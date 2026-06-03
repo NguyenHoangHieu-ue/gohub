@@ -3,7 +3,7 @@ import dataclasses
 import pandas as pd
 import json
 import io
-from gohub_api_client import GohubClient, API_KEY
+from gohub_api_clients import GohubClient, API_KEY
 
 st.set_page_config(
     page_title="Gohub PM Explorer",
