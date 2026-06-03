@@ -89,7 +89,7 @@ Dữ liệu sản phẩm hiện tại:
 def get_gemini_response(messages: list, context: str) -> str:
     genai.configure(api_key=st.secrets.get("GEMINI_KEY", ""))
     model = genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-3.5-flash",
         system_instruction=SYSTEM_PROMPT + context,
     )
     history = [

@@ -1,0 +1,2 @@
+hiện tại mỗi lần các team sale muốn tạo sản phẩm mới thì tôi phải làm thủ công như sau:
+- tạo 1 sheet danh sách sản phẩm 
