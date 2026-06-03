@@ -1,7 +1,7 @@
 """
 Gohub API Client
 Partner: gohub-cloud
-Endpoints: GET/POST /products, GET/POST /skus
+Endpoints: GET/POST /products, GET/POST /skus, GET/POST /listings, GET/POST /items
 """
 
 import requests
@@ -115,6 +115,124 @@ class Sku:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Sku":
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+@dataclass
+class Listing:
+    tenant:                         str
+    listing_code:                   str
+    listing_ref:                    str
+    reference_product_code:         str
+    status:                         str
+    listing_name_en:                str
+    listing_name_vn:                str
+    listing_type:                   str
+    type_of_sim:                    str
+    product_type:                   str
+    network_operator:               str
+    data_type_en:                   str
+    data_type_vn:                   str
+    esim_type_en:                   str
+    esim_type_vn:                   str
+    category_code:                  str
+    network_type:                   str
+    hotspot_en:                     str
+    hotspot_vn:                     str
+    kyc_needed_en:                  str
+    kyc_needed_vn:                  str
+    expirations_en:                 int
+    expirations_vn:                 int
+    top_up_options_en:              str
+    top_up_options_vn:              str
+    special_activation_required_en: str
+    special_activation_required_vn: str
+    local_phone_number_en:          str
+    local_phone_number_vn:          str
+    local_phone_number_country:     str
+    call_en:                        str
+    call_vn:                        str
+    supported_country_name_en:      str
+    supported_country_name_vn:      str
+    category_name_en:               str
+    category_name_vn:               str
+    apn:                            str
+    date_created:                   str
+    last_modified_date:             str
+    price_list:                     Optional[str] = None
+    daily_reset_time_en:            Optional[str] = None
+    daily_reset_time_vn:            Optional[str] = None
+    activation_time_en:             Optional[str] = None
+    activation_time_vn:             Optional[str] = None
+    kyc_links_en:                   Optional[str] = None
+    kyc_links_vn:                   Optional[str] = None
+    activation_en:                  Optional[str] = None
+    activation_vn:                  Optional[str] = None
+    activation_links_en:            Optional[str] = None
+    activation_links_vn:            Optional[str] = None
+    raw_unsupported_apps:           Optional[str] = None
+    unsupported_apps_en:            Optional[str] = None
+    unsupported_apps_vn:            Optional[str] = None
+    unsupported_apps_highlight_en:  Optional[str] = None
+    unsupported_apps_highlight_vn:  Optional[str] = None
+    telco_perks_en:                 Optional[str] = None
+    telco_perks_vn:                 Optional[str] = None
+    raw_note:                       Optional[str] = None
+    raw_note_vn:                    Optional[str] = None
+    note_en:                        Optional[str] = None
+    note_en_backup:                 Optional[str] = None
+    note_vn:                        Optional[str] = None
+    note_vn_backup:                 Optional[str] = None
+    call_sms_details_en:            Optional[str] = None
+    call_sms_details_vn:            Optional[str] = None
+    change_apn_note_en:             Optional[str] = None
+    change_apn_note_vn:             Optional[str] = None
+    change_apn_links_en:            Optional[str] = None
+    change_apn_links_vn:            Optional[str] = None
+    kyc_pdf_template_code:          Optional[str] = None
+    activation_pdf_template_code:   Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Listing":
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+@dataclass
+class Item:
+    tenant:           str
+    item_code:        str
+    item_ref:         str
+    alias:            str
+    sku_code:         str
+    listing_code:     str
+    category_code:    str
+    status:           str
+    item_type:        str
+    price_list:       str
+    item_name_en:     str
+    item_name_vn:     str
+    day_amount:       int
+    day_amount_unit:  str
+    data_amount:      str
+    data_amount_unit: str
+    channel:          str
+    pricelistcode:    str
+    unitprice:        float
+    currency:         str
+    date_created:     str
+    last_modified_date: str
+    throttle_speed_en:  Optional[str] = None
+    throttle_speed_vn:  Optional[str] = None
+    call_en:            Optional[str] = None
+    call_vn:            Optional[str] = None
+    call_sms_details_en:Optional[str] = None
+    call_sms_details_vn:Optional[str] = None
+    sales_channel:      Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Item":
         known = set(cls.__dataclass_fields__)
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -265,6 +383,104 @@ class GohubClient:
                                                status=status)
         )
 
+    # ══════════════════════════════════════════════════════
+    # LISTINGS
+    # ══════════════════════════════════════════════════════
+
+    def get_listings(
+        self,
+        page:               int           = 1,
+        limit:              int           = 1000,
+        tenant:             Optional[str] = None,
+        listing_type_code:  Optional[str] = None,
+        status:             Optional[str] = None,
+    ) -> ApiResponse:
+        params: dict = {"page": page, "limit": limit}
+        if tenant:            params["tenant"]          = tenant
+        if listing_type_code: params["listingTypeCode"] = listing_type_code
+        if status:            params["status"]          = status
+        resp = self.session.get(f"{self.base_url}/listings", params=params)
+        return self._parse(resp, Listing)
+
+    def post_listings(
+        self,
+        page:          int           = 1,
+        limit:         int           = 1000,
+        tenant:        Optional[str] = None,
+        listing_codes: Optional[list]= None,
+        product_codes: Optional[list]= None,
+        status:        Optional[str] = None,
+    ) -> ApiResponse:
+        body: dict = {"page": page, "limit": limit}
+        if tenant:        body["tenant"]       = tenant
+        if listing_codes: body["listingCodes"] = listing_codes
+        if product_codes: body["productCodes"] = product_codes
+        if status:        body["status"]       = status
+        resp = self.session.post(f"{self.base_url}/listings", json=body)
+        return self._parse(resp, Listing)
+
+    def get_all_listings(self, tenant=None, listing_type_code=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.get_listings(page=page, limit=limit, tenant=tenant,
+                                                  listing_type_code=listing_type_code, status=status)
+        )
+
+    def post_all_listings(self, tenant=None, listing_codes=None, product_codes=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.post_listings(page=page, limit=limit, tenant=tenant,
+                                                   listing_codes=listing_codes,
+                                                   product_codes=product_codes, status=status)
+        )
+
+    # ══════════════════════════════════════════════════════
+    # ITEMS
+    # ══════════════════════════════════════════════════════
+
+    def get_items(
+        self,
+        page:           int           = 1,
+        limit:          int           = 1000,
+        tenant:         Optional[str] = None,
+        item_type_code: Optional[str] = None,
+        status:         Optional[str] = None,
+    ) -> ApiResponse:
+        params: dict = {"page": page, "limit": limit}
+        if tenant:         params["tenant"]       = tenant
+        if item_type_code: params["itemTypeCode"] = item_type_code
+        if status:         params["status"]       = status
+        resp = self.session.get(f"{self.base_url}/items", params=params)
+        return self._parse(resp, Item)
+
+    def post_items(
+        self,
+        page:          int           = 1,
+        limit:         int           = 1000,
+        tenant:        Optional[str] = None,
+        item_codes:    Optional[list]= None,
+        listing_codes: Optional[list]= None,
+        sku_codes:     Optional[list]= None,
+    ) -> ApiResponse:
+        body: dict = {"page": page, "limit": limit}
+        if tenant:        body["tenant"]       = tenant
+        if item_codes:    body["itemCodes"]    = item_codes
+        if listing_codes: body["listingCodes"] = listing_codes
+        if sku_codes:     body["skuCodes"]     = sku_codes
+        resp = self.session.post(f"{self.base_url}/items", json=body)
+        return self._parse(resp, Item)
+
+    def get_all_items(self, tenant=None, item_type_code=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.get_items(page=page, limit=limit, tenant=tenant,
+                                               item_type_code=item_type_code, status=status)
+        )
+
+    def post_all_items(self, tenant=None, item_codes=None, listing_codes=None, sku_codes=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.post_items(page=page, limit=limit, tenant=tenant,
+                                                item_codes=item_codes, listing_codes=listing_codes,
+                                                sku_codes=sku_codes)
+        )
+
 
 # ─────────────────────────────────────────────────────────
 # Helpers
@@ -290,14 +506,20 @@ def to_csv(items: list, path: str):
 # Main
 # ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    client = GohubClient(env="production")
+    client = GohubClient()
 
-    # Products
     print("─── POST /products ───")
     r = client.post_products(page=1, limit=10, tenant="VN")
     print(f"{r.status} ({r.code}) · {r.pagination}")
 
-    # SKUs
     print("\n─── POST /skus ───")
     r2 = client.post_skus(page=1, limit=10, tenant="VN")
     print(f"{r2.status} ({r2.code}) · {r2.pagination}")
+
+    print("\n─── GET /listings ───")
+    r3 = client.get_listings(page=1, limit=10, tenant="VN")
+    print(f"{r3.status} ({r3.code}) · {r3.pagination}")
+
+    print("\n─── GET /items ───")
+    r4 = client.get_items(page=1, limit=10, tenant="VN")
+    print(f"{r4.status} ({r4.code}) · {r4.pagination}")
