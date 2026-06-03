@@ -13,6 +13,18 @@ import bcrypt
 CONFIG_FILE = "auth_config.json"
 
 
+def _getpass(prompt: str) -> str:
+    """getpass fallback cho VS Code terminal / Windows."""
+    try:
+        pw = _getpass(prompt)
+        if pw:
+            return pw
+        # getpass trả về rỗng → terminal không hỗ trợ, dùng input
+        raise RuntimeError
+    except Exception:
+        return input(f"{prompt}(hiện rõ) ")
+
+
 def load() -> dict:
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -56,8 +68,8 @@ def add_user(config: dict):
     name  = input("Tên hiển thị: ").strip()
     email = input("Email: ").strip()
     role  = input("Role (admin/sale) [sale]: ").strip() or "sale"
-    pw    = getpass.getpass("Password: ")
-    pw2   = getpass.getpass("Nhập lại password: ")
+    pw    = _getpass("Password: ")
+    pw2   = _getpass("Nhập lại password: ")
     if pw != pw2:
         print("❌ Password không khớp. Hủy.")
         return
@@ -73,8 +85,8 @@ def change_password(config: dict):
     if username not in users:
         print(f"❌ Không tìm thấy '{username}'")
         return
-    pw  = getpass.getpass("Password mới: ")
-    pw2 = getpass.getpass("Nhập lại: ")
+    pw  = _getpass("Password mới: ")
+    pw2 = _getpass("Nhập lại: ")
     if pw != pw2:
         print("❌ Password không khớp. Hủy.")
         return
@@ -127,7 +139,7 @@ def push_to_supabase(config: dict):
     print("\n--- Đẩy users lên Supabase ---")
     print("Dùng để seed lần đầu hoặc đồng bộ từ auth_config.json lên Supabase.\n")
     url = input("SUPABASE_URL: ").strip()
-    key = getpass.getpass("SUPABASE_SERVICE_KEY: ")
+    key = _getpass("SUPABASE_SERVICE_KEY: ")
     if not url or not key:
         print("Hủy.")
         return
