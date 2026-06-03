@@ -22,7 +22,7 @@ with st.sidebar:
         index=0,
     )
     st.divider()
-    env = st.selectbox("Environment", ["production", "staging"], index=0)
+    env = st.selectbox("Environment", ["production"], index=0)
 
 is_sku = data_type == "🏷 SKUs"
 
