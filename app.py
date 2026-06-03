@@ -193,23 +193,42 @@ def fmt_sync(log: dict, table: str) -> str:
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
     return dt.strftime("%d/%m %H:%M")
 
-def build_context(products, skus) -> str:
+_ITEM_LIMIT = 15_000  # giới hạn items đưa vào context (~2M tokens nếu không giới hạn)
+
+def build_context(products, skus, listings, items) -> str:
     prod_lines = [
-        f"- {p.product_code} | tenant: {p.tenant} | loại sim: {p.type_of_sim} "
-        f"| countries: {p.supported_countries} | status: {p.status}"
+        f"- {p.product_code}|{p.tenant}|{p.type_of_sim}|{p.supported_countries}|{p.status}"
         for p in products
     ]
     sku_lines = [
-        f"- {s.sku_code} | product: {s.product_code} | tenant: {s.tenant} "
-        f"| {s.sim_esim} | data: {s.data_amount}{s.data_amount_unit}/{s.day_amount}{s.day_amount_unit}"
-        + (f" | final_cogs_vnd: {s.final_cogs_included_vat_vnd} VND" if role == "admin" else "")
-        + f" | status: {s.status}"
+        f"- {s.sku_code}|{s.product_code}|{s.tenant}|{s.sim_esim}"
+        f"|{s.data_amount}{s.data_amount_unit}/{s.day_amount}{s.day_amount_unit}"
+        f"|throttle:{s.throttle_speed}|call:{s.call}"
+        + (f"|cogs_vnd:{s.final_cogs_included_vat_vnd}" if role == "admin" else "")
+        + f"|{s.status}"
         for s in skus
     ]
-    return (
-        "=== PRODUCTS ===\n" + "\n".join(prod_lines) +
-        "\n\n=== SKUS ===\n" + "\n".join(sku_lines)
-    )
+    listing_lines = [
+        f"- {l.listing_code}|{l.listing_name_vn}|{l.type_of_sim}|op:{l.network_operator}"
+        f"|cat:{l.category_code}|exp:{l.expirations_en}ngày|hotspot:{l.hotspot_en}|call:{l.call_en}|{l.status}"
+        for l in listings
+    ]
+    active_items = [i for i in items if (i.status or "").lower() == "active"]
+    item_lines = [
+        f"- {i.item_name_vn}|listing:{i.listing_code}|sku:{i.sku_code}"
+        f"|{i.unitprice}{i.currency}|{i.data_amount}{i.data_amount_unit}/{i.day_amount}{i.day_amount_unit}"
+        for i in active_items[:_ITEM_LIMIT]
+    ]
+    if len(active_items) > _ITEM_LIMIT:
+        item_lines.append(f"... (còn {len(active_items) - _ITEM_LIMIT:,} active items khác)")
+
+    return "\n".join([
+        f"=== PRODUCTS ({len(products):,}) ===",    *prod_lines,
+        f"\n=== SKUS ({len(skus):,}) ===",          *sku_lines,
+        f"\n=== LISTINGS ({len(listings):,}) ===",  *listing_lines,
+        f"\n=== ITEMS ({len(active_items):,} active, hiển thị {min(len(active_items), _ITEM_LIMIT):,}) ===",
+        *item_lines,
+    ])
 
 SYSTEM_PROMPT = """Bạn là trợ lý AI của GoHub, hỗ trợ team sale tra cứu thông tin sản phẩm SIM/eSim du lịch.
 Trả lời bằng tiếng Việt, ngắn gọn và chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
@@ -342,14 +361,6 @@ def render_explorer(tab_idx: int):
                            file_name=f"{fname}.json", mime="application/json",
                            key=f"json_{table}")
 
-    # ── Detail viewer ────────────────────────────────────
-    with st.expander(f"🔎 Xem chi tiết 1 {label}"):
-        keys     = [getattr(i, detail_key) for i in result]
-        selected = st.selectbox(f"Chọn {detail_key}", keys, key=f"detail_{table}")
-        if selected:
-            obj = next((i for i in result if getattr(i, detail_key) == selected), None)
-            if obj:
-                st.json(dataclasses.asdict(obj))
 
 
 # ─────────────────────────────────────────────────────────
@@ -380,8 +391,13 @@ with tabs[4]:
             try:
                 products = [Product.from_dict(r) for r in load_table("products")]
                 skus     = [Sku.from_dict(r)     for r in load_table("skus")]
-                st.session_state.chat_context = build_context(products, skus)
-                st.session_state._chat_info = f"{len(products):,} products · {len(skus):,} SKUs"
+                listings = [Listing.from_dict(r) for r in load_table("listings")]
+                items    = [Item.from_dict(r)    for r in load_table("items")]
+                st.session_state.chat_context = build_context(products, skus, listings, items)
+                st.session_state._chat_info = (
+                    f"{len(products):,} products · {len(skus):,} SKUs · "
+                    f"{len(listings):,} listings · {len(items):,} items"
+                )
             except Exception as e:
                 st.error(f"❌ Lỗi tải dữ liệu: {e}")
 
