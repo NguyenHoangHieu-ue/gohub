@@ -1,9 +1,12 @@
+import time
 import streamlit as st
 import dataclasses
 import pandas as pd
 import json
 import io
 import google.generativeai as genai
+from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
 from gohub_api_clients import GohubClient, API_KEY
 
 st.set_page_config(
@@ -13,16 +16,88 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────
+# Auto-refresh trigger (every 30 minutes)
+# ─────────────────────────────────────────────────────────
+st_autorefresh(interval=30 * 60 * 1000, key="periodic_refresh")
+
+STALE_SECONDS = 30 * 60  # 30 phút
+
+# ─────────────────────────────────────────────────────────
 # Session state init
 # ─────────────────────────────────────────────────────────
 _defaults = {
-    "data_products": [], "data_skus": [],
-    "data_listings": [], "data_items": [],
-    "chat_messages": [], "chat_context": "",
+    "data_products": [],  "ts_products": 0,
+    "data_skus":     [],  "ts_skus":     0,
+    "data_listings": [],  "ts_listings": 0,
+    "data_items":    [],  "ts_items":    0,
+    "chat_messages": [],  "chat_context": "",
+    "fetch_error":   "",
 }
 for _k, _v in _defaults.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
+# ─────────────────────────────────────────────────────────
+# Fetch helpers
+# ─────────────────────────────────────────────────────────
+def is_stale(ts_key: str) -> bool:
+    return time.time() - st.session_state[ts_key] > STALE_SECONDS
+
+def fmt_ts(ts: float) -> str:
+    if not ts:
+        return "—"
+    return datetime.fromtimestamp(ts).strftime("%H:%M")
+
+def make_client() -> GohubClient:
+    return GohubClient(api_key=st.secrets.get("API_KEY", API_KEY))
+
+def fetch_products():
+    client = make_client()
+    st.session_state.data_products = client.get_all_products()
+    st.session_state.ts_products   = time.time()
+    st.session_state.chat_context  = ""  # invalidate chatbot context
+
+def fetch_skus():
+    client = make_client()
+    st.session_state.data_skus = client.get_all_skus()
+    st.session_state.ts_skus   = time.time()
+    st.session_state.chat_context = ""
+
+def fetch_listings():
+    client = make_client()
+    st.session_state.data_listings = client.get_all_listings()
+    st.session_state.ts_listings   = time.time()
+
+def fetch_items():
+    client = make_client()
+    st.session_state.data_items = client.get_all_items()
+    st.session_state.ts_items   = time.time()
+
+def refresh_all():
+    """Force-refresh tất cả data đang có."""
+    try:
+        fetch_products()
+        fetch_skus()
+        if st.session_state.data_listings:
+            fetch_listings()
+        if st.session_state.data_items:
+            fetch_items()
+        st.session_state.fetch_error = ""
+    except Exception as e:
+        st.session_state.fetch_error = str(e)
+
+# ─────────────────────────────────────────────────────────
+# Auto-fetch Products + SKUs on startup / when stale
+# ─────────────────────────────────────────────────────────
+_need_core = is_stale("ts_products") or is_stale("ts_skus")
+if _need_core:
+    try:
+        with st.spinner("🔄 Đang cập nhật Products & SKUs..."):
+            fetch_products()
+            fetch_skus()
+        st.session_state.fetch_error = ""
+    except Exception as _e:
+        st.session_state.fetch_error = str(_e)
 
 # ─────────────────────────────────────────────────────────
 # Sidebar
@@ -33,14 +108,33 @@ with st.sidebar:
         "nav", label_visibility="collapsed",
         options=["🗂 Products", "🏷 SKUs", "📋 Listings", "🛒 Items", "🤖 Chatbot"],
     )
+
     st.divider()
-    st.caption("**Dữ liệu đã tải**")
-    for _tab, _key in [
-        ("Products", "data_products"), ("SKUs",     "data_skus"),
-        ("Listings", "data_listings"), ("Items",    "data_items"),
+
+    # Data status
+    st.caption("**Trạng thái dữ liệu**")
+    for _name, _key, _ts in [
+        ("Products", "data_products", "ts_products"),
+        ("SKUs",     "data_skus",     "ts_skus"),
+        ("Listings", "data_listings", "ts_listings"),
+        ("Items",    "data_items",    "ts_items"),
     ]:
-        _n = len(st.session_state[_key])
-        st.caption(f"{'🟢' if _n else '⚪'} {_tab}: **{f'{_n:,}' if _n else '—'}**")
+        _n  = len(st.session_state[_key])
+        _t  = fmt_ts(st.session_state[_ts])
+        _ico = "🟢" if _n else "⚪"
+        _cnt = f"{_n:,} · {_t}" if _n else "—"
+        st.caption(f"{_ico} **{_name}**: {_cnt}")
+
+    if st.session_state.fetch_error:
+        st.warning(f"⚠️ {st.session_state.fetch_error}")
+
+    st.divider()
+    if st.button("🔄 Refresh tất cả", use_container_width=True):
+        with st.spinner("Đang refresh..."):
+            refresh_all()
+        st.rerun()
+
+    st.caption(f"Tự động refresh mỗi 30 phút")
 
 # ─────────────────────────────────────────────────────────
 # Column config
@@ -90,7 +184,6 @@ def parse_codes(raw: str) -> list | None:
     parts = [c.strip() for c in raw.split(",") if c.strip()]
     return parts or None
 
-
 def local_search(df: pd.DataFrame, query: str, cols: list) -> pd.DataFrame:
     if not query.strip():
         return df
@@ -99,7 +192,6 @@ def local_search(df: pd.DataFrame, query: str, cols: list) -> pd.DataFrame:
         lambda col: col.str.contains(query, case=False, na=False)
     ).any(axis=1)
     return df[mask]
-
 
 def build_context(products, skus) -> str:
     prod_lines = [
@@ -118,7 +210,6 @@ def build_context(products, skus) -> str:
         "\n\n=== SKUS ===\n" + "\n".join(sku_lines)
     )
 
-
 SYSTEM_PROMPT = """Bạn là trợ lý AI của GoHub, hỗ trợ team sale tra cứu thông tin sản phẩm SIM/eSim du lịch.
 Trả lời bằng tiếng Việt, ngắn gọn và chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
 Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có dữ liệu thay vì đoán.
@@ -126,7 +217,6 @@ Khi hiển thị giá, luôn ưu tiên dùng giá VND (trường final_cogs_incl
 
 Dữ liệu sản phẩm hiện tại:
 """
-
 
 def get_gemini_response(messages: list, context: str) -> str:
     genai.configure(api_key=st.secrets.get("GEMINI_KEY", ""))
@@ -141,6 +231,78 @@ def get_gemini_response(messages: list, context: str) -> str:
     chat = model.start_chat(history=history)
     return chat.send_message(messages[-1]["content"]).text
 
+def render_explorer(label, state_key, detail_key, fname_prefix, display_cols):
+    """Shared renderer for all 4 explorer pages."""
+    result = st.session_state[state_key]
+
+    # Search + filter bar
+    col_search, col_tenant, col_status = st.columns([3, 1, 1])
+    search = col_search.text_input(
+        "search", placeholder=f"🔍 Tìm trong {len(result):,} {label}s...",
+        label_visibility="collapsed",
+    )
+    tenant_filter = col_tenant.selectbox(
+        "Tenant", ["Tất cả", "VN", "US"], label_visibility="collapsed",
+    )
+    status_filter = col_status.selectbox(
+        "Status", ["Tất cả", "Active", "Inactive"], label_visibility="collapsed",
+    )
+
+    # Build display dataframe
+    df_full = pd.DataFrame([dataclasses.asdict(i) for i in result])
+    cols_show = [c for c in display_cols if c in df_full.columns]
+    df_view = df_full[cols_show].copy()
+
+    if tenant_filter != "Tất cả" and "tenant" in df_view.columns:
+        df_view = df_view[df_view["tenant"] == tenant_filter]
+    if status_filter != "Tất cả" and "status" in df_view.columns:
+        df_view = df_view[df_view["status"] == status_filter]
+    df_view = local_search(df_view, search, cols_show)
+
+    # Metrics
+    m1, m2, m3 = st.columns(3)
+    m1.metric(f"Tổng {label}s", f"{len(df_full):,}")
+    if "status" in df_full.columns:
+        n_active = (df_full["status"].str.lower() == "active").sum()
+        m2.metric("Active", f"{n_active:,}")
+        m3.metric("Inactive", f"{len(df_full) - n_active:,}")
+
+    if search or tenant_filter != "Tất cả" or status_filter != "Tất cả":
+        st.caption(f"Đang hiển thị **{len(df_view):,}** / {len(df_full):,} {label}s")
+
+    st.dataframe(df_view, use_container_width=True, height=520)
+
+    # Downloads
+    st.divider()
+    dl1, dl2 = st.columns(2)
+    fname = f"{fname_prefix}_all"
+    with dl1:
+        csv_buf = io.StringIO()
+        df_full.to_csv(csv_buf, index=False, encoding="utf-8-sig")
+        st.download_button(
+            "⬇️ Download CSV", use_container_width=True,
+            data=csv_buf.getvalue().encode("utf-8-sig"),
+            file_name=f"{fname}.csv", mime="text/csv",
+        )
+    with dl2:
+        json_str = json.dumps(
+            [dataclasses.asdict(i) for i in result], ensure_ascii=False, indent=2
+        )
+        st.download_button(
+            "⬇️ Download JSON", use_container_width=True,
+            data=json_str.encode("utf-8"),
+            file_name=f"{fname}.json", mime="application/json",
+        )
+
+    # Detail viewer
+    with st.expander(f"🔎 Xem chi tiết 1 {label}"):
+        keys = [getattr(i, detail_key) for i in result]
+        selected = st.selectbox(f"Chọn {detail_key}", keys)
+        if selected:
+            obj = next((i for i in result if getattr(i, detail_key) == selected), None)
+            if obj:
+                st.json(dataclasses.asdict(obj))
+
 
 # ─────────────────────────────────────────────────────────
 # Page: Chatbot
@@ -150,37 +312,17 @@ if page == "🤖 Chatbot":
 
     products = st.session_state.data_products
     skus     = st.session_state.data_skus
-    has_data = bool(products and skus)
 
-    # Auto-build context from already-loaded data
-    if has_data and not st.session_state.chat_context:
+    if products and skus and not st.session_state.chat_context:
         st.session_state.chat_context = build_context(products, skus)
 
-    col_btn, col_status = st.columns([1, 2])
-    with col_btn:
-        btn_label = "🔄 Tải lại dữ liệu" if has_data else "📥 Tải dữ liệu từ PM"
-        if st.button(btn_label, use_container_width=True):
-            with st.spinner("Đang tải Products & SKUs..."):
-                try:
-                    client = GohubClient(api_key=st.secrets.get("API_KEY", API_KEY))
-                    st.session_state.data_products = client.get_all_products()
-                    st.session_state.data_skus     = client.get_all_skus()
-                    st.session_state.chat_context  = build_context(
-                        st.session_state.data_products,
-                        st.session_state.data_skus,
-                    )
-                    st.session_state.chat_messages = []
-                    p = len(st.session_state.data_products)
-                    s = len(st.session_state.data_skus)
-                    st.success(f"✅ Đã tải {p:,} products · {s:,} SKUs")
-                except Exception as e:
-                    st.error(f"❌ Lỗi: {e}")
-
-    with col_status:
-        if has_data:
-            st.info(f"✅ Sẵn sàng — {len(products):,} products · {len(skus):,} SKUs đã tải")
-        else:
-            st.warning("Chưa có dữ liệu. Nhấn **Tải dữ liệu từ PM** để bắt đầu.")
+    if st.session_state.chat_context:
+        st.caption(
+            f"Dữ liệu: **{len(products):,}** products · **{len(skus):,}** SKUs · "
+            f"cập nhật lúc {fmt_ts(st.session_state.ts_products)}"
+        )
+    else:
+        st.warning("Dữ liệu chưa sẵn sàng — đang tải, vui lòng chờ giây lát...")
 
     st.divider()
 
@@ -207,161 +349,35 @@ if page == "🤖 Chatbot":
                 except Exception as e:
                     st.error(f"❌ Lỗi Gemini: {e}")
 
-
 # ─────────────────────────────────────────────────────────
-# Page: Explorer (Products / SKUs / Listings / Items)
+# Page: Explorer
 # ─────────────────────────────────────────────────────────
 else:
     label, state_key, detail_key, fname_prefix, display_cols = PAGE_CONFIG[page]
-    existing = st.session_state[state_key]
+    ts_key_map = {
+        "🗂 Products": ("ts_products", fetch_products),
+        "🏷 SKUs":     ("ts_skus",     fetch_skus),
+        "📋 Listings": ("ts_listings", fetch_listings),
+        "🛒 Items":    ("ts_items",    fetch_items),
+    }
+    ts_key, fetch_fn = ts_key_map[page]
+
+    # Auto-fetch when first visiting this tab or data is stale
+    if is_stale(ts_key):
+        try:
+            with st.spinner(f"🔄 Đang tải {label}s..."):
+                fetch_fn()
+        except Exception as e:
+            st.error(f"❌ Lỗi tải {label}s: {e}")
 
     st.title(f"{page} Explorer")
 
-    # ── Filters ──────────────────────────────────────────
-    with st.expander("🔍 Bộ lọc", expanded=not bool(existing)):
-        col1, col2 = st.columns(2)
-        tenant = col1.selectbox("Tenant", ["", "VN", "US"],
-                                format_func=lambda x: "Tất cả" if x == "" else x)
-        status = col2.selectbox("Status", ["", "Active", "Inactive"],
-                                format_func=lambda x: "Tất cả" if x == "" else x)
+    _ts = fmt_ts(st.session_state[ts_key])
+    _n  = len(st.session_state[state_key])
+    st.caption(f"**{_n:,}** {label}s · cập nhật lúc **{_ts}** · tự refresh sau 30 phút")
 
-        if page == "🏷 SKUs":
-            ca, cb = st.columns(2)
-            sku_codes_input     = ca.text_input("SKU Codes", placeholder="Ví dụ: 11VNMMBZ00610, ...")
-            product_codes_input = cb.text_input("Product Codes", placeholder="Ví dụ: 11VNMMBZ, ...")
-        elif page == "📋 Listings":
-            ca, cb, cc = st.columns(3)
-            listing_type_code_input = ca.text_input("Listing Type Code", placeholder="Ví dụ: BUS")
-            listing_codes_input     = cb.text_input("Listing Codes", placeholder="Ví dụ: L001, L002")
-            product_codes_input     = cc.text_input("Product Codes", placeholder="Ví dụ: P001, P002")
-        elif page == "🛒 Items":
-            ca, cb = st.columns(2)
-            item_type_code_input = ca.text_input("Item Type Code", placeholder="Ví dụ: BUS")
-            item_codes_input     = cb.text_input("Item Codes", placeholder="Ví dụ: I001, I002")
-            cc, cd = st.columns(2)
-            listing_codes_input  = cc.text_input("Listing Codes", placeholder="Ví dụ: L001, L002")
-            sku_codes_input      = cd.text_input("SKU Codes", placeholder="Ví dụ: S001, S002")
-        else:  # Products
-            product_codes_input = st.text_input("Product Codes", placeholder="Ví dụ: 11VNMMBZ, 11VNMSFP")
-
-        with st.expander("⚙️ Nâng cao"):
-            method = st.radio("Method", ["POST", "GET"], horizontal=True)
-
-    # ── Fetch button (always visible) ────────────────────
-    btn_label = f"🔄 Refresh {label}s" if existing else f"📥 Tải {label}s"
-    run = st.button(btn_label, type="primary", use_container_width=True)
-
-    if run:
-        try:
-            client = GohubClient(api_key=st.secrets.get("API_KEY", API_KEY))
-            with st.spinner(f"Đang tải {label}s..."):
-                if page == "🏷 SKUs":
-                    kw = dict(tenant=tenant or None, status=status or None,
-                              sku_codes=parse_codes(sku_codes_input),
-                              product_codes=parse_codes(product_codes_input))
-                    data = client.post_all_skus(**kw) if method == "POST" else client.get_all_skus(**kw)
-
-                elif page == "📋 Listings":
-                    if method == "POST":
-                        data = client.post_all_listings(
-                            tenant=tenant or None, status=status or None,
-                            listing_codes=parse_codes(listing_codes_input),
-                            product_codes=parse_codes(product_codes_input),
-                        )
-                    else:
-                        data = client.get_all_listings(
-                            tenant=tenant or None, status=status or None,
-                            listing_type_code=listing_type_code_input or None,
-                        )
-
-                elif page == "🛒 Items":
-                    if method == "POST":
-                        data = client.post_all_items(
-                            tenant=tenant or None,
-                            item_codes=parse_codes(item_codes_input),
-                            listing_codes=parse_codes(listing_codes_input),
-                            sku_codes=parse_codes(sku_codes_input),
-                        )
-                    else:
-                        data = client.get_all_items(
-                            tenant=tenant or None, status=status or None,
-                            item_type_code=item_type_code_input or None,
-                        )
-
-                else:  # Products
-                    kw = dict(tenant=tenant or None, status=status or None,
-                              product_codes=parse_codes(product_codes_input))
-                    data = (client.post_all_products(**kw) if method == "POST"
-                            else client.get_all_products(tenant=tenant or None, status=status or None))
-
-            st.session_state[state_key] = data
-            if page in ("🗂 Products", "🏷 SKUs"):
-                st.session_state.chat_context = ""  # invalidate chatbot context
-            st.success(f"✅ Đã tải **{len(data):,}** {label}s")
-
-        except Exception as e:
-            st.error(f"❌ Lỗi: {e}")
-            st.exception(e)
-
-    # ── Display ───────────────────────────────────────────
     result = st.session_state[state_key]
-
-    if not result:
-        st.info(f"Chưa có dữ liệu. Nhấn **Tải {label}s** để bắt đầu.")
+    if result:
+        render_explorer(label, state_key, detail_key, fname_prefix, display_cols)
     else:
-        df_full = pd.DataFrame([dataclasses.asdict(i) for i in result])
-
-        # Metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric(f"Tổng {label}s", f"{len(df_full):,}")
-        if "status" in df_full.columns:
-            n_active = (df_full["status"].str.lower() == "active").sum()
-            m2.metric("Active", f"{n_active:,}")
-            m3.metric("Inactive", f"{len(df_full) - n_active:,}")
-
-        st.divider()
-
-        # Search
-        search = st.text_input(
-            "search", placeholder=f"🔍 Tìm trong {len(df_full):,} {label}s...",
-            label_visibility="collapsed",
-        )
-        cols_show = [c for c in display_cols if c in df_full.columns]
-        df_show = local_search(df_full[cols_show], search, cols_show)
-
-        if search:
-            st.caption(f"Tìm thấy **{len(df_show):,}** / {len(df_full):,} {label}s")
-
-        st.dataframe(df_show, use_container_width=True, height=520)
-
-        # Downloads
-        st.divider()
-        dl1, dl2 = st.columns(2)
-        fname = f"{fname_prefix}_{tenant or 'all'}"
-
-        with dl1:
-            csv_buf = io.StringIO()
-            df_full.to_csv(csv_buf, index=False, encoding="utf-8-sig")
-            st.download_button(
-                "⬇️ Download CSV", use_container_width=True,
-                data=csv_buf.getvalue().encode("utf-8-sig"),
-                file_name=f"{fname}.csv", mime="text/csv",
-            )
-        with dl2:
-            json_str = json.dumps(
-                [dataclasses.asdict(i) for i in result], ensure_ascii=False, indent=2
-            )
-            st.download_button(
-                "⬇️ Download JSON", use_container_width=True,
-                data=json_str.encode("utf-8"),
-                file_name=f"{fname}.json", mime="application/json",
-            )
-
-        # Detail viewer
-        with st.expander(f"🔎 Xem chi tiết 1 {label}"):
-            keys = [getattr(i, detail_key) for i in result]
-            selected = st.selectbox(f"Chọn {detail_key}", keys)
-            if selected:
-                obj = next((i for i in result if getattr(i, detail_key) == selected), None)
-                if obj:
-                    st.json(dataclasses.asdict(obj))
+        st.info(f"Đang tải {label}s, vui lòng chờ...")
