@@ -9,7 +9,7 @@ import json
 import dataclasses
 from dataclasses import dataclass
 from typing import Optional
-import st
+import streamlit as st
 
 # ─────────────────────────────────────────────────────────
 # Config
