@@ -4,6 +4,8 @@ import streamlit_authenticator as stauth
 import dataclasses
 import pandas as pd
 import io
+import bcrypt
+from datetime import datetime, timezone
 import google.generativeai as genai
 from supabase import create_client
 from gohub_api_clients import Product, Sku, Listing, Item
@@ -11,10 +13,37 @@ from gohub_api_clients import Product, Sku, Listing, Item
 st.set_page_config(page_title="Gohub PM", page_icon="📡", layout="wide")
 
 # ─────────────────────────────────────────────────────────
-# Auth
+# Supabase clients
 # ─────────────────────────────────────────────────────────
-_auth_cfg = json.loads(st.secrets.get("AUTH_CONFIG", "{}"))
-_credentials = {"usernames": _auth_cfg.get("usernames", {})}
+@st.cache_resource
+def _sb():
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_ANON_KEY"])
+
+@st.cache_resource
+def _sb_admin():
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_SERVICE_KEY"])
+
+# ─────────────────────────────────────────────────────────
+# Auth — load users từ Supabase
+# ─────────────────────────────────────────────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_users() -> list[dict]:
+    resp = _sb_admin().table("users").select("*").order("username").execute()
+    return resp.data or []
+
+def _build_credentials() -> dict:
+    return {
+        "usernames": {
+            u["username"]: {
+                "name":     u["name"],
+                "email":    u.get("email") or "",
+                "password": u["password"],
+            }
+            for u in _load_users()
+        }
+    }
+
+_credentials = _build_credentials()
 
 authenticator = stauth.Authenticate(
     credentials=_credentials,
@@ -31,14 +60,14 @@ if not st.session_state.get("authentication_status"):
     st.stop()
 
 _username = st.session_state["username"]
-role = _credentials["usernames"].get(_username, {}).get("role", "sale")
+role = next(
+    (u["role"] for u in _load_users() if u["username"] == _username),
+    "sale",
+)
 
 # ─────────────────────────────────────────────────────────
-# Supabase — shared cache (tất cả user dùng chung)
+# Shared data cache (products / skus / listings / items)
 # ─────────────────────────────────────────────────────────
-def _sb():
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_ANON_KEY"])
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def load_table(table: str) -> list[dict]:
     sb, rows, batch, offset = _sb(), [], 1000, 0
@@ -117,7 +146,6 @@ def local_search(df: pd.DataFrame, query: str, cols: list) -> pd.DataFrame:
 def fmt_sync(log: dict, table: str) -> str:
     if table not in log:
         return "—"
-    from datetime import datetime, timezone
     ts = log[table]["last_sync"]
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
     return dt.strftime("%d/%m %H:%M")
@@ -128,7 +156,6 @@ def build_context(products, skus) -> str:
         f"| countries: {p.supported_countries} | status: {p.status}"
         for p in products
     ]
-    cost_part = " | final_cogs_vnd: {s.final_cogs_included_vat_vnd} VND" if role == "admin" else ""
     sku_lines = [
         f"- {s.sku_code} | product: {s.product_code} | tenant: {s.tenant} "
         f"| {s.sim_esim} | data: {s.data_amount}{s.data_amount_unit}/{s.day_amount}{s.day_amount_unit}"
@@ -172,14 +199,17 @@ with st.sidebar:
 
     st.divider()
 
+    nav_options = ["🗂 Products", "🏷 SKUs", "📋 Listings", "🛒 Items", "🤖 Chatbot"]
+    if role == "admin":
+        nav_options.append("👤 Admin")
+
     page = st.radio(
         "nav", label_visibility="collapsed",
-        options=["🗂 Products", "🏷 SKUs", "📋 Listings", "🛒 Items", "🤖 Chatbot"],
+        options=nav_options,
     )
 
     st.divider()
 
-    # Sync status
     try:
         sync_log = load_sync_log()
         st.caption("**Dữ liệu (sync mỗi 30 phút)**")
@@ -193,9 +223,122 @@ with st.sidebar:
         st.caption("⚠️ Không thể kết nối Supabase")
 
 # ─────────────────────────────────────────────────────────
+# Page: Admin
+# ─────────────────────────────────────────────────────────
+if page == "👤 Admin":
+    st.title("👤 Quản lý Users")
+
+    tab_list, tab_add, tab_pw = st.tabs(["Danh sách", "Thêm user", "Đổi password"])
+
+    with tab_list:
+        users = _load_users()
+        if not users:
+            st.info("Chưa có user nào.")
+        else:
+            for u in users:
+                c_info, c_role, c_save, c_del = st.columns([4, 2, 2, 1])
+                c_info.markdown(f"**{u['username']}** · {u['name']}")
+                c_info.caption(u.get("email") or "—")
+
+                new_role = c_role.selectbox(
+                    "role",
+                    ["admin", "sale"],
+                    index=0 if u["role"] == "admin" else 1,
+                    key=f"role_{u['username']}",
+                    label_visibility="collapsed",
+                )
+                if c_save.button("Lưu", key=f"save_{u['username']}", use_container_width=True):
+                    if new_role != u["role"]:
+                        _sb_admin().table("users").update({
+                            "role": new_role,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }).eq("username", u["username"]).execute()
+                        _load_users.clear()
+                        st.success(f"Đã đổi role **{u['username']}** → `{new_role}`")
+                        st.rerun()
+                    else:
+                        st.toast("Role không thay đổi.")
+
+                if u["username"] != _username:
+                    if c_del.button("🗑️", key=f"del_{u['username']}", help=f"Xóa {u['username']}"):
+                        if st.session_state.get(f"confirm_del_{u['username']}"):
+                            _sb_admin().table("users").delete().eq("username", u["username"]).execute()
+                            _load_users.clear()
+                            st.success(f"Đã xóa user **{u['username']}**")
+                            st.session_state.pop(f"confirm_del_{u['username']}", None)
+                            st.rerun()
+                        else:
+                            st.session_state[f"confirm_del_{u['username']}"] = True
+                            st.rerun()
+
+                if st.session_state.get(f"confirm_del_{u['username']}"):
+                    st.warning(
+                        f"Xác nhận xóa **{u['username']}**? "
+                        f"Bấm 🗑️ lần nữa để xác nhận, hoặc tải lại trang để hủy."
+                    )
+
+                st.divider()
+
+    with tab_add:
+        with st.form("form_add_user", clear_on_submit=True):
+            st.subheader("Thêm user mới")
+            col1, col2 = st.columns(2)
+            new_username = col1.text_input("Username *")
+            new_name     = col2.text_input("Tên hiển thị *")
+            new_email    = col1.text_input("Email")
+            new_role_opt = col2.selectbox("Role", ["sale", "admin"])
+            new_pw       = col1.text_input("Password *", type="password")
+            new_pw2      = col2.text_input("Nhập lại password *", type="password")
+            add_submitted = st.form_submit_button("Thêm user", use_container_width=True)
+
+        if add_submitted:
+            if not new_username or not new_name or not new_pw:
+                st.error("Username, tên hiển thị và password không được để trống.")
+            elif new_pw != new_pw2:
+                st.error("Password không khớp.")
+            elif any(u["username"] == new_username for u in _load_users()):
+                st.error(f"Username **{new_username}** đã tồn tại.")
+            else:
+                hashed = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt(12)).decode()
+                _sb_admin().table("users").insert({
+                    "username": new_username,
+                    "name":     new_name,
+                    "email":    new_email,
+                    "role":     new_role_opt,
+                    "password": hashed,
+                }).execute()
+                _load_users.clear()
+                st.success(f"Đã thêm user **{new_username}** (`{new_role_opt}`)")
+                st.rerun()
+
+    with tab_pw:
+        users = _load_users()
+        with st.form("form_change_pw", clear_on_submit=True):
+            st.subheader("Đổi password")
+            target_user = st.selectbox("Username", [u["username"] for u in users])
+            col1, col2 = st.columns(2)
+            chg_pw  = col1.text_input("Password mới *", type="password")
+            chg_pw2 = col2.text_input("Nhập lại *", type="password")
+            pw_submitted = st.form_submit_button("Đổi password", use_container_width=True)
+
+        if pw_submitted:
+            if not chg_pw:
+                st.error("Password không được để trống.")
+            elif chg_pw != chg_pw2:
+                st.error("Password không khớp.")
+            else:
+                hashed = bcrypt.hashpw(chg_pw.encode(), bcrypt.gensalt(12)).decode()
+                _sb_admin().table("users").update({
+                    "password":   hashed,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("username", target_user).execute()
+                _load_users.clear()
+                st.success(f"Đã đổi password cho **{target_user}**")
+
+# ─────────────────────────────────────────────────────────
 # Page: Chatbot
 # ─────────────────────────────────────────────────────────
-if page == "🤖 Chatbot":
+elif page == "🤖 Chatbot":
     st.title("🤖 Chatbot — Hỗ trợ Team Sale")
 
     if "chat_messages" not in st.session_state:
@@ -254,7 +397,6 @@ else:
 
     st.title(f"{page} Explorer")
 
-    # Load data (shared cache)
     with st.spinner(f"Đang tải {label}s..."):
         try:
             raw    = load_table(table)
@@ -264,19 +406,17 @@ else:
             st.stop()
 
     if not result:
-        st.warning(f"Chưa có dữ liệu. GitHub Actions sẽ tự đồng bộ sau.")
+        st.warning("Chưa có dữ liệu. GitHub Actions sẽ tự đồng bộ sau.")
         st.stop()
 
-    df_full  = pd.DataFrame([dataclasses.asdict(i) for i in result])
+    df_full   = pd.DataFrame([dataclasses.asdict(i) for i in result])
     cols_show = [c for c in display_cols if c in df_full.columns]
 
-    # ── Filter bar ────────────────────────────────────────
     c1, c2, c3 = st.columns([3, 1, 1])
     search        = c1.text_input("search", placeholder=f"🔍 Tìm trong {len(result):,} {label}s...", label_visibility="collapsed")
     tenant_filter = c2.selectbox("Tenant", ["Tất cả", "VN", "US"], label_visibility="collapsed")
     status_filter = c3.selectbox("Status", ["Tất cả", "Active", "Inactive"], label_visibility="collapsed")
 
-    # ── Apply filters ─────────────────────────────────────
     df_view = df_full[cols_show].copy()
     if tenant_filter != "Tất cả" and "tenant" in df_view.columns:
         df_view = df_view[df_view["tenant"] == tenant_filter]
@@ -284,7 +424,6 @@ else:
         df_view = df_view[df_view["status"] == status_filter]
     df_view = local_search(df_view, search, cols_show)
 
-    # ── Metrics ───────────────────────────────────────────
     m1, m2, m3 = st.columns(3)
     m1.metric(f"Tổng {label}s", f"{len(df_full):,}")
     if "status" in df_full.columns:
@@ -297,7 +436,6 @@ else:
 
     st.dataframe(df_view, use_container_width=True, height=520)
 
-    # ── Downloads ─────────────────────────────────────────
     st.divider()
     dl1, dl2 = st.columns(2)
     fname = f"{fname_prefix}_all"
@@ -314,7 +452,6 @@ else:
                            data=js.encode("utf-8"),
                            file_name=f"{fname}.json", mime="application/json")
 
-    # ── Detail viewer ─────────────────────────────────────
     with st.expander(f"🔎 Xem chi tiết 1 {label}"):
         keys     = [getattr(i, detail_key) for i in result]
         selected = st.selectbox(f"Chọn {detail_key}", keys)

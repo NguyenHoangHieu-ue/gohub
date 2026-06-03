@@ -123,6 +123,36 @@ def export_json(config: dict):
     print()
 
 
+def push_to_supabase(config: dict):
+    print("\n--- Đẩy users lên Supabase ---")
+    print("Dùng để seed lần đầu hoặc đồng bộ từ auth_config.json lên Supabase.\n")
+    url = input("SUPABASE_URL: ").strip()
+    key = getpass.getpass("SUPABASE_SERVICE_KEY: ")
+    if not url or not key:
+        print("Hủy.")
+        return
+    try:
+        from supabase import create_client
+        sb = create_client(url, key)
+        users = config.get("usernames", {})
+        if not users:
+            print("Không có user nào trong auth_config.json.")
+            return
+        for uname, info in users.items():
+            sb.table("users").upsert({
+                "username": uname,
+                "name":     info["name"],
+                "email":    info.get("email", ""),
+                "role":     info["role"],
+                "password": info["password"],
+            }, on_conflict="username").execute()
+        print(f"✅ Đã đẩy {len(users)} users lên Supabase")
+    except ImportError:
+        print("❌ Cần cài: pip install supabase")
+    except Exception as e:
+        print(f"❌ Lỗi: {e}")
+
+
 def main():
     config = load()
 
@@ -135,6 +165,7 @@ def main():
         print("  [3] Đổi role")
         print("  [4] Xóa user")
         print("  [5] Xuất JSON → Streamlit Secrets")
+        print("  [6] Đẩy users lên Supabase (seed lần đầu)")
         print("  [0] Thoát")
         choice = input("\nChọn: ").strip()
 
@@ -148,6 +179,8 @@ def main():
             delete_user(config)
         elif choice == "5":
             export_json(config)
+        elif choice == "6":
+            push_to_supabase(config)
         elif choice == "0":
             print("Thoát.")
             break

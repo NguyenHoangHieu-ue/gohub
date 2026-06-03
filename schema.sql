@@ -98,3 +98,16 @@ CREATE TABLE IF NOT EXISTS sync_log (
     last_sync    TIMESTAMPTZ DEFAULT NOW(),
     record_count INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    username    TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    email       TEXT,
+    role        TEXT NOT NULL DEFAULT 'sale',
+    password    TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chỉ service role mới được truy cập bảng users
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
