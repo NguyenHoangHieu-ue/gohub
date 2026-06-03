@@ -14,8 +14,8 @@ from typing import Optional
 # ─────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────
-API_KEY = "a99e6a939875a9be06f32ea767557d4ac7e019c6064b44569ba4961054d51691"
-#API_KEY = st.secrets.get("API_KEY", "fallback_key_local")
+#API_KEY = "a99e6a939875a9be06f32ea767557d4ac7e019c6064b44569ba4961054d51691"
+API_KEY = st.secrets.get("API_KEY", "fallback_key_local")
 
 BASE_URLS = {
     "production": "https://api-pm.space.gohub.com/api-pull/gohub-cloud",
