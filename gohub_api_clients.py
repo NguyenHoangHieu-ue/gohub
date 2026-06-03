@@ -4,18 +4,17 @@ Partner: gohub-cloud
 Endpoints: GET/POST /products, GET/POST /skus, GET/POST /listings, GET/POST /items
 """
 
+import os
 import requests
 import json
 import dataclasses
 from dataclasses import dataclass
 from typing import Optional
-import streamlit as st
 
 # ─────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────
-#API_KEY = "a99e6a939875a9be06f32ea767557d4ac7e019c6064b44569ba4961054d51691"
-API_KEY = st.secrets.get("API_KEY", "fallback_key_local")
+API_KEY = os.environ.get("API_KEY", "")
 
 BASE_URL = "https://api-pm.space.gohub.com/api-pull/gohub-cloud"
 
