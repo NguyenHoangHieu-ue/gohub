@@ -251,9 +251,11 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/skus", json=body)
         return self._parse(resp, Sku)
 
-    def get_all_skus(self, tenant=None, status=None) -> list:
+    def get_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None) -> list:
         return self._fetch_all(
-            lambda page, limit: self.get_skus(page=page, limit=limit, tenant=tenant, status=status)
+            lambda page, limit: self.get_skus(page=page, limit=limit, tenant=tenant,
+                                              sku_codes=sku_codes, product_codes=product_codes,
+                                              status=status)
         )
 
     def post_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None) -> list:

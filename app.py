@@ -97,7 +97,7 @@ SKU_COLS = [
 # ─────────────────────────────────────────────────────────
 if run:
     try:
-        client = GohubClient(env=env, api_key=st.secrets.get("API_KEY", API_KEY))
+        client = GohubClient(api_key=st.secrets.get("API_KEY", API_KEY))
         product_codes = parse_codes(product_codes_input)
 
         with st.spinner("Đang tải toàn bộ dữ liệu..."):
@@ -115,6 +115,8 @@ if run:
                     items = client.get_all_skus(
                         tenant=tenant or None,
                         status=status or None,
+                        sku_codes=sku_codes,
+                        product_codes=product_codes,
                     )
                 display_cols = SKU_COLS
                 detail_key   = "sku_code"
