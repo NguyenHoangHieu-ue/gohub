@@ -17,10 +17,7 @@ import streamlit as st
 #API_KEY = "a99e6a939875a9be06f32ea767557d4ac7e019c6064b44569ba4961054d51691"
 API_KEY = st.secrets.get("API_KEY", "fallback_key_local")
 
-BASE_URLS = {
-    "production": "https://api-pm.space.gohub.com/api-pull/gohub-cloud",
-    "staging":    "https://api-pm.stg-space.gohub.com/api-pull/gohub-cloud",
-}
+BASE_URL = "https://api-pm.space.gohub.com/api-pull/gohub-cloud"
 
 
 # ─────────────────────────────────────────────────────────
@@ -135,10 +132,8 @@ class ApiResponse:
 # Client
 # ─────────────────────────────────────────────────────────
 class GohubClient:
-    def __init__(self, env: str = "production", api_key: str = API_KEY):
-        assert env in BASE_URLS, "env phải là 'staging' hoặc 'production'"
-        self.base_url = BASE_URLS[env]
-        self.env = env
+    def __init__(self, api_key: str = API_KEY):
+        self.base_url = BASE_URL
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {api_key}",
