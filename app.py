@@ -69,7 +69,7 @@ def build_context(products, skus) -> str:
         f"- {s.sku_code} | product: {s.product_code} | tenant: {s.tenant} "
         f"| {s.sim_esim} | data: {s.data_amount}{s.data_amount_unit} / {s.day_amount}{s.day_amount_unit} "
         f"| giá: {s.original_cost} {s.currency} | cogs: {s.latest_cogs} {s.latest_cogs_currency} "
-        f"| status: {s.status}"
+        f"| final_cogs_vnd: {s.final_cogs_included_vat_vnd} VND | status: {s.status}"
         for s in skus
     ]
     return (
@@ -81,6 +81,7 @@ def build_context(products, skus) -> str:
 SYSTEM_PROMPT = """Bạn là trợ lý AI của GoHub, hỗ trợ team sale tra cứu thông tin sản phẩm SIM/eSim du lịch.
 Trả lời bằng tiếng Việt, ngắn gọn và chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
 Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có dữ liệu thay vì đoán.
+Khi hiển thị giá, luôn ưu tiên dùng giá VND (trường final_cogs_included_vat_vnd hoặc reference_cost_vnd). Nếu chỉ có giá ngoại tệ thì ghi rõ đơn vị tiền tệ đó.
 
 Dữ liệu sản phẩm hiện tại:
 """
