@@ -19,13 +19,15 @@ with st.sidebar:
     st.title("📡 Gohub PM")
     data_type = st.radio(
         "Chọn loại dữ liệu",
-        ["🗂 Products", "🏷 SKUs", "🤖 Chatbot"],
+        ["🗂 Products", "🏷 SKUs", "📋 Listings", "🛒 Items", "🤖 Chatbot"],
         index=0,
     )
     st.divider()
     env = st.selectbox("Environment", ["production"], index=0)
 
 is_sku      = data_type == "🏷 SKUs"
+is_listing  = data_type == "📋 Listings"
+is_item     = data_type == "🛒 Items"
 is_chatbot  = data_type == "🤖 Chatbot"
 
 
@@ -54,6 +56,30 @@ SKU_COLS = [
     "final_cogs_included_vat_vnd", "final_cogs_usd",
     "date_created", "last_modified_date",
 ]
+
+LISTING_COLS = [
+    "listing_code", "listing_ref", "reference_product_code", "tenant", "status",
+    "listing_name_vn", "listing_type", "type_of_sim", "product_type",
+    "network_operator", "category_code", "network_type",
+    "expirations_en", "hotspot_en", "call_en", "top_up_options_en",
+    "date_created", "last_modified_date",
+]
+
+ITEM_COLS = [
+    "item_code", "item_ref", "sku_code", "listing_code", "tenant", "status",
+    "item_name_vn", "item_type", "price_list", "category_code",
+    "day_amount", "day_amount_unit", "data_amount", "data_amount_unit",
+    "throttle_speed_en", "call_en",
+    "unitprice", "currency",
+    "date_created", "last_modified_date",
+]
+
+PAGE_LABEL = {
+    "🗂 Products": ("Product", "product_code", "products"),
+    "🏷 SKUs":     ("SKU",     "sku_code",     "skus"),
+    "📋 Listings": ("Listing", "listing_code", "listings"),
+    "🛒 Items":    ("Item",    "item_code",    "items"),
+}
 
 
 # ─────────────────────────────────────────────────────────
@@ -159,15 +185,21 @@ if is_chatbot:
 
 
 # ─────────────────────────────────────────────────────────
-# Page: Products / SKUs
+# Page: Products / SKUs / Listings / Items
 # ─────────────────────────────────────────────────────────
 else:
-    st.title("🏷 SKU Explorer" if is_sku else "🗂 Product Explorer")
+    label, detail_key, fname_prefix = PAGE_LABEL[data_type]
+    titles = {
+        "🗂 Products": "🗂 Product Explorer",
+        "🏷 SKUs":     "🏷 SKU Explorer",
+        "📋 Listings": "📋 Listing Explorer",
+        "🛒 Items":    "🛒 Item Explorer",
+    }
+    st.title(titles[data_type])
     st.caption(f"Env: **{env}** · Fetch: **tất cả trang (auto-paginate)**")
 
     with st.expander("🔍 Bộ lọc", expanded=True):
         col1, col2, col3 = st.columns(3)
-
         with col1:
             tenant = st.selectbox("Tenant", ["", "VN", "US"],
                                   format_func=lambda x: "Tất cả" if x == "" else x)
@@ -179,69 +211,75 @@ else:
 
         if is_sku:
             col_a, col_b = st.columns(2)
-            with col_a:
-                sku_codes_input = st.text_input(
-                    "SKU Codes (cách nhau bằng dấu phẩy)",
-                    placeholder="Ví dụ: 11VNMMBZ00610, 11VNMSFP00315",
-                )
-            with col_b:
-                product_codes_input = st.text_input(
-                    "Product Codes (lọc SKU theo product)",
-                    placeholder="Ví dụ: 11VNMMBZ, 11VNMSFP",
-                )
-        else:
-            product_codes_input = st.text_input(
-                "Product Codes (cách nhau bằng dấu phẩy)",
-                placeholder="Ví dụ: 11VNMMBZ, 11VNMSFP",
-            )
+            sku_codes_input     = col_a.text_input("SKU Codes", placeholder="Ví dụ: 11VNMMBZ00610, 11VNMSFP00315")
+            product_codes_input = col_b.text_input("Product Codes", placeholder="Ví dụ: 11VNMMBZ, 11VNMSFP")
+        elif is_listing:
+            col_a, col_b, col_c = st.columns(3)
+            listing_type_code_input = col_a.text_input("Listing Type Code (GET)", placeholder="Ví dụ: BUS")
+            listing_codes_input     = col_b.text_input("Listing Codes (POST)", placeholder="Ví dụ: L001, L002")
+            product_codes_input     = col_c.text_input("Product Codes (POST)", placeholder="Ví dụ: P001, P002")
+        elif is_item:
+            col_a, col_b = st.columns(2)
+            item_type_code_input = col_a.text_input("Item Type Code (GET)", placeholder="Ví dụ: BUS")
+            item_codes_input     = col_b.text_input("Item Codes (POST)", placeholder="Ví dụ: I001, I002")
+            col_c, col_d = st.columns(2)
+            listing_codes_input  = col_c.text_input("Listing Codes (POST)", placeholder="Ví dụ: L001, L002")
+            sku_codes_input      = col_d.text_input("SKU Codes (POST)", placeholder="Ví dụ: S001, S002")
+        else:  # Products
+            product_codes_input = st.text_input("Product Codes", placeholder="Ví dụ: 11VNMMBZ, 11VNMSFP")
 
     run = st.button("🚀 Fetch data", type="primary", use_container_width=True)
 
     if run:
         try:
             client = GohubClient(api_key=st.secrets.get("API_KEY", API_KEY))
-            product_codes = parse_codes(product_codes_input)
 
             with st.spinner("Đang tải toàn bộ dữ liệu..."):
-
                 if is_sku:
-                    sku_codes = parse_codes(sku_codes_input)
-                    if method == "POST":
-                        items = client.post_all_skus(
-                            tenant=tenant or None,
-                            status=status or None,
-                            sku_codes=sku_codes,
-                            product_codes=product_codes,
-                        )
-                    else:
-                        items = client.get_all_skus(
-                            tenant=tenant or None,
-                            status=status or None,
-                            sku_codes=sku_codes,
-                            product_codes=product_codes,
-                        )
+                    fetch_kwargs = dict(tenant=tenant or None, status=status or None,
+                                        sku_codes=parse_codes(sku_codes_input),
+                                        product_codes=parse_codes(product_codes_input))
+                    result = client.post_all_skus(**fetch_kwargs) if method == "POST" else client.get_all_skus(**fetch_kwargs)
                     display_cols = SKU_COLS
-                    detail_key   = "sku_code"
-                    label        = "SKU"
-                else:
+
+                elif is_listing:
                     if method == "POST":
-                        items = client.post_all_products(
-                            tenant=tenant or None,
-                            status=status or None,
-                            product_codes=product_codes,
+                        result = client.post_all_listings(
+                            tenant=tenant or None, status=status or None,
+                            listing_codes=parse_codes(listing_codes_input),
+                            product_codes=parse_codes(product_codes_input),
                         )
                     else:
-                        items = client.get_all_products(
-                            tenant=tenant or None,
-                            status=status or None,
+                        result = client.get_all_listings(
+                            tenant=tenant or None, status=status or None,
+                            listing_type_code=listing_type_code_input or None,
                         )
+                    display_cols = LISTING_COLS
+
+                elif is_item:
+                    if method == "POST":
+                        result = client.post_all_items(
+                            tenant=tenant or None,
+                            item_codes=parse_codes(item_codes_input),
+                            listing_codes=parse_codes(listing_codes_input),
+                            sku_codes=parse_codes(sku_codes_input),
+                        )
+                    else:
+                        result = client.get_all_items(
+                            tenant=tenant or None, status=status or None,
+                            item_type_code=item_type_code_input or None,
+                        )
+                    display_cols = ITEM_COLS
+
+                else:  # Products
+                    fetch_kwargs = dict(tenant=tenant or None, status=status or None,
+                                        product_codes=parse_codes(product_codes_input))
+                    result = client.post_all_products(**fetch_kwargs) if method == "POST" else client.get_all_products(tenant=tenant or None, status=status or None)
                     display_cols = PRODUCT_COLS
-                    detail_key   = "product_code"
-                    label        = "Product"
 
-            st.success(f"✅ Đã tải **{len(items):,}** {label}s")
+            st.success(f"✅ Đã tải **{len(result):,}** {label}s")
 
-            df = pd.DataFrame([dataclasses.asdict(i) for i in items])
+            df = pd.DataFrame([dataclasses.asdict(i) for i in result])
 
             m1, m2, m3, m4 = st.columns(4)
             m1.metric(f"Tổng {label}s", f"{len(df):,}")
@@ -256,7 +294,7 @@ else:
 
             st.divider()
             dl1, dl2 = st.columns(2)
-            fname = f"{'skus' if is_sku else 'products'}_{tenant or 'all'}_{env}"
+            fname = f"{fname_prefix}_{tenant or 'all'}_{env}"
 
             with dl1:
                 csv_buf = io.StringIO()
@@ -270,7 +308,7 @@ else:
                 )
             with dl2:
                 json_str = json.dumps(
-                    [dataclasses.asdict(i) for i in items],
+                    [dataclasses.asdict(i) for i in result],
                     ensure_ascii=False, indent=2,
                 )
                 st.download_button(
@@ -282,10 +320,10 @@ else:
                 )
 
             with st.expander(f"🔎 Xem chi tiết 1 {label}"):
-                keys = [getattr(i, detail_key) for i in items]
+                keys = [getattr(i, detail_key) for i in result]
                 selected = st.selectbox(f"Chọn {detail_key}", keys)
                 if selected:
-                    obj = next((i for i in items if getattr(i, detail_key) == selected), None)
+                    obj = next((i for i in result if getattr(i, detail_key) == selected), None)
                     if obj:
                         st.json(dataclasses.asdict(obj))
 
