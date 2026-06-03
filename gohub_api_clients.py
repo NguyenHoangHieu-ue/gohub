@@ -1,6 +1,7 @@
 """
 Gohub API Client
-Partner: bao-test | API: gohub-cloud
+Partner: gohub-cloud
+Endpoints: GET/POST /products, GET/POST /skus
 """
 
 import requests
@@ -9,10 +10,12 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Optional
 
+
 # ─────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────
-API_KEY = "0e44b4d7017cc7b5be349df4cfa42b112b12bccf471e213534ea0507ce9098d1"
+API_KEY = "a99e6a939875a9be06f32ea767557d4ac7e019c6064b44569ba4961054d51691"
+#API_KEY = st.secrets.get("API_KEY", "fallback_key_local")
 
 BASE_URLS = {
     "production": "https://api-pm.space.gohub.com/api-pull/gohub-cloud",
@@ -30,38 +33,36 @@ class Pagination:
     limit: int
 
     def __str__(self):
-        pages = -(-self.total // self.limit)  # ceiling division
+        pages = -(-self.total // self.limit)
         return f"Page {self.page}/{pages} — {self.total} total items"
 
 
 @dataclass
 class Product:
-    # Required fields
-    tenant:              str
-    product_code:        str
-    product_ref:         str
-    status:              str
-    type_of_sim:         str
-    product_type:        str
-    operator_code:       str
-    vendor_code:         str
-    purchase_type:       str
-    gc_purchase_type:    str
-    source_type:         str
-    sku_type:            str
-    data_type:           str
-    import_type:         str
-    supported_countries: str
-    network_type:        str
-    onsite_carrier:      str
-    local_phone_number:  str
-    hotspot:             str
-    kyc_code:            str
-    kyc_needed:          str
-    top_up_options:      str
-    date_created:        str
-    last_modified_date:  str
-    # Nullable fields
+    tenant:                 str
+    product_code:           str
+    product_ref:            str
+    status:                 str
+    type_of_sim:            str
+    product_type:           str
+    operator_code:          str
+    vendor_code:            str
+    purchase_type:          str
+    gc_purchase_type:       str
+    source_type:            str
+    sku_type:               str
+    data_type:              str
+    import_type:            str
+    supported_countries:    str
+    network_type:           str
+    onsite_carrier:         str
+    local_phone_number:     str
+    hotspot:                str
+    kyc_code:               str
+    kyc_needed:             str
+    top_up_options:         str
+    date_created:           str
+    last_modified_date:     str
     base_sim_esim_sku_code: Optional[str] = None
     daily_reset_time:       Optional[str] = None
     activation_time:        Optional[str] = None
@@ -82,7 +83,47 @@ class Product:
 
 
 @dataclass
-class ProductsResponse:
+class Sku:
+    tenant:                     str
+    sku_code:                   str
+    sku_ref:                    str
+    product_code:               str
+    status:                     str
+    sim_esim:                   str
+    product_type:               str
+    parents:                    str
+    throttle_speed:             str
+    call:                       str
+    expirations:                str
+    currency:                   str
+    day_amount:                 int
+    day_amount_unit:            str
+    data_amount:                float
+    data_amount_unit:           str
+    date_created:               str
+    last_modified_date:         str
+    # Nullable / optional
+    frame:                      Optional[str]   = None
+    datapack:                   Optional[str]   = None
+    call_sms_details:           Optional[str]   = None
+    vendor_sku:                 Optional[str]   = None
+    vendor_sku_sim:             Optional[str]   = None
+    original_cost:              Optional[float] = None
+    reference_cost_vnd:         Optional[float] = None
+    latest_cogs:                Optional[float] = None
+    latest_cogs_currency:       Optional[str]   = None
+    final_cogs_included_vat_vnd:Optional[float] = None
+    final_cogs_usd:             Optional[float] = None
+    wr_group:                   Optional[str]   = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Sku":
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in d.items() if k in known})
+
+
+@dataclass
+class ApiResponse:
     status:     str
     code:       int
     message:    str
@@ -94,199 +135,172 @@ class ProductsResponse:
 # Client
 # ─────────────────────────────────────────────────────────
 class GohubClient:
-    def __init__(self, env: str = "production"):
+    def __init__(self, env: str = "production", api_key: str = API_KEY):
         assert env in BASE_URLS, "env phải là 'staging' hoặc 'production'"
         self.base_url = BASE_URLS[env]
         self.env = env
         self.session = requests.Session()
         self.session.headers.update({
-            "Authorization": f"Bearer {API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type":  "application/json",
         })
 
-    # ── GET /products ──────────────────────────────────────
+    # ── Internal: parse response ───────────────────────────
+    def _parse(self, resp: requests.Response, model) -> ApiResponse:
+        resp.raise_for_status()
+        raw = resp.json()
+        items      = [model.from_dict(item) for item in raw["data"]["items"]]
+        pagination = Pagination(**raw["data"]["pagination"])
+        return ApiResponse(
+            status=raw["status"], code=raw["code"],
+            message=raw["message"], items=items, pagination=pagination,
+        )
+
+    # ── Internal: auto-paginate ────────────────────────────
+    def _fetch_all(self, fetch_page_fn, limit: int = 1000) -> list:
+        all_items, page = [], 1
+        while True:
+            r = fetch_page_fn(page=page, limit=limit)
+            all_items.extend(r.items)
+            total_pages = -(-r.pagination.total // limit)
+            print(f"  Page {page}/{total_pages} — +{len(r.items)} (tổng: {len(all_items)}/{r.pagination.total})")
+            if len(all_items) >= r.pagination.total:
+                break
+            page += 1
+        return all_items
+
+    # ══════════════════════════════════════════════════════
+    # PRODUCTS
+    # ══════════════════════════════════════════════════════
+
     def get_products(
         self,
         page:          int           = 1,
-        limit:         int           = 100,       # max 1000
-        tenant:        Optional[str] = None,      # "VN" | "US"
-        product_code:  Optional[str] = None,      # filter contains
-        product_codes: Optional[list]= None,      # ["P001","P002"]
-        status:        Optional[str] = None,      # "Active" | ...
-    ) -> ProductsResponse:
+        limit:         int           = 1000,
+        tenant:        Optional[str] = None,
+        product_code:  Optional[str] = None,
+        product_codes: Optional[list]= None,
+        status:        Optional[str] = None,
+    ) -> ApiResponse:
         params: dict = {"page": page, "limit": limit}
         if tenant:        params["tenant"]       = tenant
         if product_code:  params["productCode"]  = product_code
         if product_codes: params["productCodes"] = ",".join(product_codes)
         if status:        params["status"]       = status
-
         resp = self.session.get(f"{self.base_url}/products", params=params)
-        resp.raise_for_status()
-        raw = resp.json()
+        return self._parse(resp, Product)
 
-        items      = [Product.from_dict(item) for item in raw["data"]["items"]]
-        pagination = Pagination(**raw["data"]["pagination"])
-
-        return ProductsResponse(
-            status     = raw["status"],
-            code       = raw["code"],
-            message    = raw["message"],
-            items      = items,
-            pagination = pagination,
-        )
-
-    # ── POST /products ────────────────────────────────────
     def post_products(
         self,
         page:          int           = 1,
-        limit:         int           = 100,       # max 1000
-        tenant:        Optional[str] = None,      # "VN" | "US"
-        product_codes: Optional[list]= None,      # ["P001","P002"]
-        status:        Optional[str] = None,      # "ACTIVE" | ...
-    ) -> ProductsResponse:
+        limit:         int           = 1000,
+        tenant:        Optional[str] = None,
+        product_codes: Optional[list]= None,
+        status:        Optional[str] = None,
+    ) -> ApiResponse:
         body: dict = {"page": page, "limit": limit}
         if tenant:        body["tenant"]       = tenant
         if product_codes: body["productCodes"] = product_codes
         if status:        body["status"]       = status
-
         resp = self.session.post(f"{self.base_url}/products", json=body)
-        resp.raise_for_status()
-        raw = resp.json()
+        return self._parse(resp, Product)
 
-        items      = [Product.from_dict(item) for item in raw["data"]["items"]]
-        pagination = Pagination(**raw["data"]["pagination"])
-
-        return ProductsResponse(
-            status     = raw["status"],
-            code       = raw["code"],
-            message    = raw["message"],
-            items      = items,
-            pagination = pagination,
+    def get_all_products(self, tenant=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.get_products(page=page, limit=limit, tenant=tenant, status=status)
         )
 
-    # ── POST fetch ALL pages (auto-paginate) ──────────────
-    def post_all_products(
+    def post_all_products(self, tenant=None, product_codes=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.post_products(page=page, limit=limit, tenant=tenant,
+                                                   product_codes=product_codes, status=status)
+        )
+
+    # ══════════════════════════════════════════════════════
+    # SKUS
+    # ══════════════════════════════════════════════════════
+
+    def get_skus(
         self,
+        page:          int           = 1,
+        limit:         int           = 1000,
         tenant:        Optional[str] = None,
+        sku_code:      Optional[str] = None,
+        sku_codes:     Optional[list]= None,
         product_codes: Optional[list]= None,
         status:        Optional[str] = None,
-        limit:         int           = 1000,
-    ) -> list:
-        all_items, page = [], 1
-        while True:
-            r = self.post_products(page=page, limit=limit, tenant=tenant,
-                                   product_codes=product_codes, status=status)
-            all_items.extend(r.items)
-            total_pages = -(-r.pagination.total // limit)
-            print(f"  Page {page}/{total_pages} — +{len(r.items)} items (tổng: {len(all_items)}/{r.pagination.total})")
-            if len(all_items) >= r.pagination.total:
-                break
-            page += 1
-        return all_items
+    ) -> ApiResponse:
+        params: dict = {"page": page, "limit": limit}
+        if tenant:        params["tenant"]       = tenant
+        if sku_code:      params["skuCode"]      = sku_code
+        if sku_codes:     params["skuCodes"]     = ",".join(sku_codes)
+        if product_codes: params["productCodes"] = ",".join(product_codes)
+        if status:        params["status"]       = status
+        resp = self.session.get(f"{self.base_url}/skus", params=params)
+        return self._parse(resp, Sku)
 
-    # ── Fetch ALL pages (auto-paginate) ───────────────────
-    def get_all_products(
+    def post_skus(
         self,
-        tenant: Optional[str] = None,
-        status: Optional[str] = None,
-        limit:  int           = 1000,
-    ) -> list:
-        all_items, page = [], 1
-        while True:
-            r = self.get_products(page=page, limit=limit, tenant=tenant, status=status)
-            all_items.extend(r.items)
-            total_pages = -(-r.pagination.total // limit)
-            print(f"  Page {page}/{total_pages} — +{len(r.items)} items (tổng: {len(all_items)}/{r.pagination.total})")
-            if len(all_items) >= r.pagination.total:
-                break
-            page += 1
-        return all_items
+        page:          int           = 1,
+        limit:         int           = 1000,
+        tenant:        Optional[str] = None,
+        sku_codes:     Optional[list]= None,
+        product_codes: Optional[list]= None,
+        status:        Optional[str] = None,
+    ) -> ApiResponse:
+        body: dict = {"page": page, "limit": limit}
+        if tenant:        body["tenant"]       = tenant
+        if sku_codes:     body["skuCodes"]     = sku_codes
+        if product_codes: body["productCodes"] = product_codes
+        if status:        body["status"]       = status
+        resp = self.session.post(f"{self.base_url}/skus", json=body)
+        return self._parse(resp, Sku)
+
+    def get_all_skus(self, tenant=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.get_skus(page=page, limit=limit, tenant=tenant, status=status)
+        )
+
+    def post_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None) -> list:
+        return self._fetch_all(
+            lambda page, limit: self.post_skus(page=page, limit=limit, tenant=tenant,
+                                               sku_codes=sku_codes, product_codes=product_codes,
+                                               status=status)
+        )
 
 
 # ─────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────
-PREVIEW_COLS = [
-    "product_code", "product_ref", "tenant", "status",
-    "product_type", "vendor_code", "source_type",
-]
-
-def print_products(products: list, max_rows: int = 10):
-    """In bảng tóm tắt ra terminal."""
-    col_w = 26
-    header = " | ".join(f"{c:<{col_w}}" for c in PREVIEW_COLS)
-    print(header)
-    print("─" * len(header))
-    for p in products[:max_rows]:
-        row = " | ".join(f"{str(getattr(p, c, '') or ''):<{col_w}}" for c in PREVIEW_COLS)
-        print(row)
-    if len(products) > max_rows:
-        print(f"  ... và {len(products) - max_rows} sản phẩm nữa")
-
-
-def to_json(products: list, path: str):
-    """Xuất toàn bộ products ra file JSON."""
+def to_json(items: list, path: str):
     with open(path, "w", encoding="utf-8") as f:
-        json.dump([dataclasses.asdict(p) for p in products], f, ensure_ascii=False, indent=2)
-    print(f"✓ Đã lưu {len(products)} sản phẩm → {path}")
+        json.dump([dataclasses.asdict(i) for i in items], f, ensure_ascii=False, indent=2)
+    print(f"✓ Đã lưu {len(items)} items → {path}")
 
 
-def to_csv(products: list, path: str):
-    """Xuất toàn bộ products ra file CSV."""
+def to_csv(items: list, path: str):
     import csv
-    if not products:
-        print("Không có dữ liệu để xuất.")
-        return
-    fields = list(dataclasses.asdict(products[0]).keys())
+    if not items: return
+    fields = list(dataclasses.asdict(items[0]).keys())
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
-        writer.writerows([dataclasses.asdict(p) for p in products])
-    print(f"✓ Đã lưu {len(products)} sản phẩm → {path}")
+        writer.writerows([dataclasses.asdict(i) for i in items])
+    print(f"✓ Đã lưu {len(items)} items → {path}")
 
 
 # ─────────────────────────────────────────────────────────
-# Main — examples
+# Main
 # ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-
-    # Đổi env thành "production" khi cần
     client = GohubClient(env="production")
 
-    # ── 1. Lấy 1 trang, lọc tenant VN ──────────────────────
-    print("─── GET /products  page=1  limit=10  tenant=VN ───")
-    r = client.get_products(page=1, limit=10, tenant="VN")
-    print(f"Status  : {r.status} ({r.code})")
-    print(f"Message : {r.message}")
-    print(f"Pages   : {r.pagination}")
-    print()
-    print_products(r.items)
+    # Products
+    print("─── POST /products ───")
+    r = client.post_products(page=1, limit=10, tenant="VN")
+    print(f"{r.status} ({r.code}) · {r.pagination}")
 
-    # ── 2. Lọc theo product_codes cụ thể ───────────────────
-    # r2 = client.get_products(product_codes=["11VNMMBZ", "11VNMSFP"])
-    # print_products(r2.items)
-
-    # ── 3. Fetch toàn bộ sản phẩm, xuất CSV + JSON ─────────
-    # print("\n─── Fetch ALL (auto-paginate) ───")
-    # all_products = client.get_all_products(tenant="VN", status="Active")
-    # to_json(all_products, "products_vn.json")
-    # to_csv(all_products,  "products_vn.csv")
-
-    # ── 4. POST /products ───────────────────────────────────
-    print("\n─── POST /products  page=1  limit=10  tenant=VN ───")
-    r_post = client.post_products(page=1, limit=10, tenant="VN")
-    print(f"Status  : {r_post.status} ({r_post.code})")
-    print(f"Message : {r_post.message}")
-    print(f"Pages   : {r_post.pagination}")
-    print()
-    print_products(r_post.items)
-
-    # ── 5. POST: lọc danh sách product_codes cụ thể ─────────
-    # r5 = client.post_products(product_codes=["11VNMMBZ", "11VNMSFP"])
-    # print_products(r5.items)
-
-    # ── 6. POST: fetch toàn bộ, xuất CSV + JSON ─────────────
-    # print("\n─── POST ALL (auto-paginate) ───")
-    # all_products = client.post_all_products(tenant="VN", status="ACTIVE")
-    # to_json(all_products, "products_vn.json")
-    # to_csv(all_products,  "products_vn.csv")
+    # SKUs
+    print("\n─── POST /skus ───")
+    r2 = client.post_skus(page=1, limit=10, tenant="VN")
+    print(f"{r2.status} ({r2.code}) · {r2.pagination}")
