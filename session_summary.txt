@@ -3,70 +3,69 @@ Cập nhật lần cuối: 2026-06-04
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
-Deploy hiện tại:  Streamlit Cloud + Supabase + GitHub Actions (sync mỗi 30 phút)
-Deploy mới (WIP): Next.js trong web/ → sẽ deploy lên Vercel
+Deploy: Next.js trên Vercel (https://gohub-murex.vercel.app) — ĐANG HOẠT ĐỘNG
+Streamlit: Đã XÓA hoàn toàn (app.py, generate_auth.py, requirements.txt đã remove)
+GitHub Actions sync: Vẫn chạy (sync.py + gohub_api_clients.py giữ nguyên)
 
 ---
 
-## Kiến trúc hệ thống
+## Kiến trúc hệ thống (chỉ còn Next.js)
 
-### Stack hiện tại (Streamlit)
-- Frontend: Streamlit Cloud (app.py)
-- Database: Supabase (PostgreSQL, free tier)
-- Sync: GitHub Actions cron */30 * * * * chạy sync.py
-- Auth: streamlit-authenticator v0.3.3, user lưu trong bảng users Supabase
-- AI: Google Gemini (gemini-3.5-flash)
-
-### Stack mới (Next.js — trong web/)
-- Frontend: Next.js 14 (App Router, TypeScript, Tailwind CSS)
-- Deploy: Vercel (free tier)
-- Auth: NextAuth.js v4, CredentialsProvider → validate bcrypt từ bảng users Supabase
-- Data: @supabase/supabase-js gọi thẳng từ Server Components
-- Table: @tanstack/react-table (sort, filter, pagination, export CSV/JSON)
+### Stack
+- Frontend: Next.js 14.2.35 (App Router, TypeScript, Tailwind CSS)
+- Deploy: Vercel (https://gohub-murex.vercel.app)
+- Auth: NextAuth.js v4, CredentialsProvider → bcrypt verify từ bảng users Supabase
+- Data: @supabase/supabase-js (Server Components + API routes)
+- Table: @tanstack/react-table (sort, filter, paginate, export CSV/JSON)
 - AI: @google/generative-ai (gemini-3.5-flash)
-- Admin: REST API routes tại /api/admin/users
+- Sync: GitHub Actions cron */30 * * * * chạy sync.py → Supabase
 
 ---
 
 ## Files chính
 
-### Python (Streamlit stack — vẫn giữ)
-- app.py              — Streamlit UI (6 tabs + sidebar)
-- sync.py             — GitHub Actions sync (GoHub API → Supabase, batch 500)
-- gohub_api_clients.py — Python client gọi GoHub API
-- generate_auth.py    — CLI quản lý user local
-- schema.sql          — Supabase table definitions
-- requirements.txt
-
 ### Next.js (web/)
 web/
-├── package.json         — deps: next 14, next-auth, supabase-js, tanstack-table, lucide-react
-├── tailwind.config.ts   — brand colors: brand-600 = #0f4c81
-├── .env.local.example   — template secrets
+├── package.json         — next 14.2.35, next-auth, supabase-js, tanstack-table
+├── next.config.js       — (đã đổi từ .ts sang .js cho Next.js 14)
+├── vercel.json          — { "framework": "nextjs" }
+├── .env.local           — secrets local (không commit)
 └── src/
     ├── app/
-    │   ├── login/page.tsx              — Login page (gradient card)
+    │   ├── login/page.tsx              — Login page (có try/catch error handling)
     │   ├── (dashboard)/layout.tsx      — Auth check + Sidebar wrapper
-    │   ├── (dashboard)/products/       — Server Component, fetch + DataTable
-    │   ├── (dashboard)/skus/           — Role-based: ẩn cột giá nếu role=sale
-    │   ├── (dashboard)/listings/
-    │   ├── (dashboard)/items/
+    │   ├── (dashboard)/products/       — Server Component, cached 30 phút
+    │   ├── (dashboard)/skus/           — Server Component, cached 30 phút
+    │   │                                 Filter nâng cao: SIM/eSIM, product type,
+    │   │                                 throttle, day range, data range
+    │   │                                 Ẩn cột giá nếu role=sale
+    │   ├── (dashboard)/listings/       — Server Component, cached 30 phút
+    │   ├── (dashboard)/items/          — CLIENT component, server-side search
+    │   │                                 Filter: search, status, tenant, channel,
+    │   │                                 item_type, price_list, day range, price range
+    │   │                                 Pagination server-side (50/trang)
     │   ├── (dashboard)/chatbot/        — Client Component, bubble chat UI
     │   ├── (dashboard)/admin/          — Client Component, CRUD users
     │   └── api/
     │       ├── auth/[...nextauth]/     — NextAuth handler
     │       ├── chat/                   — Gemini API (context cache 30 phút)
+    │       │                             Context giới hạn: 3k SKUs, 3k listings, 2k items
+    │       ├── items/                  — GET items với filter + server-side pagination
     │       └── admin/users/            — GET/POST + [username] PATCH/DELETE
     ├── components/
     │   ├── sidebar.tsx      — Fixed 240px, gradient brand header, user card
-    │   ├── data-table.tsx   — TanStack Table: sort, filter, paginate, export
+    │   ├── data-table.tsx   — TanStack Table + ExtraFilter (select dropdown + range)
     │   └── metric-card.tsx  — Card với top accent border
-    ├── lib/
-    │   ├── auth.ts          — NextAuth config + bcrypt verify
-    │   ├── supabase.ts      — supabase (anon) + supabaseAdmin (service key) + fetchAll()
-    │   └── utils.ts         — fmtVND, fmtUSD, fmtDate, fmtNum, cn
-    ├── types/next-auth.d.ts — Augment Session với role + username
-    └── middleware.ts        — Protect /products /skus /listings /items /chatbot /admin
+    └── lib/
+        ├── auth.ts          — NextAuth config + bcrypt verify
+        ├── supabase.ts      — supabase + supabaseAdmin + cached getters (30 phút)
+        │                      getProducts(), getSkus(), getListings(), getActiveItems()
+        └── utils.ts         — fmtVND, fmtUSD, fmtDate, fmtNum, cn
+
+### Python (sync — vẫn giữ)
+- sync.py             — GitHub Actions sync (GoHub API → Supabase, batch 500)
+- gohub_api_clients.py — Python client gọi GoHub API
+- schema.sql          — Supabase table definitions
 
 ---
 
@@ -74,64 +73,76 @@ web/
 - products     (769 rows)
 - skus         (10,957 rows)
 - listings     (10,674 rows)
-- items        (137,005 rows)
+- items        (137,005 rows — 130,019 active)
 - sync_log     — ghi lại thời gian sync
 - users        — user accounts (bcrypt hash, RLS enabled)
 
+Users hiện có:
+- hieu (role: admin)
+- hieu1 (role: sale)
+
 ---
 
-## Secrets cần thiết
-
-### Streamlit Cloud Secrets
-SUPABASE_URL         = "https://wfuigmfnfcijkvylrwzz.supabase.co"
-SUPABASE_ANON_KEY    = "eyJ..."
-SUPABASE_SERVICE_KEY = "eyJ..."
-GEMINI_KEY           = "AIza..."
-COOKIE_KEY           = "gohub-secret-key"
-
-### GitHub Repo Secrets (cho Actions sync)
-API_KEY              = "0e44b4..."
-SUPABASE_URL         = (như trên)
-SUPABASE_SERVICE_KEY = (như trên)
+## Secrets
 
 ### Next.js .env.local (và Vercel Environment Variables)
-NEXT_PUBLIC_SUPABASE_URL      = (như trên)
-NEXT_PUBLIC_SUPABASE_ANON_KEY = (như trên)
-SUPABASE_SERVICE_KEY          = (như trên)
-NEXTAUTH_SECRET               = (random 32-char string)
-NEXTAUTH_URL                  = https://your-app.vercel.app (production) hoặc http://localhost:3000 (local)
-GEMINI_KEY                    = (như trên)
+NEXT_PUBLIC_SUPABASE_URL      = https://wfuigmfnfcijkvylrwzz.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY = eyJ... (trong key.txt)
+SUPABASE_SERVICE_KEY          = eyJ... (trong key.txt)
+NEXTAUTH_SECRET               = 82c8dfd48a475000674420e13a0883e6298b8562dd5bdd38804ba269896c61b6
+NEXTAUTH_URL                  = https://gohub-murex.vercel.app
+GEMINI_KEY                    = AIzaSyByOnUrpRgemltiKhlGF1P_5lnzq8-uDTE
 
----
-
-## Setup Next.js local
-
-cd web
-npm install
-cp .env.local.example .env.local
-# điền secrets vào .env.local
-npm run dev   # → http://localhost:3000
-
-## Deploy lên Vercel
-
-1. vercel.com → Import repo NguyenHoangHieu-ue/gohub
-2. Root Directory: web
-3. Thêm Environment Variables (6 biến ở trên)
-4. Deploy → Vercel tự build Next.js
+### GitHub Repo Secrets (cho Actions sync)
+API_KEY              = 0e44b4... (trong key.txt)
+SUPABASE_URL         = (như trên)
+SUPABASE_SERVICE_KEY = (như trên)
 
 ---
 
 ## Lưu ý kỹ thuật
 
-### Next.js
-- Data pages là React Server Components → fetch Supabase server-side, không expose key ra client
-- Chatbot context cache module-level (30 phút) — trong Vercel serverless mỗi instance cache riêng
-- Items 137k rows: load toàn bộ vào DataTable client-side (TanStack Table xử lý được)
-- Role check: SKUs ẩn cost columns nếu role=sale
-- Admin page: client component, gọi /api/admin/users/* với session cookie
+### Performance
+- Products/SKUs/Listings: unstable_cache 30 phút → lần đầu fetch Supabase, lần sau tức thì
+- Items: server-side search qua /api/items, 50 rows/trang, filter đa chiều
+- Chatbot context: giới hạn 3k SKUs active + 3k listings active + 2k items active
 
-### Python (vẫn hoạt động song song)
-- sync.py chạy local cần: PYTHONIOENCODING=utf-8
-- Python executable: C:\Users\hieuh\AppData\Local\Programs\Python\Python311\python.exe
-- Streamlit cache @st.cache_data(ttl=1800) — restart app để clear
-- items 137k: chatbot chỉ lấy 15k active đầu tiên
+### Data loading
+- Products (769): fetchAll → cache 30 phút
+- SKUs (10,957): fetchAll → cache 30 phút, filter client-side với ExtraFilter
+- Listings (10,674): fetchAll → cache 30 phút
+- Items (130k active): server-side search, không cache (real-time filter)
+
+### Filter
+- DataTable có ExtraFilter type: "select" (dropdown) hoặc "range" (min/max input)
+- SKUs dùng ExtraFilter: SIM/eSIM, product_type, throttle_speed, day_amount, data_amount
+- Items page: custom filter UI → gọi /api/items
+
+### Cấu trúc mã (từ Item-SKU Format.xlsx)
+SKU CODE (13 ký tự) = [PurchaseType(1)][ProductType(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]
+ITEM CODE (18 ký tự) = [Channel(1)][Partner(2)][PricelistCode(2)][SKU_CODE(13)][Number(2)]
+- Channel: B=B2C, D=OD, W=WS, I=Internal
+- Partner: SP=ShopeePay, MM=Momo, ZP=Zalopay, KK=KKday, T1=Tier1 WS
+- PurchaseType: 1-6=VN variants, A-E=US variants
+- Country: VNM=Vietnam, CHM=China-HK-Macao, ...
+
+### Setup local
+cd web
+npm install
+# .env.local đã có sẵn (không commit)
+npm run dev   # → http://localhost:3000
+
+---
+
+## Việc đã làm trong session này
+1. Migrate hoàn toàn từ Streamlit sang Next.js
+2. Fix next.config.ts → next.config.js (Next.js 14 không hỗ trợ .ts)
+3. Upgrade Next.js 14.2.28 → 14.2.35 (security patch)
+4. Thêm vercel.json để Vercel nhận dạng Next.js framework
+5. Deploy thành công lên Vercel (https://gohub-murex.vercel.app)
+6. Fix chatbot: giảm token xuống ~200k (từ 1M+ gây lỗi 400)
+7. Fix items: server-side search thay vì load 137k rows
+8. Cache Supabase queries 30 phút (unstable_cache)
+9. Fix SKUs: cột giá hiển thị số thô, không thêm ký tự tiền tệ
+10. Build DataTable ExtraFilter (dropdown + range) cho SKUs
+11. Rewrite Items page thành client component + /api/items server-side search
