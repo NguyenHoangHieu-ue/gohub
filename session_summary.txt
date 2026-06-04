@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-04
+Cập nhật lần cuối: 2026-06-04 (session 2)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -146,3 +146,21 @@ npm run dev   # → http://localhost:3000
 9. Fix SKUs: cột giá hiển thị số thô, không thêm ký tự tiền tệ
 10. Build DataTable ExtraFilter (dropdown + range) cho SKUs
 11. Rewrite Items page thành client component + /api/items server-side search
+
+## Session 2 (2026-06-04)
+12. Xóa .streamlit/config.toml (rác còn sót từ Streamlit)
+13. Xóa 4 tab Products/SKUs/Listings/Items — web chuyển hướng sang mục tiêu mới
+14. Xóa data-table.tsx, metric-card.tsx, api/items/route.ts (không còn dùng)
+15. Cập nhật sidebar: chỉ còn Chatbot + Admin
+16. Root redirect về /chatbot thay vì /products
+17. Dọn supabase.ts: bỏ cached getters, giữ 2 client
+18. Gitignore VENDOR/, Add_product/, TaiLieuCongTy_Chung/ (data nội bộ, không public)
+
+## Định hướng web mới (đang plan)
+Mục tiêu 5 tính năng:
+1. Chatbot trả lời về sản phẩm hệ thống (đã có)
+2. Quản lý data NCC (báo giá từ nhà cung cấp → chuẩn hóa → Supabase)
+3. Tạo mẫu sản phẩm mới (6-sheet Excel, tự tính cost theo tỷ giá/công thức)
+4. Gap analysis: NCC có gì mà hệ thống chưa có
+5. Phân quyền: admin/manager xem full, team khác xem hạn chế
+(Đang thu thập yêu cầu chi tiết từ user)
