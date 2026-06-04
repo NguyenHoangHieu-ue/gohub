@@ -175,3 +175,5 @@ Mục tiêu 5 tính năng:
     - /promotions — Khuyến Mãi (NCC)
     - /skus       — Sản Phẩm Hệ Thống (format Template_SKU + cột status)
     - /ncc        — Sản Phẩm Nhà Cung Cấp (sau khi chuẩn hóa schema)
+23. Tất cả lỗi UI hiển thị "Hiếu đang fix, vui lòng đợi" (chatbot, admin, login)
+24. Fix redirect stale: login + admin không còn trỏ về /products đã xóa → /chatbot
