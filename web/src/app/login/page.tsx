@@ -15,11 +15,16 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError("")
-    const result = await signIn("credentials", { username, password, redirect: false })
-    if (result?.ok) {
-      router.push("/products")
-    } else {
-      setError("Sai tên đăng nhập hoặc mật khẩu.")
+    try {
+      const result = await signIn("credentials", { username, password, redirect: false })
+      if (result?.ok) {
+        router.push("/products")
+      } else {
+        setError(result?.error || "Sai tên đăng nhập hoặc mật khẩu.")
+        setLoading(false)
+      }
+    } catch (err) {
+      setError("Lỗi kết nối. Thử lại sau.")
       setLoading(false)
     }
   }
