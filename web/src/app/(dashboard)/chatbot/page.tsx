@@ -36,6 +36,8 @@ export default function ChatbotPage() {
     setInput("")
     setLoading(true)
 
+    let streamStarted = false
+
     try {
       const res = await fetch("/api/chat", {
         method:  "POST",
@@ -44,13 +46,13 @@ export default function ChatbotPage() {
       })
 
       if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.error || "API error")
+        const json = await res.json().catch(() => ({}))
+        throw new Error((json as any).error || "API error")
       }
 
-      // Switch from typing indicator to streaming
       setLoading(false)
       setStreaming(true)
+      streamStarted = true
       setMessages(prev => [...prev, { role: "assistant", content: "" }])
 
       const reader  = res.body!.getReader()
@@ -69,8 +71,17 @@ export default function ChatbotPage() {
           return msgs
         })
       }
-    } catch (e: any) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Hiếu đang fix, vui lòng đợi" }])
+    } catch {
+      const errMsg = "Hiếu đang fix, vui lòng đợi"
+      if (streamStarted) {
+        setMessages(prev => {
+          const msgs = [...prev]
+          msgs[msgs.length - 1] = { role: "assistant", content: errMsg }
+          return msgs
+        })
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: errMsg }])
+      }
     } finally {
       setLoading(false)
       setStreaming(false)

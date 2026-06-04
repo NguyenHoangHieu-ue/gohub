@@ -100,8 +100,9 @@ export async function POST(req: NextRequest) {
             const text = chunk.text()
             if (text) controller.enqueue(encoder.encode(text))
           }
-        } finally {
           controller.close()
+        } catch (err) {
+          controller.error(err)
         }
       },
     })
