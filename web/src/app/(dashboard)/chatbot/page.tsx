@@ -71,8 +71,8 @@ export default function ChatbotPage() {
           return msgs
         })
       }
-    } catch {
-      const errMsg = "Hiếu đang fix, vui lòng đợi"
+    } catch (e: any) {
+      const errMsg = `[DEBUG] ${e?.message || String(e)}`
       if (streamStarted) {
         setMessages(prev => {
           const msgs = [...prev]
