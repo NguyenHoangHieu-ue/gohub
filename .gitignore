@@ -19,6 +19,11 @@ TaiLieuCongTy_Chung/
 .streamlit/config.toml
 .streamlit/secrets.toml
 
+# Docs / notes (local only)
+*.txt
+*.md
+_Skills_AI/
+
 # OS
 .DS_Store
 Thumbs.db
