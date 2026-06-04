@@ -171,3 +171,7 @@ Mục tiêu 5 tính năng:
 21. Cache context data: unstable_cache 24h TTL (persistent qua Vercel cold starts)
     - Tách data fetching (cached) khỏi context string building (role-dependent, không cache)
     - Cold start đầu tiên sau 24h sẽ fetch Supabase; các lần sau tức thì
+22. Thêm 3 tab placeholder (đang phát triển):
+    - /promotions — Khuyến Mãi (NCC)
+    - /skus       — Sản Phẩm Hệ Thống (format Template_SKU + cột status)
+    - /ncc        — Sản Phẩm Nhà Cung Cấp (sau khi chuẩn hóa schema)
