@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { fetchAll } from "@/lib/supabase"
+import { getSkus } from "@/lib/supabase"
 import { DataTable, type ColDef } from "@/components/data-table"
 import { MetricCard } from "@/components/metric-card"
 import { Tag } from "lucide-react"
@@ -39,7 +39,7 @@ export default async function SkusPage() {
   if (!session) redirect("/login")
 
   const role   = session.user.role
-  const data   = await fetchAll("skus")
+  const data   = await getSkus()
   const active = data.filter(r => String(r.status ?? "").toLowerCase() === "active").length
   const hidden = role !== "admin" ? COST_COLS : []
 

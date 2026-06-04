@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { supabaseAdmin } from "@/lib/supabase"
+import { supabaseAdmin, getActiveItems } from "@/lib/supabase"
 import { DataTable } from "@/components/data-table"
 import { MetricCard } from "@/components/metric-card"
 import { ShoppingCart } from "lucide-react"
@@ -37,22 +37,12 @@ async function getItemStats() {
   return { total: total ?? 0, active: active ?? 0 }
 }
 
-const ITEMS_DISPLAY_LIMIT = 10_000
-
-async function fetchItems(): Promise<Record<string, unknown>[]> {
-  const { data } = await supabaseAdmin
-    .from("items")
-    .select("*")
-    .eq("status", "Active")
-    .limit(ITEMS_DISPLAY_LIMIT)
-  return data ?? []
-}
 
 export default async function ItemsPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
 
-  const [stats, data] = await Promise.all([getItemStats(), fetchItems()])
+  const [stats, data] = await Promise.all([getItemStats(), getActiveItems()])
 
   return (
     <div className="p-6 space-y-5">

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { fetchAll } from "@/lib/supabase"
+import { getListings } from "@/lib/supabase"
 import { DataTable } from "@/components/data-table"
 import { MetricCard } from "@/components/metric-card"
 import { List } from "lucide-react"
@@ -31,7 +31,7 @@ export default async function ListingsPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
 
-  const data   = await fetchAll("listings")
+  const data   = await getListings()
   const active = data.filter(r => String(r.status ?? "").toLowerCase() === "active").length
 
   return (
