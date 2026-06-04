@@ -1,0 +1,137 @@
+== TÓM TẮT SESSION ==
+Cập nhật lần cuối: 2026-06-04
+
+## Trạng thái hiện tại
+Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
+Deploy hiện tại:  Streamlit Cloud + Supabase + GitHub Actions (sync mỗi 30 phút)
+Deploy mới (WIP): Next.js trong web/ → sẽ deploy lên Vercel
+
+---
+
+## Kiến trúc hệ thống
+
+### Stack hiện tại (Streamlit)
+- Frontend: Streamlit Cloud (app.py)
+- Database: Supabase (PostgreSQL, free tier)
+- Sync: GitHub Actions cron */30 * * * * chạy sync.py
+- Auth: streamlit-authenticator v0.3.3, user lưu trong bảng users Supabase
+- AI: Google Gemini (gemini-3.5-flash)
+
+### Stack mới (Next.js — trong web/)
+- Frontend: Next.js 14 (App Router, TypeScript, Tailwind CSS)
+- Deploy: Vercel (free tier)
+- Auth: NextAuth.js v4, CredentialsProvider → validate bcrypt từ bảng users Supabase
+- Data: @supabase/supabase-js gọi thẳng từ Server Components
+- Table: @tanstack/react-table (sort, filter, pagination, export CSV/JSON)
+- AI: @google/generative-ai (gemini-3.5-flash)
+- Admin: REST API routes tại /api/admin/users
+
+---
+
+## Files chính
+
+### Python (Streamlit stack — vẫn giữ)
+- app.py              — Streamlit UI (6 tabs + sidebar)
+- sync.py             — GitHub Actions sync (GoHub API → Supabase, batch 500)
+- gohub_api_clients.py — Python client gọi GoHub API
+- generate_auth.py    — CLI quản lý user local
+- schema.sql          — Supabase table definitions
+- requirements.txt
+
+### Next.js (web/)
+web/
+├── package.json         — deps: next 14, next-auth, supabase-js, tanstack-table, lucide-react
+├── tailwind.config.ts   — brand colors: brand-600 = #0f4c81
+├── .env.local.example   — template secrets
+└── src/
+    ├── app/
+    │   ├── login/page.tsx              — Login page (gradient card)
+    │   ├── (dashboard)/layout.tsx      — Auth check + Sidebar wrapper
+    │   ├── (dashboard)/products/       — Server Component, fetch + DataTable
+    │   ├── (dashboard)/skus/           — Role-based: ẩn cột giá nếu role=sale
+    │   ├── (dashboard)/listings/
+    │   ├── (dashboard)/items/
+    │   ├── (dashboard)/chatbot/        — Client Component, bubble chat UI
+    │   ├── (dashboard)/admin/          — Client Component, CRUD users
+    │   └── api/
+    │       ├── auth/[...nextauth]/     — NextAuth handler
+    │       ├── chat/                   — Gemini API (context cache 30 phút)
+    │       └── admin/users/            — GET/POST + [username] PATCH/DELETE
+    ├── components/
+    │   ├── sidebar.tsx      — Fixed 240px, gradient brand header, user card
+    │   ├── data-table.tsx   — TanStack Table: sort, filter, paginate, export
+    │   └── metric-card.tsx  — Card với top accent border
+    ├── lib/
+    │   ├── auth.ts          — NextAuth config + bcrypt verify
+    │   ├── supabase.ts      — supabase (anon) + supabaseAdmin (service key) + fetchAll()
+    │   └── utils.ts         — fmtVND, fmtUSD, fmtDate, fmtNum, cn
+    ├── types/next-auth.d.ts — Augment Session với role + username
+    └── middleware.ts        — Protect /products /skus /listings /items /chatbot /admin
+
+---
+
+## Bảng Supabase
+- products     (769 rows)
+- skus         (10,957 rows)
+- listings     (10,674 rows)
+- items        (137,005 rows)
+- sync_log     — ghi lại thời gian sync
+- users        — user accounts (bcrypt hash, RLS enabled)
+
+---
+
+## Secrets cần thiết
+
+### Streamlit Cloud Secrets
+SUPABASE_URL         = "https://wfuigmfnfcijkvylrwzz.supabase.co"
+SUPABASE_ANON_KEY    = "eyJ..."
+SUPABASE_SERVICE_KEY = "eyJ..."
+GEMINI_KEY           = "AIza..."
+COOKIE_KEY           = "gohub-secret-key"
+
+### GitHub Repo Secrets (cho Actions sync)
+API_KEY              = "0e44b4..."
+SUPABASE_URL         = (như trên)
+SUPABASE_SERVICE_KEY = (như trên)
+
+### Next.js .env.local (và Vercel Environment Variables)
+NEXT_PUBLIC_SUPABASE_URL      = (như trên)
+NEXT_PUBLIC_SUPABASE_ANON_KEY = (như trên)
+SUPABASE_SERVICE_KEY          = (như trên)
+NEXTAUTH_SECRET               = (random 32-char string)
+NEXTAUTH_URL                  = https://your-app.vercel.app (production) hoặc http://localhost:3000 (local)
+GEMINI_KEY                    = (như trên)
+
+---
+
+## Setup Next.js local
+
+cd web
+npm install
+cp .env.local.example .env.local
+# điền secrets vào .env.local
+npm run dev   # → http://localhost:3000
+
+## Deploy lên Vercel
+
+1. vercel.com → Import repo NguyenHoangHieu-ue/gohub
+2. Root Directory: web
+3. Thêm Environment Variables (6 biến ở trên)
+4. Deploy → Vercel tự build Next.js
+
+---
+
+## Lưu ý kỹ thuật
+
+### Next.js
+- Data pages là React Server Components → fetch Supabase server-side, không expose key ra client
+- Chatbot context cache module-level (30 phút) — trong Vercel serverless mỗi instance cache riêng
+- Items 137k rows: load toàn bộ vào DataTable client-side (TanStack Table xử lý được)
+- Role check: SKUs ẩn cost columns nếu role=sale
+- Admin page: client component, gọi /api/admin/users/* với session cookie
+
+### Python (vẫn hoạt động song song)
+- sync.py chạy local cần: PYTHONIOENCODING=utf-8
+- Python executable: C:\Users\hieuh\AppData\Local\Programs\Python\Python311\python.exe
+- Streamlit cache @st.cache_data(ttl=1800) — restart app để clear
+- items 137k: chatbot chỉ lấy 15k active đầu tiên
