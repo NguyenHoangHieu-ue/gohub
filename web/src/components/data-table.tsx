@@ -21,11 +21,19 @@ export interface ColDef {
   format?: ColFormat
 }
 
+export interface ExtraFilter {
+  field:    string
+  label:    string
+  type:     "select" | "range"
+  options?: string[]
+}
+
 interface DataTableProps {
   data:            Record<string, unknown>[]
   columns:         ColDef[]
   filename:        string
   hiddenColumns?:  string[]
+  extraFilters?:   ExtraFilter[]
 }
 
 function renderCell(value: unknown, format?: ColFormat): React.ReactNode {
@@ -58,11 +66,13 @@ function renderCell(value: unknown, format?: ColFormat): React.ReactNode {
   }
 }
 
-export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataTableProps) {
-  const [sorting, setSorting]       = useState<SortingState>([])
-  const [search, setSearch]         = useState("")
-  const [statusFilter, setStatus]   = useState("all")
-  const [tenantFilter, setTenant]   = useState("all")
+export function DataTable({ data, columns, filename, hiddenColumns = [], extraFilters = [] }: DataTableProps) {
+  const [sorting, setSorting]     = useState<SortingState>([])
+  const [search, setSearch]       = useState("")
+  const [statusFilter, setStatus] = useState("all")
+  const [tenantFilter, setTenant] = useState("all")
+  const [xSelect, setXSelect]     = useState<Record<string, string>>({})
+  const [xRange, setXRange]       = useState<Record<string, [string, string]>>({})
 
   const visibleCols = columns.filter(c => !hiddenColumns.includes(c.key))
 
@@ -72,6 +82,19 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
       d = d.filter(r => String(r.status ?? "").toLowerCase() === statusFilter)
     if (tenantFilter !== "all")
       d = d.filter(r => String(r.tenant ?? "") === tenantFilter)
+
+    for (const f of extraFilters) {
+      if (f.type === "select") {
+        const v = xSelect[f.field]
+        if (v && v !== "all")
+          d = d.filter(r => String(r[f.field] ?? "") === v)
+      } else if (f.type === "range") {
+        const [min, max] = xRange[f.field] ?? ["", ""]
+        if (min !== "") d = d.filter(r => Number(r[f.field] ?? 0) >= Number(min))
+        if (max !== "") d = d.filter(r => Number(r[f.field] ?? 0) <= Number(max))
+      }
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase()
       d = d.filter(r =>
@@ -79,7 +102,7 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
       )
     }
     return d
-  }, [data, statusFilter, tenantFilter, search, visibleCols])
+  }, [data, statusFilter, tenantFilter, xSelect, xRange, search, visibleCols, extraFilters])
 
   const tableCols: ColumnDef<Record<string, unknown>>[] = visibleCols.map(c => ({
     accessorKey: c.key,
@@ -92,8 +115,8 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
     columns:        tableCols,
     state:          { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel:      getCoreRowModel(),
-    getSortedRowModel:    getSortedRowModel(),
+    getCoreRowModel:       getCoreRowModel(),
+    getSortedRowModel:     getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState:   { pagination: { pageSize: 50 } },
   })
@@ -126,6 +149,9 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
     URL.revokeObjectURL(url)
   }
 
+  const selectFilters = extraFilters.filter(f => f.type === "select")
+  const rangeFilters  = extraFilters.filter(f => f.type === "range")
+
   const { pageIndex, pageSize } = table.getState().pagination
   const pageStart = pageIndex * pageSize + 1
   const pageEnd   = Math.min((pageIndex + 1) * pageSize, filtered.length)
@@ -133,39 +159,77 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
   return (
     <div className="space-y-3">
       {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-        <div className="relative flex-1 min-w-40">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={`Tìm trong ${data.length.toLocaleString()} bản ghi...`}
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-          />
+      <div className="flex flex-col gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-40">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`Tìm trong ${data.length.toLocaleString()} bản ghi...`}
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={tenantFilter}
+            onChange={e => setTenant(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="all">Tất cả Tenant</option>
+            <option value="VN">VN</option>
+            <option value="US">US</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={e => setStatus(e.target.value)}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="all">Tất cả Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          {selectFilters.map(f => (
+            <select
+              key={f.field}
+              value={xSelect[f.field] ?? "all"}
+              onChange={e => setXSelect(prev => ({ ...prev, [f.field]: e.target.value }))}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="all">Tất cả {f.label}</option>
+              {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {filtered.length < data.length && (
+            <span className="text-xs text-gray-500 ml-1">
+              {filtered.length.toLocaleString()} / {data.length.toLocaleString()}
+            </span>
+          )}
         </div>
-        <select
-          value={tenantFilter}
-          onChange={e => setTenant(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="all">Tất cả Tenant</option>
-          <option value="VN">VN</option>
-          <option value="US">US</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={e => setStatus(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-        >
-          <option value="all">Tất cả Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-        {filtered.length < data.length && (
-          <span className="text-xs text-gray-500 ml-1">
-            {filtered.length.toLocaleString()} / {data.length.toLocaleString()}
-          </span>
+
+        {rangeFilters.length > 0 && (
+          <div className="flex items-center gap-4 flex-wrap pt-1 border-t border-gray-200">
+            {rangeFilters.map(f => (
+              <div key={f.field} className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{f.label}:</span>
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={xRange[f.field]?.[0] ?? ""}
+                  onChange={e => setXRange(prev => ({ ...prev, [f.field]: [e.target.value, prev[f.field]?.[1] ?? ""] }))}
+                  className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <span className="text-xs text-gray-400">–</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={xRange[f.field]?.[1] ?? ""}
+                  onChange={e => setXRange(prev => ({ ...prev, [f.field]: [prev[f.field]?.[0] ?? "", e.target.value] }))}
+                  className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -216,7 +280,7 @@ export function DataTable({ data, columns, filename, hiddenColumns = [] }: DataT
           </table>
         </div>
 
-        {/* Pagination bar */}
+        {/* Pagination */}
         <div className="border-t border-gray-100 px-4 py-2.5 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500">

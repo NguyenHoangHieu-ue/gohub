@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { getSkus } from "@/lib/supabase"
-import { DataTable, type ColDef } from "@/components/data-table"
+import { DataTable, type ColDef, type ExtraFilter } from "@/components/data-table"
 import { MetricCard } from "@/components/metric-card"
 import { Tag } from "lucide-react"
 
@@ -34,6 +34,23 @@ const ALL_COLS: ColDef[] = [
 const COST_COLS = ["original_cost", "latest_cogs", "latest_cogs_currency",
                    "final_cogs_included_vat_vnd", "final_cogs_usd"]
 
+const EXTRA_FILTERS: ExtraFilter[] = [
+  {
+    field: "sim_esim", label: "SIM/eSIM", type: "select",
+    options: ["SIM", "eSIM"],
+  },
+  {
+    field: "product_type", label: "Product Type", type: "select",
+    options: ["SIM/eSIM data", "eSIM full", "SIM full", "SIM frame"],
+  },
+  {
+    field: "throttle_speed", label: "Throttle", type: "select",
+    options: ["Unlimited high speed", "1 mbps", "512 kbps", "384 kbps", "256 kbps", "128 kbps", "Stop"],
+  },
+  { field: "day_amount",  label: "Số ngày",  type: "range" },
+  { field: "data_amount", label: "Data (GB)", type: "range" },
+]
+
 export default async function SkusPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
@@ -57,7 +74,7 @@ export default async function SkusPage() {
         <MetricCard label="Inactive" value={data.length - active} accent="gray"  />
       </div>
 
-      <DataTable data={data} columns={ALL_COLS} filename="skus" hiddenColumns={hidden} />
+      <DataTable data={data} columns={ALL_COLS} filename="skus" hiddenColumns={hidden} extraFilters={EXTRA_FILTERS} />
     </div>
   )
 }
