@@ -10,6 +10,11 @@ __pycache__/
 venv/
 .venv/
 
+# Vendor / NCC data files
+VENDOR/
+Add_product/
+TaiLieuCongTy_Chung/
+
 # Streamlit
 .streamlit/config.toml
 .streamlit/secrets.toml
