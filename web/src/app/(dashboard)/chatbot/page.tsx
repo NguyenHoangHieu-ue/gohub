@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Send, Trash2, Bot, User } from "lucide-react"
 
 interface Message {
@@ -16,6 +17,9 @@ const QUICK = [
 ]
 
 export default function ChatbotPage() {
+  const { data: session } = useSession()
+  const role = session?.user?.role || "sale"
+
   const [messages,  setMessages]  = useState<Message[]>([])
   const [input,     setInput]     = useState("")
   const [loading,   setLoading]   = useState(false)
@@ -72,7 +76,9 @@ export default function ChatbotPage() {
         })
       }
     } catch (e: any) {
-      const errMsg = `[DEBUG] ${e?.message || String(e)}`
+      const errMsg = role === "admin"
+        ? `[DEBUG] ${e?.message || String(e)}`
+        : "Vui lòng liên hệ Hiếu để được hỗ trợ"
       if (streamStarted) {
         setMessages(prev => {
           const msgs = [...prev]
