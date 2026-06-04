@@ -37,18 +37,15 @@ async function getItemStats() {
   return { total: total ?? 0, active: active ?? 0 }
 }
 
+const ITEMS_DISPLAY_LIMIT = 10_000
+
 async function fetchItems(): Promise<Record<string, unknown>[]> {
-  const rows: Record<string, unknown>[] = []
-  let offset = 0
-  while (true) {
-    const { data } = await supabaseAdmin
-      .from("items").select("*").range(offset, offset + 999)
-    if (!data || data.length === 0) break
-    rows.push(...data)
-    if (data.length < 1000) break
-    offset += 1000
-  }
-  return rows
+  const { data } = await supabaseAdmin
+    .from("items")
+    .select("*")
+    .eq("status", "Active")
+    .limit(ITEMS_DISPLAY_LIMIT)
+  return data ?? []
 }
 
 export default async function ItemsPage() {

@@ -4,22 +4,18 @@ import { authOptions } from "@/lib/auth"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin } from "@/lib/supabase"
 
-const ITEM_LIMIT = 15_000
-const CACHE_TTL  = 30 * 60 * 1000
+const SKU_LIMIT   = 3_000
+const LIST_LIMIT  = 3_000
+const ITEM_LIMIT  = 2_000
+const CACHE_TTL   = 30 * 60 * 1000
 
 const contextCache: Record<string, { data: string; at: number }> = {}
 
-async function fetchAllFast(table: string) {
-  const rows: Record<string, unknown>[] = []
-  let offset = 0
-  while (true) {
-    const { data } = await supabaseAdmin.from(table).select("*").range(offset, offset + 999)
-    if (!data || data.length === 0) break
-    rows.push(...data)
-    if (data.length < 1000) break
-    offset += 1000
-  }
-  return rows
+async function fetchLimited(table: string, limit: number, activeOnly = false) {
+  let q = supabaseAdmin.from(table).select("*")
+  if (activeOnly) q = q.eq("status", "Active")
+  const { data } = await q.limit(limit)
+  return data ?? []
 }
 
 async function buildContext(role: string): Promise<string> {
@@ -28,40 +24,34 @@ async function buildContext(role: string): Promise<string> {
     return contextCache[role].data
 
   const [products, skus, listings, items] = await Promise.all([
-    fetchAllFast("products"),
-    fetchAllFast("skus"),
-    fetchAllFast("listings"),
-    fetchAllFast("items"),
+    fetchLimited("products", 1000),
+    fetchLimited("skus",     SKU_LIMIT,  true),
+    fetchLimited("listings", LIST_LIMIT, true),
+    fetchLimited("items",    ITEM_LIMIT, true),
   ])
-
-  const active = items.filter(i => String(i.status ?? "").toLowerCase() === "active")
 
   const lines = [
     `=== PRODUCTS (${products.length}) ===`,
-    ...products.map(p => `- ${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.supported_countries}|${p.status}`),
+    ...products.map((p: any) => `- ${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.supported_countries}|${p.status}`),
 
-    `\n=== SKUS (${skus.length}) ===`,
-    ...skus.map(s =>
-      `- ${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
+    `\n=== SKUS (${skus.length} active) ===`,
+    ...skus.map((s: any) =>
+      `- ${s.sku_code}|${s.product_code}|${s.sim_esim}` +
       `|${s.data_amount}${s.data_amount_unit}/${s.day_amount}${s.day_amount_unit}` +
-      `|throttle:${s.throttle_speed}|call:${s.call}` +
-      (role === "admin" ? `|cogs_vnd:${s.final_cogs_included_vat_vnd}` : "") +
-      `|${s.status}`
+      (role === "admin" ? `|cogs_vnd:${s.final_cogs_included_vat_vnd}` : "")
     ),
 
-    `\n=== LISTINGS (${listings.length}) ===`,
-    ...listings.map(l =>
+    `\n=== LISTINGS (${listings.length} active) ===`,
+    ...listings.map((l: any) =>
       `- ${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}` +
-      `|op:${l.network_operator}|cat:${l.category_code}` +
-      `|exp:${l.expirations_en}ngày|hotspot:${l.hotspot_en}|call:${l.call_en}|${l.status}`
+      `|op:${l.network_operator}|exp:${l.expirations_en}ngày|${l.status}`
     ),
 
-    `\n=== ITEMS (${active.length} active, hiển thị ${Math.min(active.length, ITEM_LIMIT)}) ===`,
-    ...active.slice(0, ITEM_LIMIT).map(i =>
-      `- ${i.item_name_vn}|listing:${i.listing_code}|sku:${i.sku_code}` +
-      `|${i.unitprice}${i.currency}|${i.data_amount}${i.data_amount_unit}/${i.day_amount}${i.day_amount_unit}`
+    `\n=== ITEMS (${items.length} active) ===`,
+    ...items.map((i: any) =>
+      `- ${i.item_name_vn}|listing:${i.listing_code}|${i.unitprice}${i.currency}` +
+      `|${i.data_amount}${i.data_amount_unit}/${i.day_amount}${i.day_amount_unit}`
     ),
-    ...(active.length > ITEM_LIMIT ? [`... (còn ${active.length - ITEM_LIMIT} active items khác)`] : []),
   ]
 
   const ctx = lines.join("\n")
