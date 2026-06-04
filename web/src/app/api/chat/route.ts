@@ -3,11 +3,13 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin } from "@/lib/supabase"
-import { unstable_cache } from "next/cache"
 
 const SKU_LIMIT  = 3_000
 const LIST_LIMIT = 3_000
 const ITEM_LIMIT = 2_000
+const CACHE_TTL  = 30 * 60 * 1000
+
+let cache: { data: { products: any[]; skus: any[]; listings: any[]; items: any[] }; at: number } | null = null
 
 async function fetchLimited(table: string, limit: number, activeOnly = false) {
   let q = supabaseAdmin.from(table).select("*")
@@ -16,21 +18,21 @@ async function fetchLimited(table: string, limit: number, activeOnly = false) {
   return data ?? []
 }
 
-const getRawData = unstable_cache(
-  async () => {
-    const [products, skus, listings, items] = await Promise.all([
-      fetchLimited("products", 1000),
-      fetchLimited("skus",     SKU_LIMIT,  true),
-      fetchLimited("listings", LIST_LIMIT, true),
-      fetchLimited("items",    ITEM_LIMIT, true),
-    ])
-    return { products, skus, listings, items }
-  },
-  ["chat-raw-data"],
-  { revalidate: 24 * 60 * 60 },
-)
+async function getRawData() {
+  const now = Date.now()
+  if (cache && now - cache.at < CACHE_TTL) return cache.data
 
-function buildContext(data: Awaited<ReturnType<typeof getRawData>>, role: string): string {
+  const [products, skus, listings, items] = await Promise.all([
+    fetchLimited("products", 1000),
+    fetchLimited("skus",     SKU_LIMIT,  true),
+    fetchLimited("listings", LIST_LIMIT, true),
+    fetchLimited("items",    ITEM_LIMIT, true),
+  ])
+  cache = { data: { products, skus, listings, items }, at: now }
+  return cache.data
+}
+
+function buildContext(data: { products: any[]; skus: any[]; listings: any[]; items: any[] }, role: string): string {
   const { products, skus, listings, items } = data
   const lines = [
     `=== PRODUCTS (${products.length}) ===`,
