@@ -3,14 +3,10 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Package, Tag, List, ShoppingCart, MessageSquare, Users, LogOut } from "lucide-react"
+import { MessageSquare, Users, LogOut } from "lucide-react"
 
 const NAV = [
-  { href: "/products", label: "Products",  icon: Package },
-  { href: "/skus",     label: "SKUs",       icon: Tag },
-  { href: "/listings", label: "Listings",   icon: List },
-  { href: "/items",    label: "Items",      icon: ShoppingCart },
-  { href: "/chatbot",  label: "Chatbot",    icon: MessageSquare },
+  { href: "/chatbot", label: "Chatbot", icon: MessageSquare },
 ]
 
 export function Sidebar() {
