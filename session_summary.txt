@@ -164,3 +164,10 @@ Mục tiêu 5 tính năng:
 4. Gap analysis: NCC có gì mà hệ thống chưa có
 5. Phân quyền: admin/manager xem full, team khác xem hạn chế
 (Đang thu thập yêu cầu chi tiết từ user)
+
+## Session 2 — tiếp (2026-06-04)
+19. Sync schedule: đổi từ */30 phút → 1 lần/ngày lúc 01:00 UTC
+20. Chatbot streaming: text hiện từng chữ thay vì chờ full response
+21. Cache context data: unstable_cache 24h TTL (persistent qua Vercel cold starts)
+    - Tách data fetching (cached) khỏi context string building (role-dependent, không cache)
+    - Cold start đầu tiên sau 24h sẽ fetch Supabase; các lần sau tức thì
