@@ -70,7 +70,7 @@ export default function ChatbotPage() {
         })
       }
     } catch (e: any) {
-      setMessages(prev => [...prev, { role: "assistant", content: `Xin lỗi, có lỗi xảy ra: ${e.message}` }])
+      setMessages(prev => [...prev, { role: "assistant", content: "Hiếu đang fix, vui lòng đợi" }])
     } finally {
       setLoading(false)
       setStreaming(false)

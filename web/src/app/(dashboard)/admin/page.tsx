@@ -20,7 +20,7 @@ export default function AdminPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin") router.push("/products")
+    if (status === "authenticated" && session?.user?.role !== "admin") router.push("/chatbot")
   }, [status, session, router])
 
   if (status !== "authenticated" || session?.user?.role !== "admin") return null
@@ -115,7 +115,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     })
     setSaving(null)
     if (res.ok) { onRefresh(); onNotify("success", `Đã đổi role ${username} → ${role}`) }
-    else onNotify("error", "Lỗi khi đổi role")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
   const deleteUser = async (username: string) => {
@@ -123,7 +123,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     const res = await fetch(`/api/admin/users/${username}`, { method: "DELETE" })
     setPendingDelete(null)
     if (res.ok) { onRefresh(); onNotify("success", `Đã xóa user ${username}`) }
-    else onNotify("error", "Lỗi khi xóa user")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
   if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
@@ -212,7 +212,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
       setTab("list")
     } else {
       const { error } = await res.json()
-      onNotify("error", error || "Lỗi khi thêm user")
+      onNotify("error", "Hiếu đang fix, vui lòng đợi")
     }
   }
 
@@ -267,7 +267,7 @@ function ChangePassword({ users, onNotify }: {
     })
     setLoading(false)
     if (res.ok) { onNotify("success", `Đã đổi password cho ${target}`); setPw(""); setPw2("") }
-    else onNotify("error", "Lỗi khi đổi password")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
   return (

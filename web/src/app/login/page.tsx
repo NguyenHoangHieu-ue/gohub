@@ -18,13 +18,13 @@ export default function LoginPage() {
     try {
       const result = await signIn("credentials", { username, password, redirect: false })
       if (result?.ok) {
-        router.push("/products")
+        router.push("/chatbot")
       } else {
-        setError(result?.error || "Sai tên đăng nhập hoặc mật khẩu.")
+        setError("Sai tên đăng nhập hoặc mật khẩu.")
         setLoading(false)
       }
     } catch (err) {
-      setError("Lỗi kết nối. Thử lại sau.")
+      setError("Hiếu đang fix, vui lòng đợi")
       setLoading(false)
     }
   }
