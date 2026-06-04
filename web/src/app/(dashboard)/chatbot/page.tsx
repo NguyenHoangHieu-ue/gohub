@@ -16,17 +16,20 @@ const QUICK = [
 ]
 
 export default function ChatbotPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput]       = useState("")
-  const [loading, setLoading]   = useState(false)
-  const bottomRef               = useRef<HTMLDivElement>(null)
+  const [messages,  setMessages]  = useState<Message[]>([])
+  const [input,     setInput]     = useState("")
+  const [loading,   setLoading]   = useState(false)
+  const [streaming, setStreaming] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, loading])
 
+  const busy = loading || streaming
+
   const send = async (content: string) => {
-    if (!content.trim() || loading) return
+    if (!content.trim() || busy) return
 
     const next: Message[] = [...messages, { role: "user", content }]
     setMessages(next)
@@ -39,13 +42,38 @@ export default function ChatbotPage() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ messages: next }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || "API error")
-      setMessages(prev => [...prev, { role: "assistant", content: json.reply }])
+
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || "API error")
+      }
+
+      // Switch from typing indicator to streaming
+      setLoading(false)
+      setStreaming(true)
+      setMessages(prev => [...prev, { role: "assistant", content: "" }])
+
+      const reader  = res.body!.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        setMessages(prev => {
+          const msgs = [...prev]
+          msgs[msgs.length - 1] = {
+            ...msgs[msgs.length - 1],
+            content: msgs[msgs.length - 1].content + text,
+          }
+          return msgs
+        })
+      }
     } catch (e: any) {
       setMessages(prev => [...prev, { role: "assistant", content: `Xin lỗi, có lỗi xảy ra: ${e.message}` }])
     } finally {
       setLoading(false)
+      setStreaming(false)
     }
   }
 
@@ -110,7 +138,12 @@ export default function ChatbotPage() {
                   ? "bg-brand-600 text-white rounded-tr-sm"
                   : "bg-gray-100 text-gray-800 rounded-tl-sm"
               }`}>
-                <div className="whitespace-pre-wrap">{msg.content}</div>
+                <div className="whitespace-pre-wrap">
+                  {msg.content}
+                  {streaming && i === messages.length - 1 && msg.role === "assistant" && (
+                    <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+                  )}
+                </div>
               </div>
               {msg.role === "user" && (
                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -120,7 +153,7 @@ export default function ChatbotPage() {
             </div>
           ))}
 
-          {/* Typing indicator */}
+          {/* Typing indicator — only while waiting for first chunk */}
           {loading && (
             <div className="flex gap-3 justify-start">
               <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
@@ -153,12 +186,12 @@ export default function ChatbotPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Hỏi về sản phẩm SIM/eSim..."
-              disabled={loading}
+              disabled={busy}
               className="flex-1 px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-50 transition"
             />
             <button
               type="submit"
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || busy}
               className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send size={16} />

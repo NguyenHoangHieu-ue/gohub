@@ -2,7 +2,7 @@ name: Sync GoHub Data to Supabase
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "0 1 * * *"   # every day at 01:00 UTC
   workflow_dispatch:           # manual trigger from GitHub UI
 
 jobs:

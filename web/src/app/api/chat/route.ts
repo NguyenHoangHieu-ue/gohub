@@ -3,36 +3,40 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin } from "@/lib/supabase"
+import { unstable_cache } from "next/cache"
 
-const SKU_LIMIT   = 3_000
-const LIST_LIMIT  = 3_000
-const ITEM_LIMIT  = 2_000
-const CACHE_TTL   = 30 * 60 * 1000
-
-const contextCache: Record<string, { data: string; at: number }> = {}
+const SKU_LIMIT  = 3_000
+const LIST_LIMIT = 3_000
+const ITEM_LIMIT = 2_000
 
 async function fetchLimited(table: string, limit: number, activeOnly = false) {
   let q = supabaseAdmin.from(table).select("*")
-  if (activeOnly) q = q.eq("status", "Active")
-  const { data } = await q.limit(limit)
+  if (activeOnly) q = (q as any).eq("status", "Active")
+  const { data } = await (q as any).limit(limit)
   return data ?? []
 }
 
-async function buildContext(role: string): Promise<string> {
-  const now = Date.now()
-  if (contextCache[role] && now - contextCache[role].at < CACHE_TTL)
-    return contextCache[role].data
+const getRawData = unstable_cache(
+  async () => {
+    const [products, skus, listings, items] = await Promise.all([
+      fetchLimited("products", 1000),
+      fetchLimited("skus",     SKU_LIMIT,  true),
+      fetchLimited("listings", LIST_LIMIT, true),
+      fetchLimited("items",    ITEM_LIMIT, true),
+    ])
+    return { products, skus, listings, items }
+  },
+  ["chat-raw-data"],
+  { revalidate: 24 * 60 * 60 },
+)
 
-  const [products, skus, listings, items] = await Promise.all([
-    fetchLimited("products", 1000),
-    fetchLimited("skus",     SKU_LIMIT,  true),
-    fetchLimited("listings", LIST_LIMIT, true),
-    fetchLimited("items",    ITEM_LIMIT, true),
-  ])
-
+function buildContext(data: Awaited<ReturnType<typeof getRawData>>, role: string): string {
+  const { products, skus, listings, items } = data
   const lines = [
     `=== PRODUCTS (${products.length}) ===`,
-    ...products.map((p: any) => `- ${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.supported_countries}|${p.status}`),
+    ...products.map((p: any) =>
+      `- ${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.supported_countries}|${p.status}`
+    ),
 
     `\n=== SKUS (${skus.length} active) ===`,
     ...skus.map((s: any) =>
@@ -53,10 +57,7 @@ async function buildContext(role: string): Promise<string> {
       `|${i.data_amount}${i.data_amount_unit}/${i.day_amount}${i.day_amount_unit}`
     ),
   ]
-
-  const ctx = lines.join("\n")
-  contextCache[role] = { data: ctx, at: now }
-  return ctx
+  return lines.join("\n")
 }
 
 const SYSTEM = `Bạn là trợ lý AI của GoHub, hỗ trợ team sale tra cứu thông tin sản phẩm SIM/eSim du lịch.
@@ -74,9 +75,11 @@ export async function POST(req: NextRequest) {
   const role = session.user.role || "sale"
 
   try {
-    const context = await buildContext(role)
-    const genAI   = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model   = genAI.getGenerativeModel({
+    const rawData = await getRawData()
+    const context = buildContext(rawData, role)
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+    const model = genAI.getGenerativeModel({
       model:             "gemini-3.5-flash",
       systemInstruction: SYSTEM + "\n" + context,
     })
@@ -87,8 +90,25 @@ export async function POST(req: NextRequest) {
     }))
 
     const chat   = model.startChat({ history })
-    const result = await chat.sendMessage(messages.at(-1).content)
-    return NextResponse.json({ reply: result.response.text() })
+    const result = await chat.sendMessageStream(messages.at(-1).content)
+
+    const encoder = new TextEncoder()
+    const stream  = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.stream) {
+            const text = chunk.text()
+            if (text) controller.enqueue(encoder.encode(text))
+          }
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
