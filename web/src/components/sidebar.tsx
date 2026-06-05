@@ -88,8 +88,7 @@ export function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-xs text-gray-400 truncate">{username}</span>
+            <div className="mt-0.5">
               <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
                 {roleLabel(role)}
               </span>
