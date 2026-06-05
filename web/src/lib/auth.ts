@@ -189,7 +189,7 @@ export const authOptions: NextAuthOptions = {
         })
 
         ;(user as any).username = username
-        ;(user as any).role     = "sale"
+        ;(user as any).role     = "standard"
         return true
       }
 
