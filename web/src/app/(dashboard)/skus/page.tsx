@@ -102,7 +102,9 @@ function Select({
 
 export default function SkusPage() {
   const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "admin"
+  const role    = (session?.user as any)?.role || "standard"
+  const isAdmin = role === "admin"
+  const canSeeCost = role === "admin" || role === "manager"
 
   const [rows,    setRows]    = useState<Sku[]>([])
   const [total,   setTotal]   = useState(0)
@@ -163,8 +165,9 @@ export default function SkusPage() {
   }, [search])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const headers = isAdmin
-    ? [...HEADERS_BASE.slice(0, -1), ...HEADERS_ADMIN, HEADERS_BASE[HEADERS_BASE.length - 1]]
+  // canSeeCost: insert COGS columns right after datapack (index 13), before kyc/country/note
+  const headers = canSeeCost
+    ? [...HEADERS_BASE.slice(0, 13), ...HEADERS_ADMIN, ...HEADERS_BASE.slice(13)]
     : HEADERS_BASE
 
   return (
@@ -268,7 +271,7 @@ export default function SkusPage() {
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{row.vendor_sku || "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{row.frame || "—"}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-xs">{row.datapack || "—"}</td>
-                  {isAdmin && (
+                  {canSeeCost && (
                     <>
                       <td className="px-3 py-2 whitespace-nowrap text-xs text-right">{row.latest_cogs != null ? row.latest_cogs.toLocaleString() : "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{row.latest_cogs_currency || "—"}</td>
