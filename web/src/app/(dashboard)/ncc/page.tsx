@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe } from "lucide-react"
+import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown } from "lucide-react"
 
 const canSeeCost = (role?: string) => role === "admin" || role === "manager"
 
@@ -34,8 +34,30 @@ interface WMProduct {
   apn_data_reset: string | null
   apn_telecom_providers: string | null
   apn_prepaid_card: string | null
-  // enriched (gap tab)
-  sku_codes?: string[]
+  // enriched (in_system tab)
+  system_skus?: SystemSku[]
+}
+
+interface SystemSku {
+  sku_code: string
+  vendor_sku: string
+  tenant: string
+  status: string
+  sim_esim: string
+  data_amount: number | null
+  data_amount_unit: string | null
+  day_amount: number | null
+  day_amount_unit: string | null
+  throttle_speed: string | null
+  call: string | null
+  expirations: number | null
+  frame: string | null
+  datapack: string | null
+  latest_cogs: number | null
+  latest_cogs_currency: string | null
+  note: string | null
+  kyc_needed: string | null
+  supported_countries: string | null
 }
 
 interface Zone3HK {
@@ -49,17 +71,67 @@ interface Zone3HK {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Combine all APN fields into one readable note string */
-function fmtApnNote(p: WMProduct): string {
+/** Short one-line APN summary for compact display */
+function fmtApnSummary(p: WMProduct): string {
   const parts: string[] = []
-  if (p.apn)                  parts.push(`APN: ${p.apn}`)
-  if (p.apn_network_type)     parts.push(`Network: ${p.apn_network_type}`)
-  if (p.apn_roaming_carrier)  parts.push(`Roaming: ${p.apn_roaming_carrier}`)
+  if (p.apn)              parts.push(p.apn)
+  if (p.apn_network_type) parts.push(p.apn_network_type)
+  if (p.apn_roaming_carrier) parts.push(p.apn_roaming_carrier)
+  return parts.join(" · ") || ""
+}
+
+/** Full APN details for modal */
+function fmtApnFull(p: WMProduct): string {
+  const parts: string[] = []
+  if (p.apn)                   parts.push(`APN: ${p.apn}`)
+  if (p.apn_network_type)      parts.push(`Network: ${p.apn_network_type}`)
+  if (p.apn_roaming_carrier)   parts.push(`Roaming: ${p.apn_roaming_carrier}`)
   if (p.apn_telecom_providers) parts.push(`Providers:\n${p.apn_telecom_providers}`)
-  if (p.apn_coverage_area)    parts.push(`Coverage: ${p.apn_coverage_area}`)
-  if (p.apn_data_reset)       parts.push(`Data Reset: ${p.apn_data_reset}`)
-  if (p.apn_notification)     parts.push(`Notification: ${p.apn_notification}`)
+  if (p.apn_coverage_area)     parts.push(`Coverage: ${p.apn_coverage_area}`)
+  if (p.apn_data_reset)        parts.push(`Data Reset: ${p.apn_data_reset}`)
+  if (p.apn_notification)      parts.push(`Notification: ${p.apn_notification}`)
   return parts.join("\n\n")
+}
+
+// ─── APN Modal ────────────────────────────────────────────────────────────────
+
+function ApnModal({ product, onClose }: { product: WMProduct; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-5 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">{product.vendor_product_id}</p>
+            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{product.product_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4 text-xl leading-none">×</button>
+        </div>
+        <div className="overflow-y-auto p-5 space-y-3 text-xs">
+          {[
+            ["APN",          product.apn],
+            ["Network",      product.apn_network_type],
+            ["Roaming",      product.apn_roaming_carrier],
+            ["Coverage",     product.apn_coverage_area],
+            ["Providers",    product.apn_telecom_providers],
+            ["Data Reset",   product.apn_data_reset],
+            ["Notification", product.apn_notification],
+          ].filter(([, v]) => v).map(([label, val]) => (
+            <div key={label as string} className="grid grid-cols-[100px_1fr] gap-2">
+              <span className="text-gray-400 font-medium">{label}</span>
+              <span className="text-gray-800 whitespace-pre-wrap leading-relaxed">{val}</span>
+            </div>
+          ))}
+          {!fmtApnFull(product) && <p className="text-gray-400">Không có thông tin APN</p>}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function fmtData(row: WMProduct): string {
@@ -128,6 +200,7 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
   const [subTab, setSubTab] = useState<"catalog" | "gap">("catalog")
   const [products, setProducts] = useState<WMProduct[]>([])
   const [total, setTotal] = useState(0)
+  const [apnModal, setApnModal] = useState<WMProduct | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
 
@@ -143,6 +216,7 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
 
   // Gap filter
   const [gap, setGap] = useState<"in_system" | "not_in_system">("not_in_system")
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const searchTimer = useRef<NodeJS.Timeout | null>(null)
 
@@ -195,6 +269,18 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
   function handleSubTab(t: "catalog" | "gap") {
     setSubTab(t)
     setPage(1)
+    setProducts([])
+    setLoading(true)
+    setExpandedRows(new Set())
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function handleFilter(setter: (v: string) => void, value: string) {
@@ -273,7 +359,7 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
           {(["not_in_system", "in_system"] as const).map(g => (
             <button
               key={g}
-              onClick={() => { setGap(g); setPage(1) }}
+              onClick={() => { setGap(g); setPage(1); setProducts([]); setLoading(true) }}
               className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
                 gap === g
                   ? "bg-brand-600 text-white border-brand-600"
@@ -320,60 +406,135 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
           </thead>
           <tbody>
             {loading && products.length === 0 ? (
-              <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">Đang tải...</td></tr>
+              Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <td key={j} className="px-3 py-3">
+                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${50 + (i * 9 + j * 13) % 40}%` }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : products.length === 0 ? (
-              <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">Không có dữ liệu</td></tr>
-            ) : products.map(p => (
-              <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-3 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">{p.vendor_product_id}</td>
-                <td className="px-3 py-2 text-gray-800 max-w-[280px]">
-                  <span className="line-clamp-2 text-xs leading-relaxed">{p.product_name}</span>
-                </td>
-                <td className="px-3 py-2 text-xs text-gray-500 max-w-[140px]">
-                  <span className="line-clamp-1">{p.region ?? "—"}</span>
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <Badge color={p.sim_type === "eSIM" ? "blue" : p.sim_type === "SIM" ? "green" : "gray"}>
-                    {p.sim_type ?? "—"}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2 text-center text-sm text-gray-700">{p.days ?? "—"}</td>
-                <td className="px-3 py-2 text-center text-xs text-gray-700 whitespace-nowrap">{fmtData(p)}</td>
-                <td className="px-3 py-2 text-center text-xs text-gray-500 max-w-[200px]">{fmtThrottle(p)}</td>
-                {/* KYC — WM products are always No KYC */}
-                <td className="px-3 py-2 text-center">
-                  <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">No</span>
-                </td>
-                {showCost && (
-                  <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
-                    {p.cogs != null ? p.cogs.toLocaleString() : "—"}
+              <tr><td colSpan={12} className="text-center py-12 text-gray-400 text-sm">Không có dữ liệu</td></tr>
+            ) : products.flatMap(p => {
+              const isExpandable = subTab === "gap" && gap === "in_system"
+              const isExpanded   = expandedRows.has(p.vendor_product_id)
+              const skus         = p.system_skus ?? []
+              return [
+                <tr
+                  key={p.id}
+                  className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isExpandable ? "cursor-pointer select-none" : ""}`}
+                  onClick={isExpandable ? () => toggleExpand(p.vendor_product_id) : undefined}
+                >
+                  <td className="px-3 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">{p.vendor_product_id}</td>
+                  <td className="px-3 py-2 text-gray-800 max-w-[280px]">
+                    <span className="line-clamp-2 text-xs leading-relaxed">{p.product_name}</span>
                   </td>
-                )}
-                {subTab === "gap" && (
-                  <>
-                    <td className="px-3 py-2 text-center">
-                      {gap === "in_system"
-                        ? <Badge color="green">✓ Có</Badge>
-                        : <Badge color="red">✗ Chưa</Badge>
-                      }
+                  <td className="px-3 py-2 text-xs text-gray-500 max-w-[140px]">
+                    <span className="line-clamp-1">{p.region ?? "—"}</span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <Badge color={p.sim_type === "eSIM" ? "blue" : p.sim_type === "SIM" ? "green" : "gray"}>
+                      {p.sim_type ?? "—"}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2 text-center text-sm text-gray-700">{p.days ?? "—"}</td>
+                  <td className="px-3 py-2 text-center text-xs text-gray-700 whitespace-nowrap">{fmtData(p)}</td>
+                  <td className="px-3 py-2 text-center text-xs text-gray-500 max-w-[200px]">{fmtThrottle(p)}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">No</span>
+                  </td>
+                  {showCost && (
+                    <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
+                      {p.cogs != null ? p.cogs.toLocaleString() : "—"}
                     </td>
-                    <td className="px-3 py-2 text-xs font-mono text-gray-500">
-                      {p.sku_codes?.length
-                        ? <div className="space-y-0.5">{p.sku_codes.map(s => <div key={s}>{s}</div>)}</div>
-                        : <span className="text-gray-300">—</span>
-                      }
+                  )}
+                  {subTab === "gap" && (
+                    <>
+                      <td className="px-3 py-2 text-center">
+                        {gap === "in_system" ? (
+                          <div className="inline-flex items-center gap-1">
+                            <Badge color="green">✓ Có</Badge>
+                            <ChevronDown size={12} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                          </div>
+                        ) : (
+                          <Badge color="red">✗ Chưa</Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs font-mono">
+                        {skus.length
+                          ? <div className="space-y-0.5">{skus.map(s => <div key={s.sku_code} className="text-brand-700">{s.sku_code}</div>)}</div>
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                    </>
+                  )}
+                  {/* APN / Note — compact, double-click to expand */}
+                  <td className="px-3 py-2 text-xs text-gray-500 max-w-[200px]">
+                    {fmtApnSummary(p) ? (
+                      <div
+                        className="flex items-center gap-1 group cursor-pointer"
+                        onDoubleClick={e => { e.stopPropagation(); setApnModal(p) }}
+                        title="Double-click để xem đầy đủ"
+                      >
+                        <span className="truncate group-hover:text-brand-600">{fmtApnSummary(p)}</span>
+                        <ChevronDown size={11} className="flex-shrink-0 text-gray-300 group-hover:text-brand-400 -rotate-90" />
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                </tr>,
+
+                // Expand row — system SKUs styled like /skus page
+                ...(isExpandable && isExpanded ? [
+                  <tr key={`${p.id}-expand`} className="bg-blue-50/20">
+                    <td colSpan={20} className="px-4 py-3 border-b border-blue-100">
+                      {skus.length === 0 ? (
+                        <p className="text-xs text-gray-400">Không có SKU chi tiết</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-blue-100 bg-white">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                {["Status","Tenant","SKU Code","SIM/eSIM","Data","Days","Throttle","Call","Exp.",
+                                  ...(showCost ? ["COGS","Curr."] : []),
+                                  "Note"].map(h => (
+                                  <th key={h} className="px-2 py-2 text-left font-medium text-gray-400 whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {skus.map(s => (
+                                <tr key={s.sku_code} className="hover:bg-blue-50/30 transition-colors">
+                                  <td className="px-2 py-1.5 whitespace-nowrap">
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                                      s.status === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"
+                                    }`}>{s.status}</span>
+                                  </td>
+                                  <td className="px-2 py-1.5 font-medium text-gray-600 whitespace-nowrap">{s.tenant}</td>
+                                  <td className="px-2 py-1.5 font-mono text-brand-700 whitespace-nowrap">{s.sku_code}</td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap">{s.sim_esim || "—"}</td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap">{s.data_amount != null ? `${s.data_amount}${s.data_amount_unit}` : "—"}</td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap">{s.day_amount != null ? `${s.day_amount} ${s.day_amount_unit}` : "—"}</td>
+                                  <td className="px-2 py-1.5 whitespace-nowrap text-gray-500">{s.throttle_speed || "—"}</td>
+                                  <td className="px-2 py-1.5">{s.call || "—"}</td>
+                                  <td className="px-2 py-1.5">{s.expirations || "—"}</td>
+                                  {showCost && <td className="px-2 py-1.5 text-right font-mono">{s.latest_cogs != null ? s.latest_cogs.toLocaleString() : "—"}</td>}
+                                  {showCost && <td className="px-2 py-1.5">{s.latest_cogs_currency || "—"}</td>}
+                                  <td className="px-2 py-1.5 max-w-[200px] text-gray-500 whitespace-normal">{s.note || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </td>
-                  </>
-                )}
-                {/* APN / Note */}
-                <td className="px-3 py-2 text-xs text-gray-500 max-w-[240px]">
-                  {fmtApnNote(p)
-                    ? <div className="whitespace-pre-wrap leading-relaxed">{fmtApnNote(p)}</div>
-                    : <span className="text-gray-300">—</span>
-                  }
-                </td>
-              </tr>
-            ))}
+                  </tr>
+                ] : []),
+              ]
+            })}
           </tbody>
         </table>
       </div>
@@ -381,6 +542,9 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
       <div className="flex justify-end">
         <Pagination page={page} total={total} pageSize={50} onChange={setPage} />
       </div>
+
+      {/* APN Modal */}
+      {apnModal && <ApnModal product={apnModal} onClose={() => setApnModal(null)} />}
     </div>
   )
 }

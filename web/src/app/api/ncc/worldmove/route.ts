@@ -11,22 +11,36 @@ function stripCost(rows: any[], role?: string) {
   return rows.map(r => ({ ...r, cogs: null, cogs_currency: null }))
 }
 
-/** Enrich in_system products with their sku_code from the skus table */
+/** Enrich in_system products with full sku rows from skus table */
 async function enrichWithSku(rows: any[]): Promise<any[]> {
   if (!rows.length) return rows
   const ids = rows.map((r: any) => r.vendor_product_id).filter(Boolean)
   const { data: skuRows } = await (supabaseAdmin.from("skus") as any)
-    .select("sku_code, vendor_sku")
+    .select("sku_code,vendor_sku,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,latest_cogs,latest_cogs_currency")
     .in("vendor_sku", ids)
-    .limit(ids.length + 10)
-  const skuMap: Record<string, string[]> = {}
+    .limit(ids.length * 3 + 10)
+
+  // Also get product enrichment for those skus
+  const productCodes = [...new Set((skuRows ?? []).map((s: any) => s.sku_code?.slice(0, 8)).filter(Boolean))]
+  let productMap: Record<string, any> = {}
+  if (productCodes.length) {
+    const { data: prods } = await (supabaseAdmin.from("products") as any)
+      .select("product_code,note,kyc_needed,supported_countries")
+      .in("product_code", productCodes)
+    for (const p of prods ?? [])
+      productMap[p.product_code] = p
+  }
+
+  const skuMap: Record<string, any[]> = {}
   for (const s of skuRows ?? []) {
+    const prod = productMap[s.sku_code?.slice(0, 8)] ?? {}
+    const enriched = { ...s, note: prod.note ?? null, kyc_needed: prod.kyc_needed ?? null, supported_countries: prod.supported_countries ?? null }
     if (!skuMap[s.vendor_sku]) skuMap[s.vendor_sku] = []
-    skuMap[s.vendor_sku].push(s.sku_code)
+    skuMap[s.vendor_sku].push(enriched)
   }
   return rows.map((r: any) => ({
     ...r,
-    sku_codes: skuMap[r.vendor_product_id] ?? [],
+    system_skus: skuMap[r.vendor_product_id] ?? [],
   }))
 }
 
