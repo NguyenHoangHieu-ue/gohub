@@ -19,7 +19,15 @@ BATCH_SIZE  = 500
 
 
 def parse_product_name(name: str) -> dict:
-    """Extract days, data_gb, is_daily, is_unlimited, throttle_kbps from product name."""
+    """Extract days, data_gb, is_daily, is_unlimited, throttle_kbps from product name.
+
+    Unlimited types (per GoHub rule):
+      - Titanium AYCE    → no speed limit (throttle_kbps = None)
+      - Premium Unlimited → 1 GB/day highspeed then throttle 10 Mbps
+      - Unlimited        → 2 GB/day highspeed then throttle 5 Mbps
+    Fixed / Daily types:
+      - throttle = 128 kbps (default after data used)
+    """
     result = {
         "days": None,
         "data_gb": None,
@@ -33,32 +41,43 @@ def parse_product_name(name: str) -> dict:
     if m:
         result["days"] = int(m.group(1))
 
-    # Unlimited
-    if re.search(r"[Uu]nlimited", name):
+    # Titanium AYCE — no throttle, no data cap
+    if re.search(r"[Tt]itanium\s+AYCE", name):
         result["is_unlimited"] = True
-        # Throttle for unlimited packages
-        m = re.search(r"(\d+(?:\.\d+)?)\s*[Mm]bps", name, re.IGNORECASE)
-        if m:
-            result["throttle_kbps"] = int(float(m.group(1)) * 1000)
-        m = re.search(r"(\d+)\s*kbps", name, re.IGNORECASE)
-        if m:
-            result["throttle_kbps"] = int(m.group(1))
+        result["data_gb"] = None
+        result["throttle_kbps"] = None   # truly no speed limit
         return result
 
-    # GB data
+    # Premium Unlimited — 1 GB/day highspeed → throttle 10 Mbps
+    if re.search(r"[Pp]remium\s+[Uu]nlimited", name):
+        result["is_unlimited"] = True
+        result["data_gb"] = 1.0          # 1 GB/day highspeed
+        result["is_daily"] = True
+        result["throttle_kbps"] = 10_000 # 10 Mbps
+        return result
+
+    # Standard Unlimited — 2 GB/day highspeed → throttle 5 Mbps
+    if re.search(r"[Uu]nlimited", name):
+        result["is_unlimited"] = True
+        result["data_gb"] = 2.0          # 2 GB/day highspeed
+        result["is_daily"] = True
+        result["throttle_kbps"] = 5_000  # 5 Mbps
+        return result
+
+    # GB data (fixed or daily)
     m = re.search(r"([\d.]+)\s*GB\s*(/day)?", name, re.IGNORECASE)
     if m:
         result["data_gb"] = float(m.group(1))
         result["is_daily"] = m.group(2) is not None
 
-    # MB data (convert to GB)
+    # MB data — convert to GB
     if result["data_gb"] is None:
         m = re.search(r"([\d.]+)\s*MB\s*(/day)?", name, re.IGNORECASE)
         if m:
             result["data_gb"] = round(float(m.group(1)) / 1000, 4)
             result["is_daily"] = m.group(2) is not None
 
-    # Throttle
+    # Explicit throttle in name
     m = re.search(r"(\d+)\s*kbps", name, re.IGNORECASE)
     if m:
         result["throttle_kbps"] = int(m.group(1))
@@ -66,6 +85,10 @@ def parse_product_name(name: str) -> dict:
         m = re.search(r"(\d+(?:\.\d+)?)\s*[Mm]bps", name, re.IGNORECASE)
         if m:
             result["throttle_kbps"] = int(float(m.group(1)) * 1000)
+
+    # Default throttle for non-unlimited packages = 128 kbps
+    if result["throttle_kbps"] is None:
+        result["throttle_kbps"] = 128
 
     return result
 

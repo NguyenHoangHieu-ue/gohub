@@ -39,10 +39,15 @@ interface Zone3HK {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtData(row: WMProduct): string {
-  if (row.is_unlimited) return "Unlimited"
-  if (row.data_gb == null) return "—"
-  const label = row.data_gb < 1 ? `${(row.data_gb * 1000).toFixed(0)} MB` : `${row.data_gb} GB`
-  return row.is_daily ? `${label}/day` : label
+  if (!row.is_unlimited) {
+    if (row.data_gb == null) return "—"
+    const label = row.data_gb < 1 ? `${(row.data_gb * 1000).toFixed(0)} MB` : `${row.data_gb} GB`
+    return row.is_daily ? `${label}/day` : label
+  }
+  // Unlimited types
+  if (row.throttle_kbps == null) return "Unl. (AYCE)"              // Titanium
+  if (row.throttle_kbps >= 10000) return "Unl. (1GB/d HS)"         // Premium
+  return "Unl. (2GB/d HS)"                                          // Standard
 }
 
 function fmtThrottle(kbps: number | null): string {
@@ -269,7 +274,7 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
               <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">Không có dữ liệu</td></tr>
             ) : products.map(p => (
               <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-3 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">{p.vendor_internal_id ?? p.vendor_product_id}</td>
+                <td className="px-3 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">{p.vendor_product_id}</td>
                 <td className="px-3 py-2 text-gray-800 max-w-[280px]">
                   <span className="line-clamp-2 text-xs leading-relaxed">{p.product_name}</span>
                 </td>
