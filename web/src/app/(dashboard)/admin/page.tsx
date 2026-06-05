@@ -149,7 +149,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-gray-900">{u.username}</span>
                 <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${roleBadgeClass(u.role)}`}>
-                  {u.role}
+                  {u.role === "standard" ? "Standard" : u.role}
                 </span>
                 {/* Auth provider badge */}
                 {u.lark_open_id ? (
@@ -171,7 +171,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 onChange={e => changeRole(u.username, e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                <option value="sale">Sale</option>
+                <option value="standard">Standard</option>
                 <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
               </select>
@@ -206,7 +206,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
   onNotify:  (type: "success" | "error", text: string) => void
   setTab:    (t: Tab) => void
 }) {
-  const [form, setForm]   = useState({ username: "", name: "", email: "", role: "sale", password: "", confirm: "" })
+  const [form, setForm]   = useState({ username: "", name: "", email: "", role: "standard", password: "", confirm: "" })
   const [loading, setLoading] = useState(false)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -224,7 +224,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
     if (res.ok) {
       onRefresh()
       onNotify("success", `Đã thêm user ${form.username}`)
-      setForm({ username: "", name: "", email: "", role: "sale", password: "", confirm: "" })
+      setForm({ username: "", name: "", email: "", role: "standard", password: "", confirm: "" })
       setTab("list")
     } else {
       const { error } = await res.json()
@@ -245,7 +245,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
             onChange={e => set("role", e.target.value)}
             className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            <option value="sale">Sale</option>
+            <option value="standard">Standard</option>
             <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </select>

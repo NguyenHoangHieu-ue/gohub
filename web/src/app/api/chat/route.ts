@@ -10,7 +10,11 @@ const ITEM_LIMIT = 2_000
 const CACHE_TTL  = 30 * 60 * 1000
 
 let cache: {
-  data: { products: any[]; skus: any[]; listings: any[]; items: any[]; zones3hk: any[]; wmInSystem: any[] }
+  data: {
+    products: any[]; skus: any[]; listings: any[]; items: any[]
+    zones3hk: any[]; wmInSystem: any[]
+    countries: any[]; supportCountries: any[]
+  }
   at: number
 } | null = null
 
@@ -25,30 +29,32 @@ async function getRawData() {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
-  const [products, skus, listings, items, zones3hk, wmInSystem] = await Promise.all([
+  const [products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries] = await Promise.all([
     fetchLimited("products", 1000),
     fetchLimited("skus",     SKU_LIMIT,  true),
     fetchLimited("listings", LIST_LIMIT, true),
     fetchLimited("items",    ITEM_LIMIT, true),
-    // 3HK zone reference (45 rows)
     supabaseAdmin.from("ncc_3hk_zones").select("zone,country,network,price_per_gb_hkd,is_kyc")
       .order("zone").then(r => r.data ?? []),
-    // WM products already in the system (via vendor_sku match)
     supabaseAdmin.from("skus")
       .select("sku_code,vendor_sku,sim_esim,data_amount,data_amount_unit,day_amount,throttle_speed,status")
-      .ilike("vendor_sku", "WM-%")
-      .limit(800)
-      .then(r => r.data ?? []),
+      .ilike("vendor_sku", "WM-%").limit(800).then(r => r.data ?? []),
+    supabaseAdmin.from("ref_countries").select("code,name").order("code").then(r => r.data ?? []),
+    supabaseAdmin.from("ref_support_countries").select("code,support_country,country_codes").order("code").then(r => r.data ?? []),
   ])
-  cache = { data: { products, skus, listings, items, zones3hk, wmInSystem }, at: now }
+  cache = { data: { products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries }, at: now }
   return cache.data
 }
 
 function buildContext(
-  data: { products: any[]; skus: any[]; listings: any[]; items: any[]; zones3hk: any[]; wmInSystem: any[] },
+  data: {
+    products: any[]; skus: any[]; listings: any[]; items: any[]
+    zones3hk: any[]; wmInSystem: any[]
+    countries: any[]; supportCountries: any[]
+  },
   role: string
 ): string {
-  const { products, skus, listings, items, zones3hk, wmInSystem } = data
+  const { products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries } = data
   const isCostRole = role === "admin" || role === "manager"
 
   const lines = [
@@ -95,38 +101,54 @@ function buildContext(
       `- ${s.vendor_sku}|${s.sim_esim}|${s.data_amount}${s.data_amount_unit}/${s.day_amount}ngày` +
       `|throttle:${s.throttle_speed}|${s.status}`
     ),
+
+    // ── Country reference ────────────────────────────────────────────────────
+    `\n=== MÃ NƯỚC ISO (${countries.length}) ===`,
+    ...countries.map((c: any) => `${c.code}=${c.name}`),
+
+    `\n=== MÃ NHÓM NƯỚC HỆ THỐNG (${supportCountries.length}) ===`,
+    ...supportCountries.map((sc: any) =>
+      `${sc.code}: ${sc.support_country ?? ""}` +
+      (sc.country_codes ? ` [${sc.country_codes}]` : "")
+    ),
   ]
   return lines.join("\n")
 }
 
-const SYSTEM = `Bạn là trợ lý AI của GoHub, hỗ trợ team sale tra cứu thông tin sản phẩm SIM/eSim du lịch.
-Trả lời bằng tiếng Việt, ngắn gọn và chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
+const SYSTEM_BASE = `Bạn là trợ lý AI của GoHub, hỗ trợ team tra cứu thông tin sản phẩm SIM/eSim du lịch.
+Trả lời bằng tiếng Việt, chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
 Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có dữ liệu thay vì đoán.
 Khi hiển thị giá, luôn ưu tiên dùng giá VND. Nếu chỉ có ngoại tệ thì ghi rõ đơn vị.
 
-Về NCC (nhà cung cấp):
-- 3HK: datapool, GoHub TỰ TẠO gói theo yêu cầu. Dữ liệu zone cho biết 3HK HỖ TRỢ nước nào/mạng nào.
-  Nếu hỏi "3HK có gói X chưa?" — kiểm tra xem GoHub đã tạo gói đó trên hệ thống chưa (WM-e-... vendor_sku).
-  Nếu hỏi "3HK hỗ trợ nước X không?" — kiểm tra zone reference.
-- WORLDMOVE: catalog cố định. Sản phẩm WM đã có trong hệ thống được liệt kê ở mục NCC WORLDMOVE.
+Quy tắc định dạng câu trả lời:
+- Dùng danh sách gạch đầu dòng khi liệt kê nhiều mục (3+ mục).
+- Dùng in đậm cho tên sản phẩm, giá, thông số quan trọng.
+- Câu trả lời ngắn gọn, đúng trọng tâm. Không dùng tiêu đề lớn (##) trừ khi câu trả lời dài.
+- Không lạm dụng in đậm — chỉ in đậm thông tin quan trọng nhất.
 
-Dữ liệu sản phẩm hiện tại:`
+Về NCC (nhà cung cấp):
+- 3HK: datapool, GoHub tự tạo gói. Dữ liệu zone cho biết 3HK hỗ trợ nước nào và mạng nào.
+- WORLDMOVE: catalog cố định, không yêu cầu KYC. Sản phẩm WM đã có trong hệ thống ở mục NCC WORLDMOVE.
+
+Dữ liệu hệ thống:`
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { messages } = await req.json()
-  const role = session.user.role || "sale"
+  const { messages, userName } = await req.json()
+  const role = session.user.role || "standard"
+  const name = userName || session.user.name || "bạn"
 
   try {
     const rawData = await getRawData()
     const context = buildContext(rawData, role)
+    const systemInstruction = `${SYSTEM_BASE}\n${context}\n\n---\nNgười đang chat với bạn: ${name}`
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const model = genAI.getGenerativeModel({
       model:             "gemini-3.5-flash",
-      systemInstruction: SYSTEM + "\n" + context,
+      systemInstruction,
     })
 
     const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({

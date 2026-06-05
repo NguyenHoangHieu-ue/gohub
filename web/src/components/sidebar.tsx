@@ -20,9 +20,10 @@ function roleBadgeClass(role: string): string {
 }
 
 function roleLabel(role: string): string {
-  if (role === "admin")   return "Admin"
-  if (role === "manager") return "Manager"
-  return "Sale"
+  if (role === "admin")    return "Admin"
+  if (role === "manager")  return "Manager"
+  if (role === "standard") return "Standard"
+  return "Standard"
 }
 
 export function Sidebar() {

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Send, Trash2, Bot, User } from "lucide-react"
+import ReactMarkdown from "react-markdown"
 
 interface Message {
   role:    "user" | "assistant"
@@ -18,7 +19,8 @@ const QUICK = [
 
 export default function ChatbotPage() {
   const { data: session } = useSession()
-  const role = session?.user?.role || "sale"
+  const role     = session?.user?.role || "standard"
+  const userName = session?.user?.name || ""
 
   const [messages,  setMessages]  = useState<Message[]>([])
   const [input,     setInput]     = useState("")
@@ -46,7 +48,7 @@ export default function ChatbotPage() {
       const res = await fetch("/api/chat", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages: next }),
+        body:    JSON.stringify({ messages: next, userName }),
       })
 
       if (!res.ok) {
@@ -155,12 +157,32 @@ export default function ChatbotPage() {
                   ? "bg-brand-600 text-white rounded-tr-sm"
                   : "bg-gray-100 text-gray-800 rounded-tl-sm"
               }`}>
-                <div className="whitespace-pre-wrap">
-                  {msg.content}
-                  {streaming && i === messages.length - 1 && msg.role === "assistant" && (
-                    <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
-                  )}
-                </div>
+                {msg.role === "user" ? (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                ) : (
+                  <div className="markdown-body">
+                    <ReactMarkdown
+                      components={{
+                        p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                        em:     ({ children }) => <em className="italic">{children}</em>,
+                        ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+                        ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+                        li:     ({ children }) => <li className="text-gray-700">{children}</li>,
+                        h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+                        h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                        h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                        hr:     () => <hr className="my-2 border-gray-300" />,
+                        code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                    {streaming && i === messages.length - 1 && (
+                      <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+                    )}
+                  </div>
+                )}
               </div>
               {msg.role === "user" && (
                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">

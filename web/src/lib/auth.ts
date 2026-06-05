@@ -183,7 +183,7 @@ export const authOptions: NextAuthOptions = {
           username,
           name:         user.name ?? username,
           email:        user.email || null,
-          role:         "sale",
+          role:         "standard",
           lark_open_id: openId,
           password:     null,
         })
