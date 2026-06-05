@@ -13,6 +13,18 @@ const NAV = [
   { href: "/countries",  label: "Danh sách Nước", icon: Globe },
 ]
 
+function roleBadgeClass(role: string): string {
+  if (role === "admin")   return "bg-amber-100 text-amber-700"
+  if (role === "manager") return "bg-purple-100 text-purple-700"
+  return "bg-green-100 text-green-700"
+}
+
+function roleLabel(role: string): string {
+  if (role === "admin")   return "Admin"
+  if (role === "manager") return "Manager"
+  return "Sale"
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
@@ -78,12 +90,8 @@ export function Sidebar() {
             <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-xs text-gray-400 truncate">{username}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                role === "admin"
-                  ? "bg-amber-100 text-amber-700"
-                  : "bg-green-100 text-green-700"
-              }`}>
-                {role === "admin" ? "Admin" : "Sale"}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
+                {roleLabel(role)}
               </span>
             </div>
           </div>

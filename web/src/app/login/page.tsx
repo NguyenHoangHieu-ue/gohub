@@ -5,10 +5,11 @@ import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState("")
+  const [username, setUsername]       = useState("")
+  const [password, setPassword]       = useState("")
+  const [loading, setLoading]         = useState(false)
+  const [larkLoading, setLarkLoading] = useState(false)
+  const [error, setError]             = useState("")
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,6 +27,17 @@ export default function LoginPage() {
     } catch (err) {
       setError("Hiếu đang fix, vui lòng đợi")
       setLoading(false)
+    }
+  }
+
+  const handleLarkLogin = async () => {
+    setLarkLoading(true)
+    setError("")
+    try {
+      await signIn("lark", { callbackUrl: "/chatbot" })
+    } catch (err) {
+      setError("Hiếu đang fix, vui lòng đợi")
+      setLarkLoading(false)
     }
   }
 
@@ -87,6 +99,45 @@ export default function LoginPage() {
               {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 select-none">hoặc</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          {/* Lark login button */}
+          <button
+            type="button"
+            onClick={handleLarkLogin}
+            disabled={larkLoading || loading}
+            className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 bg-white border border-[#1456F0] text-[#1456F0] font-semibold rounded-xl hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-[#1456F0] focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {/* Lark icon (inline SVG) */}
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 48 48"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle cx="24" cy="24" r="24" fill="#1456F0" />
+              <text
+                x="24"
+                y="31"
+                textAnchor="middle"
+                fontSize="22"
+                fontWeight="bold"
+                fill="white"
+                fontFamily="Arial, sans-serif"
+              >
+                L
+              </text>
+            </svg>
+            {larkLoading ? "Đang chuyển hướng..." : "Đăng nhập bằng Lark"}
+          </button>
         </div>
       </div>
     </div>

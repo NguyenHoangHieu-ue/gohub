@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation"
 import { Users, Plus, Key, Trash2, Save, Shield } from "lucide-react"
 
 interface User {
-  username:   string
-  name:       string
-  email:      string
-  role:       string
-  created_at: string
+  username:      string
+  name:          string
+  email:         string
+  role:          string
+  created_at:    string
+  lark_open_id?: string
 }
 
 type Tab = "list" | "add" | "password"
@@ -26,6 +27,12 @@ export default function AdminPage() {
   if (status !== "authenticated" || session?.user?.role !== "admin") return null
 
   return <AdminPanel currentUser={session.user.username} />
+}
+
+function roleBadgeClass(role: string): string {
+  if (role === "admin")   return "bg-amber-100 text-amber-700"
+  if (role === "manager") return "bg-purple-100 text-purple-700"
+  return "bg-green-100 text-green-700"
 }
 
 function AdminPanel({ currentUser }: { currentUser: string }) {
@@ -139,13 +146,21 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
           )}
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-gray-900">{u.username}</span>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                  u.role === "admin" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
-                }`}>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${roleBadgeClass(u.role)}`}>
                   {u.role}
                 </span>
+                {/* Auth provider badge */}
+                {u.lark_open_id ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">
+                    Lark
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">
+                    PW
+                  </span>
+                )}
               </div>
               <div className="text-sm text-gray-500 mt-0.5">{u.name} {u.email ? `· ${u.email}` : ""}</div>
             </div>
@@ -157,6 +172,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="sale">Sale</option>
+                <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
               </select>
 
@@ -202,7 +218,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
     const res = await fetch("/api/admin/users", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ username: form.username, name: form.name, email: form.email, role: form.role, password: form.password }),
+      body:    JSON.stringify({ username: form.username, name: form.name, email: form.email, role: form.role, password: form.password || null }),
     })
     setLoading(false)
     if (res.ok) {
@@ -230,12 +246,14 @@ function AddUser({ onRefresh, onNotify, setTab }: {
             className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="sale">Sale</option>
+            <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </select>
         </div>
-        <Field label="Password *"      value={form.password}  onChange={v => set("password", v)} type="password" placeholder="••••••••" />
-        <Field label="Nhập lại PW *"   value={form.confirm}   onChange={v => set("confirm",  v)} type="password" placeholder="••••••••" />
+        <Field label="Password"        value={form.password}  onChange={v => set("password", v)} type="password" placeholder="••••••••" />
+        <Field label="Nhập lại PW"     value={form.confirm}   onChange={v => set("confirm",  v)} type="password" placeholder="••••••••" />
       </div>
+      <p className="text-xs text-gray-400">Password có thể để trống nếu user sẽ đăng nhập bằng Lark.</p>
       <button
         type="submit"
         disabled={loading}

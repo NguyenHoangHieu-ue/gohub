@@ -16,7 +16,7 @@ export async function GET() {
     await requireAdmin()
     const { data } = await supabaseAdmin
       .from("users")
-      .select("username, name, email, role, created_at")
+      .select("username, name, email, role, created_at, lark_open_id")
       .order("username")
     return NextResponse.json({ users: data })
   } catch {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdmin()
     const { username, name, email, role, password } = await req.json()
-    if (!username || !name || !password)
+    if (!username || !name)
       return NextResponse.json({ error: "Thiếu trường bắt buộc" }, { status: 400 })
 
     const { data: existing } = await supabaseAdmin
@@ -36,8 +36,17 @@ export async function POST(req: NextRequest) {
     if (existing)
       return NextResponse.json({ error: `Username "${username}" đã tồn tại` }, { status: 409 })
 
-    const hashed = await bcrypt.hash(password, 12)
-    await supabaseAdmin.from("users").insert({ username, name, email, role, password: hashed })
+    const hashedPassword = password
+      ? await bcrypt.hash(password, 12)
+      : null
+
+    await supabaseAdmin.from("users").insert({
+      username,
+      name,
+      email:    email || null,
+      role:     role  || "sale",
+      password: hashedPassword,
+    })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
