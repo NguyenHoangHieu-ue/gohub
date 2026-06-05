@@ -34,8 +34,9 @@ interface WMProduct {
   apn_data_reset: string | null
   apn_telecom_providers: string | null
   apn_prepaid_card: string | null
-  // enriched (in_system tab)
-  system_skus?: SystemSku[]
+  // enriched fields
+  in_system: boolean
+  system_skus: SystemSku[]
 }
 
 interface SystemSku {
@@ -197,14 +198,14 @@ function Pagination({ page, total, pageSize, onChange }: {
 const WM_SIM_TYPES = ["eSIM", "SIM", "Top-Up SIM"]
 
 function WorldmoveTab({ showCost }: { showCost: boolean }) {
-  const [subTab, setSubTab] = useState<"catalog" | "gap">("catalog")
-  const [products, setProducts] = useState<WMProduct[]>([])
-  const [total, setTotal] = useState(0)
-  const [apnModal, setApnModal] = useState<WMProduct | null>(null)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [products, setProducts]       = useState<WMProduct[]>([])
+  const [total, setTotal]             = useState(0)
+  const [apnModal, setApnModal]       = useState<WMProduct | null>(null)
+  const [page, setPage]               = useState(1)
+  const [loading, setLoading]         = useState(false)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
-  // Catalog filters
+  // Filters
   const [search, setSearch]   = useState("")
   const [simType, setSimType] = useState("")
   const [region, setRegion]   = useState("")
@@ -213,33 +214,26 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
   const [days,    setDays]    = useState("")
   const [dataMin, setDataMin] = useState("")
   const [dataMax, setDataMax] = useState("")
-
-  // Gap filter
-  const [gap, setGap] = useState<"in_system" | "not_in_system">("not_in_system")
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [gap, setGap]         = useState<"all" | "in_system" | "not_in_system">("all")
 
   const searchTimer = useRef<NodeJS.Timeout | null>(null)
 
   const load = useCallback(async (p: number, f: {
     search: string; simType: string; region: string; isLesim: string; isUnlim: string
-    days: string; dataMin: string; dataMax: string; gap: string; subTab: string
+    days: string; dataMin: string; dataMax: string; gap: string
   }) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(p), pageSize: "50" })
-      if (f.subTab === "gap") {
-        params.set("gap", f.gap)
-      } else {
-        params.set("gap", "all")
-        if (f.search)  params.set("search",       f.search)
-        if (f.simType) params.set("sim_type",      f.simType)
-        if (f.region)  params.set("region",        f.region)
-        if (f.isLesim) params.set("is_lesim",      f.isLesim)
-        if (f.isUnlim) params.set("is_unlimited",  f.isUnlim)
-        if (f.days)    params.set("days",           f.days)
-        if (f.dataMin) params.set("data_min",       f.dataMin)
-        if (f.dataMax) params.set("data_max",       f.dataMax)
-      }
+      params.set("gap", f.gap)
+      if (f.search)  params.set("search",       f.search)
+      if (f.simType) params.set("sim_type",      f.simType)
+      if (f.region)  params.set("region",        f.region)
+      if (f.isLesim) params.set("is_lesim",      f.isLesim)
+      if (f.isUnlim) params.set("is_unlimited",  f.isUnlim)
+      if (f.days)    params.set("days",           f.days)
+      if (f.dataMin) params.set("data_min",       f.dataMin)
+      if (f.dataMax) params.set("data_max",       f.dataMax)
       const res = await fetch(`/api/ncc/worldmove?${params}`)
       const json = await res.json()
       setProducts(json.data ?? [])
@@ -251,13 +245,12 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
     }
   }, [])
 
-  const allFilters = () => ({ search, simType, region, isLesim, isUnlim, days, dataMin, dataMax, gap, subTab })
+  const allFilters = () => ({ search, simType, region, isLesim, isUnlim, days, dataMin, dataMax, gap })
 
   useEffect(() => {
     load(page, allFilters())
-  }, [page, gap, subTab, simType, isLesim, isUnlim, days]) // eslint-disable-line
+  }, [page, gap, simType, isLesim, isUnlim, days]) // eslint-disable-line
 
-  // Debounce text inputs
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => {
@@ -266,8 +259,13 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
     }, 400)
   }, [search, region, dataMin, dataMax]) // eslint-disable-line
 
-  function handleSubTab(t: "catalog" | "gap") {
-    setSubTab(t)
+  function handleFilter(setter: (v: string) => void, value: string) {
+    setter(value)
+    setPage(1)
+  }
+
+  function handleGap(g: "all" | "in_system" | "not_in_system") {
+    setGap(g)
     setPage(1)
     setProducts([])
     setLoading(true)
@@ -283,100 +281,76 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
     })
   }
 
-  function handleFilter(setter: (v: string) => void, value: string) {
-    setter(value)
-    setPage(1)
-  }
-
   return (
     <div className="space-y-4">
-      {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-        {(["catalog", "gap"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => handleSubTab(t)}
-            className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${
-              subTab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t === "catalog" ? "Catalog NCC" : "So sánh Hệ Thống"}
-          </button>
-        ))}
-      </div>
-
-      {subTab === "catalog" && (
-        /* Catalog filters */
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Tìm product name, ID, region..."
-              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400"
-            />
-          </div>
-          <select value={simType} onChange={e => handleFilter(setSimType, e.target.value)}
-            className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
-            <option value="">SIM Type</option>
-            {WM_SIM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <input value={region} onChange={e => setRegion(e.target.value)}
-            placeholder="Region..."
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-36"
-          />
-          <select value={isLesim} onChange={e => handleFilter(setIsLesim, e.target.value)}
-            className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
-            <option value="">leSIM</option>
-            <option value="true">leSIM</option>
-            <option value="false">Dedicated</option>
-          </select>
-          <select value={isUnlim} onChange={e => handleFilter(setIsUnlim, e.target.value)}
-            className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
-            <option value="">Data type</option>
-            <option value="true">Unlimited</option>
-            <option value="false">Fixed / Daily</option>
-          </select>
-          <input value={days} onChange={e => handleFilter(setDays, e.target.value)}
-            placeholder="Days (vd: 7)"
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-28"
-          />
-          <input value={dataMin} onChange={e => setDataMin(e.target.value)}
-            placeholder="GB min"
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
-          />
-          <input value={dataMax} onChange={e => setDataMax(e.target.value)}
-            placeholder="GB max"
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm product name, ID, region..."
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400"
           />
         </div>
-      )}
+        <select value={simType} onChange={e => handleFilter(setSimType, e.target.value)}
+          className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
+          <option value="">SIM Type</option>
+          {WM_SIM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <input value={region} onChange={e => setRegion(e.target.value)}
+          placeholder="Region..."
+          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-36"
+        />
+        <select value={isLesim} onChange={e => handleFilter(setIsLesim, e.target.value)}
+          className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
+          <option value="">leSIM</option>
+          <option value="true">leSIM</option>
+          <option value="false">Dedicated</option>
+        </select>
+        <select value={isUnlim} onChange={e => handleFilter(setIsUnlim, e.target.value)}
+          className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white">
+          <option value="">Data type</option>
+          <option value="true">Unlimited</option>
+          <option value="false">Fixed / Daily</option>
+        </select>
+        <input value={days} onChange={e => handleFilter(setDays, e.target.value)}
+          placeholder="Days (vd: 7)"
+          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-28"
+        />
+        <input value={dataMin} onChange={e => setDataMin(e.target.value)}
+          placeholder="GB min"
+          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
+        />
+        <input value={dataMax} onChange={e => setDataMax(e.target.value)}
+          placeholder="GB max"
+          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
+        />
+      </div>
 
-      {subTab === "gap" && (
-        /* Gap filter */
-        <div className="flex gap-2 items-center">
-          <span className="text-sm text-gray-500">Hiện:</span>
-          {(["not_in_system", "in_system"] as const).map(g => (
+      {/* Gap filter + count row */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          {([
+            { v: "all",            label: "Tất cả" },
+            { v: "in_system",      label: "Đã có trong HT" },
+            { v: "not_in_system",  label: "Chưa có trong HT" },
+          ] as const).map(opt => (
             <button
-              key={g}
-              onClick={() => { setGap(g); setPage(1); setProducts([]); setLoading(true) }}
-              className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
-                gap === g
-                  ? "bg-brand-600 text-white border-brand-600"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+              key={opt.v}
+              onClick={() => handleGap(opt.v)}
+              className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                gap === opt.v ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              {g === "not_in_system" ? "Chưa có trong hệ thống" : "Đã có trong hệ thống"}
+              {opt.label}
             </button>
           ))}
         </div>
-      )}
-
-      {/* Table header + pagination */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400">WORLDMOVE • {total.toLocaleString()} sản phẩm</span>
-        <div className="flex items-center gap-2">
-          {loading && <RefreshCw size={14} className="animate-spin text-gray-400" />}
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          {loading && <RefreshCw size={13} className="animate-spin" />}
+          <span>WORLDMOVE • {total.toLocaleString()} sản phẩm</span>
+          <span className="text-gray-300">|</span>
           <Pagination page={page} total={total} pageSize={50} onChange={setPage} />
         </div>
       </div>
@@ -395,12 +369,8 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Throttle</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">KYC</th>
               {showCost && <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">COGS (TWD)</th>}
-              {subTab === "gap" && (
-                <>
-                  <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Trong HT</th>
-                  <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">SKU</th>
-                </>
-              )}
+              <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Trong HT</th>
+              <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">SKU HT</th>
               <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">Note / APN</th>
             </tr>
           </thead>
@@ -408,7 +378,7 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
             {loading && products.length === 0 ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-b border-gray-50">
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} className="px-3 py-3">
                       <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${50 + (i * 9 + j * 13) % 40}%` }} />
                     </td>
@@ -418,14 +388,13 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
             ) : products.length === 0 ? (
               <tr><td colSpan={12} className="text-center py-12 text-gray-400 text-sm">Không có dữ liệu</td></tr>
             ) : products.flatMap(p => {
-              const isExpandable = subTab === "gap" && gap === "in_system"
-              const isExpanded   = expandedRows.has(p.vendor_product_id)
-              const skus         = p.system_skus ?? []
+              const isExpanded = p.in_system && expandedRows.has(p.vendor_product_id)
+              const skus       = p.system_skus ?? []
               return [
                 <tr
                   key={p.id}
-                  className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${isExpandable ? "cursor-pointer select-none" : ""}`}
-                  onClick={isExpandable ? () => toggleExpand(p.vendor_product_id) : undefined}
+                  className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${p.in_system ? "cursor-pointer select-none" : ""}`}
+                  onClick={p.in_system ? () => toggleExpand(p.vendor_product_id) : undefined}
                 >
                   <td className="px-3 py-2 text-xs text-gray-400 font-mono whitespace-nowrap">{p.vendor_product_id}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[280px]">
@@ -450,27 +419,25 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
                       {p.cogs != null ? p.cogs.toLocaleString() : "—"}
                     </td>
                   )}
-                  {subTab === "gap" && (
-                    <>
-                      <td className="px-3 py-2 text-center">
-                        {gap === "in_system" ? (
-                          <div className="inline-flex items-center gap-1">
-                            <Badge color="green">✓ Có</Badge>
-                            <ChevronDown size={12} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
-                          </div>
-                        ) : (
-                          <Badge color="red">✗ Chưa</Badge>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-xs font-mono">
-                        {skus.length
-                          ? <div className="space-y-0.5">{skus.map(s => <div key={s.sku_code} className="text-brand-700">{s.sku_code}</div>)}</div>
-                          : <span className="text-gray-300">—</span>
-                        }
-                      </td>
-                    </>
-                  )}
-                  {/* APN / Note — compact, double-click to expand */}
+                  {/* Trong HT */}
+                  <td className="px-3 py-2 text-center">
+                    {p.in_system ? (
+                      <div className="inline-flex items-center gap-1">
+                        <Badge color="green">✓ Có</Badge>
+                        <ChevronDown size={12} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                      </div>
+                    ) : (
+                      <Badge color="red">✗ Chưa</Badge>
+                    )}
+                  </td>
+                  {/* SKU HT */}
+                  <td className="px-3 py-2 text-xs font-mono">
+                    {skus.length
+                      ? <div className="space-y-0.5">{skus.map(s => <div key={s.sku_code} className="text-brand-700">{s.sku_code}</div>)}</div>
+                      : <span className="text-gray-300">—</span>
+                    }
+                  </td>
+                  {/* APN / Note */}
                   <td className="px-3 py-2 text-xs text-gray-500 max-w-[200px]">
                     {fmtApnSummary(p) ? (
                       <div
@@ -487,8 +454,8 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
                   </td>
                 </tr>,
 
-                // Expand row — system SKUs styled like /skus page
-                ...(isExpandable && isExpanded ? [
+                // Expand sub-row — SKU detail styled like /skus page
+                ...(isExpanded ? [
                   <tr key={`${p.id}-expand`} className="bg-blue-50/20">
                     <td colSpan={20} className="px-4 py-3 border-b border-blue-100">
                       {skus.length === 0 ? (
@@ -543,7 +510,6 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
         <Pagination page={page} total={total} pageSize={50} onChange={setPage} />
       </div>
 
-      {/* APN Modal */}
       {apnModal && <ApnModal product={apnModal} onClose={() => setApnModal(null)} />}
     </div>
   )
