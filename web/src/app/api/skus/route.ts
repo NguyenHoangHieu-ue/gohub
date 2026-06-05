@@ -56,18 +56,53 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Enrich with note from products table
+  // Enrich with product data (note, kyc, supported_countries)
   const productCodes = [...new Set((rows ?? []).map((r: any) => r.product_code).filter(Boolean))]
-  let noteMap: Record<string, string> = {}
+  let productMap: Record<string, { note: string | null; kyc_needed: string | null; supported_countries: string | null }> = {}
   if (productCodes.length > 0) {
     const { data: products } = await supabaseAdmin
       .from("products")
-      .select("product_code, note")
+      .select("product_code, note, kyc_needed, supported_countries")
       .in("product_code", productCodes as string[])
-    noteMap = Object.fromEntries((products ?? []).map((p: any) => [p.product_code, p.note]))
+    productMap = Object.fromEntries(
+      (products ?? []).map((p: any) => [p.product_code, {
+        note: p.note ?? null,
+        kyc_needed: p.kyc_needed ?? null,
+        supported_countries: p.supported_countries ?? null,
+      }])
+    )
   }
 
-  const enriched = (rows ?? []).map((r: any) => ({ ...r, note: noteMap[r.product_code] || null }))
+  // Build country name lookup from ref_countries
+  const allCountryCodes = new Set<string>()
+  for (const p of Object.values(productMap)) {
+    if (p.supported_countries) {
+      p.supported_countries.split(/[,\s]+/).forEach(c => { if (c) allCountryCodes.add(c.trim()) })
+    }
+  }
+  let countryNameMap: Record<string, string> = {}
+  if (allCountryCodes.size > 0) {
+    const { data: cRows } = await supabaseAdmin
+      .from("ref_countries")
+      .select("code, name")
+      .in("code", [...allCountryCodes])
+    countryNameMap = Object.fromEntries((cRows ?? []).map((c: any) => [c.code, c.name]))
+  }
+
+  const enriched = (rows ?? []).map((r: any) => {
+    const prod = productMap[r.product_code] ?? {}
+    const codes = (prod.supported_countries ?? "")
+    const names = codes
+      ? codes.split(/[,\s]+/).filter(Boolean).map((c: string) => countryNameMap[c.trim()] || c.trim()).join(", ")
+      : null
+    return {
+      ...r,
+      note:                prod.note ?? null,
+      kyc_needed:          prod.kyc_needed ?? null,
+      supported_countries: codes || null,
+      country_names:       names || null,
+    }
+  })
 
   return NextResponse.json({ data: enriched, total: count ?? 0, page, pageSize: PAGE_SIZE })
 }

@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Plus, Key, Trash2, Save, Shield } from "lucide-react"
+import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface User {
   username:      string
@@ -14,7 +14,7 @@ interface User {
   lark_open_id?: string
 }
 
-type Tab = "list" | "add" | "password"
+type Tab = "list" | "add" | "password" | "settings" | "template"
 
 export default function AdminPage() {
   const { data: session, status } = useSession()
@@ -57,9 +57,11 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
   }
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "list",     label: "Danh sách",    icon: <Users size={15} /> },
-    { id: "add",      label: "Thêm user",    icon: <Plus  size={15} /> },
-    { id: "password", label: "Đổi password", icon: <Key   size={15} /> },
+    { id: "list",     label: "Danh sách",    icon: <Users          size={15} /> },
+    { id: "add",      label: "Thêm user",    icon: <Plus           size={15} /> },
+    { id: "password", label: "Đổi password", icon: <Key            size={15} /> },
+    { id: "settings", label: "Cài đặt",      icon: <Settings       size={15} /> },
+    { id: "template", label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
   ]
 
   return (
@@ -99,6 +101,8 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
       {tab === "list"     && <UserList users={users} loading={loading} currentUser={currentUser} onRefresh={fetchUsers} onNotify={notify} />}
       {tab === "add"      && <AddUser   onRefresh={fetchUsers} onNotify={notify} setTab={setTab} />}
       {tab === "password" && <ChangePassword users={users} onNotify={notify} />}
+      {tab === "settings" && <SettingsTab onNotify={notify} />}
+      {tab === "template" && <TemplateTab onNotify={notify} />}
     </div>
   )
 }
@@ -332,6 +336,543 @@ function Field({ label, value, onChange, type = "text", placeholder }: {
         placeholder={placeholder}
         required={label.includes("*")}
         className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+      />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature A: Settings Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AppSetting {
+  key:        string
+  value:      string
+  label:      string
+  category:   string
+  updated_at: string | null
+}
+
+const SETTING_UNITS: Record<string, string> = {
+  "fx.usd_vnd":              "VND per 1 USD",
+  "fx.hkd_usd":              "USD per 1 HKD",
+  "fx.twd_usd":              "USD per 1 TWD",
+  "3hk.fixed_factor":        "(0 – 1)",
+  "3hk.daily_factor":        "(0 – 1)",
+  "3hk.unlim_10mbps_gb_day": "GB/day",
+  "3hk.unlim_5mbps_gb_day":  "GB/day",
+}
+
+function SettingsTab({ onNotify }: {
+  onNotify: (type: "success" | "error", text: string) => void
+}) {
+  const [settings, setSettings]   = useState<AppSetting[]>([])
+  const [changed, setChanged]     = useState<Record<string, string>>({})
+  const [loading, setLoading]     = useState(true)
+  const [saving,  setSaving]      = useState(false)
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then(r => r.json())
+      .then(d => { setSettings(d.settings ?? []); setLoading(false) })
+      .catch(() => { onNotify("error", "Hiếu đang fix, vui lòng đợi"); setLoading(false) })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setValue = (key: string, val: string) => {
+    setChanged(prev => ({ ...prev, [key]: val }))
+  }
+
+  const getCurrentValue = (s: AppSetting) =>
+    changed[s.key] !== undefined ? changed[s.key] : s.value
+
+  const save = async () => {
+    const updates = Object.entries(changed).map(([key, value]) => ({ key, value }))
+    if (updates.length === 0) { onNotify("error", "Chưa có thay đổi nào"); return }
+    setSaving(true)
+    const res = await fetch("/api/admin/settings", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ updates }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      // Reflect saved values back
+      setSettings(prev => prev.map(s =>
+        changed[s.key] !== undefined
+          ? { ...s, value: changed[s.key], updated_at: new Date().toISOString() }
+          : s
+      ))
+      setChanged({})
+      onNotify("success", `Đã lưu ${updates.length} cài đặt`)
+    } else {
+      onNotify("error", "Hiếu đang fix, vui lòng đợi")
+    }
+  }
+
+  if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
+
+  const fxSettings      = settings.filter(s => s.category === "fx_rate")
+  const formulaSettings = settings.filter(s => s.category === "formula")
+
+  const renderSection = (title: string, rows: AppSetting[]) => (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+      <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">{title}</h3>
+      <div className="divide-y divide-gray-100">
+        {rows.map(s => (
+          <div key={s.key} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-gray-700">{s.label}</div>
+              <div className="text-xs text-gray-400 font-mono mt-0.5">{s.key}</div>
+              {s.updated_at && (
+                <div className="text-xs text-gray-300 mt-0.5">
+                  Cập nhật: {new Date(s.updated_at).toLocaleString("vi-VN")}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="number"
+                step="any"
+                value={getCurrentValue(s)}
+                onChange={e => setValue(s.key, e.target.value)}
+                className={`w-28 px-3 py-2 text-sm text-right border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 transition ${
+                  changed[s.key] !== undefined ? "border-amber-400 bg-amber-50" : "border-gray-300"
+                }`}
+              />
+              {SETTING_UNITS[s.key] && (
+                <span className="text-xs text-gray-400 w-28">{SETTING_UNITS[s.key]}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {renderSection("Tỷ Giá Nội Bộ", fxSettings)}
+      {renderSection("Công Thức 3HK Datapool", formulaSettings)}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={save}
+          disabled={saving || Object.keys(changed).length === 0}
+          className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+        >
+          <Save size={15} />
+          {saving ? "Đang lưu..." : "Lưu tất cả"}
+        </button>
+        {Object.keys(changed).length > 0 && (
+          <span className="text-sm text-amber-600">{Object.keys(changed).length} thay đổi chưa lưu</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature B: Template Generator Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface WMProduct {
+  vendor_product_id: string
+  product_name:      string
+  region:            string
+  sim_type:          string
+  days:              number
+  data_amount?:      number | null
+  data_unit?:        string | null
+  is_unlimited:      boolean
+  cogs?:             number | null
+  cogs_currency?:    string | null
+}
+
+const DEFAULT_CONFIG = {
+  productCodePrefix:   "",
+  supportCountryCode:  "",
+  isoCodes:            "",
+  vendorCode:          "WM",
+  dataPolicyCode:      "P",
+  sourceType:          "D",
+  productType:         "C",
+  importType:          "Official",
+  operatorCode:        "",
+  networkType:         "",
+  apn:                 "",
+  onsiteCarrier:       "",
+  kycNeeded:           "No",
+  dailyResetTime:      "",
+  activationTime:      "",
+  expirationDays:      90,
+  call:                "No",
+  hotspot:             "Yes",
+  countryVn:           "",
+  cogsDescription:     "",
+  cogsFormula:         "",
+}
+
+function fmtData(p: WMProduct): string {
+  if (p.is_unlimited) return "Unlimited"
+  if (!p.data_amount) return "—"
+  return `${p.data_amount} ${p.data_unit ?? "GB"}`
+}
+
+const WM_PAGE_SIZE = 50
+
+function TemplateTab({ onNotify }: {
+  onNotify: (type: "success" | "error", text: string) => void
+}) {
+  const [config, setConfig]           = useState(DEFAULT_CONFIG)
+  const [products, setProducts]       = useState<WMProduct[]>([])
+  const [total, setTotal]             = useState(0)
+  const [page, setPage]               = useState(1)
+  const [loadingP, setLoadingP]       = useState(false)
+  const [generating, setGenerating]   = useState(false)
+  const [selected, setSelected]       = useState<Set<string>>(new Set())
+  const [searchRegion, setSearchRegion] = useState("")
+  const [filterSim, setFilterSim]     = useState("")
+  const [filterUnlim, setFilterUnlim] = useState("")
+  const [fxSettings, setFxSettings]   = useState({ fx_usd_vnd: 26394, fx_twd_usd: 0.03165 })
+
+  // Load fx settings once
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then(r => r.json())
+      .then(d => {
+        const rows: AppSetting[] = d.settings ?? []
+        const usd_vnd = rows.find(s => s.key === "fx.usd_vnd")
+        const twd_usd = rows.find(s => s.key === "fx.twd_usd")
+        setFxSettings({
+          fx_usd_vnd: usd_vnd ? parseFloat(usd_vnd.value) : 26394,
+          fx_twd_usd: twd_usd ? parseFloat(twd_usd.value) : 0.03165,
+        })
+      })
+  }, [])
+
+  const fetchProducts = useCallback(async (pg: number) => {
+    setLoadingP(true)
+    const params = new URLSearchParams({
+      page:         String(pg),
+      gap:          "all",
+    })
+    if (searchRegion) params.set("region", searchRegion)
+    if (filterSim)    params.set("sim_type", filterSim)
+    if (filterUnlim)  params.set("is_unlimited", filterUnlim)
+
+    const res = await fetch(`/api/ncc/worldmove?${params}`)
+    const d   = await res.json()
+    setProducts(d.data ?? [])
+    setTotal(d.total ?? 0)
+    setLoadingP(false)
+  }, [searchRegion, filterSim, filterUnlim])
+
+  useEffect(() => { fetchProducts(page) }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const search = () => { setPage(1); fetchProducts(1) }
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const s = new Set(prev)
+      s.has(id) ? s.delete(id) : s.add(id)
+      return s
+    })
+  }
+
+  const selectAll = () => {
+    setSelected(prev => {
+      const s = new Set(prev)
+      products.forEach(p => s.add(p.vendor_product_id))
+      return s
+    })
+  }
+
+  const clearAll = () => setSelected(new Set())
+
+  const generate = async () => {
+    if (selected.size === 0) { onNotify("error", "Chưa chọn sản phẩm nào"); return }
+    if (!config.productCodePrefix) { onNotify("error", "Nhập Product Code Prefix"); return }
+    if (!config.supportCountryCode) { onNotify("error", "Nhập Support Country Code"); return }
+
+    // We need the full product objects for selected IDs
+    // For simplicity, collect from current page; in production you'd want all pages
+    const selectedProducts = products.filter(p => selected.has(p.vendor_product_id))
+
+    setGenerating(true)
+    try {
+      const res = await fetch("/api/admin/template", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          products: selectedProducts,
+          config:   { ...config },
+          settings: fxSettings,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Lỗi không xác định" }))
+        onNotify("error", err.error ?? "Hiếu đang fix, vui lòng đợi")
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement("a")
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "")
+      a.href     = url
+      a.download = `template_${date}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      onNotify("success", `Đã tạo template với ${selectedProducts.length} sản phẩm`)
+    } catch {
+      onNotify("error", "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const setC = (k: keyof typeof DEFAULT_CONFIG, v: string | number) =>
+    setConfig(prev => ({ ...prev, [k]: v }))
+
+  const totalPages = Math.ceil(total / WM_PAGE_SIZE)
+
+  return (
+    <div className="space-y-5">
+      {/* ── Config inputs ── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Cấu hình Template</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <TemplField label="Product Code Prefix *" value={config.productCodePrefix}   onChange={v => setC("productCodePrefix", v)}   placeholder="DCTWNWM" />
+          <TemplField label="Country VN (tên)"       value={config.countryVn ?? ""}    onChange={v => setC("countryVn", v)}            placeholder="Đài Loan" />
+          <TemplField label="Support Country Code *" value={config.supportCountryCode}  onChange={v => setC("supportCountryCode", v)}   placeholder="TWN" />
+          <TemplField label="ISO Country Codes"      value={config.isoCodes}            onChange={v => setC("isoCodes", v)}             placeholder="TW" />
+          <TemplField label="Vendor Code"            value={config.vendorCode}          onChange={v => setC("vendorCode", v)}           placeholder="WM" />
+          <TemplField label="Data Policy Code"       value={config.dataPolicyCode}      onChange={v => setC("dataPolicyCode", v)}       placeholder="P" />
+          <TemplField label="Source Type"            value={config.sourceType}          onChange={v => setC("sourceType", v)}           placeholder="D" />
+          <TemplField label="Product Type"           value={config.productType}         onChange={v => setC("productType", v)}          placeholder="C" />
+          <TemplField label="Import Type"            value={config.importType}          onChange={v => setC("importType", v)}           placeholder="Official" />
+          <TemplField label="Operator Code"          value={config.operatorCode}        onChange={v => setC("operatorCode", v)}         placeholder="WORLDMOVE" />
+          <TemplField label="Network Type"           value={config.networkType}         onChange={v => setC("networkType", v)}          placeholder="4G" />
+          <TemplField label="APN"                    value={config.apn}                 onChange={v => setC("apn", v)}                  placeholder="mobile.three.com.hk" />
+          <TemplField label="Onsite Carrier"         value={config.onsiteCarrier}       onChange={v => setC("onsiteCarrier", v)}        placeholder="Chunghwa Telecom" />
+          <TemplField label="Daily Reset Time"       value={config.dailyResetTime}      onChange={v => setC("dailyResetTime", v)}       placeholder="UTC+8" />
+          <TemplField label="Activation Time"        value={config.activationTime}      onChange={v => setC("activationTime", v)}       placeholder="24h" />
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Expiration (days)</label>
+            <input
+              type="number"
+              value={config.expirationDays}
+              onChange={e => setC("expirationDays", parseInt(e.target.value) || 90)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <TemplField label="Call"    value={config.call}    onChange={v => setC("call", v)}    placeholder="No" />
+          <TemplField label="Hotspot" value={config.hotspot} onChange={v => setC("hotspot", v)} placeholder="Yes" />
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">KYC Needed</label>
+            <select
+              value={config.kycNeeded}
+              onChange={e => setC("kycNeeded", e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+        </div>
+        {/* COGS description & formula */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Mô tả COGS (Sheet 2)</label>
+            <textarea
+              rows={2}
+              value={config.cogsDescription}
+              onChange={e => setC("cogsDescription", e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              placeholder="Mô tả cấu trúc giá..."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Công thức COGS (Sheet 2)</label>
+            <textarea
+              rows={2}
+              value={config.cogsFormula}
+              onChange={e => setC("cogsFormula", e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+              placeholder="COGS = ..."
+            />
+          </div>
+        </div>
+        <div className="text-xs text-gray-400">
+          Tỷ giá đang dùng: 1 TWD = {fxSettings.fx_twd_usd} USD · 1 USD = {fxSettings.fx_usd_vnd} VND
+          &nbsp;(lấy từ tab Cài đặt)
+        </div>
+      </div>
+
+      {/* ── Product selection ── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Chọn sản phẩm WM</h3>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-40">
+            <Search size={14} className="text-gray-400" />
+            <input
+              value={searchRegion}
+              onChange={e => setSearchRegion(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && search()}
+              placeholder="Lọc theo region / tên..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <select
+            value={filterSim}
+            onChange={e => { setFilterSim(e.target.value); setPage(1) }}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Tất cả loại SIM</option>
+            <option value="eSIM">eSIM</option>
+            <option value="SIM">SIM</option>
+          </select>
+          <select
+            value={filterUnlim}
+            onChange={e => { setFilterUnlim(e.target.value); setPage(1) }}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="">Tất cả gói</option>
+            <option value="true">Unlimited</option>
+            <option value="false">Fixed</option>
+          </select>
+          <button
+            onClick={search}
+            className="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+          >
+            Tìm
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+                <th className="px-3 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && products.every(p => selected.has(p.vendor_product_id))}
+                    onChange={e => e.target.checked ? selectAll() : clearAll()}
+                  />
+                </th>
+                <th className="px-3 py-2">Vendor ID</th>
+                <th className="px-3 py-2">Tên sản phẩm</th>
+                <th className="px-3 py-2">Region</th>
+                <th className="px-3 py-2">Loại</th>
+                <th className="px-3 py-2 text-right">Days</th>
+                <th className="px-3 py-2 text-right">Data</th>
+                <th className="px-3 py-2 text-right">COGS (TWD)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loadingP ? (
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Đang tải...</td></tr>
+              ) : products.length === 0 ? (
+                <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Không có dữ liệu</td></tr>
+              ) : products.map(p => (
+                <tr
+                  key={p.vendor_product_id}
+                  className={`cursor-pointer hover:bg-gray-50 ${selected.has(p.vendor_product_id) ? "bg-brand-50" : ""}`}
+                  onClick={() => toggleSelect(p.vendor_product_id)}
+                >
+                  <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(p.vendor_product_id)}
+                      onChange={() => toggleSelect(p.vendor_product_id)}
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{p.vendor_product_id}</td>
+                  <td className="px-3 py-2">{p.product_name}</td>
+                  <td className="px-3 py-2 text-gray-600">{p.region}</td>
+                  <td className="px-3 py-2 text-gray-600">{p.sim_type}</td>
+                  <td className="px-3 py-2 text-right">{p.days}</td>
+                  <td className="px-3 py-2 text-right">{fmtData(p)}</td>
+                  <td className="px-3 py-2 text-right">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>{total.toLocaleString()} sản phẩm · Trang {page}/{totalPages}</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          <span className="text-sm text-gray-500">
+            {selected.size} sản phẩm được chọn
+          </span>
+          <button
+            onClick={selectAll}
+            className="text-xs text-brand-600 hover:underline"
+          >
+            Chọn tất cả trang này
+          </button>
+          {selected.size > 0 && (
+            <button
+              onClick={clearAll}
+              className="text-xs text-gray-400 hover:underline"
+            >
+              Bỏ chọn tất cả
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Generate button ── */}
+      <button
+        onClick={generate}
+        disabled={generating || selected.size === 0}
+        className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        <FileSpreadsheet size={16} />
+        {generating ? "Đang tạo..." : `Tạo Excel (${selected.size} sản phẩm)`}
+      </button>
+    </div>
+  )
+}
+
+function TemplField({ label, value, onChange, placeholder }: {
+  label:       string
+  value:       string
+  onChange:    (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
       />
     </div>
   )

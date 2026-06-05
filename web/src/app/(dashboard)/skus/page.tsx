@@ -23,6 +23,9 @@ interface Sku {
   latest_cogs:          number
   latest_cogs_currency: string
   note:                 string | null
+  kyc_needed:           string | null
+  supported_countries:  string | null
+  country_names:        string | null
 }
 
 interface FilterOptions {
@@ -51,7 +54,10 @@ const HEADERS_BASE = [
   { key: "vendor_sku",     label: "Vendor SKU",   note: "Mã SKU bên NCC" },
   { key: "frame",          label: "Frame SKU",    note: "" },
   { key: "datapack",       label: "Datapack SKU", note: "" },
-  { key: "note",           label: "Note",         note: "Ghi chú từ Product" },
+  { key: "kyc_needed",          label: "KYC",           note: "Yêu cầu KYC?" },
+  { key: "supported_countries", label: "Country Code",  note: "Mã quốc gia hỗ trợ" },
+  { key: "country_names",       label: "Country Name",  note: "Tên quốc gia hỗ trợ" },
+  { key: "note",                label: "Note",          note: "Ghi chú từ Product" },
 ]
 const HEADERS_ADMIN = [
   { key: "latest_cogs",          label: "COGS",     note: "Giá nhập" },
@@ -268,7 +274,14 @@ export default function SkusPage() {
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{row.latest_cogs_currency || "—"}</td>
                     </>
                   )}
-                  <td className="px-3 py-2 text-xs text-gray-500 max-w-[200px] truncate" title={row.note || ""}>{row.note || ""}</td>
+                  <td className="px-3 py-2 text-xs text-center">
+                    {row.kyc_needed
+                      ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${row.kyc_needed === "Yes" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>{row.kyc_needed}</span>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-xs font-mono text-gray-500 whitespace-nowrap">{row.supported_countries || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-gray-600 max-w-[180px]" title={row.country_names || ""}>{row.country_names || "—"}</td>
+                  <td className="px-3 py-2 text-xs text-gray-500 max-w-[220px]" title={row.note || ""}>{row.note || ""}</td>
                 </tr>
               ))}
             </tbody>

@@ -44,16 +44,19 @@ function fmtData(row: WMProduct): string {
     const label = row.data_gb < 1 ? `${(row.data_gb * 1000).toFixed(0)} MB` : `${row.data_gb} GB`
     return row.is_daily ? `${label}/day` : label
   }
-  // Unlimited types
-  if (row.throttle_kbps == null) return "Unl. (AYCE)"              // Titanium
-  if (row.throttle_kbps >= 10000) return "Unl. (1GB/d HS)"         // Premium
-  return "Unl. (2GB/d HS)"                                          // Standard
+  return "UNL/Day"
 }
 
-function fmtThrottle(kbps: number | null): string {
-  if (kbps == null) return "—"
-  if (kbps >= 1000) return `${kbps / 1000} Mbps`
-  return `${kbps} kbps`
+function fmtThrottle(row: WMProduct): string {
+  if (!row.is_unlimited) {
+    if (row.throttle_kbps == null) return "—"
+    if (row.throttle_kbps >= 1000) return `${row.throttle_kbps / 1000} Mbps`
+    return `${row.throttle_kbps} kbps`
+  }
+  // Unlimited types — describe highspeed + throttle
+  if (row.throttle_kbps == null) return "No speed limit"                    // Titanium AYCE
+  if (row.throttle_kbps >= 10000) return "1GB Highspeed then throttle 10Mbps" // Premium
+  return "2GB Highspeed then throttle 5Mbps"                                // Standard
 }
 
 function Badge({ children, color }: { children: React.ReactNode; color: string }) {
@@ -261,7 +264,6 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Data</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Throttle</th>
               {showCost && <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">COGS (TWD)</th>}
-              <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">leSIM</th>
               {subTab === "gap" && (
                 <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">HT</th>
               )}
@@ -288,15 +290,12 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
                 </td>
                 <td className="px-3 py-2 text-center text-sm text-gray-700">{p.days ?? "—"}</td>
                 <td className="px-3 py-2 text-center text-xs text-gray-700 whitespace-nowrap">{fmtData(p)}</td>
-                <td className="px-3 py-2 text-center text-xs text-gray-500">{fmtThrottle(p.throttle_kbps)}</td>
+                <td className="px-3 py-2 text-center text-xs text-gray-500 max-w-[200px]">{fmtThrottle(p)}</td>
                 {showCost && (
                   <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
                     {p.cogs != null ? p.cogs.toLocaleString() : "—"}
                   </td>
                 )}
-                <td className="px-3 py-2 text-center">
-                  {p.is_lesim ? <Badge color="purple">leSIM</Badge> : <span className="text-gray-300 text-xs">—</span>}
-                </td>
                 {subTab === "gap" && (
                   <td className="px-3 py-2 text-center">
                     {gap === "in_system"
