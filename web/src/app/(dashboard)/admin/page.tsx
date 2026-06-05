@@ -476,45 +476,58 @@ function SettingsTab({ onNotify }: {
 
 interface WMProduct {
   vendor_product_id: string
-  product_name:      string
-  region:            string
-  sim_type:          string
-  days:              number
-  data_amount?:      number | null
-  data_unit?:        string | null
+  product_name:      string | null
+  region:            string | null
+  sim_type:          string | null
+  days:              number | null
+  data_gb:           number | null
+  is_daily:          boolean
   is_unlimited:      boolean
-  cogs?:             number | null
-  cogs_currency?:    string | null
+  throttle_kbps:     number | null
+  cogs:              number | null
+  cogs_currency:     string | null
 }
 
 const DEFAULT_CONFIG = {
-  productCodePrefix:   "",
-  supportCountryCode:  "",
-  isoCodes:            "",
-  vendorCode:          "WM",
-  dataPolicyCode:      "P",
-  sourceType:          "D",
-  productType:         "C",
-  importType:          "Official",
-  operatorCode:        "",
-  networkType:         "",
-  apn:                 "",
-  onsiteCarrier:       "",
-  kycNeeded:           "No",
-  dailyResetTime:      "",
-  activationTime:      "",
-  expirationDays:      90,
-  call:                "No",
-  hotspot:             "Yes",
-  countryVn:           "",
-  cogsDescription:     "",
-  cogsFormula:         "",
+  // Country / Vendor
+  supportCountryCode: "",     // 3-char, e.g. "TWN"
+  isoCodes:           "",     // ISO codes, e.g. "TW"
+  vendorCode:         "WM",   // 2-char
+  countryNameVn:      "",     // e.g. "Đài Loan"
+  countryNameEn:      "",     // e.g. "Taiwan"
+  // SKU Code Components
+  purchaseType_US:    "D",    // letter for US entity
+  purchaseType_VN:    "3",    // digit for VN entity
+  productType:        "C",    // 1-char
+  dataPolicyCode:     "P",    // 1-char data policy
+  // Product Fields
+  operatorCode:       "",     // e.g. "WORLDMOVE"
+  purchaseMethod:     "API Purchase",
+  skuType:            "Base + Datapack",
+  importType:         "Official",
+  typeOfSim:          "eSIM",
+  // Network
+  networkType:        "",
+  apn:                "",
+  onsiteCarrier:      "",
+  // Misc
+  kycNeeded:          "No",
+  kycCode:            1,
+  hotspot:            "Yes",
+  dailyResetTime:     "",
+  activationTime:     "",
+  expirationDays:     90,
+  call:               "No",
+  // Notes
+  cogsDescription:    "",
+  cogsFormula:        "",
 }
 
-function fmtData(p: WMProduct): string {
-  if (p.is_unlimited) return "Unlimited"
-  if (!p.data_amount) return "—"
-  return `${p.data_amount} ${p.data_unit ?? "GB"}`
+function fmtWMData(p: WMProduct): string {
+  if (p.is_unlimited) return "UNL/Day"
+  if (p.data_gb == null) return "—"
+  if (p.data_gb < 1) return `${Math.round(p.data_gb * 1000)}MB${p.is_daily ? "/day" : ""}`
+  return `${p.data_gb}GB${p.is_daily ? "/day" : ""}`
 }
 
 const WM_PAGE_SIZE = 50
@@ -590,8 +603,9 @@ function TemplateTab({ onNotify }: {
 
   const generate = async () => {
     if (selected.size === 0) { onNotify("error", "Chưa chọn sản phẩm nào"); return }
-    if (!config.productCodePrefix) { onNotify("error", "Nhập Product Code Prefix"); return }
-    if (!config.supportCountryCode) { onNotify("error", "Nhập Support Country Code"); return }
+    if (!config.supportCountryCode) { onNotify("error", "Nhập Support Country Code (3 chars)"); return }
+    if (!config.purchaseType_US) { onNotify("error", "Nhập Purchase Type US (1 ký tự)"); return }
+    if (!config.purchaseType_VN) { onNotify("error", "Nhập Purchase Type VN (1 số)"); return }
 
     // We need the full product objects for selected IDs
     // For simplicity, collect from current page; in production you'd want all pages
@@ -640,21 +654,30 @@ function TemplateTab({ onNotify }: {
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Cấu hình Template</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <TemplField label="Product Code Prefix *" value={config.productCodePrefix}   onChange={v => setC("productCodePrefix", v)}   placeholder="DCTWNWM" />
-          <TemplField label="Country VN (tên)"       value={config.countryVn ?? ""}    onChange={v => setC("countryVn", v)}            placeholder="Đài Loan" />
-          <TemplField label="Support Country Code *" value={config.supportCountryCode}  onChange={v => setC("supportCountryCode", v)}   placeholder="TWN" />
-          <TemplField label="ISO Country Codes"      value={config.isoCodes}            onChange={v => setC("isoCodes", v)}             placeholder="TW" />
-          <TemplField label="Vendor Code"            value={config.vendorCode}          onChange={v => setC("vendorCode", v)}           placeholder="WM" />
-          <TemplField label="Data Policy Code"       value={config.dataPolicyCode}      onChange={v => setC("dataPolicyCode", v)}       placeholder="P" />
-          <TemplField label="Source Type"            value={config.sourceType}          onChange={v => setC("sourceType", v)}           placeholder="D" />
-          <TemplField label="Product Type"           value={config.productType}         onChange={v => setC("productType", v)}          placeholder="C" />
-          <TemplField label="Import Type"            value={config.importType}          onChange={v => setC("importType", v)}           placeholder="Official" />
-          <TemplField label="Operator Code"          value={config.operatorCode}        onChange={v => setC("operatorCode", v)}         placeholder="WORLDMOVE" />
-          <TemplField label="Network Type"           value={config.networkType}         onChange={v => setC("networkType", v)}          placeholder="4G" />
-          <TemplField label="APN"                    value={config.apn}                 onChange={v => setC("apn", v)}                  placeholder="mobile.three.com.hk" />
-          <TemplField label="Onsite Carrier"         value={config.onsiteCarrier}       onChange={v => setC("onsiteCarrier", v)}        placeholder="Chunghwa Telecom" />
-          <TemplField label="Daily Reset Time"       value={config.dailyResetTime}      onChange={v => setC("dailyResetTime", v)}       placeholder="UTC+8" />
-          <TemplField label="Activation Time"        value={config.activationTime}      onChange={v => setC("activationTime", v)}       placeholder="24h" />
+          {/* ─ SKU Code Components ─ */}
+          <TemplField label="Purchase Type US *"    value={config.purchaseType_US}     onChange={v => setC("purchaseType_US", v)}     placeholder="D (letter)" />
+          <TemplField label="Purchase Type VN *"    value={config.purchaseType_VN}     onChange={v => setC("purchaseType_VN", v)}     placeholder="3 (digit)" />
+          <TemplField label="Product Type"          value={config.productType}         onChange={v => setC("productType", v)}         placeholder="C" />
+          <TemplField label="Support Country Code *" value={config.supportCountryCode} onChange={v => setC("supportCountryCode", v)} placeholder="TWN" />
+          <TemplField label="Vendor Code"           value={config.vendorCode}          onChange={v => setC("vendorCode", v)}          placeholder="WM" />
+          <TemplField label="Data Policy Code"      value={config.dataPolicyCode}      onChange={v => setC("dataPolicyCode", v)}      placeholder="P" />
+          {/* ─ Country Names ─ */}
+          <TemplField label="Country Name VN"       value={config.countryNameVn}       onChange={v => setC("countryNameVn", v)}       placeholder="Đài Loan" />
+          <TemplField label="Country Name EN"       value={config.countryNameEn}       onChange={v => setC("countryNameEn", v)}       placeholder="Taiwan" />
+          <TemplField label="ISO Country Codes"     value={config.isoCodes}            onChange={v => setC("isoCodes", v)}            placeholder="TW" />
+          {/* ─ Product Info ─ */}
+          <TemplField label="Operator Code"         value={config.operatorCode}        onChange={v => setC("operatorCode", v)}        placeholder="WORLDMOVE" />
+          <TemplField label="Type of SIM"           value={config.typeOfSim}           onChange={v => setC("typeOfSim", v)}           placeholder="eSIM" />
+          <TemplField label="Purchase Method"       value={config.purchaseMethod}      onChange={v => setC("purchaseMethod", v)}      placeholder="API Purchase" />
+          <TemplField label="SKU Type"              value={config.skuType}             onChange={v => setC("skuType", v)}             placeholder="Base + Datapack" />
+          <TemplField label="Import Type"           value={config.importType}          onChange={v => setC("importType", v)}          placeholder="Official" />
+          {/* ─ Network ─ */}
+          <TemplField label="Network Type"          value={config.networkType}         onChange={v => setC("networkType", v)}         placeholder="4G" />
+          <TemplField label="APN"                   value={config.apn}                 onChange={v => setC("apn", v)}                 placeholder="mobile.three.com.hk" />
+          <TemplField label="Onsite Carrier"        value={config.onsiteCarrier}       onChange={v => setC("onsiteCarrier", v)}       placeholder="Chunghwa Telecom" />
+          {/* ─ Timing ─ */}
+          <TemplField label="Daily Reset Time"      value={config.dailyResetTime}      onChange={v => setC("dailyResetTime", v)}      placeholder="UTC+8" />
+          <TemplField label="Activation Time"       value={config.activationTime}      onChange={v => setC("activationTime", v)}      placeholder="24h" />
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Expiration (days)</label>
             <input
@@ -793,7 +816,7 @@ function TemplateTab({ onNotify }: {
                   <td className="px-3 py-2 text-gray-600">{p.region}</td>
                   <td className="px-3 py-2 text-gray-600">{p.sim_type}</td>
                   <td className="px-3 py-2 text-right">{p.days}</td>
-                  <td className="px-3 py-2 text-right">{fmtData(p)}</td>
+                  <td className="px-3 py-2 text-right">{fmtWMData(p)}</td>
                   <td className="px-3 py-2 text-right">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
                 </tr>
               ))}

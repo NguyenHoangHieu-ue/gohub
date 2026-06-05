@@ -10,41 +10,60 @@ async function requireAdmin() {
   return session
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface WMProduct {
   vendor_product_id: string
-  product_name:      string
-  region:            string
-  sim_type:          string
-  days:              number
-  data_amount?:      number | null
-  data_unit?:        string | null
+  product_name:      string | null
+  region:            string | null
+  sim_type:          string | null
+  days:              number | null
+  data_gb:           number | null
+  is_daily:          boolean
   is_unlimited:      boolean
-  cogs?:             number | null
-  cogs_currency?:    string | null
+  throttle_kbps:     number | null
+  cogs:              number | null
+  cogs_currency:     string | null
 }
 
 interface TemplateConfig {
-  productCodePrefix:   string
-  supportCountryCode:  string
-  isoCodes:            string
-  vendorCode:          string
-  dataPolicyCode:      string
-  sourceType:          string
-  productType:         string
-  importType:          string
-  operatorCode:        string
-  networkType:         string
-  apn:                 string
-  onsiteCarrier:       string
-  kycNeeded:           string
-  dailyResetTime:      string
-  activationTime:      string
-  expirationDays:      number
-  call:                string
-  hotspot:             string
-  cogsDescription?:    string
-  cogsFormula?:        string
-  countryVn?:          string
+  // ─ Country / Vendor ─
+  supportCountryCode: string   // 3-char, e.g. "TWN"
+  isoCodes:           string   // ISO codes, e.g. "TW"
+  vendorCode:         string   // 2-char, e.g. "WM"
+  countryNameVn:      string   // Vietnamese, e.g. "Đài Loan"
+  countryNameEn:      string   // English,    e.g. "Taiwan"
+
+  // ─ SKU Code Components ─
+  purchaseType_US:    string   // letter, e.g. "D" → US productCode prefix
+  purchaseType_VN:    string   // digit,  e.g. "3" → VN productCode prefix
+  productType:        string   // 1-char, e.g. "C"
+  dataPolicyCode:     string   // 1-char, e.g. "P" (daily <2Mbps throttle)
+
+  // ─ Product Fields ─
+  operatorCode:       string   // e.g. "WORLDMOVE"
+  purchaseMethod:     string   // "API Purchase" or "Manual Purchase"
+  skuType:            string   // "Base + Datapack" or "Base"
+  importType:         string   // "Official"
+  typeOfSim:          string   // "eSIM" or "SIM"
+
+  // ─ Network ─
+  networkType:        string   // "4G" or "5G/4G"
+  apn:                string
+  onsiteCarrier:      string
+
+  // ─ Misc ─
+  kycNeeded:          string   // "Yes" / "No"
+  kycCode:            number   // 1 = no KYC, 6 = KYC required, etc.
+  hotspot:            string   // "Yes" / "No"
+  dailyResetTime:     string   // e.g. "UTC+8"
+  activationTime:     string
+  expirationDays:     number   // typically 90
+  call:               string   // "Yes" / "No"
+
+  // ─ Template Notes ─
+  cogsDescription?:   string
+  cogsFormula?:       string
 }
 
 interface FxSettings {
@@ -52,49 +71,74 @@ interface FxSettings {
   fx_twd_usd: number
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function zeroPad(n: number, len: number): string {
   return String(Math.round(n)).padStart(len, "0")
 }
 
-function buildSkuSuffix(product: WMProduct): string {
-  if (product.is_unlimited) {
-    return "UNL" + zeroPad(product.days, 2)
-  }
-  const dataMb = product.data_amount ?? 0
-  const dataVal = product.data_unit === "GB" ? dataMb * 10 : Math.round(dataMb / 100)
-  return zeroPad(dataVal, 3) + zeroPad(product.days, 2)
+/** ROUNDUP: always rounds away from zero */
+function roundUp(value: number, decimals: number): number {
+  const factor = Math.pow(10, decimals)
+  return Math.ceil(value * factor) / factor
 }
 
-function buildSkuUS(prefix: string, product: WMProduct): string {
-  return prefix + buildSkuSuffix(product)
+/**
+ * DataAmount code (3 chars):
+ *   unlimited  → "UNL"
+ *   >= 1 GB   → zeroPad(GB, 3)  e.g. 3GB → "003", 10GB → "010"
+ *   < 1 GB    → zeroPad(MB, 3)  e.g. 0.5GB → "500"
+ */
+function dataAmountCode(data_gb: number | null, is_unlimited: boolean): string {
+  if (is_unlimited || data_gb == null) return "UNL"
+  if (data_gb >= 1) return zeroPad(Math.round(data_gb), 3)
+  return zeroPad(Math.round(data_gb * 1000), 3)
 }
 
-function buildSkuVN(prefix: string, product: WMProduct): string {
-  const vnPrefix = "3" + prefix.slice(1)
-  return vnPrefix + buildSkuSuffix(product)
+/** SKU suffix = DataAmountCode(3) + DayAmount(2) */
+function skuSuffix(p: WMProduct): string {
+  return dataAmountCode(p.data_gb, p.is_unlimited) + zeroPad(p.days ?? 0, 2)
 }
 
-function buildNameVn(product: WMProduct, config: TemplateConfig): string {
-  const country = config.countryVn || config.supportCountryCode
-  if (product.is_unlimited) {
-    return `eSIM ${country} Unlimited ${product.days} Ngày`
-  }
-  const data = product.data_unit === "GB"
-    ? `${product.data_amount}GB`
-    : `${product.data_amount}${product.data_unit ?? "MB"}`
-  return `eSIM ${country} ${data} ${product.days} Ngày`
+function buildProductCode(purchaseType: string, cfg: TemplateConfig): string {
+  return purchaseType + cfg.productType + cfg.supportCountryCode + cfg.vendorCode + cfg.dataPolicyCode
 }
 
-function buildNameEn(product: WMProduct, config: TemplateConfig): string {
-  const country = config.supportCountryCode
-  if (product.is_unlimited) {
-    return `eSIM ${country} Unlimited ${product.days} Day${product.days !== 1 ? "s" : ""}`
-  }
-  const data = product.data_unit === "GB"
-    ? `${product.data_amount}GB`
-    : `${product.data_amount}${product.data_unit ?? "MB"}`
-  return `eSIM ${country} ${data} ${product.days} Day${product.days !== 1 ? "s" : ""}`
+function skuUS(p: WMProduct, cfg: TemplateConfig): string {
+  return buildProductCode(cfg.purchaseType_US, cfg) + skuSuffix(p)
 }
+
+function skuVN(p: WMProduct, cfg: TemplateConfig): string {
+  return buildProductCode(cfg.purchaseType_VN, cfg) + skuSuffix(p)
+}
+
+function fmtThrottle(throttle_kbps: number | null): string {
+  if (throttle_kbps == null) return ""
+  if (throttle_kbps >= 1000) return `${throttle_kbps / 1000} Mbps`
+  return `${throttle_kbps} kbps`
+}
+
+function fmtData(p: WMProduct): string {
+  if (p.is_unlimited) return "Unlimited"
+  if (p.data_gb == null) return ""
+  if (p.data_gb < 1) return `${Math.round(p.data_gb * 1000)}MB`
+  return `${p.data_gb}GB`
+}
+
+function nameVn(p: WMProduct, cfg: TemplateConfig): string {
+  const days = zeroPad(p.days ?? 0, 2)
+  if (p.is_unlimited) return `${cfg.typeOfSim} ${cfg.countryNameVn} Unlimited ${days} Ngày`
+  return `${cfg.typeOfSim} ${cfg.countryNameVn} ${fmtData(p)} ${days} Ngày`
+}
+
+function nameEn(p: WMProduct, cfg: TemplateConfig): string {
+  const days = zeroPad(p.days ?? 0, 2)
+  const dayLabel = `${days} Day${(p.days ?? 1) !== 1 ? "s" : ""}`
+  if (p.is_unlimited) return `${cfg.typeOfSim} ${cfg.countryNameEn} Unlimited ${dayLabel}`
+  return `${cfg.typeOfSim} ${cfg.countryNameEn} ${fmtData(p)} ${dayLabel}`
+}
+
+// ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -111,111 +155,101 @@ export async function POST(req: NextRequest) {
   }
 
   const { products, config, settings } = body
-  if (!products?.length || !config || !settings) {
+  if (!products?.length || !config || !settings)
     return NextResponse.json({ error: "Thiếu dữ liệu đầu vào" }, { status: 400 })
-  }
 
   const fx_twd_usd = Number(settings.fx_twd_usd) || 0.03165
   const fx_usd_vnd = Number(settings.fx_usd_vnd) || 26394
+  const productCodeUS = buildProductCode(config.purchaseType_US, config)
+  const productCodeVN = buildProductCode(config.purchaseType_VN, config)
 
   const wb = XLSX.utils.book_new()
 
   // ── Sheet 1: Danh sách sản phẩm ──────────────────────────────────────────
-  const sheet1Rows = products.map(p => {
-    const costUSD = p.cogs ? p.cogs * fx_twd_usd : null
-    const costVND = costUSD !== null ? costUSD * fx_usd_vnd : null
+  const s1 = products.map(p => {
+    const costUSD = p.cogs != null ? roundUp(p.cogs * fx_twd_usd, 2) : null
+    const costVND = costUSD != null ? roundUp(costUSD * fx_usd_vnd, 0) : null
     return {
-      wmproductId:      p.vendor_product_id,
-      productId:        buildSkuUS(config.productCodePrefix, p),
-      "product name":   p.product_name,
-      region:           p.region,
-      type:             p.sim_type,
+      wmproductId:       p.vendor_product_id,
+      productId:         skuUS(p, config),
+      "product name":    p.product_name ?? "",
+      region:            p.region ?? "",
+      type:              p.sim_type ?? "",
       "cost price (NT)": p.cogs ?? "",
-      "cost price (USD)": costUSD !== null ? Math.round(costUSD * 10000) / 10000 : "",
-      "cost price (VND)": costVND !== null ? Math.round(costVND) : "",
+      "cost price (USD)": costUSD ?? "",
+      "cost price (VND)": costVND ?? "",
     }
   })
-  const ws1 = XLSX.utils.json_to_sheet(sheet1Rows)
-  XLSX.utils.book_append_sheet(wb, ws1, "Danh sách sản phẩm")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s1), "Danh sách sản phẩm")
 
   // ── Sheet 2: Cấu trúc & cogs ─────────────────────────────────────────────
-  const sheet2Data = [
-    ["Mô tả", config.cogsDescription ?? ""],
-    ["Công thức", config.cogsFormula ?? ""],
+  const s2 = [
+    [config.cogsDescription ?? `SIM/eSIM - ${config.operatorCode} - ${config.countryNameEn}\nTỷ giá: TWD/USD: ${(1/fx_twd_usd).toFixed(3)} và VND/USD: ${fx_usd_vnd}`],
+    [config.cogsFormula ?? `Tính giá:\n- cost price (USD) = cost price (NT) / ${(1/fx_twd_usd).toFixed(3)}\n- cost price (VND) = cost price (USD) * ${fx_usd_vnd}`],
   ]
-  const ws2 = XLSX.utils.aoa_to_sheet(sheet2Data)
-  XLSX.utils.book_append_sheet(wb, ws2, "Cấu trúc & cogs")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), "Cấu trúc & cogs")
 
   // ── Sheet 3: Template_SKU_US ─────────────────────────────────────────────
-  const skuUsCols = [
+  const skuCols = [
     "tenant","productCode","dataAmount","dataAmountUnit","dayAmount","dayAmountUnit",
     "nameVn","nameEn","frameSku","datapackSku","latestCogs","latestCogsCurrency",
     "throttleSpeed","call","callSmsDetails","expirations","vendorSku","vendorSkuSim","SKU",
   ]
-  const sheet3Rows = products.map(p => {
-    const costUSD  = p.cogs ? p.cogs * fx_twd_usd : null
-    const skuUS    = buildSkuUS(config.productCodePrefix, p)
-    const dataAmt  = p.is_unlimited ? 9999 : (p.data_amount ?? "")
-    const dataUnit = p.is_unlimited ? "GB" : (p.data_unit ?? "GB")
+  const s3 = products.map(p => {
+    const costUSD = p.cogs != null ? roundUp(p.cogs * fx_twd_usd, 2) : null
     return {
-      tenant:              "US",
-      productCode:         skuUS,
-      dataAmount:          dataAmt,
-      dataAmountUnit:      dataUnit,
-      dayAmount:           p.days,
-      dayAmountUnit:       "Day",
-      nameVn:              buildNameVn(p, config),
-      nameEn:              buildNameEn(p, config),
-      frameSku:            "",
-      datapackSku:         "",
-      latestCogs:          costUSD !== null ? Math.round(costUSD * 10000) / 10000 : "",
-      latestCogsCurrency:  "USD",
-      throttleSpeed:       p.is_unlimited ? "128 kbps" : "",
-      call:                config.call,
-      callSmsDetails:      "",
-      expirations:         config.expirationDays,
-      vendorSku:           p.vendor_product_id,
-      vendorSkuSim:        "",
-      SKU:                 skuUS,
+      tenant:             "US",
+      productCode:        productCodeUS,
+      dataAmount:         p.is_unlimited ? 9999 : (p.data_gb ?? ""),
+      dataAmountUnit:     "GB",
+      dayAmount:          p.days ?? "",
+      dayAmountUnit:      "Day(s)",
+      nameVn:             nameVn(p, config),
+      nameEn:             nameEn(p, config),
+      frameSku:           "",
+      datapackSku:        "",
+      latestCogs:         costUSD ?? "",
+      latestCogsCurrency: "USD",
+      throttleSpeed:      fmtThrottle(p.throttle_kbps),
+      call:               config.call,
+      callSmsDetails:     "",
+      expirations:        config.expirationDays,
+      vendorSku:          p.vendor_product_id,
+      vendorSkuSim:       "",
+      SKU:                skuUS(p, config),
     }
   })
-  const ws3 = XLSX.utils.json_to_sheet(sheet3Rows, { header: skuUsCols })
-  XLSX.utils.book_append_sheet(wb, ws3, "Template_SKU_US")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s3, { header: skuCols }), "Template_SKU_US")
 
   // ── Sheet 4: Template_SKU_VN ─────────────────────────────────────────────
-  const sheet4Rows = products.map(p => {
-    const costUSD  = p.cogs ? p.cogs * fx_twd_usd : null
-    const costVND  = costUSD !== null ? Math.round(costUSD * fx_usd_vnd) : null
-    const skuUS    = buildSkuUS(config.productCodePrefix, p)
-    const skuVN    = buildSkuVN(config.productCodePrefix, p)
-    const dataAmt  = p.is_unlimited ? 9999 : (p.data_amount ?? "")
-    const dataUnit = p.is_unlimited ? "GB" : (p.data_unit ?? "GB")
+  const s4 = products.map(p => {
+    const costUSD = p.cogs != null ? roundUp(p.cogs * fx_twd_usd, 2) : null
+    const costVND = costUSD != null ? roundUp(costUSD * fx_usd_vnd, 0) : null
     return {
-      tenant:              "VN",
-      productCode:         skuVN,
-      dataAmount:          dataAmt,
-      dataAmountUnit:      dataUnit,
-      dayAmount:           p.days,
-      dayAmountUnit:       "Day",
-      nameVn:              buildNameVn(p, config),
-      nameEn:              buildNameEn(p, config),
-      frameSku:            "",
-      datapackSku:         "",
-      latestCogs:          costVND !== null ? costVND : "",
-      latestCogsCurrency:  "VND",
-      throttleSpeed:       p.is_unlimited ? "128 kbps" : "",
-      call:                config.call,
-      callSmsDetails:      "",
-      expirations:         config.expirationDays,
-      vendorSku:           skuUS,
-      vendorSkuSim:        "",
-      SKU:                 skuVN,
+      tenant:             "VN",
+      productCode:        productCodeVN,
+      dataAmount:         p.is_unlimited ? 9999 : (p.data_gb ?? ""),
+      dataAmountUnit:     "GB",
+      dayAmount:          p.days ?? "",
+      dayAmountUnit:      "Day(s)",
+      nameVn:             nameVn(p, config),
+      nameEn:             nameEn(p, config),
+      frameSku:           "",
+      datapackSku:        "",
+      latestCogs:         costVND ?? "",
+      latestCogsCurrency: "VND",
+      throttleSpeed:      fmtThrottle(p.throttle_kbps),
+      call:               config.call,
+      callSmsDetails:     "",
+      expirations:        config.expirationDays,
+      vendorSku:          skuUS(p, config),   // VN buys from US → vendorSku = US SKU code
+      vendorSkuSim:       "",
+      SKU:                skuVN(p, config),
     }
   })
-  const ws4 = XLSX.utils.json_to_sheet(sheet4Rows, { header: skuUsCols })
-  XLSX.utils.book_append_sheet(wb, ws4, "Template_SKU_VN")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s4, { header: skuCols }), "Template_SKU_VN")
 
-  // ── Sheet 5: Template_Product_US ─────────────────────────────────────────
+  // ── Sheet 5 & 6: Template_Product ────────────────────────────────────────
   const productCols = [
     "tenant","sourceType","productType","supportCountryCode","supportedCountries",
     "vendorCode","dataPolicyCode","typeOfSim","operatorCode","purchaseType","skuType",
@@ -224,89 +258,60 @@ export async function POST(req: NextRequest) {
     "hotspot","kycCode","kycNeeded","kycLinks","topUpOptions","activation","unsupportedApps",
     "telcoPerks","note","dataPlanType",
   ]
-  const sheet5Rows = products.map(p => {
-    const skuUS = buildSkuUS(config.productCodePrefix, p)
-    return {
-      tenant:             "US",
-      sourceType:         config.sourceType,
-      productType:        config.productType,
-      supportCountryCode: config.supportCountryCode,
-      supportedCountries: config.isoCodes,
-      vendorCode:         config.vendorCode,
-      dataPolicyCode:     config.dataPolicyCode,
-      typeOfSim:          p.sim_type,
-      operatorCode:       config.operatorCode,
-      purchaseType:       "",
-      skuType:            "",
-      dataType:           p.is_unlimited ? "Unlimited" : "Fixed",
-      baseSimEsimSkuCode: skuUS,
-      importType:         config.importType,
-      dailyResetTime:     config.dailyResetTime,
-      activationTime:     config.activationTime,
-      networkType:        config.networkType,
-      apnOriginal:        config.apn,
-      apn:                config.apn,
-      onsiteCarrier:      config.onsiteCarrier,
-      localPhoneNumber:   "",
-      localNumberCountry: "",
-      hotspot:            config.hotspot,
-      kycCode:            "",
-      kycNeeded:          config.kycNeeded,
-      kycLinks:           "",
-      topUpOptions:       "",
-      activation:         "",
-      unsupportedApps:    "",
-      telcoPerks:         "",
-      note:               "",
-      dataPlanType:       p.is_unlimited ? "Unlimited" : "Fixed",
-    }
-  })
-  const ws5 = XLSX.utils.json_to_sheet(sheet5Rows, { header: productCols })
-  XLSX.utils.book_append_sheet(wb, ws5, "Template_Product_US")
 
-  // ── Sheet 6: Template_Product_VN ─────────────────────────────────────────
-  const sheet6Rows = products.map(p => {
-    const skuVN = buildSkuVN(config.productCodePrefix, p)
-    return {
-      tenant:             "VN",
-      sourceType:         config.sourceType,
-      productType:        config.productType,
-      supportCountryCode: config.supportCountryCode,
-      supportedCountries: config.isoCodes,
-      vendorCode:         config.vendorCode,
-      dataPolicyCode:     config.dataPolicyCode,
-      typeOfSim:          p.sim_type,
-      operatorCode:       config.operatorCode,
-      purchaseType:       "",
-      skuType:            "",
-      dataType:           p.is_unlimited ? "Unlimited" : "Fixed",
-      baseSimEsimSkuCode: skuVN,
-      importType:         config.importType,
-      dailyResetTime:     config.dailyResetTime,
-      activationTime:     config.activationTime,
-      networkType:        config.networkType,
-      apnOriginal:        config.apn,
-      apn:                config.apn,
-      onsiteCarrier:      config.onsiteCarrier,
-      localPhoneNumber:   "",
-      localNumberCountry: "",
-      hotspot:            config.hotspot,
-      kycCode:            "",
-      kycNeeded:          config.kycNeeded,
-      kycLinks:           "",
-      topUpOptions:       "",
-      activation:         "",
-      unsupportedApps:    "",
-      telcoPerks:         "",
-      note:               "",
-      dataPlanType:       p.is_unlimited ? "Unlimited" : "Fixed",
-    }
+  // One product row per unique productCode (products share the same product info)
+  const makeProductRow = (tenant: string, sourceType: string | number, baseCode: string) => ({
+    tenant,
+    sourceType,
+    productType:        config.productType,
+    supportCountryCode: config.supportCountryCode,
+    supportedCountries: config.isoCodes,
+    vendorCode:         config.vendorCode,
+    dataPolicyCode:     config.dataPolicyCode,
+    typeOfSim:          config.typeOfSim,
+    operatorCode:       config.operatorCode,
+    purchaseType:       config.purchaseMethod,
+    skuType:            config.skuType,
+    dataType:           "",
+    baseSimEsimSkuCode: baseCode,
+    importType:         config.importType,
+    dailyResetTime:     config.dailyResetTime,
+    activationTime:     config.activationTime,
+    networkType:        config.networkType,
+    apnOriginal:        config.apn,
+    apn:                config.apn,
+    onsiteCarrier:      config.onsiteCarrier,
+    localPhoneNumber:   "",
+    localNumberCountry: "",
+    hotspot:            config.hotspot,
+    kycCode:            config.kycCode,
+    kycNeeded:          config.kycNeeded,
+    kycLinks:           "",
+    topUpOptions:       "",
+    activation:         "",
+    unsupportedApps:    "",
+    telcoPerks:         "",
+    note:               "",
+    dataPlanType:       "",
   })
-  const ws6 = XLSX.utils.json_to_sheet(sheet6Rows, { header: productCols })
-  XLSX.utils.book_append_sheet(wb, ws6, "Template_Product_VN")
 
-  // ── Write and return ─────────────────────────────────────────────────────
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
+  // US: sourceType = letter (string), VN: sourceType = number
+  const vnSourceNum = /^\d+$/.test(config.purchaseType_VN)
+    ? parseInt(config.purchaseType_VN)
+    : config.purchaseType_VN
+
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet([makeProductRow("US", config.purchaseType_US, productCodeUS)], { header: productCols }),
+    "Template_Product_US"
+  )
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet([makeProductRow("VN", vnSourceNum, productCodeVN)], { header: productCols }),
+    "Template_Product_VN"
+  )
+
+  const buf  = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "")
   return new NextResponse(buf, {
     status: 200,

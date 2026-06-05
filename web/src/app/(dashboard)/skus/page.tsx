@@ -282,9 +282,32 @@ export default function SkusPage() {
                       ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${row.kyc_needed === "Yes" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>{row.kyc_needed}</span>
                       : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-xs font-mono text-gray-500 whitespace-nowrap">{row.supported_countries || "—"}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600 max-w-[180px]" title={row.country_names || ""}>{row.country_names || "—"}</td>
-                  <td className="px-3 py-2 text-xs text-gray-500 max-w-[220px]" title={row.note || ""}>{row.note || ""}</td>
+                  {/* Country Code — show first 4 codes + count badge */}
+                  <td className="px-3 py-2 text-xs font-mono text-gray-500" title={row.supported_countries || ""}>
+                    {row.supported_countries
+                      ? (() => {
+                          const codes = row.supported_countries.split(/[,\s]+/).filter(Boolean)
+                          const shown = codes.slice(0, 4).join(", ")
+                          return codes.length > 4
+                            ? <span>{shown} <span className="bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 4}</span></span>
+                            : shown
+                        })()
+                      : "—"}
+                  </td>
+                  {/* Country Name — show first 2 names + count */}
+                  <td className="px-3 py-2 text-xs text-gray-600" title={row.country_names || ""}>
+                    {row.country_names
+                      ? (() => {
+                          const names = row.country_names.split(", ").filter(Boolean)
+                          const shown = names.slice(0, 2).join(", ")
+                          return names.length > 2
+                            ? <span>{shown} <span className="bg-gray-100 text-gray-400 px-1 rounded">+{names.length - 2}</span></span>
+                            : shown
+                        })()
+                      : "—"}
+                  </td>
+                  {/* Note — full text, wraps */}
+                  <td className="px-3 py-2 text-xs text-gray-600 min-w-[180px] max-w-[320px] leading-relaxed">{row.note || <span className="text-gray-300">—</span>}</td>
                 </tr>
               ))}
             </tbody>
