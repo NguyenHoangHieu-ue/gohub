@@ -9,7 +9,7 @@ const NAV = [
   { href: "/chatbot",    label: "Chatbot",       icon: MessageSquare },
   { href: "/promotions", label: "Khuyến Mãi",    icon: Gift },
   { href: "/skus",       label: "SP Hệ Thống",   icon: Package },
-  { href: "/ncc",        label: "SP Nhà CC",      icon: Truck },
+  { href: "/ncc",        label: "SP Vendor",       icon: Truck },
   { href: "/countries",  label: "Danh sách Nước", icon: Globe },
 ]
 

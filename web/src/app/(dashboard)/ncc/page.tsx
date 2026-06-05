@@ -25,6 +25,17 @@ interface WMProduct {
   is_kyc: boolean
   is_lesim: boolean
   status: string
+  // APN columns
+  apn: string | null
+  apn_network_type: string | null
+  apn_roaming_carrier: string | null
+  apn_coverage_area: string | null
+  apn_notification: string | null
+  apn_data_reset: string | null
+  apn_telecom_providers: string | null
+  apn_prepaid_card: string | null
+  // enriched (gap tab)
+  sku_codes?: string[]
 }
 
 interface Zone3HK {
@@ -37,6 +48,19 @@ interface Zone3HK {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Combine all APN fields into one readable note string */
+function fmtApnNote(p: WMProduct): string {
+  const parts: string[] = []
+  if (p.apn)                  parts.push(`APN: ${p.apn}`)
+  if (p.apn_network_type)     parts.push(`Network: ${p.apn_network_type}`)
+  if (p.apn_roaming_carrier)  parts.push(`Roaming: ${p.apn_roaming_carrier}`)
+  if (p.apn_telecom_providers) parts.push(`Providers:\n${p.apn_telecom_providers}`)
+  if (p.apn_coverage_area)    parts.push(`Coverage: ${p.apn_coverage_area}`)
+  if (p.apn_data_reset)       parts.push(`Data Reset: ${p.apn_data_reset}`)
+  if (p.apn_notification)     parts.push(`Notification: ${p.apn_notification}`)
+  return parts.join("\n\n")
+}
 
 function fmtData(row: WMProduct): string {
   if (!row.is_unlimited) {
@@ -113,27 +137,34 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
   const [region, setRegion]   = useState("")
   const [isLesim, setIsLesim] = useState("")
   const [isUnlim, setIsUnlim] = useState("")
+  const [days,    setDays]    = useState("")
+  const [dataMin, setDataMin] = useState("")
+  const [dataMax, setDataMax] = useState("")
 
   // Gap filter
   const [gap, setGap] = useState<"in_system" | "not_in_system">("not_in_system")
 
   const searchTimer = useRef<NodeJS.Timeout | null>(null)
 
-  const load = useCallback(async (p: number, currentFilters: {
-    search: string; simType: string; region: string; isLesim: string; isUnlim: string; gap: string; subTab: string
+  const load = useCallback(async (p: number, f: {
+    search: string; simType: string; region: string; isLesim: string; isUnlim: string
+    days: string; dataMin: string; dataMax: string; gap: string; subTab: string
   }) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(p), pageSize: "50" })
-      if (currentFilters.subTab === "gap") {
-        params.set("gap", currentFilters.gap)
+      if (f.subTab === "gap") {
+        params.set("gap", f.gap)
       } else {
         params.set("gap", "all")
-        if (currentFilters.search)  params.set("search",       currentFilters.search)
-        if (currentFilters.simType) params.set("sim_type",     currentFilters.simType)
-        if (currentFilters.region)  params.set("region",       currentFilters.region)
-        if (currentFilters.isLesim) params.set("is_lesim",     currentFilters.isLesim)
-        if (currentFilters.isUnlim) params.set("is_unlimited", currentFilters.isUnlim)
+        if (f.search)  params.set("search",       f.search)
+        if (f.simType) params.set("sim_type",      f.simType)
+        if (f.region)  params.set("region",        f.region)
+        if (f.isLesim) params.set("is_lesim",      f.isLesim)
+        if (f.isUnlim) params.set("is_unlimited",  f.isUnlim)
+        if (f.days)    params.set("days",           f.days)
+        if (f.dataMin) params.set("data_min",       f.dataMin)
+        if (f.dataMax) params.set("data_max",       f.dataMax)
       }
       const res = await fetch(`/api/ncc/worldmove?${params}`)
       const json = await res.json()
@@ -146,19 +177,20 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
     }
   }, [])
 
-  // Reload when page changes
-  useEffect(() => {
-    load(page, { search, simType, region, isLesim, isUnlim, gap, subTab })
-  }, [page, gap, subTab, simType, isLesim, isUnlim]) // eslint-disable-line
+  const allFilters = () => ({ search, simType, region, isLesim, isUnlim, days, dataMin, dataMax, gap, subTab })
 
-  // Debounce search + region text inputs
+  useEffect(() => {
+    load(page, allFilters())
+  }, [page, gap, subTab, simType, isLesim, isUnlim, days]) // eslint-disable-line
+
+  // Debounce text inputs
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => {
       setPage(1)
-      load(1, { search, simType, region, isLesim, isUnlim, gap, subTab })
+      load(1, allFilters())
     }, 400)
-  }, [search, region]) // eslint-disable-line
+  }, [search, region, dataMin, dataMax]) // eslint-disable-line
 
   function handleSubTab(t: "catalog" | "gap") {
     setSubTab(t)
@@ -219,6 +251,18 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
             <option value="true">Unlimited</option>
             <option value="false">Fixed / Daily</option>
           </select>
+          <input value={days} onChange={e => handleFilter(setDays, e.target.value)}
+            placeholder="Days (vd: 7)"
+            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-28"
+          />
+          <input value={dataMin} onChange={e => setDataMin(e.target.value)}
+            placeholder="GB min"
+            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
+          />
+          <input value={dataMax} onChange={e => setDataMax(e.target.value)}
+            placeholder="GB max"
+            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-24"
+          />
         </div>
       )}
 
@@ -263,10 +307,15 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Days</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Data</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Throttle</th>
+              <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">KYC</th>
               {showCost && <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">COGS (TWD)</th>}
               {subTab === "gap" && (
-                <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">HT</th>
+                <>
+                  <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Trong HT</th>
+                  <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">SKU</th>
+                </>
               )}
+              <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">Note / APN</th>
             </tr>
           </thead>
           <tbody>
@@ -291,19 +340,38 @@ function WorldmoveTab({ showCost }: { showCost: boolean }) {
                 <td className="px-3 py-2 text-center text-sm text-gray-700">{p.days ?? "—"}</td>
                 <td className="px-3 py-2 text-center text-xs text-gray-700 whitespace-nowrap">{fmtData(p)}</td>
                 <td className="px-3 py-2 text-center text-xs text-gray-500 max-w-[200px]">{fmtThrottle(p)}</td>
+                {/* KYC — WM products are always No KYC */}
+                <td className="px-3 py-2 text-center">
+                  <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">No</span>
+                </td>
                 {showCost && (
                   <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
                     {p.cogs != null ? p.cogs.toLocaleString() : "—"}
                   </td>
                 )}
                 {subTab === "gap" && (
-                  <td className="px-3 py-2 text-center">
-                    {gap === "in_system"
-                      ? <Badge color="green">✓ Có</Badge>
-                      : <Badge color="red">✗ Chưa</Badge>
-                    }
-                  </td>
+                  <>
+                    <td className="px-3 py-2 text-center">
+                      {gap === "in_system"
+                        ? <Badge color="green">✓ Có</Badge>
+                        : <Badge color="red">✗ Chưa</Badge>
+                      }
+                    </td>
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500">
+                      {p.sku_codes?.length
+                        ? <div className="space-y-0.5">{p.sku_codes.map(s => <div key={s}>{s}</div>)}</div>
+                        : <span className="text-gray-300">—</span>
+                      }
+                    </td>
+                  </>
                 )}
+                {/* APN / Note */}
+                <td className="px-3 py-2 text-xs text-gray-500 max-w-[240px]">
+                  {fmtApnNote(p)
+                    ? <div className="whitespace-pre-wrap leading-relaxed">{fmtApnNote(p)}</div>
+                    : <span className="text-gray-300">—</span>
+                  }
+                </td>
               </tr>
             ))}
           </tbody>
@@ -460,7 +528,7 @@ export default function NccPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center gap-2">
         <Truck size={20} className="text-brand-600" />
-        <h1 className="text-xl font-bold text-gray-900">Sản Phẩm Nhà Cung Cấp</h1>
+        <h1 className="text-xl font-bold text-gray-900">Sản Phẩm Vendor</h1>
       </div>
 
       {/* Vendor selector */}
