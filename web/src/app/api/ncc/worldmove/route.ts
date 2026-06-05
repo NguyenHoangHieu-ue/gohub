@@ -4,10 +4,17 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const PAGE_SIZE = 50
+const canSeeCost = (role?: string) => role === "admin" || role === "manager"
+
+function stripCost(rows: any[], role?: string) {
+  if (canSeeCost(role)) return rows
+  return rows.map(r => ({ ...r, cogs: null, cogs_currency: null }))
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const role = (session.user as any).role as string | undefined
 
   const sp        = req.nextUrl.searchParams
   const page      = Math.max(1, parseInt(sp.get("page") || "1"))
@@ -40,7 +47,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: (error || countError)?.message }, { status: 500 })
 
     return NextResponse.json({
-      data:     data ?? [],
+      data:     stripCost(data ?? [], role),
       total:    countData ?? 0,
       page,
       pageSize: PAGE_SIZE,
@@ -66,7 +73,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({
-    data:     data ?? [],
+    data:     stripCost(data ?? [], role),
     total:    count ?? 0,
     page,
     pageSize: PAGE_SIZE,

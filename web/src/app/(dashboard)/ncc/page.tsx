@@ -1,7 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useSession } from "next-auth/react"
 import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe } from "lucide-react"
+
+const canSeeCost = (role?: string) => role === "admin" || role === "manager"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -89,7 +92,7 @@ function Pagination({ page, total, pageSize, onChange }: {
 
 const WM_SIM_TYPES = ["eSIM", "SIM", "Top-Up SIM"]
 
-function WorldmoveTab() {
+function WorldmoveTab({ showCost }: { showCost: boolean }) {
   const [subTab, setSubTab] = useState<"catalog" | "gap">("catalog")
   const [products, setProducts] = useState<WMProduct[]>([])
   const [total, setTotal] = useState(0)
@@ -252,7 +255,7 @@ function WorldmoveTab() {
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Days</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Data</th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">Throttle</th>
-              <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">COGS (TWD)</th>
+              {showCost && <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">COGS (TWD)</th>}
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">leSIM</th>
               {subTab === "gap" && (
                 <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">HT</th>
@@ -281,9 +284,11 @@ function WorldmoveTab() {
                 <td className="px-3 py-2 text-center text-sm text-gray-700">{p.days ?? "—"}</td>
                 <td className="px-3 py-2 text-center text-xs text-gray-700 whitespace-nowrap">{fmtData(p)}</td>
                 <td className="px-3 py-2 text-center text-xs text-gray-500">{fmtThrottle(p.throttle_kbps)}</td>
-                <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
-                  {p.cogs != null ? p.cogs.toLocaleString() : "—"}
-                </td>
+                {showCost && (
+                  <td className="px-3 py-2 text-right text-sm text-gray-800 font-mono">
+                    {p.cogs != null ? p.cogs.toLocaleString() : "—"}
+                  </td>
+                )}
                 <td className="px-3 py-2 text-center">
                   {p.is_lesim ? <Badge color="purple">leSIM</Badge> : <span className="text-gray-300 text-xs">—</span>}
                 </td>
@@ -314,7 +319,7 @@ const ZONE_COLORS: Record<string, string> = {
   A1: "blue", A2: "purple", B: "green", C: "amber",
 }
 
-function ThreeHKTab() {
+function ThreeHKTab({ showCost }: { showCost: boolean }) {
   const [zones, setZones] = useState<Zone3HK[]>([])
   const [loading, setLoading] = useState(true)
   const [searchCountry, setSearchCountry] = useState("")
@@ -379,7 +384,7 @@ function ThreeHKTab() {
               <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">Zone</th>
               <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">Country</th>
               <th className="text-left px-3 py-2.5 font-medium text-gray-500 text-xs">Network</th>
-              <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">Price/GB (HKD)</th>
+              {showCost && <th className="text-right px-3 py-2.5 font-medium text-gray-500 text-xs">Price/GB (HKD)</th>}
               <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">KYC</th>
             </tr>
           </thead>
@@ -394,16 +399,20 @@ function ThreeHKTab() {
                   {i === 0 ? (
                     <td rowSpan={rows.length} className="px-3 py-2 align-top pt-3 border-r border-gray-100">
                       <Badge color={ZONE_COLORS[zone] ?? "gray"}>Zone {zone}</Badge>
-                      <div className="text-xs text-gray-400 mt-1 font-mono">
-                        {z.price_per_gb_hkd} HKD/GB
-                      </div>
+                      {showCost && z.price_per_gb_hkd != null && (
+                        <div className="text-xs text-gray-400 mt-1 font-mono">
+                          {z.price_per_gb_hkd} HKD/GB
+                        </div>
+                      )}
                     </td>
                   ) : null}
                   <td className="px-3 py-2 text-gray-800 font-medium text-sm">{z.country}</td>
                   <td className="px-3 py-2 text-xs text-gray-500">{z.network ?? "—"}</td>
-                  <td className="px-3 py-2 text-right text-sm font-mono text-gray-700">
-                    {z.price_per_gb_hkd != null ? z.price_per_gb_hkd : "—"}
-                  </td>
+                  {showCost && (
+                    <td className="px-3 py-2 text-right text-sm font-mono text-gray-700">
+                      {z.price_per_gb_hkd != null ? z.price_per_gb_hkd : "—"}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-center">
                     {z.is_kyc
                       ? <Badge color="amber">KYC</Badge>
@@ -417,14 +426,16 @@ function ThreeHKTab() {
         </table>
       </div>
 
-      {/* COGS formula reference */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-800 space-y-1">
-        <p className="font-semibold mb-2 text-blue-900">Công thức tính COGS 3HK (E - US Datapool)</p>
-        <p><span className="font-medium">Fixed:</span> GB × Price/GB × 55% × Tỷ giá HKD→USD</p>
-        <p><span className="font-medium">Daily:</span> GB/day × Days × Price/GB × 40% × Tỷ giá</p>
-        <p><span className="font-medium">Unlimited (10 Mbps throttle):</span> 1.8 GB/day × Days × Price/GB × Tỷ giá</p>
-        <p><span className="font-medium">Unlimited (5 Mbps throttle):</span> 1.6 GB/day × Days × Price/GB × Tỷ giá</p>
-      </div>
+      {/* COGS formula reference — admin/manager only */}
+      {showCost && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-800 space-y-1">
+          <p className="font-semibold mb-2 text-blue-900">Công thức tính COGS 3HK (E - US Datapool)</p>
+          <p><span className="font-medium">Fixed:</span> GB × Price/GB × 55% × Tỷ giá HKD→USD</p>
+          <p><span className="font-medium">Daily:</span> GB/day × Days × Price/GB × 40% × Tỷ giá</p>
+          <p><span className="font-medium">Unlimited (10 Mbps throttle):</span> 1.8 GB/day × Days × Price/GB × Tỷ giá</p>
+          <p><span className="font-medium">Unlimited (5 Mbps throttle):</span> 1.6 GB/day × Days × Price/GB × Tỷ giá</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -438,6 +449,8 @@ const VENDORS = [
 
 export default function NccPage() {
   const [vendor, setVendor] = useState<"WORLDMOVE" | "3HK">("WORLDMOVE")
+  const { data: session } = useSession()
+  const showCost = canSeeCost((session?.user as any)?.role)
 
   return (
     <div className="p-6 space-y-5">
@@ -464,8 +477,8 @@ export default function NccPage() {
         ))}
       </div>
 
-      {vendor === "WORLDMOVE" && <WorldmoveTab />}
-      {vendor === "3HK"       && <ThreeHKTab />}
+      {vendor === "WORLDMOVE" && <WorldmoveTab showCost={showCost} />}
+      {vendor === "3HK"       && <ThreeHKTab  showCost={showCost} />}
     </div>
   )
 }
