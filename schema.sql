@@ -111,3 +111,76 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Chỉ service role mới được truy cập bảng users
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- NCC (Nhà Cung Cấp) tables — thêm sau
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncc_products (
+    id                  SERIAL PRIMARY KEY,
+    vendor              TEXT NOT NULL,          -- 'WORLDMOVE', future vendors
+    vendor_product_id   TEXT,                   -- wmproductId (WM primary key from vendor)
+    vendor_internal_id  TEXT,                   -- productId (WM) — matches skus.vendor_sku
+    product_name        TEXT,
+    region              TEXT,
+    sim_type            TEXT,                   -- 'eSIM', 'SIM', 'Top-Up SIM'
+    days                INTEGER,
+    data_gb             NUMERIC,               -- total GB (fixed) or GB/day (daily)
+    is_daily            BOOLEAN DEFAULT FALSE, -- true = data_gb is per-day limit
+    is_unlimited        BOOLEAN DEFAULT FALSE,
+    throttle_kbps       INTEGER,
+    cogs                NUMERIC,
+    cogs_currency       TEXT,                  -- 'TWD' (WM), 'HKD' (3HK)
+    is_kyc              BOOLEAN DEFAULT FALSE,
+    is_lesim            BOOLEAN DEFAULT FALSE, -- WM: shared leSIM pool
+    status              TEXT DEFAULT 'active',
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ncc_products_vendor_uniq
+    ON ncc_products(vendor, vendor_product_id);
+
+CREATE TABLE IF NOT EXISTS ncc_3hk_zones (
+    id               SERIAL PRIMARY KEY,
+    zone             TEXT NOT NULL,   -- 'A1', 'A2', 'B', 'C'
+    country          TEXT NOT NULL,
+    network          TEXT,
+    price_per_gb_hkd NUMERIC,
+    is_kyc           BOOLEAN DEFAULT FALSE,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RPC functions for gap analysis (WORLDMOVE vs system SKUs)
+-- Chạy sau khi đã import data vào ncc_products
+
+CREATE OR REPLACE FUNCTION count_ncc_gap(p_vendor TEXT, p_in_system BOOLEAN)
+RETURNS INTEGER AS $$
+    SELECT COUNT(*)::INTEGER FROM ncc_products n
+    WHERE n.vendor = p_vendor
+    AND CASE
+        WHEN p_in_system THEN
+            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+        ELSE
+            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+    END
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION get_ncc_gap(
+    p_vendor    TEXT,
+    p_in_system BOOLEAN,
+    p_offset    INTEGER DEFAULT 0,
+    p_limit     INTEGER DEFAULT 50
+)
+RETURNS SETOF ncc_products AS $$
+    SELECT n.* FROM ncc_products n
+    WHERE n.vendor = p_vendor
+    AND CASE
+        WHEN p_in_system THEN
+            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+        ELSE
+            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+    END
+    ORDER BY n.vendor_product_id
+    OFFSET p_offset LIMIT p_limit
+$$ LANGUAGE sql STABLE;
