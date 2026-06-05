@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight } from "lucide-react"
@@ -475,42 +475,42 @@ function SettingsTab({ onNotify }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface WMProduct {
-  vendor_product_id: string
-  product_name:      string | null
-  region:            string | null
-  sim_type:          string | null
-  days:              number | null
-  data_gb:           number | null
-  is_daily:          boolean
-  is_unlimited:      boolean
-  throttle_kbps:     number | null
-  cogs:              number | null
-  cogs_currency:     string | null
+  vendor_product_id:    string
+  product_name:         string | null
+  region:               string | null
+  sim_type:             string | null
+  days:                 number | null
+  data_gb:              number | null
+  is_daily:             boolean
+  is_unlimited:         boolean
+  throttle_kbps:        number | null
+  cogs:                 number | null
+  cogs_currency:        string | null
+  // APN fields
+  apn:                  string | null
+  apn_network_type:     string | null
+  apn_roaming_carrier:  string | null
+  apn_telecom_providers:string | null
 }
 
 const DEFAULT_CONFIG = {
-  // Country / Vendor
-  supportCountryCode: "",     // 3-char, e.g. "TWN"
-  isoCodes:           "",     // ISO codes, e.g. "TW"
-  vendorCode:         "WM",   // 2-char
-  countryNameVn:      "",     // e.g. "Đài Loan"
-  countryNameEn:      "",     // e.g. "Taiwan"
-  // SKU Code Components
-  purchaseType_US:    "D",    // letter for US entity
-  purchaseType_VN:    "3",    // digit for VN entity
-  productType:        "C",    // 1-char
-  dataPolicyCode:     "P",    // 1-char data policy
-  // Product Fields
-  operatorCode:       "",     // e.g. "WORLDMOVE"
+  supportCountryCode: "",
+  isoCodes:           "",
+  vendorCode:         "WM",
+  countryNameVn:      "",
+  countryNameEn:      "",
+  purchaseType_US:    "D",
+  purchaseType_VN:    "3",
+  productType:        "C",
+  dataPolicyCode:     "P",
+  operatorCode:       "WORLDMOVE",
   purchaseMethod:     "API Purchase",
   skuType:            "Base + Datapack",
   importType:         "Official",
   typeOfSim:          "eSIM",
-  // Network
   networkType:        "",
   apn:                "",
   onsiteCarrier:      "",
-  // Misc
   kycNeeded:          "No",
   kycCode:            1,
   hotspot:            "Yes",
@@ -518,9 +518,73 @@ const DEFAULT_CONFIG = {
   activationTime:     "",
   expirationDays:     90,
   call:               "No",
-  // Notes
   cogsDescription:    "",
   cogsFormula:        "",
+}
+
+// ─── Client-side compute helpers (mirror API logic) ────────────────────────
+
+function _zeroPad(n: number, len: number) { return String(Math.round(n)).padStart(len, "0") }
+function _roundUp(val: number, dec: number) { const f = 10 ** dec; return Math.ceil(val * f) / f }
+
+function _dataAmountCode(data_gb: number | null, is_unlimited: boolean): string {
+  if (is_unlimited || data_gb == null) return "UNL"
+  if (data_gb >= 1) return _zeroPad(Math.round(data_gb), 3)
+  return _zeroPad(Math.round(data_gb * 1000), 3)
+}
+
+function _skuSuffix(p: WMProduct): string {
+  return _dataAmountCode(p.data_gb, p.is_unlimited) + _zeroPad(p.days ?? 0, 2)
+}
+
+function _buildPC(pt: string, cfg: typeof DEFAULT_CONFIG): string {
+  return pt + cfg.productType + cfg.supportCountryCode + cfg.vendorCode + cfg.dataPolicyCode
+}
+
+function _fmtThrottle(kbps: number | null): string {
+  if (kbps == null) return ""
+  if (kbps >= 1000) return `${kbps / 1000} Mbps`
+  return `${kbps} kbps`
+}
+
+function _fmtData(p: WMProduct): string {
+  if (p.is_unlimited) return "Unlimited"
+  if (p.data_gb == null) return ""
+  if (p.data_gb < 1) return `${Math.round(p.data_gb * 1000)}MB`
+  return `${p.data_gb}GB`
+}
+
+function _nameVn(p: WMProduct, cfg: typeof DEFAULT_CONFIG): string {
+  const d = _zeroPad(p.days ?? 0, 2)
+  return `${cfg.typeOfSim} ${cfg.countryNameVn} ${p.is_unlimited ? "Unlimited" : _fmtData(p)} ${d} Ngày`
+}
+
+function _nameEn(p: WMProduct, cfg: typeof DEFAULT_CONFIG): string {
+  const d = _zeroPad(p.days ?? 0, 2)
+  const dl = `${d} Day${(p.days ?? 1) !== 1 ? "s" : ""}`
+  return `${cfg.typeOfSim} ${cfg.countryNameEn} ${p.is_unlimited ? "Unlimited" : _fmtData(p)} ${dl}`
+}
+
+function _deriveDataPolicy(p: WMProduct): string {
+  if (p.is_unlimited) {
+    if (!p.throttle_kbps) return "D"
+    if (p.throttle_kbps >= 10000) return "A"
+    if (p.throttle_kbps >= 5000)  return "B"
+    return "P"
+  }
+  return p.is_daily ? "P" : "F"
+}
+
+interface PreviewRow {
+  sku:        string
+  name_vn:    string
+  name_en:    string
+  cogs:       string
+  currency:   string
+  throttle:   string
+  days:       number | null
+  data:       string
+  vendor_sku: string
 }
 
 function fmtWMData(p: WMProduct): string {
@@ -535,19 +599,22 @@ const WM_PAGE_SIZE = 50
 function TemplateTab({ onNotify }: {
   onNotify: (type: "success" | "error", text: string) => void
 }) {
-  const [config, setConfig]           = useState(DEFAULT_CONFIG)
-  const [products, setProducts]       = useState<WMProduct[]>([])
-  const [total, setTotal]             = useState(0)
-  const [page, setPage]               = useState(1)
-  const [loadingP, setLoadingP]       = useState(false)
-  const [generating, setGenerating]   = useState(false)
-  const [selected, setSelected]       = useState<Set<string>>(new Set())
-  const [searchRegion, setSearchRegion] = useState("")
-  const [filterSim, setFilterSim]     = useState("")
+  const [config, setConfig]         = useState(DEFAULT_CONFIG)
+  const [products, setProducts]     = useState<WMProduct[]>([])
+  const [total, setTotal]           = useState(0)
+  const [page, setPage]             = useState(1)
+  const [loadingP, setLoadingP]     = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [selected, setSelected]     = useState<Set<string>>(new Set())
+  const [selObjs, setSelObjs]       = useState<Map<string, WMProduct>>(new Map())
+  const [searchQ, setSearchQ]       = useState("")
+  const [filterSim, setFilterSim]   = useState("")
   const [filterUnlim, setFilterUnlim] = useState("")
-  const [fxSettings, setFxSettings]   = useState({ fx_usd_vnd: 26394, fx_twd_usd: 0.03165 })
+  const [fxSettings, setFxSettings] = useState({ fx_usd_vnd: 26394, fx_twd_usd: 0.03165 })
+  const [previewRows, setPreviewRows] = useState<{ us: PreviewRow[]; vn: PreviewRow[]; pcUS: string; pcVN: string } | null>(null)
+  const [previewTab, setPreviewTab]   = useState<"us" | "vn" | "prod">("us")
+  const previewRef = useRef<HTMLDivElement>(null)
 
-  // Load fx settings once
   useEffect(() => {
     fetch("/api/admin/settings")
       .then(r => r.json())
@@ -564,78 +631,124 @@ function TemplateTab({ onNotify }: {
 
   const fetchProducts = useCallback(async (pg: number) => {
     setLoadingP(true)
-    const params = new URLSearchParams({
-      page:         String(pg),
-      gap:          "all",
-    })
-    if (searchRegion) params.set("region", searchRegion)
-    if (filterSim)    params.set("sim_type", filterSim)
-    if (filterUnlim)  params.set("is_unlimited", filterUnlim)
-
+    const params = new URLSearchParams({ page: String(pg), gap: "all" })
+    if (searchQ)      params.set("search",       searchQ)
+    if (filterSim)    params.set("sim_type",      filterSim)
+    if (filterUnlim)  params.set("is_unlimited",  filterUnlim)
     const res = await fetch(`/api/ncc/worldmove?${params}`)
     const d   = await res.json()
     setProducts(d.data ?? [])
     setTotal(d.total ?? 0)
     setLoadingP(false)
-  }, [searchRegion, filterSim, filterUnlim])
+  }, [searchQ, filterSim, filterUnlim])
 
-  useEffect(() => { fetchProducts(page) }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchProducts(page) }, [page]) // eslint-disable-line
 
-  const search = () => { setPage(1); fetchProducts(1) }
+  const doSearch = () => { setPage(1); fetchProducts(1) }
 
-  const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const s = new Set(prev)
-      s.has(id) ? s.delete(id) : s.add(id)
-      return s
-    })
+  const toggleSelect = (p: WMProduct) => {
+    const id = p.vendor_product_id
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+    setSelObjs(prev => { const m = new Map(prev); m.has(id) ? m.delete(id) : m.set(id, p); return m })
   }
-
   const selectAll = () => {
-    setSelected(prev => {
-      const s = new Set(prev)
-      products.forEach(p => s.add(p.vendor_product_id))
-      return s
-    })
+    setSelected(prev => { const s = new Set(prev); products.forEach(p => s.add(p.vendor_product_id)); return s })
+    setSelObjs(prev => { const m = new Map(prev); products.forEach(p => m.set(p.vendor_product_id, p)); return m })
+  }
+  const clearAll  = () => { setSelected(new Set()); setSelObjs(new Map()) }
+
+  const setC = (k: keyof typeof DEFAULT_CONFIG, v: string | number) =>
+    setConfig(prev => ({ ...prev, [k]: v }))
+
+  function autoFill() {
+    const prods = [...selObjs.values()]
+    if (!prods.length) { onNotify("error", "Chưa chọn sản phẩm"); return }
+    const f = prods[0]
+    setConfig(prev => ({
+      ...prev,
+      typeOfSim:      f.sim_type      ?? prev.typeOfSim,
+      operatorCode:   "WORLDMOVE",
+      networkType:    f.apn_network_type     ?? prev.networkType,
+      apn:            f.apn                  ?? prev.apn,
+      onsiteCarrier:  f.apn_telecom_providers?.split("\n")[0].trim() ?? f.apn_roaming_carrier ?? prev.onsiteCarrier,
+      dataPolicyCode: _deriveDataPolicy(f),
+    }))
+    onNotify("success", "Đã auto-fill từ sản phẩm đã chọn")
   }
 
-  const clearAll = () => setSelected(new Set())
+  function buildPreview() {
+    if (selObjs.size === 0) { onNotify("error", "Chưa chọn sản phẩm"); return }
+    if (!config.supportCountryCode) { onNotify("error", "Nhập Support Country Code (3 ký tự)"); return }
+    if (!config.purchaseType_US)    { onNotify("error", "Nhập Purchase Type US"); return }
+    if (!config.purchaseType_VN)    { onNotify("error", "Nhập Purchase Type VN"); return }
 
-  const generate = async () => {
-    if (selected.size === 0) { onNotify("error", "Chưa chọn sản phẩm nào"); return }
-    if (!config.supportCountryCode) { onNotify("error", "Nhập Support Country Code (3 chars)"); return }
-    if (!config.purchaseType_US) { onNotify("error", "Nhập Purchase Type US (1 ký tự)"); return }
-    if (!config.purchaseType_VN) { onNotify("error", "Nhập Purchase Type VN (1 số)"); return }
+    const sorted = [...selObjs.values()].sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
+    const pcUS   = _buildPC(config.purchaseType_US, config)
+    const pcVN   = _buildPC(config.purchaseType_VN, config)
+    const { fx_twd_usd, fx_usd_vnd } = fxSettings
 
-    // We need the full product objects for selected IDs
-    // For simplicity, collect from current page; in production you'd want all pages
-    const selectedProducts = products.filter(p => selected.has(p.vendor_product_id))
+    const us: PreviewRow[] = sorted.map(p => {
+      const cogsUSD = p.cogs != null ? _roundUp(p.cogs * fx_twd_usd, 2) : null
+      return {
+        sku:        pcUS + _skuSuffix(p),
+        name_vn:    _nameVn(p, config),
+        name_en:    _nameEn(p, config),
+        cogs:       cogsUSD != null ? cogsUSD.toLocaleString() : "—",
+        currency:   "USD",
+        throttle:   _fmtThrottle(p.throttle_kbps),
+        days:       p.days,
+        data:       _fmtData(p),
+        vendor_sku: p.vendor_product_id,
+      }
+    })
 
+    const vn: PreviewRow[] = sorted.map(p => {
+      const cogsUSD = p.cogs != null ? _roundUp(p.cogs * fx_twd_usd, 2) : null
+      const cogsVND = cogsUSD != null ? _roundUp(cogsUSD * fx_usd_vnd, 0) : null
+      return {
+        sku:        pcVN + _skuSuffix(p),
+        name_vn:    _nameVn(p, config),
+        name_en:    _nameEn(p, config),
+        cogs:       cogsVND != null ? cogsVND.toLocaleString() : "—",
+        currency:   "VND",
+        throttle:   _fmtThrottle(p.throttle_kbps),
+        days:       p.days,
+        data:       _fmtData(p),
+        vendor_sku: pcUS + _skuSuffix(p),
+      }
+    })
+
+    setPreviewRows({ us, vn, pcUS, pcVN })
+    setPreviewTab("us")
+    setTimeout(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80)
+  }
+
+  async function downloadExcel() {
+    if (selObjs.size === 0) { onNotify("error", "Chưa có sản phẩm để tải"); return }
     setGenerating(true)
     try {
       const res = await fetch("/api/admin/template", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          products: selectedProducts,
+          products: [...selObjs.values()],
           config:   { ...config },
           settings: fxSettings,
         }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Lỗi không xác định" }))
+        const err = await res.json().catch(() => ({}))
         onNotify("error", err.error ?? "Hiếu đang fix, vui lòng đợi")
         return
       }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")
-      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "")
       a.href     = url
-      a.download = `template_${date}.xlsx`
+      a.download = `template_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-      onNotify("success", `Đã tạo template với ${selectedProducts.length} sản phẩm`)
+      onNotify("success", `Đã tải template ${selObjs.size} sản phẩm`)
     } catch {
       onNotify("error", "Hiếu đang fix, vui lòng đợi")
     } finally {
@@ -643,143 +756,59 @@ function TemplateTab({ onNotify }: {
     }
   }
 
-  const setC = (k: keyof typeof DEFAULT_CONFIG, v: string | number) =>
-    setConfig(prev => ({ ...prev, [k]: v }))
-
   const totalPages = Math.ceil(total / WM_PAGE_SIZE)
 
   return (
     <div className="space-y-5">
-      {/* ── Config inputs ── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Cấu hình Template</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {/* ─ SKU Code Components ─ */}
-          <TemplField label="Purchase Type US *"    value={config.purchaseType_US}     onChange={v => setC("purchaseType_US", v)}     placeholder="D (letter)" />
-          <TemplField label="Purchase Type VN *"    value={config.purchaseType_VN}     onChange={v => setC("purchaseType_VN", v)}     placeholder="3 (digit)" />
-          <TemplField label="Product Type"          value={config.productType}         onChange={v => setC("productType", v)}         placeholder="C" />
-          <TemplField label="Support Country Code *" value={config.supportCountryCode} onChange={v => setC("supportCountryCode", v)} placeholder="TWN" />
-          <TemplField label="Vendor Code"           value={config.vendorCode}          onChange={v => setC("vendorCode", v)}          placeholder="WM" />
-          <TemplField label="Data Policy Code"      value={config.dataPolicyCode}      onChange={v => setC("dataPolicyCode", v)}      placeholder="P" />
-          {/* ─ Country Names ─ */}
-          <TemplField label="Country Name VN"       value={config.countryNameVn}       onChange={v => setC("countryNameVn", v)}       placeholder="Đài Loan" />
-          <TemplField label="Country Name EN"       value={config.countryNameEn}       onChange={v => setC("countryNameEn", v)}       placeholder="Taiwan" />
-          <TemplField label="ISO Country Codes"     value={config.isoCodes}            onChange={v => setC("isoCodes", v)}            placeholder="TW" />
-          {/* ─ Product Info ─ */}
-          <TemplField label="Operator Code"         value={config.operatorCode}        onChange={v => setC("operatorCode", v)}        placeholder="WORLDMOVE" />
-          <TemplField label="Type of SIM"           value={config.typeOfSim}           onChange={v => setC("typeOfSim", v)}           placeholder="eSIM" />
-          <TemplField label="Purchase Method"       value={config.purchaseMethod}      onChange={v => setC("purchaseMethod", v)}      placeholder="API Purchase" />
-          <TemplField label="SKU Type"              value={config.skuType}             onChange={v => setC("skuType", v)}             placeholder="Base + Datapack" />
-          <TemplField label="Import Type"           value={config.importType}          onChange={v => setC("importType", v)}          placeholder="Official" />
-          {/* ─ Network ─ */}
-          <TemplField label="Network Type"          value={config.networkType}         onChange={v => setC("networkType", v)}         placeholder="4G" />
-          <TemplField label="APN"                   value={config.apn}                 onChange={v => setC("apn", v)}                 placeholder="mobile.three.com.hk" />
-          <TemplField label="Onsite Carrier"        value={config.onsiteCarrier}       onChange={v => setC("onsiteCarrier", v)}       placeholder="Chunghwa Telecom" />
-          {/* ─ Timing ─ */}
-          <TemplField label="Daily Reset Time"      value={config.dailyResetTime}      onChange={v => setC("dailyResetTime", v)}      placeholder="UTC+8" />
-          <TemplField label="Activation Time"       value={config.activationTime}      onChange={v => setC("activationTime", v)}      placeholder="24h" />
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Expiration (days)</label>
-            <input
-              type="number"
-              value={config.expirationDays}
-              onChange={e => setC("expirationDays", parseInt(e.target.value) || 90)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-          </div>
-          <TemplField label="Call"    value={config.call}    onChange={v => setC("call", v)}    placeholder="No" />
-          <TemplField label="Hotspot" value={config.hotspot} onChange={v => setC("hotspot", v)} placeholder="Yes" />
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">KYC Needed</label>
-            <select
-              value={config.kycNeeded}
-              onChange={e => setC("kycNeeded", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="No">No</option>
-              <option value="Yes">Yes</option>
-            </select>
-          </div>
-        </div>
-        {/* COGS description & formula */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Mô tả COGS (Sheet 2)</label>
-            <textarea
-              rows={2}
-              value={config.cogsDescription}
-              onChange={e => setC("cogsDescription", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-              placeholder="Mô tả cấu trúc giá..."
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Công thức COGS (Sheet 2)</label>
-            <textarea
-              rows={2}
-              value={config.cogsFormula}
-              onChange={e => setC("cogsFormula", e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-              placeholder="COGS = ..."
-            />
-          </div>
-        </div>
-        <div className="text-xs text-gray-400">
-          Tỷ giá đang dùng: 1 TWD = {fxSettings.fx_twd_usd} USD · 1 USD = {fxSettings.fx_usd_vnd} VND
-          &nbsp;(lấy từ tab Cài đặt)
-        </div>
-      </div>
 
-      {/* ── Product selection ── */}
+      {/* ─── Step 1: Chọn sản phẩm ─────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Chọn sản phẩm WM</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
+            1. Chọn sản phẩm WM
+          </h3>
+          {selected.size > 0 && (
+            <span className="text-sm font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full">
+              {selected.size} đã chọn
+            </span>
+          )}
+        </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-40">
-            <Search size={14} className="text-gray-400" />
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
-              value={searchRegion}
-              onChange={e => setSearchRegion(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && search()}
-              placeholder="Lọc theo region / tên..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && doSearch()}
+              placeholder="Tìm product name, ID, region..."
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
-          <select
-            value={filterSim}
-            onChange={e => { setFilterSim(e.target.value); setPage(1) }}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            <option value="">Tất cả loại SIM</option>
+          <select value={filterSim} onChange={e => { setFilterSim(e.target.value); setPage(1) }}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="">Tất cả SIM</option>
             <option value="eSIM">eSIM</option>
             <option value="SIM">SIM</option>
           </select>
-          <select
-            value={filterUnlim}
-            onChange={e => { setFilterUnlim(e.target.value); setPage(1) }}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
+          <select value={filterUnlim} onChange={e => { setFilterUnlim(e.target.value); setPage(1) }}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Tất cả gói</option>
             <option value="true">Unlimited</option>
             <option value="false">Fixed</option>
           </select>
-          <button
-            onClick={search}
-            className="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
-          >
+          <button onClick={doSearch}
+            className="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors">
             Tìm
           </button>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-gray-100">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
                 <th className="px-3 py-2 w-8">
-                  <input
-                    type="checkbox"
+                  <input type="checkbox"
                     checked={products.length > 0 && products.every(p => selected.has(p.vendor_product_id))}
                     onChange={e => e.target.checked ? selectAll() : clearAll()}
                   />
@@ -799,84 +828,229 @@ function TemplateTab({ onNotify }: {
               ) : products.length === 0 ? (
                 <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Không có dữ liệu</td></tr>
               ) : products.map(p => (
-                <tr
-                  key={p.vendor_product_id}
-                  className={`cursor-pointer hover:bg-gray-50 ${selected.has(p.vendor_product_id) ? "bg-brand-50" : ""}`}
-                  onClick={() => toggleSelect(p.vendor_product_id)}
+                <tr key={p.vendor_product_id}
+                  className={`cursor-pointer hover:bg-gray-50 transition-colors ${selected.has(p.vendor_product_id) ? "bg-brand-50" : ""}`}
+                  onClick={() => toggleSelect(p)}
                 >
                   <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
+                    <input type="checkbox"
                       checked={selected.has(p.vendor_product_id)}
-                      onChange={() => toggleSelect(p.vendor_product_id)}
+                      onChange={() => toggleSelect(p)}
                     />
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{p.vendor_product_id}</td>
-                  <td className="px-3 py-2">{p.product_name}</td>
-                  <td className="px-3 py-2 text-gray-600">{p.region}</td>
-                  <td className="px-3 py-2 text-gray-600">{p.sim_type}</td>
-                  <td className="px-3 py-2 text-right">{p.days}</td>
-                  <td className="px-3 py-2 text-right">{fmtWMData(p)}</td>
-                  <td className="px-3 py-2 text-right">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-500">{p.vendor_product_id}</td>
+                  <td className="px-3 py-2 text-gray-800">{p.product_name}</td>
+                  <td className="px-3 py-2 text-gray-500">{p.region}</td>
+                  <td className="px-3 py-2 text-gray-500">{p.sim_type}</td>
+                  <td className="px-3 py-2 text-right text-gray-700">{p.days}</td>
+                  <td className="px-3 py-2 text-right text-gray-700">{fmtWMData(p)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-gray-700">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>{total.toLocaleString()} sản phẩm · Trang {page}/{totalPages}</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500">{selected.size} sản phẩm đã chọn</span>
+            <button onClick={selectAll} className="text-xs text-brand-600 hover:underline">Chọn trang này</button>
+            {selected.size > 0 && (
+              <button onClick={clearAll} className="text-xs text-gray-400 hover:underline">Bỏ hết</button>
+            )}
           </div>
-        )}
-
-        <div className="flex items-center gap-3 pt-1">
-          <span className="text-sm text-gray-500">
-            {selected.size} sản phẩm được chọn
-          </span>
-          <button
-            onClick={selectAll}
-            className="text-xs text-brand-600 hover:underline"
-          >
-            Chọn tất cả trang này
-          </button>
-          {selected.size > 0 && (
-            <button
-              onClick={clearAll}
-              className="text-xs text-gray-400 hover:underline"
-            >
-              Bỏ chọn tất cả
-            </button>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span>Trang {page}/{totalPages}</span>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronLeft size={15} /></button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronRight size={15} /></button>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Generate button ── */}
+      {/* ─── Step 2: Cấu hình ──────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">2. Cấu hình Template</h3>
+          <button
+            onClick={autoFill}
+            disabled={selected.size === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-40"
+          >
+            ⚡ Auto-fill từ SP đã chọn
+          </button>
+        </div>
+
+        {/* Required fields */}
+        <div>
+          <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wide mb-2">Bắt buộc nhập</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-3 bg-brand-50/40 border border-brand-100 rounded-lg">
+            <TemplField label="Purchase Type US *" value={config.purchaseType_US} onChange={v => setC("purchaseType_US", v)} placeholder="D" />
+            <TemplField label="Purchase Type VN *" value={config.purchaseType_VN} onChange={v => setC("purchaseType_VN", v)} placeholder="3" />
+            <TemplField label="Country Code (3 ký tự) *" value={config.supportCountryCode} onChange={v => setC("supportCountryCode", v)} placeholder="TWN" />
+            <TemplField label="Data Policy Code *" value={config.dataPolicyCode} onChange={v => setC("dataPolicyCode", v)} placeholder="P" />
+            <TemplField label="Tên nước (VN)" value={config.countryNameVn} onChange={v => setC("countryNameVn", v)} placeholder="Đài Loan" />
+            <TemplField label="Tên nước (EN)" value={config.countryNameEn} onChange={v => setC("countryNameEn", v)} placeholder="Taiwan" />
+          </div>
+        </div>
+
+        {/* Auto-fillable fields */}
+        <div>
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Auto-fill (có thể chỉnh)</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <TemplField label="Type of SIM" value={config.typeOfSim} onChange={v => setC("typeOfSim", v)} placeholder="eSIM" />
+            <TemplField label="Operator Code" value={config.operatorCode} onChange={v => setC("operatorCode", v)} placeholder="WORLDMOVE" />
+            <TemplField label="Network Type" value={config.networkType} onChange={v => setC("networkType", v)} placeholder="4G" />
+            <TemplField label="APN" value={config.apn} onChange={v => setC("apn", v)} placeholder="mobile.three.com.hk" />
+            <TemplField label="Onsite Carrier" value={config.onsiteCarrier} onChange={v => setC("onsiteCarrier", v)} placeholder="Chunghwa Telecom" />
+            <TemplField label="ISO Codes" value={config.isoCodes} onChange={v => setC("isoCodes", v)} placeholder="TW" />
+          </div>
+        </div>
+
+        {/* Advanced defaults */}
+        <details className="group">
+          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
+            ▸ Tuỳ chỉnh nâng cao (ít thay đổi)
+          </summary>
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <TemplField label="Product Type" value={config.productType} onChange={v => setC("productType", v)} placeholder="C" />
+            <TemplField label="Vendor Code" value={config.vendorCode} onChange={v => setC("vendorCode", v)} placeholder="WM" />
+            <TemplField label="Purchase Method" value={config.purchaseMethod} onChange={v => setC("purchaseMethod", v)} placeholder="API Purchase" />
+            <TemplField label="SKU Type" value={config.skuType} onChange={v => setC("skuType", v)} placeholder="Base + Datapack" />
+            <TemplField label="Import Type" value={config.importType} onChange={v => setC("importType", v)} placeholder="Official" />
+            <TemplField label="Daily Reset Time" value={config.dailyResetTime} onChange={v => setC("dailyResetTime", v)} placeholder="UTC+8" />
+            <TemplField label="Activation Time" value={config.activationTime} onChange={v => setC("activationTime", v)} placeholder="24h" />
+            <TemplField label="Call" value={config.call} onChange={v => setC("call", v)} placeholder="No" />
+            <TemplField label="Hotspot" value={config.hotspot} onChange={v => setC("hotspot", v)} placeholder="Yes" />
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">KYC Needed</label>
+              <select value={config.kycNeeded} onChange={e => setC("kycNeeded", e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Expiration (days)</label>
+              <input type="number" value={config.expirationDays}
+                onChange={e => setC("expirationDays", parseInt(e.target.value) || 90)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+        </details>
+
+        <div className="text-xs text-gray-400 pt-1">
+          Tỷ giá: 1 TWD = {fxSettings.fx_twd_usd} USD · 1 USD = {fxSettings.fx_usd_vnd} VND
+          &nbsp;(từ tab Cài đặt)
+        </div>
+      </div>
+
+      {/* ─── Step 3: Xem trước ─────────────────────────────────── */}
       <button
-        onClick={generate}
-        disabled={generating || selected.size === 0}
-        className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+        onClick={buildPreview}
+        disabled={selected.size === 0}
+        className="flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
       >
         <FileSpreadsheet size={16} />
-        {generating ? "Đang tạo..." : `Tạo Excel (${selected.size} sản phẩm)`}
+        {selected.size === 0 ? "Xem trước (chưa chọn SP)" : `3. Xem trước ${selected.size} sản phẩm`}
       </button>
+
+      {/* ─── Step 4: Preview panel ─────────────────────────────── */}
+      {previewRows && (
+        <div ref={previewRef} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50 flex-wrap gap-3">
+            <div className="flex gap-1">
+              {([
+                { id: "us",   label: `SKU US (${previewRows.us.length})` },
+                { id: "vn",   label: `SKU VN (${previewRows.vn.length})` },
+                { id: "prod", label: "Product row" },
+              ] as const).map(t => (
+                <button key={t.id} onClick={() => setPreviewTab(t.id)}
+                  className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                    previewTab === t.id ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={downloadExcel}
+              disabled={generating}
+              className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+            >
+              <FileSpreadsheet size={15} />
+              {generating ? "Đang tạo..." : "Tải Excel"}
+            </button>
+          </div>
+
+          <div className="overflow-x-auto p-1">
+            {previewTab !== "prod" && (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    {["SKU Code","Name VN","Name EN","COGS","Curr.","Days","Data","Throttle","Vendor SKU"].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-gray-400 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(previewTab === "us" ? previewRows.us : previewRows.vn).map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-brand-700 whitespace-nowrap">{r.sku}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.name_vn}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500">{r.name_en}</td>
+                      <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{r.cogs}</td>
+                      <td className="px-3 py-2 text-gray-400">{r.currency}</td>
+                      <td className="px-3 py-2 text-center">{r.days}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{r.data}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500">{r.throttle || "—"}</td>
+                      <td className="px-3 py-2 font-mono text-gray-400 whitespace-nowrap">{r.vendor_sku}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {previewTab === "prod" && (
+              <div className="p-4 space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
+                  {[
+                    ["productCode US", previewRows.pcUS],
+                    ["productCode VN", previewRows.pcVN],
+                    ["supportCountryCode", config.supportCountryCode],
+                    ["supportedCountries (ISO)", config.isoCodes],
+                    ["vendorCode", config.vendorCode],
+                    ["dataPolicyCode", config.dataPolicyCode],
+                    ["typeOfSim", config.typeOfSim],
+                    ["operatorCode", config.operatorCode],
+                    ["purchaseMethod", config.purchaseMethod],
+                    ["skuType", config.skuType],
+                    ["importType", config.importType],
+                    ["networkType", config.networkType],
+                    ["APN", config.apn],
+                    ["onsiteCarrier", config.onsiteCarrier],
+                    ["dailyResetTime", config.dailyResetTime],
+                    ["activationTime", config.activationTime],
+                    ["kycNeeded", config.kycNeeded],
+                    ["hotspot", config.hotspot],
+                    ["call", config.call],
+                    ["expirationDays", String(config.expirationDays)],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex gap-2">
+                      <span className="text-gray-400 min-w-[160px]">{k}</span>
+                      <span className="font-medium text-gray-800">{v || <span className="text-red-400">chưa nhập</span>}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
