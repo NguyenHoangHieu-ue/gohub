@@ -3,13 +3,14 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { MessageSquare, Users, LogOut, Gift, Package, Truck } from "lucide-react"
+import { MessageSquare, Users, LogOut, Gift, Package, Truck, Globe } from "lucide-react"
 
 const NAV = [
   { href: "/chatbot",    label: "Chatbot",       icon: MessageSquare },
   { href: "/promotions", label: "Khuyến Mãi",    icon: Gift },
   { href: "/skus",       label: "SP Hệ Thống",   icon: Package },
   { href: "/ncc",        label: "SP Nhà CC",      icon: Truck },
+  { href: "/countries",  label: "Danh sách Nước", icon: Globe },
 ]
 
 export function Sidebar() {
