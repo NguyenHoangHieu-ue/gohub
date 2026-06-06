@@ -88,11 +88,22 @@ const PRODUCT_TYPE: Record<string, string> = {
 }
 
 const DATA_POLICY: Record<string, string> = {
-  A: "Daily-Unlim 5Mbps",  B: "Daily-Unlim 10Mbps", C: "Unlim 20Mbps",
-  D: "Unlim 100Mbps",      E: "Fixed-Unlim 5Mbps",  G: "Fixed-Unlim 10Mbps",
-  H: "Unlim 5Mbps",        K: "eSIM Profile/SIM Frame",
-  F: "Fixed throttle<2Mbps", P: "Daily throttle<2Mbps",
-  Y: "Fixed không throttle", Z: "Daily không throttle",
+  // Daily cap + sau khi hết cap reset hàng ngày → unlimited throttled
+  A: "Daily-cap→Unlim-5Mbps",   // cap hàng ngày, hết → unlimited 5Mbps
+  B: "Daily-cap→Unlim-10Mbps",  // cap hàng ngày, hết → unlimited 10Mbps
+  // Fixed total cap + hết cap → unlimited throttled (KHÔNG reset ngày)
+  E: "Fixed-cap→Unlim-5Mbps",   // tổng cap cố định, hết → unlimited 5Mbps
+  G: "Fixed-cap→Unlim-10Mbps",  // tổng cap cố định, hết → unlimited 10Mbps
+  // Không cap, tốc độ cố định không throttle
+  C: "Unlim-fixed-20Mbps",
+  D: "Unlim-fixed-100Mbps",
+  H: "Unlim-fixed-5Mbps",
+  // Throttle sau khi hết cap (không unlimited sau đó)
+  F: "Fixed-throttle<2Mbps",    // tổng cap cố định, hết → throttle <2Mbps
+  P: "Daily-throttle<2Mbps",    // cap hàng ngày, hết → throttle <2Mbps
+  Y: "Fixed-no-throttle",       // tổng cap cố định, không throttle sau
+  Z: "Daily-no-throttle",       // cap hàng ngày, không throttle sau
+  K: "eSIM-Profile/SIM-Frame",  // không có data, ch�� là SIM vỏ hoặc eSIM profile
 }
 
 const SOURCE_TYPE: Record<string, string> = {
@@ -233,29 +244,47 @@ Giọng văn chuyên nghiệp, thân thiện vừa phải. Không dùng emoji.
 
 ━━━ NGHIỆP VỤ ━━━
 
+2 PHÁP NHÂN:
+- Gohub Inc (US): mua hàng từ vendor nước ngoài, nguồn A-E, bán lại cho Gohub JSC
+- Gohub JSC (VN): mua từ Gohub Inc hoặc trực tiếp, nguồn 1-6, bán cho khách hàng VN
+  → Tenant=US là sản phẩm của Gohub Inc, Tenant=VN là của Gohub JSC
+  → VN mua từ US: source_type 2 hoặc 3 (Internal GHI)
+
 CẤU TRÚC MÃ:
 - Product code (8 ký tự): [source_type][product_type][country_3][vendor_2][data_policy]
 - SKU code (13 ký tự): [product_code_8][data_amount_code_3][day_amount_2]
-- Dữ liệu đã được decode inline trong context (ví dụ: C(eSIM Full), F(Fixed<2Mbps), E(US-Datapool)).
+- Dữ liệu đã được decode inline (ví dụ: C(eSIM Full), F(Fixed<2Mbps), E(US-Datapool)).
 
 QUAN HỆ PRODUCT ↔ SKU:
 - 1 Product → nhiều SKU (khác nhau về data_amount và day_amount)
-- Product chứa thông tin chung: loại SIM, nhà CC, mạng, APN, KYC, ghi chú
-- SKU chứa thông tin cụ thể: dung lượng, số ngày, giá, vendor_sku
+- Product: thông tin chung (loại SIM, nhà CC, mạng, APN, KYC, ghi chú)
+- SKU: thông tin cụ thể (dung lượng, số ngày, giá, vendor_sku)
 
 SKU TYPE:
-- Base: SIM frame hoặc eSIM profile (không có data, cần ghép Datapack)
-- Datapack: data riêng, ghép với Base
-- Base+Datapack: sản phẩm hoàn chỉnh (thường dùng nhất)
-  Frame SKU = WMBLANKSIM/WMBLANKESIM | Datapack SKU = SKU data riêng
+- Base: SIM frame hoặc eSIM profile (không có data, ghép với Datapack)
+- Datapack: gói data riêng, ghép vào Base
+- Base+Datapack: sản phẩm hoàn chỉnh (thường gặp nhất)
+  3HK có s���n frame SKU riêng → tạo sản phẩm 3HK phải có cả mã eSIM full (C) và eSIM data (A)
 
 CHUỖI GIÁ: original_cost → latest_cogs → final_cogs_incl_vat_vnd (VND) / final_cogs_usd
-  Khi nói "Giá" → dùng final_cogs_incl_vat_vnd (VND) hoặc final_cogs_usd tùy ngữ cảnh.
+  Khi nói "Giá" → dùng final_cogs_incl_vat_vnd (VND) hoặc final_cogs_usd.
 
 EXPIRATIONS vs DAY_AMOUNT:
-- day_amount = số ngày sử dụng data (ví dụ: 7 ngày)
-- expirations = số ngày SIM còn hiệu lực sau kích hoạt (ví dụ: 90 ngày)
-  → Có thể mua gói 7 ngày nhưng SIM vẫn dùng được 90 ngày kể từ lần kích hoạt đầu.
+- day_amount = số ngày sử dụng data
+- expirations = số ngày SIM còn hiệu lực sau kích hoạt (thường 90 ngày)
+  → Mua gói 7 ngày nhưng SIM vẫn kích hoạt được trong 90 ngày.
+
+COGS 3HK (US Datapool — source_type E) — chỉ admin/manager:
+  Giá 3HK theo khu vực (HKD/GB): Châu Á 12 nước = 5 HKD | Châu Âu+US = 7 HKD | AU/NZ = 6.5 HKD
+  Công thức tính COGS:
+  - Fixed:     GB × giá_HKD/GB × 55% ÷ tỷ_giá_HKD/USD
+  - Daily:     GB/ngày × số_ngày × giá_HKD/GB × 40% ÷ tỷ_giá_HKD/USD
+  - Unlim 10Mbps: 1.8 GB/ngày × số_ngày × giá_HKD/GB ÷ tỷ_giá_HKD/USD
+  - Unlim 5Mbps:  1.6 GB/ngày × số_ngày × giá_HKD/GB ÷ tỷ_giá_HKD/USD
+  (Tỷ giá HKD/USD hiện tại ≈ 7.798; tra bảng Tỷ giá để lấy giá trị tháng hiện tại)
+
+TỶ GIÁ NỘI BỘ (T03/2026 — tháng gần nhất có dữ liệu):
+  USD/VND = 26,394 | HKD/USD = 7.798 | CNY/VND = 3,970 | GBP/VND = 35,957
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
