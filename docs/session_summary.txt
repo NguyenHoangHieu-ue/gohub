@@ -1,0 +1,327 @@
+== TÓM TẮT SESSION ==
+Cập nhật lần cuối: 2026-06-05 (session 3 — tiếp)
+
+## Trạng thái hiện tại
+Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
+Deploy: Next.js trên Vercel (https://gohub-murex.vercel.app) — ĐANG HOẠT ĐỘNG
+Streamlit: Đã XÓA hoàn toàn (app.py, generate_auth.py, requirements.txt đã remove)
+GitHub Actions sync: Vẫn chạy (sync.py + gohub_api_clients.py giữ nguyên)
+
+---
+
+## Kiến trúc hệ thống (chỉ còn Next.js)
+
+### Stack
+- Frontend: Next.js 14.2.35 (App Router, TypeScript, Tailwind CSS)
+- Deploy: Vercel (https://gohub-murex.vercel.app)
+- Auth: NextAuth.js v4, CredentialsProvider → bcrypt verify từ bảng users Supabase
+- Data: @supabase/supabase-js (Server Components + API routes)
+- Table: @tanstack/react-table (sort, filter, paginate, export CSV/JSON)
+- AI: @google/generative-ai (gemini-3.5-flash)
+- Sync: GitHub Actions cron */30 * * * * chạy sync.py → Supabase
+
+---
+
+## Files chính
+
+### Next.js (web/)
+web/
+├── package.json         — next 14.2.35, next-auth, supabase-js, tanstack-table
+├── next.config.js       — (đã đổi từ .ts sang .js cho Next.js 14)
+├── vercel.json          — { "framework": "nextjs" }
+├── .env.local           — secrets local (không commit)
+└── src/
+    ├── app/
+    │   ├── login/page.tsx              — Login page (có try/catch error handling)
+    │   ├── (dashboard)/layout.tsx      — Auth check + Sidebar wrapper
+    │   ├── (dashboard)/products/       — Server Component, cached 30 phút
+    │   ├── (dashboard)/skus/           — Server Component, cached 30 phút
+    │   │                                 Filter nâng cao: SIM/eSIM, product type,
+    │   │                                 throttle, day range, data range
+    │   │                                 Ẩn cột giá nếu role=sale
+    │   ├── (dashboard)/listings/       — Server Component, cached 30 phút
+    │   ├── (dashboard)/items/          — CLIENT component, server-side search
+    │   │                                 Filter: search, status, tenant, channel,
+    │   │                                 item_type, price_list, day range, price range
+    │   │                                 Pagination server-side (50/trang)
+    │   ├── (dashboard)/chatbot/        — Client Component, bubble chat UI
+    │   ├── (dashboard)/admin/          — Client Component, CRUD users
+    │   └── api/
+    │       ├── auth/[...nextauth]/     — NextAuth handler
+    │       ├── chat/                   — Gemini API (context cache 30 phút)
+    │       │                             Context giới hạn: 3k SKUs, 3k listings, 2k items
+    │       ├── items/                  — GET items với filter + server-side pagination
+    │       └── admin/users/            — GET/POST + [username] PATCH/DELETE
+    ├── components/
+    │   ├── sidebar.tsx      — Fixed 240px, gradient brand header, user card
+    │   ├── data-table.tsx   — TanStack Table + ExtraFilter (select dropdown + range)
+    │   └── metric-card.tsx  — Card với top accent border
+    └── lib/
+        ├── auth.ts          — NextAuth config + bcrypt verify
+        ├── supabase.ts      — supabase + supabaseAdmin + cached getters (30 phút)
+        │                      getProducts(), getSkus(), getListings(), getActiveItems()
+        └── utils.ts         — fmtVND, fmtUSD, fmtDate, fmtNum, cn
+
+### Python (sync — vẫn giữ)
+- sync.py             — GitHub Actions sync (GoHub API → Supabase, batch 500)
+- gohub_api_clients.py — Python client gọi GoHub API
+- schema.sql          — Supabase table definitions
+
+---
+
+## Bảng Supabase
+- products     (769 rows)
+- skus         (10,957 rows)
+- listings     (10,674 rows)
+- items        (137,005 rows — 130,019 active)
+- sync_log     — ghi lại thời gian sync
+- users        — user accounts (bcrypt hash, RLS enabled)
+
+Users hiện có:
+- hieu (role: admin)
+- hieu1 (role: sale)
+
+---
+
+## Secrets
+
+### Next.js .env.local (và Vercel Environment Variables)
+NEXT_PUBLIC_SUPABASE_URL      = https://wfuigmfnfcijkvylrwzz.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY = eyJ... (trong key.txt)
+SUPABASE_SERVICE_KEY          = eyJ... (trong key.txt)
+NEXTAUTH_SECRET               = 82c8dfd48a475000674420e13a0883e6298b8562dd5bdd38804ba269896c61b6
+NEXTAUTH_URL                  = https://gohub-murex.vercel.app
+GEMINI_KEY                    = AIzaSyByOnUrpRgemltiKhlGF1P_5lnzq8-uDTE
+
+### GitHub Repo Secrets (cho Actions sync)
+API_KEY              = 0e44b4... (trong key.txt)
+SUPABASE_URL         = (như trên)
+SUPABASE_SERVICE_KEY = (như trên)
+
+---
+
+## Lưu ý kỹ thuật
+
+### Performance
+- Products/SKUs/Listings: unstable_cache 30 phút → lần đầu fetch Supabase, lần sau tức thì
+- Items: server-side search qua /api/items, 50 rows/trang, filter đa chiều
+- Chatbot context: giới hạn 3k SKUs active + 3k listings active + 2k items active
+
+### Data loading
+- Products (769): fetchAll → cache 30 phút
+- SKUs (10,957): fetchAll → cache 30 phút, filter client-side với ExtraFilter
+- Listings (10,674): fetchAll → cache 30 phút
+- Items (130k active): server-side search, không cache (real-time filter)
+
+### Filter
+- DataTable có ExtraFilter type: "select" (dropdown) hoặc "range" (min/max input)
+- SKUs dùng ExtraFilter: SIM/eSIM, product_type, throttle_speed, day_amount, data_amount
+- Items page: custom filter UI → gọi /api/items
+
+### Cấu trúc mã (từ Item-SKU Format.xlsx)
+SKU CODE (13 ký tự) = [PurchaseType(1)][ProductType(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]
+ITEM CODE (18 ký tự) = [Channel(1)][Partner(2)][PricelistCode(2)][SKU_CODE(13)][Number(2)]
+- Channel: B=B2C, D=OD, W=WS, I=Internal
+- Partner: SP=ShopeePay, MM=Momo, ZP=Zalopay, KK=KKday, T1=Tier1 WS
+- PurchaseType: 1-6=VN variants, A-E=US variants
+- Country: VNM=Vietnam, CHM=China-HK-Macao, ...
+
+### Setup local
+cd web
+npm install
+# .env.local đã có sẵn (không commit)
+npm run dev   # → http://localhost:3000
+
+---
+
+## Việc đã làm trong session này
+1. Migrate hoàn toàn từ Streamlit sang Next.js
+2. Fix next.config.ts → next.config.js (Next.js 14 không hỗ trợ .ts)
+3. Upgrade Next.js 14.2.28 → 14.2.35 (security patch)
+4. Thêm vercel.json để Vercel nhận dạng Next.js framework
+5. Deploy thành công lên Vercel (https://gohub-murex.vercel.app)
+6. Fix chatbot: giảm token xuống ~200k (từ 1M+ gây lỗi 400)
+7. Fix items: server-side search thay vì load 137k rows
+8. Cache Supabase queries 30 phút (unstable_cache)
+9. Fix SKUs: cột giá hiển thị số thô, không thêm ký tự tiền tệ
+10. Build DataTable ExtraFilter (dropdown + range) cho SKUs
+11. Rewrite Items page thành client component + /api/items server-side search
+
+## Session 2 (2026-06-04)
+12. Xóa .streamlit/config.toml (rác còn sót từ Streamlit)
+13. Xóa 4 tab Products/SKUs/Listings/Items — web chuyển hướng sang mục tiêu mới
+14. Xóa data-table.tsx, metric-card.tsx, api/items/route.ts (không còn dùng)
+15. Cập nhật sidebar: chỉ còn Chatbot + Admin
+16. Root redirect về /chatbot thay vì /products
+17. Dọn supabase.ts: bỏ cached getters, giữ 2 client
+18. Gitignore VENDOR/, Add_product/, TaiLieuCongTy_Chung/ (data nội bộ, không public)
+
+## Định hướng web mới (đang plan)
+Mục tiêu 5 tính năng:
+1. Chatbot trả lời về sản phẩm hệ thống (đã có)
+2. Quản lý data NCC (báo giá từ nhà cung cấp → chuẩn hóa → Supabase)
+3. Tạo mẫu sản phẩm mới (6-sheet Excel, tự tính cost theo tỷ giá/công thức)
+4. Gap analysis: NCC có gì mà hệ thống chưa có
+5. Phân quyền: admin/manager xem full, team khác xem hạn chế
+(Đang thu thập yêu cầu chi tiết từ user)
+
+## Session 2 — tiếp (2026-06-04)
+19. Sync schedule: đổi từ */30 phút → 1 lần/ngày lúc 01:00 UTC
+20. Chatbot streaming: text hiện từng chữ thay vì chờ full response
+21. Cache context data: unstable_cache 24h TTL (persistent qua Vercel cold starts)
+    - Tách data fetching (cached) khỏi context string building (role-dependent, không cache)
+    - Cold start đầu tiên sau 24h sẽ fetch Supabase; các lần sau tức thì
+22. Thêm 3 tab placeholder (đang phát triển):
+    - /promotions — Khuyến Mãi (NCC)
+    - /skus       — Sản Phẩm Hệ Thống (format Template_SKU + cột status)
+    - /ncc        — Sản Phẩm Nhà Cung Cấp (sau khi chuẩn hóa schema)
+23. Tất cả lỗi UI hiển thị "Hiếu đang fix, vui lòng đợi" (chatbot, admin, login)
+24. Fix redirect stale: login + admin không còn trỏ về /products đã xóa → /chatbot
+25. Fix Gemini API key bị leak/block → expose debug error cho admin, "liên hệ Hiếu" cho role khác
+26. Tab SP Hệ Thống (/skus): real data từ Supabase, pagination 50/trang, search, filter tenant/status
+    - Columns EN: Status, Tenant, SKU Code, Product Code, SIM/eSIM, Data, Days, Throttle, Call, Expiration, Vendor SKU, Frame SKU, Datapack SKU, Note
+    - Admin thêm: COGS, Currency
+    - Note column: join từ bảng products qua product_code (note nằm trong products, không phải skus)
+27. Tab SP Hệ Thống (/skus) — nâng cấp filter:
+    - 7 dropdown filter theo từng nhóm ký tự SKU code (pos 1, 2, 3-5, 6-7, 8, 9-11, 12-13)
+    - API /api/skus/filters: trả về distinct values cho từng vị trí từ database
+    - API /api/skus: build LIKE pattern từ các filter params (kết hợp chính xác theo vị trí)
+    - Quan hệ: ProductCode = SKU[0:8], các SKU cùng loại chỉ khác 5 ký tự cuối (DataAmount+DayAmount)
+
+## Session 3 (2026-06-05)
+28. Chatbot: fix error handling — admin thấy lỗi debug, role khác thấy "Vui lòng liên hệ Hiếu"
+29. Fix stream error propagation: dùng controller.error() thay finally{close()}
+30. Fix double-message bug khi stream fail sau khi đã bắt đầu
+31. Fix tsconfig.json: thêm "target": "ES2017" (build error: Set iteration)
+32. Tab /ncc — WORLDMOVE + 3HK:
+    - Supabase: thêm ncc_products, ncc_3hk_zones tables + 2 RPC gap analysis functions
+    - scripts/import_worldmove.py: parse 8921 sản phẩm từ CSV (days/data/throttle/leSIM)
+    - scripts/import_3hk.py: import 46 zone-country từ Excel
+    - API /api/ncc/worldmove: paginate + filter + gap analysis via RPC (đã/chưa có trong hệ thống)
+    - API /api/ncc/3hk-zones: zone reference data
+    - UI: vendor tabs (WM/3HK), sub-tabs Catalog + So sánh HT, zone table + COGS formula
+    - Phân quyền: cột COGS (WM) + Price/GB + COGS formula (3HK) chỉ admin/manager thấy
+    - API strip cost fields server-side (không thể xem qua DevTools)
+    - Data đã import: ncc_products 8921 rows (WORLDMOVE), ncc_3hk_zones 45 rows (3HK)
+33. Fix WM gap analysis: bỏ RPC dependency, dùng direct Supabase queries
+    - in_system: .in('vendor_product_id', sysSkus) — 537/633 system WM SKUs khớp
+    - not_in_system: fetch all 8921 IDs → filter in memory → paginate
+    - Fix join key: vendor_product_id (WM-e-...) thay vì vendor_internal_id
+34. Fix WM throttle logic (re-import 8921 rows):
+    - Titanium AYCE → throttle=null (no speed limit)
+    - Premium Unlimited → 1GB/day highspeed, throttle 10 Mbps
+    - Standard Unlimited → 2GB/day highspeed, throttle 5 Mbps
+    - Fixed/Daily → default throttle 128 kbps
+35. Tab /countries (Danh sách Nước):
+    - Supabase: ref_countries (212 rows), ref_support_countries (77 rows)
+    - 2 sub-tabs: Mã Nước | Nhóm Nước Hỗ Trợ (không scroll)
+    - API /api/countries, scripts/import_countries.py
+36. Lark OAuth + manager role + phân quyền UI:
+    - LarkProvider (larksuite.com): custom token exchange, auto-create user (role=standard)
+    - signIn: link by email, unique username, lark_open_id column
+    - Login page: nút "Đăng nhập bằng Lark" + password login giữ nguyên
+    - DB migration: ALTER TABLE users ADD COLUMN lark_open_id, DROP NOT NULL password
+    - Admin UI: manager role + Lark/PW badge + password optional
+    - Chờ user tạo Lark App và cung cấp LARK_APP_ID, LARK_APP_SECRET
+37. Role sale → standard: DB đã UPDATE, tất cả UI/code cập nhật
+38. Chatbot cải tiến:
+    - react-markdown render đúng (không còn * thô)
+    - System prompt: hướng dẫn format vừa phải
+    - Chatbot biết tên người dùng (từ session)
+    - Thêm country reference (212 + 77) vào context
+39. Sidebar: bỏ username, chỉ hiện tên + role badge
+40. Tab /countries: 2 sub-tabs (Mã Nước | Nhóm Nước Hỗ Trợ) thay vì scroll dọc
+41. SP Hệ Thống (/skus):
+    - Thêm cột KYC (from products.kyc_needed, badge amber/gray)
+    - Thêm cột Country Code (supported_countries, first 4 + "+N more")
+    - Thêm cột Country Name (join ref_countries, first 2 + "+N more")
+    - Note: full text wrap, không truncate
+    - COGS: manager cũng thấy (canSeeCost = admin || manager)
+    - Fix column alignment cho admin: COGS sau datapack, trước KYC/Country
+42. SP Vendor (/ncc):
+    - Rename: "SP Nhà CC" → "SP Vendor" (sidebar + title)
+    - WORLDMOVE catalog: thêm filter Days, GB min/max
+    - Thêm cột KYC (WM luôn = No)
+    - Thêm cột Note/APN: gộp apn + network + roaming + providers + coverage + data_reset + notification
+    - So sánh HT: thêm cột "Trong HT" (badge) + cột SKU (sku_code từ skus table)
+    - APN import: 8921 WM products × 8 cột APN, 100% match rate
+43. Admin tabs mới (admin only):
+    - Tab Cài đặt: tỷ giá nội bộ + công thức 3HK datapool, editable, lưu app_settings Supabase
+    - Tab Tạo template: workflow 4 bước: Chọn SP → Cấu hình → Xem trước → Tải Excel
+      · Step 1: Search/filter/select WM products (checkbox, cross-page selection tracking)
+      · Step 2: Config chia 3 nhóm: Bắt buộc | Auto-fill | Nâng cao (collapsible)
+        - Nút "⚡ Auto-fill từ SP đã chọn": tự điền typeOfSim, APN, networkType, onsiteCarrier,
+          operatorCode, dataPolicyCode (derived từ throttle logic)
+      · Step 3: "Xem trước N SP" → compute client-side → preview panel scroll into view
+        - Preview 3 tab: SKU US | SKU VN | Product row
+        - Hiển thị: SKU code (brand-700 mono), name VN/EN, COGS, throttle, vendor_sku
+      · Step 4: "Tải Excel" trong preview panel → gọi API → download 6-sheet Excel
+      · dataPolicyCode auto-derive: unlimited+no throttle→D, +10Mbps→A, +5Mbps→B, +128kbps→P; fixed+daily→P, fixed→F
+44. SKU compact columns: Country Code (4 codes + badge), Country Name (2 + badge)
+45. Chatbot: thêm country reference (212 + 77) + WM system SKUs vào context
+47. SP Vendor (/ncc) WM gộp catalog + so sánh HT thành 1 tab:
+    - Bỏ sub-tab "Catalog NCC" / "So sánh Hệ Thống"
+    - Thêm segmented control 3 nút: Tất cả / Đã có trong HT / Chưa có trong HT
+    - Tất cả filter catalog (search, SIM type, region, leSIM, data type, days, GB) đều hoạt động với cả 3 gap filter
+    - Cột "Trong HT" + "SKU HT" luôn hiển thị; click row in_system → expand SKU detail
+    - API refactor: luôn mark in_system per row, enrich system_skus chỉ cho in_system rows
+    - gap=not_in_system: two-step fetch (all matching IDs → filter out sysSet → paginate)
+46. SP Vendor (/ncc) UX cải tiến:
+    - Skeleton loading rows (6 rows animate-pulse) khi switch gap tab
+    - APN Note: compact text + icon hint (chevron) → double-click mở modal
+    - in_system: click vào WM row → expand inline sub-table SKU theo style /skus
+      (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
+    - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
+    - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Pending (cần làm)
+- User chạy scripts/setup_settings_table.sql trong Supabase (app_settings table)
+- Tạo Lark App mới bằng account ADMIN công ty (xem ghi chú bên dưới) → cung cấp LARK_APP_ID + LARK_APP_SECRET mới → cập nhật .env.local + Vercel
+
+## Lark Login — Trạng thái
+- Code: HOÀN CHỈNH (LarkProvider, signIn/jwt/session callbacks, UI login page)
+- migrate_lark.sql: ĐÃ CHẠY (lark_open_id column đã có trong DB)
+- App hiện tại: dùng account Lark cá nhân (không phải admin công ty)
+  → chỉ user hiện tại vào được, chưa mở rộng được cho cả team
+- Kế hoạch: tạo lại Lark App bằng account admin công ty để toàn bộ team có thể đăng nhập
+
+## Planned (sau này)
+- Tab /promotions — Khuyến Mãi NCC (chưa có yêu cầu chi tiết)
+- Thêm NCC khác (BILLIONCONNECT, SIMSTORE, TRUEMOVE, VIETTEL) — SQL + import script đã viết sẵn trong database/setup/ và database/import/, CHƯA import data, chờ khi cần
+- Upload data NCC qua web UI (format chuẩn thống nhất)
+
+## Quyết định (2026-06-06)
+- Chỉ làm việc với 2 vendor: WORLDMOVE và 3HK — các vendor còn lại (BC, SS, VT, TM) defer lại sau
+- Folder đã tổ chức lại: sync/, database/setup|migrations|import/, docs/
+- DB hiện tại: ncc_worldmove (8921 rows), ncc_3hk (45 rows), ref_vendors (20 rows), sku_view đã tạo
+- /ncc page đang ở maintenance mode trong khi redesign
+
+## Session 3 — tiếp (2026-06-06, lần 2)
+48. Đọc chi tiết TaiLieuCongTy_Chung (COGS_Template, Quy Trình, Tỷ giá):
+    - 2 pháp nhân: Gohub Inc (US source A-E) + Gohub JSC (VN source 1-6)
+    - COGS 3HK formula: Fixed×55%, Daily×40%, Unlim-10Mbps=1.8GB/d, Unlim-5Mbps=1.6GB/d
+    - Tỷ giá T03/2026 mới nhất: USD/VND=26394, HKD/USD=7.798, TWD/USD=31.452
+    - 3HK giá/GB: Châu Á 12 nước=5HKD, EU+US=7HKD, AU/NZ=6.5HKD
+49. Chatbot: 5 rules mới
+    - (1) Nguồn data ưu tiên: products+skus trước, listings/items chỉ khi cần tên/giá kênh
+    - (2) Tìm kiếm nước: context decode ISO→tên, "đi Nga"→tìm "Russia"; 25+ mapping tên VN→EN
+    - (3) Giá: luôn hiển thị USD + VND dùng latest_cogs + quy đổi, không làm tròn
+    - (4) Ưu tiên VN: sort tenant VN trước US trong context + rule ưu tiên
+    - (5) Nhất quán admin/standard: cùng cấu trúc trả lời, COGS chỉ khi được hỏi
+50. Chatbot: fix cơ bản
+    - Xóa listing_code, item_code khỏi context rows (prevent lỗi dùng mã sai)
+    - Lọc chỉ giữ product_type C/E/1/2 (eSIM/SIM full) — loại A/B/D/K
+    - Rule BẮT BUỘC dùng sku_code khi đề xuất
+    - Giá: dùng latest_cogs làm gốc → quy đổi USD/VND/TWD (không final_cogs_included_vat)
+51. Chatbot: decode quốc gia
+    - Thêm decodeCountries() function map ISO→tên dùng ref_countries
+    - SKU context: "nước: RU(Russia), BY(Belarus)" thay vì chỉ mã
+    - Chatbot tìm theo tên → dễ hiểu + match chính xác
+52. Chatbot: rule 3HK rõ ràng
+    - 3HK CHỈ thông báo: Zone/network/giá_HKD/GB/KYC
+    - KHÔNG tự tính gói cước dùng formula
+    - Thông tin tham khảo cho Hiếu tạo sản phẩm nếu cần
+    - Fix: NCC catalog < 3 results → WM show 2–3 SP, 3HK show info chứ không gợi ý detail
+53. Data policy decode chi tiết:
+    - A/B=Daily-cap→Unlim-5/10Mbps | E/G=Fixed-cap→Unlim-5/10Mbps | C/D/H=Unlim-fixed
+    - F/P=throttle<2Mbps | Y/Z=no-throttle | K=Frame/Profile (không data)

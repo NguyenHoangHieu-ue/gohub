@@ -21,10 +21,13 @@ TaiLieuCongTy_Chung/
 # DB scripts / schema / import (local only — không public)
 database/
 
-# Docs / notes (local only)
+# Docs / notes (local only, but track session summary + memory)
 docs/
+!docs/session_summary.txt
 _Skills_AI/
 *.txt
+!memory/
+!memory/*.md
 *.md
 
 # OS
