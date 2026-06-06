@@ -154,6 +154,17 @@ function buildContext(d: CacheData, role: string): string {
   const isCost = role === "admin" || role === "manager"
   const { skus, listings, items, wmProducts, wmInSystemSet, zones3hk, countries, supportCountries, vendors, settings } = d
 
+  // Build country code → name map để decode supported_countries
+  const countryMap: Record<string, string> = {}
+  for (const c of countries) countryMap[c.code] = c.name
+
+  function decodeCountries(codes: string | null): string {
+    if (!codes) return ""
+    return codes.split(/[,\s]+/).filter(Boolean)
+      .map((c: string) => countryMap[c.trim()] ? `${c}(${countryMap[c.trim()]})` : c)
+      .join(", ")
+  }
+
   // Build product map for decoding in SKU rows
   const prodMap: Record<string, any> = {}
   for (const s of skus) {
@@ -200,7 +211,7 @@ function buildContext(d: CacheData, role: string): string {
         `|hh:${s.expirations ?? "—"}d` +
         (s.note ? `|${s.note}` : "") +
         (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
-        (s.supported_countries ? `|${s.supported_countries}` : "") +
+        (s.supported_countries ? `|nước:${decodeCountries(s.supported_countries)}` : "") +
         (isCost ? `|vnd:${s.final_cogs_included_vat_vnd ?? "?"}|usd:${s.final_cogs_usd ?? "?"}` : "")
     }),
 
@@ -310,16 +321,13 @@ Không đọc Listings/Items để đề xuất sản phẩm — chỉ dùng SKU
 
 ━━━ TÌM KIẾM THEO NƯỚC ━━━
 
-Trường supported_countries chứa mã ISO, 1 gói có thể hỗ trợ nhiều nước.
-Khi user hỏi gói "đi nước X" → tìm tất cả SKU có mã ISO của X trong supported_countries.
-Mapping tên VN → ISO code:
-  Mỹ/Hoa Kỳ→USA | Nhật/Nhật Bản→JPN | Hàn Quốc/Hàn→KOR | Trung Quốc→CHN
-  Thái Lan→THA | Singapore→SGP | Đài Loan→TWN | Hong Kong→HKG | Macao→MAC
-  Anh/UK→GBR | Pháp→FRA | Đức→DEU | Ý/Italy→ITA | Tây Ban Nha→ESP
-  Úc→AUS | New Zealand→NZL | Canada→CAN | Mexico→MEX | Việt Nam→VNM
-  Ấn Độ→IND | Indonesia→IDN | Philippines→PHL | Malaysia→MYS | Campuchia→KHM
-  Dubai/UAE→ARE | Nga→RUS | Đan Mạch→DNK | Hà Lan→NLD | Ba Lan→POL
-Nếu không chắc mã ISO → tìm trong MÃ NƯỚC ISO bên dưới.
+Mỗi SKU có trường "nước:" liệt kê các nước hỗ trợ dạng "mã(Tên)" — ví dụ: RU(Russia), US(United States).
+Khi user hỏi gói "đi nước X" → tìm tất cả SKU có TÊN NƯỚC đó trong trường "nước:".
+Ví dụ: "đi Nga" → tìm SKU có "Russia" trong nước; "đi Mỹ" → tìm "United States".
+1 gói có thể hỗ trợ nhiều nước — gói đi Mỹ có thể có cả US+Canada+Mexico.
+Tên VN → tên EN để tìm: Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia,
+  Trung=China, Thái=Thailand, Đài Loan=Taiwan, Anh=United Kingdom, Úc=Australia,
+  Dubai=United Arab Emirates, Đức=Germany, Pháp=France, Ý=Italy
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
@@ -344,8 +352,10 @@ CÁC QUY TẮC KHÁC:
   - Hỏi chung: liệt kê ~10 kết quả phù hợp → hỏi "Bạn muốn xem chi tiết SP nào?"
 
 KHI HỆ THỐNG < 3 KẾT QUẢ:
-  Tìm thêm trong CATALOG NCC (WM/3HK) — hàng chưa nhập.
-  Gợi ý 2–3 SP, kèm: "**Nếu muốn request sản phẩm này, nhắn Hiếu nha.**"
+  - WM catalog: gợi ý 2–3 SP tương tự (tên, data, ngày, giá TWD), kèm: "**Nếu muốn request, nhắn Hiếu nha.**"
+  - 3HK catalog: KHÔNG tự tính gói cước. Chỉ thông báo:
+    "3HK hỗ trợ [nước] — Zone [X], mạng [Y], giá [Z] HKD/GB, KYC: [yes/no]"
+    Đây là thông tin tham khảo để Hiếu tạo sản phẩm nếu cần.
 
 NHẤT QUÁN ADMIN/STANDARD:
   Cả 2 role nhận cùng cấu trúc câu trả lời. Admin/manager thấy thêm giá COGS — chỉ hiển thị khi được hỏi.
