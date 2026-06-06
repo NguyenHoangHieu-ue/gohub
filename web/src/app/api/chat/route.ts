@@ -94,10 +94,19 @@ const VN_TO_EN: Record<string, string> = {
   "châu âu": "Europe",
 }
 
-const PRODUCT_KEYWORDS = ["gói", "sim", "esim", "data", "mua", "tìm", "sản phẩm", "có không", "bao nhiêu ngày", "dung lượng"]
+const PRODUCT_KEYWORDS = [
+  "gói", "sim", "esim", "data", "mua", "tìm", "sản phẩm",
+  "có không", "dung lượng", "unlimited", "không giới hạn",
+  "ngày", "gb", "mb", "châu á", "châu âu", "châu mỹ", "châu phi", "châu đại dương",
+  "rẻ nhất", "tốt nhất", "phù hợp", "gợi ý", "đề xuất", "recommend",
+  "mạng", "operator", "carrier", "network", "roaming",
+  "kyc", "hộ chiếu", "passport",
+  "giá", "bao nhiêu tiền", "daily", "hàng ngày",
+]
 
 interface SearchIntent {
-  countryEn: string | null  // tên nước tiếng Anh để search ref_support_countries
+  countryEn: string | null
+  operator:  string | null  // tên operator (Softbank, Docomo, NTT...)
   simType:   "eSIM" | "SIM" | null
   ngayMin:   number | null
   ngayMax:   number | null
@@ -108,7 +117,7 @@ interface SearchIntent {
 function detectIntent(message: string, data: CacheData): SearchIntent {
   const msg = message.toLowerCase()
 
-  // 1. Tìm tên nước từ map VN→EN (dài trước ngắn để tránh match nhầm "nhật" trong "nhật bản")
+  // 1. Tìm tên nước từ map VN→EN (dài trước ngắn để tránh match nhầm)
   let countryEn: string | null = null
   const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
   for (const [vn, en] of sorted) {
@@ -126,24 +135,33 @@ function detectIntent(message: string, data: CacheData): SearchIntent {
     }
   }
 
-  // 3. SIM type
+  // 3. Tìm operator name (Softbank, Docomo, NTT, True Move, v.v.)
+  let operator: string | null = null
+  const ops = [...new Set(data.skus.map((s: any) => s.operator_code).filter(Boolean))] as string[]
+  for (const op of ops) {
+    if (op.length > 2 && msg.includes(op.toLowerCase())) {
+      operator = op; break
+    }
+  }
+
+  // 4. SIM type
   const isEsim = msg.includes("esim") || msg.includes("e-sim") || msg.includes("e sim")
   const isSim  = !isEsim && (msg.includes("sim vật lý") || msg.includes("sim vật") || msg.includes("sim thường"))
   const simType = isEsim ? "eSIM" : isSim ? "SIM" : null
 
-  // 4. Số ngày (ví dụ: "7 ngày", "30 ngày")
+  // 5. Số ngày
   const dayMatches = [...msg.matchAll(/(\d+)\s*ngày/g)].map(m => parseInt(m[1]))
   const ngayMin = dayMatches.length ? Math.min(...dayMatches) : null
   const ngayMax = dayMatches.length ? Math.max(...dayMatches) : null
 
-  // 5. Dung lượng (ví dụ: "10gb", "5 gb")
+  // 6. Dung lượng
   const gbMatch = msg.match(/(\d+)\s*gb/)
   const dataGbMin = gbMatch ? parseInt(gbMatch[1]) : null
 
-  // 6. Có phải câu hỏi về sản phẩm không?
-  const isProduct = !!countryEn || PRODUCT_KEYWORDS.some(k => msg.includes(k))
+  // 7. Có phải câu hỏi về sản phẩm không?
+  const isProduct = !!countryEn || !!operator || PRODUCT_KEYWORDS.some(k => msg.includes(k))
 
-  return { countryEn, simType, ngayMin, ngayMax, dataGbMin, isProduct }
+  return { countryEn, operator, simType, ngayMin, ngayMax, dataGbMin, isProduct }
 }
 
 // ─── Search SKUs ──────────────────────────────────────────────────────────────
@@ -151,7 +169,7 @@ function detectIntent(message: string, data: CacheData): SearchIntent {
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
 function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): string {
-  const { countryEn, simType, ngayMin, ngayMax, dataGbMin } = intent
+  const { countryEn, operator, simType, ngayMin, ngayMax, dataGbMin } = intent
 
   // Tìm group codes cho nước
   let groupCodes: Set<string> | null = null
@@ -181,6 +199,7 @@ function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): str
     }
     if (simType === "eSIM" && s.sim_esim !== "eSIM") return false
     if (simType === "SIM"  && s.sim_esim !== "SIM")  return false
+    if (operator && s.operator_code?.toLowerCase() !== operator.toLowerCase()) return false
     if (ngayMin && (s.day_amount ?? 0) < ngayMin) return false
     if (ngayMax && (s.day_amount ?? 0) > ngayMax) return false
     if (dataGbMin && (s.data_amount ?? 9999) < dataGbMin && (s.data_amount ?? 9999) < 9999) return false
@@ -201,9 +220,14 @@ function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): str
     return `[Không tìm thấy gói nào phù hợp. Nhóm nước khớp: ${groupsFound.join(", ") || "không có"}]`
   }
 
-  const header = countryEn
-    ? `[Tìm thấy ${total} gói cho "${countryEn}" — nhóm: ${groupsFound.join(", ")} — hiển thị ${results.length}]`
-    : `[Tìm thấy ${total} gói — hiển thị ${results.length}]`
+  const filters = [
+    countryEn ? `nước: "${countryEn}" (nhóm: ${groupsFound.join(", ")})` : null,
+    operator  ? `operator: "${operator}"` : null,
+    simType   ? `loại: ${simType}` : null,
+    ngayMin   ? `ngày: ${ngayMin}${ngayMax && ngayMax !== ngayMin ? `–${ngayMax}` : ""}` : null,
+  ].filter(Boolean).join(", ")
+
+  const header = `[Tìm thấy ${total} gói${filters ? ` — ${filters}` : ""} — hiển thị ${results.length}]`
 
   const cols = `sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku` +
     (isCost ? `|gia_vnd|gia_usd` : "")

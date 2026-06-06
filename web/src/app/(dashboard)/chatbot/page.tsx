@@ -10,8 +10,9 @@ interface Message {
   content: string
 }
 
-const HISTORY_KEY = "gohub_chat_history"
-const MAX_HISTORY = 100
+const HISTORY_KEY   = "gohub_chat_history"
+const SESSION_KEY   = "gohub_session_id"
+const MAX_HISTORY   = 100
 
 const QUICK = [
   "GoHub có gói eSIM nào cho Nhật Bản không?",
@@ -29,13 +30,24 @@ export default function ChatbotPage() {
   const [loading,    setLoading]    = useState(false)
   const [streaming,  setStreaming]  = useState(false)
   const [restored,   setRestored]   = useState(false)
-  const bottomRef  = useRef<HTMLDivElement>(null)
+  const bottomRef   = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
+  const sessionId   = useRef<string>("")  // UUID per browser session
 
-  // Load lịch sử từ localStorage lần đầu mount
+  // Khởi tạo sessionId từ sessionStorage và load lịch sử
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
+
+    // Lấy hoặc tạo sessionId
+    let sid = sessionStorage.getItem(SESSION_KEY)
+    if (!sid) {
+      sid = crypto.randomUUID()
+      sessionStorage.setItem(SESSION_KEY, sid)
+    }
+    sessionId.current = sid
+
+    // Ưu tiên 1: localStorage (cùng thiết bị, cùng browser)
     try {
       const saved = localStorage.getItem(HISTORY_KEY)
       if (saved) {
@@ -43,15 +55,28 @@ export default function ChatbotPage() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMessages(parsed.slice(-MAX_HISTORY))
           setRestored(true)
+          return
         }
       }
     } catch {}
+
+    // Ưu tiên 2: DB (thiết bị khác hoặc xóa localStorage)
+    fetch("/api/chat/history")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.messages?.length) {
+          setMessages(data.messages)
+          setRestored(true)
+          // Lưu vào localStorage để lần sau nhanh hơn
+          try { localStorage.setItem(HISTORY_KEY, JSON.stringify(data.messages)) } catch {}
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  // Lưu lịch sử mỗi khi messages thay đổi
+  // Lưu lịch sử vào localStorage mỗi khi messages thay đổi
   useEffect(() => {
-    if (!initialized.current) return
-    if (messages.length === 0) return
+    if (!initialized.current || messages.length === 0) return
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-MAX_HISTORY)))
     } catch {}
@@ -66,7 +91,27 @@ export default function ChatbotPage() {
   const clearChat = () => {
     setMessages([])
     setRestored(false)
+    // Tạo session mới khi xóa chat
+    const newSid = crypto.randomUUID()
+    sessionStorage.setItem(SESSION_KEY, newSid)
+    sessionId.current = newSid
     try { localStorage.removeItem(HISTORY_KEY) } catch {}
+  }
+
+  // Lưu cặp user+assistant vào DB (fire-and-forget)
+  const saveToHistory = (userContent: string, assistantContent: string) => {
+    if (!sessionId.current || !assistantContent) return
+    fetch("/api/chat/history", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: sessionId.current,
+        messages: [
+          { direction: "user",      content: userContent },
+          { direction: "assistant", content: assistantContent },
+        ],
+      }),
+    }).catch(() => {})
   }
 
   const send = async (content: string) => {
@@ -81,7 +126,7 @@ export default function ChatbotPage() {
     let streamStarted = false
     try {
       const res = await fetch("/api/chat", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: next, userName }),
       })
@@ -112,6 +157,10 @@ export default function ChatbotPage() {
           return updated
         })
       }
+
+      // Lưu vào DB sau khi stream hoàn tất
+      saveToHistory(content, assistantMsg)
+
     } catch (e: any) {
       const isAdmin = (session?.user as any)?.role === "admin"
       const errMsg  = isAdmin ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
