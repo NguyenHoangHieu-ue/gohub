@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { Send, Trash2, Bot, User } from "lucide-react"
+import { Send, Trash2, Bot, User, History } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 
 interface Message {
@@ -10,23 +10,52 @@ interface Message {
   content: string
 }
 
+const HISTORY_KEY = "gohub_chat_history"
+const MAX_HISTORY = 100
+
 const QUICK = [
-  "Có bao nhiêu gói SIM cho Việt Nam?",
-  "eSIM Nhật Bản 5GB rẻ nhất bao nhiêu?",
-  "Gói nào hỗ trợ hotspot?",
+  "GoHub có gói eSIM nào cho Nhật Bản không?",
   "Gói data không giới hạn có không?",
+  "WM có sản phẩm nào cho Thái Lan chưa có trong hệ thống?",
+  "Gói 3HK cho Hồng Kông giá thế nào?",
 ]
 
 export default function ChatbotPage() {
   const { data: session } = useSession()
-  const role     = session?.user?.role || "standard"
   const userName = session?.user?.name || ""
 
-  const [messages,  setMessages]  = useState<Message[]>([])
-  const [input,     setInput]     = useState("")
-  const [loading,   setLoading]   = useState(false)
-  const [streaming, setStreaming] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [messages,   setMessages]   = useState<Message[]>([])
+  const [input,      setInput]      = useState("")
+  const [loading,    setLoading]    = useState(false)
+  const [streaming,  setStreaming]  = useState(false)
+  const [restored,   setRestored]   = useState(false)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const initialized = useRef(false)
+
+  // Load lịch sử từ localStorage lần đầu mount
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY)
+      if (saved) {
+        const parsed: Message[] = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.slice(-MAX_HISTORY))
+          setRestored(true)
+        }
+      }
+    } catch {}
+  }, [])
+
+  // Lưu lịch sử mỗi khi messages thay đổi
+  useEffect(() => {
+    if (!initialized.current) return
+    if (messages.length === 0) return
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-MAX_HISTORY)))
+    } catch {}
+  }, [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -34,8 +63,15 @@ export default function ChatbotPage() {
 
   const busy = loading || streaming
 
+  const clearChat = () => {
+    setMessages([])
+    setRestored(false)
+    try { localStorage.removeItem(HISTORY_KEY) } catch {}
+  }
+
   const send = async (content: string) => {
     if (!content.trim() || busy) return
+    setRestored(false)
 
     const next: Message[] = [...messages, { role: "user", content }]
     setMessages(next)
@@ -43,49 +79,47 @@ export default function ChatbotPage() {
     setLoading(true)
 
     let streamStarted = false
-
     try {
       const res = await fetch("/api/chat", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages: next, userName }),
+        body: JSON.stringify({ messages: next, userName }),
       })
 
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error((json as any).error || "API error")
+        const err = await res.json().catch(() => ({ error: "Lỗi không xác định" }))
+        throw new Error(err.error || `HTTP ${res.status}`)
       }
 
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error("No stream")
+
+      const decoder = new TextDecoder()
+      let assistantMsg = ""
       setLoading(false)
       setStreaming(true)
       streamStarted = true
-      setMessages(prev => [...prev, { role: "assistant", content: "" }])
 
-      const reader  = res.body!.getReader()
-      const decoder = new TextDecoder()
+      setMessages(prev => [...prev, { role: "assistant", content: "" }])
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const text = decoder.decode(value, { stream: true })
+        assistantMsg += decoder.decode(value, { stream: true })
         setMessages(prev => {
-          const msgs = [...prev]
-          msgs[msgs.length - 1] = {
-            ...msgs[msgs.length - 1],
-            content: msgs[msgs.length - 1].content + text,
-          }
-          return msgs
+          const updated = [...prev]
+          updated[updated.length - 1] = { role: "assistant", content: assistantMsg }
+          return updated
         })
       }
     } catch (e: any) {
-      const errMsg = role === "admin"
-        ? `[DEBUG] ${e?.message || String(e)}`
-        : "Vui lòng liên hệ Hiếu để được hỗ trợ"
+      const isAdmin = (session?.user as any)?.role === "admin"
+      const errMsg  = isAdmin ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
       if (streamStarted) {
         setMessages(prev => {
-          const msgs = [...prev]
-          msgs[msgs.length - 1] = { role: "assistant", content: errMsg }
-          return msgs
+          const updated = [...prev]
+          updated[updated.length - 1] = { role: "assistant", content: errMsg }
+          return updated
         })
       } else {
         setMessages(prev => [...prev, { role: "assistant", content: errMsg }])
@@ -105,15 +139,23 @@ export default function ChatbotPage() {
           <h1 className="text-xl font-bold text-gray-900">Chatbot Hỗ Trợ</h1>
           <span className="text-sm text-gray-400">Trợ lý AI từ dữ liệu GoHub</span>
         </div>
-        {messages.length > 0 && (
-          <button
-            onClick={() => setMessages([])}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors"
-          >
-            <Trash2 size={14} />
-            Xóa chat
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {restored && (
+            <span className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2.5 py-1.5 rounded-lg">
+              <History size={12} />
+              Đã khôi phục lịch sử
+            </span>
+          )}
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors"
+            >
+              <Trash2 size={14} />
+              Xóa chat
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Chat container */}
@@ -126,7 +168,7 @@ export default function ChatbotPage() {
               <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center mb-4 border border-brand-100">
                 <Bot size={28} className="text-brand-600" />
               </div>
-              <p className="font-semibold text-gray-800 mb-1">Xin chào! Tôi có thể giúp gì cho bạn?</p>
+              <p className="font-semibold text-gray-800 mb-1">Xin chào! Tôi có thể giúp gì cho bạn? 👋</p>
               <p className="text-sm text-gray-400 mb-6 max-w-xs">
                 Hỏi về sản phẩm, giá cả, hoặc thông tin gói cước SIM/eSim
               </p>
@@ -192,7 +234,7 @@ export default function ChatbotPage() {
             </div>
           ))}
 
-          {/* Typing indicator — only while waiting for first chunk */}
+          {/* Typing indicator */}
           {loading && (
             <div className="flex gap-3 justify-start">
               <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
@@ -201,11 +243,8 @@ export default function ChatbotPage() {
               <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
                 <div className="flex gap-1 items-center">
                   {[0, 1, 2].map(i => (
-                    <span
-                      key={i}
-                      className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }}
-                    />
+                    <span key={i} className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />
                   ))}
                 </div>
               </div>
@@ -216,23 +255,15 @@ export default function ChatbotPage() {
 
         {/* Input */}
         <div className="border-t border-gray-100 p-3 flex-shrink-0">
-          <form
-            onSubmit={e => { e.preventDefault(); send(input) }}
-            className="flex gap-2"
-          >
+          <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
             <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
+              type="text" value={input} onChange={e => setInput(e.target.value)}
               placeholder="Hỏi về sản phẩm SIM/eSim..."
               disabled={busy}
               className="flex-1 px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-50 transition"
             />
-            <button
-              type="submit"
-              disabled={!input.trim() || busy}
-              className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <button type="submit" disabled={!input.trim() || busy}
+              className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               <Send size={16} />
             </button>
           </form>
