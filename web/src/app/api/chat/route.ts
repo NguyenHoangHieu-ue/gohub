@@ -154,14 +154,21 @@ function buildContext(d: CacheData, role: string): string {
   const isCost = role === "admin" || role === "manager"
   const { skus, listings, items, wmProducts, wmInSystemSet, zones3hk, countries, supportCountries, vendors, settings } = d
 
-  // Build country code → name map để decode supported_countries
-  const countryMap: Record<string, string> = {}
-  for (const c of countries) countryMap[c.code] = c.name
+  // Build group code → description map từ ref_support_countries
+  // products.supported_countries lưu 3-ký-tự group codes (RUS, EU1, W04...) từ bảng này
+  const supportCountryMap: Record<string, string> = {}
+  for (const sc of supportCountries) {
+    if (sc.support_country) supportCountryMap[sc.code] = sc.support_country
+    else supportCountryMap[sc.code] = sc.code
+  }
 
   function decodeCountries(codes: string | null): string {
     if (!codes) return ""
     return codes.split(/[,\s]+/).filter(Boolean)
-      .map((c: string) => countryMap[c.trim()] ? `${c}(${countryMap[c.trim()]})` : c)
+      .map((c: string) => {
+        const key = c.trim()
+        return supportCountryMap[key] ? `${key}(${supportCountryMap[key]})` : key
+      })
       .join(", ")
   }
 
@@ -321,13 +328,14 @@ Không đọc Listings/Items để đề xuất sản phẩm — chỉ dùng SKU
 
 ━━━ TÌM KIẾM THEO NƯỚC ━━━
 
-Mỗi SKU có trường "nước:" liệt kê các nước hỗ trợ dạng "mã(Tên)" — ví dụ: RU(Russia), US(United States).
-Khi user hỏi gói "đi nước X" → tìm tất cả SKU có TÊN NƯỚC đó trong trường "nước:".
-Ví dụ: "đi Nga" → tìm SKU có "Russia" trong nước; "đi Mỹ" → tìm "United States".
-1 gói có thể hỗ trợ nhiều nước — gói đi Mỹ có thể có cả US+Canada+Mexico.
+Mỗi SKU có trường "nước:" liệt kê các nhóm nước hỗ trợ dạng "MÃ(Mô tả)" — ví dụ: RUS(Russia), EU1(United Kingdom, Denmark, ...), W04(...).
+Mã là 3 ký tự, bằng ký tự 3-5 của SKU code. Mô tả trong ngoặc là danh sách nước thuộc nhóm đó.
+Khi user hỏi gói "đi nước X" → tìm tất cả SKU có nước X trong MÔ TẢ của trường "nước:".
+Ví dụ: "đi Nga" → tìm SKU có "Russia" trong mô tả nước; "đi Mỹ" → tìm "United States".
+1 gói có thể hỗ trợ nhiều nước — gói EU1 có thể bao gồm cả Nga + châu Âu.
 Tên VN → tên EN để tìm: Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia,
   Trung=China, Thái=Thailand, Đài Loan=Taiwan, Anh=United Kingdom, Úc=Australia,
-  Dubai=United Arab Emirates, Đức=Germany, Pháp=France, Ý=Italy
+  Dubai=United Arab Emirates, Đức=Germany, Pháp=France, Ý=Italy, Hồng Kông=Hong Kong
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
