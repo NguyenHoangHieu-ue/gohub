@@ -19,6 +19,10 @@ TaiLieuCongTy_Chung/
 .streamlit/config.toml
 .streamlit/secrets.toml
 
+# DB scripts / schema (local only — không public lên GitHub)
+scripts/
+schema.sql
+
 # Docs / notes (local only)
 *.txt
 *.md
