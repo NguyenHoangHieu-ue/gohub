@@ -20,28 +20,28 @@ metadata:
 
 ---
 
-### 2. Tìm Kiếm Theo Nước (Database-Driven)
+### 2. Tìm Kiếm Theo Nước — Workflow 4 Bước
 
-**Rule**: Context **PHẢI** decode từ ref_countries table (custom codes của Gohub, không phải ISO standard).
-Khi user hỏi "đi Nga" → lookup ref_countries → tìm tên English → match trong context
+**Rule**: Chatbot phải thực hiện đúng 4 bước khi user hỏi "đi [nước X]".
 
-**Why**: 
-- Gohub dùng country codes riêng (RU, US, JPN, CHM...), không phải ISO 3166
-- Nếu hardcode mapping → khi công ty thay đổi codes, chatbot vẫn dùng cũ
-- Đọc database → tự động cập nhật, không cần sửa code
-
-**How to apply**:
+**Why**:
 - `products.supported_countries` lưu 3-ký-tự GROUP codes (RUS, EU1, W04...) từ `ref_support_countries`
-  → Đây là cùng code với ký tự 3-5 trong SKU code (vd: SKU "1CRUS..." → country group = RUS)
-  → KHÔNG phải ISO 2-ký-tự (RU, US) từ ref_countries
-- `decodeCountries(codes)` function: lookup `ref_support_countries.code` → `support_country` (FIXED 2026-06-06)
-- SKU context rows: `nước: RUS(Russia), EU1(United Kingdom, Denmark, ...)` 
-- System prompt: mapping tên VN→EN dùng để user hỏi tiếng Việt (Nga=Russia...) → tìm trong mô tả group (DONE)
-- Chatbot workflow:
-  1. User: "tôi cần sản phẩm đi Nga"
-  2. Model: map "Nga" → "Russia"
-  3. Match trong context: tìm SKU có "Russia" trong MÔ TẢ của trường "nước:"
-  4. Trả về SKU có "RUS(Russia)" hoặc "EU1(...Russia...)" hoặc group nào chứa Russia
+- GROUP code = ký tự 3-5 trong SKU code (SKU "1CRUS..." → country group = RUS)
+- 1 nước có thể thuộc nhiều group (Russia có trong RUS, MLB, EU1, SCA, W04, W30...)
+- Không theo đúng 4 bước → bỏ sót sản phẩm hoặc tìm sai
+
+**How to apply** — Workflow 4 bước (đã encode vào system prompt):
+1. **Tìm mã nhóm**: tra mục NHÓM NƯỚC HỖ TRỢ → tìm tất cả dòng có chứa tên nước X
+   - VD: "Nga" → Russia → các group chứa "Russia": RUS, MLB, EU1, SCA, W04, W30...
+2. **Lọc SKU theo mã nhóm**: chỉ giữ SKU có ký tự 3-5 nằm trong danh sách mã từ bước 1
+   - VD: SKU "1CRUS12A00107" → ký tự 3-5 = "RUS" → khớp → giữ lại
+3. **Lọc product type**: chỉ giữ SKU có ký tự 2 = C (eSIM Full) hoặc E (SIM Full)
+4. **Lấy thông tin**: product_code = 8 ký tự đầu SKU → tra context lấy chi tiết; ưu tiên tenant=VN
+
+**Trong code** (web/src/app/api/chat/route.ts):
+- `decodeCountries()` lookup `ref_support_countries.code → support_country`
+- Context SKU rows: `nước: RUS(Russia), EU1(United Kingdom, Denmark, ..., Russia, ...)`
+- fullSkus đã lọc sẵn product type C/E/1/2, sort VN trước US
 
 ---
 

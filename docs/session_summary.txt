@@ -339,3 +339,10 @@ Mục tiêu 5 tính năng:
     - Trước: "RUS" → không decode được (ref_countries chỉ có "RU")
     - Sau: "RUS" → "Russia", "EU1" → "United Kingdom, Denmark, Austria, ...", "W04" → danh sách đầy đủ
     - System prompt cập nhật: tìm theo tên trong MÔ TẢ group, không phải ISO code
+56. Chatbot country search — cập nhật workflow 4 bước rõ ràng trong system prompt:
+    - Bước 1: tra mục NHÓM NƯỚC HỖ TRỢ → tìm tất cả mã nhóm có chứa tên nước cần tìm
+      (VD: "Nga"/Russia → RUS, MLB, EU1, SCA, W04, W30...)
+    - Bước 2: lọc SKU có ký tự 3-5 của SKU code khớp với mã nhóm từ Bước 1
+    - Bước 3: chỉ giữ SKU có product type C (eSIM Full) hoặc E (SIM Full) — ký tự 2 của SKU code
+    - Bước 4: product_code = 8 ký tự đầu của SKU code → tra context lấy thông tin chi tiết
+    - Ưu tiên tenant=VN trước US trong kết quả đề xuất
