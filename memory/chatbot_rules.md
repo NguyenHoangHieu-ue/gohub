@@ -20,20 +20,26 @@ metadata:
 
 ---
 
-### 2. Tìm Kiếm Theo Nước
+### 2. Tìm Kiếm Theo Nước (Database-Driven)
 
-**Rule**: Context decode ISO code → tên nước (ví dụ: "RU(Russia)"). Khi user hỏi "đi Nga" → chatbot tìm "Russia" trong nước; hoặc "đi Mỹ" → tìm "United States"
+**Rule**: Context **PHẢI** decode từ ref_countries table (custom codes của Gohub, không phải ISO standard).
+Khi user hỏi "đi Nga" → lookup ref_countries → tìm tên English → match trong context
 
 **Why**: 
-- ISO 3166-1 alpha-3 (RUS, USA) quá phức tạp, model hay nhầm
-- Tên nước tiếng Anh là natural language → match dễ hơn
-- Người dùng hỏi tiếng Việt (Nga, Mỹ) → cần mapping rõ
+- Gohub dùng country codes riêng (RU, US, JPN, CHM...), không phải ISO 3166
+- Nếu hardcode mapping → khi công ty thay đổi codes, chatbot vẫn dùng cũ
+- Đọc database → tự động cập nhật, không cần sửa code
 
 **How to apply**:
-- `decodeCountries(codes)` function map code→name dùng ref_countries lookup (DONE in buildContext)
-- SKU context rows: `nước: RU(Russia), BY(Belarus)` (DONE)
-- System prompt: mapping tên VN→EN (Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia...) (DONE)
-- Test: "tôi cần tìm sản phẩm đi Nga" → tìm thấy products có "Russia"
+- `decodeCountries(codes)` function: lookup countryMap từ ref_countries, convert code→name (DONE)
+- SKU context rows: `nước: RU(Russia), BY(Belarus)` using actual company codes (DONE)
+- System prompt: mapping tên VN→EN dùng để user hỏi tiếng Việt (Mỹ=United States, Nga=Russia...) (DONE)
+- Chatbot workflow:
+  1. User: "tôi cần sản phẩm đi Nga"
+  2. Model: map "Nga" → "Russia" (từ system prompt)
+  3. Match trong context: tìm có chứa "Russia" trong nước column
+  4. Trả về SKU có "RU(Russia)" hoặc country name chứa Russia
+- Test: "tôi cần tìm sản phẩm đi Nga" → tìm thấy sản phẩm support Russia
 
 ---
 

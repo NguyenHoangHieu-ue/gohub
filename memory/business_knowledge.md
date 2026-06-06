@@ -44,6 +44,37 @@ Dùng giá zone 3HK + assumption data sử dụng → tính COGS USD → convert
 
 ---
 
+## Country Codes (Custom — Không phải ISO Standard)
+
+**QUAN TRỌNG**: Gohub dùng country codes **riêng, không phải ISO 3166** trong ref_countries table.
+
+**Cách hoạt động**:
+- Mỗi sản phẩm trong `products.supported_countries` chứa mã country tùy chỉnh (ví dụ: RU, US, JPN, CHM)
+- Chatbot PHẢI lookup ref_countries table để convert mã → tên quốc gia tiếng Anh
+- Sau đó mới tìm kiếm: user hỏi "đi Nga" → map "Nga" → "Russia" → tìm trong `supported_countries` có "RU(Russia)"
+
+**Trong code** (web/src/app/api/chat/route.ts):
+```typescript
+// Build country code → name map
+const countryMap: Record<string, string> = {}
+for (const c of countries) countryMap[c.code] = c.name
+
+function decodeCountries(codes: string | null): string {
+  if (!codes) return ""
+  return codes.split(/[,\s]+/).filter(Boolean)
+    .map((c: string) => countryMap[c.trim()] ? `${c}(${countryMap[c.trim()]})` : c)
+    .join(", ")
+}
+```
+
+**Ngoài code** (chatbot không decode được):
+- System prompt có mapping tên VN → tên EN: "Mỹ=United States, Nhật=Japan, Nga=Russia..."
+- Model dùng để map user input tiếng Việt → tên EN → match với decoded context
+
+**Tầm quan trọng**: Nếu Gohub thay đổi country codes trong ref_countries → chatbot sẽ tự động update vì dùng lookup. Không cần hardcode.
+
+---
+
 ## Tỷ Giá Nội Bộ T03/2026
 
 **Nguồn**: D:\Kien_Thuc\Work\gohub\LamViec\HeThong\TaiLieuCongTy_Chung\Tỉ giá nội bộ theo tháng.xlsx  
