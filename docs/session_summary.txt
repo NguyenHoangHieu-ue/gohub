@@ -325,3 +325,7 @@ Mục tiêu 5 tính năng:
 53. Data policy decode chi tiết:
     - A/B=Daily-cap→Unlim-5/10Mbps | E/G=Fixed-cap→Unlim-5/10Mbps | C/D/H=Unlim-fixed
     - F/P=throttle<2Mbps | Y/Z=no-throttle | K=Frame/Profile (không data)
+54. Country codes: Gohub dùng custom codes (RU, US, JPN, CHM...), không phải ISO standard
+    - Chatbot PHẢI lookup ref_countries table để decode code→tên quốc gia
+    - Database-driven: nếu company thay codes → chatbot tự động update (không hardcode)
+    - Workflow: user "đi Nga" → map tên VN→EN "Russia" → match trong ref_countries → tìm SKU có "RU(Russia)"
