@@ -91,9 +91,8 @@ export async function GET(req: NextRequest) {
     const allIds: string[] = []
     for (let off = 0; ; off += 1000) {
       const { data: batch } = await applyFilters(
-        (supabaseAdmin.from("ncc_products") as any)
-          .select("vendor_product_id")
-          .eq("vendor", "WORLDMOVE"),
+        (supabaseAdmin.from("ncc_worldmove") as any)
+          .select("vendor_product_id"),
         filters
       ).range(off, off + 999)
       if (!batch || !batch.length) break
@@ -105,16 +104,15 @@ export async function GET(req: NextRequest) {
     const pageIds = notInIds.slice(offset, offset + PAGE_SIZE)
     if (!pageIds.length)
       return NextResponse.json({ data: [], total, page, pageSize: PAGE_SIZE })
-    const { data, error } = await (supabaseAdmin.from("ncc_products") as any)
+    const { data, error } = await (supabaseAdmin.from("ncc_worldmove") as any)
       .select("*").in("vendor_product_id", pageIds).order("vendor_product_id")
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     rows = (data ?? []).map((r: any) => ({ ...r, in_system: false, system_skus: [] }))
   } else {
     // gap=all or gap=in_system: single SQL query
     let q = applyFilters(
-      (supabaseAdmin.from("ncc_products") as any)
-        .select("*", { count: "exact" })
-        .eq("vendor", "WORLDMOVE"),
+      (supabaseAdmin.from("ncc_worldmove") as any)
+        .select("*", { count: "exact" }),
       filters
     )
     if (gap === "in_system") {

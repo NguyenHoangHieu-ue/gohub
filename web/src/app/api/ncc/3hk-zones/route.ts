@@ -12,7 +12,7 @@ export async function GET() {
   const role = (session.user as any).role as string | undefined
 
   const { data, error } = await supabaseAdmin
-    .from("ncc_3hk_zones")
+    .from("ncc_3hk")
     .select("*")
     .order("zone")
     .order("country")
