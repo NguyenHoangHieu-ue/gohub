@@ -7,13 +7,12 @@ import { supabaseAdmin } from "@/lib/supabase"
 const SKU_LIMIT  = 3_000
 const LIST_LIMIT = 3_000
 const ITEM_LIMIT = 2_000
-const CACHE_TTL  = 24 * 60 * 60 * 1000   // 24h — data sync 1 lần/ngày
+const CACHE_TTL  = 24 * 60 * 60 * 1000
 
 let cache: { data: CacheData; at: number } | null = null
 
 interface CacheData {
-  products:         any[]
-  skus:             any[]
+  skuView:          any[]
   listings:         any[]
   items:            any[]
   wmProducts:       any[]
@@ -25,45 +24,41 @@ interface CacheData {
   settings:         any[]
 }
 
-async function fetchAll(table: string, select = "*", activeOnly = false) {
-  let q = supabaseAdmin.from(table).select(select)
-  if (activeOnly) q = (q as any).eq("status", "Active")
-  const { data } = await (q as any).limit(20_000)
-  return data ?? []
-}
-
 async function getRawData(): Promise<CacheData> {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
   const [
-    products, skus, listings, items,
+    skuViewRaw, listings, items,
     wmProducts, wmSkusRaw,
     zones3hk,
     countries, supportCountries,
     vendors, settings,
   ] = await Promise.all([
-    fetchAll("products", "*"),
-    fetchAll("skus",     "*", true),
-    fetchAll("listings", "*", true),
-    fetchAll("items",    "*", true),
-
-    // NCC WORLDMOVE — toàn bộ catalog, bỏ APN fields (tiết kiệm token)
-    supabaseAdmin.from("ncc_worldmove")
-      .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,status")
-      .eq("status", "active")
-      .order("region")
+    // sku_view = skus JOIN products — nguồn chính cho SP GoHub
+    supabaseAdmin.from("sku_view")
+      .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,throttle_speed,vendor_sku,final_cogs_included_vat_vnd,final_cogs_usd,latest_cogs,latest_cogs_currency,note,kyc_needed,supported_countries,network_type,operator_code")
+      .eq("status", "Active")
+      .limit(SKU_LIMIT)
       .then(r => r.data ?? []),
 
-    // WM SKUs đã có trong hệ thống GoHub (để đánh dấu in_system)
+    supabaseAdmin.from("listings").select("listing_code,listing_name_vn,listing_name_en,type_of_sim,network_operator,expirations_en,status")
+      .eq("status", "Active").limit(LIST_LIMIT).then(r => r.data ?? []),
+
+    supabaseAdmin.from("items").select("item_name_vn,listing_code,unitprice,currency,data_amount,data_amount_unit,day_amount,status")
+      .eq("status", "Active").limit(ITEM_LIMIT).then(r => r.data ?? []),
+
+    // NCC WORLDMOVE — toàn bộ catalog, không lấy APN fields
+    supabaseAdmin.from("ncc_worldmove")
+      .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim")
+      .eq("status", "active").order("region").then(r => r.data ?? []),
+
+    // WM SKUs đang có trong hệ thống GoHub
     supabaseAdmin.from("skus").select("vendor_sku").ilike("vendor_sku", "WM-%")
       .then(r => r.data ?? []),
 
-    // NCC 3HK — zone reference
-    supabaseAdmin.from("ncc_3hk")
-      .select("zone,country,network,price_per_gb_hkd,is_kyc")
-      .order("zone")
-      .then(r => r.data ?? []),
+    supabaseAdmin.from("ncc_3hk").select("zone,country,network,price_per_gb_hkd,is_kyc")
+      .order("zone").then(r => r.data ?? []),
 
     supabaseAdmin.from("ref_countries").select("code,name").order("code").then(r => r.data ?? []),
     supabaseAdmin.from("ref_support_countries").select("code,support_country,country_codes").order("code").then(r => r.data ?? []),
@@ -73,19 +68,7 @@ async function getRawData(): Promise<CacheData> {
 
   const wmInSystemSet = new Set<string>(wmSkusRaw.map((s: any) => s.vendor_sku as string))
 
-  const data: CacheData = {
-    products,
-    skus:     skus.slice(0, SKU_LIMIT),
-    listings: listings.slice(0, LIST_LIMIT),
-    items:    items.slice(0, ITEM_LIMIT),
-    wmProducts,
-    wmInSystemSet,
-    zones3hk,
-    countries,
-    supportCountries,
-    vendors,
-    settings,
-  }
+  const data: CacheData = { skuView: skuViewRaw, listings, items, wmProducts, wmInSystemSet, zones3hk, countries, supportCountries, vendors, settings }
   cache = { data, at: now }
   return data
 }
@@ -105,40 +88,44 @@ function fmtThrottle(kbps: number | null): string {
 
 function buildContext(d: CacheData, role: string): string {
   const isCost = role === "admin" || role === "manager"
-  const { products, skus, listings, items, wmProducts, wmInSystemSet, zones3hk,
-          countries, supportCountries, vendors, settings } = d
+  const { skuView, listings, items, wmProducts, wmInSystemSet, zones3hk, countries, supportCountries, vendors, settings } = d
 
   const lines: string[] = [
-    // ── GoHub system data ────────────────────────────────────────────────────
-    `=== PRODUCTS hệ thống GoHub (${products.length}) ===`,
-    ...products.map((p: any) =>
-      `${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.status}|nước:${p.supported_countries}`
+    // ── NGUỒN CHÍNH: sku_view ────────────────────────────────────────────────
+    `=== [NGUỒN CHÍNH] SKU_VIEW — Sản phẩm GoHub ĐANG CÓ trong hệ thống (${skuView.length} SKU active) ===`,
+    `Đây là danh sách sản phẩm GoHub đang quản lý và bán. Luôn tra ở đây trước khi tra các bảng khác.`,
+    `Cột: sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|vendor_sku|note|kyc|countries` +
+      (isCost ? `|cogs_vnd|cogs_usd` : ""),
+    ...skuView.map((s: any) =>
+      `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
+      `|${s.data_amount}${s.data_amount_unit}/${s.day_amount}d` +
+      `|${s.throttle_speed ?? "—"}|vendor:${s.vendor_sku ?? "—"}` +
+      (s.note ? `|note:${s.note}` : "") +
+      (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
+      (s.supported_countries ? `|nước:${s.supported_countries}` : "") +
+      (isCost ? `|vnd:${s.final_cogs_included_vat_vnd ?? "?"}|usd:${s.final_cogs_usd ?? "?"}` : "")
     ),
 
-    `\n=== SKUS hệ thống (${skus.length} active) ===`,
-    ...skus.map((s: any) =>
-      `${s.sku_code}|${s.product_code}|${s.sim_esim}` +
-      `|${s.data_amount}${s.data_amount_unit}/${s.day_amount}${s.day_amount_unit}` +
-      `|throttle:${s.throttle_speed}` +
-      (isCost ? `|cogs_vnd:${s.final_cogs_included_vat_vnd}|cogs_usd:${s.final_cogs_usd}` : "")
-    ),
-
-    `\n=== LISTINGS (${listings.length} active) ===`,
+    // ── Listings ─────────────────────────────────────────────────────────────
+    `\n=== LISTINGS GoHub (${listings.length} active) ===`,
+    `Listing là tên hiển thị và thông số chung. Mỗi listing có nhiều item (giá bán theo kênh).`,
     ...listings.map((l: any) =>
-      `${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}` +
-      `|op:${l.network_operator}|exp:${l.expirations_en}ngày`
+      `${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngày`
     ),
 
-    `\n=== ITEMS (${items.length} active) ===`,
+    // ── Items ─────────────────────────────────────────────────────────────────
+    `\n=== ITEMS GoHub (${items.length} active — giá bán theo kênh) ===`,
     ...items.map((i: any) =>
       `${i.item_name_vn}|listing:${i.listing_code}|${i.unitprice}${i.currency}` +
-      `|${i.data_amount}${i.data_amount_unit}/${i.day_amount}${i.day_amount_unit}`
+      `|${i.data_amount}${i.data_amount_unit}/${i.day_amount}d`
     ),
 
     // ── NCC: WORLDMOVE ───────────────────────────────────────────────────────
-    `\n=== NCC WORLDMOVE — toàn bộ catalog (${wmProducts.length} sản phẩm) ===`,
-    `Chú thích cột: vendor_id|vùng|loại|ngày|data|throttle` +
-      (isCost ? `|giá(${wmProducts[0]?.cogs_currency ?? "TWD"})` : "") + `|HT=đã có trong GoHub`,
+    `\n=== [NCC] WORLDMOVE — Catalog nhà cung cấp (${wmProducts.length} SP) ===`,
+    `ĐÂY LÀ CATALOG NCC, KHÔNG PHẢI SP GOHUB ĐANG BÁN.`,
+    `HT = vendor_product_id này ĐÃ được nhập vào hệ thống GoHub (có trong sku_view).`,
+    `Không có HT = NCC có nhưng GoHub CHƯA nhập.`,
+    `Cột: vendor_id|vùng|loại|ngày|data|throttle` + (isCost ? `|giá(${wmProducts[0]?.cogs_currency ?? "TWD"})` : "") + `|[HT nếu có]`,
     ...wmProducts.map((p: any) =>
       `${p.vendor_product_id}|${p.region}|${p.sim_type}|${p.days}d` +
       `|${fmtWmData(p)}|${fmtThrottle(p.throttle_kbps)}` +
@@ -147,8 +134,8 @@ function buildContext(d: CacheData, role: string): string {
     ),
 
     // ── NCC: 3HK ─────────────────────────────────────────────────────────────
-    `\n=== NCC 3HK — zone datapool (${zones3hk.length} zone-quốc gia) ===`,
-    `3HK là datapool: GoHub tự tạo gói từ zone. KYC bắt buộc chỉ HK và TW.`,
+    `\n=== [NCC] 3HK — Zone datapool (${zones3hk.length} zone-quốc gia) ===`,
+    `3HK là datapool: GoHub tự cấu hình gói GB+ngày. KYC bắt buộc chỉ HK và TW.`,
     ...zones3hk.map((z: any) =>
       `Zone${z.zone}|${z.country}|${z.network}` +
       (isCost ? `|${z.price_per_gb_hkd}HKD/GB` : "") +
@@ -157,9 +144,7 @@ function buildContext(d: CacheData, role: string): string {
 
     // ── Reference ────────────────────────────────────────────────────────────
     `\n=== MÃ VENDOR (${vendors.length}) ===`,
-    ...vendors.map((v: any) =>
-      `${v.vendor_code}=${v.name}` + (v.description ? ` (${v.description})` : "")
-    ),
+    ...vendors.map((v: any) => `${v.vendor_code}=${v.name}` + (v.description ? ` (${v.description})` : "")),
 
     `\n=== MÃ NƯỚC ISO (${countries.length}) ===`,
     ...countries.map((c: any) => `${c.code}=${c.name}`),
@@ -169,7 +154,6 @@ function buildContext(d: CacheData, role: string): string {
       `${sc.code}: ${sc.support_country ?? ""}${sc.country_codes ? ` [${sc.country_codes}]` : ""}`
     ),
 
-    // ── Tỷ giá (admin/manager only) ──────────────────────────────────────────
     ...(isCost && settings.length ? [
       `\n=== TỶ GIÁ NỘI BỘ ===`,
       ...settings.map((s: any) => `${s.key}=${s.value}`),
@@ -181,17 +165,37 @@ function buildContext(d: CacheData, role: string): string {
 
 const SYSTEM_BASE = `Bạn là trợ lý AI của GoHub Telco, hỗ trợ team tra cứu thông tin sản phẩm SIM/eSim du lịch.
 Trả lời bằng tiếng Việt, chính xác dựa trên dữ liệu thực tế từ hệ thống bên dưới.
-Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có thay vì đoán.
-Khi hiển thị giá, ưu tiên VND. Nếu chỉ có ngoại tệ thì ghi rõ đơn vị.
+Nếu không tìm thấy thông tin, hãy nói rõ là không có thay vì đoán.
 
-Quy tắc định dạng:
+━━━ QUY TẮC ĐỌC DỮ LIỆU ━━━
+
+1. NGUỒN CHÍNH — Luôn tra SKU_VIEW trước:
+   - SKU_VIEW là bảng tổng hợp SKU + Product của GoHub, đây là nguồn sự thật cho tất cả SP đang có trong hệ thống.
+   - Tra Listings khi cần tên hiển thị hoặc thông số listing.
+   - Tra Items khi cần giá bán theo kênh.
+
+2. ƯU TIÊN MÃ SKU:
+   - Khi người dùng hỏi về sản phẩm mà không nói rõ loại mã (listing, item...), luôn trả về sku_code từ SKU_VIEW.
+   - Chỉ trả listing_code hoặc item_code khi người dùng hỏi rõ về listing/item/giá bán.
+
+3. PHÂN BIỆT 2 NGUỒN — QUAN TRỌNG:
+   a) HỆ THỐNG GOHUB (đang bán/quản lý): SKU_VIEW + Listings + Items
+      → Khi user hỏi "GoHub có không", "đang bán", "trong hệ thống" → tìm ở đây
+   b) CATALOG NCC (nhà cung cấp): [NCC] WORLDMOVE, [NCC] 3HK
+      → Đây là danh sách NCC cung cấp, GoHub có thể nhập hoặc chưa nhập
+      → Chỉ tìm ở đây khi user nói rõ: "NCC có gì", "chưa có trong hệ thống", "muốn nhập thêm", "WM có gói nào"
+   KHÔNG được nói SP NCC chưa nhập là SP GoHub đang bán.
+
+4. Cột HT trong NCC WM:
+   - "HT" = GoHub đã nhập SP này vào hệ thống (có trong SKU_VIEW)
+   - Không có "HT" = NCC có nhưng GoHub CHƯA nhập, CHƯA bán
+
+━━━ QUY TẮC TRÌNH BÀY ━━━
+
 - Dùng danh sách gạch đầu dòng khi liệt kê 3+ mục.
-- In đậm tên sản phẩm, giá, thông số quan trọng nhất.
-- Câu trả lời ngắn gọn, đúng trọng tâm. Không dùng tiêu đề ## trừ khi câu trả lời rất dài.
-
-Về nhà cung cấp:
-- WORLDMOVE (WM): catalog cố định, không KYC. Cột HT = đã có trong hệ thống GoHub.
-- 3HK: datapool theo zone, GoHub tự cấu hình gói. KYC chỉ HK và TW.
+- In đậm sku_code, giá, thông số quan trọng.
+- Ngắn gọn, đúng trọng tâm. Không dùng tiêu đề ## trừ khi câu trả lời rất dài.
+- Khi hiển thị giá: ưu tiên VND, ghi rõ đơn vị nếu ngoại tệ.
 
 Dữ liệu hệ thống:`
 
