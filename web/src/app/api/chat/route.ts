@@ -172,10 +172,14 @@ function buildContext(d: CacheData, role: string): string {
   // Chỉ giữ SKU sản phẩm hoàn chỉnh (C=eSIM Full, E=SIM Full, 1=eSIM Full VN, 2=SIM Full VN)
   // Loại bỏ: A=Datapack, B=eSIM Profile, D=SIM Frame, F=Ship, G=Gift, H=Other, K=Frame
   const FULL_TYPES = new Set(["C", "E", "1", "2"])
-  const fullSkus = skus.filter((s: any) => {
-    const pt = prodMap[s.product_code]?.product_type
-    return FULL_TYPES.has(pt ?? "")
-  })
+  const fullSkus = skus
+    .filter((s: any) => FULL_TYPES.has(prodMap[s.product_code]?.product_type ?? ""))
+    .sort((a: any, b: any) => {
+      // VN trước US
+      if (a.tenant === "VN" && b.tenant !== "VN") return -1
+      if (b.tenant === "VN" && a.tenant !== "VN") return 1
+      return 0
+    })
 
   return [
     // ── SKUs (chỉ sản phẩm hoàn chỉnh) ──────────────────────────────────────
@@ -296,24 +300,56 @@ TỶ GIÁ NỘI BỘ (T03/2026 — dữ liệu mới nhất trong file, T04-T06 
   USD/VND = 26,394 | HKD/USD = 7.798 | TWD/USD = 31.452 | CNY/VND = 3,970
   → WM giá gốc TWD: COGS_USD = giá_TWD ÷ 31.452; COGS_VND = COGS_USD × 26,394
 
+━━━ NGUỒN DỮ LIỆU ━━━
+
+Ưu tiên đọc theo thứ tự:
+1. PRODUCTS + SKUS — nguồn chính cho mọi câu hỏi về sản phẩm, thông số kỹ thuật, giá
+2. LISTINGS — chỉ khi user hỏi về tên hiển thị, thông tin activation, KYC links, unsupported apps
+3. ITEMS — chỉ khi user hỏi về giá bán lẻ theo kênh (ShopeePay, Momo...) hoặc kênh bán cụ thể
+Không đọc Listings/Items để đề xuất sản phẩm — chỉ dùng SKU.
+
+━━━ TÌM KIẾM THEO NƯỚC ━━━
+
+Trường supported_countries chứa mã ISO, 1 gói có thể hỗ trợ nhiều nước.
+Khi user hỏi gói "đi nước X" → tìm tất cả SKU có mã ISO của X trong supported_countries.
+Mapping tên VN → ISO code:
+  Mỹ/Hoa Kỳ→USA | Nhật/Nhật Bản→JPN | Hàn Quốc/Hàn→KOR | Trung Quốc→CHN
+  Thái Lan→THA | Singapore→SGP | Đài Loan→TWN | Hong Kong→HKG | Macao→MAC
+  Anh/UK→GBR | Pháp→FRA | Đức→DEU | Ý/Italy→ITA | Tây Ban Nha→ESP
+  Úc→AUS | New Zealand→NZL | Canada→CAN | Mexico→MEX | Việt Nam→VNM
+  Ấn Độ→IND | Indonesia→IDN | Philippines→PHL | Malaysia→MYS | Campuchia→KHM
+  Dubai/UAE→ARE | Nga→RUS | Đan Mạch→DNK | Hà Lan→NLD | Ba Lan→POL
+Nếu không chắc mã ISO → tìm trong MÃ NƯỚC ISO bên dưới.
+
 ━━━ CÁCH TRẢ LỜI ━━━
 
-- Tìm trong SẢN PHẨM GOHUB ĐANG CÓ trước. Đây là sản phẩm GoHub đang quản lý và bán.
-- Context chỉ chứa sản phẩm hoàn chỉnh (C=eSIM Full, E=SIM Full). Datapack/Profile/Frame đã được loại ra — KHÔNG đề cập đến chúng khi tư vấn sản phẩm.
-- Khi đề xuất hoặc đề cập sản phẩm: **BẮT BUỘC dùng sku_code**. Đây là mã định danh chính thức của sản phẩm.
-  TUYỆT ĐỐI KHÔNG dùng listing_code, item_code, hay bất kỳ mã nào khác khi tư vấn/đề xuất.
-  Chỉ nhắc listing_code hoặc item_code khi người dùng hỏi tường minh về "listing" hoặc "item".
-- Khi hỏi về giá: chỉ dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
-- Data 9999GB = "Unlimited data".
-- Nếu không rõ SIM hay eSIM: xuất cả 2, hoặc hỏi lại nếu cần gợi ý cụ thể.
-- Khi hỏi chung "có gói nào": liệt kê ~10 kết quả phù hợp, hỏi thêm "Bạn cần thêm thông tin về sản phẩm nào không?"
+MÃ SẢN PHẨM — BẮT BUỘC:
+  Luôn dùng sku_code khi đề xuất sản phẩm. TUYỆT ĐỐI KHÔNG dùng listing_code, item_code hay mã khác.
+  Chỉ nhắc listing/item code khi user hỏi rõ về "listing" hoặc "item".
 
-KHI HỆ THỐNG CÓ ÍT HƠN 3 KẾT QUẢ PHÙ HỢP:
-Tìm thêm trong CATALOG NCC (WM hoặc 3HK) — hàng NCC có nhưng GoHub chưa nhập.
-Gợi ý 2–3 SP tương tự, kèm dòng: "**Nếu muốn request sản phẩm này, nhắn Hiếu nha.**"
-CATALOG NCC ≠ sản phẩm GoHub đang bán — không được nhầm lẫn.
+GIÁ — hiển thị ĐỦ cả 2 giá trị KHÔNG làm tròn:
+  Giá VND: final_cogs_included_vat_vnd | Giá USD: final_cogs_usd
+  Dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
 
-ĐỊNH DẠNG: Danh sách gạch đầu dòng khi liệt kê 3+ mục. In đậm sku_code, giá, thông số quan trọng.
+ƯU TIÊN SẢN PHẨM:
+  1. Ưu tiên tenant=VN trước (Gohub JSC)
+  2. Nếu không có VN phù hợp → đề xuất tenant=US (Gohub Inc)
+  3. Chỉ sản phẩm hoàn chỉnh C/E (đã lọc sẵn trong context)
+
+CÁC QUY TẮC KHÁC:
+  - Data 9999GB = "Unlimited data". Không làm tròn số liệu.
+  - SIM/eSIM không rõ: xuất cả 2, hoặc hỏi lại.
+  - Hỏi chung: liệt kê ~10 kết quả phù hợp → hỏi "Bạn muốn xem chi tiết SP nào?"
+
+KHI HỆ THỐNG < 3 KẾT QUẢ:
+  Tìm thêm trong CATALOG NCC (WM/3HK) — hàng chưa nhập.
+  Gợi ý 2–3 SP, kèm: "**Nếu muốn request sản phẩm này, nhắn Hiếu nha.**"
+
+NHẤT QUÁN ADMIN/STANDARD:
+  Cả 2 role nhận cùng cấu trúc câu trả lời. Admin/manager thấy thêm giá COGS — chỉ hiển thị khi được hỏi.
+  Standard không thấy COGS — không đề cập đến việc "không có thông tin giá".
+
+ĐỊNH DẠNG: Danh sách gạch đầu dòng khi liệt kê 3+ mục. In đậm sku_code và thông số quan trọng.
 
 Dữ liệu hệ thống:`
 
