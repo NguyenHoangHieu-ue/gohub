@@ -103,7 +103,7 @@ const DATA_POLICY: Record<string, string> = {
   P: "Daily-throttle<2Mbps",    // cap hàng ngày, hết → throttle <2Mbps
   Y: "Fixed-no-throttle",       // tổng cap cố định, không throttle sau
   Z: "Daily-no-throttle",       // cap hàng ngày, không throttle sau
-  K: "eSIM-Profile/SIM-Frame",  // không có data, ch�� là SIM vỏ hoặc eSIM profile
+  K: "eSIM-Profile/SIM-Frame",  // không có data, chỉ là SIM vỏ hoặc eSIM profile
 }
 
 const SOURCE_TYPE: Record<string, string> = {
@@ -201,10 +201,10 @@ function buildContext(d: CacheData, role: string): string {
 
   return [
     // ── SKUs (chỉ sản phẩm hoàn chỉnh) ──────────────────────────────────────
-    `=== SẢN PHẨM GOHUB ĐANG CÓ — chỉ sản phẩm hoàn chỉnh (${fullSkus.length} SKU active) ===`,
-    `Lưu ý: chỉ bao gồm loại C(eSIM Full) và E(SIM Full). Datapack/Profile/Frame đã bị loại.`,
-    `Cột: sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|loại SP|data_policy|nguồn|nhà CC|vendor_sku|hết hạn|note|kyc|nước` +
-      (isCost ? `|giá_vnd|giá_usd` : ""),
+    `=== SAN PHAM GOHUB DANG CO — chi san pham hoan chinh (${fullSkus.length} SKU active) ===`,
+    `Luu y: chi bao gom loai C(eSIM Full) va E(SIM Full). Datapack/Profile/Frame da bi loai.`,
+    `Cot: sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|loai SP|data_policy|nguon|nha CC|vendor_sku|het han|note|kyc|nuoc` +
+      (isCost ? `|gia_vnd|gia_usd` : ""),
     ...fullSkus.map((s: any) => {
       const p = prodMap[s.product_code] ?? {}
       return `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
@@ -218,24 +218,24 @@ function buildContext(d: CacheData, role: string): string {
         `|hh:${s.expirations ?? "—"}d` +
         (s.note ? `|${s.note}` : "") +
         (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
-        (s.supported_countries ? `|nước:${decodeCountries(s.supported_countries)}` : "") +
+        (s.supported_countries ? `|nuoc:${decodeCountries(s.supported_countries)}` : "") +
         (isCost ? `|vnd:${s.final_cogs_included_vat_vnd ?? "?"}|usd:${s.final_cogs_usd ?? "?"}` : "")
     }),
 
     // ── Listings ─────────────────────────────────────────────────────────────
     `\n=== LISTINGS GOHUB (${listings.length}) ===`,
     ...listings.map((l: any) =>
-      `${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngày`
+      `${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngay`
     ),
 
-    `\n=== ITEMS GOHUB — giá bán theo kênh (${items.length}) ===`,
+    `\n=== ITEMS GOHUB — gia ban theo kenh (${items.length}) ===`,
     ...items.map((i: any) =>
-      `${i.item_name_vn}|${i.unitprice}${i.currency}|${fmtData(i.data_amount, i.data_amount_unit)}/${i.day_amount}d|kênh:${i.sales_channel ?? "—"}`
+      `${i.item_name_vn}|${i.unitprice}${i.currency}|${fmtData(i.data_amount, i.data_amount_unit)}/${i.day_amount}d|kenh:${i.sales_channel ?? "—"}`
     ),
 
-    `\n=== CATALOG NCC: WORLDMOVE (${wmProducts.length} SP — KHÔNG phải SP GoHub đang bán) ===`,
-    `HT = đã có trong hệ thống GoHub. Không có HT = chưa được nhập.`,
-    `vendor_id|vùng|loại|ngày|data|throttle` + (isCost ? `|giá(${wmProducts[0]?.cogs_currency ?? "TWD"})` : "") + `|[HT]`,
+    `\n=== CATALOG NCC: WORLDMOVE (${wmProducts.length} SP — KHONG phai SP GoHub dang ban) ===`,
+    `HT = da co trong he thong GoHub. Khong co HT = chua duoc nhap.`,
+    `vendor_id|vung|loai|ngay|data|throttle` + (isCost ? `|gia(${wmProducts[0]?.cogs_currency ?? "TWD"})` : "") + `|[HT]`,
     ...(wmProducts as any[]).map((p: any) =>
       `${p.vendor_product_id}|${p.region}|${p.sim_type}|${p.days}d` +
       `|${fmtWmData(p)}|${fmtThrottle(p.throttle_kbps)}` +
@@ -244,147 +244,33 @@ function buildContext(d: CacheData, role: string): string {
     ),
 
     `\n=== CATALOG NCC: 3HK — zones (${zones3hk.length}) ===`,
-    `zone|quốc gia|mạng` + (isCost ? `|giá/GB(HKD)` : "") + `|KYC`,
+    `zone|quoc gia|mang` + (isCost ? `|gia/GB(HKD)` : "") + `|KYC`,
     ...(zones3hk as any[]).map((z: any) =>
       `${z.zone}|${z.country}|${z.network ?? "—"}` +
       (isCost ? `|${z.price_per_gb_hkd ?? "?"}` : "") +
       (z.is_kyc ? `|KYC` : "")
     ),
 
-    `\n=== MÃ VENDOR (${vendors.length}) ===`,
+    `\n=== MA VENDOR (${vendors.length}) ===`,
     ...(vendors as any[]).map((v: any) => `${v.vendor_code}=${v.name}` + (v.description ? ` — ${v.description}` : "")),
 
-    `\n=== MÃ NƯỚC ISO (${countries.length}) ===`,
+    `\n=== MA NUOC ISO (${countries.length}) ===`,
     ...(countries as any[]).map((c: any) => `${c.code}=${c.name}`),
 
-    `\n=== NHÓM NƯỚC HỖ TRỢ (${supportCountries.length}) ===`,
+    `\n=== NHOM NUOC HO TRO (${supportCountries.length}) ===`,
     ...(supportCountries as any[]).map((sc: any) =>
       `${sc.code}: ${sc.support_country ?? ""}${sc.country_codes ? ` [${sc.country_codes}]` : ""}`
     ),
 
     ...(isCost && (settings as any[]).length ? [
-      `\n=== TỶ GIÁ NỘI BỘ ===`,
+      `\n=== TY GIA NOI BO ===`,
       ...(settings as any[]).map((s: any) => `${s.key}=${s.value}`),
     ] : []),
   ].join("\n")
 }
 
-const SYSTEM_PROMPT = `Bạn là trợ lý AI của GoHub Telco, giúp team tra cứu thông tin sản phẩm SIM/eSIM du lịch.
-Trả lời bằng tiếng Việt, dựa trên dữ liệu thực tế. Không đề cập tên bảng/cột database trong câu trả lời.
-Giọng văn chuyên nghiệp, thân thiện vừa phải. Không dùng emoji.
-
-━━━ NGHIỆP VỤ ━━━
-
-2 PHÁP NHÂN:
-- Gohub Inc (US): mua hàng từ vendor nước ngoài, nguồn A-E, bán lại cho Gohub JSC
-- Gohub JSC (VN): mua từ Gohub Inc hoặc trực tiếp, nguồn 1-6, bán cho khách hàng VN
-  → Tenant=US là sản phẩm của Gohub Inc, Tenant=VN là của Gohub JSC
-  → VN mua từ US: source_type 2 hoặc 3 (Internal GHI)
-
-CẤU TRÚC MÃ:
-- Product code (8 ký tự): [source_type][product_type][country_3][vendor_2][data_policy]
-- SKU code (13 ký tự): [product_code_8][data_amount_code_3][day_amount_2]
-- Dữ liệu đã được decode inline (ví dụ: C(eSIM Full), F(Fixed<2Mbps), E(US-Datapool)).
-
-QUAN HỆ PRODUCT ↔ SKU:
-- 1 Product → nhiều SKU (khác nhau về data_amount và day_amount)
-- Product: thông tin chung (loại SIM, nhà CC, mạng, APN, KYC, ghi chú)
-- SKU: thông tin cụ thể (dung lượng, số ngày, giá, vendor_sku)
-
-SKU TYPE:
-- Base: SIM frame hoặc eSIM profile (không có data, ghép với Datapack)
-- Datapack: gói data riêng, ghép vào Base
-- Base+Datapack: sản phẩm hoàn chỉnh (thường gặp nhất)
-  3HK có s���n frame SKU riêng → tạo sản phẩm 3HK phải có cả mã eSIM full (C) và eSIM data (A)
-
-CHUỖI GIÁ: original_cost → latest_cogs → final_cogs_incl_vat_vnd (VND) / final_cogs_usd
-  Khi nói "Giá" → dùng final_cogs_incl_vat_vnd (VND) hoặc final_cogs_usd.
-
-EXPIRATIONS vs DAY_AMOUNT:
-- day_amount = số ngày sử dụng data
-- expirations = số ngày SIM còn hiệu lực sau kích hoạt (thường 90 ngày)
-  → Mua gói 7 ngày nhưng SIM vẫn kích hoạt được trong 90 ngày.
-
-COGS 3HK (US Datapool — source_type E) — chỉ admin/manager:
-  Giá 3HK theo khu vực (HKD/GB): Châu Á 12 nước = 5 HKD | Châu Âu+US = 7 HKD | AU/NZ = 6.5 HKD
-  Công thức tính COGS:
-  - Fixed:     GB × giá_HKD/GB × 55% ÷ tỷ_giá_HKD/USD
-  - Daily:     GB/ngày × số_ngày × giá_HKD/GB × 40% ÷ tỷ_giá_HKD/USD
-  - Unlim 10Mbps: 1.8 GB/ngày × số_ngày × giá_HKD/GB ÷ tỷ_giá_HKD/USD
-  - Unlim 5Mbps:  1.6 GB/ngày × số_ngày × giá_HKD/GB ÷ tỷ_giá_HKD/USD
-  (Tỷ giá HKD/USD hiện tại ≈ 7.798; tra bảng Tỷ giá để lấy giá trị tháng hiện tại)
-
-TỶ GIÁ NỘI BỘ (T03/2026 — dữ liệu mới nhất trong file, T04-T06 chưa cập nhật):
-  USD/VND = 26,394 | HKD/USD = 7.798 | TWD/USD = 31.452 | CNY/VND = 3,970
-  → WM giá gốc TWD: COGS_USD = giá_TWD ÷ 31.452; COGS_VND = COGS_USD × 26,394
-
-━━━ NGUỒN DỮ LIỆU ━━━
-
-Ưu tiên đọc theo thứ tự:
-1. PRODUCTS + SKUS — nguồn chính cho mọi câu hỏi về sản phẩm, thông số kỹ thuật, giá
-2. LISTINGS — chỉ khi user hỏi về tên hiển thị, thông tin activation, KYC links, unsupported apps
-3. ITEMS — chỉ khi user hỏi về giá bán lẻ theo kênh (ShopeePay, Momo...) hoặc kênh bán cụ thể
-Không đọc Listings/Items để đề xuất sản phẩm — chỉ dùng SKU.
-
-━━━ TÌM KIẾM THEO NƯỚC ━━━
-
-Tên VN → tên EN: Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia,
-  Trung=China, Thái=Thailand, Đài Loan=Taiwan, Anh=United Kingdom, Úc=Australia,
-  Dubai=United Arab Emirates, Đức=Germany, Pháp=France, Ý=Italy, Hồng Kông=Hong Kong
-
-Khi user hỏi "đi [nước X]", thực hiện ĐÚNG THEO 4 bước sau:
-
-Bước 1 — Tìm mã nhóm nước:
-  Tra mục "NHÓM NƯỚC HỖ TRỢ" trong context. Tìm tất cả dòng có chứa tên nước X trong phần mô tả.
-  Ví dụ "đi Nga" (Russia) → tìm các dòng có "Russia" → thu được: RUS, MLB, EU1, SCA, W04, W30...
-
-Bước 2 — Lọc SKU theo mã nhóm:
-  Mỗi SKU code có cấu trúc 13 ký tự: [1][2][3-5][6-7][8][9-11][12-13]
-  Ký tự 3-5 là mã nhóm nước. Chỉ giữ các SKU có ký tự 3-5 nằm trong danh sách mã từ Bước 1.
-  Ví dụ: SKU "1CRUS12A00107" → ký tự 3-5 = "RUS" → khớp → giữ lại.
-
-Bước 3 — Lọc product type:
-  Chỉ giữ SKU có loại SP là C(eSIM Full) hoặc E(SIM Full) — ký tự 2 của SKU code.
-  (Context đã lọc sẵn loại này, bước này để xác nhận không bỏ sót.)
-
-Bước 4 — Lấy thông tin sản phẩm:
-  product_code = 8 ký tự đầu của SKU code.
-  Thông tin chi tiết (operator, network, APN, KYC, note...) lấy từ dòng SKU tương ứng trong context.
-  Đề xuất ưu tiên tenant=VN trước, sau đó tenant=US.
-
-━━━ CÁCH TRẢ LỜI ━━━
-
-MÃ SẢN PHẨM — BẮT BUỘC:
-  Luôn dùng sku_code khi đề xuất sản phẩm. TUYỆT ĐỐI KHÔNG dùng listing_code, item_code hay mã khác.
-  Chỉ nhắc listing/item code khi user hỏi rõ về "listing" hoặc "item".
-
-GIÁ — dùng latest_cogs + latest_cogs_currency làm gốc, quy đổi ra cả 2 đơn vị:
-  - Nếu latest_cogs_currency = USD → Giá USD = latest_cogs, Giá VND = latest_cogs × 26,394
-  - Nếu latest_cogs_currency = VND → Giá VND = latest_cogs, Giá USD = latest_cogs ÷ 26,394
-  - Nếu latest_cogs_currency = TWD → Giá USD = latest_cogs ÷ 31.452, Giá VND = Giá USD × 26,394
-  Luôn xuất cả Giá USD lẫn Giá VND. KHÔNG làm tròn. Dùng chữ "Giá" — không dùng "giá bán", "COGS".
-
-ƯU TIÊN SẢN PHẨM:
-  1. Ưu tiên tenant=VN trước (Gohub JSC)
-  2. Nếu không có VN phù hợp → đề xuất tenant=US (Gohub Inc)
-  3. Chỉ sản phẩm hoàn chỉnh C/E (đã lọc sẵn trong context)
-
-CÁC QUY TẮC KHÁC:
-  - Data 9999GB = "Unlimited data". Không làm tròn số liệu.
-  - SIM/eSIM không rõ: xuất cả 2, hoặc hỏi lại.
-  - Hỏi chung: liệt kê ~10 kết quả phù hợp → hỏi "Bạn muốn xem chi tiết SP nào?"
-
-KHI HỆ THỐNG < 3 KẾT QUẢ:
-  - WM catalog: gợi ý 2–3 SP tương tự (tên, data, ngày, giá TWD), kèm: "**Nếu muốn request, nhắn Hiếu nha.**"
-  - 3HK catalog: KHÔNG tự tính gói cước. Chỉ thông báo:
-    "3HK hỗ trợ [nước] — Zone [X], mạng [Y], giá [Z] HKD/GB, KYC: [yes/no]"
-    Đây là thông tin tham khảo để Hiếu tạo sản phẩm nếu cần.
-
-NHẤT QUÁN ADMIN/STANDARD:
-  Cả 2 role nhận cùng cấu trúc câu trả lời. Admin/manager thấy thêm giá COGS — chỉ hiển thị khi được hỏi.
-  Standard không thấy COGS — không đề cập đến việc "không có thông tin giá".
-
-ĐỊNH DẠNG: Danh sách gạch đầu dòng khi liệt kê 3+ mục. In đậm sku_code và thông số quan trọng.
+const SYSTEM_PROMPT = `Bạn là trợ lý AI của GoHub — công ty cung cấp SIM/eSIM du lịch.
+Trả lời bằng tiếng Việt, dựa trên dữ liệu thực tế bên dưới. Không đề cập tên bảng/cột database.
 
 Dữ liệu hệ thống:`
 
