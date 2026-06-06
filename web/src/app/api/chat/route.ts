@@ -289,7 +289,9 @@ function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): str
 
   // Lọc GoHub SKUs
   let results = data.skus.filter(s => {
-    if (!FULL_TYPES.has(s.product_type ?? "")) return false
+    // Fallback: nếu product_type không join được từ products → đọc từ sku_code[1]
+    const pt = s.product_type ?? s.sku_code?.[1] ?? ""
+    if (!FULL_TYPES.has(pt)) return false
     if (groupCodes) {
       const grp = s.sku_code?.substring(2, 5)
       if (!grp || !groupCodes.has(grp)) return false
@@ -311,6 +313,14 @@ function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): str
   })
 
   const totalGoHub = results.length
+
+  // Debug log — xem trong Vercel Function Logs
+  console.log(`[chat:search] country="${countryEn}" groups=[${groupsFound.join(",")}] operator="${operator}" simType="${simType}" skus_total=${data.skus.length} results=${totalGoHub}`)
+  if (totalGoHub === 0) {
+    // Sample 3 SKU để kiểm tra product_type thực tế
+    const sample = data.skus.slice(0, 3).map(s => `${s.sku_code} pt=${s.product_type ?? "null"} pt_derived=${s.sku_code?.[1]}`)
+    console.log(`[chat:search] sample SKUs: ${sample.join(" | ")}`)
+  }
 
   // Smart sampling khi > 50: lấy đều từ các mốc ngày
   let shown: any[]
