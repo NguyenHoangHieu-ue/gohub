@@ -37,14 +37,12 @@ class Pagination:
 class Product:
     tenant:                 str
     product_code:           str
-    product_ref:            str
     status:                 str
     type_of_sim:            str
     product_type:           str
     operator_code:          str
     vendor_code:            str
     purchase_type:          str
-    gc_purchase_type:       str
     source_type:            str
     sku_type:               str
     data_type:              str
@@ -82,12 +80,10 @@ class Product:
 class Sku:
     tenant:                     str
     sku_code:                   str
-    sku_ref:                    str
     product_code:               str
     status:                     str
     sim_esim:                   str
     product_type:               str
-    parents:                    str
     throttle_speed:             str
     call:                       str
     expirations:                str
@@ -122,7 +118,6 @@ class Sku:
 class Listing:
     tenant:                         str
     listing_code:                   str
-    listing_ref:                    str
     reference_product_code:         str
     status:                         str
     listing_name_en:                str
@@ -133,8 +128,6 @@ class Listing:
     network_operator:               str
     data_type_en:                   str
     data_type_vn:                   str
-    esim_type_en:                   str
-    esim_type_vn:                   str
     category_code:                  str
     network_type:                   str
     hotspot_en:                     str
@@ -152,14 +145,9 @@ class Listing:
     local_phone_number_country:     str
     call_en:                        str
     call_vn:                        str
-    supported_country_name_en:      str
-    supported_country_name_vn:      str
-    category_name_en:               str
-    category_name_vn:               str
     apn:                            str
     date_created:                   str
     last_modified_date:             str
-    price_list:                     Optional[str] = None
     daily_reset_time_en:            Optional[str] = None
     daily_reset_time_vn:            Optional[str] = None
     activation_time_en:             Optional[str] = None
@@ -170,27 +158,14 @@ class Listing:
     activation_vn:                  Optional[str] = None
     activation_links_en:            Optional[str] = None
     activation_links_vn:            Optional[str] = None
-    raw_unsupported_apps:           Optional[str] = None
     unsupported_apps_en:            Optional[str] = None
     unsupported_apps_vn:            Optional[str] = None
-    unsupported_apps_highlight_en:  Optional[str] = None
-    unsupported_apps_highlight_vn:  Optional[str] = None
     telco_perks_en:                 Optional[str] = None
     telco_perks_vn:                 Optional[str] = None
-    raw_note:                       Optional[str] = None
-    raw_note_vn:                    Optional[str] = None
     note_en:                        Optional[str] = None
-    note_en_backup:                 Optional[str] = None
     note_vn:                        Optional[str] = None
-    note_vn_backup:                 Optional[str] = None
     call_sms_details_en:            Optional[str] = None
     call_sms_details_vn:            Optional[str] = None
-    change_apn_note_en:             Optional[str] = None
-    change_apn_note_vn:             Optional[str] = None
-    change_apn_links_en:            Optional[str] = None
-    change_apn_links_vn:            Optional[str] = None
-    kyc_pdf_template_code:          Optional[str] = None
-    activation_pdf_template_code:   Optional[str] = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Listing":
@@ -202,22 +177,18 @@ class Listing:
 class Item:
     tenant:           str
     item_code:        str
-    item_ref:         str
     alias:            str
     sku_code:         str
     listing_code:     str
     category_code:    str
     status:           str
     item_type:        str
-    price_list:       str
     item_name_en:     str
     item_name_vn:     str
     day_amount:       int
     day_amount_unit:  str
     data_amount:      str
     data_amount_unit: str
-    channel:          str
-    pricelistcode:    str
     unitprice:        float
     currency:         str
     date_created:     str
