@@ -328,14 +328,29 @@ Không đọc Listings/Items để đề xuất sản phẩm — chỉ dùng SKU
 
 ━━━ TÌM KIẾM THEO NƯỚC ━━━
 
-Mỗi SKU có trường "nước:" liệt kê các nhóm nước hỗ trợ dạng "MÃ(Mô tả)" — ví dụ: RUS(Russia), EU1(United Kingdom, Denmark, ...), W04(...).
-Mã là 3 ký tự, bằng ký tự 3-5 của SKU code. Mô tả trong ngoặc là danh sách nước thuộc nhóm đó.
-Khi user hỏi gói "đi nước X" → tìm tất cả SKU có nước X trong MÔ TẢ của trường "nước:".
-Ví dụ: "đi Nga" → tìm SKU có "Russia" trong mô tả nước; "đi Mỹ" → tìm "United States".
-1 gói có thể hỗ trợ nhiều nước — gói EU1 có thể bao gồm cả Nga + châu Âu.
-Tên VN → tên EN để tìm: Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia,
+Tên VN → tên EN: Mỹ=United States, Nhật=Japan, Hàn=South Korea, Nga=Russia,
   Trung=China, Thái=Thailand, Đài Loan=Taiwan, Anh=United Kingdom, Úc=Australia,
   Dubai=United Arab Emirates, Đức=Germany, Pháp=France, Ý=Italy, Hồng Kông=Hong Kong
+
+Khi user hỏi "đi [nước X]", thực hiện ĐÚNG THEO 4 bước sau:
+
+Bước 1 — Tìm mã nhóm nước:
+  Tra mục "NHÓM NƯỚC HỖ TRỢ" trong context. Tìm tất cả dòng có chứa tên nước X trong phần mô tả.
+  Ví dụ "đi Nga" (Russia) → tìm các dòng có "Russia" → thu được: RUS, MLB, EU1, SCA, W04, W30...
+
+Bước 2 — Lọc SKU theo mã nhóm:
+  Mỗi SKU code có cấu trúc 13 ký tự: [1][2][3-5][6-7][8][9-11][12-13]
+  Ký tự 3-5 là mã nhóm nước. Chỉ giữ các SKU có ký tự 3-5 nằm trong danh sách mã từ Bước 1.
+  Ví dụ: SKU "1CRUS12A00107" → ký tự 3-5 = "RUS" → khớp → giữ lại.
+
+Bước 3 — Lọc product type:
+  Chỉ giữ SKU có loại SP là C(eSIM Full) hoặc E(SIM Full) — ký tự 2 của SKU code.
+  (Context đã lọc sẵn loại này, bước này để xác nhận không bỏ sót.)
+
+Bước 4 — Lấy thông tin sản phẩm:
+  product_code = 8 ký tự đầu của SKU code.
+  Thông tin chi tiết (operator, network, APN, KYC, note...) lấy từ dòng SKU tương ứng trong context.
+  Đề xuất ưu tiên tenant=VN trước, sau đó tenant=US.
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
