@@ -15,18 +15,17 @@ VENDOR/
 Add_product/
 TaiLieuCongTy_Chung/
 
-# Streamlit
-.streamlit/config.toml
-.streamlit/secrets.toml
+# Streamlit (rác cũ)
+.streamlit/
 
-# DB scripts / schema (local only — không public lên GitHub)
-scripts/
-schema.sql
+# DB scripts / schema / import (local only — không public)
+database/
 
 # Docs / notes (local only)
+docs/
+_Skills_AI/
 *.txt
 *.md
-_Skills_AI/
 
 # OS
 .DS_Store

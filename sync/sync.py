@@ -1,6 +1,7 @@
 """
 Sync GoHub API data → Supabase.
-Chạy bởi GitHub Actions mỗi 30 phút, hoặc thủ công: python sync.py
+GitHub Actions: chạy tự động mỗi ngày lúc 01:00 UTC
+Local: cd sync && python sync.py  (cần set env vars API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY)
 """
 import os
 import dataclasses
