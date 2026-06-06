@@ -180,8 +180,7 @@ function WMTab({ role }: { role?: string }) {
   const [search,   setSearch]   = useState("")
   const [simType,  setSimType]  = useState("")
   const [region,   setRegion]   = useState("")
-  const [isLesim,  setIsLesim]  = useState("")
-  const [isUnlim,  setIsUnlim]  = useState("")
+  const [dataType, setDataType] = useState("")  // "unlimited" | "daily" | "fixed"
   const [days,     setDays]     = useState("")
   const [dataMin,  setDataMin]  = useState("")
   const [dataMax,  setDataMax]  = useState("")
@@ -195,14 +194,13 @@ function WMTab({ role }: { role?: string }) {
     setLoading(true)
     const params = new URLSearchParams({
       page: String(pg), gap: currentGap,
-      ...(searchRef.current && { search: searchRef.current }),
-      ...(simType  && { sim_type:     simType  }),
-      ...(region   && { region:       region   }),
-      ...(isLesim  && { is_lesim:     isLesim  }),
-      ...(isUnlim  && { is_unlimited: isUnlim  }),
-      ...(days     && { days:         days     }),
-      ...(dataMin  && { data_min:     dataMin  }),
-      ...(dataMax  && { data_max:     dataMax  }),
+      ...(searchRef.current && { search:     searchRef.current }),
+      ...(simType  && { sim_type:  simType  }),
+      ...(region   && { region:    region   }),
+      ...(dataType && { data_type: dataType }),
+      ...(days     && { days:      days     }),
+      ...(dataMin  && { data_min:  dataMin  }),
+      ...(dataMax  && { data_max:  dataMax  }),
     })
     try {
       const res = await fetch(`/api/ncc/worldmove?${params}`)
@@ -212,7 +210,7 @@ function WMTab({ role }: { role?: string }) {
     } finally {
       setLoading(false)
     }
-  }, [simType, region, isLesim, isUnlim, days, dataMin, dataMax])
+  }, [simType, region, dataType, days, dataMin, dataMax])
 
   useEffect(() => { fetchData(page, gap) }, [fetchData, page, gap])
 
@@ -248,17 +246,20 @@ function WMTab({ role }: { role?: string }) {
             onKeyDown={e => e.key === "Enter" && applySearch()}
             placeholder="Tìm ID, tên, vùng..." className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-52" />
         </div>
-        {[
-          { val: simType,  set: setSimType,  opts: ["eSIM","SIM","Top-Up SIM"],   ph: "SIM type" },
-          { val: isLesim,  set: setIsLesim,  opts: ["true","false"],              ph: "leSIM" },
-          { val: isUnlim,  set: setIsUnlim,  opts: ["true","false"],              ph: "Unlimited" },
-        ].map(({ val, set, opts, ph }) => (
-          <select key={ph} value={val} onChange={e => { set(e.target.value); setPage(1); }}
-            className="py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700">
-            <option value="">{ph}</option>
-            {opts.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ))}
+        <select value={simType} onChange={e => { setSimType(e.target.value); setPage(1) }}
+          className="py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700">
+          <option value="">Tất cả SIM</option>
+          <option value="eSIM">eSIM</option>
+          <option value="SIM">SIM</option>
+          <option value="Top-Up SIM">Top-Up SIM</option>
+        </select>
+        <select value={dataType} onChange={e => { setDataType(e.target.value); setPage(1) }}
+          className="py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700">
+          <option value="">Tất cả loại data</option>
+          <option value="unlimited">Unlimited</option>
+          <option value="daily">Daily</option>
+          <option value="fixed">Fixed</option>
+        </select>
         <input value={days} onChange={e => { setDays(e.target.value); setPage(1); }} placeholder="Days"
           type="number" min="1" className="w-20 py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400" />
         <input value={dataMin} onChange={e => { setDataMin(e.target.value); setPage(1); }} placeholder="GB min"

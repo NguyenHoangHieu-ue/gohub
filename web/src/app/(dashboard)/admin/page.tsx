@@ -599,6 +599,8 @@ const WM_PAGE_SIZE = 50
 function TemplateTab({ onNotify }: {
   onNotify: (type: "success" | "error", text: string) => void
 }) {
+  const [subTab, setSubTab]         = useState<"create" | "customize">("create")
+  const [selectedNCC, setSelectedNCC] = useState("WM")
   const [config, setConfig]         = useState(DEFAULT_CONFIG)
   const [products, setProducts]     = useState<WMProduct[]>([])
   const [total, setTotal]           = useState(0)
@@ -631,7 +633,8 @@ function TemplateTab({ onNotify }: {
 
   const fetchProducts = useCallback(async (pg: number) => {
     setLoadingP(true)
-    const params = new URLSearchParams({ page: String(pg), gap: "all" })
+    // Tạo mới: mặc định chỉ show sản phẩm chưa có trong hệ thống
+    const params = new URLSearchParams({ page: String(pg), gap: "not_in_system" })
     if (searchQ)      params.set("search",       searchQ)
     if (filterSim)    params.set("sim_type",      filterSim)
     if (filterUnlim)  params.set("is_unlimited",  filterUnlim)
@@ -761,11 +764,59 @@ function TemplateTab({ onNotify }: {
   return (
     <div className="space-y-5">
 
+      {/* ─── Sub-tabs ─────────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        {([["create", "Tạo mới"], ["customize", "Tùy chỉnh template"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setSubTab(key)}
+            className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              subTab === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            }`}>{label}</button>
+        ))}
+      </div>
+
+      {/* ─── Tùy chỉnh template (placeholder) ─────────────────────── */}
+      {subTab === "customize" && (
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center space-y-2">
+          <p className="text-gray-500 font-medium">Tùy chỉnh cấu trúc template</p>
+          <p className="text-sm text-gray-400">Tính năng đang phát triển — cho phép chỉnh sửa format cột, tên sheet, công thức giá trong file Excel xuất ra.</p>
+        </div>
+      )}
+
+      {subTab === "create" && <>
+
+      {/* ─── NCC Selector ────────────────────────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-semibold text-gray-700">Nhà cung cấp (NCC):</span>
+          {[
+            { code: "WM",  name: "WORLDMOVE",      available: true  },
+            { code: "3H",  name: "3HK",             available: false },
+            { code: "BC",  name: "BILLIONCONNECT",  available: false },
+            { code: "SS",  name: "SIMSTORE",        available: false },
+          ].map(ncc => (
+            <button key={ncc.code}
+              onClick={() => ncc.available && setSelectedNCC(ncc.code)}
+              disabled={!ncc.available}
+              className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-all ${
+                selectedNCC === ncc.code
+                  ? "bg-brand-600 text-white border-brand-600"
+                  : ncc.available
+                  ? "border-gray-200 text-gray-700 hover:border-brand-400"
+                  : "border-gray-100 text-gray-300 cursor-not-allowed"
+              }`}>
+              {ncc.name}
+              {!ncc.available && <span className="ml-1.5 text-[10px]">soon</span>}
+            </button>
+          ))}
+          <span className="text-xs text-gray-400 ml-2">Hiển thị sản phẩm chưa có trong hệ thống</span>
+        </div>
+      </div>
+
       {/* ─── Step 1: Chọn sản phẩm ─────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
-            1. Chọn sản phẩm WM
+            1. Chọn sản phẩm {selectedNCC}
           </h3>
           {selected.size > 0 && (
             <span className="text-sm font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full">
@@ -1051,6 +1102,8 @@ function TemplateTab({ onNotify }: {
           </div>
         </div>
       )}
+
+      </> /* end subTab === "create" */}
     </div>
   )
 }

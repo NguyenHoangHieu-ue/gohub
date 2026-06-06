@@ -75,27 +75,24 @@ const SKU_FILTERS = [
   { param: "days",    label: "Day Amount",    pos: "pos 12–13", note: "01, 07, 30..." },
 ]
 
-function Select({
-  label, note, pos, value, options, onChange,
+function FilterInput({
+  label, pos, note, value, onChange, placeholder,
 }: {
-  label: string; note: string; pos: string; value: string
-  options: string[]; onChange: (v: string) => void
+  label: string; pos: string; note: string
+  value: string; onChange: (v: string) => void; placeholder?: string
 }) {
   return (
-    <div className="flex flex-col gap-1 min-w-[110px]">
+    <div className="flex flex-col gap-1 min-w-[100px]">
       <label className="text-[11px] font-semibold text-gray-500 flex items-center gap-1">
         {label}
         <span className="text-gray-300 font-normal">{pos}</span>
       </label>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
+      <input
+        value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder || note || "..."}
         title={note}
-        className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-      >
-        <option value="">All</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+        className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+      />
     </div>
   )
 }
@@ -112,11 +109,20 @@ export default function SkusPage() {
   const [loading, setLoading] = useState(true)
   const [opts,    setOpts]    = useState<FilterOptions | null>(null)
 
-  // filters
+  // filters — pending (input values) vs applied (actually query)
   const [search,  setSearch]  = useState("")
   const [query,   setQuery]   = useState("")
   const [tenant,  setTenant]  = useState("")
   const [status,  setStatus]  = useState("")
+  // pending SKU code filter inputs
+  const [pPt,      setPPt]      = useState("")
+  const [pPtype,   setPPtype]   = useState("")
+  const [pCountry, setPCountry] = useState("")
+  const [pVendor,  setPVendor]  = useState("")
+  const [pDtype,   setPDtype]   = useState("")
+  const [pData,    setPData]    = useState("")
+  const [pDays,    setPDays]    = useState("")
+  // applied SKU code filters
   const [pt,      setPt]      = useState("")
   const [ptype,   setPtype]   = useState("")
   const [country, setCountry] = useState("")
@@ -134,6 +140,18 @@ export default function SkusPage() {
   }, [])
 
   const resetPage = () => setPage(1)
+
+  // Apply pending SKU filters
+  const applySkuFilters = () => {
+    setPt(pPt); setPtype(pPtype); setCountry(pCountry)
+    setVendor(pVendor); setDtype(pDtype); setData(pData); setDays(pDays)
+    setPage(1)
+  }
+  const clearSkuFilters = () => {
+    setPPt(""); setPPtype(""); setPCountry(""); setPVendor(""); setPDtype(""); setPData(""); setPDays("")
+    setPt(""); setPtype(""); setCountry(""); setVendor(""); setDtype(""); setData(""); setDays("")
+    setPage(1)
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -211,23 +229,33 @@ export default function SkusPage() {
         </select>
       </div>
 
-      {/* Filters row 2 — SKU code components */}
-      {opts && (
-        <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
-            SKU Code Filter — <span className="font-normal normal-case text-gray-400">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
-          </p>
-          <div className="flex gap-3 flex-wrap">
-            <Select label="Purchase Type" pos="pos 1"    note="1-6=VN, A-E=US"       value={pt}      options={opts.purchaseTypes} onChange={v => { setPt(v);      resetPage() }} />
-            <Select label="Product Type"  pos="pos 2"    note=""                      value={ptype}   options={opts.productTypes}  onChange={v => { setPtype(v);   resetPage() }} />
-            <Select label="Country"       pos="pos 3–5"  note="VNM, TWN, CHM..."      value={country} options={opts.countries}     onChange={v => { setCountry(v); resetPage() }} />
-            <Select label="Vendor"        pos="pos 6–7"  note="WM, 3H..."             value={vendor}  options={opts.vendors}       onChange={v => { setVendor(v);  resetPage() }} />
-            <Select label="Data Type"     pos="pos 8"    note=""                      value={dtype}   options={opts.dataTypes}     onChange={v => { setDtype(v);   resetPage() }} />
-            <Select label="Data Amount"   pos="pos 9–11" note="UNL, 010, 003..."      value={data}    options={opts.dataAmounts}   onChange={v => { setData(v);    resetPage() }} />
-            <Select label="Day Amount"    pos="pos 12–13" note="01, 07, 30..."        value={days}    options={opts.dayAmounts}    onChange={v => { setDays(v);    resetPage() }} />
+      {/* Filters row 2 — SKU code components (text input + Tìm button) */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
+          SKU Code Filter — <span className="font-normal normal-case text-gray-400">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
+        </p>
+        <div className="flex gap-3 flex-wrap items-end">
+          <FilterInput label="Purchase Type" pos="pos 1"    note="1-6=VN, A-E=US"  value={pPt}      onChange={setPPt}      placeholder="1-6, A-E" />
+          <FilterInput label="Product Type"  pos="pos 2"    note="A-H, 1-4"        value={pPtype}   onChange={setPPtype}   placeholder="C, E..." />
+          <FilterInput label="Country"       pos="pos 3–5"  note="VNM, TWN, CHM"   value={pCountry} onChange={setPCountry} placeholder="TWN" />
+          <FilterInput label="Vendor"        pos="pos 6–7"  note="WM, 3H..."       value={pVendor}  onChange={setPVendor}  placeholder="WM" />
+          <FilterInput label="Data Policy"   pos="pos 8"    note="F, P, D, A..."   value={pDtype}   onChange={setPDtype}   placeholder="F" />
+          <FilterInput label="Data Amount"   pos="pos 9–11" note="UNL, 010, 003"   value={pData}    onChange={setPData}    placeholder="UNL" />
+          <FilterInput label="Day Amount"    pos="pos 12–13" note="01, 07, 30"     value={pDays}    onChange={setPDays}    placeholder="07" />
+          <div className="flex gap-2 pb-0.5">
+            <button onClick={applySkuFilters}
+              className="px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition-colors">
+              Tìm
+            </button>
+            {(pt || ptype || country || vendor || dtype || data || days) && (
+              <button onClick={clearSkuFilters}
+                className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">
+                Xóa
+              </button>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

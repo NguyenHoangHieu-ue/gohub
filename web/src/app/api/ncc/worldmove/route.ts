@@ -43,12 +43,13 @@ async function enrichWithSku(rows: any[]): Promise<any[]> {
 }
 
 function applyFilters(q: any, filters: Record<string, string>) {
-  const { search, simType, region, isLesim, isUnlim, days, dataMin, dataMax } = filters
+  const { search, simType, region, dataType, days, dataMin, dataMax } = filters
   if (search)   q = q.or(`vendor_product_id.ilike.%${search}%,product_name.ilike.%${search}%,region.ilike.%${search}%`)
   if (simType)  q = q.eq("sim_type", simType)
   if (region)   q = q.ilike("region", `%${region}%`)
-  if (isLesim)  q = q.eq("is_lesim", isLesim === "true")
-  if (isUnlim)  q = q.eq("is_unlimited", isUnlim === "true")
+  if (dataType === "unlimited") q = q.eq("is_unlimited", true)
+  if (dataType === "daily")     q = q.eq("is_daily", true).eq("is_unlimited", false)
+  if (dataType === "fixed")     q = q.eq("is_daily", false).eq("is_unlimited", false)
   if (days)     q = q.eq("days", parseInt(days))
   if (dataMin)  q = q.gte("data_gb", parseFloat(dataMin))
   if (dataMax)  q = q.lte("data_gb", parseFloat(dataMax))
@@ -65,14 +66,13 @@ export async function GET(req: NextRequest) {
   const gap    = sp.get("gap") || "all"   // "all" | "in_system" | "not_in_system"
 
   const filters = {
-    search:  sp.get("search")       || "",
-    simType: sp.get("sim_type")     || "",
-    region:  sp.get("region")       || "",
-    isLesim: sp.get("is_lesim")     || "",
-    isUnlim: sp.get("is_unlimited") || "",
-    days:    sp.get("days")         || "",
-    dataMin: sp.get("data_min")     || "",
-    dataMax: sp.get("data_max")     || "",
+    search:   sp.get("search")     || "",
+    simType:  sp.get("sim_type")   || "",
+    region:   sp.get("region")     || "",
+    dataType: sp.get("data_type")  || "",  // "unlimited" | "daily" | "fixed"
+    days:     sp.get("days")       || "",
+    dataMin:  sp.get("data_min")   || "",
+    dataMax:  sp.get("data_max")   || "",
   }
 
   // Fetch system WM SKUs for in_system marking

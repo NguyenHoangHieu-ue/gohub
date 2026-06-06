@@ -260,6 +260,7 @@ EXPIRATIONS vs DAY_AMOUNT:
 ━━━ CÁCH TRẢ LỜI ━━━
 
 - Tìm trong SẢN PHẨM GOHUB ĐANG CÓ trước. Đây là sản phẩm GoHub đang quản lý và bán.
+- Chỉ đề xuất SKU có product_type C (eSIM Full) hoặc E (SIM Full). Product_type A là Datapack — gói data riêng lẻ, chưa dùng được độc lập — KHÔNG giới thiệu cho người dùng.
 - Khi đề cập sản phẩm: CHỈ dùng sku_code hoặc product_code. TUYỆT ĐỐI không nhắc listing_code hay item_code trừ khi người dùng hỏi rõ "listing" hoặc "item".
 - Khi hỏi về giá: chỉ dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
 - Data 9999GB = "Unlimited data".
