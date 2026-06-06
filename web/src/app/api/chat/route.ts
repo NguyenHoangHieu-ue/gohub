@@ -203,12 +203,12 @@ function buildContext(d: CacheData, role: string): string {
     // ── Listings ─────────────────────────────────────────────────────────────
     `\n=== LISTINGS GOHUB (${listings.length}) ===`,
     ...listings.map((l: any) =>
-      `${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngày`
+      `${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngày`
     ),
 
     `\n=== ITEMS GOHUB — giá bán theo kênh (${items.length}) ===`,
     ...items.map((i: any) =>
-      `${i.item_name_vn}|listing:${i.listing_code}|${i.unitprice}${i.currency}|${fmtData(i.data_amount, i.data_amount_unit)}/${i.day_amount}d`
+      `${i.item_name_vn}|${i.unitprice}${i.currency}|${fmtData(i.data_amount, i.data_amount_unit)}/${i.day_amount}d|kênh:${i.sales_channel ?? "—"}`
     ),
 
     `\n=== CATALOG NCC: WORLDMOVE (${wmProducts.length} SP — KHÔNG phải SP GoHub đang bán) ===`,
