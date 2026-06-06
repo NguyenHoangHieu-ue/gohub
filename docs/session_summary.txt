@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-05 (session 3 — tiếp)
+Cập nhật lần cuối: 2026-06-06 (session 4)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -329,3 +329,13 @@ Mục tiêu 5 tính năng:
     - Chatbot PHẢI lookup ref_countries table để decode code→tên quốc gia
     - Database-driven: nếu company thay codes → chatbot tự động update (không hardcode)
     - Workflow: user "đi Nga" → map tên VN→EN "Russia" → match trong ref_countries → tìm SKU có "RU(Russia)"
+
+## Session 4 (2026-06-06)
+55. Fix chatbot không tìm được sản phẩm đi Nga — root cause:
+    - products.supported_countries lưu 3-ký-tự GROUP codes từ ref_support_countries (RUS, EU1, W04...)
+    - Không phải ISO 2-ký-tự từ ref_countries (RU, US, VN)
+    - GROUP code = ký tự 3-5 trong SKU code — ví dụ SKU "1CRUS12A00107" → Country=RUS
+    - Fix: decodeCountries() lookup ref_support_countries.code → support_country thay vì ref_countries
+    - Trước: "RUS" → không decode được (ref_countries chỉ có "RU")
+    - Sau: "RUS" → "Russia", "EU1" → "United Kingdom, Denmark, Austria, ...", "W04" → danh sách đầy đủ
+    - System prompt cập nhật: tìm theo tên trong MÔ TẢ group, không phải ISO code

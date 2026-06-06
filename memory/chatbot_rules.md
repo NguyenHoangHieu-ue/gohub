@@ -31,15 +31,17 @@ Khi user hỏi "đi Nga" → lookup ref_countries → tìm tên English → matc
 - Đọc database → tự động cập nhật, không cần sửa code
 
 **How to apply**:
-- `decodeCountries(codes)` function: lookup countryMap từ ref_countries, convert code→name (DONE)
-- SKU context rows: `nước: RU(Russia), BY(Belarus)` using actual company codes (DONE)
-- System prompt: mapping tên VN→EN dùng để user hỏi tiếng Việt (Mỹ=United States, Nga=Russia...) (DONE)
+- `products.supported_countries` lưu 3-ký-tự GROUP codes (RUS, EU1, W04...) từ `ref_support_countries`
+  → Đây là cùng code với ký tự 3-5 trong SKU code (vd: SKU "1CRUS..." → country group = RUS)
+  → KHÔNG phải ISO 2-ký-tự (RU, US) từ ref_countries
+- `decodeCountries(codes)` function: lookup `ref_support_countries.code` → `support_country` (FIXED 2026-06-06)
+- SKU context rows: `nước: RUS(Russia), EU1(United Kingdom, Denmark, ...)` 
+- System prompt: mapping tên VN→EN dùng để user hỏi tiếng Việt (Nga=Russia...) → tìm trong mô tả group (DONE)
 - Chatbot workflow:
   1. User: "tôi cần sản phẩm đi Nga"
-  2. Model: map "Nga" → "Russia" (từ system prompt)
-  3. Match trong context: tìm có chứa "Russia" trong nước column
-  4. Trả về SKU có "RU(Russia)" hoặc country name chứa Russia
-- Test: "tôi cần tìm sản phẩm đi Nga" → tìm thấy sản phẩm support Russia
+  2. Model: map "Nga" → "Russia"
+  3. Match trong context: tìm SKU có "Russia" trong MÔ TẢ của trường "nước:"
+  4. Trả về SKU có "RUS(Russia)" hoặc "EU1(...Russia...)" hoặc group nào chứa Russia
 
 ---
 
