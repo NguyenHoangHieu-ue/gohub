@@ -41,12 +41,12 @@ async function getRawData(): Promise<CacheData> {
     const p = prodMap[s.product_code] ?? {}
     return {
       ...s,
-      product_type:       p.product_type ?? null,
-      operator_code:      p.operator_code ?? null,
-      network_type:       p.network_type ?? null,
-      kyc_needed:         p.kyc_needed ?? null,
+      product_type:        p.product_type ?? null,
+      operator_code:       p.operator_code ?? null,
+      network_type:        p.network_type ?? null,
+      kyc_needed:          p.kyc_needed ?? null,
       supported_countries: p.supported_countries ?? null,
-      note:               p.note ?? null,
+      note:                p.note ?? null,
     }
   })
 
@@ -62,34 +62,113 @@ function fmtData(amount: number | null, unit: string | null): string {
   return amount < 1 ? `${Math.round(amount * 1000)}MB` : `${amount}${unit ?? "GB"}`
 }
 
-// ─── Tool functions ───────────────────────────────────────────────────────────
+// ─── Intent detection ─────────────────────────────────────────────────────────
 
-// Chỉ sản phẩm hoàn chỉnh (C=eSIM Full US, E=SIM Full US, 1=eSIM Full VN, 2=SIM Full VN)
+// Tên nước tiếng Việt → tiếng Anh (để khớp với ref_support_countries)
+const VN_TO_EN: Record<string, string> = {
+  "nhật bản": "Japan", "nhật": "Japan",
+  "mỹ": "United States", "hoa kỳ": "United States",
+  "nga": "Russia",
+  "hàn quốc": "South Korea", "hàn": "South Korea",
+  "thái lan": "Thailand", "thái": "Thailand",
+  "úc": "Australia",
+  "anh": "United Kingdom",
+  "đức": "Germany",
+  "pháp": "France",
+  "ý": "Italy",
+  "tây ban nha": "Spain",
+  "đài loan": "Taiwan",
+  "hồng kông": "Hong Kong",
+  "trung quốc": "China", "trung": "China",
+  "ấn độ": "India",
+  "singapore": "Singapore",
+  "indonesia": "Indonesia",
+  "malaysia": "Malaysia",
+  "philippines": "Philippines",
+  "việt nam": "Vietnam",
+  "dubai": "United Arab Emirates", "uae": "United Arab Emirates",
+  "thổ nhĩ kỳ": "Turkey",
+  "canada": "Canada",
+  "mexico": "Mexico",
+  "brazil": "Brazil",
+  "châu âu": "Europe",
+}
+
+const PRODUCT_KEYWORDS = ["gói", "sim", "esim", "data", "mua", "tìm", "sản phẩm", "có không", "bao nhiêu ngày", "dung lượng"]
+
+interface SearchIntent {
+  countryEn: string | null  // tên nước tiếng Anh để search ref_support_countries
+  simType:   "eSIM" | "SIM" | null
+  ngayMin:   number | null
+  ngayMax:   number | null
+  dataGbMin: number | null
+  isProduct: boolean
+}
+
+function detectIntent(message: string, data: CacheData): SearchIntent {
+  const msg = message.toLowerCase()
+
+  // 1. Tìm tên nước từ map VN→EN (dài trước ngắn để tránh match nhầm "nhật" trong "nhật bản")
+  let countryEn: string | null = null
+  const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
+  for (const [vn, en] of sorted) {
+    if (msg.includes(vn)) { countryEn = en; break }
+  }
+
+  // 2. Nếu chưa tìm được, check tên tiếng Anh từ ref_support_countries
+  if (!countryEn) {
+    for (const sc of data.supportCountries) {
+      const name = (sc.support_country ?? "").toLowerCase()
+      if (name.length > 3 && msg.includes(name)) {
+        countryEn = sc.support_country
+        break
+      }
+    }
+  }
+
+  // 3. SIM type
+  const isEsim = msg.includes("esim") || msg.includes("e-sim") || msg.includes("e sim")
+  const isSim  = !isEsim && (msg.includes("sim vật lý") || msg.includes("sim vật") || msg.includes("sim thường"))
+  const simType = isEsim ? "eSIM" : isSim ? "SIM" : null
+
+  // 4. Số ngày (ví dụ: "7 ngày", "30 ngày")
+  const dayMatches = [...msg.matchAll(/(\d+)\s*ngày/g)].map(m => parseInt(m[1]))
+  const ngayMin = dayMatches.length ? Math.min(...dayMatches) : null
+  const ngayMax = dayMatches.length ? Math.max(...dayMatches) : null
+
+  // 5. Dung lượng (ví dụ: "10gb", "5 gb")
+  const gbMatch = msg.match(/(\d+)\s*gb/)
+  const dataGbMin = gbMatch ? parseInt(gbMatch[1]) : null
+
+  // 6. Có phải câu hỏi về sản phẩm không?
+  const isProduct = !!countryEn || PRODUCT_KEYWORDS.some(k => msg.includes(k))
+
+  return { countryEn, simType, ngayMin, ngayMax, dataGbMin, isProduct }
+}
+
+// ─── Search SKUs ──────────────────────────────────────────────────────────────
+
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
-function timGoiSim(
-  args: { ten_nuoc?: string; loai_sim?: string; ngay_min?: number; ngay_max?: number; data_gb_min?: number },
-  data: CacheData,
-  isCost: boolean
-) {
-  const { ten_nuoc, loai_sim, ngay_min, ngay_max, data_gb_min } = args
+function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): string {
+  const { countryEn, simType, ngayMin, ngayMax, dataGbMin } = intent
 
   // Tìm group codes cho nước
   let groupCodes: Set<string> | null = null
   const groupsFound: string[] = []
 
-  if (ten_nuoc) {
-    const search = ten_nuoc.toLowerCase()
+  if (countryEn) {
+    const search = countryEn.toLowerCase()
     for (const sc of data.supportCountries) {
       const hay = `${sc.support_country ?? ""} ${sc.country_codes ?? ""}`.toLowerCase()
       if (hay.includes(search)) {
-        groupsFound.push(`${sc.code}: ${sc.support_country}`)
+        groupsFound.push(`${sc.code}(${sc.support_country})`)
         if (!groupCodes) groupCodes = new Set()
         groupCodes.add(sc.code)
       }
     }
     if (!groupCodes) {
-      return { error: `Không tìm thấy nhóm nước nào cho "${ten_nuoc}". Hãy thử tên tiếng Anh.` }
+      return `[Không tìm thấy nhóm nước nào cho "${countryEn}" trong ref_support_countries]`
     }
   }
 
@@ -100,15 +179,15 @@ function timGoiSim(
       const grp = s.sku_code?.substring(2, 5)
       if (!grp || !groupCodes.has(grp)) return false
     }
-    if (loai_sim === "eSIM" && s.sim_esim !== "eSIM") return false
-    if (loai_sim === "SIM" && s.sim_esim !== "SIM") return false
-    if (ngay_min && (s.day_amount ?? 0) < ngay_min) return false
-    if (ngay_max && (s.day_amount ?? 0) > ngay_max) return false
-    if (data_gb_min && (s.data_amount ?? 9999) < data_gb_min && (s.data_amount ?? 9999) < 9999) return false
+    if (simType === "eSIM" && s.sim_esim !== "eSIM") return false
+    if (simType === "SIM"  && s.sim_esim !== "SIM")  return false
+    if (ngayMin && (s.day_amount ?? 0) < ngayMin) return false
+    if (ngayMax && (s.day_amount ?? 0) > ngayMax) return false
+    if (dataGbMin && (s.data_amount ?? 9999) < dataGbMin && (s.data_amount ?? 9999) < 9999) return false
     return true
   })
 
-  // Sort: VN trước, sau đó theo ngày tăng dần
+  // Sort: VN trước, sau đó ngày tăng dần
   results.sort((a, b) => {
     if (a.tenant === "VN" && b.tenant !== "VN") return -1
     if (b.tenant === "VN" && a.tenant !== "VN") return 1
@@ -118,81 +197,31 @@ function timGoiSim(
   const total = results.length
   results = results.slice(0, 30)
 
-  return {
-    total_found: total,
-    groups_matched: groupsFound,
-    skus: results.map(s => skuRow(s, isCost)),
+  if (total === 0) {
+    return `[Không tìm thấy gói nào phù hợp. Nhóm nước khớp: ${groupsFound.join(", ") || "không có"}]`
   }
+
+  const header = countryEn
+    ? `[Tìm thấy ${total} gói cho "${countryEn}" — nhóm: ${groupsFound.join(", ")} — hiển thị ${results.length}]`
+    : `[Tìm thấy ${total} gói — hiển thị ${results.length}]`
+
+  const cols = `sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku` +
+    (isCost ? `|gia_vnd|gia_usd` : "")
+
+  const rows = results.map(s =>
+    `${s.sku_code}|${s.tenant}|${s.sim_esim}` +
+    `|${fmtData(s.data_amount, s.data_amount_unit)}|${s.day_amount}d` +
+    `|${s.throttle_speed ?? "—"}` +
+    `|${s.operator_code ?? "—"}` +
+    `|${s.kyc_needed ?? "—"}` +
+    `|${s.supported_countries ?? "—"}` +
+    `|${s.vendor_sku ?? "—"}` +
+    (isCost ? `|${s.final_cogs_included_vat_vnd ?? "?"}|${s.final_cogs_usd ?? "?"}` : "") +
+    (s.note ? ` — note: ${s.note}` : "")
+  )
+
+  return [header, cols, ...rows].join("\n")
 }
-
-function xemChiTietSku(args: { sku_code: string }, data: CacheData, isCost: boolean) {
-  const s = data.skus.find(s => s.sku_code === args.sku_code)
-  if (!s) return { error: `Không tìm thấy SKU "${args.sku_code}"` }
-  return skuRow(s, isCost)
-}
-
-function skuRow(s: any, isCost: boolean) {
-  return {
-    sku_code:        s.sku_code,
-    product_code:    s.product_code,
-    tenant:          s.tenant,
-    sim_esim:        s.sim_esim,
-    data:            fmtData(s.data_amount, s.data_amount_unit),
-    days:            s.day_amount,
-    throttle:        s.throttle_speed ?? null,
-    operator:        s.operator_code ?? null,
-    network:         s.network_type ?? null,
-    vendor_sku:      s.vendor_sku ?? null,
-    expiration_days: s.expirations ?? null,
-    kyc:             s.kyc_needed ?? null,
-    note:            s.note ?? null,
-    nuoc:            s.supported_countries ?? null,
-    ...(isCost ? {
-      gia_vnd: s.final_cogs_included_vat_vnd,
-      gia_usd: s.final_cogs_usd,
-    } : {}),
-  }
-}
-
-async function callTool(name: string, args: any, data: CacheData, isCost: boolean) {
-  switch (name) {
-    case "tim_goi_sim":     return timGoiSim(args, data, isCost)
-    case "xem_chi_tiet_sku": return xemChiTietSku(args, data, isCost)
-    default: return { error: `Unknown tool: ${name}` }
-  }
-}
-
-// ─── Tool definitions for Gemini ─────────────────────────────────────────────
-
-const TOOLS = [{
-  functionDeclarations: [
-    {
-      name: "tim_goi_sim",
-      description: "Tìm kiếm gói SIM/eSIM trong hệ thống GoHub. Gọi khi user hỏi về sản phẩm đi du lịch nước nào, loại SIM, số ngày, dung lượng. Tên nước phải bằng tiếng Anh.",
-      parameters: {
-        type: "object",
-        properties: {
-          ten_nuoc:    { type: "string", description: "Tên quốc gia tiếng Anh, ví dụ: Japan, Russia, United States, Thailand" },
-          loai_sim:    { type: "string", enum: ["eSIM", "SIM"], description: "Loại: eSIM hoặc SIM vật lý" },
-          ngay_min:    { type: "number", description: "Số ngày tối thiểu" },
-          ngay_max:    { type: "number", description: "Số ngày tối đa" },
-          data_gb_min: { type: "number", description: "Dung lượng tối thiểu (GB)" },
-        },
-      },
-    },
-    {
-      name: "xem_chi_tiet_sku",
-      description: "Xem thông tin chi tiết của một SKU khi đã biết mã SKU.",
-      parameters: {
-        type: "object",
-        properties: {
-          sku_code: { type: "string", description: "Mã SKU 13 ký tự" },
-        },
-        required: ["sku_code"],
-      },
-    },
-  ],
-}]
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -203,8 +232,7 @@ function buildSystemPrompt(data: CacheData, role: string): string {
   const lines = [
     `Bạn là trợ lý AI của GoHub — công ty cung cấp SIM/eSIM du lịch.`,
     `Trả lời bằng tiếng Việt. Không đề cập tên bảng/cột database.`,
-    ``,
-    `Khi user hỏi về sản phẩm, PHẢI gọi tool tim_goi_sim để tìm — không tự bịa hoặc đoán sản phẩm.`,
+    `Khi có dữ liệu sản phẩm được cung cấp trong tin nhắn, hãy dựa vào đó để trả lời — không tự bịa thêm sản phẩm.`,
     ``,
     `=== NHOM NUOC HO TRO (${supportCountries.length}) ===`,
     ...(supportCountries as any[]).map(sc =>
@@ -212,7 +240,7 @@ function buildSystemPrompt(data: CacheData, role: string): string {
     ),
     ``,
     `=== MA NUOC (${countries.length}) ===`,
-    ...(countries as any[]).map(c => `${c.code}=${c.name}`),
+    ...(countries as any[]).map((c: any) => `${c.code}=${c.name}`),
     ``,
     `=== VENDOR (${vendors.length}) ===`,
     ...(vendors as any[]).map((v: any) => `${v.vendor_code}=${v.name}`),
@@ -233,20 +261,16 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { messages, userName } = await req.json()
-  const role  = session.user.role || "standard"
+  const role   = session.user.role || "standard"
   const isCost = role === "admin" || role === "manager"
-  const name  = userName || session.user.name || "bạn"
+  const name   = userName || session.user.name || "bạn"
 
   try {
     const rawData = await getRawData()
     const systemInstruction = `${buildSystemPrompt(rawData, role)}\n\n---\nNgười đang chat: ${name}`
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.5-flash",
-      systemInstruction,
-      tools: TOOLS as any,
-    })
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
 
     const history = messages.slice(0, -1).map((m: any) => ({
       role:  m.role === "user" ? "user" : "model",
@@ -256,49 +280,31 @@ export async function POST(req: NextRequest) {
     const chat        = model.startChat({ history })
     const lastMessage = messages.at(-1).content
 
-    // Lần 1: gọi không stream để phát hiện function call
-    const result1  = await chat.sendMessage(lastMessage)
-    const parts    = result1.response.candidates?.[0]?.content?.parts ?? []
-    const toolCall = (parts as any[]).find(p => p.functionCall)
+    // Parse intent và search cache phía server (không cần gọi Gemini lần 1)
+    const intent = detectIntent(lastMessage, rawData)
+    const finalMessage = intent.isProduct
+      ? `[Dữ liệu sản phẩm tìm được]\n${searchSkus(intent, rawData, isCost)}\n\n[Câu hỏi]\n${lastMessage}`
+      : lastMessage
+
+    // Một lần gọi Gemini duy nhất, stream thẳng
+    const result = await chat.sendMessageStream(finalMessage)
 
     const encoder = new TextEncoder()
-
-    if (toolCall) {
-      const { name: toolName, args: toolArgs } = toolCall.functionCall
-      const toolResult = await callTool(toolName, toolArgs, rawData, isCost)
-
-      // Lần 2: gửi kết quả tool và stream câu trả lời cuối
-      const result2 = await chat.sendMessageStream([{
-        functionResponse: { name: toolName, response: toolResult },
-      }] as any)
-
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const chunk of result2.stream) {
-              const text = chunk.text()
-              if (text) controller.enqueue(encoder.encode(text))
-            }
-            controller.close()
-          } catch (err) {
-            controller.error(err)
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.stream) {
+            const text = chunk.text()
+            if (text) controller.enqueue(encoder.encode(text))
           }
-        },
-      })
-      return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
-    } else {
-      // Gemini trả lời trực tiếp không cần tool (câu hỏi chung, greeting, v.v.)
-      const text = result1.response.text()
-      return new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(text))
-            controller.close()
-          },
-        }),
-        { headers: { "Content-Type": "text/plain; charset=utf-8" } }
-      )
-    }
+          controller.close()
+        } catch (err) {
+          controller.error(err)
+        }
+      },
+    })
+
+    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
