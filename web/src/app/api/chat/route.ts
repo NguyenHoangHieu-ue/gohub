@@ -78,6 +78,49 @@ async function getRawData(): Promise<CacheData> {
   return data
 }
 
+// ─── Decode lookup tables ────────────────────────────────────────────────────
+
+const PRODUCT_TYPE: Record<string, string> = {
+  A: "SIM/eSIM Data (Datapack)", B: "eSIM Profile", C: "eSIM Full (Profile+Data)",
+  D: "SIM Frame (SIM trắng)",    E: "SIM Full (Frame+Data)", F: "Phí Ship",
+  G: "Quà tặng", H: "Khác",
+  "1": "eSIM Full VN", "2": "SIM Full VN", "3": "Phí Ship VN", "4": "Dịch vụ VAT VN",
+}
+
+const DATA_POLICY: Record<string, string> = {
+  A: "Daily-Unlim 5Mbps",  B: "Daily-Unlim 10Mbps", C: "Unlim 20Mbps",
+  D: "Unlim 100Mbps",      E: "Fixed-Unlim 5Mbps",  G: "Fixed-Unlim 10Mbps",
+  H: "Unlim 5Mbps",        K: "eSIM Profile/SIM Frame",
+  F: "Fixed throttle<2Mbps", P: "Daily throttle<2Mbps",
+  Y: "Fixed không throttle", Z: "Daily không throttle",
+}
+
+const SOURCE_TYPE: Record<string, string> = {
+  "1": "VN-StockDirect", "2": "VN-StockInternal", "3": "VN-MonthlyInvoice",
+  "4": "VN-TelcoBalance", "5": "VN-Datapool", "6": "VN-Others",
+  A: "US-StockDirect", B: "US-StockInternal", C: "US-MonthlyInvoice",
+  D: "US-TelcoBalance", E: "US-Datapool",
+}
+
+const SKU_TYPE: Record<string, string> = {
+  "Base": "Base", "Base + Datapack": "Base+Datapack", "Datapack": "Datapack",
+}
+
+function decodeProductType(code: string | null): string {
+  if (!code) return "?"
+  return PRODUCT_TYPE[code] ? `${code}(${PRODUCT_TYPE[code]})` : code
+}
+
+function decodeDataPolicy(code: string | null): string {
+  if (!code) return "?"
+  return DATA_POLICY[code] ? `${code}(${DATA_POLICY[code]})` : code
+}
+
+function decodeSourceType(code: string | null): string {
+  if (!code) return "?"
+  return SOURCE_TYPE[code] ? `${code}(${SOURCE_TYPE[code]})` : code
+}
+
 function fmtData(amount: number | null, unit: string | null): string {
   if (!amount || amount >= 9999) return "Unlimited"
   return amount < 1 ? `${Math.round(amount * 1000)}MB` : `${amount}${unit ?? "GB"}`
@@ -100,20 +143,44 @@ function buildContext(d: CacheData, role: string): string {
   const isCost = role === "admin" || role === "manager"
   const { skus, listings, items, wmProducts, wmInSystemSet, zones3hk, countries, supportCountries, vendors, settings } = d
 
-  return [
-    `=== SẢN PHẨM GOHUB ĐANG CÓ (${skus.length} SKU active) ===`,
-    `sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|vendor_sku|note|kyc|countries` +
-      (isCost ? `|cogs_vnd|cogs_usd` : ""),
-    ...skus.map((s: any) =>
-      `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
-      `|${fmtData(s.data_amount, s.data_amount_unit)}/${s.day_amount}d` +
-      `|${s.throttle_speed ?? "—"}|${s.vendor_sku ?? "—"}` +
-      (s.note ? `|${s.note}` : "") +
-      (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
-      (s.supported_countries ? `|${s.supported_countries}` : "") +
-      (isCost ? `|vnd:${s.final_cogs_included_vat_vnd ?? "?"}|usd:${s.final_cogs_usd ?? "?"}` : "")
-    ),
+  // Build product map for decoding in SKU rows
+  const prodMap: Record<string, any> = {}
+  for (const s of skus) {
+    if (s.product_code && !prodMap[s.product_code]) {
+      prodMap[s.product_code] = {
+        product_type: s.product_type,
+        data_type: s.data_type,
+        source_type: s.source_type,
+        purchase_type: s.purchase_type,
+        sku_type: s.sku_type,
+        operator_code: s.operator_code,
+      }
+    }
+  }
 
+  return [
+    // ── SKUs ────────────────────────────────────────────────────────────────
+    `=== SẢN PHẨM GOHUB ĐANG CÓ (${skus.length} SKU active) ===`,
+    `Cột: sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|loại SP|data_policy|nguồn|nhà CC|vendor_sku|hết hạn|note|kyc|nước` +
+      (isCost ? `|giá_vnd|giá_usd` : ""),
+    ...skus.map((s: any) => {
+      const p = prodMap[s.product_code] ?? {}
+      return `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
+        `|${fmtData(s.data_amount, s.data_amount_unit)}/${s.day_amount}d` +
+        `|${s.throttle_speed ?? "—"}` +
+        `|${decodeProductType(p.product_type ?? null)}` +
+        `|${decodeDataPolicy(p.data_type ?? null)}` +
+        `|${decodeSourceType(p.source_type ?? null)}` +
+        `|${p.operator_code ?? "—"}` +
+        `|${s.vendor_sku ?? "—"}` +
+        `|hh:${s.expirations ?? "—"}d` +
+        (s.note ? `|${s.note}` : "") +
+        (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
+        (s.supported_countries ? `|${s.supported_countries}` : "") +
+        (isCost ? `|vnd:${s.final_cogs_included_vat_vnd ?? "?"}|usd:${s.final_cogs_usd ?? "?"}` : "")
+    }),
+
+    // ── Listings ─────────────────────────────────────────────────────────────
     `\n=== LISTINGS GOHUB (${listings.length}) ===`,
     ...listings.map((l: any) =>
       `${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}|op:${l.network_operator}|exp:${l.expirations_en}ngày`
@@ -164,40 +231,31 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của GoHub Telco, giúp team tra 
 Trả lời bằng tiếng Việt, dựa trên dữ liệu thực tế. Không đề cập tên bảng/cột database trong câu trả lời.
 Giọng văn chuyên nghiệp, thân thiện vừa phải. Không dùng emoji.
 
-━━━ NGHIỆP VỤ — ĐỌC KỸ TRƯỚC ━━━
+━━━ NGHIỆP VỤ ━━━
 
 CẤU TRÚC MÃ:
-- Product code (8 ký tự): [source_type(1)][product_type(1)][country(3)][vendor(2)][data_policy(1)]
-- SKU code (13 ký tự): [product_code(8)][data_amount_code(3)][day_amount(2)]
+- Product code (8 ký tự): [source_type][product_type][country_3][vendor_2][data_policy]
+- SKU code (13 ký tự): [product_code_8][data_amount_code_3][day_amount_2]
+- Dữ liệu đã được decode inline trong context (ví dụ: C(eSIM Full), F(Fixed<2Mbps), E(US-Datapool)).
 
-PRODUCT TYPE (loại sản phẩm):
-  A=SIM/eSIM Data (Datapack)  B=eSIM Profile  C=eSIM Full (A+B)
-  D=SIM Frame (SIM trắng)     E=SIM Full (A+D) F=Phí Ship  G=Quà tặng  H=Khác
-  Số (VN only): 1=eSIM Full VN  2=SIM Full VN  3=Phí Ship  4=Dịch vụ VAT khác
-  → product_type trong skus là tên text: ví dụ C → "eSIM full"
+QUAN HỆ PRODUCT ↔ SKU:
+- 1 Product → nhiều SKU (khác nhau về data_amount và day_amount)
+- Product chứa thông tin chung: loại SIM, nhà CC, mạng, APN, KYC, ghi chú
+- SKU chứa thông tin cụ thể: dung lượng, số ngày, giá, vendor_sku
 
-SOURCE TYPE (nguồn/kênh nhập hàng — ký tự đầu product_code):
-  VN: 1=Stock Direct  2=Stock Internal GHI  3=Monthly Invoice GHI  4=Telco Balance  5=Datapool  6=Others
-  US: A=Stock Direct  B=Stock Internal GHV  C=Monthly Invoice GHV  D=Telco Balance  E=Datapool
+SKU TYPE:
+- Base: SIM frame hoặc eSIM profile (không có data, cần ghép Datapack)
+- Datapack: data riêng, ghép với Base
+- Base+Datapack: sản phẩm hoàn chỉnh (thường dùng nhất)
+  Frame SKU = WMBLANKSIM/WMBLANKESIM | Datapack SKU = SKU data riêng
 
-DATA POLICY CODE (ký tự cuối product_code — loại & tốc độ data):
-  A=Daily Unlimited 5Mbps    B=Daily Unlimited 10Mbps   C=Unlimited 20Mbps
-  D=Unlimited 100Mbps        E=Fixed Unlimited 5Mbps    G=Fixed Unlimited 10Mbps
-  F=Fixed throttle <2Mbps    P=Daily throttle <2Mbps    Y=Fixed không throttle
-  Z=Daily không throttle     K=Dành cho eSIM profile và SIM frame
+CHUỖI GIÁ: original_cost → latest_cogs → final_cogs_incl_vat_vnd (VND) / final_cogs_usd
+  Khi nói "Giá" → dùng final_cogs_incl_vat_vnd (VND) hoặc final_cogs_usd tùy ngữ cảnh.
 
-PURCHASE TYPE (phương thức mua): Manual Purchase / API Purchase / Only Stock
-
-SKU TYPE: Base (product_type B hoặc D) | Base+Datapack (C hoặc E) | Datapack (A)
-
-FRAME SKU & DATAPACK SKU: dùng cho sản phẩm type Base+Datapack.
-  Frame SKU = WMBLANKSIM/WMBLANKESIM hoặc 3HKDATAPOOLSIM/3HKDATAPOOLESIM
-  Datapack SKU = mã SKU data riêng ghép vào SIM frame
-
-CHUỖI GIÁ (SKU): original_cost → latest_cogs → final_cogs_not_vat → final_cogs_incl_vat_vnd / final_cogs_usd
-  "Giá" = final_cogs_incl_vat_vnd (VND) hoặc final_cogs_usd (USD)
-
-EXPIRATIONS: số ngày SIM còn hiệu lực sau kích hoạt (≥ day_amount, ví dụ gói 7 ngày nhưng SIM hết hạn sau 90 ngày).
+EXPIRATIONS vs DAY_AMOUNT:
+- day_amount = số ngày sử dụng data (ví dụ: 7 ngày)
+- expirations = số ngày SIM còn hiệu lực sau kích hoạt (ví dụ: 90 ngày)
+  → Có thể mua gói 7 ngày nhưng SIM vẫn dùng được 90 ngày kể từ lần kích hoạt đầu.
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
