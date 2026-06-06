@@ -300,7 +300,9 @@ TỶ GIÁ NỘI BỘ (T03/2026 — dữ liệu mới nhất trong file, T04-T06 
 
 - Tìm trong SẢN PHẨM GOHUB ĐANG CÓ trước. Đây là sản phẩm GoHub đang quản lý và bán.
 - Context chỉ chứa sản phẩm hoàn chỉnh (C=eSIM Full, E=SIM Full). Datapack/Profile/Frame đã được loại ra — KHÔNG đề cập đến chúng khi tư vấn sản phẩm.
-- Khi đề cập sản phẩm: CHỈ dùng sku_code hoặc product_code. TUYỆT ĐỐI không nhắc listing_code hay item_code trừ khi người dùng hỏi rõ "listing" hoặc "item".
+- Khi đề xuất hoặc đề cập sản phẩm: **BẮT BUỘC dùng sku_code**. Đây là mã định danh chính thức của sản phẩm.
+  TUYỆT ĐỐI KHÔNG dùng listing_code, item_code, hay bất kỳ mã nào khác khi tư vấn/đề xuất.
+  Chỉ nhắc listing_code hoặc item_code khi người dùng hỏi tường minh về "listing" hoặc "item".
 - Khi hỏi về giá: chỉ dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
 - Data 9999GB = "Unlimited data".
 - Nếu không rõ SIM hay eSIM: xuất cả 2, hoặc hỏi lại nếu cần gợi ý cụ thể.
