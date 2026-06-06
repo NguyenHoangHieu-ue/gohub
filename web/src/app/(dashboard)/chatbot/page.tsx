@@ -102,7 +102,7 @@ export default function ChatbotPage() {
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-baseline gap-2">
           <Bot size={20} className="text-brand-600" />
-          <h1 className="text-xl font-bold text-gray-900">Chatbot Hỗ Trợ Sale</h1>
+          <h1 className="text-xl font-bold text-gray-900">Chatbot Hỗ Trợ</h1>
           <span className="text-sm text-gray-400">Trợ lý AI từ dữ liệu GoHub</span>
         </div>
         {messages.length > 0 && (

@@ -48,7 +48,7 @@ export function Sidebar() {
             📡
           </div>
           <div>
-            <div className="text-white font-bold text-[15px] leading-tight">GoHub PM</div>
+            <div className="text-white font-bold text-[15px] leading-tight">Gohub Telco</div>
             <div className="text-blue-100/70 text-[11px]">Product Manager</div>
           </div>
         </div>

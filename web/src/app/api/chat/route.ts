@@ -7,128 +7,191 @@ import { supabaseAdmin } from "@/lib/supabase"
 const SKU_LIMIT  = 3_000
 const LIST_LIMIT = 3_000
 const ITEM_LIMIT = 2_000
-const CACHE_TTL  = 30 * 60 * 1000
+const CACHE_TTL  = 24 * 60 * 60 * 1000   // 24h — data sync 1 lần/ngày
 
-let cache: {
-  data: {
-    products: any[]; skus: any[]; listings: any[]; items: any[]
-    zones3hk: any[]; wmInSystem: any[]
-    countries: any[]; supportCountries: any[]
-  }
-  at: number
-} | null = null
+let cache: { data: CacheData; at: number } | null = null
 
-async function fetchLimited(table: string, limit: number, activeOnly = false) {
-  let q = supabaseAdmin.from(table).select("*")
+interface CacheData {
+  products:         any[]
+  skus:             any[]
+  listings:         any[]
+  items:            any[]
+  wmProducts:       any[]
+  wmInSystemSet:    Set<string>
+  zones3hk:         any[]
+  countries:        any[]
+  supportCountries: any[]
+  vendors:          any[]
+  settings:         any[]
+}
+
+async function fetchAll(table: string, select = "*", activeOnly = false) {
+  let q = supabaseAdmin.from(table).select(select)
   if (activeOnly) q = (q as any).eq("status", "Active")
-  const { data } = await (q as any).limit(limit)
+  const { data } = await (q as any).limit(20_000)
   return data ?? []
 }
 
-async function getRawData() {
+async function getRawData(): Promise<CacheData> {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
-  const [products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries] = await Promise.all([
-    fetchLimited("products", 1000),
-    fetchLimited("skus",     SKU_LIMIT,  true),
-    fetchLimited("listings", LIST_LIMIT, true),
-    fetchLimited("items",    ITEM_LIMIT, true),
-    supabaseAdmin.from("ncc_3hk_zones").select("zone,country,network,price_per_gb_hkd,is_kyc")
-      .order("zone").then(r => r.data ?? []),
-    supabaseAdmin.from("skus")
-      .select("sku_code,vendor_sku,sim_esim,data_amount,data_amount_unit,day_amount,throttle_speed,status")
-      .ilike("vendor_sku", "WM-%").limit(800).then(r => r.data ?? []),
+  const [
+    products, skus, listings, items,
+    wmProducts, wmSkusRaw,
+    zones3hk,
+    countries, supportCountries,
+    vendors, settings,
+  ] = await Promise.all([
+    fetchAll("products", "*"),
+    fetchAll("skus",     "*", true),
+    fetchAll("listings", "*", true),
+    fetchAll("items",    "*", true),
+
+    // NCC WORLDMOVE — toàn bộ catalog, bỏ APN fields (tiết kiệm token)
+    supabaseAdmin.from("ncc_worldmove")
+      .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,status")
+      .eq("status", "active")
+      .order("region")
+      .then(r => r.data ?? []),
+
+    // WM SKUs đã có trong hệ thống GoHub (để đánh dấu in_system)
+    supabaseAdmin.from("skus").select("vendor_sku").ilike("vendor_sku", "WM-%")
+      .then(r => r.data ?? []),
+
+    // NCC 3HK — zone reference
+    supabaseAdmin.from("ncc_3hk")
+      .select("zone,country,network,price_per_gb_hkd,is_kyc")
+      .order("zone")
+      .then(r => r.data ?? []),
+
     supabaseAdmin.from("ref_countries").select("code,name").order("code").then(r => r.data ?? []),
     supabaseAdmin.from("ref_support_countries").select("code,support_country,country_codes").order("code").then(r => r.data ?? []),
+    supabaseAdmin.from("ref_vendors").select("vendor_code,name,description").order("vendor_code").then(r => r.data ?? []),
+    supabaseAdmin.from("app_settings").select("key,value").then(r => r.data ?? []),
   ])
-  cache = { data: { products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries }, at: now }
-  return cache.data
+
+  const wmInSystemSet = new Set<string>(wmSkusRaw.map((s: any) => s.vendor_sku as string))
+
+  const data: CacheData = {
+    products,
+    skus:     skus.slice(0, SKU_LIMIT),
+    listings: listings.slice(0, LIST_LIMIT),
+    items:    items.slice(0, ITEM_LIMIT),
+    wmProducts,
+    wmInSystemSet,
+    zones3hk,
+    countries,
+    supportCountries,
+    vendors,
+    settings,
+  }
+  cache = { data, at: now }
+  return data
 }
 
-function buildContext(
-  data: {
-    products: any[]; skus: any[]; listings: any[]; items: any[]
-    zones3hk: any[]; wmInSystem: any[]
-    countries: any[]; supportCountries: any[]
-  },
-  role: string
-): string {
-  const { products, skus, listings, items, zones3hk, wmInSystem, countries, supportCountries } = data
-  const isCostRole = role === "admin" || role === "manager"
+function fmtWmData(p: any): string {
+  if (p.is_unlimited) return p.is_daily ? `${p.data_gb ?? "?"}GB/d+Unlim` : "Unlimited"
+  if (!p.data_gb) return "?"
+  const gb = p.data_gb < 1 ? `${Math.round(p.data_gb * 1000)}MB` : `${p.data_gb}GB`
+  return p.is_daily ? `${gb}/ngày` : gb
+}
 
-  const lines = [
-    `=== PRODUCTS (${products.length}) ===`,
+function fmtThrottle(kbps: number | null): string {
+  if (!kbps) return "NoLimit"
+  if (kbps >= 1000) return `${kbps / 1000}Mbps`
+  return `${kbps}kbps`
+}
+
+function buildContext(d: CacheData, role: string): string {
+  const isCost = role === "admin" || role === "manager"
+  const { products, skus, listings, items, wmProducts, wmInSystemSet, zones3hk,
+          countries, supportCountries, vendors, settings } = d
+
+  const lines: string[] = [
+    // ── GoHub system data ────────────────────────────────────────────────────
+    `=== PRODUCTS hệ thống GoHub (${products.length}) ===`,
     ...products.map((p: any) =>
-      `- ${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.supported_countries}|${p.status}`
+      `${p.product_code}|${p.tenant}|${p.type_of_sim}|${p.status}|nước:${p.supported_countries}`
     ),
 
-    `\n=== SKUS (${skus.length} active) ===`,
+    `\n=== SKUS hệ thống (${skus.length} active) ===`,
     ...skus.map((s: any) =>
-      `- ${s.sku_code}|${s.product_code}|${s.sim_esim}` +
+      `${s.sku_code}|${s.product_code}|${s.sim_esim}` +
       `|${s.data_amount}${s.data_amount_unit}/${s.day_amount}${s.day_amount_unit}` +
-      (isCostRole ? `|cogs_vnd:${s.final_cogs_included_vat_vnd}` : "")
+      `|throttle:${s.throttle_speed}` +
+      (isCost ? `|cogs_vnd:${s.final_cogs_included_vat_vnd}|cogs_usd:${s.final_cogs_usd}` : "")
     ),
 
     `\n=== LISTINGS (${listings.length} active) ===`,
     ...listings.map((l: any) =>
-      `- ${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}` +
-      `|op:${l.network_operator}|exp:${l.expirations_en}ngày|${l.status}`
+      `${l.listing_code}|${l.listing_name_vn}|${l.type_of_sim}` +
+      `|op:${l.network_operator}|exp:${l.expirations_en}ngày`
     ),
 
     `\n=== ITEMS (${items.length} active) ===`,
     ...items.map((i: any) =>
-      `- ${i.item_name_vn}|listing:${i.listing_code}|${i.unitprice}${i.currency}` +
+      `${i.item_name_vn}|listing:${i.listing_code}|${i.unitprice}${i.currency}` +
       `|${i.data_amount}${i.data_amount_unit}/${i.day_amount}${i.day_amount_unit}`
     ),
 
-    // ── NCC: 3HK ──────────────────────────────────────────────────────────────
-    `\n=== NCC: 3HK ZONE REFERENCE (datapool — GoHub tự tạo gói) ===`,
-    `Lưu ý: 3HK là datapool, GoHub có thể tạo bất kỳ gói nào (GB, ngày) với nước hỗ trợ dưới đây.`,
-    `KYC bắt buộc: chỉ Hong Kong và Taiwan.`,
-    `Giá cost = GB × Price/GB_HKD × tỷ giá (chỉ admin/manager biết).`,
+    // ── NCC: WORLDMOVE ───────────────────────────────────────────────────────
+    `\n=== NCC WORLDMOVE — toàn bộ catalog (${wmProducts.length} sản phẩm) ===`,
+    `Chú thích cột: vendor_id|vùng|loại|ngày|data|throttle` +
+      (isCost ? `|giá(${wmProducts[0]?.cogs_currency ?? "TWD"})` : "") + `|HT=đã có trong GoHub`,
+    ...wmProducts.map((p: any) =>
+      `${p.vendor_product_id}|${p.region}|${p.sim_type}|${p.days}d` +
+      `|${fmtWmData(p)}|${fmtThrottle(p.throttle_kbps)}` +
+      (isCost ? `|${p.cogs ?? "?"}` : "") +
+      (wmInSystemSet.has(p.vendor_product_id) ? "|HT" : "")
+    ),
+
+    // ── NCC: 3HK ─────────────────────────────────────────────────────────────
+    `\n=== NCC 3HK — zone datapool (${zones3hk.length} zone-quốc gia) ===`,
+    `3HK là datapool: GoHub tự tạo gói từ zone. KYC bắt buộc chỉ HK và TW.`,
     ...zones3hk.map((z: any) =>
-      `- Zone ${z.zone}|${z.country}|${z.network}` +
-      (isCostRole ? `|${z.price_per_gb_hkd}HKD/GB` : "") +
-      (z.is_kyc ? `|KYC=YES` : `|KYC=NO`)
+      `Zone${z.zone}|${z.country}|${z.network}` +
+      (isCost ? `|${z.price_per_gb_hkd}HKD/GB` : "") +
+      (z.is_kyc ? `|KYC` : "")
     ),
 
-    // ── NCC: WORLDMOVE — sản phẩm đã có trên hệ thống ─────────────────────────
-    `\n=== NCC: WORLDMOVE — sản phẩm đã có trên hệ thống GoHub (${wmInSystem.length}) ===`,
-    `Lưu ý: WORLDMOVE không yêu cầu KYC. WM cung cấp eSIM/SIM cố định theo gói.`,
-    `Throttle: Unlimited standard=2GB/ngày rồi 5Mbps, Premium=1GB/ngày rồi 10Mbps, AYCE=không giới hạn.`,
-    ...wmInSystem.map((s: any) =>
-      `- ${s.vendor_sku}|${s.sim_esim}|${s.data_amount}${s.data_amount_unit}/${s.day_amount}ngày` +
-      `|throttle:${s.throttle_speed}|${s.status}`
+    // ── Reference ────────────────────────────────────────────────────────────
+    `\n=== MÃ VENDOR (${vendors.length}) ===`,
+    ...vendors.map((v: any) =>
+      `${v.vendor_code}=${v.name}` + (v.description ? ` (${v.description})` : "")
     ),
 
-    // ── Country reference ────────────────────────────────────────────────────
     `\n=== MÃ NƯỚC ISO (${countries.length}) ===`,
     ...countries.map((c: any) => `${c.code}=${c.name}`),
 
-    `\n=== MÃ NHÓM NƯỚC HỆ THỐNG (${supportCountries.length}) ===`,
+    `\n=== NHÓM NƯỚC HỖ TRỢ GoHub (${supportCountries.length}) ===`,
     ...supportCountries.map((sc: any) =>
-      `${sc.code}: ${sc.support_country ?? ""}` +
-      (sc.country_codes ? ` [${sc.country_codes}]` : "")
+      `${sc.code}: ${sc.support_country ?? ""}${sc.country_codes ? ` [${sc.country_codes}]` : ""}`
     ),
+
+    // ── Tỷ giá (admin/manager only) ──────────────────────────────────────────
+    ...(isCost && settings.length ? [
+      `\n=== TỶ GIÁ NỘI BỘ ===`,
+      ...settings.map((s: any) => `${s.key}=${s.value}`),
+    ] : []),
   ]
+
   return lines.join("\n")
 }
 
-const SYSTEM_BASE = `Bạn là trợ lý AI của GoHub, hỗ trợ team tra cứu thông tin sản phẩm SIM/eSim du lịch.
-Trả lời bằng tiếng Việt, chính xác dựa trên dữ liệu thực tế từ hệ thống PM bên dưới.
-Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có dữ liệu thay vì đoán.
-Khi hiển thị giá, luôn ưu tiên dùng giá VND. Nếu chỉ có ngoại tệ thì ghi rõ đơn vị.
+const SYSTEM_BASE = `Bạn là trợ lý AI của GoHub Telco, hỗ trợ team tra cứu thông tin sản phẩm SIM/eSim du lịch.
+Trả lời bằng tiếng Việt, chính xác dựa trên dữ liệu thực tế từ hệ thống bên dưới.
+Nếu không tìm thấy thông tin trong dữ liệu, hãy nói rõ là không có thay vì đoán.
+Khi hiển thị giá, ưu tiên VND. Nếu chỉ có ngoại tệ thì ghi rõ đơn vị.
 
-Quy tắc định dạng câu trả lời:
-- Dùng danh sách gạch đầu dòng khi liệt kê nhiều mục (3+ mục).
-- Dùng in đậm cho tên sản phẩm, giá, thông số quan trọng.
-- Câu trả lời ngắn gọn, đúng trọng tâm. Không dùng tiêu đề lớn (##) trừ khi câu trả lời dài.
-- Không lạm dụng in đậm — chỉ in đậm thông tin quan trọng nhất.
+Quy tắc định dạng:
+- Dùng danh sách gạch đầu dòng khi liệt kê 3+ mục.
+- In đậm tên sản phẩm, giá, thông số quan trọng nhất.
+- Câu trả lời ngắn gọn, đúng trọng tâm. Không dùng tiêu đề ## trừ khi câu trả lời rất dài.
 
-Về NCC (nhà cung cấp):
-- 3HK: datapool, GoHub tự tạo gói. Dữ liệu zone cho biết 3HK hỗ trợ nước nào và mạng nào.
-- WORLDMOVE: catalog cố định, không yêu cầu KYC. Sản phẩm WM đã có trong hệ thống ở mục NCC WORLDMOVE.
+Về nhà cung cấp:
+- WORLDMOVE (WM): catalog cố định, không KYC. Cột HT = đã có trong hệ thống GoHub.
+- 3HK: datapool theo zone, GoHub tự cấu hình gói. KYC chỉ HK và TW.
 
 Dữ liệu hệ thống:`
 
@@ -143,13 +206,10 @@ export async function POST(req: NextRequest) {
   try {
     const rawData = await getRawData()
     const context = buildContext(rawData, role)
-    const systemInstruction = `${SYSTEM_BASE}\n${context}\n\n---\nNgười đang chat với bạn: ${name}`
+    const systemInstruction = `${SYSTEM_BASE}\n${context}\n\n---\nNgười đang chat: ${name}`
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({
-      model:             "gemini-3.5-flash",
-      systemInstruction,
-    })
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
 
     const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
       role:  m.role === "user" ? "user" : "model",
@@ -174,9 +234,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return new Response(stream, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    })
+    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
