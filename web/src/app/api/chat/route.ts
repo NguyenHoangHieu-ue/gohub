@@ -21,24 +21,47 @@ interface CacheData {
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
+// Supabase giới hạn 1000 rows mặc định — cần pagination để lấy hết
+async function fetchAllRows(
+  table: string,
+  select: string,
+  filters: Array<{ col: string; val: string }> = []
+): Promise<any[]> {
+  const PAGE = 1000
+  const all: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    let q = supabaseAdmin.from(table).select(select).range(from, from + PAGE - 1)
+    for (const f of filters) q = (q as any).eq(f.col, f.val)
+    const { data } = await q
+    if (!data?.length) break
+    all.push(...data)
+    if (data.length < PAGE) break
+  }
+  return all
+}
+
 async function getRawData(): Promise<CacheData> {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
+  // skus và ncc_worldmove có >1000 rows — phải dùng fetchAllRows
+  // Chạy song song: skus+products+wm cùng lúc, reference tables cùng lúc
   const [
     skusRaw, productsRaw,
     wmProductsRaw, wmSkusRaw, zones3hkRaw,
     supportCountries, countries, vendors, settings,
   ] = await Promise.all([
-    supabaseAdmin.from("skus")
-      .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd")
-      .eq("status", "Active").then(r => r.data ?? []),
-    supabaseAdmin.from("products")
-      .select("product_code,product_type,operator_code,network_type,kyc_needed,supported_countries,note")
-      .then(r => r.data ?? []),
-    supabaseAdmin.from("ncc_worldmove")
-      .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc")
-      .eq("status", "active").then(r => r.data ?? []),
+    fetchAllRows("skus",
+      "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd",
+      [{ col: "status", val: "Active" }]
+    ),
+    fetchAllRows("products",
+      "product_code,product_type,operator_code,network_type,kyc_needed,supported_countries,note"
+    ),
+    fetchAllRows("ncc_worldmove",
+      "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc",
+      [{ col: "status", val: "active" }]
+    ),
     supabaseAdmin.from("skus").select("vendor_sku").ilike("vendor_sku", "WM-%")
       .then(r => r.data ?? []),
     supabaseAdmin.from("ncc_3hk").select("zone,country,network,price_per_gb_hkd,is_kyc")
