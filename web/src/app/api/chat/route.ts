@@ -169,12 +169,21 @@ function buildContext(d: CacheData, role: string): string {
     }
   }
 
+  // Chỉ giữ SKU sản phẩm hoàn chỉnh (C=eSIM Full, E=SIM Full, 1=eSIM Full VN, 2=SIM Full VN)
+  // Loại bỏ: A=Datapack, B=eSIM Profile, D=SIM Frame, F=Ship, G=Gift, H=Other, K=Frame
+  const FULL_TYPES = new Set(["C", "E", "1", "2"])
+  const fullSkus = skus.filter((s: any) => {
+    const pt = prodMap[s.product_code]?.product_type
+    return FULL_TYPES.has(pt ?? "")
+  })
+
   return [
-    // ── SKUs ────────────────────────────────────────────────────────────────
-    `=== SẢN PHẨM GOHUB ĐANG CÓ (${skus.length} SKU active) ===`,
+    // ── SKUs (chỉ sản phẩm hoàn chỉnh) ──────────────────────────────────────
+    `=== SẢN PHẨM GOHUB ĐANG CÓ — chỉ sản phẩm hoàn chỉnh (${fullSkus.length} SKU active) ===`,
+    `Lưu ý: chỉ bao gồm loại C(eSIM Full) và E(SIM Full). Datapack/Profile/Frame đã bị loại.`,
     `Cột: sku_code|product_code|tenant|SIM/eSIM|data/days|throttle|loại SP|data_policy|nguồn|nhà CC|vendor_sku|hết hạn|note|kyc|nước` +
       (isCost ? `|giá_vnd|giá_usd` : ""),
-    ...skus.map((s: any) => {
+    ...fullSkus.map((s: any) => {
       const p = prodMap[s.product_code] ?? {}
       return `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
         `|${fmtData(s.data_amount, s.data_amount_unit)}/${s.day_amount}d` +
@@ -283,13 +292,14 @@ COGS 3HK (US Datapool — source_type E) — chỉ admin/manager:
   - Unlim 5Mbps:  1.6 GB/ngày × số_ngày × giá_HKD/GB ÷ tỷ_giá_HKD/USD
   (Tỷ giá HKD/USD hiện tại ≈ 7.798; tra bảng Tỷ giá để lấy giá trị tháng hiện tại)
 
-TỶ GIÁ NỘI BỘ (T03/2026 — tháng gần nhất có dữ liệu):
-  USD/VND = 26,394 | HKD/USD = 7.798 | CNY/VND = 3,970 | GBP/VND = 35,957
+TỶ GIÁ NỘI BỘ (T03/2026 — dữ liệu mới nhất trong file, T04-T06 chưa cập nhật):
+  USD/VND = 26,394 | HKD/USD = 7.798 | TWD/USD = 31.452 | CNY/VND = 3,970
+  → WM giá gốc TWD: COGS_USD = giá_TWD ÷ 31.452; COGS_VND = COGS_USD × 26,394
 
 ━━━ CÁCH TRẢ LỜI ━━━
 
 - Tìm trong SẢN PHẨM GOHUB ĐANG CÓ trước. Đây là sản phẩm GoHub đang quản lý và bán.
-- Chỉ đề xuất SKU có product_type C (eSIM Full) hoặc E (SIM Full). Product_type A là Datapack — gói data riêng lẻ, chưa dùng được độc lập — KHÔNG giới thiệu cho người dùng.
+- Context chỉ chứa sản phẩm hoàn chỉnh (C=eSIM Full, E=SIM Full). Datapack/Profile/Frame đã được loại ra — KHÔNG đề cập đến chúng khi tư vấn sản phẩm.
 - Khi đề cập sản phẩm: CHỈ dùng sku_code hoặc product_code. TUYỆT ĐỐI không nhắc listing_code hay item_code trừ khi người dùng hỏi rõ "listing" hoặc "item".
 - Khi hỏi về giá: chỉ dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
 - Data 9999GB = "Unlimited data".
