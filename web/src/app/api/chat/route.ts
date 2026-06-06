@@ -35,14 +35,22 @@ async function getRawData(): Promise<CacheData> {
     countries, supportCountries,
     vendors, settings,
   ] = await Promise.all([
-    supabaseAdmin.from("skus").select("*").eq("status", "Active").limit(SKU_LIMIT)
-      .then(r => r.data ?? []),
-    supabaseAdmin.from("products").select("product_code,note,kyc_needed,network_type,apn,onsite_carrier,operator_code,supported_countries,type_of_sim,vendor_code")
-      .then(r => r.data ?? []),
-    supabaseAdmin.from("listings").select("listing_code,listing_name_vn,listing_name_en,type_of_sim,network_operator,expirations_en")
-      .eq("status", "Active").limit(LIST_LIMIT).then(r => r.data ?? []),
-    supabaseAdmin.from("items").select("item_name_vn,listing_code,unitprice,currency,data_amount,data_amount_unit,day_amount")
-      .eq("status", "Active").limit(ITEM_LIMIT).then(r => r.data ?? []),
+    // SKUs — chỉ cột có trong PM system (bỏ: sku_ref, product_type text, parents, synced_at, dates)
+    supabaseAdmin.from("skus").select(
+      "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,call_sms_details,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd,wr_group,currency"
+    ).eq("status", "Active").limit(SKU_LIMIT).then(r => r.data ?? []),
+    // Products — chỉ cột có trong PM system (bỏ: product_ref, gc_purchase_type, synced_at, dates)
+    supabaseAdmin.from("products").select(
+      "product_code,tenant,status,type_of_sim,product_type,operator_code,vendor_code,source_type,data_type,purchase_type,sku_type,import_type,supported_countries,network_type,onsite_carrier,local_phone_number,hotspot,kyc_code,kyc_needed,top_up_options,base_sim_esim_sku_code,daily_reset_time,activation_time,apn,local_number_country,kyc_links,activation,unsupported_apps,telco_perks,note,data_plan_type"
+    ).then(r => r.data ?? []),
+    // Listings — chỉ cột PM (bỏ: listing_ref, price_list, esim_type, raw_, backup, highlight, template codes, dates)
+    supabaseAdmin.from("listings").select(
+      "listing_code,tenant,status,listing_name_en,listing_name_vn,listing_type,reference_product_code,type_of_sim,product_type,network_operator,data_type_en,supported_countries,daily_reset_time_en,activation_time_en,network_type,apn,hotspot_en,kyc_needed_en,kyc_links_en,expirations_en,top_up_options_en,activation_en,unsupported_apps_en,telco_perks_en,note_en,note_vn,call_en,call_sms_details_en,local_phone_number_country,category_code"
+    ).eq("status", "Active").limit(LIST_LIMIT).then(r => r.data ?? []),
+    // Items — chỉ cột PM (bỏ: item_ref, alias, price_list, channel, pricelistcode, dates)
+    supabaseAdmin.from("items").select(
+      "item_code,sku_code,listing_code,tenant,status,item_type,item_name_en,item_name_vn,day_amount,day_amount_unit,data_amount,data_amount_unit,throttle_speed_en,call_en,call_sms_details_en,sales_channel,unitprice,currency,category_code"
+    ).eq("status", "Active").limit(ITEM_LIMIT).then(r => r.data ?? []),
     supabaseAdmin.from("ncc_worldmove")
       .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim")
       .eq("status", "active").order("region").then(r => r.data ?? []),

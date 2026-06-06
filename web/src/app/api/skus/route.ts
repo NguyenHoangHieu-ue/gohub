@@ -38,7 +38,11 @@ export async function GET(req: NextRequest) {
   const data    = sp.get("data")    || ""
   const days    = sp.get("days")    || ""
 
-  let q = supabaseAdmin.from("skus").select("*", { count: "exact" })
+  // Chỉ fetch cột có trong PM system (bỏ: sku_ref, parents, product_type text, synced_at, dates)
+  let q = supabaseAdmin.from("skus").select(
+    "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,call_sms_details,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd,wr_group,currency",
+    { count: "exact" }
+  )
 
   if (search) q = (q as any).or(
     `sku_code.ilike.%${search}%,product_code.ilike.%${search}%,vendor_sku.ilike.%${search}%`
