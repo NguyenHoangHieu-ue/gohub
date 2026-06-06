@@ -73,8 +73,15 @@ async function getRawData(): Promise<CacheData> {
   return data
 }
 
+function fmtData(amount: number | null, unit: string | null, isDaily = false): string {
+  if (!amount || amount >= 9999) return isDaily ? "Unlimited/ngày" : "Unlimited"
+  const gb = amount < 1 ? `${Math.round(amount * 1000)}MB` : `${amount}${unit ?? "GB"}`
+  return isDaily ? `${gb}/ngày` : gb
+}
+
 function fmtWmData(p: any): string {
-  if (p.is_unlimited) return p.is_daily ? `${p.data_gb ?? "?"}GB/d+Unlim` : "Unlimited"
+  if (p.is_unlimited || (p.data_gb ?? 0) >= 9999)
+    return p.is_daily ? `${p.data_gb ?? "?"}GB/d+Unlim` : "Unlimited"
   if (!p.data_gb) return "?"
   const gb = p.data_gb < 1 ? `${Math.round(p.data_gb * 1000)}MB` : `${p.data_gb}GB`
   return p.is_daily ? `${gb}/ngày` : gb
@@ -98,7 +105,7 @@ function buildContext(d: CacheData, role: string): string {
       (isCost ? `|cogs_vnd|cogs_usd` : ""),
     ...skuView.map((s: any) =>
       `${s.sku_code}|${s.product_code}|${s.tenant}|${s.sim_esim}` +
-      `|${s.data_amount}${s.data_amount_unit}/${s.day_amount}d` +
+      `|${fmtData(s.data_amount, s.data_amount_unit)}/${s.day_amount}d` +
       `|${s.throttle_speed ?? "—"}|vendor:${s.vendor_sku ?? "—"}` +
       (s.note ? `|note:${s.note}` : "") +
       (s.kyc_needed ? `|kyc:${s.kyc_needed}` : "") +
@@ -134,8 +141,8 @@ function buildContext(d: CacheData, role: string): string {
     ),
 
     // ── NCC: 3HK ─────────────────────────────────────────────────────────────
-    `\n=== [NCC] 3HK — Zone datapool (${zones3hk.length} zone-quốc gia) ===`,
-    `3HK là datapool: GoHub tự cấu hình gói GB+ngày. KYC bắt buộc chỉ HK và TW.`,
+    `\n=== [NCC] 3HK — Danh sách zone (${zones3hk.length} quốc gia) ===`,
+    `Cột: Zone|Quốc gia|Mạng` + (isCost ? `|Giá/GB (HKD)` : "") + `|KYC`,
     ...zones3hk.map((z: any) =>
       `Zone${z.zone}|${z.country}|${z.network}` +
       (isCost ? `|${z.price_per_gb_hkd}HKD/GB` : "") +
@@ -174,9 +181,10 @@ Nếu không tìm thấy thông tin, hãy nói rõ là không có thay vì đoá
    - Tra Listings khi cần tên hiển thị hoặc thông số listing.
    - Tra Items khi cần giá bán theo kênh.
 
-2. ƯU TIÊN MÃ SKU:
-   - Khi người dùng hỏi về sản phẩm mà không nói rõ loại mã (listing, item...), luôn trả về sku_code từ SKU_VIEW.
-   - Chỉ trả listing_code hoặc item_code khi người dùng hỏi rõ về listing/item/giá bán.
+2. ƯU TIÊN MÃ SKU — BẮT BUỘC:
+   - Mặc định CHỈ xuất sku_code. KHÔNG xuất listing_code hay item_code trừ khi người dùng hỏi rõ.
+   - Ví dụ: "gói nào cho Nhật 7 ngày" → trả sku_code. KHÔNG tự ý kèm listing_code.
+   - Chỉ xuất listing_code khi user hỏi về listing/tên sản phẩm hiển thị/giá bán.
 
 3. PHÂN BIỆT 2 NGUỒN — QUAN TRỌNG:
    a) HỆ THỐNG GOHUB (đang bán/quản lý): SKU_VIEW + Listings + Items
@@ -196,7 +204,7 @@ Nếu không tìm thấy thông tin, hãy nói rõ là không có thay vì đoá
       Xuất 2–3 gợi ý gần nhất (cùng vùng/số ngày/dung lượng), kèm sku_code nếu đã có trong hệ thống.
    b) Kiểm tra trong catalog NCC (WM hoặc 3HK) xem có sản phẩm phù hợp chưa được nhập không (không có cột HT).
       Nếu có, thông báo: "Vendor [tên] có sản phẩm [thông số] nhưng chưa được tạo trong hệ thống.
-      Nếu muốn tạo, vui lòng request Hiếu."
+      **Nếu muốn tạo, vui lòng request Hiếu.**"
 
 ━━━ QUY TẮC TRÌNH BÀY ━━━
 
@@ -204,6 +212,7 @@ Nếu không tìm thấy thông tin, hãy nói rõ là không có thay vì đoá
 - In đậm sku_code, giá, thông số quan trọng.
 - Ngắn gọn, đúng trọng tâm. Không dùng tiêu đề ## trừ khi câu trả lời rất dài.
 - Khi hiển thị giá: ưu tiên VND, ghi rõ đơn vị nếu ngoại tệ.
+- Data 9999GB = Unlimited, hiển thị là "Unlimited data".
 
 Dữ liệu hệ thống:`
 
