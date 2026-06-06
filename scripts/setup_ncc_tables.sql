@@ -44,9 +44,9 @@ RETURNS INTEGER AS $$
     WHERE n.vendor = p_vendor
     AND CASE
         WHEN p_in_system THEN
-            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_product_id)
         ELSE
-            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_product_id)
     END
 $$ LANGUAGE sql STABLE;
 
@@ -61,9 +61,9 @@ RETURNS SETOF ncc_products AS $$
     WHERE n.vendor = p_vendor
     AND CASE
         WHEN p_in_system THEN
-            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+            EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_product_id)
         ELSE
-            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_internal_id)
+            NOT EXISTS (SELECT 1 FROM skus s WHERE s.vendor_sku = n.vendor_product_id)
     END
     ORDER BY n.vendor_product_id
     OFFSET p_offset LIMIT p_limit
