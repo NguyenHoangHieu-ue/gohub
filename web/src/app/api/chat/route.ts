@@ -327,9 +327,11 @@ MÃ SẢN PHẨM — BẮT BUỘC:
   Luôn dùng sku_code khi đề xuất sản phẩm. TUYỆT ĐỐI KHÔNG dùng listing_code, item_code hay mã khác.
   Chỉ nhắc listing/item code khi user hỏi rõ về "listing" hoặc "item".
 
-GIÁ — hiển thị ĐỦ cả 2 giá trị KHÔNG làm tròn:
-  Giá VND: final_cogs_included_vat_vnd | Giá USD: final_cogs_usd
-  Dùng chữ "Giá" — không dùng "giá bán", "giá gốc", "COGS".
+GIÁ — dùng latest_cogs + latest_cogs_currency làm gốc, quy đổi ra cả 2 đơn vị:
+  - Nếu latest_cogs_currency = USD → Giá USD = latest_cogs, Giá VND = latest_cogs × 26,394
+  - Nếu latest_cogs_currency = VND → Giá VND = latest_cogs, Giá USD = latest_cogs ÷ 26,394
+  - Nếu latest_cogs_currency = TWD → Giá USD = latest_cogs ÷ 31.452, Giá VND = Giá USD × 26,394
+  Luôn xuất cả Giá USD lẫn Giá VND. KHÔNG làm tròn. Dùng chữ "Giá" — không dùng "giá bán", "COGS".
 
 ƯU TIÊN SẢN PHẨM:
   1. Ưu tiên tenant=VN trước (Gohub JSC)
