@@ -9,6 +9,7 @@ const CACHE_TTL = 30 * 60 * 1000
 let cache: { data: CacheData; at: number } | null = null
 
 interface CacheData {
+  // Raw data (dùng cho NCC lookup)
   skus:             any[]
   wmProducts:       any[]
   wmInSystem:       Set<string>
@@ -17,11 +18,13 @@ interface CacheData {
   countries:        any[]
   vendors:          any[]
   settings:         any[]
+  // Pre-computed context strings (inject thẳng vào system prompt)
+  skuCtx:           string   // không có giá
+  skuCtxCost:       string   // có giá VND/USD (admin/manager)
 }
 
-// ─── Data fetching ────────────────────────────────────────────────────────────
+// ─── Pagination helper — vượt giới hạn 1000 rows của Supabase ────────────────
 
-// Supabase giới hạn 1000 rows mặc định — cần pagination để lấy hết
 async function fetchAllRows(
   table: string,
   select: string,
@@ -40,12 +43,61 @@ async function fetchAllRows(
   return all
 }
 
+// ─── Data fetching + pre-compute ─────────────────────────────────────────────
+
+const FULL_TYPES = new Set(["C", "E", "1", "2"])
+
+function fmtData(amount: number | null, unit: string | null): string {
+  if (!amount || amount >= 9999) return "Unlimited"
+  return amount < 1 ? `${Math.round(amount * 1000)}MB` : `${amount}${unit ?? "GB"}`
+}
+
+function fmtWmData(p: any): string {
+  if (p.is_unlimited || (p.data_gb ?? 0) >= 9999)
+    return p.is_daily ? `${p.data_gb ?? "?"}GB/d+Unlim` : "Unlimited"
+  if (!p.data_gb) return "?"
+  const gb = p.data_gb < 1 ? `${Math.round(p.data_gb * 1000)}MB` : `${p.data_gb}GB`
+  return p.is_daily ? `${gb}/ngay` : gb
+}
+
+function fmtThrottle(kbps: number | null): string {
+  if (!kbps) return "NoLimit"
+  return kbps >= 1000 ? `${kbps / 1000}Mbps` : `${kbps}kbps`
+}
+
+function buildSkuCtx(skus: any[], isCost: boolean): string {
+  // Chỉ giữ sản phẩm hoàn chỉnh, sort VN trước rồi theo country group
+  const full = skus
+    .filter(s => FULL_TYPES.has(s.product_type ?? s.sku_code?.[1] ?? ""))
+    .sort((a, b) => {
+      if (a.tenant === "VN" && b.tenant !== "VN") return -1
+      if (b.tenant === "VN" && a.tenant !== "VN") return 1
+      return (a.sku_code ?? "").localeCompare(b.sku_code ?? "")
+    })
+
+  const header =
+    `=== SAN PHAM GOHUB (${full.length} SKU active — chi eSIM Full va SIM Full) ===\n` +
+    `Cau truc SKU code 13 ky tu: [source(1)][type(1)][country_group(3)][vendor(2)][data_policy(1)][data_amount(3)][day(2)]\n` +
+    `sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku` +
+    (isCost ? `|gia_vnd|gia_usd` : "")
+
+  const rows = full.map(s =>
+    `${s.sku_code}|${s.tenant}|${s.sim_esim}` +
+    `|${fmtData(s.data_amount, s.data_amount_unit)}|${s.day_amount}d` +
+    `|${s.throttle_speed ?? "—"}|${s.operator_code ?? "—"}` +
+    `|${s.kyc_needed ?? "—"}|${s.supported_countries ?? "—"}` +
+    `|${s.vendor_sku ?? "—"}` +
+    (isCost ? `|${s.final_cogs_included_vat_vnd ?? "?"}|${s.final_cogs_usd ?? "?"}` : "") +
+    (s.note ? ` [${s.note}]` : "")
+  )
+
+  return [header, ...rows].join("\n")
+}
+
 async function getRawData(): Promise<CacheData> {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
-  // skus và ncc_worldmove có >1000 rows — phải dùng fetchAllRows
-  // Chạy song song: skus+products+wm cùng lúc, reference tables cùng lúc
   const [
     skusRaw, productsRaw,
     wmProductsRaw, wmSkusRaw, zones3hkRaw,
@@ -66,12 +118,17 @@ async function getRawData(): Promise<CacheData> {
       .then(r => r.data ?? []),
     supabaseAdmin.from("ncc_3hk").select("zone,country,network,price_per_gb_hkd,is_kyc")
       .order("zone").then(r => r.data ?? []),
-    supabaseAdmin.from("ref_support_countries").select("code,support_country,country_codes").order("code").then(r => r.data ?? []),
-    supabaseAdmin.from("ref_countries").select("code,name").order("name").then(r => r.data ?? []),
-    supabaseAdmin.from("ref_vendors").select("vendor_code,name").order("vendor_code").then(r => r.data ?? []),
-    supabaseAdmin.from("app_settings").select("key,value").then(r => r.data ?? []),
+    supabaseAdmin.from("ref_support_countries").select("code,support_country,country_codes")
+      .order("code").then(r => r.data ?? []),
+    supabaseAdmin.from("ref_countries").select("code,name")
+      .order("name").then(r => r.data ?? []),
+    supabaseAdmin.from("ref_vendors").select("vendor_code,name")
+      .order("vendor_code").then(r => r.data ?? []),
+    supabaseAdmin.from("app_settings").select("key,value")
+      .then(r => r.data ?? []),
   ])
 
+  // Enrich SKUs với product data
   const prodMap = Object.fromEntries((productsRaw as any[]).map((p: any) => [p.product_code, p]))
   const skus = (skusRaw as any[]).map((s: any) => {
     const p = prodMap[s.product_code] ?? {}
@@ -88,37 +145,25 @@ async function getRawData(): Promise<CacheData> {
 
   const wmInSystem = new Set<string>((wmSkusRaw as any[]).map((s: any) => s.vendor_sku as string))
 
+  // Pre-compute SKU context strings (cache 1 lần, dùng cho mọi request)
+  const skuCtx     = buildSkuCtx(skus, false)
+  const skuCtxCost = buildSkuCtx(skus, true)
+
+  console.log(`[chat:cache] skus=${skus.length} wm=${(wmProductsRaw as any[]).length} full_ctx_chars=${skuCtx.length}`)
+
   const data: CacheData = {
     skus, wmProducts: wmProductsRaw as any[], wmInSystem,
-    zones3hk: zones3hkRaw as any[], supportCountries, countries, vendors, settings,
+    zones3hk: zones3hkRaw as any[],
+    supportCountries, countries, vendors, settings,
+    skuCtx, skuCtxCost,
   }
   cache = { data, at: now }
   return data
 }
 
-// ─── Format helpers ───────────────────────────────────────────────────────────
+// ─── NCC lookup (chỉ khi cần — detect country đơn giản) ──────────────────────
 
-function fmtData(amount: number | null, unit: string | null): string {
-  if (!amount || amount >= 9999) return "Unlimited"
-  return amount < 1 ? `${Math.round(amount * 1000)}MB` : `${amount}${unit ?? "GB"}`
-}
-
-function fmtWmData(p: any): string {
-  if (p.is_unlimited || (p.data_gb ?? 0) >= 9999)
-    return p.is_daily ? `${p.data_gb ?? "?"}GB/d+Unlim` : "Unlimited"
-  if (!p.data_gb) return "?"
-  const gb = p.data_gb < 1 ? `${Math.round(p.data_gb * 1000)}MB` : `${p.data_gb}GB`
-  return p.is_daily ? `${gb}/ngay` : gb
-}
-
-function fmtThrottle(kbps: number | null): string {
-  if (!kbps) return "NoLimit"
-  return kbps >= 1000 ? `${kbps / 1000}Mbps` : `${kbps}kbps`
-}
-
-// ─── Intent detection ─────────────────────────────────────────────────────────
-
-// Tên VN → EN. Từ dài đặt trước từ ngắn để sort đúng
+// Tên nước VN → EN
 const VN_TO_EN: Record<string, string> = {
   "nhật bản": "Japan",       "nhat ban": "Japan",
   "nhật": "Japan",            "nhat": "Japan",
@@ -139,8 +184,6 @@ const VN_TO_EN: Record<string, string> = {
   "phần lan": "Finland",     "phan lan": "Finland",
   "đan mạch": "Denmark",     "dan mach": "Denmark",
   "hy lạp": "Greece",        "hy lap": "Greece",
-  "ba lan": "Poland",
-  "séc": "Czech Republic",
   "ấn độ": "India",          "an do": "India",
   "thái lan": "Thailand",    "thai lan": "Thailand",
   "thái": "Thailand",         "thai": "Thailand",
@@ -151,8 +194,7 @@ const VN_TO_EN: Record<string, string> = {
   "đức": "Germany",           "duc": "Germany",
   "pháp": "France",           "phap": "France",
   "ý": "Italy",
-  "áo": "Austria",
-  "bỉ": "Belgium",
+  "ba lan": "Poland",
   "singapore": "Singapore",
   "indonesia": "Indonesia",
   "malaysia": "Malaysia",
@@ -162,301 +204,124 @@ const VN_TO_EN: Record<string, string> = {
   "canada": "Canada",
   "mexico": "Mexico",
   "brazil": "Brazil",
-  "rumani": "Romania",
-  "hungary": "Hungary",
   "châu âu": "Europe",
 }
 
-// Tên thành phố → nước
 const CITY_TO_COUNTRY: Record<string, string> = {
-  "tokyo": "Japan",        "osaka": "Japan",      "kyoto": "Japan",
-  "fukuoka": "Japan",      "hokkaido": "Japan",   "sapporo": "Japan",
+  "tokyo": "Japan",        "osaka": "Japan",      "kyoto": "Japan",     "fukuoka": "Japan",
   "seoul": "South Korea",  "busan": "South Korea", "jeju": "South Korea",
-  "incheon": "South Korea",
   "bangkok": "Thailand",   "phuket": "Thailand",  "pattaya": "Thailand",
-  "chiang mai": "Thailand", "koh samui": "Thailand",
-  "paris": "France",       "lyon": "France",       "nice": "France",
-  "london": "United Kingdom", "manchester": "United Kingdom", "edinburgh": "United Kingdom",
+  "chiang mai": "Thailand",
+  "paris": "France",       "london": "United Kingdom",
   "new york": "United States", "los angeles": "United States",
-  "san francisco": "United States", "las vegas": "United States",
-  "chicago": "United States",
-  "sydney": "Australia",   "melbourne": "Australia", "brisbane": "Australia",
+  "sydney": "Australia",   "melbourne": "Australia",
   "taipei": "Taiwan",
-  "beijing": "China",      "shanghai": "China",   "guangzhou": "China",
-  "shenzhen": "China",     "chengdu": "China",    "macau": "China",
+  "beijing": "China",      "shanghai": "China",   "guangzhou": "China",  "bali": "Indonesia",
   "moscow": "Russia",
-  "rome": "Italy",         "milan": "Italy",      "venice": "Italy",
-  "florence": "Italy",
-  "berlin": "Germany",     "munich": "Germany",   "frankfurt": "Germany",
+  "rome": "Italy",         "milan": "Italy",
+  "berlin": "Germany",     "munich": "Germany",
   "amsterdam": "Netherlands",
-  "dubai": "United Arab Emirates", "abu dhabi": "United Arab Emirates",
-  "toronto": "Canada",     "vancouver": "Canada", "montreal": "Canada",
-  "mumbai": "India",       "delhi": "India",      "bangalore": "India",
-  "goa": "India",
-  "jakarta": "Indonesia",  "bali": "Indonesia",   "lombok": "Indonesia",
-  "kuala lumpur": "Malaysia", "penang": "Malaysia", "johor": "Malaysia",
-  "manila": "Philippines", "cebu": "Philippines", "boracay": "Philippines",
-  "cairo": "Egypt",
-  "istanbul": "Turkey",    "cappadocia": "Turkey",
-  "barcelona": "Spain",    "madrid": "Spain",     "seville": "Spain",
+  "dubai": "United Arab Emirates",
+  "toronto": "Canada",     "vancouver": "Canada",
+  "mumbai": "India",       "delhi": "India",
+  "jakarta": "Indonesia",
+  "kuala lumpur": "Malaysia", "penang": "Malaysia",
+  "manila": "Philippines", "cebu": "Philippines",
+  "istanbul": "Turkey",
+  "barcelona": "Spain",    "madrid": "Spain",
   "lisbon": "Portugal",
-  "zurich": "Switzerland", "geneva": "Switzerland",
+  "zurich": "Switzerland",
   "vienna": "Austria",
-  "brussels": "Belgium",
   "stockholm": "Sweden",
   "oslo": "Norway",
   "copenhagen": "Denmark",
-  "helsinki": "Finland",
-  "athens": "Greece",      "santorini": "Greece", "mykonos": "Greece",
-  "warsaw": "Poland",      "krakow": "Poland",
+  "athens": "Greece",      "santorini": "Greece",
+  "warsaw": "Poland",
   "prague": "Czech Republic",
   "budapest": "Hungary",
 }
 
-const PRODUCT_KEYWORDS = [
-  "gói", "sim", "esim", "data", "mua", "tìm", "sản phẩm",
-  "có không", "dung lượng", "unlimited", "không giới hạn",
-  "ngày", "gb", "mb", "châu á", "châu âu", "châu mỹ", "châu phi", "châu đại dương",
-  "rẻ nhất", "tốt nhất", "phù hợp", "gợi ý", "đề xuất", "recommend",
-  "mạng", "operator", "carrier", "network", "roaming",
-  "kyc", "hộ chiếu", "passport",
-  "giá", "bao nhiêu tiền", "daily", "hàng ngày",
-]
-
-interface SearchIntent {
-  countryEn: string | null
-  operator:  string | null
-  simType:   "eSIM" | "SIM" | null
-  ngayMin:   number | null
-  ngayMax:   number | null
-  dataGbMin: number | null
-  isProduct: boolean
-}
-
-function detectIntent(message: string, data: CacheData): SearchIntent {
+function detectCountry(message: string, data: CacheData): string | null {
   const msg = message.toLowerCase()
-
-  // 1. VN name → EN (dài trước)
-  let countryEn: string | null = null
-  const sortedVn = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
-  for (const [vn, en] of sortedVn) {
-    if (msg.includes(vn)) { countryEn = en; break }
+  const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
+  for (const [vn, en] of sorted) {
+    if (msg.includes(vn)) return en
   }
-
-  // 2. City name → country (dài trước để tránh "nice" match trong "announcement")
-  if (!countryEn) {
-    const sortedCity = Object.entries(CITY_TO_COUNTRY).sort((a, b) => b[0].length - a[0].length)
-    for (const [city, country] of sortedCity) {
-      if (msg.includes(city)) { countryEn = country; break }
-    }
+  const sortedCity = Object.entries(CITY_TO_COUNTRY).sort((a, b) => b[0].length - a[0].length)
+  for (const [city, country] of sortedCity) {
+    if (msg.includes(city)) return country
   }
-
-  // 3. English country name từ ref_support_countries (ví dụ user gõ "Japan", "Korea"...)
-  if (!countryEn) {
-    for (const sc of data.supportCountries) {
-      const name = (sc.support_country ?? "").toLowerCase()
-      if (name.length > 3 && msg.includes(name)) { countryEn = sc.support_country; break }
-    }
+  for (const sc of data.supportCountries) {
+    const name = (sc.support_country ?? "").toLowerCase()
+    if (name.length > 3 && msg.includes(name)) return sc.support_country
   }
-
-  // 4. Operator từ cache (Softbank, Docomo, True Move, v.v.)
-  let operator: string | null = null
-  const ops = [...new Set(data.skus.map((s: any) => s.operator_code).filter(Boolean))] as string[]
-  for (const op of ops) {
-    if (op.length > 2 && msg.includes(op.toLowerCase())) { operator = op; break }
-  }
-
-  // 5. SIM type
-  const isEsim = msg.includes("esim") || msg.includes("e-sim") || msg.includes("e sim")
-  const isSim  = !isEsim && (msg.includes("sim vật lý") || msg.includes("sim vật") || msg.includes("sim thường"))
-  const simType = isEsim ? "eSIM" : isSim ? "SIM" : null
-
-  // 6. Số ngày
-  const dayMatches = [...msg.matchAll(/(\d+)\s*ngày/g)].map(m => parseInt(m[1]))
-  const ngayMin = dayMatches.length ? Math.min(...dayMatches) : null
-  const ngayMax = dayMatches.length ? Math.max(...dayMatches) : null
-
-  // 7. Dung lượng
-  const gbMatch = msg.match(/(\d+)\s*gb/)
-  const dataGbMin = gbMatch ? parseInt(gbMatch[1]) : null
-
-  // 8. Product query?
-  const isProduct = !!countryEn || !!operator || PRODUCT_KEYWORDS.some(k => msg.includes(k))
-
-  return { countryEn, operator, simType, ngayMin, ngayMax, dataGbMin, isProduct }
+  return null
 }
 
-// ─── Search ───────────────────────────────────────────────────────────────────
+function buildNccSection(countryEn: string, data: CacheData, isCost: boolean): string {
+  const search = countryEn.toLowerCase()
 
-const FULL_TYPES = new Set(["C", "E", "1", "2"])
-const NCC_THRESHOLD = 5   // khi GoHub < 5 kết quả → thêm NCC catalog
+  const wmMatches = (data.wmProducts as any[])
+    .filter(p => (p.region ?? "").toLowerCase().includes(search))
+    .slice(0, 15)
 
-function searchSkus(intent: SearchIntent, data: CacheData, isCost: boolean): string {
-  const { countryEn, operator, simType, ngayMin, ngayMax, dataGbMin } = intent
+  const hkMatches = (data.zones3hk as any[])
+    .filter(z => (z.country ?? "").toLowerCase().includes(search))
 
-  // Tìm group codes cho nước (từ ref_support_countries)
-  let groupCodes: Set<string> | null = null
-  const groupsFound: string[] = []
+  if (!wmMatches.length && !hkMatches.length) return ""
 
-  if (countryEn) {
-    const search = countryEn.toLowerCase()
-    for (const sc of data.supportCountries) {
-      const hay = `${sc.support_country ?? ""} ${sc.country_codes ?? ""}`.toLowerCase()
-      if (hay.includes(search)) {
-        groupsFound.push(`${sc.code}`)
-        if (!groupCodes) groupCodes = new Set()
-        groupCodes.add(sc.code)
-      }
-    }
-  }
+  const lines: string[] = [
+    `\n=== NCC CATALOG cho "${countryEn}" (${wmMatches.length} WorldMove + ${hkMatches.length} 3HK) ===`,
+    `Ghi chu: CO_TRONG_HT = da nhap vao GoHub, CHUA_NHAP = chua duoc nhap`,
+  ]
 
-  // Lọc GoHub SKUs
-  let results = data.skus.filter(s => {
-    // Fallback: nếu product_type không join được từ products → đọc từ sku_code[1]
-    const pt = s.product_type ?? s.sku_code?.[1] ?? ""
-    if (!FULL_TYPES.has(pt)) return false
-    if (groupCodes) {
-      const grp = s.sku_code?.substring(2, 5)
-      if (!grp || !groupCodes.has(grp)) return false
-    }
-    if (simType === "eSIM" && s.sim_esim !== "eSIM") return false
-    if (simType === "SIM"  && s.sim_esim !== "SIM")  return false
-    if (operator && s.operator_code?.toLowerCase() !== operator.toLowerCase()) return false
-    if (ngayMin && (s.day_amount ?? 0) < ngayMin) return false
-    if (ngayMax && (s.day_amount ?? 0) > ngayMax) return false
-    if (dataGbMin && (s.data_amount ?? 9999) < dataGbMin && (s.data_amount ?? 9999) < 9999) return false
-    return true
-  })
-
-  // Sort: VN trước, sau đó ngày tăng dần
-  results.sort((a, b) => {
-    if (a.tenant === "VN" && b.tenant !== "VN") return -1
-    if (b.tenant === "VN" && a.tenant !== "VN") return 1
-    return (a.day_amount ?? 0) - (b.day_amount ?? 0)
-  })
-
-  const totalGoHub = results.length
-
-  // Debug log — xem trong Vercel Function Logs
-  console.log(`[chat:search] country="${countryEn}" groups=[${groupsFound.join(",")}] operator="${operator}" simType="${simType}" skus_total=${data.skus.length} results=${totalGoHub}`)
-  if (totalGoHub === 0) {
-    // Sample 3 SKU để kiểm tra product_type thực tế
-    const sample = data.skus.slice(0, 3).map(s => `${s.sku_code} pt=${s.product_type ?? "null"} pt_derived=${s.sku_code?.[1]}`)
-    console.log(`[chat:search] sample SKUs: ${sample.join(" | ")}`)
-  }
-
-  // Smart sampling khi > 50: lấy đều từ các mốc ngày
-  let shown: any[]
-  if (totalGoHub <= 50) {
-    shown = results
-  } else {
-    const byDay = new Map<number, any[]>()
-    for (const s of results) {
-      const d = s.day_amount ?? 0
-      if (!byDay.has(d)) byDay.set(d, [])
-      byDay.get(d)!.push(s)
-    }
-    shown = []
-    for (const group of byDay.values()) {
-      shown.push(...group.slice(0, Math.max(1, Math.ceil(50 / byDay.size))))
-      if (shown.length >= 50) break
-    }
-    shown = shown.slice(0, 50)
-  }
-
-  // ── Build GoHub section ──
-  const filterDesc = [
-    countryEn ? `nước: "${countryEn}"${groupsFound.length ? ` [mã nhóm: ${groupsFound.join(",")}]` : " — chưa có trong ref_support_countries"}` : null,
-    operator  ? `operator: "${operator}"` : null,
-    simType   ? `loại: ${simType}` : null,
-    ngayMin   ? `ngày: ${ngayMin}${ngayMax && ngayMax !== ngayMin ? `–${ngayMax}` : ""}` : null,
-    dataGbMin ? `data tối thiểu: ${dataGbMin}GB` : null,
-  ].filter(Boolean).join(", ")
-
-  const gohubLines: string[] = []
-
-  if (totalGoHub === 0) {
-    gohubLines.push(`=== GOHUB HỆ THỐNG: 0 gói${filterDesc ? ` (${filterDesc})` : ""} — hệ thống chưa có ===`)
-  } else {
-    gohubLines.push(
-      `=== GOHUB HỆ THỐNG: ${totalGoHub} gói${filterDesc ? ` (${filterDesc})` : ""} — hiển thị ${shown.length}${totalGoHub > 50 ? " — còn nhiều hơn, user có thể lọc cụ thể hơn" : ""} ===`,
-      `sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku` + (isCost ? `|gia_vnd|gia_usd` : ""),
-      ...shown.map(s =>
-        `${s.sku_code}|${s.tenant}|${s.sim_esim}` +
-        `|${fmtData(s.data_amount, s.data_amount_unit)}|${s.day_amount}d` +
-        `|${s.throttle_speed ?? "—"}|${s.operator_code ?? "—"}` +
-        `|${s.kyc_needed ?? "—"}|${s.supported_countries ?? "—"}` +
-        `|${s.vendor_sku ?? "—"}` +
-        (isCost ? `|${s.final_cogs_included_vat_vnd ?? "?"}|${s.final_cogs_usd ?? "?"}` : "") +
-        (s.note ? ` [${s.note}]` : "")
+  if (wmMatches.length) {
+    lines.push(
+      `[WorldMove]`,
+      `vendor_id|region|sim_type|days|data|throttle|trang_thai` + (isCost ? `|gia` : ""),
+      ...wmMatches.map(p =>
+        `${p.vendor_product_id}|${p.region}|${p.sim_type}|${p.days}d` +
+        `|${fmtWmData(p)}|${fmtThrottle(p.throttle_kbps)}` +
+        `|${data.wmInSystem.has(p.vendor_product_id) ? "CO_TRONG_HT" : "CHUA_NHAP"}` +
+        (isCost ? `|${p.cogs ?? "?"}${p.cogs_currency ?? ""}` : "")
       )
     )
   }
 
-  // ── NCC section (khi GoHub thiếu) ──
-  const nccLines: string[] = []
-
-  if (totalGoHub < NCC_THRESHOLD && countryEn) {
-    const search = countryEn.toLowerCase()
-
-    const wmAll = (data.wmProducts as any[]).filter(p =>
-      (p.region ?? "").toLowerCase().includes(search)
-    )
-    const wmShown = wmAll.slice(0, 15)
-
-    const hkAll = (data.zones3hk as any[]).filter(z =>
-      (z.country ?? "").toLowerCase().includes(search)
-    )
-
-    if (wmAll.length > 0 || hkAll.length > 0) {
-      nccLines.push(
-        `\n=== NCC CATALOG — GoHub chưa nhập đủ (${wmAll.length} WorldMove + ${hkAll.length} 3HK) ===`,
-        `Ghi chú: CO_TRONG_HT = đã có trong GoHub hệ thống, CHUA_NHAP = chưa được nhập`,
+  if (hkMatches.length) {
+    lines.push(
+      `[3HK]`,
+      `zone|country|network` + (isCost ? `|HKD/GB` : "") + `|KYC`,
+      ...hkMatches.map(z =>
+        `${z.zone}|${z.country}|${z.network ?? "—"}` +
+        (isCost ? `|${z.price_per_gb_hkd ?? "?"}` : "") +
+        (z.is_kyc ? `|Yes` : `|No`)
       )
-
-      if (wmAll.length > 0) {
-        nccLines.push(
-          `[WorldMove — ${wmAll.length} SP, hiển thị ${wmShown.length}]`,
-          `vendor_id|region|sim_type|days|data|throttle|trang_thai` + (isCost ? `|gia(${wmShown[0]?.cogs_currency ?? "TWD"})` : ""),
-          ...wmShown.map(p =>
-            `${p.vendor_product_id}|${p.region}|${p.sim_type}|${p.days}d` +
-            `|${fmtWmData(p)}|${fmtThrottle(p.throttle_kbps)}` +
-            `|${data.wmInSystem.has(p.vendor_product_id) ? "CO_TRONG_HT" : "CHUA_NHAP"}` +
-            (isCost ? `|${p.cogs ?? "?"}` : "")
-          )
-        )
-      }
-
-      if (hkAll.length > 0) {
-        nccLines.push(
-          `[3HK — ${hkAll.length} zone]`,
-          `zone|country|network` + (isCost ? `|HKD_per_GB` : "") + `|KYC`,
-          ...hkAll.map(z =>
-            `${z.zone}|${z.country}|${z.network ?? "—"}` +
-            (isCost ? `|${z.price_per_gb_hkd ?? "?"}` : "") +
-            (z.is_kyc ? `|Yes` : `|No`)
-          )
-        )
-      }
-    } else {
-      nccLines.push(`\n=== NCC CATALOG: không có WorldMove hoặc 3HK nào cho "${countryEn}" ===`)
-    }
+    )
   }
 
-  return [...gohubLines, ...nccLines].join("\n")
+  return lines.join("\n")
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(data: CacheData, role: string): string {
+function buildSystemPrompt(data: CacheData, role: string, nccSection: string): string {
   const isCost = role === "admin" || role === "manager"
-  const { supportCountries, countries, vendors, settings } = data
+  const { skuCtx, skuCtxCost, supportCountries, countries, vendors, settings } = data
 
   const lines = [
-    `Bạn là trợ lý AI của GoHub — công ty cung cấp SIM/eSIM du lịch.`,
-    `Trả lời bằng tiếng Việt. Không đề cập tên bảng/cột database.`,
-    `Khi có dữ liệu sản phẩm trong tin nhắn, dựa vào đó để trả lời — không tự bịa sản phẩm.`,
-    `Nếu có mục "GOHUB HỆ THỐNG: 0 gói" và có mục "NCC CATALOG", hãy thông báo GoHub chưa có và giới thiệu options từ NCC.`,
+    `Ban la tro ly AI cua GoHub — cong ty cung cap SIM/eSIM du lich.`,
+    `Tra loi bang tieng Viet. Khong de cap ten bang/cot database.`,
+    `Danh sach san pham GoHub hien co nam trong phan SAN PHAM GOHUB ben duoi.`,
+    `Khi user hoi ve san pham, tim trong danh sach do — khong tu bia them.`,
+    `Neu GoHub khong co → thong bao ro rang va gioi thieu catalog NCC neu co.`,
+    ``,
+    isCost ? skuCtxCost : skuCtx,
+  ]
+
+  if (nccSection) lines.push(nccSection)
+
+  lines.push(
     ``,
     `=== NHOM NUOC HO TRO (${supportCountries.length}) ===`,
     ...(supportCountries as any[]).map(sc =>
@@ -468,7 +333,7 @@ function buildSystemPrompt(data: CacheData, role: string): string {
     ``,
     `=== VENDOR ===`,
     ...(vendors as any[]).map((v: any) => `${v.vendor_code}=${v.name}`),
-  ]
+  )
 
   if (isCost && (settings as any[]).length) {
     lines.push(``, `=== TY GIA ===`)
@@ -491,7 +356,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const rawData = await getRawData()
-    const systemInstruction = `${buildSystemPrompt(rawData, role)}\n\n---\nNgười đang chat: ${name}`
+
+    // Detect country chỉ để inject NCC catalog nếu cần
+    const lastMessage = messages.at(-1).content
+    const countryEn   = detectCountry(lastMessage, rawData)
+    const nccSection  = countryEn ? buildNccSection(countryEn, rawData, isCost) : ""
+
+    const systemInstruction =
+      `${buildSystemPrompt(rawData, role, nccSection)}\n\n---\nNguoi dang chat: ${name}`
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
@@ -501,18 +373,10 @@ export async function POST(req: NextRequest) {
       parts: [{ text: m.content }],
     }))
 
-    const chat        = model.startChat({ history })
-    const lastMessage = messages.at(-1).content
-
-    const intent = detectIntent(lastMessage, rawData)
-    const finalMessage = intent.isProduct
-      ? `[Dữ liệu tìm được]\n${searchSkus(intent, rawData, isCost)}\n\n[Câu hỏi]\n${lastMessage}`
-      : lastMessage
-
-    const result = await chat.sendMessageStream(finalMessage)
+    const result = await model.startChat({ history }).sendMessageStream(lastMessage)
 
     const encoder = new TextEncoder()
-    const stream = new ReadableStream({
+    const stream  = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of result.stream) {

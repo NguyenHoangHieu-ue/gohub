@@ -274,6 +274,32 @@ Mục tiêu 5 tính năng:
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
 
+## Session 5 (2026-06-07) — Chatbot rebuild
+57. Reset chatbot — xóa toàn bộ rules cũ, rebuild từ đầu
+58. Kiến trúc mới chatbot: server-side intent detection → search cache → 1 Gemini call stream
+    - Bỏ function calling (2 Gemini calls = chậm)
+    - detectIntent(): parse VN/EN tên nước + thành phố + operator + ngày/GB từ message
+    - searchSkus(): filter cache → top 50 kết quả (smart sample theo ngày)
+    - NCC fallback: khi GoHub < 5 kết quả → tự search WM + 3HK cùng nước
+    - Pagination fetchAllRows(): fix Supabase 1000-row limit
+59. Chat history persistence:
+    - localStorage: survives tab switch + close browser (cùng device)
+    - DB bảng chat_history: cross-device restore (30 messages gần nhất)
+    - API GET/POST /api/chat/history: load + save mỗi lượt
+    - sessionId (UUID per browser session) stored in sessionStorage
+    - User cần chạy database/setup/chat_history.sql trong Supabase
+60. Root cause bug chatbot luôn báo "không có sản phẩm":
+    - Supabase default cap 1000 rows → chỉ load 1000/10957 SKUs
+    - Fix: fetchAllRows() pagination (1000/page, sequential per table, parallel across tables)
+    - product_type filter fallback: dùng sku_code[1] khi join products thất bại
+
+## Quyết định chatbot architecture (2026-06-07)
+- Đánh giá 5 giải pháp: pre-computed dict / 2-step Gemini / always-inject summary / embeddings / tool-call+stream
+- **Chọn Option 3 (always inject SKU summary)**: đơn giản nhất, không bao giờ miss, 1 Gemini call
+  → Pre-compute toàn bộ SKU full-type tại cache build time → inject vào system prompt mỗi request
+  → Không cần intent detection cho GoHub products, Gemini tự tìm trong context
+- **Sau khi ổn → Option 4 (embeddings + pgvector)**: semantic search, xử lý mọi cách diễn đạt
+
 ## Pending (cần làm)
 - User chạy scripts/setup_settings_table.sql trong Supabase (app_settings table)
 - Tạo Lark App mới bằng account ADMIN công ty (xem ghi chú bên dưới) → cung cấp LARK_APP_ID + LARK_APP_SECRET mới → cập nhật .env.local + Vercel
