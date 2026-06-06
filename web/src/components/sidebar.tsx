@@ -10,7 +10,7 @@ const NAV = [
   { href: "/promotions", label: "Khuyến Mãi",    icon: Gift },
   { href: "/skus",       label: "SP Hệ Thống",   icon: Package },
   { href: "/ncc",        label: "SP Vendor",       icon: Truck },
-  { href: "/countries",  label: "Danh sách Nước", icon: Globe },
+  { href: "/countries",  label: "Thông tin",       icon: Globe },
 ]
 
 function roleBadgeClass(role: string): string {
