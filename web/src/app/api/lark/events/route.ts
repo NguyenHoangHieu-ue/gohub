@@ -176,7 +176,7 @@ async function processAndReply(openId: string, messageId: string, userText: stri
   try {
     // Get user info
     const { role, name } = await getUserRole(openId)
-    const isCost = role === "admin" || role === "manager"
+    const isCost = true
 
     // Get history
     const history = await getLarkHistory(openId)

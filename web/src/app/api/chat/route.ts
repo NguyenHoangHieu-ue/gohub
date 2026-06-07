@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   const name    = userName || session.user.name || "bạn"
   const history = (messages as Message[]).slice(0, -1)
   const lastMsg = (messages as Message[]).at(-1)?.content ?? ""
-  const isCost  = role === "admin" || role === "manager"
+  const isCost  = true
 
   try {
     const refCache = await getRefCache()
