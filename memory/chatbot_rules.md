@@ -1,102 +1,144 @@
 ---
 name: chatbot_rules
-description: 5 rules core của chatbot — nguồn data, tìm nước, giá USD/VND, ưu tiên VN, nhất quán role
+description: Kiến trúc + rules chatbot GoHub — Option 3 always-inject, 1 Gemini call, streaming
 metadata:
   type: feedback
 ---
 
-## 5 Rules Core Chatbot
+## Kiến Trúc Hiện Tại (Option 3 — Always Inject)
 
-### 1. Nguồn Data Ưu Tiên
+**File**: `web/src/app/api/chat/route.ts`  
+**Model**: `gemini-3.5-flash` — systemInstruction + history + sendMessageStream  
+**Cache TTL**: 30 phút (in-memory, reset khi Vercel cold start)
 
-**Rule**: Đọc theo thứ tự: (1) products+skus, (2) listings chỉ khi hỏi tên/activation, (3) items chỉ khi hỏi giá kênh
-
-**Why**: products+skus là source chính có đủ tech specs (data, throttle, kyc); listings/items là chi tiết phụ. Nếu chatbot đọc cả 3 cùng lúc thì context quá lớn, model bỏ qua entries quan trọng.
-
-**How to apply**: 
-- Mô tả ưu tiên trong system prompt (DONE in route.ts)
-- Bỏ listing_code, item_code khỏi context data (DONE)
-- Test: hỏi "gói đi Mỹ" → chỉ dùng products.supported_countries + SKU detail, không lôi item price ra
-
----
-
-### 2. Tìm Kiếm Theo Nước — Workflow 4 Bước
-
-**Rule**: Chatbot phải thực hiện đúng 4 bước khi user hỏi "đi [nước X]".
-
-**Why**:
-- `products.supported_countries` lưu 3-ký-tự GROUP codes (RUS, EU1, W04...) từ `ref_support_countries`
-- GROUP code = ký tự 3-5 trong SKU code (SKU "1CRUS..." → country group = RUS)
-- 1 nước có thể thuộc nhiều group (Russia có trong RUS, MLB, EU1, SCA, W04, W30...)
-- Không theo đúng 4 bước → bỏ sót sản phẩm hoặc tìm sai
-
-**How to apply** — Workflow 4 bước (đã encode vào system prompt):
-1. **Tìm mã nhóm**: tra mục NHÓM NƯỚC HỖ TRỢ → tìm tất cả dòng có chứa tên nước X
-   - VD: "Nga" → Russia → các group chứa "Russia": RUS, MLB, EU1, SCA, W04, W30...
-2. **Lọc SKU theo mã nhóm**: chỉ giữ SKU có ký tự 3-5 nằm trong danh sách mã từ bước 1
-   - VD: SKU "1CRUS12A00107" → ký tự 3-5 = "RUS" → khớp → giữ lại
-3. **Lọc product type**: chỉ giữ SKU có ký tự 2 = C (eSIM Full) hoặc E (SIM Full)
-4. **Lấy thông tin**: product_code = 8 ký tự đầu SKU → tra context lấy chi tiết; ưu tiên tenant=VN
-
-**Trong code** (web/src/app/api/chat/route.ts):
-- `decodeCountries()` lookup `ref_support_countries.code → support_country`
-- Context SKU rows: `nước: RUS(Russia), EU1(United Kingdom, Denmark, ..., Russia, ...)`
-- fullSkus đã lọc sẵn product type C/E/1/2, sort VN trước US
+### Flow mỗi request:
+1. `getRawData()` — lấy cache hoặc fetch Supabase
+2. `detectCountry(lastMessage)` — nếu tìm thấy tên nước → inject NCC catalog
+3. `buildSystemPrompt()` — ghép toàn bộ context vào system instruction
+4. 1 Gemini call stream → trả về text từng chunk
 
 ---
 
-### 3. Giá: Hiển thị USD + VND
+## Context Sections (luôn inject)
 
-**Rule**: Luôn xuất cả 2 giá **không làm tròn**, dùng `latest_cogs` làm gốc + quy đổi tỷ giá
-
-**Why**:
-- Admin/user cần xem 2 đơn vị để quyết định
-- Làm tròn → mất precision, sai khi tính lợi nhuận
-- `latest_cogs` là giá nhập gốc; `final_cogs_*` là giá sau VAT (khác product → product)
-
-**How to apply**:
-- Logic: 
-  - Nếu latest_cogs_currency=USD → Giá USD=latest_cogs, Giá VND=latest_cogs × 26,394
-  - Nếu latest_cogs_currency=VND → Giá VND=latest_cogs, Giá USD=latest_cogs ÷ 26,394
-  - Nếu latest_cogs_currency=TWD (WM) → Giá USD=latest_cogs ÷ 31.452, Giá VND=Giá USD × 26,394
-- System prompt: ghi rõ "không làm tròn" (DONE)
-- Test: xem giá WM product (gốc TWD) → hiện cả USD + VND, số thập phân không mất
+| Section | Nội dung | Điều kiện |
+|---------|----------|-----------|
+| `SAN PHAM GOHUB` | Tất cả SKU active, type C/E/1/2, sort VN trước | Luôn có |
+| `NCC CATALOG` | WM (max 15 SP) + 3HK matching nước | Chỉ khi detectCountry() tìm được |
+| `NHOM NUOC HO TRO` | ref_support_countries (code, tên, danh sách nước) | Luôn có |
+| `MA NUOC` | ref_countries (code → name) | Luôn có |
+| `VENDOR` | ref_vendors (vendor_code → name) | Luôn có |
+| `TY GIA` | app_settings (tỷ giá từ DB) | Chỉ admin/manager |
 
 ---
 
-### 4. Ưu Tiên Tenant VN
+## Rule 1: Lọc & Sort SKU
 
-**Rule**: Sort context SKU: tenant=VN trước US. Khi đề xuất, nếu có VN phù hợp → dùng VN; chỉ dùng US nếu không có VN phù hợp
+**FULL_TYPES** = `{ C, E, 1, 2 }` — chỉ sản phẩm hoàn chỉnh (eSIM Full, SIM Full)
 
-**Why**: 
-- Gohub JSC (VN) là pháp nhân chính bán ra; Gohub Inc (US) là supplier
-- VN sản phẩm đã chuẩn hóa, giá rõ ràng
-- US thường là parent → giá USD → cần convert
+**Sort**: tenant=VN trước → rồi sort theo sku_code alphabetically
 
-**How to apply**:
-- fullSkus sort: (a, b) => a.tenant==='VN' ? -1 : (b.tenant==='VN' ? 1 : 0) (DONE)
-- System prompt: rule ưu tiên VN (DONE)
-- Test: hỏi "gói đi Mỹ" → nếu cả VN+US có → liệt kê VN trước, hoặc chỉ suggest VN (tuỳ số lượng)
+**Filter**: chỉ `status=Active` từ bảng skus
+
+**product_type fallback**: nếu join products thất bại → dùng `sku_code[1]`
+
+**Listings/Items**: KHÔNG còn trong context (đã xóa từ session 2)
 
 ---
 
-### 5. Nhất Quán Admin/Standard
+## Rule 2: Tìm Nước — Server-side (chỉ cho NCC)
 
-**Rule**: Cả 2 role nhận **cùng cấu trúc câu trả lời**. COGS chỉ hiển thị khi được hỏi rõ. Standard không nói "không có thông tin giá" vì nó chỉ không thấy COGS, không phải không có giá.
+Server chạy `detectCountry()` để quyết định có inject NCC catalog không.  
+**Gemini tự tìm** SKU GoHub trong context đã inject sẵn (không cần server filter).
 
-**Why**:
-- Standard chỉ không thấy COGS (giá nhập) trong context, nhưng vẫn thấy dữ liệu khác
-- Nếu trả lời khác nhau → user bị nhầm, loss of trust
-- COGS là internal cost → chỉ hỏi rõ mới cần
+### detectCountry() — 3 bước:
+1. Map tên VN → EN (`VN_TO_EN` hardcode ~40 entries): "nga"→"Russia", "mỹ"→"United States"...
+2. Map thành phố → nước (`CITY_TO_COUNTRY` ~50 entries): "tokyo"→"Japan", "dubai"→"UAE"...
+3. Fallback: tìm trong `ref_support_countries.support_country` (lowercase match, >3 ký tự)
 
-**How to apply**:
-- System prompt: một lối (DONE)
-- Code: canSeeCost=admin||manager để enrich context (không thay đổi structure)
-- Test: admin + standard hỏi "gói này giá bao nhiêu" → cùng format trả lời, chỉ khác COGS visible/không
+### Gemini tìm SKU theo nước — workflow (encode trong system prompt):
+1. Tra `NHOM NUOC HO TRO` → tìm tất cả mã nhóm có chứa tên nước
+   - VD: "Nga"/Russia → RUS, MLB, EU1, SCA, W04, W30...
+2. Lọc SKU có ký tự 3-5 của sku_code khớp với mã nhóm
+3. Chỉ giữ ký tự 2 = C hoặc E (eSIM/SIM Full)
+4. product_code = 8 ký tự đầu → lấy thêm thông tin; ưu tiên tenant=VN
+
+**Why**: `products.supported_countries` dùng 3-ký-tự GROUP codes (RUS, EU1, W04...)  
+không phải ISO 2-ký-tự — Gemini phải dùng context `NHOM NUOC HO TRO` để decode đúng.
+
+---
+
+## Rule 3: Giá
+
+**Trong context**: `latest_cogs` + `latest_cogs_currency` (giá gốc, chưa quy đổi)  
+**Columns**: `latest_cogs|currency` — chỉ xuất hiện với admin/manager (`isCost=true`)  
+**Standard/sale**: không thấy cột giá trong context → không đề cập COGS
+
+**Quy tắc hiển thị**:
+- Chỉ xuất `latest_cogs` + đơn vị tiền tệ (VD: `5.68 USD`, `31.45 TWD`)
+- Nếu user hỏi quy đổi → dùng `TY GIA` section để tính, không làm tròn
+- Các trường khác (`final_cogs_included_vat_vnd`, `final_cogs_usd`) KHÔNG xuất trừ khi có yêu cầu đặc biệt rõ ràng
+
+**Why**: `latest_cogs` là giá gốc nhập — source of truth. Final COGS sau VAT là bước tính toán riêng, chỉ cần khi có context cụ thể.
+
+**Tỷ giá**: lấy từ `app_settings` table (editable qua Admin → Cài đặt), inject vào section `TY GIA`
+
+---
+
+## Rule 4: Ưu Tiên VN
+
+**Sort code**:
+```typescript
+.sort((a, b) => {
+  if (a.tenant === "VN" && b.tenant !== "VN") return -1
+  if (b.tenant === "VN" && a.tenant !== "VN") return 1
+  return (a.sku_code ?? "").localeCompare(b.sku_code ?? "")
+})
+```
+
+System prompt ghi rõ rule ưu tiên VN trước US.
+
+---
+
+## Rule 5: Cost Visibility
+
+`isCost = role === "admin" || role === "manager"`
+
+- `isCost=true` → inject `skuCtxCost` (có gia_vnd|gia_usd) + NCC giá + TY GIA section
+- `isCost=false` → inject `skuCtx` (không có giá) + NCC không có giá
+
+**Xử lý server-side** → không thể xem qua DevTools
+
+---
+
+## NCC Catalog (buildNccSection)
+
+Chỉ inject khi `detectCountry()` trả về tên nước (không null).
+
+**WorldMove**: filter theo `region.toLowerCase().includes(countryEn)` → max 15 SP  
+Mỗi row: `vendor_id|region|sim_type|days|data|throttle|trang_thai[|gia]`  
+`trang_thai`: CO_TRONG_HT (vendor_sku match WM-*) hoặc CHUA_NHAP
+
+**3HK**: filter theo `country.toLowerCase().includes(countryEn)` → tất cả match  
+Mỗi row: `zone|country|network[|HKD/GB]|KYC`  
+3HK chỉ thông tin tham khảo — KHÔNG tự tính gói, Gemini chỉ báo zone/network/giá_HKD/GB/KYC
+
+---
+
+## SKU Context Format
+
+```
+=== SAN PHAM GOHUB (N SKU active — chi eSIM Full va SIM Full) ===
+Cau truc SKU code 13 ky tu: [source(1)][type(1)][country_group(3)][vendor(2)][data_policy(1)][data_amount(3)][day(2)]
+sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku[|latest_cogs|currency]
+1CVNM...  |VN|eSIM|5GB|30d|5Mbps|...|No|VNM(Vietnam)|WM-e-...[|5.68|USD]
+```
+
+`nuoc` field = `products.supported_countries` — GROUP codes, Gemini decode qua `NHOM NUOC HO TRO`
 
 ---
 
 ## Liên kết
 
-[[business_knowledge]] — 3HK rule, tỷ giá, COGS formula  
-[[feedback_autonomous]] — hoàn toàn tự do fix/test/push
+[[business_knowledge]] — 3HK formula, tỷ giá, product type codes  
+[[feedback_autonomous]] — tự fix/test/push

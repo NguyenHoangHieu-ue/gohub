@@ -79,7 +79,7 @@ function buildSkuCtx(skus: any[], isCost: boolean): string {
     `=== SAN PHAM GOHUB (${full.length} SKU active — chi eSIM Full va SIM Full) ===\n` +
     `Cau truc SKU code 13 ky tu: [source(1)][type(1)][country_group(3)][vendor(2)][data_policy(1)][data_amount(3)][day(2)]\n` +
     `sku_code|tenant|sim|data|days|throttle|operator|kyc|nuoc|vendor_sku` +
-    (isCost ? `|gia_vnd|gia_usd` : "")
+    (isCost ? `|latest_cogs|currency` : "")
 
   const rows = full.map(s =>
     `${s.sku_code}|${s.tenant}|${s.sim_esim}` +
@@ -87,7 +87,7 @@ function buildSkuCtx(skus: any[], isCost: boolean): string {
     `|${s.throttle_speed ?? "—"}|${s.operator_code ?? "—"}` +
     `|${s.kyc_needed ?? "—"}|${s.supported_countries ?? "—"}` +
     `|${s.vendor_sku ?? "—"}` +
-    (isCost ? `|${s.final_cogs_included_vat_vnd ?? "?"}|${s.final_cogs_usd ?? "?"}` : "") +
+    (isCost ? `|${s.latest_cogs ?? "?"}|${s.latest_cogs_currency ?? "?"}` : "") +
     (s.note ? ` [${s.note}]` : "")
   )
 
