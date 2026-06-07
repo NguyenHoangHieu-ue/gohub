@@ -7,14 +7,23 @@ const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
 function getCountryCodes(countryEn: string, ref: RefCache) {
   const s = countryEn.toLowerCase()
+
+  // Tìm ISO code từ ref_countries (ví dụ: "Montenegro" → "ME")
+  const isoMatch = ref.countries.find(
+    (c: any) => (c.name ?? "").toLowerCase() === s || (c.code ?? "").toLowerCase() === s
+  )
+  const isoCode = isoMatch?.code?.toLowerCase() ?? ""
+
   const single: string[] = [], all: string[] = []
   for (const sc of ref.supportCountries) {
     const hay = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
-    if (!hay.includes(s)) continue
+    // Match theo tên nước HOẶC ISO code trong country_codes
+    const matched = hay.includes(s) || (isoCode && hay.includes(isoCode))
+    if (!matched) continue
     all.push(sc.code)
     if (!sc.support_country?.includes(",")) single.push(sc.code)
   }
-  return { single, all }
+  return { single, all, isoCode: isoMatch?.code ?? "" }
 }
 
 async function enrichWithProducts(rows: any[]): Promise<any[]> {
@@ -50,8 +59,8 @@ export async function searchSkus(params: {
   sim_type?: string
   tenant?: string
 }, ref: RefCache): Promise<{ skus: any[]; note: string }> {
-  const { single, all } = getCountryCodes(params.country, ref)
-  if (!all.length) return { skus: [], note: `Không tìm thấy mã nhóm nào cho "${params.country}"` }
+  const { single, all, isoCode } = getCountryCodes(params.country, ref)
+  if (!all.length) return { skus: [], note: `Không tìm thấy "${params.country}" trong danh sách nước hỗ trợ. Nước này có thể chưa được GoHub hỗ trợ.` }
 
   const queryByCodes = async (codes: string[]) => {
     const { data, error } = await supabaseAdmin
@@ -66,11 +75,13 @@ export async function searchSkus(params: {
   // Phase 1: mã đơn nước, Phase 2: nhóm nước nếu rỗng
   let rows = single.length ? await queryByCodes(single) : []
   let note = ""
-  if (!rows.length) {
+  if (!rows.length && all.length) {
     rows = await queryByCodes(all)
-    if (rows.length) note = `Mở rộng sang nhóm nước chứa ${params.country}`
+    if (rows.length) {
+      note = `GoHub không có gói riêng cho ${params.country}${isoCode ? ` (${isoCode})` : ""}, hiển thị gói nhóm nước có hỗ trợ ${params.country}`
+    }
   }
-  if (!rows.length) return { skus: [], note: `GoHub không có sản phẩm cho ${params.country}` }
+  if (!rows.length) return { skus: [], note: `GoHub chưa có sản phẩm nào hỗ trợ ${params.country}` }
 
   // Sort VN trước US, lọc thêm theo các tiêu chí tuỳ chọn
   let result = [...rows].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
@@ -112,6 +123,56 @@ export async function searchSkus(params: {
   }
 
   return { skus: result.slice(0, 15), note }
+}
+
+// ─── Tool: identify_code ─────────────────────────────────────────────────────
+
+export async function identifyCode(code: string): Promise<any> {
+  const c = code.trim().toUpperCase()
+  const len = c.length
+
+  const hints: string[] = []
+
+  // SKU: 13 ký tự
+  if (len === 13 && /^[A-Z0-9]{13}$/.test(c)) {
+    const { data } = await supabaseAdmin.from("skus").select("sku_code,status").eq("sku_code", c).maybeSingle()
+    if (data) return { found: true, type: "SKU", code: c, status: data.status }
+    hints.push("Định dạng khớp SKU (13 ký tự) nhưng không tìm thấy trong database")
+  }
+
+  // Product code: 8 ký tự
+  if (len === 8 && /^[A-Z0-9]{8}$/.test(c)) {
+    const { data } = await supabaseAdmin.from("products").select("product_code,status").eq("product_code", c).maybeSingle()
+    if (data) return { found: true, type: "Product Code", code: c, status: data.status }
+    hints.push("Định dạng khớp Product Code (8 ký tự) nhưng không tìm thấy trong database")
+  }
+
+  // Alias / Item code: 18 ký tự
+  if (len === 18 && /^[A-Z0-9]{18}$/.test(c)) {
+    const { data } = await supabaseAdmin.from("items").select("item_code,alias,status").eq("item_code", c).maybeSingle()
+    if (data) return { found: true, type: "Item Code", code: c, status: data.status }
+    // Try alias
+    const { data: byAlias } = await supabaseAdmin.from("items").select("item_code,alias,sku_code,status").eq("alias", c).maybeSingle()
+    if (byAlias) return { found: true, type: "Alias (Item)", code: c, item_code: byAlias.item_code, sku_code: byAlias.sku_code }
+    hints.push("Định dạng khớp Item Code/Alias (18 ký tự) nhưng không tìm thấy")
+  }
+
+  // Alias bất kỳ độ dài
+  if (len !== 13 && len !== 8 && len !== 18) {
+    const { data: byAlias } = await supabaseAdmin.from("items").select("item_code,alias,sku_code,status").eq("alias", c).maybeSingle()
+    if (byAlias) return { found: true, type: "Alias (Item)", code: c, item_code: byAlias.item_code, sku_code: byAlias.sku_code }
+
+    const { data: byListing } = await supabaseAdmin.from("listings").select("listing_code,status").eq("listing_code", c).maybeSingle()
+    if (byListing) return { found: true, type: "Listing Code", code: c, status: byListing.status }
+  }
+
+  // Không nhận ra
+  return {
+    found: false,
+    code: c,
+    length: len,
+    hint: hints.length ? hints[0] : `Mã "${c}" (${len} ký tự) không khớp định dạng nào trong hệ thống GoHub. Vui lòng kiểm tra lại. Các định dạng hợp lệ: SKU (13 ký tự), Product Code (8 ký tự), Item Code/Alias (18 ký tự), Listing Code.`,
+  }
 }
 
 // ─── Tool: get_product_detail ─────────────────────────────────────────────────

@@ -10,7 +10,7 @@ import {
   getCountryInfo, getVendorInfo,
   getFxRates, getSkuCogs, calculate3hkCogs,
   searchNccWm, searchNcc3hk, findGaps,
-  getItems, searchListings,
+  getItems, searchListings, identifyCode,
 } from "@/lib/agents/tools"
 import type { Message, UserRole }   from "@/lib/agents/types"
 
@@ -84,30 +84,39 @@ async function buildToolContext(
   }
 
   if (agentId === "tra-cuu") {
-    if (params.skuCode) {
-      const detail = await getProductDetail(params.skuCode)
-      if (isCost && detail?.sku?.latest_cogs != null) {
-        const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
-        detail.sku.cogs_usd = usd
-        detail.sku.cogs_vnd = vnd
+    const code = params.skuCode || params.listingCode
+    if (code) {
+      // Identify code type first
+      const identified = await identifyCode(code)
+      sections.push(`=== NHẬN DẠNG MÃ: ${code} ===`, JSON.stringify(identified, null, 2))
+
+      if (identified.found) {
+        if (identified.type === "SKU") {
+          const detail = await getProductDetail(code)
+          if (isCost && detail?.sku?.latest_cogs != null) {
+            const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+            detail.sku.cogs_usd = usd
+            detail.sku.cogs_vnd = vnd
+          }
+          sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
+          sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
+        } else if (identified.type === "Alias (Item)") {
+          const [items, listings] = await Promise.all([
+            getItems({ listing_code: identified.item_code }),
+            identified.sku_code ? getProductDetail(identified.sku_code) : Promise.resolve(null),
+          ])
+          sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
+          if (listings) sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(listings, null, 2))
+        } else if (identified.type === "Listing Code") {
+          const [listings, items] = await Promise.all([
+            searchListings({ product_code: code }),
+            getItems({ listing_code: code }),
+          ])
+          sections.push(`=== LISTING ===`, JSON.stringify(listings, null, 2))
+          sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
+        }
       }
-      sections.push(
-        `=== CHI TIẾT SKU: ${params.skuCode} ===`,
-        JSON.stringify(detail, null, 2),
-        `=== GIẢI MÃ ===`,
-        JSON.stringify(decodeSkuCode(params.skuCode), null, 2)
-      )
-    } else if (params.listingCode) {
-      const [listings, items] = await Promise.all([
-        searchListings({ product_code: params.listingCode }),
-        getItems({ listing_code: params.listingCode }),
-      ])
-      sections.push(
-        `=== LISTING: ${params.listingCode} ===`,
-        JSON.stringify(listings, null, 2),
-        `=== ITEMS ===`,
-        JSON.stringify(items, null, 2)
-      )
+      // Nếu !identified.found → hint đã có trong identified, AI sẽ dùng để thông báo
     }
   }
 
