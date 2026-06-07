@@ -8,7 +8,6 @@ export const config = {
     "/skus/:path*",
     "/listings/:path*",
     "/items/:path*",
-    "/chatbot/:path*",
     "/admin/:path*",
   ],
 }
