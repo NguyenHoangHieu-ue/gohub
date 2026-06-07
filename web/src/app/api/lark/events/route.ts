@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse }  from "next/server"
+import { waitUntil }                  from "@vercel/functions"
 import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { getRefCache }               from "@/lib/agents/cache"
@@ -221,8 +222,8 @@ export async function POST(req: NextRequest) {
   }
   if (!userText) return NextResponse.json({ ok: true })
 
-  // Respond immediately (Lark timeout = 3s), process async
-  processAndReply(openId, messageId, userText).catch(console.error)
+  // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
+  waitUntil(processAndReply(openId, messageId, userText))
   return NextResponse.json({ ok: true })
 }
 
