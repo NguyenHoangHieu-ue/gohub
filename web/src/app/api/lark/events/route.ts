@@ -157,23 +157,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  // ── URL verification — schema 1.0 ─────────────────────────────────────────
-  if (body.type === "url_verification") {
-    const challenge = body.challenge as string
-    console.log("[Lark] responding challenge:", challenge)
-    return new Response(JSON.stringify({ challenge }), {
-      status:  200,
-      headers: { "Content-Type": "application/json" },
-    })
-  }
+  // ── URL verification — schema 1.0 & 2.0 ──────────────────────────────────
+  const challenge: string | undefined =
+    body.type === "url_verification"                          ? body.challenge :
+    body.schema === "2.0" && body.header?.event_type === "challenge" ? body.event?.challenge :
+    undefined
 
-  // ── URL verification — schema 2.0 ─────────────────────────────────────────
-  if (body.schema === "2.0" && body.header?.event_type === "challenge") {
-    const challenge = body.event?.challenge as string
-    console.log("[Lark] responding challenge 2.0:", challenge)
-    return new Response(JSON.stringify({ challenge }), {
+  if (challenge) {
+    console.log("[Lark] responding challenge:", challenge)
+    const resBody = JSON.stringify({ challenge })
+    return new Response(resBody, {
       status:  200,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type":   "application/json",
+        "Content-Length": String(Buffer.byteLength(resBody)),
+      },
     })
   }
 
