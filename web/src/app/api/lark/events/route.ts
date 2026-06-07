@@ -106,8 +106,21 @@ async function buildToolContext(
   return sections.filter(Boolean).join("\n")
 }
 
+// Debug GET — Lark sometimes pings with GET first
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "lark-bot" })
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json()
+  let body: any
+  try {
+    const raw = await req.text()
+    console.log("[Lark] raw body:", raw)
+    console.log("[Lark] headers:", Object.fromEntries(req.headers.entries()))
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    return NextResponse.json({ ok: true })
+  }
 
   // ── URL verification — schema 1.0 ─────────────────────────────────────────
   if (body.type === "url_verification") {
