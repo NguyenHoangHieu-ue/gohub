@@ -59,6 +59,12 @@ async function buildToolContext(
   }
 
   if (agentId === "giai-dap") {
+    // Luôn inject vendor list (nhỏ, luôn cần)
+    const vendors = getVendorInfo(undefined, ref)
+    sections.push(
+      `=== DANH SÁCH VENDOR (${vendors.length}) ===`,
+      vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
+    )
     if (params.skuCode) {
       sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
     }
