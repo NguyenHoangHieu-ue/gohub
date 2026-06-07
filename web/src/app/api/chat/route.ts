@@ -18,6 +18,7 @@ interface CacheData {
   countries:        any[]
   vendors:          any[]
   settings:         any[]
+  groupMap:         Record<string, string>  // group code → tên nước
   // Pre-computed context strings (inject thẳng vào system prompt)
   skuCtx:           string   // không có giá
   skuCtxCost:       string   // có giá VND/USD (admin/manager)
@@ -168,7 +169,7 @@ async function getRawData(): Promise<CacheData> {
     skus, wmProducts: wmProductsRaw as any[], wmInSystem,
     zones3hk: zones3hkRaw as any[],
     supportCountries, countries, vendors, settings,
-    skuCtx, skuCtxCost,
+    groupMap, skuCtx, skuCtxCost,
   }
   cache = { data, at: now }
   return data
@@ -316,9 +317,25 @@ function buildNccSection(countryEn: string, data: CacheData, isCost: boolean): s
   return lines.join("\n")
 }
 
+// ─── Server-side SKU filter theo nước ────────────────────────────────────────
+
+function filterSkusByCountry(skus: any[], countryEn: string, supportCountries: any[]): any[] {
+  const search = countryEn.toLowerCase()
+  const matchCodes = new Set<string>()
+  for (const sc of supportCountries) {
+    const haystack = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
+    if (haystack.includes(search)) matchCodes.add(sc.code as string)
+  }
+  if (!matchCodes.size) return skus
+  return skus.filter(s => {
+    if (!s.supported_countries) return false
+    return (s.supported_countries as string).split(/[,\s]+/).some(g => matchCodes.has(g.trim()))
+  })
+}
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(data: CacheData, role: string, nccSection: string): string {
+function buildSystemPrompt(data: CacheData, role: string, nccSection: string, skuCtxOverride?: string): string {
   const isCost = role === "admin" || role === "manager"
   const { skuCtx, skuCtxCost, supportCountries, countries, vendors, settings } = data
 
@@ -329,7 +346,7 @@ function buildSystemPrompt(data: CacheData, role: string, nccSection: string): s
     `Khi user hoi ve san pham, tim trong danh sach do — khong tu bia them.`,
     `Neu GoHub khong co → thong bao ro rang va gioi thieu catalog NCC neu co.`,
     ``,
-    isCost ? skuCtxCost : skuCtx,
+    skuCtxOverride ?? (isCost ? skuCtxCost : skuCtx),
   ]
 
   if (nccSection) lines.push(nccSection)
@@ -410,13 +427,20 @@ export async function POST(req: NextRequest) {
   try {
     const rawData = await getRawData()
 
-    // Detect country chỉ để inject NCC catalog nếu cần
     const lastMessage = messages.at(-1).content
     const countryEn   = detectCountry(lastMessage, rawData)
     const nccSection  = countryEn ? buildNccSection(countryEn, rawData, isCost) : ""
 
+    // Khi detect được nước → filter SKUs server-side → context nhỏ, Gemini tìm chính xác hơn
+    let skuCtxOverride: string | undefined
+    if (countryEn) {
+      const filtered = filterSkusByCountry(rawData.skus, countryEn, rawData.supportCountries)
+      skuCtxOverride  = buildSkuCtx(filtered, isCost, rawData.groupMap)
+      console.log(`[chat] country=${countryEn} skus=${filtered.length}`)
+    }
+
     const systemInstruction =
-      `${buildSystemPrompt(rawData, role, nccSection)}\n\n---\nNguoi dang chat: ${name}`
+      `${buildSystemPrompt(rawData, role, nccSection, skuCtxOverride)}\n\n---\nNguoi dang chat: ${name}`
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
