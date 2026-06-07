@@ -42,7 +42,7 @@ export function Sidebar() {
   return (
     <aside className={`
       fixed left-0 top-0 h-full bg-white border-r border-gray-200
-      flex flex-col z-40 select-none
+      flex flex-col z-40 select-none overflow-visible
       transition-all duration-200 ease-in-out
       ${collapsed ? "w-16" : "w-60"}
     `}>
@@ -91,16 +91,21 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Toggle button */}
-      <div className={`border-t border-gray-100 ${collapsed ? "px-1.5 py-2" : "px-2.5 py-2"}`}>
-        <button
-          onClick={toggle}
-          title={collapsed ? "Mở rộng" : "Thu gọn"}
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          {collapsed ? <ChevronRight size={15} /> : <><ChevronLeft size={15} /><span>Thu gọn</span></>}
-        </button>
-      </div>
+      {/* Toggle tab — dán vào cạnh phải sidebar */}
+      <button
+        onClick={toggle}
+        title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+        className="absolute -right-3 top-1/2 -translate-y-1/2 z-50
+          w-6 h-12 bg-white border border-gray-200 rounded-r-lg shadow-sm
+          flex items-center justify-center
+          text-gray-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50
+          transition-all duration-150 group"
+      >
+        {collapsed
+          ? <ChevronRight size={14} className="group-hover:scale-110 transition-transform" />
+          : <ChevronLeft  size={14} className="group-hover:scale-110 transition-transform" />
+        }
+      </button>
 
       {/* User footer */}
       <div className={`border-t border-gray-100 p-3 space-y-1 flex-shrink-0 ${collapsed ? "px-1.5" : "p-3"}`}>

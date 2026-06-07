@@ -441,10 +441,17 @@ export default function ChatbotPage() {
             {/* Desktop toggle */}
             <button
               onClick={toggleChatSidebar}
-              title={chatSidebar ? "Thu gọn lịch sử" : "Mở lịch sử"}
-              className="hidden md:flex p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              title={chatSidebar ? "Thu gọn lịch sử" : "Mở lịch sử trò chuyện"}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5
+                text-xs font-medium text-gray-500
+                bg-white border border-gray-200 rounded-lg shadow-sm
+                hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50
+                transition-all duration-150"
             >
-              {chatSidebar ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+              {chatSidebar
+                ? <><PanelLeftClose size={15} /><span>Thu gọn</span></>
+                : <><PanelLeftOpen  size={15} /><span>Lịch sử</span></>
+              }
             </button>
             <Sparkles size={20} className="text-brand-600" />
             <h1 className="text-lg md:text-xl font-bold text-gray-900">Telco Chat</h1>
