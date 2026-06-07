@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import type { Message } from "@/lib/agents/types"
 
@@ -66,14 +66,15 @@ export default function ChatbotPage() {
   const userName = session?.user?.name || ""
   const userRole = (session?.user as any)?.role || "standard"
 
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [activeConvId,  setActiveConvId]  = useState<string | null>(null)
-  const [messages,      setMessages]      = useState<StoredMessage[]>([])
-  const [input,         setInput]         = useState("")
-  const [loading,       setLoading]       = useState(false)
-  const [streaming,     setStreaming]      = useState(false)
-  const [agentName,     setAgentName]     = useState<string | null>(null)
-  const [deletingId,    setDeletingId]    = useState<string | null>(null)
+  const [conversations,  setConversations] = useState<Conversation[]>([])
+  const [activeConvId,   setActiveConvId]  = useState<string | null>(null)
+  const [messages,       setMessages]      = useState<StoredMessage[]>([])
+  const [input,          setInput]         = useState("")
+  const [loading,        setLoading]       = useState(false)
+  const [streaming,      setStreaming]      = useState(false)
+  const [agentName,      setAgentName]     = useState<string | null>(null)
+  const [deletingId,     setDeletingId]    = useState<string | null>(null)
+  const [mobileDrawer,   setMobileDrawer]  = useState(false)
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
@@ -332,68 +333,101 @@ export default function ChatbotPage() {
 
   const groups = groupConversations(conversations)
 
+  const ConvList = ({ onSelect }: { onSelect?: () => void }) => (
+    <>
+      <div className="p-3 border-b border-gray-200">
+        <button
+          onClick={() => { startNew(); onSelect?.() }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors"
+        >
+          <Plus size={15} />
+          Cuộc trò chuyện mới
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+        {conversations.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center mt-6 px-3">Chưa có cuộc trò chuyện nào</p>
+        ) : (
+          groups.map(group => (
+            <div key={group.label}>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-2 mb-1">
+                {group.label}
+              </p>
+              {group.items.map(conv => (
+                <div
+                  key={conv.id}
+                  onClick={() => { switchConversation(conv); onSelect?.() }}
+                  className={`group flex items-start gap-1 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
+                    conv.id === activeConvId
+                      ? "bg-brand-100 text-brand-800"
+                      : "hover:bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  <MessageSquare size={13} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                  <span className="flex-1 text-xs leading-snug line-clamp-2">{conv.title}</span>
+                  <button
+                    onClick={(e) => deleteConversation(conv.id, e)}
+                    disabled={deletingId === conv.id}
+                    className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-0.5 text-gray-400 hover:text-red-500 transition-all disabled:opacity-50"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  )
+
   return (
     <div className="flex" style={{ height: "100vh" }}>
 
-      {/* ── Conversation list panel ── */}
-      <div className="w-56 border-r border-gray-200 bg-gray-50 flex flex-col flex-shrink-0">
-        <div className="p-3 border-b border-gray-200">
-          <button
-            onClick={startNew}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors"
-          >
-            <Plus size={15} />
-            Cuộc trò chuyện mới
+      {/* ── Mobile drawer overlay ── */}
+      {mobileDrawer && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setMobileDrawer(false)}
+        />
+      )}
+
+      {/* ── Conversation list — desktop sidebar / mobile drawer ── */}
+      <div className={`
+        fixed md:relative inset-y-0 left-0 z-40
+        w-64 md:w-56 bg-gray-50 border-r border-gray-200
+        flex flex-col flex-shrink-0
+        transform transition-transform duration-200 ease-in-out
+        ${mobileDrawer ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+      `}>
+        {/* Mobile drawer header */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 md:hidden">
+          <span className="text-sm font-semibold text-gray-700">Lịch sử trò chuyện</span>
+          <button onClick={() => setMobileDrawer(false)} className="p-1 text-gray-400 hover:text-gray-600">
+            <X size={18} />
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-3">
-          {conversations.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center mt-6 px-3">Chưa có cuộc trò chuyện nào</p>
-          ) : (
-            groups.map(group => (
-              <div key={group.label}>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-2 mb-1">
-                  {group.label}
-                </p>
-                {group.items.map(conv => (
-                  <div
-                    key={conv.id}
-                    onClick={() => switchConversation(conv)}
-                    className={`group flex items-start gap-1 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                      conv.id === activeConvId
-                        ? "bg-brand-100 text-brand-800"
-                        : "hover:bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    <MessageSquare size={13} className="flex-shrink-0 mt-0.5 text-gray-400" />
-                    <span className="flex-1 text-xs leading-snug line-clamp-2">{conv.title}</span>
-                    <button
-                      onClick={(e) => deleteConversation(conv.id, e)}
-                      disabled={deletingId === conv.id}
-                      className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-0.5 text-gray-400 hover:text-red-500 transition-all disabled:opacity-50"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))
-          )}
-        </div>
+        <ConvList onSelect={() => setMobileDrawer(false)} />
       </div>
 
       {/* ── Chat area ── */}
-      <div className="flex-1 flex flex-col min-w-0 p-6">
+      <div className="flex-1 flex flex-col min-w-0 p-3 md:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
-          <div className="flex items-baseline gap-2">
+        <div className="flex items-center justify-between mb-3 md:mb-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileDrawer(true)}
+              className="md:hidden p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <Menu size={18} />
+            </button>
             <Sparkles size={20} className="text-brand-600" />
-            <h1 className="text-xl font-bold text-gray-900">Telco Chat</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900">Telco Chat</h1>
           </div>
           <div className="flex items-center gap-2">
             {agentName && (
-              <span className="text-xs text-gray-400 animate-pulse">
+              <span className="text-xs text-gray-400 animate-pulse hidden sm:block">
                 {agentName} đang xử lý...
               </span>
             )}
@@ -402,7 +436,7 @@ export default function ChatbotPage() {
 
         {/* Chat container */}
         <div className="flex-1 bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
 
             {/* Empty state */}
             {messages.length === 0 && (
@@ -433,7 +467,7 @@ export default function ChatbotPage() {
                     <Bot size={15} className="text-brand-600" />
                   </div>
                 )}
-                <div className="flex flex-col gap-1 max-w-[72%]">
+                <div className="flex flex-col gap-1 max-w-[85%] md:max-w-[72%]">
                   {msg.role === "assistant" && msg.agent && (
                     <span className={`text-xs px-2 py-0.5 rounded-full self-start font-medium ${AGENT_COLORS[msg.agent.id] ?? "bg-gray-100 text-gray-600"}`}>
                       {msg.agent.name}

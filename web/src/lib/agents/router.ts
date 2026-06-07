@@ -121,11 +121,11 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
 
   // Gap analysis
   if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))
-    return role !== "standard" ? "gap-analysis" : "giai-dap"
+    return "gap-analysis"
 
   // Pricing / COGS
   if (/cogs|gi[aá] v[oố]n|gi[aá] nh[aậ]p|l[oợ]i nhu[aậ]n|t[yỷ] gi[aá]|chi ph[ií]/.test(m))
-    return role !== "standard" ? "gia-cogs" : "giai-dap"
+    return "gia-cogs"
 
   // System knowledge
   if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))

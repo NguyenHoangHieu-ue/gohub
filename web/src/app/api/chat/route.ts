@@ -31,12 +31,25 @@ async function buildToolContext(
       vendor:      params.vendor,
     }, ref)
 
-    const rows = skus.map(s =>
-      `${s.sku_code}|${s.tenant}|${s.sim_esim}|${s.data_amount ?? "?"}${s.data_amount_unit ?? "GB"}` +
-      `|${s.day_amount}d|throttle:${s.throttle_speed ?? "NoLimit"}` +
-      `|operator:${s.operator_code ?? "—"}|kyc:${s.kyc_needed ?? "—"}` +
-      (isCost ? `|cogs:${s.latest_cogs ?? "?"}${s.latest_cogs_currency ?? ""}` : "")
-    )
+    const rows = skus.map(s => {
+      const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999
+        ? "Unlimited"
+        : s.data_amount != null
+          ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}`
+          : null
+      const parts: string[] = [
+        s.sku_code,
+        s.tenant,
+        s.sim_esim ?? null,
+        dataStr,
+        `${s.day_amount}d`,
+        s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+        s.operator_code  ? `operator:${s.operator_code}`  : null,
+        s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+        isCost && s.latest_cogs != null ? `cogs:${s.latest_cogs}${s.latest_cogs_currency ?? ""}` : null,
+      ]
+      return parts.filter(Boolean).join("|")
+    })
     sections.push(
       `=== KẾT QUẢ TÌM KIẾM: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
       note ? `Lưu ý: ${note}` : "",
