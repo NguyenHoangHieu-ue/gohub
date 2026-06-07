@@ -50,13 +50,14 @@ const CITY_TO_COUNTRY: Record<string, string> = {
 }
 
 export interface ExtractedParams {
-  country?:     string
-  skuCode?:     string
-  days?:        number
-  dataGB?:      number
-  isUnlimited?: boolean
-  vendor?:      string   // "WM", "3H"
-  nccVendor?:   "wm" | "3hk" | "all"
+  country?:      string
+  skuCode?:      string
+  listingCode?:  string
+  days?:         number
+  dataGB?:       number
+  isUnlimited?:  boolean
+  vendor?:       string   // "WM", "3H"
+  nccVendor?:    "wm" | "3hk" | "all"
 }
 
 export function extractParams(message: string): ExtractedParams {
@@ -66,6 +67,10 @@ export function extractParams(message: string): ExtractedParams {
   // SKU code (13 chars)
   const skuMatch = message.match(/\b([A-Z0-9]{13})\b/i)
   if (skuMatch) params.skuCode = skuMatch[1].toUpperCase()
+
+  // Listing code (thường bắt đầu bằng chữ + số, ví dụ: EJPN3DP001)
+  const listingMatch = message.match(/\b([A-Z]{1,3}[A-Z0-9]{5,9})\b/i)
+  if (listingMatch && !params.skuCode) params.listingCode = listingMatch[1].toUpperCase()
 
   // Country
   const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
@@ -116,8 +121,9 @@ const AGENT_NAMES: Record<AgentId, string> = {
 function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
   const m = msg.toLowerCase()
 
-  // Direct SKU lookup
+  // Direct SKU lookup hoặc hỏi về listing/item
   if (params.skuCode) return "tra-cuu"
+  if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
 
   // Gap analysis
   if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))

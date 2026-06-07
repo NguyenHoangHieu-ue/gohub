@@ -116,21 +116,87 @@ export async function searchSkus(params: {
 
 // ─── Tool: get_product_detail ─────────────────────────────────────────────────
 
+const LISTING_COLS = [
+  "listing_code","reference_product_code","tenant","status","listing_type",
+  "listing_name_en","listing_name_vn",
+  "type_of_sim","product_type","network_operator",
+  "data_type_en","data_type_vn",
+  "category_code",
+  "daily_reset_time_en","daily_reset_time_vn",
+  "activation_time_en","activation_time_vn",
+  "network_type",
+  "hotspot_en","hotspot_vn",
+  "kyc_needed_en","kyc_needed_vn",
+  "kyc_links_en","kyc_links_vn",
+  "expirations_en","expirations_vn",
+  "top_up_options_en","top_up_options_vn",
+  "activation_en","activation_vn",
+  "activation_links_en","activation_links_vn",
+  "special_activation_required_en","special_activation_required_vn",
+  "unsupported_apps_en","unsupported_apps_vn",
+  "telco_perks_en","telco_perks_vn",
+  "note_en","note_vn",
+  "call_sms_details_en","call_sms_details_vn",
+  "local_phone_number_en","local_phone_number_vn","local_phone_number_country",
+  "call_en","call_vn",
+  "apn",
+].join(",")
+
+const ITEM_COLS = [
+  "item_code","alias","sku_code","listing_code","tenant",
+  "category_code","status","item_type",
+  "item_name_en","item_name_vn",
+  "day_amount","day_amount_unit",
+  "data_amount","data_amount_unit",
+  "throttle_speed_en","throttle_speed_vn",
+  "call_en","call_vn",
+  "call_sms_details_en","call_sms_details_vn",
+  "sales_channel","unitprice","currency",
+].join(",")
+
 export async function getProductDetail(sku_code: string): Promise<any> {
   const { data: sku } = await supabaseAdmin
     .from("skus").select("*").eq("sku_code", sku_code).maybeSingle()
   if (!sku) return { error: `SKU "${sku_code}" không tồn tại trong database` }
 
-  const [{ data: product }, { data: listings }] = await Promise.all([
+  const [{ data: product }, { data: listings }, { data: items }] = await Promise.all([
     supabaseAdmin.from("products").select("*").eq("product_code", sku.product_code).maybeSingle(),
     supabaseAdmin.from("listings")
-      .select("listing_name_vn,listing_name_en,activation_vn,activation_en,kyc_needed_vn,kyc_links_vn,expirations_vn,apn,network_type,hotspot_vn,call_vn")
+      .select(LISTING_COLS)
       .eq("reference_product_code", sku.product_code)
       .eq("status", "Active")
-      .limit(3),
+      .limit(5),
+    supabaseAdmin.from("items")
+      .select(ITEM_COLS)
+      .eq("sku_code", sku_code)
+      .eq("status", "Active")
+      .limit(10),
   ])
 
-  return { sku, product: product ?? {}, listings: listings ?? [] }
+  return { sku, product: product ?? {}, listings: listings ?? [], items: items ?? [] }
+}
+
+// ─── Tool: get_items ──────────────────────────────────────────────────────────
+
+export async function getItems(params: { sku_code?: string; listing_code?: string }): Promise<any[]> {
+  let q = supabaseAdmin.from("items").select(ITEM_COLS).eq("status", "Active")
+  if (params.sku_code)     q = q.eq("sku_code", params.sku_code)
+  if (params.listing_code) q = q.eq("listing_code", params.listing_code)
+  const { data } = await q.limit(20)
+  return data ?? []
+}
+
+// ─── Tool: search_listings ────────────────────────────────────────────────────
+
+export async function searchListings(params: { product_code?: string; name?: string; tenant?: string }): Promise<any[]> {
+  let q = supabaseAdmin.from("listings").select(LISTING_COLS).eq("status", "Active")
+  if (params.product_code) q = q.eq("reference_product_code", params.product_code)
+  if (params.tenant)       q = q.eq("tenant", params.tenant)
+  if (params.name) {
+    q = q.or(`listing_name_vn.ilike.%${params.name}%,listing_name_en.ilike.%${params.name}%`)
+  }
+  const { data } = await q.limit(5)
+  return data ?? []
 }
 
 // ─── Tool: decode_sku_code ────────────────────────────────────────────────────

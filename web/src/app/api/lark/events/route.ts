@@ -7,13 +7,13 @@ import { AGENTS }                    from "@/lib/agents/agents"
 import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import {
-  replyLarkMessage, getLarkUserInfo, stripMarkdown,
+  sendLarkMessage, getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import {
   searchSkus, getProductDetail, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, getSkuCogs,
-  findGaps,
+  findGaps, getItems, searchListings,
 } from "@/lib/agents/tools"
 import type { Message, UserRole }    from "@/lib/agents/types"
 
@@ -104,15 +104,24 @@ async function buildToolContext(
     sections.push(`=== KẾT QUẢ TÌM KIẾM: ${skus.length} SKU (nước=${params.country}) ===`, note ?? "", ...rows)
   }
 
-  if (agentId === "tra-cuu" && params.skuCode) {
-    const detail = await getProductDetail(params.skuCode)
-    if (isCost && detail?.sku?.latest_cogs != null) {
-      const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
-      detail.sku.cogs_usd = usd
-      detail.sku.cogs_vnd = vnd
+  if (agentId === "tra-cuu") {
+    if (params.skuCode) {
+      const detail = await getProductDetail(params.skuCode)
+      if (isCost && detail?.sku?.latest_cogs != null) {
+        const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+        detail.sku.cogs_usd = usd
+        detail.sku.cogs_vnd = vnd
+      }
+      sections.push(`=== CHI TIẾT SKU: ${params.skuCode} ===`, JSON.stringify(detail, null, 2))
+      sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
+    } else if (params.listingCode) {
+      const [listings, items] = await Promise.all([
+        searchListings({ product_code: params.listingCode }),
+        getItems({ listing_code: params.listingCode }),
+      ])
+      sections.push(`=== LISTING: ${params.listingCode} ===`, JSON.stringify(listings, null, 2))
+      sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
     }
-    sections.push(`=== CHI TIẾT SKU: ${params.skuCode} ===`, JSON.stringify(detail, null, 2))
-    sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
   }
 
   if (agentId === "giai-dap") {
