@@ -534,20 +534,33 @@ export async function POST(req: NextRequest) {
     const rawData = await getRawData()
 
     const lastMessage = messages.at(-1).content
-    const intent      = detectIntent(lastMessage, rawData)
-    const nccSection  = intent.country ? buildNccSection(intent.country, rawData, isCost) : ""
-
     let skuCtxOverride: string | undefined
-    if (intent.country) {
-      const { skus: filtered, note } = filterSKUs(rawData.skus, intent, rawData.supportCountries)
-      const criteria = [
-        `nuoc=${intent.country}`,
-        intent.vendor      && `vendor=${intent.vendor}`,
-        intent.days   != null && `${intent.days}d`,
-        intent.isUnlimited   ? "Unlimited" : (intent.dataGB != null && `${intent.dataGB}GB`),
-      ].filter(Boolean).join(" ")
-      const baseCtx  = buildSkuCtx(filtered, isCost, rawData.groupMap)
-      skuCtxOverride = `[Tim kiem: ${criteria}${note ? ` | ${note}` : ""}]\n${baseCtx}`
+    let nccSection = ""
+
+    // Case 1: user cung cấp trực tiếp mã SKU 13 ký tự
+    const skuDirectMatch = lastMessage.match(/\b([A-Z0-9]{13})\b/i)
+    if (skuDirectMatch) {
+      const skuCode = skuDirectMatch[1].toUpperCase()
+      const found   = rawData.skus.find(s => (s.sku_code as string)?.toUpperCase() === skuCode)
+      if (found) {
+        skuCtxOverride = `[Tim truc tiep: SKU ${skuCode}]\n` + buildSkuCtx([found], isCost, rawData.groupMap)
+      } else {
+        skuCtxOverride = `[SKU "${skuCode}" khong co trong he thong Active. Co the: (1) SKU chua duoc active, (2) Ma sai, (3) Da bi deactivate. Thong bao ro cho user, khong doan.]`
+      }
+    } else {
+      // Case 2: intent detection + filtering theo country/vendor/days/data
+      const intent = detectIntent(lastMessage, rawData)
+      nccSection   = intent.country ? buildNccSection(intent.country, rawData, isCost) : ""
+      if (intent.country) {
+        const { skus: filtered, note } = filterSKUs(rawData.skus, intent, rawData.supportCountries)
+        const criteria = [
+          `nuoc=${intent.country}`,
+          intent.vendor      && `vendor=${intent.vendor}`,
+          intent.days   != null && `${intent.days}d`,
+          intent.isUnlimited   ? "Unlimited" : (intent.dataGB != null && `${intent.dataGB}GB`),
+        ].filter(Boolean).join(" ")
+        skuCtxOverride = `[Tim kiem: ${criteria}${note ? ` | ${note}` : ""}]\n` + buildSkuCtx(filtered, isCost, rawData.groupMap)
+      }
     }
 
     const systemInstruction =
