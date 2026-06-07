@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse }  from "next/server"
+import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { getRefCache }               from "@/lib/agents/cache"
 import { AGENTS }                    from "@/lib/agents/agents"
@@ -146,14 +147,34 @@ export async function GET() {
   return NextResponse.json({ ok: true, service: "lark-bot" })
 }
 
+function decryptLark(encrypted: string): any {
+  const encryptKey = process.env.LARK_ENCRYPT_KEY!
+  const key = createHash("sha256").update(encryptKey).digest()
+  const buf = Buffer.from(encrypted, "base64")
+  const iv         = buf.subarray(0, 16)
+  const ciphertext = buf.subarray(16)
+  const decipher   = createDecipheriv("aes-256-cbc", key, iv)
+  const plain      = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+  return JSON.parse(plain.toString("utf-8"))
+}
+
 export async function POST(req: NextRequest) {
   let body: any
   try {
     const raw = await req.text()
-    console.log("[Lark] raw body:", raw)
-    console.log("[Lark] headers:", Object.fromEntries(req.headers.entries()))
-    body = raw ? JSON.parse(raw) : {}
-  } catch {
+    const parsed = raw ? JSON.parse(raw) : {}
+
+    // Decrypt if encrypted
+    if (parsed.encrypt) {
+      console.log("[Lark] decrypting...")
+      body = decryptLark(parsed.encrypt)
+      console.log("[Lark] decrypted:", JSON.stringify(body).slice(0, 200))
+    } else {
+      console.log("[Lark] raw body:", raw.slice(0, 200))
+      body = parsed
+    }
+  } catch (e: any) {
+    console.error("[Lark] parse/decrypt error:", e.message)
     return NextResponse.json({ ok: true })
   }
 
