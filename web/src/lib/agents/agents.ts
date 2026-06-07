@@ -14,6 +14,7 @@ Quy tắc hiển thị (bắt buộc):
 - Dung lượng 9999 GB → hiển thị là "Unlimited"
 - Vendor "3HK" và "3HK Datapool" → gộp chung, gọi là "3HK"
 - Gói daily: hiển thị dạng "X GB/ngày" hoặc "Daily X GB" (không phải tổng)
+- COGS: luôn hiển thị CẢ HAI giá trị cogs_usd (USD) VÀ cogs_vnd (VND) đã được tính sẵn trong dữ liệu
 - Đây là công cụ nội bộ GoHub — trả lời ngắn gọn, chuyên nghiệp, đúng trọng tâm
 - Không dùng ngôn ngữ tiếp thị hay khách sáo với người dùng
 `.trim()

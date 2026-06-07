@@ -13,6 +13,22 @@ import {
 } from "@/lib/agents/tools"
 import type { Message, UserRole }   from "@/lib/agents/types"
 
+// Convert COGS to USD + VND using fx rates
+function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
+  const usdVnd = fx["fx.usd_vnd"] ?? 26000
+  const hkdUsd = fx["fx.hkd_usd"] ?? 0.128
+  const twdUsd = fx["fx.twd_usd"] ?? 0.031
+  let usd = 0
+  switch (currency?.toUpperCase()) {
+    case "USD": usd = cogs; break
+    case "VND": usd = cogs / usdVnd; break
+    case "HKD": usd = cogs * hkdUsd; break
+    case "TWD": usd = cogs * twdUsd; break
+    default:    usd = cogs; break
+  }
+  return { usd: Math.round(usd * 10000) / 10000, vnd: Math.round(usd * usdVnd) }
+}
+
 // Pre-execute tools based on agent + extracted params, return context string
 async function buildToolContext(
   agentId: string,
@@ -21,6 +37,13 @@ async function buildToolContext(
   isCost:  boolean
 ): Promise<string> {
   const sections: string[] = []
+
+  // Fetch FX rates once for any agent that shows COGS
+  let fx: Record<string, number> = {}
+  if (isCost) {
+    const rates = await getFxRates()
+    for (const r of rates) fx[r.key] = parseFloat(r.value)
+  }
 
   if (agentId === "tu-van" && params.country) {
     const { skus, note } = await searchSkus({
@@ -37,61 +60,63 @@ async function buildToolContext(
         : s.data_amount != null
           ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}`
           : null
-      const parts: string[] = [
-        s.sku_code,
-        s.tenant,
-        s.sim_esim ?? null,
-        dataStr,
-        `${s.day_amount}d`,
+      let cogsStr: string | null = null
+      if (isCost && s.latest_cogs != null) {
+        const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("vi-VN")} VND`
+      }
+      const parts = [
+        s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
         s.operator_code  ? `operator:${s.operator_code}`  : null,
         s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-        isCost && s.latest_cogs != null ? `cogs:${s.latest_cogs}${s.latest_cogs_currency ?? ""}` : null,
+        cogsStr,
       ]
       return parts.filter(Boolean).join("|")
     })
     sections.push(
       `=== KẾT QUẢ TÌM KIẾM: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
       note ? `Lưu ý: ${note}` : "",
-      `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs" : ""}`,
+      `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs(USD/VND)" : ""}`,
       ...rows
     )
   }
 
   if (agentId === "tra-cuu" && params.skuCode) {
     const detail = await getProductDetail(params.skuCode)
+    // Enrich COGS với USD+VND nếu có
+    if (isCost && detail?.sku?.latest_cogs != null) {
+      const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+      detail.sku.cogs_usd = usd
+      detail.sku.cogs_vnd = vnd
+    }
     sections.push(
       `=== CHI TIẾT SKU: ${params.skuCode} ===`,
-      JSON.stringify(detail, null, 2)
+      JSON.stringify(detail, null, 2),
+      `=== GIẢI MÃ ===`,
+      JSON.stringify(decodeSkuCode(params.skuCode), null, 2)
     )
-    if (!params.skuCode.match(/\d/)) {
-      // also decode if valid format
-    } else {
-      sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
-    }
   }
 
   if (agentId === "giai-dap") {
-    // Luôn inject vendor list (nhỏ, luôn cần)
     const vendors = getVendorInfo(undefined, ref)
     sections.push(
       `=== DANH SÁCH VENDOR (${vendors.length}) ===`,
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
-    if (params.skuCode) {
-      sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
-    }
-    if (params.country) {
-      const info = getCountryInfo(params.country, ref)
-      sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(info, null, 2))
-    }
+    if (params.skuCode) sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
+    if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
   }
 
   if (agentId === "gia-cogs") {
-    const [rates] = await Promise.all([getFxRates()])
-    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(rates, null, 2))
+    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2))
     if (params.skuCode) {
       const cogs = await getSkuCogs(params.skuCode)
+      if (cogs && !cogs.error && cogs.latest_cogs != null) {
+        const { usd, vnd } = convertCogs(cogs.latest_cogs, cogs.latest_cogs_currency, fx)
+        cogs.cogs_usd = usd
+        cogs.cogs_vnd = vnd
+      }
       sections.push(`=== COGS SKU ${params.skuCode} ===`, JSON.stringify(cogs, null, 2))
     }
   }

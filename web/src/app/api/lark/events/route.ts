@@ -51,6 +51,21 @@ async function getUserRole(openId: string): Promise<{ role: UserRole; name: stri
   }
 }
 
+function convertCogs(cogs: number, currency: string, fx: Record<string, number>) {
+  const usdVnd = fx["fx.usd_vnd"] ?? 26000
+  const hkdUsd = fx["fx.hkd_usd"] ?? 0.128
+  const twdUsd = fx["fx.twd_usd"] ?? 0.031
+  let usd = 0
+  switch (currency?.toUpperCase()) {
+    case "USD": usd = cogs; break
+    case "VND": usd = cogs / usdVnd; break
+    case "HKD": usd = cogs * hkdUsd; break
+    case "TWD": usd = cogs * twdUsd; break
+    default:    usd = cogs; break
+  }
+  return { usd: Math.round(usd * 10000) / 10000, vnd: Math.round(usd * usdVnd) }
+}
+
 // Reuse buildToolContext logic (same as /api/chat)
 async function buildToolContext(
   agentId: string,
@@ -60,16 +75,27 @@ async function buildToolContext(
 ): Promise<string> {
   const sections: string[] = []
 
+  let fx: Record<string, number> = {}
+  if (isCost) {
+    const rates = await getFxRates()
+    for (const r of rates) fx[r.key] = parseFloat(r.value)
+  }
+
   if (agentId === "tu-van" && params.country) {
     const { skus, note } = await searchSkus({ country: params.country, days: params.days, data_gb: params.dataGB, is_unlimited: params.isUnlimited, vendor: params.vendor }, ref)
     const rows = skus.map(s => {
       const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
         : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+      let cogsStr: string | null = null
+      if (isCost && s.latest_cogs != null) {
+        const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("vi-VN")} VND`
+      }
       const parts = [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
         s.operator_code  ? `operator:${s.operator_code}`  : null,
         s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-        isCost && s.latest_cogs != null ? `cogs:${s.latest_cogs}${s.latest_cogs_currency ?? ""}` : null,
+        cogsStr,
       ]
       return parts.filter(Boolean).join("|")
     })
@@ -78,6 +104,11 @@ async function buildToolContext(
 
   if (agentId === "tra-cuu" && params.skuCode) {
     const detail = await getProductDetail(params.skuCode)
+    if (isCost && detail?.sku?.latest_cogs != null) {
+      const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+      detail.sku.cogs_usd = usd
+      detail.sku.cogs_vnd = vnd
+    }
     sections.push(`=== CHI TIẾT SKU: ${params.skuCode} ===`, JSON.stringify(detail, null, 2))
     sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
   }
@@ -90,10 +121,14 @@ async function buildToolContext(
   }
 
   if (agentId === "gia-cogs") {
-    const rates = await getFxRates()
-    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(rates, null, 2))
+    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2))
     if (params.skuCode) {
       const cogs = await getSkuCogs(params.skuCode)
+      if (cogs && !cogs.error && cogs.latest_cogs != null) {
+        const { usd, vnd } = convertCogs(cogs.latest_cogs, cogs.latest_cogs_currency, fx)
+        cogs.cogs_usd = usd
+        cogs.cogs_vnd = vnd
+      }
       sections.push(`=== COGS SKU ${params.skuCode} ===`, JSON.stringify(cogs, null, 2))
     }
   }
