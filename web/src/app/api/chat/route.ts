@@ -65,8 +65,7 @@ function fmtThrottle(kbps: number | null): string {
   return kbps >= 1000 ? `${kbps / 1000}Mbps` : `${kbps}kbps`
 }
 
-function buildSkuCtx(skus: any[], isCost: boolean): string {
-  // Chỉ giữ sản phẩm hoàn chỉnh, sort VN trước rồi theo country group
+function buildSkuCtx(skus: any[], isCost: boolean, groupMap: Record<string, string>): string {
   const full = skus
     .filter(s => FULL_TYPES.has(s.product_type ?? s.sku_code?.[1] ?? ""))
     .sort((a, b) => {
@@ -74,6 +73,16 @@ function buildSkuCtx(skus: any[], isCost: boolean): string {
       if (b.tenant === "VN" && a.tenant !== "VN") return 1
       return (a.sku_code ?? "").localeCompare(b.sku_code ?? "")
     })
+
+  function decodeGroups(codes: string | null): string {
+    if (!codes) return "—"
+    return codes.split(/[,\s]+/).filter(Boolean)
+      .map(c => {
+        const name = groupMap[c.trim()]
+        return name ? `${c}(${name})` : c
+      })
+      .join(" / ")
+  }
 
   const header =
     `=== SAN PHAM GOHUB (${full.length} SKU active — chi eSIM Full va SIM Full) ===\n` +
@@ -85,7 +94,7 @@ function buildSkuCtx(skus: any[], isCost: boolean): string {
     `${s.sku_code}|${s.tenant}|${s.sim_esim}` +
     `|${fmtData(s.data_amount, s.data_amount_unit)}|${s.day_amount}d` +
     `|${s.throttle_speed ?? "—"}|${s.operator_code ?? "—"}` +
-    `|${s.kyc_needed ?? "—"}|${s.supported_countries ?? "—"}` +
+    `|${s.kyc_needed ?? "—"}|${decodeGroups(s.supported_countries)}` +
     `|${s.vendor_sku ?? "—"}` +
     (isCost ? `|${s.latest_cogs ?? "?"}|${s.latest_cogs_currency ?? "?"}` : "") +
     (s.note ? ` [${s.note}]` : "")
@@ -145,9 +154,13 @@ async function getRawData(): Promise<CacheData> {
 
   const wmInSystem = new Set<string>((wmSkusRaw as any[]).map((s: any) => s.vendor_sku as string))
 
+  // Build group code → country name map để decode supported_countries server-side
+  const groupMap: Record<string, string> = {}
+  for (const sc of (supportCountries as any[])) groupMap[sc.code] = sc.support_country ?? sc.code
+
   // Pre-compute SKU context strings (cache 1 lần, dùng cho mọi request)
-  const skuCtx     = buildSkuCtx(skus, false)
-  const skuCtxCost = buildSkuCtx(skus, true)
+  const skuCtx     = buildSkuCtx(skus, false, groupMap)
+  const skuCtxCost = buildSkuCtx(skus, true, groupMap)
 
   console.log(`[chat:cache] skus=${skus.length} wm=${(wmProductsRaw as any[]).length} full_ctx_chars=${skuCtx.length}`)
 
@@ -339,6 +352,17 @@ function buildSystemPrompt(data: CacheData, role: string, nccSection: string): s
     lines.push(``, `=== TY GIA ===`)
     lines.push(...(settings as any[]).map((s: any) => `${s.key}=${s.value}`))
   }
+
+  lines.push(``,
+    `=== XU LY CAU HOI MO HO ===`,
+    `Neu user KHONG neu nuoc → hoi lai ngay: "Ban muon di nuoc nao?" (bat buoc, khong the tim duoc neu thieu nuoc)`,
+    `Neu co nuoc, THIEU ngay → liet ke TAT CA goi theo nuoc do, sap xep tang dan theo so ngay`,
+    `Neu co nuoc + ngay, THIEU data → liet ke cac muc data co san cho nuoc + ngay do`,
+    `"1 tuan"=7d | "2 tuan"=14d | "1 thang"=30d | "nua thang"=15d | "vai ngay"=hoi them so ngay cu the`,
+    `"khoang X ngay" → tim X ngay chinh xac truoc; neu khong co → neu ro khong co X ngay va goi y nearest below VA nearest above`,
+    `Neu khong tim duoc chinh xac → TUYET DOI KHONG noi "khong co san pham" ma goi y san pham gan nhat kem giai thich ly do`,
+    `Neu user hoi chung chung ("goi nao tot?", "tu van goi") → hoi nuoc + ngay truoc khi tra loi`,
+  )
 
   lines.push(``,
     `=== GIAI THICH COT DU LIEU ===`,
