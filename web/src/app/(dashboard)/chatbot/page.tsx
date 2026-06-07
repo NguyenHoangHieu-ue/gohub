@@ -2,14 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import type { Message } from "@/lib/agents/types"
 
 // sessionStorage keys
-const SS_CONV_ID   = "gohub_conv_id"
-const SS_CONV_USER = "gohub_conv_user"
-const SS_MESSAGES  = "gohub_messages"
+const SS_CONV_ID      = "gohub_conv_id"
+const SS_CONV_USER    = "gohub_conv_user"
+const SS_MESSAGES     = "gohub_messages"
+const LS_CHAT_SIDEBAR = "gohub_chat_sidebar"
 
 interface Conversation {
   id:         string
@@ -75,12 +76,21 @@ export default function ChatbotPage() {
   const [agentName,      setAgentName]     = useState<string | null>(null)
   const [deletingId,     setDeletingId]    = useState<string | null>(null)
   const [mobileDrawer,   setMobileDrawer]  = useState(false)
+  const [chatSidebar,    setChatSidebar]   = useState(true)   // desktop: show/hide conv list
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
   const msgCountRef = useRef(0)  // track message count for isFirst detection
 
   const busy = loading || streaming
+
+  const toggleChatSidebar = useCallback(() => {
+    setChatSidebar(prev => {
+      const next = !prev
+      try { localStorage.setItem(LS_CHAT_SIDEBAR, next ? "1" : "0") } catch {}
+      return next
+    })
+  }, [])
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -144,6 +154,10 @@ export default function ChatbotPage() {
   useEffect(() => {
     if (!userName || initialized.current) return
     initialized.current = true
+
+    try {
+      setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0")
+    } catch {}
 
     loadConversations()
 
@@ -395,10 +409,11 @@ export default function ChatbotPage() {
       {/* ── Conversation list — desktop sidebar / mobile drawer ── */}
       <div className={`
         fixed md:relative inset-y-0 left-0 z-40
-        w-64 md:w-56 bg-gray-50 border-r border-gray-200
+        w-64 bg-gray-50 border-r border-gray-200
         flex flex-col flex-shrink-0
-        transform transition-transform duration-200 ease-in-out
+        transform transition-all duration-200 ease-in-out
         ${mobileDrawer ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        ${!chatSidebar ? "md:w-0 md:border-0 md:overflow-hidden" : "md:w-56"}
       `}>
         {/* Mobile drawer header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 md:hidden">
@@ -418,9 +433,18 @@ export default function ChatbotPage() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileDrawer(true)}
+              title="Lịch sử trò chuyện"
               className="md:hidden p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <Menu size={18} />
+            </button>
+            {/* Desktop toggle */}
+            <button
+              onClick={toggleChatSidebar}
+              title={chatSidebar ? "Thu gọn lịch sử" : "Mở lịch sử"}
+              className="hidden md:flex p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              {chatSidebar ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
             </button>
             <Sparkles size={20} className="text-brand-600" />
             <h1 className="text-lg md:text-xl font-bold text-gray-900">Telco Chat</h1>
