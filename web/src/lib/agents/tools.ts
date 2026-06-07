@@ -120,6 +120,7 @@ const LISTING_COLS = [
   "listing_code","reference_product_code","tenant","status","listing_type",
   "listing_name_en","listing_name_vn",
   "type_of_sim","product_type","network_operator",
+  "supported_countries",
   "data_type_en","data_type_vn",
   "category_code",
   "daily_reset_time_en","daily_reset_time_vn",
