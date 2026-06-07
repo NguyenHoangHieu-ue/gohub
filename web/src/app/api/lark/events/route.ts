@@ -124,12 +124,22 @@ export async function POST(req: NextRequest) {
 
   // ── URL verification — schema 1.0 ─────────────────────────────────────────
   if (body.type === "url_verification") {
-    return NextResponse.json({ challenge: body.challenge })
+    const challenge = body.challenge as string
+    console.log("[Lark] responding challenge:", challenge)
+    return new Response(JSON.stringify({ challenge }), {
+      status:  200,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
   // ── URL verification — schema 2.0 ─────────────────────────────────────────
   if (body.schema === "2.0" && body.header?.event_type === "challenge") {
-    return NextResponse.json({ challenge: body.event?.challenge })
+    const challenge = body.event?.challenge as string
+    console.log("[Lark] responding challenge 2.0:", challenge)
+    return new Response(JSON.stringify({ challenge }), {
+      status:  200,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
   // ── Message event ──────────────────────────────────────────────────────────
