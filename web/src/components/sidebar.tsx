@@ -6,7 +6,7 @@ import { useSession, signOut } from "next-auth/react"
 import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles } from "lucide-react"
 
 const NAV = [
-  { href: "/chatbot",    label: "AI Agent",      icon: Sparkles },
+  { href: "/chatbot",    label: "Telco Chat",    icon: Sparkles },
   { href: "/promotions", label: "Khuyến Mãi",    icon: Gift },
   { href: "/skus",       label: "SP Hệ Thống",   icon: Package },
   { href: "/ncc",        label: "SP Vendor",       icon: Truck },

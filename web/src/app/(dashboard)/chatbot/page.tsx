@@ -158,8 +158,7 @@ export default function ChatbotPage() {
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-baseline gap-2">
           <Sparkles size={20} className="text-brand-600" />
-          <h1 className="text-xl font-bold text-gray-900">AI Agent</h1>
-          <span className="text-sm text-gray-400">Router → 5 Agents chuyên biệt</span>
+          <h1 className="text-xl font-bold text-gray-900">Telco Chat</h1>
         </div>
         <div className="flex items-center gap-2">
           {agentName && (
