@@ -537,15 +537,44 @@ export async function POST(req: NextRequest) {
     let skuCtxOverride: string | undefined
     let nccSection = ""
 
-    // Case 1: user cung cấp trực tiếp mã SKU 13 ký tự
+    // Case 1: user cung cấp trực tiếp mã SKU 13 ký tự → query DB trực tiếp (bypass cache)
     const skuDirectMatch = lastMessage.match(/\b([A-Z0-9]{13})\b/i)
     if (skuDirectMatch) {
       const skuCode = skuDirectMatch[1].toUpperCase()
-      const found   = rawData.skus.find(s => (s.sku_code as string)?.toUpperCase() === skuCode)
-      if (found) {
-        skuCtxOverride = `[Tim truc tiep: SKU ${skuCode}]\n` + buildSkuCtx([found], isCost, rawData.groupMap)
+
+      const [{ data: skuRow }, { data: prodRow }] = await Promise.all([
+        supabaseAdmin.from("skus")
+          .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd")
+          .eq("sku_code", skuCode)
+          .maybeSingle(),
+        supabaseAdmin.from("skus")
+          .select("product_code")
+          .eq("sku_code", skuCode)
+          .maybeSingle()
+          .then(async r => {
+            if (!r.data?.product_code) return { data: null }
+            return supabaseAdmin.from("products")
+              .select("product_type,operator_code,network_type,kyc_needed,supported_countries,note")
+              .eq("product_code", r.data.product_code)
+              .maybeSingle()
+          }),
+      ])
+
+      if (!skuRow) {
+        skuCtxOverride = `[SKU "${skuCode}" khong ton tai trong database. Ma co the sai.]`
+      } else if (skuRow.status !== "Active") {
+        skuCtxOverride = `[SKU "${skuCode}" ton tai nhung dang o trang thai "${skuRow.status}" (chua phai Active). Thong bao chinh xac trang thai nay cho user.]`
       } else {
-        skuCtxOverride = `[SKU "${skuCode}" khong co trong he thong Active. Co the: (1) SKU chua duoc active, (2) Ma sai, (3) Da bi deactivate. Thong bao ro cho user, khong doan.]`
+        const enriched = {
+          ...skuRow,
+          product_type:        (prodRow as any)?.product_type ?? null,
+          operator_code:       (prodRow as any)?.operator_code ?? null,
+          network_type:        (prodRow as any)?.network_type ?? null,
+          kyc_needed:          (prodRow as any)?.kyc_needed ?? null,
+          supported_countries: (prodRow as any)?.supported_countries ?? null,
+          note:                (prodRow as any)?.note ?? null,
+        }
+        skuCtxOverride = `[Tim truc tiep tu DB: SKU ${skuCode} — Active]\n` + buildSkuCtx([enriched], isCost, rawData.groupMap)
       }
     } else {
       // Case 2: intent detection + filtering theo country/vendor/days/data
