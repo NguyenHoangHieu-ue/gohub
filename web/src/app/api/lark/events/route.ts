@@ -109,14 +109,20 @@ async function buildToolContext(
 export async function POST(req: NextRequest) {
   const body = await req.json()
 
-  // ── URL verification (Lark setup step) ────────────────────────────────────
+  // ── URL verification — schema 1.0 ─────────────────────────────────────────
   if (body.type === "url_verification") {
     return NextResponse.json({ challenge: body.challenge })
   }
 
+  // ── URL verification — schema 2.0 ─────────────────────────────────────────
+  if (body.schema === "2.0" && body.header?.event_type === "challenge") {
+    return NextResponse.json({ challenge: body.event?.challenge })
+  }
+
   // ── Message event ──────────────────────────────────────────────────────────
   const event = body.event
-  if (!event || body.header?.event_type !== "im.message.receive_v1") {
+  const eventType = body.header?.event_type ?? body.type
+  if (!event || eventType !== "im.message.receive_v1") {
     return NextResponse.json({ ok: true })
   }
 
