@@ -91,7 +91,7 @@ async function buildToolContext(
       let cogsStr: string | null = null
       if (isCost && s.latest_cogs != null) {
         const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("vi-VN")} VND`
+        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("en-US")} VND`
       }
       const parts = [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
@@ -208,10 +208,10 @@ export async function POST(req: NextRequest) {
   const msg        = event.message
   const sender     = event.sender
   const openId     = sender?.sender_id?.open_id as string | undefined
-  const messageId  = msg?.message_id as string | undefined
+  const chatId     = msg?.chat_id as string | undefined
   const msgType    = msg?.message_type as string
 
-  if (!openId || !messageId || msgType !== "text") return NextResponse.json({ ok: true })
+  if (!openId || !chatId || msgType !== "text") return NextResponse.json({ ok: true })
 
   // Parse text content
   let userText: string
@@ -223,11 +223,11 @@ export async function POST(req: NextRequest) {
   if (!userText) return NextResponse.json({ ok: true })
 
   // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
-  waitUntil(processAndReply(openId, messageId, userText))
+  waitUntil(processAndReply(openId, chatId, userText))
   return NextResponse.json({ ok: true })
 }
 
-async function processAndReply(openId: string, messageId: string, userText: string) {
+async function processAndReply(openId: string, chatId: string, userText: string) {
   try {
     // Get user info
     const { role, name } = await getUserRole(openId)
@@ -264,15 +264,15 @@ async function processAndReply(openId: string, messageId: string, userText: stri
     // Strip markdown for Lark plain text
     const replyText = stripMarkdown(response)
 
-    // Reply and save history
-    await replyLarkMessage(messageId, replyText)
+    // Gửi thẳng vào chat (không tạo thread)
+    await sendLarkMessage(chatId, "chat_id", replyText)
     await saveLarkMessage(openId, "user",      userText)
     await saveLarkMessage(openId, "assistant", replyText)
 
   } catch (err: any) {
     console.error("[Lark bot]", err.message)
     try {
-      await replyLarkMessage(messageId, "Hệ thống đang xử lý, vui lòng thử lại sau.")
+      await sendLarkMessage(chatId, "chat_id", "Hệ thống đang xử lý, vui lòng thử lại sau.")
     } catch {}
   }
 }

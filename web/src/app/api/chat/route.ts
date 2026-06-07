@@ -63,7 +63,7 @@ async function buildToolContext(
       let cogsStr: string | null = null
       if (isCost && s.latest_cogs != null) {
         const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("vi-VN")} VND`
+        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("en-US")} VND`
       }
       const parts = [
         s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
