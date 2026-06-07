@@ -18,7 +18,8 @@ interface CacheData {
   countries:        any[]
   vendors:          any[]
   settings:         any[]
-  groupMap:         Record<string, string>  // group code → tên nước
+  groupMap:         Record<string, string>   // group code → tên nước
+  prodMap:          Record<string, any>     // product_code → product row (enrich SKU từ DB)
   // Pre-computed context strings (inject thẳng vào system prompt)
   skuCtx:           string   // không có giá
   skuCtxCost:       string   // có giá VND/USD (admin/manager)
@@ -171,7 +172,7 @@ async function getRawData(): Promise<CacheData> {
     skus, wmProducts: wmProductsRaw as any[], wmInSystem,
     zones3hk: zones3hkRaw as any[],
     supportCountries, countries, vendors, settings,
-    groupMap, skuCtx, skuCtxCost,
+    groupMap, prodMap, skuCtx, skuCtxCost,
   }
   cache = { data, at: now }
   return data
@@ -359,83 +360,101 @@ function detectIntent(message: string, data: CacheData): Intent {
   return { country, vendor, days, dataGB, isUnlimited }
 }
 
-function filterSKUs(
-  skus: any[],
+async function querySkusFromDB(
   intent: Intent,
-  supportCountries: any[]
-): { skus: any[]; note: string } {
-  if (!intent.country) return { skus, note: "" }
-
-  const search = intent.country.toLowerCase()
+  data: CacheData
+): Promise<{ skus: any[]; note: string }> {
+  const search = intent.country!.toLowerCase()
 
   // Phân loại mã nhóm: đơn nước vs nhóm nhiều nước
-  const singleCodes = new Set<string>()
-  const allCodes    = new Set<string>()
-  for (const sc of supportCountries) {
-    const haystack = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
-    if (!haystack.includes(search)) continue
-    allCodes.add(sc.code as string)
-    // Đơn nước = support_country không có dấu phẩy
-    if (!((sc.support_country as string) ?? "").includes(",")) singleCodes.add(sc.code as string)
+  const singleCodes: string[] = []
+  const allCodes:    string[] = []
+  for (const sc of data.supportCountries) {
+    const hay = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
+    if (!hay.includes(search)) continue
+    allCodes.push(sc.code as string)
+    if (!((sc.support_country as string) ?? "").includes(",")) singleCodes.push(sc.code as string)
+  }
+  if (!allCodes.length) return { skus: [], note: `khong tim thay ma nhom cho ${intent.country}` }
+
+  // Query Supabase với ILIKE pattern trên sku_code[2:5] (__ = source + type, ${code} = country group)
+  const queryByCodes = async (codes: string[]) => {
+    const orPat = codes.map(c => `sku_code.ilike.__${c}%`).join(",")
+    const { data: rows, error } = await supabaseAdmin
+      .from("skus")
+      .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd")
+      .eq("status", "Active")
+      .or(orPat)
+    if (error) console.error("[querySkusFromDB]", error.message)
+    return rows ?? []
   }
 
-  if (!allCodes.size) return { skus: [], note: `khong tim thay ma nhom nao chua ${intent.country}` }
-
-  // Phase 1: ưu tiên mã đơn nước (VD: JPN cho Japan)
-  let result = skus.filter(s => s.sku_code && singleCodes.has((s.sku_code as string).slice(2, 5)))
+  // Phase 1: đơn nước, Phase 2: mở rộng nhóm nếu rỗng
+  let rawRows = singleCodes.length ? await queryByCodes(singleCodes) : []
   let note = ""
-
-  // Phase 2: mở rộng sang nhóm nước nếu phase 1 rỗng
-  if (!result.length) {
-    result = skus.filter(s => s.sku_code && allCodes.has((s.sku_code as string).slice(2, 5)))
-    if (result.length) note = `mo rong sang nhom nuoc chua ${intent.country}`
+  if (!rawRows.length) {
+    rawRows = await queryByCodes(allCodes)
+    if (rawRows.length) note = `mo rong sang nhom nuoc chua ${intent.country}`
+    else return { skus: [], note: `khong co san pham GoHub cho ${intent.country}` }
   }
 
-  if (!result.length) return { skus: [], note: `khong co san pham GoHub cho ${intent.country}` }
+  // Enrich với product data (prodMap từ cache — products ít thay đổi)
+  let result: any[] = rawRows.map((s: any) => {
+    const p = data.prodMap[s.product_code] ?? {}
+    return {
+      ...s,
+      product_type:        p.product_type        ?? null,
+      operator_code:       p.operator_code       ?? null,
+      network_type:        p.network_type        ?? null,
+      kyc_needed:          p.kyc_needed          ?? null,
+      supported_countries: p.supported_countries ?? null,
+      note:                p.note                ?? null,
+    }
+  })
 
-  // Vendor filter — sku_code[5:7]
+  // FULL_TYPES filter (C/E/1/2 = sản phẩm hoàn chỉnh)
+  result = result.filter((s: any) => FULL_TYPES.has(s.product_type ?? s.sku_code?.[1] ?? ""))
+
+  // Vendor filter: sku_code[5:7]
   if (intent.vendor) {
-    const withV = result.filter(s => s.sku_code && (s.sku_code as string).slice(5, 7) === intent.vendor)
+    const withV = result.filter((s: any) => (s.sku_code as string).slice(5, 7) === intent.vendor)
     if (withV.length) result = withV
-    else note += (note ? " | " : "") + `khong co vendor ${intent.vendor}, hien thi tat ca vendor`
+    else note += (note ? " | " : "") + `khong co vendor ${intent.vendor}, hien thi tat ca`
   }
 
-  // Days filter — s.day_amount (exact, fallback giữ nguyên để Gemini suggest nearest)
+  // Days filter
   if (intent.days !== null) {
-    const exact = result.filter(s => s.day_amount === intent.days)
+    const exact = result.filter((s: any) => s.day_amount === intent.days)
     if (exact.length) {
       result = exact
     } else {
-      const avail = [...new Set<number>(result.map(s => s.day_amount as number))]
-        .sort((a, b) => a - b)
-      note += (note ? " | " : "") + `khong co goi ${intent.days}d, co san: ${avail.slice(0, 6).join("/")}d`
-      // Không filter — giữ nguyên để Gemini gợi ý gần nhất
+      const avail = [...new Set<number>(result.map((s: any) => s.day_amount as number))].sort((a, b) => a - b)
+      note += (note ? " | " : "") + `khong co goi ${intent.days}d, co: ${avail.slice(0, 6).join("/")}d`
     }
   }
 
-  // Data filter — s.data_amount
+  // Data filter
   if (intent.isUnlimited) {
-    const unlim = result.filter(s => (s.data_amount ?? 0) >= 9999)
-    if (unlim.length) result = unlim
+    const u = result.filter((s: any) => (s.data_amount ?? 0) >= 9999)
+    if (u.length) result = u
     else note += (note ? " | " : "") + `khong co goi unlimited`
   } else if (intent.dataGB !== null) {
-    const exact = result.filter(s => s.data_amount === intent.dataGB)
+    const exact = result.filter((s: any) => s.data_amount === intent.dataGB)
     if (exact.length) {
       result = exact
     } else {
-      const close = result.filter(s => Math.abs((s.data_amount ?? 0) - intent.dataGB!) <= 0.5)
+      const close = result.filter((s: any) => Math.abs((s.data_amount ?? 0) - intent.dataGB!) <= 0.5)
       if (close.length) {
         result = close
       } else {
-        const avail = [...new Set<number>(result.map(s => s.data_amount as number))]
-          .sort((a, b) => a - b)
-          .map(n => n >= 9999 ? "Unlimited" : `${n}GB`)
-        note += (note ? " | " : "") + `khong co goi ${intent.dataGB}GB, co san: ${avail.slice(0, 6).join("/")}`
+        const avail = [...new Set<number>(result.map((s: any) => s.data_amount as number))]
+          .sort((a, b) => a - b).map((n: number) => n >= 9999 ? "Unlimited" : `${n}GB`)
+        note += (note ? " | " : "") + `khong co ${intent.dataGB}GB, co: ${avail.slice(0, 6).join("/")}`
       }
     }
   }
 
-  console.log(`[chat] intent=${JSON.stringify(intent)} filtered=${result.length} note="${note}"`)
+  console.log(`[chat] DB query country="${intent.country}" phase=${singleCodes.length ? "single" : "all"} result=${result.length} note="${note}"`)
   return { skus: result, note }
 }
 
@@ -577,11 +596,11 @@ export async function POST(req: NextRequest) {
         skuCtxOverride = `[Tim truc tiep tu DB: SKU ${skuCode} — Active]\n` + buildSkuCtx([enriched], isCost, rawData.groupMap)
       }
     } else {
-      // Case 2: intent detection + filtering theo country/vendor/days/data
+      // Case 2: intent detection + query DB trực tiếp theo country/vendor/days/data
       const intent = detectIntent(lastMessage, rawData)
       nccSection   = intent.country ? buildNccSection(intent.country, rawData, isCost) : ""
       if (intent.country) {
-        const { skus: filtered, note } = filterSKUs(rawData.skus, intent, rawData.supportCountries)
+        const { skus: filtered, note } = await querySkusFromDB(intent, rawData)
         const criteria = [
           `nuoc=${intent.country}`,
           intent.vendor      && `vendor=${intent.vendor}`,
