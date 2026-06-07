@@ -36,7 +36,8 @@ async function fetchAllRows(
   for (let from = 0; ; from += PAGE) {
     let q = supabaseAdmin.from(table).select(select).range(from, from + PAGE - 1)
     for (const f of filters) q = (q as any).eq(f.col, f.val)
-    const { data } = await q
+    const { data, error } = await q
+    if (error) { console.error(`[fetchAllRows] ${table}:`, error.message); break }
     if (!data?.length) break
     all.push(...data)
     if (data.length < PAGE) break
@@ -163,7 +164,8 @@ async function getRawData(): Promise<CacheData> {
   const skuCtx     = buildSkuCtx(skus, false, groupMap)
   const skuCtxCost = buildSkuCtx(skus, true, groupMap)
 
-  console.log(`[chat:cache] skus=${skus.length} wm=${(wmProductsRaw as any[]).length} full_ctx_chars=${skuCtx.length}`)
+  const withCountries = skus.filter(s => s.supported_countries).length
+  console.log(`[chat:cache] skus=${skus.length} with_countries=${withCountries} wm=${(wmProductsRaw as any[]).length} ctx_chars=${skuCtx.length}`)
 
   const data: CacheData = {
     skus, wmProducts: wmProductsRaw as any[], wmInSystem,
@@ -327,10 +329,18 @@ function filterSkusByCountry(skus: any[], countryEn: string, supportCountries: a
     if (haystack.includes(search)) matchCodes.add(sc.code as string)
   }
   if (!matchCodes.size) return skus
-  return skus.filter(s => {
-    if (!s.supported_countries) return false
-    return (s.supported_countries as string).split(/[,\s]+/).some(g => matchCodes.has(g.trim()))
+
+  const filtered = skus.filter(s => {
+    // Primary: dùng supported_countries từ products table (join)
+    if (s.supported_countries) {
+      return (s.supported_countries as string).split(/[,\s]+/).some(g => matchCodes.has(g.trim()))
+    }
+    // Fallback: ký tự 2-4 của sku_code luôn là country group (không cần join)
+    return s.sku_code ? matchCodes.has((s.sku_code as string).slice(2, 5)) : false
   })
+
+  console.log(`[chat] filter country="${countryEn}" codes=${[...matchCodes].join(",")} matched=${filtered.length}/${skus.length}`)
+  return filtered.length > 0 ? filtered : skus
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
