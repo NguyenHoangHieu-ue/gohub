@@ -9,8 +9,7 @@ const CACHE_TTL = 30 * 60 * 1000
 let cache: { data: CacheData; at: number } | null = null
 
 interface CacheData {
-  // Raw data (dùng cho NCC lookup)
-  skus:             any[]
+  // Reference data — ít thay đổi, cache 30 phút hợp lý
   wmProducts:       any[]
   wmInSystem:       Set<string>
   zones3hk:         any[]
@@ -18,11 +17,7 @@ interface CacheData {
   countries:        any[]
   vendors:          any[]
   settings:         any[]
-  groupMap:         Record<string, string>   // group code → tên nước
-  prodMap:          Record<string, any>     // product_code → product row (enrich SKU từ DB)
-  // Pre-computed context strings (inject thẳng vào system prompt)
-  skuCtx:           string   // không có giá
-  skuCtxCost:       string   // có giá VND/USD (admin/manager)
+  groupMap:         Record<string, string>  // group code → tên nước
 }
 
 // ─── Pagination helper — vượt giới hạn 1000 rows của Supabase ────────────────
@@ -110,18 +105,11 @@ async function getRawData(): Promise<CacheData> {
   const now = Date.now()
   if (cache && now - cache.at < CACHE_TTL) return cache.data
 
+  // Chỉ fetch reference data — SKU/product luôn query DB trực tiếp per-request
   const [
-    skusRaw, productsRaw,
     wmProductsRaw, wmSkusRaw, zones3hkRaw,
     supportCountries, countries, vendors, settings,
   ] = await Promise.all([
-    fetchAllRows("skus",
-      "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd",
-      [{ col: "status", val: "Active" }]
-    ),
-    fetchAllRows("products",
-      "product_code,product_type,operator_code,network_type,kyc_needed,supported_countries,note"
-    ),
     fetchAllRows("ncc_worldmove",
       "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc",
       [{ col: "status", val: "active" }]
@@ -140,39 +128,18 @@ async function getRawData(): Promise<CacheData> {
       .then(r => r.data ?? []),
   ])
 
-  // Enrich SKUs với product data
-  const prodMap = Object.fromEntries((productsRaw as any[]).map((p: any) => [p.product_code, p]))
-  const skus = (skusRaw as any[]).map((s: any) => {
-    const p = prodMap[s.product_code] ?? {}
-    return {
-      ...s,
-      product_type:        p.product_type ?? null,
-      operator_code:       p.operator_code ?? null,
-      network_type:        p.network_type ?? null,
-      kyc_needed:          p.kyc_needed ?? null,
-      supported_countries: p.supported_countries ?? null,
-      note:                p.note ?? null,
-    }
-  })
-
   const wmInSystem = new Set<string>((wmSkusRaw as any[]).map((s: any) => s.vendor_sku as string))
 
-  // Build group code → country name map để decode supported_countries server-side
   const groupMap: Record<string, string> = {}
   for (const sc of (supportCountries as any[])) groupMap[sc.code] = sc.support_country ?? sc.code
 
-  // Pre-compute SKU context strings (cache 1 lần, dùng cho mọi request)
-  const skuCtx     = buildSkuCtx(skus, false, groupMap)
-  const skuCtxCost = buildSkuCtx(skus, true, groupMap)
-
-  const withCountries = skus.filter(s => s.supported_countries).length
-  console.log(`[chat:cache] skus=${skus.length} with_countries=${withCountries} wm=${(wmProductsRaw as any[]).length} ctx_chars=${skuCtx.length}`)
+  console.log(`[chat:cache] wm=${(wmProductsRaw as any[]).length} support_countries=${(supportCountries as any[]).length}`)
 
   const data: CacheData = {
-    skus, wmProducts: wmProductsRaw as any[], wmInSystem,
+    wmProducts: wmProductsRaw as any[], wmInSystem,
     zones3hk: zones3hkRaw as any[],
     supportCountries, countries, vendors, settings,
-    groupMap, prodMap, skuCtx, skuCtxCost,
+    groupMap,
   }
   cache = { data, at: now }
   return data
@@ -398,9 +365,16 @@ async function querySkusFromDB(
     else return { skus: [], note: `khong co san pham GoHub cho ${intent.country}` }
   }
 
-  // Enrich với product data (prodMap từ cache — products ít thay đổi)
+  // Fetch product details cho đúng product_codes cần thiết — direct DB, luôn fresh
+  const productCodes = [...new Set(rawRows.map((s: any) => s.product_code as string).filter(Boolean))]
+  const { data: prodsData } = await supabaseAdmin
+    .from("products")
+    .select("product_code,product_type,operator_code,network_type,kyc_needed,supported_countries,note")
+    .in("product_code", productCodes)
+  const localProdMap: Record<string, any> = Object.fromEntries((prodsData ?? []).map((p: any) => [p.product_code, p]))
+
   let result: any[] = rawRows.map((s: any) => {
-    const p = data.prodMap[s.product_code] ?? {}
+    const p = localProdMap[s.product_code] ?? {}
     return {
       ...s,
       product_type:        p.product_type        ?? null,
@@ -462,7 +436,7 @@ async function querySkusFromDB(
 
 function buildSystemPrompt(data: CacheData, role: string, nccSection: string, skuCtxOverride?: string): string {
   const isCost = role === "admin" || role === "manager"
-  const { skuCtx, skuCtxCost, supportCountries, countries, vendors, settings } = data
+  const { supportCountries, countries, vendors, settings } = data
 
   const lines = [
     `Ban la tro ly AI cua GoHub — cong ty cung cap SIM/eSIM du lich.`,
@@ -471,7 +445,7 @@ function buildSystemPrompt(data: CacheData, role: string, nccSection: string, sk
     `Khi user hoi ve san pham, tim trong danh sach do — khong tu bia them.`,
     `Neu GoHub khong co → thong bao ro rang va gioi thieu catalog NCC neu co.`,
     ``,
-    skuCtxOverride ?? (isCost ? skuCtxCost : skuCtx),
+    skuCtxOverride ?? `=== SAN PHAM GOHUB ===\n[Chua co tieu chi tim kiem. Neu user hoi san pham, yeu cau cung cap ten nuoc truoc.]`,
   ]
 
   if (nccSection) lines.push(nccSection)
