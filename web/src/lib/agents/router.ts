@@ -1,37 +1,109 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { AgentId, UserRole, Message, RouterResult } from "./types"
 
-// ─── Rule-based fast path ──────────────────────────────────────────────────────
+// ─── Parameter extraction ─────────────────────────────────────────────────────
 
-const SKU_PATTERN = /\b([A-Z0-9]{13})\b/i
+const VN_TO_EN: Record<string, string> = {
+  "nhật bản":"Japan","nhat ban":"Japan","nhật":"Japan","nhat":"Japan",
+  "hàn quốc":"South Korea","han quoc":"South Korea","hàn":"South Korea",
+  "hoa kỳ":"United States","hoa ky":"United States","mỹ":"United States",
+  "thái lan":"Thailand","thai lan":"Thailand","thái":"Thailand","thai":"Thailand",
+  "hồng kông":"Hong Kong","hong kong":"Hong Kong",
+  "trung quốc":"China","trung quoc":"China","trung":"China",
+  "đài loan":"Taiwan","dai loan":"Taiwan",
+  "việt nam":"Vietnam","viet nam":"Vietnam",
+  "ấn độ":"India","an do":"India",
+  "úc":"Australia","uc":"Australia",
+  "nga":"Russia",
+  "anh":"United Kingdom",
+  "đức":"Germany","duc":"Germany",
+  "pháp":"France","phap":"France",
+  "ý":"Italy",
+  "ba lan":"Poland",
+  "hà lan":"Netherlands","ha lan":"Netherlands",
+  "thụy sĩ":"Switzerland","thuy si":"Switzerland",
+  "thụy điển":"Sweden","thuy dien":"Sweden",
+  "tây ban nha":"Spain","tay ban nha":"Spain",
+  "bồ đào nha":"Portugal","bo dao nha":"Portugal",
+  "thổ nhĩ kỳ":"Turkey","tho nhi ky":"Turkey",
+  "phần lan":"Finland","phan lan":"Finland",
+  "đan mạch":"Denmark","dan mach":"Denmark",
+  "hy lạp":"Greece","hy lap":"Greece",
+  "singapore":"Singapore","indonesia":"Indonesia",
+  "malaysia":"Malaysia","philippines":"Philippines",
+  "dubai":"United Arab Emirates","uae":"United Arab Emirates",
+  "canada":"Canada","mexico":"Mexico","brazil":"Brazil",
+  "châu âu":"Europe",
+}
 
-const RULES: Array<{ test: (msg: string) => boolean; agentId: AgentId }> = [
-  {
-    // Direct SKU code or "chi tiết gói X"
-    test: msg => SKU_PATTERN.test(msg) || /chi ti[eế]t|th[oô]ng tin g[oó]i|g[oó]i n[aà]y|lookup/i.test(msg),
-    agentId: "tra-cuu",
-  },
-  {
-    // Gap analysis: NCC vs system
-    test: msg => /gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc/i.test(msg),
-    agentId: "gap-analysis",
-  },
-  {
-    // Pricing / COGS
-    test: msg => /cogs|gi[aá] v[oố]n|gi[aá] nh[aậ]p|l[oợ]i nhu[aậ]n|t[yỷ] gi[aá]|usd|vnd|hkd|twd|chi ph[ií]/i.test(msg),
-    agentId: "gia-cogs",
-  },
-  {
-    // System knowledge
-    test: msg => /ngh[iĩ]a l[aà]|[lý] gi[aả]i|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] n[uư][oớ]c/i.test(msg),
-    agentId: "giai-dap",
-  },
-  {
-    // Product search / recommendation
-    test: msg => /[đd]i |g[oó]i |t[iì]m|c[oó] g[oó]i|[eE][sS][iI][mM]|sim|n[uư][oớ]c|ng[aà]y|gb|unlimited|kh[aô]ng gi[oớ]i h[aạ]n/i.test(msg),
-    agentId: "tu-van",
-  },
-]
+const CITY_TO_COUNTRY: Record<string, string> = {
+  "tokyo":"Japan","osaka":"Japan","kyoto":"Japan","fukuoka":"Japan",
+  "seoul":"South Korea","busan":"South Korea",
+  "bangkok":"Thailand","phuket":"Thailand","pattaya":"Thailand",
+  "paris":"France","london":"United Kingdom",
+  "new york":"United States","los angeles":"United States",
+  "sydney":"Australia","melbourne":"Australia",
+  "taipei":"Taiwan","beijing":"China","shanghai":"China","bali":"Indonesia",
+  "moscow":"Russia","rome":"Italy","berlin":"Germany","amsterdam":"Netherlands",
+  "dubai":"United Arab Emirates","toronto":"Canada","mumbai":"India",
+  "jakarta":"Indonesia","kuala lumpur":"Malaysia","manila":"Philippines",
+  "istanbul":"Turkey","barcelona":"Spain","lisbon":"Portugal",
+}
+
+export interface ExtractedParams {
+  country?:     string
+  skuCode?:     string
+  days?:        number
+  dataGB?:      number
+  isUnlimited?: boolean
+  vendor?:      string   // "WM", "3H"
+  nccVendor?:   "wm" | "3hk" | "all"
+}
+
+export function extractParams(message: string): ExtractedParams {
+  const msg = message.toLowerCase()
+  const params: ExtractedParams = {}
+
+  // SKU code (13 chars)
+  const skuMatch = message.match(/\b([A-Z0-9]{13})\b/i)
+  if (skuMatch) params.skuCode = skuMatch[1].toUpperCase()
+
+  // Country
+  const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
+  for (const [vn, en] of sorted) {
+    if (msg.includes(vn)) { params.country = en; break }
+  }
+  if (!params.country) {
+    const sortedCity = Object.entries(CITY_TO_COUNTRY).sort((a, b) => b[0].length - a[0].length)
+    for (const [city, country] of sortedCity) {
+      if (msg.includes(city)) { params.country = country; break }
+    }
+  }
+
+  // Days
+  const dayMatch   = msg.match(/(\d+)\s*(ngày|ngay)/)
+  const weekMatch  = msg.match(/(\d+)\s*(tuần|tuan)/)
+  const monthMatch = msg.match(/(\d+)\s*(tháng|thang)/)
+  if      (dayMatch)   params.days = parseInt(dayMatch[1])
+  else if (weekMatch)  params.days = parseInt(weekMatch[1]) * 7
+  else if (monthMatch) params.days = parseInt(monthMatch[1]) * 30
+
+  // Data
+  if (/unlimited|không giới hạn|khong gioi han|vô hạn|vo han/.test(msg)) {
+    params.isUnlimited = true
+  }
+  const gbMatch = msg.match(/(\d+(?:\.\d+)?)\s*gb/)
+  const mbMatch = msg.match(/(\d+(?:\.\d+)?)\s*mb/)
+  if (gbMatch) params.dataGB = parseFloat(gbMatch[1])
+  else if (mbMatch) params.dataGB = Math.round(parseFloat(mbMatch[1]) / 1000 * 100) / 100
+
+  // Vendor
+  if (/worldmove/.test(msg) || /\bwm\b/.test(msg)) { params.vendor = "WM"; params.nccVendor = "wm" }
+  else if (/3hk|3 hk/.test(msg)) { params.vendor = "3H"; params.nccVendor = "3hk" }
+
+  return params
+}
+
+// ─── Rule-based router ────────────────────────────────────────────────────────
 
 const AGENT_NAMES: Record<AgentId, string> = {
   "tu-van":       "Tư Vấn",
@@ -41,61 +113,33 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "gap-analysis": "Gap Analysis",
 }
 
-function ruleBasedRoute(msg: string): AgentId | null {
+function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
   const m = msg.toLowerCase()
-  for (const rule of RULES) {
-    if (rule.test(m)) return rule.agentId
-  }
-  return null
-}
 
-// ─── Gemini fallback ───────────────────────────────────────────────────────────
+  // Direct SKU lookup
+  if (params.skuCode) return "tra-cuu"
 
-async function geminiRoute(message: string, history: Message[]): Promise<AgentId> {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.5-flash",
-    generationConfig: { responseMimeType: "application/json", maxOutputTokens: 50 },
-    systemInstruction: `Classify the user message into exactly one of these agent IDs:
-- "tu-van": find/recommend SIM/eSIM products for a trip
-- "tra-cuu": look up specific SKU or product details
-- "giai-dap": explain system concepts, codes, policies, terminology
-- "gia-cogs": pricing, COGS, exchange rates (admin/manager only)
-- "gap-analysis": NCC catalog vs GoHub system comparison (admin/manager only)
-Respond with JSON: {"agentId": "<id>"}`,
-  })
+  // Gap analysis
+  if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))
+    return role !== "standard" ? "gap-analysis" : "giai-dap"
 
-  const hist = history.slice(-4).map(m => ({
-    role: m.role === "user" ? "user" as const : "model" as const,
-    parts: [{ text: m.content }],
-  }))
+  // Pricing / COGS
+  if (/cogs|gi[aá] v[oố]n|gi[aá] nh[aậ]p|l[oợ]i nhu[aậ]n|t[yỷ] gi[aá]|chi ph[ií]/.test(m))
+    return role !== "standard" ? "gia-cogs" : "giai-dap"
 
-  try {
-    const result = await model.startChat({ history: hist }).sendMessage(message)
-    const parsed = JSON.parse(result.response.text())
-    return parsed.agentId as AgentId ?? "giai-dap"
-  } catch {
+  // System knowledge
+  if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))
     return "giai-dap"
-  }
+
+  // Product search (has country or explicit search keywords)
+  if (params.country || /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói/.test(m))
+    return "tu-van"
+
+  return "giai-dap"
 }
 
-// ─── Main router ───────────────────────────────────────────────────────────────
-
-export async function route(
-  message: string,
-  history: Message[],
-  role: UserRole
-): Promise<RouterResult> {
-  // Fast path: rule-based
-  let agentId = ruleBasedRoute(message)
-
-  // Fallback: Gemini classification
-  if (!agentId) agentId = await geminiRoute(message, history)
-
-  // Role check: downgrade restricted agents for standard users
-  if (role === "standard" && (agentId === "gia-cogs" || agentId === "gap-analysis")) {
-    agentId = "giai-dap"
-  }
-
-  return { agentId, agentName: AGENT_NAMES[agentId] }
+export function route(message: string, history: Message[], role: UserRole): RouterResult & { params: ExtractedParams } {
+  const params  = extractParams(message)
+  const agentId = classifyAgent(message, params, role)
+  return { agentId, agentName: AGENT_NAMES[agentId], params }
 }
