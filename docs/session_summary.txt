@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-06 (session 4)
+Cập nhật lần cuối: 2026-06-07 (session 5)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -292,6 +292,43 @@ Mục tiêu 5 tính năng:
     - Supabase default cap 1000 rows → chỉ load 1000/10957 SKUs
     - Fix: fetchAllRows() pagination (1000/page, sequential per table, parallel across tables)
     - product_type filter fallback: dùng sku_code[1] khi join products thất bại
+
+## Session 6 (2026-06-07) — AI Intelligent Agent rebuild
+61. Xóa toàn bộ chatbot cũ (page, API routes, history) — rebuild từ đầu theo kiến trúc agent-based
+62. Thiết kế hệ thống: Router Agent + 5 Specialized Agents + Gemini function calling + streaming
+
+### Kiến trúc Agent System
+```
+User message → [Router] → [Agent] → tool calls → Supabase → Gemini stream → UI
+```
+
+**Router**: hybrid (rule-based fast path + Gemini fallback)
+**Agents**: 5 agents chuyên biệt, mỗi agent có system prompt + tool declarations riêng
+**Tools**: function calling thật (Gemini gọi tool → server execute → trả kết quả → Gemini generate)
+**UI**: chat bubble + agent badge per message + loading indicator tên agent
+
+### 5 Agents
+
+| Agent | Trigger | Tools | Roles |
+|---|---|---|---|
+| Tư Vấn | Tìm gói đi nước X | searchSkus, getCountryInfo, getProductDetail | All |
+| Tra Cứu | Hỏi chi tiết SKU/product cụ thể | getSkuByCode, getListings, decodeSkuCode | All |
+| Giải Đáp | Hỏi nghĩa mã, quy trình, hệ thống | getVendorInfo, getCountryInfo, decodeSkuCode | All |
+| Giá/COGS | Hỏi giá, COGS, tỷ giá | getFxRates, getSkuCogs, calculate3hkCogs | admin/manager |
+| Gap Analysis | NCC có gì HT chưa có | searchNccWm, searchNcc3hk, findGaps | admin/manager |
+
+### Files
+- `web/src/lib/agents/types.ts` — shared types
+- `web/src/lib/agents/cache.ts` — reference data cache 30 phút (NCC, ref tables)
+- `web/src/lib/agents/tools.ts` — all tool implementations (direct DB queries)
+- `web/src/lib/agents/agents.ts` — agent definitions (system prompts + tool declarations)
+- `web/src/lib/agents/router.ts` — router: rule-based + Gemini fallback
+- `web/src/app/api/chat/route.ts` — POST handler: route → agent → tool calling → stream
+- `web/src/app/(dashboard)/chatbot/page.tsx` — chat UI với agent badge
+
+### Cache strategy (2-tier)
+- Reference cache 30 phút: ref_support_countries, ref_countries, ref_vendors, ncc_worldmove, ncc_3hk
+- Direct DB mỗi request: skus (ILIKE pattern), products (IN product_codes)
 
 ## Quyết định chatbot architecture (2026-06-07)
 - Đánh giá 5 giải pháp: pre-computed dict / 2-step Gemini / always-inject summary / embeddings / tool-call+stream

@@ -4,5 +4,5 @@ import { redirect } from "next/navigation"
 
 export default async function Home() {
   const session = await getServerSession(authOptions)
-  redirect(session ? "/skus" : "/login")
+  redirect(session ? "/chatbot" : "/login")
 }
