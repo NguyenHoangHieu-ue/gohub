@@ -319,28 +319,124 @@ function buildNccSection(countryEn: string, data: CacheData, isCost: boolean): s
   return lines.join("\n")
 }
 
-// ─── Server-side SKU filter theo nước ────────────────────────────────────────
+// ─── Intent detection + SKU filtering ────────────────────────────────────────
 
-function filterSkusByCountry(skus: any[], countryEn: string, supportCountries: any[]): any[] {
-  const search = countryEn.toLowerCase()
-  const matchCodes = new Set<string>()
+interface Intent {
+  country:     string | null
+  vendor:      string | null   // sku_code[5:7]: "WM", "3H", ...
+  days:        number | null
+  dataGB:      number | null
+  isUnlimited: boolean
+}
+
+function detectIntent(message: string, data: CacheData): Intent {
+  const msg = message.toLowerCase()
+
+  const country = detectCountry(message, data)
+
+  let vendor: string | null = null
+  if (/worldmove/.test(msg) || /\bwm\b/.test(msg)) vendor = "WM"
+  else if (/3hk|3 hk/.test(msg)) vendor = "3H"
+
+  let days: number | null = null
+  const dayMatch   = msg.match(/(\d+)\s*(ngày|ngay)/)
+  const weekMatch  = msg.match(/(\d+)\s*(tuần|tuan)/)
+  const monthMatch = msg.match(/(\d+)\s*(tháng|thang)/)
+  if      (dayMatch)   days = parseInt(dayMatch[1])
+  else if (weekMatch)  days = parseInt(weekMatch[1]) * 7
+  else if (monthMatch) days = parseInt(monthMatch[1]) * 30
+
+  let dataGB: number | null = null
+  let isUnlimited = false
+  if (/unlimited|không giới hạn|khong gioi han|vô hạn|vo han/.test(msg)) {
+    isUnlimited = true
+  }
+  const gm = msg.match(/(\d+(?:\.\d+)?)\s*gb/)
+  const mm = msg.match(/(\d+(?:\.\d+)?)\s*mb/)
+  if (gm) dataGB = parseFloat(gm[1])
+  else if (mm) dataGB = Math.round(parseFloat(mm[1]) / 1000 * 100) / 100
+
+  return { country, vendor, days, dataGB, isUnlimited }
+}
+
+function filterSKUs(
+  skus: any[],
+  intent: Intent,
+  supportCountries: any[]
+): { skus: any[]; note: string } {
+  if (!intent.country) return { skus, note: "" }
+
+  const search = intent.country.toLowerCase()
+
+  // Phân loại mã nhóm: đơn nước vs nhóm nhiều nước
+  const singleCodes = new Set<string>()
+  const allCodes    = new Set<string>()
   for (const sc of supportCountries) {
     const haystack = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
-    if (haystack.includes(search)) matchCodes.add(sc.code as string)
+    if (!haystack.includes(search)) continue
+    allCodes.add(sc.code as string)
+    // Đơn nước = support_country không có dấu phẩy
+    if (!((sc.support_country as string) ?? "").includes(",")) singleCodes.add(sc.code as string)
   }
-  if (!matchCodes.size) return skus
 
-  const filtered = skus.filter(s => {
-    // Primary: dùng supported_countries từ products table (join)
-    if (s.supported_countries) {
-      return (s.supported_countries as string).split(/[,\s]+/).some(g => matchCodes.has(g.trim()))
+  if (!allCodes.size) return { skus: [], note: `khong tim thay ma nhom nao chua ${intent.country}` }
+
+  // Phase 1: ưu tiên mã đơn nước (VD: JPN cho Japan)
+  let result = skus.filter(s => s.sku_code && singleCodes.has((s.sku_code as string).slice(2, 5)))
+  let note = ""
+
+  // Phase 2: mở rộng sang nhóm nước nếu phase 1 rỗng
+  if (!result.length) {
+    result = skus.filter(s => s.sku_code && allCodes.has((s.sku_code as string).slice(2, 5)))
+    if (result.length) note = `mo rong sang nhom nuoc chua ${intent.country}`
+  }
+
+  if (!result.length) return { skus: [], note: `khong co san pham GoHub cho ${intent.country}` }
+
+  // Vendor filter — sku_code[5:7]
+  if (intent.vendor) {
+    const withV = result.filter(s => s.sku_code && (s.sku_code as string).slice(5, 7) === intent.vendor)
+    if (withV.length) result = withV
+    else note += (note ? " | " : "") + `khong co vendor ${intent.vendor}, hien thi tat ca vendor`
+  }
+
+  // Days filter — s.day_amount (exact, fallback giữ nguyên để Gemini suggest nearest)
+  if (intent.days !== null) {
+    const exact = result.filter(s => s.day_amount === intent.days)
+    if (exact.length) {
+      result = exact
+    } else {
+      const avail = [...new Set<number>(result.map(s => s.day_amount as number))]
+        .sort((a, b) => a - b)
+      note += (note ? " | " : "") + `khong co goi ${intent.days}d, co san: ${avail.slice(0, 6).join("/")}d`
+      // Không filter — giữ nguyên để Gemini gợi ý gần nhất
     }
-    // Fallback: ký tự 2-4 của sku_code luôn là country group (không cần join)
-    return s.sku_code ? matchCodes.has((s.sku_code as string).slice(2, 5)) : false
-  })
+  }
 
-  console.log(`[chat] filter country="${countryEn}" codes=${[...matchCodes].join(",")} matched=${filtered.length}/${skus.length}`)
-  return filtered.length > 0 ? filtered : skus
+  // Data filter — s.data_amount
+  if (intent.isUnlimited) {
+    const unlim = result.filter(s => (s.data_amount ?? 0) >= 9999)
+    if (unlim.length) result = unlim
+    else note += (note ? " | " : "") + `khong co goi unlimited`
+  } else if (intent.dataGB !== null) {
+    const exact = result.filter(s => s.data_amount === intent.dataGB)
+    if (exact.length) {
+      result = exact
+    } else {
+      const close = result.filter(s => Math.abs((s.data_amount ?? 0) - intent.dataGB!) <= 0.5)
+      if (close.length) {
+        result = close
+      } else {
+        const avail = [...new Set<number>(result.map(s => s.data_amount as number))]
+          .sort((a, b) => a - b)
+          .map(n => n >= 9999 ? "Unlimited" : `${n}GB`)
+        note += (note ? " | " : "") + `khong co goi ${intent.dataGB}GB, co san: ${avail.slice(0, 6).join("/")}`
+      }
+    }
+  }
+
+  console.log(`[chat] intent=${JSON.stringify(intent)} filtered=${result.length} note="${note}"`)
+  return { skus: result, note }
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -438,15 +534,20 @@ export async function POST(req: NextRequest) {
     const rawData = await getRawData()
 
     const lastMessage = messages.at(-1).content
-    const countryEn   = detectCountry(lastMessage, rawData)
-    const nccSection  = countryEn ? buildNccSection(countryEn, rawData, isCost) : ""
+    const intent      = detectIntent(lastMessage, rawData)
+    const nccSection  = intent.country ? buildNccSection(intent.country, rawData, isCost) : ""
 
-    // Khi detect được nước → filter SKUs server-side → context nhỏ, Gemini tìm chính xác hơn
     let skuCtxOverride: string | undefined
-    if (countryEn) {
-      const filtered = filterSkusByCountry(rawData.skus, countryEn, rawData.supportCountries)
-      skuCtxOverride  = buildSkuCtx(filtered, isCost, rawData.groupMap)
-      console.log(`[chat] country=${countryEn} skus=${filtered.length}`)
+    if (intent.country) {
+      const { skus: filtered, note } = filterSKUs(rawData.skus, intent, rawData.supportCountries)
+      const criteria = [
+        `nuoc=${intent.country}`,
+        intent.vendor      && `vendor=${intent.vendor}`,
+        intent.days   != null && `${intent.days}d`,
+        intent.isUnlimited   ? "Unlimited" : (intent.dataGB != null && `${intent.dataGB}GB`),
+      ].filter(Boolean).join(" ")
+      const baseCtx  = buildSkuCtx(filtered, isCost, rawData.groupMap)
+      skuCtxOverride = `[Tim kiem: ${criteria}${note ? ` | ${note}` : ""}]\n${baseCtx}`
     }
 
     const systemInstruction =
