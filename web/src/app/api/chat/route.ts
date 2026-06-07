@@ -340,6 +340,35 @@ function buildSystemPrompt(data: CacheData, role: string, nccSection: string): s
     lines.push(...(settings as any[]).map((s: any) => `${s.key}=${s.value}`))
   }
 
+  lines.push(``,
+    `=== GIAI THICH COT DU LIEU ===`,
+    `[SKU / San pham]`,
+    `day_amount: so NGAY SU DUNG DATA (khong phai ngay het han SIM)`,
+    `expirations: so ngay SIM con hieu luc sau kich hoat (>= day_amount). VD: goi 7 ngay nhung SIM het han sau 90 ngay kich hoat`,
+    `data_amount: dung luong data (9999 = Unlimited)`,
+    `throttle_speed: toc do mang SAU KHI het data highspeed (VD: 128kbps, 5Mbps, 10Mbps). Neu khong co = khong gioi han toc do`,
+    `call: co ho tro goi dien khong (Yes/No)`,
+    `hotspot: co chia se wifi/hotspot khong (Yes/No)`,
+    `kyc_needed: can xac minh danh tinh truoc khi dung khong (Yes/No)`,
+    `vendor_sku: ma eSIM cua nha cung cap | vendor_sku_sim: ma SIM vat ly (trong neu la eSIM)`,
+    `latest_cogs + latest_cogs_currency: gia von moi nhat theo don vi goc (USD, VND, TWD...)`,
+    `final_cogs_included_vat_vnd: gia von cuoi sau VAT (VND) — chi neu duoc hoi cu the`,
+    `final_cogs_usd: gia von cuoi sau VAT (USD) — chi neu duoc hoi cu the`,
+    `supported_countries: ma NHOM nuoc (3 ky tu), tra muc NHOM NUOC HO TRO de biet ten nuoc cu the`,
+    `sim_esim: loai SIM (SIM / eSIM)`,
+    `operator_code: ten nha cung cap mang (WORLDMOVE, 3HK...)`,
+    `network_type: loai mang (4G / 5G/4G)`,
+    ``,
+    `[Giai ma product_code (8 ky tu)]`,
+    `Ky tu 1 = source_type: VN: 1=StockDirect 2=InternalGHI 3=MonthlyInv 4=TelcoBalance 5=Datapool 6=Others | US: A=StockDirect B=Internal C=MonthlyInv D=TelcoBalance E=Datapool`,
+    `Ky tu 2 = product_type: C=eSIM Full  E=SIM Full  A=Datapack  B=eSIM Profile  D=SIM Frame  F=PhiShip  G=Qua  H=Khac  1=eSIM Full VN  2=SIM Full VN  3=PhiShip VN  4=VAT VN`,
+    `Ky tu 3-5 = country_group: ma nhom nuoc 3 ky tu (tra NHOM NUOC HO TRO)`,
+    `Ky tu 6-7 = vendor_code: WM=WORLDMOVE  3H=3HK  3D=3HK Datapool...`,
+    `Ky tu 8 = data_policy: A=Daily Unlim 5Mbps  B=Daily Unlim 10Mbps  C=Unlim 20Mbps  D=Unlim 100Mbps  E=Fixed Unlim 5Mbps  G=Fixed Unlim 10Mbps  H=Unlim 5Mbps  F=Fixed throttle<2Mbps  P=Daily throttle<2Mbps  Y=Fixed no-throttle  Z=Daily no-throttle  K=khong co data`,
+    ``,
+    `[SKU code (13 ky tu) = product_code(8) + data_amount_code(3) + day_amount(2)]`,
+  )
+
   return lines.join("\n")
 }
 
