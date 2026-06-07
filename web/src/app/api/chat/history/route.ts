@@ -3,36 +3,69 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
-// GET — load 30 messages từ session gần nhất của user (dùng khi mở lại web)
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
+  const { searchParams } = new URL(req.url)
+  const mode      = searchParams.get("mode")
+  const targetSid = searchParams.get("session_id")
 
-  // Tìm session gần nhất
-  const { data: recent } = await supabaseAdmin
-    .from("chat_history")
-    .select("session_id")
-    .eq("username", username)
-    .order("created_at", { ascending: false })
-    .limit(1)
+  // List all sessions — newest first, with first user message as preview
+  if (mode === "sessions") {
+    const { data } = await supabaseAdmin
+      .from("chat_history")
+      .select("session_id,content,created_at")
+      .eq("username", username)
+      .eq("direction", "user")
+      .order("created_at", { ascending: true })
 
-  if (!recent?.length) return NextResponse.json({ messages: [] })
+    const map = new Map<string, {
+      session_id:    string
+      first_message: string
+      created_at:    string
+      message_count: number
+    }>()
 
-  const { data: messages } = await supabaseAdmin
-    .from("chat_history")
-    .select("direction,content")
-    .eq("session_id", recent[0].session_id)
-    .order("created_at", { ascending: true })
-    .limit(30)
+    for (const row of (data ?? [])) {
+      if (!map.has(row.session_id)) {
+        map.set(row.session_id, {
+          session_id:    row.session_id,
+          first_message: (row.content as string).slice(0, 100),
+          created_at:    row.created_at,
+          message_count: 1,
+        })
+      } else {
+        map.get(row.session_id)!.message_count++
+      }
+    }
 
-  return NextResponse.json({
-    messages: (messages ?? []).map(m => ({
-      role:    m.direction === "user" ? "user" : "assistant",
-      content: m.content,
-    })),
-  })
+    const sessions = Array.from(map.values())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 30)
+
+    return NextResponse.json({ sessions })
+  }
+
+  // Load messages of a specific session
+  if (targetSid) {
+    const { data: messages } = await supabaseAdmin
+      .from("chat_history")
+      .select("direction,content")
+      .eq("session_id", targetSid)
+      .eq("username", username)
+      .order("created_at", { ascending: true })
+
+    return NextResponse.json({
+      messages: (messages ?? []).map(m => ({
+        role:    m.direction === "user" ? "user" : "assistant",
+        content: m.content,
+      })),
+    })
+  }
+
+  return NextResponse.json({ messages: [] })
 }
 
 // POST — lưu 1 cặp (user + assistant) sau mỗi lượt chat
