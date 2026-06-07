@@ -39,6 +39,7 @@ async function enrichWithProducts(rows: any[]): Promise<any[]> {
 }
 
 // ─── Tool: search_skus ────────────────────────────────────────────────────────
+// Query bảng sku_catalog (pre-joined, chỉ full-type C/E/1/2, có index trên country_group)
 
 export async function searchSkus(params: {
   country: string
@@ -53,16 +54,16 @@ export async function searchSkus(params: {
   if (!all.length) return { skus: [], note: `Không tìm thấy mã nhóm nào cho "${params.country}"` }
 
   const queryByCodes = async (codes: string[]) => {
-    const orPat = codes.map(c => `sku_code.ilike.__${c}%`).join(",")
     const { data, error } = await supabaseAdmin
-      .from("skus")
-      .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,throttle_speed,expirations,vendor_sku,latest_cogs,latest_cogs_currency")
+      .from("sku_catalog")
+      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,day_amount,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
       .eq("status", "Active")
-      .or(orPat)
+      .in("country_group", codes)
     if (error) console.error("[searchSkus]", error.message)
     return data ?? []
   }
 
+  // Phase 1: mã đơn nước, Phase 2: nhóm nước nếu rỗng
   let rows = single.length ? await queryByCodes(single) : []
   let note = ""
   if (!rows.length) {
@@ -71,14 +72,13 @@ export async function searchSkus(params: {
   }
   if (!rows.length) return { skus: [], note: `GoHub không có sản phẩm cho ${params.country}` }
 
-  let result = (await enrichWithProducts(rows))
-    .filter((s: any) => FULL_TYPES.has(s.product_type ?? s.sku_code?.[1] ?? ""))
-    .sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
+  // Sort VN trước US, lọc thêm theo các tiêu chí tuỳ chọn
+  let result = [...rows].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
 
   if (params.vendor) {
-    const v = result.filter((s: any) => s.sku_code?.slice(5, 7) === params.vendor)
+    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7) === params.vendor)
     if (v.length) result = v
-    else note += ` | Không có vendor ${params.vendor}`
+    else note += ` | Không có vendor ${params.vendor}, hiển thị tất cả`
   }
   if (params.sim_type) {
     const v = result.filter((s: any) => s.sim_esim?.toLowerCase() === params.sim_type!.toLowerCase())
@@ -89,13 +89,14 @@ export async function searchSkus(params: {
     if (v.length) result = v
   }
   if (params.is_unlimited) {
-    const v = result.filter((s: any) => (s.data_amount ?? 0) >= 9999)
+    const v = result.filter((s: any) => s.is_unlimited)
     if (v.length) result = v
     else note += ` | Không có gói unlimited`
   } else if (params.data_gb != null) {
     const exact = result.filter((s: any) => s.data_amount === params.data_gb)
-    if (exact.length) result = exact
-    else {
+    if (exact.length) {
+      result = exact
+    } else {
       const close = result.filter((s: any) => Math.abs((s.data_amount ?? 0) - params.data_gb!) <= 0.5)
       if (close.length) result = close
     }
