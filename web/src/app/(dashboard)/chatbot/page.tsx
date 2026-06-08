@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
 import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 
 // sessionStorage keys
@@ -513,7 +514,7 @@ export default function ChatbotPage() {
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (
                       <div className="markdown-body">
-                        <ReactMarkdown components={{
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                           p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                           strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
                           em:     ({ children }) => <em className="italic">{children}</em>,
