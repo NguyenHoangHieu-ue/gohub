@@ -7,7 +7,9 @@ import { AGENTS }                    from "@/lib/agents/agents"
 import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import {
-  sendLarkMessage, replyLarkMessage, getLarkUserInfo, stripMarkdown,
+  sendLarkMessage, replyLarkMessage, replyLarkTable,
+  parseMarkdownTable, splitTextAndTable,
+  getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import {
   searchSkus, getProductDetail, decodeSkuCode,
@@ -294,11 +296,20 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const result   = await model.startChat({ history: geminiHistory }).sendMessage(userText)
     const response = result.response.text()
 
-    // Strip markdown for Lark plain text
-    const replyText = stripMarkdown(response)
+    // Nếu response có bảng → gửi card + xlsx, còn lại strip markdown
+    const split = splitTextAndTable(response)
+    const table = split ? parseMarkdownTable(split.tableText) : null
 
-    // Reply vào đúng thread của tin nhắn gốc
-    await replyLarkMessage(messageId, replyText)
+    if (table) {
+      const preText = split!.preText ? stripMarkdown(split!.preText) : ""
+      await replyLarkTable(messageId, chatId, preText, table.headers, table.rows)
+    } else {
+      await replyLarkMessage(messageId, stripMarkdown(response))
+    }
+
+    const replyText = table
+      ? (split!.preText ? stripMarkdown(split!.preText) + "\n[bảng đã gửi kèm]" : "[bảng đã gửi kèm]")
+      : stripMarkdown(response)
     await saveLarkMessage(openId, threadId, "user",      userText)
     await saveLarkMessage(openId, threadId, "assistant", replyText)
 
