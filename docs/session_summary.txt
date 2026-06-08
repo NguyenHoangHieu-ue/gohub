@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-07 (session 5)
+Cập nhật lần cuối: 2026-06-08 (session 8)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,75 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 8 (2026-06-08) — Chatbot bug fixes
+
+68. Fix chatbot không tìm được sản phẩm khi user đưa Product Code (8 ký tự VN):
+    - router.ts: thêm extract `productCode` (regex `[1-6][A-Z0-9]{7}`) → route "tra-cuu"
+    - tools.ts: thêm `getProductByCode(product_code)` → fetch product + all active SKUs + listings
+    - route.ts: xử lý `identified.type === "Product Code"` trong buildToolContext
+    - Cũng fix Alias lookup: dùng `sku_code` thay vì `listing_code` khi getItems
+
+69. Fix response quá verbose lần đầu:
+    - tu-van systemPrompt: lần đầu chỉ bảng tóm tắt 10–15 SP (Mã SKU, Loại, Số ngày, Dung lượng, Giá vốn)
+    - Chi tiết (throttle/operator/KYC/note) chỉ hiện khi user hỏi thêm
+
+70. Fix tên cột DB xuất hiện trong câu trả lời:
+    - DISPLAY_RULES: thêm quy tắc cấm dùng tên cột kỹ thuật, dùng ngôn ngữ tự nhiên
+
+71. Fix note field không được kiểm tra:
+    - DISPLAY_RULES: thêm quy tắc bắt buộc check note/note_vn/note_en khi hiển thị SP
+    - tra-cuu systemPrompt: đề cập rõ "Lưu ý" từ note field
+
+72. Fix phân biệt mã code không rõ:
+    - DISPLAY_RULES: hỏi lại user khi mã không rõ định dạng
+
+73. Tạo `_Skills_AI/agents/AGENTS.md`: mô tả 5 agents (trigger, tools, output, roles) + bảng file cần sửa cho từng loại thay đổi
+
+## Session 7 (2026-06-08) — Lark bot fixes
+
+62. Fix Lark bot reply vào thread tin nhắn gốc (thay vì tạo thread mới):
+    - Nguyên nhân: dùng `sendLarkMessage(chatId)` → POST /im/v1/messages → tạo message mới
+    - Fix: truyền `message_id` từ event, dùng `replyLarkMessage(messageId)` → POST /im/v1/messages/{id}/reply
+    - File: `web/src/app/api/lark/events/route.ts`
+
+64. Lark bot history scoped theo thread:
+    - Thêm cột `thread_id` vào `lark_chat_history` (migration: database/migrations/migrate_lark_thread.sql)
+    - threadId = `msg.root_id ?? msg.message_id` — mỗi thread Lark có bối cảnh riêng
+    - getLarkHistory/saveLarkMessage filter theo cả open_id + thread_id
+    - User đã chạy migration SQL trong Supabase ✓
+
+65. Lark bot tên đổi thành "Bé Gấu Thông Thái":
+    - Tên bot đọc từ env `LARK_BOT_NAME` (thay vì hardcode)
+    - Cần thêm LARK_BOT_NAME=Bé Gấu Thông Thái vào Vercel Environment Variables
+
+66. Lark bot gửi Interactive Card + file xlsx khi response có bảng:
+    - Detect markdown table trong Gemini response (pattern `| col |`)
+    - splitTextAndTable(): tách text trước bảng + bảng ra riêng
+    - parseMarkdownTable(): parse headers + rows từ markdown table
+    - replyLarkTable(): gửi Lark Interactive Card (bảng hiển thị trong chat, 10 rows/trang) + upload + gửi file xlsx đính kèm
+    - Nếu không có bảng → gửi text bình thường như cũ
+    - Files: web/src/lib/lark.ts, web/src/app/api/lark/events/route.ts
+
+63. Fix Lark bot chỉ reply khi được @mention trong group chat:
+    - p2p chat: trả lời mọi tin nhắn như cũ
+    - Group chat: kiểm tra `event.message.mentions[].name === "Gohub-Product-Expert"`, bỏ qua nếu không @
+    - Strip `@mention` placeholder khỏi userText trước khi gửi Gemini
+
+67. Web chatbot render markdown table đúng định dạng:
+    - Thêm remark-gfm plugin (react-markdown không parse GFM table mặc định)
+    - Thêm components: table, thead, tbody, tr, th, td với Tailwind styling
+    - File: web/src/app/(dashboard)/chatbot/page.tsx
+
+## Quy ước Bug tracking
+- Khi user bảo "check bug" → đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\Bug.txt trước
+- Đây là file user ghi danh sách bug cần fix
+
+## Pending (kỹ thuật — chưa fix)
+- Fix giới hạn 2000 SKU WM trong gap analysis (`/api/ncc/worldmove` dòng 82):
+  Dùng pagination loop thay `.limit(2000)` để lấy đủ toàn bộ sysSet
+
+---
 
 ## Session 5 (2026-06-07) — Chatbot rebuild
 57. Reset chatbot — xóa toàn bộ rules cũ, rebuild từ đầu

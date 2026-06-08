@@ -467,23 +467,23 @@ export default function ChatbotPage() {
         </div>
 
         {/* Chat container */}
-        <div className="flex-1 bg-white border border-gray-200 rounded-xl flex flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
+        <div className="flex-1 bg-gray-50/80 border border-gray-200 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm">
+          <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-4">
 
             {/* Empty state */}
             {messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center py-8">
-                <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center mb-4 border border-brand-100">
-                  <Sparkles size={28} className="text-brand-600" />
+              <div className="h-full flex flex-col items-center justify-center text-center py-10">
+                <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-brand-600/25">
+                  <Sparkles size={22} className="text-white" />
                 </div>
-                <p className="font-semibold text-gray-800 mb-1">GoHub AI Agent 👋</p>
-                <p className="text-sm text-gray-400 mb-6 max-w-xs">
-                  Tư vấn sản phẩm · Tra cứu SKU · Giải đáp hệ thống · Phân tích giá · Gap Analysis
+                <p className="font-semibold text-gray-900 text-base mb-1">GoHub AI Agent</p>
+                <p className="text-sm text-gray-400 mb-8 max-w-xs leading-relaxed">
+                  Tư vấn sản phẩm, tra cứu SKU, phân tích giá và gap analysis.
                 </p>
-                <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
                   {QUICK.map(q => (
                     <button key={q} onClick={() => send(q)}
-                      className="text-left px-4 py-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 border-l-[3px] border-l-brand-500 rounded-xl hover:bg-brand-50 transition-all">
+                      className="text-left px-4 py-3 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50/50 transition-all shadow-sm">
                       {q}
                     </button>
                   ))}
@@ -495,20 +495,20 @@ export default function ChatbotPage() {
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && (
-                  <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Bot size={15} className="text-brand-600" />
+                  <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-brand-600/20">
+                    <Bot size={14} className="text-white" />
                   </div>
                 )}
                 <div className="flex flex-col gap-1 max-w-[85%] md:max-w-[72%]">
                   {msg.role === "assistant" && msg.agent && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full self-start font-medium ${AGENT_COLORS[msg.agent.id] ?? "bg-gray-100 text-gray-600"}`}>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-md self-start font-medium tracking-wide ${AGENT_COLORS[msg.agent.id] ?? "bg-gray-100 text-gray-600"}`}>
                       {msg.agent.name}
                     </span>
                   )}
                   <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-brand-600 text-white rounded-tr-sm"
-                      : "bg-gray-100 text-gray-800 rounded-tl-sm"
+                      ? "bg-brand-600 text-white rounded-tr-sm shadow-sm"
+                      : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
                   }`}>
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -526,12 +526,12 @@ export default function ChatbotPage() {
                           h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
                           hr:     () => <hr className="my-2 border-gray-300" />,
                           code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                          table:  ({ children }) => <div className="overflow-x-auto mb-3"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                          thead:  ({ children }) => <thead className="bg-gray-200 text-gray-700">{children}</thead>,
-                          tbody:  ({ children }) => <tbody>{children}</tbody>,
-                          tr:     ({ children }) => <tr className="border-b border-gray-200 even:bg-gray-50">{children}</tr>,
-                          th:     ({ children }) => <th className="px-2 py-1 text-left font-semibold whitespace-nowrap border border-gray-300">{children}</th>,
-                          td:     ({ children }) => <td className="px-2 py-1 border border-gray-200">{children}</td>,
+                          table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
+                          thead:  ({ children }) => <thead className="bg-gray-100 text-gray-600">{children}</thead>,
+                          tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
+                          tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
+                          th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700">{children}</th>,
+                          td:     ({ children }) => <td className="px-3 py-2 text-gray-600">{children}</td>,
                         }}>
                           {msg.content}
                         </ReactMarkdown>
@@ -543,8 +543,8 @@ export default function ChatbotPage() {
                   </div>
                 </div>
                 {msg.role === "user" && (
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <User size={15} className="text-gray-500" />
+                  <div className="w-8 h-8 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <User size={14} className="text-gray-500" />
                   </div>
                 )}
               </div>
@@ -553,13 +553,13 @@ export default function ChatbotPage() {
             {/* Loading */}
             {loading && (
               <div className="flex gap-3 justify-start">
-                <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                  <Bot size={15} className="text-brand-600" />
+                <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-600/20">
+                  <Bot size={14} className="text-white" />
                 </div>
-                <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
-                  <div className="flex gap-1 items-center">
+                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                  <div className="flex gap-1.5 items-center">
                     {[0, 1, 2].map(i => (
-                      <span key={i} className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                      <span key={i} className="w-1.5 h-1.5 bg-brand-300 rounded-full animate-bounce"
                         style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.8s" }} />
                     ))}
                   </div>
@@ -570,17 +570,17 @@ export default function ChatbotPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-100 p-3 flex-shrink-0">
+          <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0 rounded-b-2xl">
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
                 placeholder="Hỏi về sản phẩm, SKU, giá, gap analysis..."
                 disabled={busy}
-                className="flex-1 px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent disabled:bg-gray-50 transition"
+                className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white disabled:opacity-60 transition"
               />
               <button type="submit" disabled={!input.trim() || busy}
-                className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                <Send size={16} />
+                className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
+                <Send size={15} />
               </button>
             </form>
           </div>

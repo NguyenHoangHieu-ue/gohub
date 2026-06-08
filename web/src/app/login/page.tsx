@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { Radio } from "lucide-react"
 
 export default function LoginPage() {
   const [username, setUsername]       = useState("")
@@ -42,18 +43,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-600 via-blue-700 to-brand-700 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/15 rounded-2xl mb-4 backdrop-blur-sm border border-white/20">
-            <span className="text-3xl">📡</span>
+    <div className="min-h-screen bg-brand-700 flex items-center justify-center p-4">
+      {/* subtle grid pattern */}
+      <div className="absolute inset-0 opacity-[0.04]" style={{backgroundImage:"linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)",backgroundSize:"32px 32px"}} />
+
+      <div className="relative w-full max-w-sm">
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-brand-500/40 rounded-xl mb-4 border border-brand-400/30">
+            <Radio size={22} className="text-white" strokeWidth={2} />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">GoHub PM</h1>
-          <p className="text-blue-100/80 text-sm mt-1">Product Manager Dashboard</p>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">GoHub PM</h1>
+          <p className="text-brand-300/80 text-sm mt-1 tracking-wide uppercase text-[11px]">Product Manager Dashboard</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 p-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Đăng nhập</h2>
+        <div className="bg-white rounded-2xl shadow-2xl shadow-black/30 p-7">
+          <h2 className="text-base font-semibold text-gray-900 mb-5">Đăng nhập</h2>
 
           {error && (
             <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">

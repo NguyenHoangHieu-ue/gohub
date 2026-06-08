@@ -8,14 +8,20 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-geist)", "system-ui", "sans-serif"],
+      },
       colors: {
         brand: {
           50:  "#e8f1fb",
           100: "#c5d9f4",
           200: "#92b8ec",
+          300: "#5f9de3",
+          400: "#2e7dd4",
           500: "#1565c0",
           600: "#0f4c81",
           700: "#0a3560",
+          800: "#072448",
         },
       },
       keyframes: {

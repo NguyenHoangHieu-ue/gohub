@@ -3,7 +3,7 @@
 import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 
 const NAV = [
@@ -48,16 +48,16 @@ export function Sidebar() {
     `}>
 
       {/* Brand header */}
-      <div className={`bg-gradient-to-r from-brand-600 to-blue-600 border-b border-brand-700/30 flex-shrink-0
-        ${collapsed ? "px-2 py-3.5" : "px-4 py-3.5"}`}>
-        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2.5"}`}>
-          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-base border border-white/20 flex-shrink-0">
-            📡
+      <div className={`bg-brand-700 border-b border-brand-800/60 flex-shrink-0
+        ${collapsed ? "px-2 py-4" : "px-4 py-4"}`}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+          <div className="w-8 h-8 bg-brand-500/40 rounded-lg flex items-center justify-center border border-brand-400/30 flex-shrink-0">
+            <Radio size={16} className="text-white" strokeWidth={2} />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <div className="text-white font-bold text-[15px] leading-tight whitespace-nowrap">Gohub Telco</div>
-              <div className="text-blue-100/70 text-[11px] whitespace-nowrap">Product Manager</div>
+              <div className="text-white font-semibold text-sm leading-tight tracking-tight whitespace-nowrap">Gohub Telco</div>
+              <div className="text-brand-300/80 text-[11px] whitespace-nowrap tracking-wide uppercase">Product Manager</div>
             </div>
           )}
         </div>
@@ -72,18 +72,18 @@ export function Sidebar() {
               key={href}
               href={href}
               title={collapsed ? label : undefined}
-              className={`flex items-center rounded-lg text-sm font-medium transition-all
+              className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
                 ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
                 ${active
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
                 }`}
             >
-              <Icon size={17} className={`flex-shrink-0 ${active ? "text-brand-600" : "text-gray-400"}`} />
+              <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-brand-500" : "text-gray-400"}`} />
               {!collapsed && (
                 <>
                   <span className="flex-1 whitespace-nowrap">{label}</span>
-                  {active && <span className="w-1.5 h-1.5 rounded-full bg-brand-600 flex-shrink-0" />}
+                  {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
                 </>
               )}
             </Link>
