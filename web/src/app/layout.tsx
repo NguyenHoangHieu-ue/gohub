@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
-import { Geist } from "next/font/google"
+import { Outfit } from "next/font/google"
 import "./globals.css"
 import { SessionProvider } from "./session-provider"
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" })
 
 export const metadata: Metadata = {
   title: "GoHub PM",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body className={`${geist.variable} font-sans`}>
+      <body className={`${outfit.variable} font-sans`}>
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
