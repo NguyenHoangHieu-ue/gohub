@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 function buildLikePattern(
   pt: string, ptype: string, country: string,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   // Chỉ fetch cột có trong PM system (bỏ: sku_ref, parents, product_type text, synced_at, dates)
   let q = supabaseAdmin.from("skus").select(
-    "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,call_sms_details,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,final_cogs_included_vat_vnd,final_cogs_usd,wr_group,currency",
+    "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency",
     { count: "exact" }
   )
 
