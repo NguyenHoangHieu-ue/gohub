@@ -82,37 +82,102 @@ function apnNote(p: WMProduct): string {
 
 // ─── APN Modal ──────────────────────────────────────────────────────────────
 
-function ApnModal({ product, onClose }: { product: WMProduct; onClose: () => void }) {
-  const rows = [
-    ["APN",          product.apn],
-    ["Network",      product.network_type],
-    ["Carrier",      product.onsite_carrier],
-    ["Providers",    product.providers],
-    ["Coverage",     product.coverage],
-    ["Data Reset",   product.data_reset],
-    ["Notification", product.notification],
-    ["Prepaid Card", product.prepaid_card],
-  ].filter(([, v]) => v)
+function DetailModal({ product, showCost, onClose }: { product: WMProduct; showCost: boolean; onClose: () => void }) {
+  const sections: { title: string; rows: [string, string | number | boolean | null][] }[] = [
+    {
+      title: "Thông tin sản phẩm",
+      rows: [
+        ["Vendor ID",   product.vendor_product_id],
+        ["Tên",         product.product_name],
+        ["Vùng",        product.region],
+        ["Loại SIM",    product.sim_type],
+        ["Số ngày",     product.days],
+        ["Dung lượng",  product.is_unlimited ? "Unlimited" : product.data_gb ? (product.is_daily ? `${product.data_gb}GB/ngày` : `${product.data_gb}GB`) : null],
+        ["Throttle",    product.throttle_kbps ? (product.throttle_kbps >= 1000 ? `${product.throttle_kbps/1000} Mbps` : `${product.throttle_kbps} kbps`) : "No limit"],
+        ["KYC",         product.is_kyc ? "Có" : "Không"],
+        ["leSIM",       product.is_lesim ? "Có" : "Không"],
+        ...(showCost ? [["COGS", product.cogs ? `${product.cogs} ${product.cogs_currency ?? ""}` : null] as [string, string | null]] : []),
+      ],
+    },
+    {
+      title: "APN & Mạng",
+      rows: [
+        ["APN",          product.apn],
+        ["Network",      product.network_type],
+        ["Carrier",      product.onsite_carrier],
+        ["Providers",    product.providers],
+        ["Coverage",     product.coverage],
+        ["Data Reset",   product.data_reset],
+        ["Notification", product.notification],
+        ["Prepaid Card", product.prepaid_card],
+      ],
+    },
+  ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-[480px] max-h-[80vh] overflow-y-auto p-5 space-y-3"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-gray-100">
           <div>
-            <p className="font-semibold text-gray-900 text-sm">{product.vendor_product_id}</p>
-            <p className="text-xs text-gray-400">{product.product_name}</p>
+            <p className="font-mono font-semibold text-brand-700 text-sm">{product.vendor_product_id}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{product.product_name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0 mt-0.5">
+            <X size={18} />
+          </button>
         </div>
-        <div className="divide-y divide-gray-100">
-          {rows.map(([label, val]) => (
-            <div key={label} className="py-2 grid grid-cols-[120px_1fr] gap-2">
-              <span className="text-xs text-gray-400 font-medium">{label}</span>
-              <span className="text-xs text-gray-700 whitespace-pre-wrap break-words">{val}</span>
+
+        <div className="p-5 space-y-5">
+          {sections.map(sec => {
+            const validRows = sec.rows.filter(([, v]) => v !== null && v !== undefined && v !== "")
+            if (!validRows.length) return null
+            return (
+              <div key={sec.title}>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{sec.title}</p>
+                <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+                  {validRows.map(([label, val]) => (
+                    <div key={label} className="px-3 py-2 grid grid-cols-[130px_1fr] gap-2 items-start">
+                      <span className="text-xs text-gray-400 font-medium pt-0.5">{label}</span>
+                      <span className="text-xs text-gray-700 whitespace-pre-wrap break-words">{String(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* System SKUs */}
+          {product.in_system && product.system_skus.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">SKU trong hệ thống ({product.system_skus.length})</p>
+              <div className="bg-gray-50 rounded-xl overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 font-medium border-b border-gray-100">
+                      <th className="text-left px-3 py-2">SKU Code</th>
+                      <th className="text-left px-3 py-2">Tenant</th>
+                      <th className="text-left px-3 py-2">Data</th>
+                      <th className="text-left px-3 py-2">Days</th>
+                      {showCost && <th className="text-left px-3 py-2">COGS</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {product.system_skus.map(s => (
+                      <tr key={s.sku_code} className="border-t border-gray-100">
+                        <td className="px-3 py-1.5 font-mono font-semibold text-brand-700">{s.sku_code}</td>
+                        <td className="px-3 py-1.5 text-gray-600">{s.tenant}</td>
+                        <td className="px-3 py-1.5">{s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "—"}</td>
+                        <td className="px-3 py-1.5">{s.day_amount ?? "—"}</td>
+                        {showCost && <td className="px-3 py-1.5">{s.latest_cogs ? `${s.latest_cogs} ${s.latest_cogs_currency ?? ""}` : "—"}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          ))}
-          {rows.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">Không có thông tin APN</p>}
+          )}
         </div>
       </div>
     </div>
@@ -175,7 +240,7 @@ function WMTab({ role }: { role?: string }) {
   const [loading, setLoading]   = useState(true)
   const [gap, setGap]           = useState<GapFilter>("all")
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [apnModal, setApnModal] = useState<WMProduct | null>(null)
+  const [detailModal, setDetailModal] = useState<WMProduct | null>(null)
 
   const [search,   setSearch]   = useState("")
   const [simType,  setSimType]  = useState("")
@@ -236,7 +301,7 @@ function WMTab({ role }: { role?: string }) {
 
   return (
     <div className="space-y-3">
-      {apnModal && <ApnModal product={apnModal} onClose={() => setApnModal(null)} />}
+      {detailModal && <DetailModal product={detailModal} showCost={showCost} onClose={() => setDetailModal(null)} />}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -301,13 +366,14 @@ function WMTab({ role }: { role?: string }) {
               <th className="text-left px-4 py-2.5">APN</th>
               <th className="text-left px-4 py-2.5">Trong HT</th>
               <th className="text-left px-4 py-2.5">SKU HT</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-b border-gray-50">
-                  {Array.from({ length: showCost ? 12 : 11 }).map((_, j) => (
+                  {Array.from({ length: showCost ? 13 : 12 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${40 + Math.random() * 40}%` }} />
                     </td>
@@ -315,12 +381,11 @@ function WMTab({ role }: { role?: string }) {
                 </tr>
               ))
             ) : products.length === 0 ? (
-              <tr><td colSpan={showCost ? 12 : 11} className="text-center py-12 text-gray-400">Không có dữ liệu</td></tr>
+              <tr><td colSpan={showCost ? 13 : 12} className="text-center py-12 text-gray-400">Không có dữ liệu</td></tr>
             ) : products.map(p => (
               <>
                 <tr key={p.vendor_product_id}
                   onClick={() => p.in_system && setExpanded(prev => prev === p.vendor_product_id ? null : p.vendor_product_id)}
-                  onDoubleClick={() => setApnModal(p)}
                   className={`border-b border-gray-50 transition-colors ${
                     p.in_system ? "cursor-pointer hover:bg-blue-50/40" : "hover:bg-gray-50/50"
                   } ${expanded === p.vendor_product_id ? "bg-blue-50/30" : ""}`}
@@ -367,10 +432,18 @@ function WMTab({ role }: { role?: string }) {
                       </span>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
+                  <td className="px-3 py-2.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); setDetailModal(p) }}
+                      className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 hover:border-brand-400 transition-colors whitespace-nowrap"
+                    >
+                      Chi tiết
+                    </button>
+                  </td>
                 </tr>
                 {expanded === p.vendor_product_id && (
                   <tr key={`${p.vendor_product_id}-expand`}>
-                    <td colSpan={showCost ? 12 : 11} className="p-0">
+                    <td colSpan={showCost ? 13 : 12} className="p-0">
                       <SkuSubTable skus={p.system_skus} showCost={showCost} />
                     </td>
                   </tr>
