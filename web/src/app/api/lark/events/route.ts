@@ -237,7 +237,8 @@ export async function POST(req: NextRequest) {
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
     const mentions: any[] = msg?.mentions ?? []
-    const isMentioned = mentions.some((m: any) => m.name === "Bé Gấu Thông Thái")
+    const botName = process.env.LARK_BOT_NAME
+    const isMentioned = mentions.some((m: any) => !botName || m.name === botName)
     if (!isMentioned) return NextResponse.json({ ok: true })
   }
 
