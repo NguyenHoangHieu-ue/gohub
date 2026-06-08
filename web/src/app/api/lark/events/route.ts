@@ -7,7 +7,7 @@ import { AGENTS }                    from "@/lib/agents/agents"
 import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import {
-  sendLarkMessage, getLarkUserInfo, stripMarkdown,
+  sendLarkMessage, replyLarkMessage, getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import {
   searchSkus, getProductDetail, decodeSkuCode,
