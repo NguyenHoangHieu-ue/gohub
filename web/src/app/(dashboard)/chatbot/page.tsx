@@ -525,6 +525,12 @@ export default function ChatbotPage() {
                           h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
                           hr:     () => <hr className="my-2 border-gray-300" />,
                           code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                          table:  ({ children }) => <div className="overflow-x-auto mb-3"><table className="text-xs border-collapse w-full">{children}</table></div>,
+                          thead:  ({ children }) => <thead className="bg-gray-200 text-gray-700">{children}</thead>,
+                          tbody:  ({ children }) => <tbody>{children}</tbody>,
+                          tr:     ({ children }) => <tr className="border-b border-gray-200 even:bg-gray-50">{children}</tr>,
+                          th:     ({ children }) => <th className="px-2 py-1 text-left font-semibold whitespace-nowrap border border-gray-300">{children}</th>,
+                          td:     ({ children }) => <td className="px-2 py-1 border border-gray-200">{children}</td>,
                         }}>
                           {msg.content}
                         </ReactMarkdown>
