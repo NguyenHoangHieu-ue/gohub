@@ -238,6 +238,25 @@ export async function getProductDetail(sku_code: string): Promise<any> {
   return { sku, product: product ?? {}, listings: listings ?? [], items: items ?? [] }
 }
 
+// ─── Tool: get_product_by_code ───────────────────────────────────────────────
+
+export async function getProductByCode(product_code: string): Promise<any> {
+  const { data: product } = await supabaseAdmin
+    .from("products").select("*").eq("product_code", product_code).maybeSingle()
+  if (!product) return { error: `Product code "${product_code}" không tồn tại trong database` }
+
+  const [{ data: skus }, listings] = await Promise.all([
+    supabaseAdmin.from("skus")
+      .select("sku_code,status,sim_esim,data_amount,data_amount_unit,day_amount,expirations,throttle_speed,latest_cogs,latest_cogs_currency,vendor_sku,note")
+      .eq("product_code", product_code)
+      .eq("status", "Active")
+      .order("day_amount"),
+    searchListings({ product_code }),
+  ])
+
+  return { product, skus: skus ?? [], listings }
+}
+
 // ─── Tool: get_items ──────────────────────────────────────────────────────────
 
 export async function getItems(params: { sku_code?: string; listing_code?: string }): Promise<any[]> {
@@ -448,6 +467,7 @@ export async function executeTool(
 ): Promise<any> {
   switch (name) {
     case "search_skus":           return searchSkus(args as any, ref)
+    case "get_product_by_code":   return getProductByCode(args.product_code)
     case "get_product_detail":    return getProductDetail(args.sku_code)
     case "decode_sku_code":       return decodeSkuCode(args.sku_code)
     case "get_country_info":      return getCountryInfo(args.country_name, ref)

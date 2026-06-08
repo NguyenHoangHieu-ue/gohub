@@ -6,7 +6,7 @@ import { getRefCache }              from "@/lib/agents/cache"
 import { AGENTS }                   from "@/lib/agents/agents"
 import { route }                    from "@/lib/agents/router"
 import {
-  searchSkus, getProductDetail, decodeSkuCode,
+  searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, getSkuCogs, calculate3hkCogs,
   searchNccWm, searchNcc3hk, findGaps,
@@ -84,9 +84,23 @@ async function buildToolContext(
   }
 
   if (agentId === "tra-cuu") {
+    // Product code đã nhận dạng từ router (VN-style: bắt đầu bằng chữ số)
+    if (params.productCode) {
+      const detail = await getProductByCode(params.productCode)
+      if (isCost && detail?.skus) {
+        detail.skus = detail.skus.map((s: any) => {
+          if (s.latest_cogs != null) {
+            const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+            return { ...s, cogs_usd: usd, cogs_vnd: vnd }
+          }
+          return s
+        })
+      }
+      sections.push(`=== CHI TIẾT PRODUCT CODE: ${params.productCode} ===`, JSON.stringify(detail, null, 2))
+    }
+
     const code = params.skuCode || params.listingCode
     if (code) {
-      // Identify code type first
       const identified = await identifyCode(code)
       sections.push(`=== NHẬN DẠNG MÃ: ${code} ===`, JSON.stringify(identified, null, 2))
 
@@ -100,13 +114,25 @@ async function buildToolContext(
           }
           sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
           sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
+        } else if (identified.type === "Product Code") {
+          const detail = await getProductByCode(code)
+          if (isCost && detail?.skus) {
+            detail.skus = detail.skus.map((s: any) => {
+              if (s.latest_cogs != null) {
+                const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+                return { ...s, cogs_usd: usd, cogs_vnd: vnd }
+              }
+              return s
+            })
+          }
+          sections.push(`=== CHI TIẾT PRODUCT CODE: ${code} ===`, JSON.stringify(detail, null, 2))
         } else if (identified.type === "Alias (Item)") {
-          const [items, listings] = await Promise.all([
-            getItems({ listing_code: identified.item_code }),
+          const [items, skuDetail] = await Promise.all([
+            getItems({ sku_code: identified.sku_code }),
             identified.sku_code ? getProductDetail(identified.sku_code) : Promise.resolve(null),
           ])
           sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
-          if (listings) sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(listings, null, 2))
+          if (skuDetail) sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(skuDetail, null, 2))
         } else if (identified.type === "Listing Code") {
           const [listings, items] = await Promise.all([
             searchListings({ product_code: code }),
