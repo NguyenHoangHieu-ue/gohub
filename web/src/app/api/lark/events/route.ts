@@ -230,7 +230,8 @@ export async function POST(req: NextRequest) {
   const chatId     = msg?.chat_id as string | undefined
   const msgType    = msg?.message_type as string
 
-  if (!openId || !chatId || msgType !== "text") return NextResponse.json({ ok: true })
+  const messageId = msg?.message_id as string | undefined
+  if (!openId || !chatId || !messageId || msgType !== "text") return NextResponse.json({ ok: true })
 
   // Parse text content
   let userText: string
@@ -242,11 +243,11 @@ export async function POST(req: NextRequest) {
   if (!userText) return NextResponse.json({ ok: true })
 
   // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
-  waitUntil(processAndReply(openId, chatId, userText))
+  waitUntil(processAndReply(openId, chatId, messageId, userText))
   return NextResponse.json({ ok: true })
 }
 
-async function processAndReply(openId: string, chatId: string, userText: string) {
+async function processAndReply(openId: string, chatId: string, messageId: string, userText: string) {
   try {
     // Get user info
     const { role, name } = await getUserRole(openId)
@@ -283,8 +284,8 @@ async function processAndReply(openId: string, chatId: string, userText: string)
     // Strip markdown for Lark plain text
     const replyText = stripMarkdown(response)
 
-    // Gửi thẳng vào chat (không tạo thread)
-    await sendLarkMessage(chatId, "chat_id", replyText)
+    // Reply vào đúng thread của tin nhắn gốc
+    await replyLarkMessage(messageId, replyText)
     await saveLarkMessage(openId, "user",      userText)
     await saveLarkMessage(openId, "assistant", replyText)
 
