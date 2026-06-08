@@ -20,12 +20,13 @@ import type { Message, UserRole }    from "@/lib/agents/types"
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
 
-// Get conversation history for a Lark open_id from DB
-async function getLarkHistory(openId: string): Promise<Message[]> {
+// Get conversation history for a specific Lark thread
+async function getLarkHistory(openId: string, threadId: string): Promise<Message[]> {
   const { data } = await supabaseAdmin
     .from("lark_chat_history")
     .select("role,content")
     .eq("lark_open_id", openId)
+    .eq("thread_id", threadId)
     .order("created_at", { ascending: false })
     .limit(HISTORY_LIMIT)
   if (!data) return []
@@ -33,10 +34,10 @@ async function getLarkHistory(openId: string): Promise<Message[]> {
 }
 
 // Save a message to lark_chat_history
-async function saveLarkMessage(openId: string, role: "user" | "assistant", content: string) {
+async function saveLarkMessage(openId: string, threadId: string, role: "user" | "assistant", content: string) {
   await supabaseAdmin
     .from("lark_chat_history")
-    .insert({ lark_open_id: openId, role, content })
+    .insert({ lark_open_id: openId, thread_id: threadId, role, content })
     .then(() => {})  // fire-and-forget
 }
 
@@ -231,8 +232,9 @@ export async function POST(req: NextRequest) {
   const msgType    = msg?.message_type as string
 
   const messageId = msg?.message_id as string | undefined
+  const threadId  = (msg?.root_id ?? msg?.message_id) as string | undefined
   const chatType  = msg?.chat_type as string  // "p2p" | "group"
-  if (!openId || !chatId || !messageId || msgType !== "text") return NextResponse.json({ ok: true })
+  if (!openId || !chatId || !messageId || !threadId || msgType !== "text") return NextResponse.json({ ok: true })
 
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
@@ -254,18 +256,18 @@ export async function POST(req: NextRequest) {
   if (!userText) return NextResponse.json({ ok: true })
 
   // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
-  waitUntil(processAndReply(openId, chatId, messageId, userText))
+  waitUntil(processAndReply(openId, chatId, messageId, threadId, userText))
   return NextResponse.json({ ok: true })
 }
 
-async function processAndReply(openId: string, chatId: string, messageId: string, userText: string) {
+async function processAndReply(openId: string, chatId: string, messageId: string, threadId: string, userText: string) {
   try {
     // Get user info
     const { role, name } = await getUserRole(openId)
     const isCost = true
 
-    // Get history
-    const history = await getLarkHistory(openId)
+    // Get history scoped to this thread
+    const history = await getLarkHistory(openId, threadId)
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
     // Route + build context
@@ -297,8 +299,8 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
     // Reply vào đúng thread của tin nhắn gốc
     await replyLarkMessage(messageId, replyText)
-    await saveLarkMessage(openId, "user",      userText)
-    await saveLarkMessage(openId, "assistant", replyText)
+    await saveLarkMessage(openId, threadId, "user",      userText)
+    await saveLarkMessage(openId, threadId, "assistant", replyText)
 
   } catch (err: any) {
     console.error("[Lark bot]", err.message)
