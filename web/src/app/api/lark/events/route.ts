@@ -231,12 +231,22 @@ export async function POST(req: NextRequest) {
   const msgType    = msg?.message_type as string
 
   const messageId = msg?.message_id as string | undefined
+  const chatType  = msg?.chat_type as string  // "p2p" | "group"
   if (!openId || !chatId || !messageId || msgType !== "text") return NextResponse.json({ ok: true })
+
+  // Group chat: chỉ reply khi được @mention
+  if (chatType === "group") {
+    const mentions: any[] = msg?.mentions ?? []
+    const isMentioned = mentions.some((m: any) => m.name === "Gohub-Product-Expert")
+    if (!isMentioned) return NextResponse.json({ ok: true })
+  }
 
   // Parse text content
   let userText: string
   try {
-    userText = JSON.parse(msg.content).text?.trim()
+    const parsed = JSON.parse(msg.content)
+    // Strip @mention placeholders (e.g. "@_user_1 ") khỏi text
+    userText = (parsed.text ?? "").replace(/@\S+\s*/g, "").trim()
   } catch {
     return NextResponse.json({ ok: true })
   }
