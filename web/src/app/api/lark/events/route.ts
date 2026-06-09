@@ -38,10 +38,11 @@ async function getLarkHistory(openId: string, threadId: string): Promise<Message
 // Save a message to lark_chat_history
 function saveLarkMessage(openId: string, threadId: string, role: "user" | "assistant", content: string) {
   // Fire-and-forget — không throw để tránh trigger catch block của processAndReply
-  supabaseAdmin
+  (supabaseAdmin
     .from("lark_chat_history")
-    .insert({ lark_open_id: openId, thread_id: threadId, role, content })
-    .then(() => {}).catch(() => {})
+    .insert({ lark_open_id: openId, thread_id: threadId, role, content }) as any)
+    .then(() => {})
+    .catch((e: any) => console.error("[Lark] saveLarkMessage failed:", e?.message))
 }
 
 // Look up user role by lark_open_id

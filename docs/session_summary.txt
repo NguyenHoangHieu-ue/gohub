@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 15)
+Cập nhật lần cuối: 2026-06-09 (session 16)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,25 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 16 (2026-06-09) — Lark issues + multi-lookup limit
+
+107. Fix Lark regex — normalizeText Unicode combining chars:
+     - Literal Unicode chars /[̀-ͯ]/ → /[̀-ͯ]/ (safe escape)
+     - Trước: malformed regex → SyntaxError tại module load → mọi Lark call fail → error message
+     - Đây là root cause "Cannot read properties of undefined (reading 'slice')"
+
+108. Fix giá format — 2 cột riêng VND | USD:
+     - route.ts + lark/events: cogsVnd, cogsUsd trong parts array
+     - Header: cogs_vnd|cogs_usd
+     - Multi-lookup: dấu | để tách cột
+
+109. Fix Lark double message:
+     - saveLarkMessage: không await → fire-and-forget với .catch()
+     - Tránh throw khi Supabase insert fail → không trigger catch block processAndReply
+
+110. Multi-lookup limit 10 → 50:
+     - router.ts MAX_CODES: 10 → 50
 
 ## Session 15 (2026-06-09) — NCC notification + APN format
 
