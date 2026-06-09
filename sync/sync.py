@@ -91,7 +91,7 @@ def sync_sku_catalog(sb):
 
     print(f"[sku_catalog] Upserting {len(rows):,} rows...", flush=True)
     upsert(sb, "sku_catalog", rows, "sku_code")
-    print("[sku_catalog] Done ✓", flush=True)
+    print(f"[sku_catalog] Done ({len(rows)} rows)", flush=True)
 
 def main():
     client = GohubClient(api_key=API_KEY)
@@ -120,6 +120,41 @@ def main():
 
     # Rebuild sku_catalog sau khi sync skus + products xong
     sync_sku_catalog(sb)
+
+    # Cập nhật cột exist trên ncc_worldmove sau khi sync skus xong
+    sync_ncc_exist(sb)
+
+def sync_ncc_exist(sb):
+    """Cập nhật cột exist (Yes/No) trên ncc_worldmove.
+    exist='Yes' khi có ít nhất 1 SKU Active trong hệ thống khớp vendor_sku = vendor_product_id.
+    Chạy tự động sau mỗi lần sync skus.
+    """
+    print("[ncc_exist] Updating exist column...", flush=True)
+
+    # Fetch toàn bộ vendor_sku của WM từ skus (bypass 1000-row cap)
+    sys_rows = fetch_all_rows(sb, "skus", "vendor_sku,status")
+    sys_set  = {
+        r["vendor_sku"]
+        for r in sys_rows
+        if (r.get("vendor_sku") or "").startswith("WM-")
+        and r.get("status") == "Active"
+    }
+
+    # Fetch toàn bộ WM product IDs
+    wm_rows  = fetch_all_rows(sb, "ncc_worldmove", "vendor_product_id")
+    yes_ids  = [r["vendor_product_id"] for r in wm_rows if r["vendor_product_id"] in sys_set]
+    no_ids   = [r["vendor_product_id"] for r in wm_rows if r["vendor_product_id"] not in sys_set]
+
+    for i in range(0, len(yes_ids), CHUNK):
+        sb.table("ncc_worldmove").update({"exist": "Yes"}).in_(
+            "vendor_product_id", yes_ids[i:i + CHUNK]
+        ).execute()
+    for i in range(0, len(no_ids), CHUNK):
+        sb.table("ncc_worldmove").update({"exist": "No"}).in_(
+            "vendor_product_id", no_ids[i:i + CHUNK]
+        ).execute()
+
+    print(f"[ncc_exist] Done — exist=Yes: {len(yes_ids)}, exist=No: {len(no_ids)}", flush=True)
 
 if __name__ == "__main__":
     main()

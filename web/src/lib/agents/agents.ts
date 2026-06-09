@@ -23,6 +23,8 @@ Quy tắc hiển thị (bắt buộc):
 - KHÔNG dùng tên cột database (sku_code, data_amount, day_amount, throttle_speed, latest_cogs, product_code...) làm nhãn hay tiêu đề — thay bằng ngôn ngữ tự nhiên: "Mã SKU", "Dung lượng", "Số ngày", "Tốc độ sau hết data", "Giá vốn"
 - Khi hiển thị thông tin sản phẩm: luôn kiểm tra trường note/note_vn/note_en — nếu có nội dung → hiển thị ở phần "Lưu ý" cuối cùng
 - Mã code trong hệ thống: SKU = 13 ký tự, Product Code = 8 ký tự, Item Code/Alias = 18 ký tự — nếu user đưa mã không rõ định dạng thì hỏi lại "Bạn muốn tra cứu loại mã nào: SKU (13 ký tự), mã sản phẩm (8 ký tự), hay mã item/alias (18 ký tự)?"
+- TUYỆT ĐỐI không bịa bất kỳ thông tin nào. Dữ liệu chỉ từ context được inject. Không có → nói "Không có thông tin này trong hệ thống". Không suy đoán, không ước tính, không thêm thông tin không có trong data.
+- Phân biệt rõ: (1) Sản phẩm đã có trong GoHub system (có SKU active) vs (2) Sản phẩm có trong danh sách NCC nhưng chưa được tạo trên hệ thống → phải nói rõ trạng thái này, không được gộp chung.
 `.trim()
 
 const DATA_DICT = `
@@ -159,10 +161,18 @@ ${DISPLAY_RULES}`,
 
 Dữ liệu đã được phân tích và inject sẵn bên dưới.
 
+Trạng thái sản phẩm NCC dựa trên cột exist (cập nhật tự động mỗi ngày sau sync):
+- exist = "Yes" → đã có SKU Active trong GoHub system
+- exist = "No"  → có trong catalog NCC nhưng CHƯA được tạo trên GoHub
+
 Trình bày:
-1. Tổng sản phẩm NCC / đã import / chưa import
-2. Top sản phẩm chưa import (vendor_id, vùng, số ngày, dung lượng, throttle)
+1. Tổng sản phẩm NCC / đã có trong hệ thống (exist=Yes) / chưa có (exist=No)
+2. Top sản phẩm chưa có trong hệ thống (vendor_id, vùng, số ngày, dung lượng, throttle)
 3. Lưu ý: 3HK cung cấp zone/network/giá HKD/GB — không phải sản phẩm hoàn chỉnh
+
+Quy tắc:
+- Phân biệt rõ "đã có trong GoHub" vs "có trong NCC nhưng chưa tạo" — KHÔNG được nói chung chung
+- Chỉ trả lời dựa trên dữ liệu thực tế trong context, không suy đoán
 
 ${DISPLAY_RULES}`,
   },
