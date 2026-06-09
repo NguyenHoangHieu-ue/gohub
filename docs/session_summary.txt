@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 11)
+Cập nhật lần cuối: 2026-06-09 (session 12)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,42 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 12 (2026-06-09) — Performance + Filter hoàn chỉnh
+
+86. Database indexes (database/migrations/add_indexes.sql):
+    - Tạo index cho tất cả bảng chính: items, skus, listings, products, ncc_worldmove, ref_*
+    - items: status, tenant, status+tenant composite, item_type, sales_channel, sku_code, listing_code
+    - items: GIN trgm trên alias, sku_code, listing_code, item_name_vn, item_code
+    - skus: status, tenant, product_code, vendor_sku; partial index WHERE vendor_sku LIKE 'WM-%'
+    - skus: GIN trgm trên sku_code, vendor_sku, product_code
+    - listings: status, tenant, reference_product_code, listing_type; GIN trgm listing_name
+    - products: vendor_code, operator_code; GIN trgm vendor_code, operator_code
+    - ncc_worldmove: sim_type, is_unlimited, is_daily, days, data_gb; composite (sim_type, is_unlimited, is_daily)
+    - Chạy: database/migrations/add_indexes.sql trong Supabase SQL Editor
+
+87. Fix ncc/worldmove — bỏ .limit(2000):
+    - Đổi sang pagination loop → lấy đủ toàn bộ WM SKUs (không bị cap)
+    - Gap analysis in_system/not_in_system giờ chính xác 100%
+
+88. Fix skus/filters — fix Supabase 1000-row cap:
+    - Đổi sang pagination loop → derive filter options từ đủ 10,957 SKU codes
+
+89. New API endpoints:
+    - /api/products/filters: purchaseTypes, productTypes, countries, vendors, dataTypes, vendorCodes, operatorCodes
+    - /api/listings/filters: distinct listingTypes từ DB (thay hardcode)
+    - /api/items/filters: distinct itemTypes từ DB
+
+90. Fix items/route — filter chính xác:
+    - Bỏ channel filter
+    - item_type: đổi từ ilike → eq (exact match từ dropdown)
+
+91. SP Hệ Thống UI — filter hoàn chỉnh:
+    - useFilterOpts hook: fetch filter options 1 lần khi mount component, reusable
+    - Products: 7 ô filter (5 product code positions + vendor + operator) đều có datalist dropdown từ DB
+    - SKUs: 7 ô filter đều có datalist dropdown từ DB + nút Chi tiết → DetailModal (COGS chỉ admin/manager)
+    - Listings: filter Type dropdown lấy giá trị thật từ DB thay hardcode ["Standard","Premium","Bundle"]
+    - Items: bỏ channel, chỉ còn Type filter với dropdown từ DB
 
 ## Session 11 (2026-06-09) — SP Hệ Thống nâng cấp toàn diện
 
