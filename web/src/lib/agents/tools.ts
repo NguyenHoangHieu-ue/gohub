@@ -469,7 +469,23 @@ export function searchNccWm(params: {
   let r = ref.nccWm
   if (params.country) {
     const s = params.country.toLowerCase()
-    r = r.filter((p: any) => (p.region ?? "").toLowerCase().includes(s))
+    // Phase 1: exact region match (ví dụ: "Japan", "Taiwan")
+    let matched = r.filter((p: any) => (p.region ?? "").toLowerCase().includes(s))
+    // Phase 2: nếu không có, tìm theo ISO code hoặc group code liên quan
+    if (!matched.length) {
+      const { isoUpper, all } = getCountryCodes(params.country, ref)
+      if (all.length || isoUpper) {
+        // Lấy tên các groups liên quan để match với WM region
+        const groupNames = all
+          .map(code => (ref.groupMap[code] ?? code).toLowerCase())
+          .filter(Boolean)
+        matched = r.filter((p: any) => {
+          const region = (p.region ?? "").toLowerCase()
+          return groupNames.some(g => region.includes(g) || g.includes(region))
+        })
+      }
+    }
+    r = matched
   }
   if (params.days) r = r.filter((p: any) => p.days === params.days)
   if (params.sim_type) {

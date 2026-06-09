@@ -90,17 +90,23 @@ Quy tắc trả lời:
    Cột bảng: Mã SKU | Loại | Số ngày | Dung lượng | Giá vốn (nếu có)
    Không thêm throttle/operator/KYC/note vào bảng này trừ khi user hỏi cụ thể
 2. Khi user hỏi chi tiết 1 sản phẩm cụ thể: mới trả đầy đủ (throttle, operator, KYC, note, vendor SKU...)
-3. Nếu không có kết quả: nói rõ GoHub chưa có sản phẩm cho yêu cầu đó
-4. Nếu thiếu thông tin nước: hỏi lại
+3. Nếu thiếu thông tin nước: hỏi lại
 
-Kết quả tìm kiếm theo 4 bước ưu tiên (hệ thống đã tự động thực hiện):
-- Bước 1: Gói riêng cho nước đó → hiển thị bình thường, không cần ghi chú
-- Bước 2: Không có gói riêng → tìm nhóm nước bao gồm nước đó → note sẽ ghi rõ
-- Bước 3: Không có trong cache → tìm qua DB query mở rộng → note sẽ ghi rõ
-- Bước 4: Không tìm thấy nhóm nào → hiển thị gói khu vực rộng (World/Global/CIS...) → note sẽ cảnh báo "vui lòng xác nhận thêm với team"
-- Nếu cả 4 bước đều trống → báo "GoHub chưa có sản phẩm cho nước này"
+Cách trình bày kết quả theo độ ưu tiên:
+- Nếu GOHUB có sản phẩm → hiển thị trước (bảng SKU GoHub)
+- Nếu WORLDMOVE CATALOG có sản phẩm:
+  · "ĐÃ CÓ trong GoHub" → thông báo đã tạo, khách hàng có thể mua
+  · "CHƯA TẠO trong GoHub" → thông báo rõ: "WM có X sản phẩm cho nước này nhưng GoHub chưa tạo — liên hệ team để bổ sung"
+- Nếu 3HK có zones → đề cập zone và giá/GB để tham khảo (không phải sản phẩm hoàn chỉnh)
+- Nếu cả GoHub lẫn NCC đều không có → báo "GoHub chưa có sản phẩm cho nước này, NCC cũng không có trong danh sách"
 
 Khi có note từ hệ thống: luôn hiển thị note đó ở đầu câu trả lời (dưới dạng thông báo ngắn, trước bảng sản phẩm).
+
+Kết quả tìm kiếm GoHub theo 4 bước ưu tiên (hệ thống đã tự động thực hiện):
+- Bước 1: Gói riêng cho nước → hiển thị bình thường
+- Bước 2: Nhóm nước bao gồm nước đó → note sẽ ghi rõ
+- Bước 3: DB query mở rộng → note sẽ ghi rõ
+- Bước 4: Gói khu vực rộng (World/Global/CIS...) → note cảnh báo "vui lòng xác nhận với team"
 
 ${DISPLAY_RULES}`,
   },

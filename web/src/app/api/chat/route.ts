@@ -76,11 +76,39 @@ async function buildToolContext(
       return parts.filter(Boolean).join("|")
     })
     sections.push(
-      `=== KẾT QUẢ TÌM KIẾM: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
+      `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
       note ? `Lưu ý: ${note}` : "",
       `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs(USD/VND)" : ""}`,
       ...rows
     )
+
+    // Inject NCC catalog cho cùng nước — để bot biết WM/3HK có gì, đã/chưa tạo trong GoHub
+    const wmResults = searchNccWm({ country: params.country, days: params.days }, ref)
+    if (wmResults.length) {
+      const wmRows = wmResults.slice(0, 15).map((p: any) => {
+        const dataStr2 = p.is_unlimited ? "Unlimited" : p.data_gb != null ? `${p.data_gb}GB` : "?"
+        const cogsStr2 = isCost && p.cogs != null ? `${p.cogs}${p.cogs_currency ?? ""}` : null
+        const status   = p.exist === "Yes" ? "ĐÃ CÓ trong GoHub" : "CHƯA TẠO trong GoHub"
+        return [p.vendor_product_id, p.sim_type, `${p.days}d`, dataStr2, status, cogsStr2]
+          .filter(Boolean).join("|")
+      })
+      sections.push(
+        `=== WORLDMOVE CATALOG cho ${params.country} (${wmResults.length} sản phẩm) ===`,
+        `vendor_id|sim_type|days|data|trạng_thái${isCost ? "|cogs" : ""}`,
+        ...wmRows,
+        wmResults.length > 15 ? `... (còn ${wmResults.length - 15} sản phẩm khác)` : ""
+      )
+    }
+
+    const hkResults = searchNcc3hk(params.country, ref)
+    if (hkResults.length) {
+      sections.push(
+        `=== 3HK ZONES cho ${params.country} (${hkResults.length} zones) ===`,
+        hkResults.map((z: any) =>
+          `zone:${z.zone}|network:${z.network ?? "?"}|${isCost ? `${z.price_per_gb_hkd}HKD/GB` : ""}|KYC:${z.is_kyc ? "Yes" : "No"}`
+        ).join("\n")
+      )
+    }
   }
 
   if (agentId === "tra-cuu") {
