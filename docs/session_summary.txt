@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 12)
+Cập nhật lần cuối: 2026-06-09 (session 13)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,46 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 13 (2026-06-09) — Chatbot fixes + NCC exist column
+
+92. Custom dropdown ComboFilter (thay datalist browser):
+    - Soft colors: text-gray-500, hover:bg-gray-50, selected bg-brand-50 text-brand-700
+    - ChevronDown toggle, click ngoài đóng, filter khi gõ, "— Tất cả —" để clear
+    - font-mono cho option values, prop small=true cho filter panel
+    - Products + SKUs filter panel dùng ComboFilter (dropdown từ DB)
+    - Listings/Items Type filter dùng ComboFilter với dropdown từ DB
+
+93. Fix listings/filters — Supabase 1000-row cap:
+    - Đổi .limit(20000) → pagination loop → lấy đủ tất cả listing_type distinct
+
+94. Chatbot 4-step country search fallback (tools.ts):
+    - Fix getCountryCodes: ISO matching dùng exact array check thay vì hay.includes()
+      → fix Belarus (BY), Montenegro, và các nước ISO 2-char khác
+    - Phase 1: gói riêng (single-country groups)
+    - Phase 2: nhóm nước bao gồm nước đó (cache)
+    - Phase 3 (MỚI): DB query ref_support_countries ilike (bắt cache miss)
+    - Phase 4 (MỚI): gói khu vực rộng World/Global/CIS/Europe... (last resort)
+    - Note rõ ràng cho từng phase, cảnh báo Phase 4 cần xác nhận thêm
+    - tu-van system prompt: hướng dẫn hiển thị note từng phase
+
+95. NCC exist column (database/migrations/add_ncc_exist.sql):
+    - ALTER TABLE ncc_worldmove ADD COLUMN exist TEXT DEFAULT 'No'
+    - Initial UPDATE từ skus hiện tại (cần chạy trong Supabase SQL Editor)
+    - sync.py: thêm sync_ncc_exist() — auto-update exist=Yes/No sau mỗi sync daily
+
+96. Fix cache.ts — critical bug:
+    - nccWm bị Supabase 1000-row cap → chỉ load 1000/8921 WM products
+    - Fix: fetchAllRows pagination → load đủ 8921 rows
+    - Thêm exist vào nccWm select
+    - Bỏ wmSkus query riêng → compute nccWmInSystem từ exist='Yes' (chính xác hơn)
+
+97. No-hallucination rules (agents.ts):
+    - DISPLAY_RULES: thêm rule TUYỆT ĐỐI không bịa, chỉ từ context
+    - Rule phân biệt rõ "đã có trong GoHub system" vs "có trong NCC chưa tạo"
+    - gap-analysis prompt: mô tả exist column + quy tắc trình bày trạng thái
+
+98. Fix TypeScript build error: params.vendor non-null assertion (tools.ts dòng 152)
 
 ## Session 12 (2026-06-09) — Performance + Filter hoàn chỉnh
 
