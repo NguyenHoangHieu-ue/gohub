@@ -78,10 +78,20 @@ function fmtThrottle(kbps: number | null) {
 }
 
 function apnNote(p: WMProduct): string {
-  // Gộp onsite_carrier + providers thành danh sách nhà mạng, bỏ trùng
+  // Format providers per line (Country (Network) format)
+  const providerLines = (p.providers ?? "").split("\n")
+    .map(s => s.trim())
+    .filter(Boolean)
+
+  // If providers are in format "Country Network", keep them as-is (multi-line)
+  if (providerLines.length > 1) {
+    return providerLines.join(" | ")  // Join with separator for compact view
+  }
+
+  // Single line: region + network
   const carriersRaw = [
     p.onsite_carrier,
-    ...(p.providers?.split("\n").map(s => s.trim()).filter(Boolean) ?? []),
+    ...providerLines,
   ].filter(Boolean)
   const carriers = [...new Set(carriersRaw)]
 
@@ -92,12 +102,28 @@ function apnNote(p: WMProduct): string {
 }
 
 function apnTooltip(p: WMProduct): string {
-  // Full detail cho title tooltip
-  return [
-    p.apn       ? `APN: ${p.apn}`             : null,
-    p.network_type ? `Network: ${p.network_type}` : null,
-    apnNote(p),
-  ].filter(Boolean).join("\n")
+  // Full detail tooltip with providers per line
+  const details: string[] = []
+
+  if (p.apn) details.push(`APN: ${p.apn}`)
+  if (p.network_type) details.push(`Network: ${p.network_type}`)
+
+  // Show providers per line (Country + Network format)
+  if (p.providers) {
+    const providerLines = p.providers.split("\n")
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (providerLines.length > 0) {
+      details.push("Providers:")
+      details.push(...providerLines.map(line => `  • ${line}`))
+    }
+  }
+
+  if (p.region) details.push(`Region: ${p.region}`)
+  if (p.coverage) details.push(`Coverage: ${p.coverage}`)
+  if (p.notification) details.push(`Note: ${p.notification}`)
+
+  return details.join("\n")
 }
 
 // ─── APN Modal ──────────────────────────────────────────────────────────────
@@ -430,11 +456,16 @@ function WMTab({ role }: { role?: string }) {
                       ? <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium text-[10px]">KYC</span>
                       : <span className="text-gray-300">No</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[180px]">
+                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[200px]">
                     {apnNote(p) ? (
-                      <span className="truncate block cursor-pointer hover:text-brand-600" title={apnTooltip(p)}>
-                        {apnNote(p)}
-                      </span>
+                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-brand-600" title={apnTooltip(p)}>
+                        <span className="truncate">{apnNote(p)}</span>
+                        {(p.providers?.split("\n").filter(s => s.trim()).length ?? 0) > 1 && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-semibold text-[9px] whitespace-nowrap flex-shrink-0">
+                            {p.providers!.split("\n").filter(s => s.trim()).length}CN
+                          </span>
+                        )}
+                      </div>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-2.5 text-xs">
