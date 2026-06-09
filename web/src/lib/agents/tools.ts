@@ -6,24 +6,37 @@ const FULL_TYPES = new Set(["C", "E", "1", "2"])
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getCountryCodes(countryEn: string, ref: RefCache) {
-  const s = countryEn.toLowerCase()
+  const s = countryEn.toLowerCase().trim()
 
-  // Tìm ISO code từ ref_countries (ví dụ: "Montenegro" → "ME")
-  const isoMatch = ref.countries.find(
+  // Tìm ISO code từ ref_countries (exact match tên hoặc code)
+  const isoRow = ref.countries.find(
     (c: any) => (c.name ?? "").toLowerCase() === s || (c.code ?? "").toLowerCase() === s
   )
-  const isoCode = isoMatch?.code?.toLowerCase() ?? ""
+  // Fallback: tìm partial match tên (đề phòng tên khác nhau chút, ví dụ "Viet Nam" vs "Vietnam")
+  const isoRowPartial = !isoRow
+    ? ref.countries.find((c: any) => {
+        const n = (c.name ?? "").toLowerCase()
+        return n.startsWith(s.slice(0, 5)) || s.startsWith(n.slice(0, 5))
+      })
+    : null
+  const isoUpper = ((isoRow ?? isoRowPartial)?.code ?? "").toUpperCase()  // e.g., "BY", "RU"
 
   const single: string[] = [], all: string[] = []
   for (const sc of ref.supportCountries) {
-    const hay = ((sc.support_country ?? "") + " " + (sc.country_codes ?? "")).toLowerCase()
-    // Match theo tên nước HOẶC ISO code trong country_codes
-    const matched = hay.includes(s) || (isoCode && hay.includes(isoCode))
-    if (!matched) continue
+    const supportText = (sc.support_country ?? "").toLowerCase()
+    // Tách country_codes thành array, kiểm tra exact match (tránh false positive như "by" trong "nearby")
+    const codesArr = (sc.country_codes ?? "")
+      .toUpperCase().split(/[\s,;|/]+/).map((c: string) => c.trim()).filter(Boolean)
+
+    const byName     = supportText.includes(s)
+    const byIso      = !!isoUpper && codesArr.includes(isoUpper)
+    const byCodeText = (sc.country_codes ?? "").toLowerCase().includes(s)  // tên nước trong cột country_codes
+
+    if (!byName && !byIso && !byCodeText) continue
     all.push(sc.code)
-    if (!sc.support_country?.includes(",")) single.push(sc.code)
+    if (!(sc.support_country ?? "").includes(",")) single.push(sc.code)
   }
-  return { single, all, isoCode: isoMatch?.code ?? "" }
+  return { single, all, isoUpper }
 }
 
 async function enrichWithProducts(rows: any[]): Promise<any[]> {
@@ -59,10 +72,10 @@ export async function searchSkus(params: {
   sim_type?: string
   tenant?: string
 }, ref: RefCache): Promise<{ skus: any[]; note: string }> {
-  const { single, all, isoCode } = getCountryCodes(params.country, ref)
-  if (!all.length) return { skus: [], note: `Không tìm thấy "${params.country}" trong danh sách nước hỗ trợ. Nước này có thể chưa được GoHub hỗ trợ.` }
+  const { single, all, isoUpper } = getCountryCodes(params.country, ref)
 
   const queryByCodes = async (codes: string[]) => {
+    if (!codes.length) return []
     const { data, error } = await supabaseAdmin
       .from("sku_catalog")
       .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,day_amount,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
@@ -72,22 +85,71 @@ export async function searchSkus(params: {
     return data ?? []
   }
 
-  // Phase 1: mã đơn nước, Phase 2: nhóm nước nếu rỗng
-  let rows = single.length ? await queryByCodes(single) : []
+  let rows: any[] = []
   let note = ""
+  const usedCodes = new Set<string>([...single, ...all])
+
+  // Phase 1: gói riêng cho nước (single-country groups)
+  if (single.length) {
+    rows = await queryByCodes(single)
+  }
+
+  // Phase 2: nhóm nước bao gồm nước đó (cache-based)
   if (!rows.length && all.length) {
-    rows = await queryByCodes(all)
+    const multi = all.filter(c => !single.includes(c))
+    rows = await queryByCodes(multi.length ? multi : all)
     if (rows.length) {
-      note = `GoHub không có gói riêng cho ${params.country}${isoCode ? ` (${isoCode})` : ""}, hiển thị gói nhóm nước có hỗ trợ ${params.country}`
+      note = `GoHub không có gói riêng cho ${params.country}${isoUpper ? ` (${isoUpper})` : ""}. Hiển thị gói nhóm nước có bao gồm ${params.country}:`
     }
   }
-  if (!rows.length) return { skus: [], note: `GoHub chưa có sản phẩm nào hỗ trợ ${params.country}` }
+
+  // Phase 3: DB query mở rộng — phòng cache miss hoặc tên nước viết khác
+  if (!rows.length) {
+    const orClauses = [`support_country.ilike.%${params.country}%`]
+    if (isoUpper) orClauses.push(`country_codes.ilike.%${isoUpper}%`)
+    const { data: p3Groups } = await (supabaseAdmin.from("ref_support_countries") as any)
+      .select("code").or(orClauses.join(","))
+    const p3Codes = (p3Groups ?? [])
+      .map((r: any) => r.code as string)
+      .filter((c: string) => !usedCodes.has(c))
+    if (p3Codes.length) {
+      rows = await queryByCodes(p3Codes)
+      p3Codes.forEach((c: string) => usedCodes.add(c))
+      if (rows.length) {
+        note = `GoHub không có gói riêng cho ${params.country}${isoUpper ? ` (${isoUpper})` : ""}. Tìm thấy gói nhóm nước liên quan:`
+      }
+    }
+  }
+
+  // Phase 4: khu vực/thuộc địa rộng — chỉ dùng khi country được nhận dạng (có isoUpper)
+  if (!rows.length && isoUpper) {
+    const regionalCodes = ref.supportCountries
+      .filter((sc: any) => {
+        const t = (sc.support_country ?? "").toLowerCase()
+        return /world|global|international|europe|asia|cis|africa|americas|middle east|caribbean|pacific/i.test(t)
+      })
+      .map((sc: any) => sc.code as string)
+      .filter((c: string) => !usedCodes.has(c))
+    if (regionalCodes.length) {
+      rows = await queryByCodes(regionalCodes)
+      if (rows.length) {
+        note = `GoHub chưa có gói dành riêng cho ${params.country}${isoUpper ? ` (${isoUpper})` : ""}. Các gói khu vực rộng dưới đây có thể sử dụng được — vui lòng xác nhận thêm với team trước khi tư vấn khách:`
+      }
+    }
+  }
+
+  if (!rows.length) {
+    return {
+      skus: [],
+      note: `GoHub chưa có sản phẩm nào hỗ trợ ${params.country}${isoUpper ? ` (${isoUpper})` : ""}. Đã tìm qua ${usedCodes.size} nhóm nước trong hệ thống.`,
+    }
+  }
 
   // Sort VN trước US, lọc thêm theo các tiêu chí tuỳ chọn
   let result = [...rows].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
 
   if (params.vendor) {
-    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7) === params.vendor)
+    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7).toUpperCase() === params.vendor.toUpperCase())
     if (v.length) result = v
     else note += ` | Không có vendor ${params.vendor}, hiển thị tất cả`
   }
