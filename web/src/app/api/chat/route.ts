@@ -64,7 +64,7 @@ async function buildToolContext(
       let cogsStr: string | null = null
       if (isCost && s.latest_cogs != null) {
         const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-        cogsStr = `cogs:$${usd} USD / ${vnd.toLocaleString("en-US")} VND`
+        cogsStr = `cogs:${vnd.toLocaleString("en-US")} VND ($${usd} USD)`
       }
       const parts = [
         s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
@@ -138,7 +138,7 @@ async function buildToolContext(
           const skuSummary = (d.skus ?? []).slice(0, 5).map((s: any) => {
             const dataStr = s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "?"
             const cogsStr = isCost && s.latest_cogs
-              ? ` cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd}USD` : ""
+              ? ` cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).vnd.toLocaleString("en-US")} VND ($${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd} USD)` : ""
             return `${s.sku_code}|${dataStr}|${s.day_amount ?? "?"}d${cogsStr}`
           }).join("; ")
           sections.push(`[${i+1}] ${productCodes[i]} | ${d.product?.status ?? "?"} | SKUs: ${skuSummary}`)
@@ -174,7 +174,7 @@ async function buildToolContext(
             const s = d.sku
             const dataStr = s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "Unlimited"
             const cogsStr = isCost && s.latest_cogs
-              ? ` | cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd}USD` : ""
+              ? ` | cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).vnd.toLocaleString("en-US")} VND ($${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd} USD)` : ""
             return `[${i+1}] SKU:${code} | ${s.status} | ${s.sim_esim ?? "?"} | ${dataStr} | ${s.day_amount ?? "?"}d | throttle:${s.throttle_speed || "none"}${cogsStr}`
           }
           if (id.type === "Product Code") {

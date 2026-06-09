@@ -1,4 +1,4 @@
-import type { AgentId, UserRole, Message, RouterResult } from "./types"
+﻿import type { AgentId, UserRole, Message, RouterResult } from "./types"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
 
@@ -9,7 +9,7 @@ function normalizeText(s: string): string {
     .toLowerCase()
     .replace(/đ/g, "d")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim()
 }
