@@ -79,6 +79,29 @@ const SKU_COGS_COLS = [
   { key: "latest_cogs_currency", label: "Currency" },
 ]
 
+const SKU_MODAL_FIELDS_BASE = [
+  { key: "sku_code",            label: "SKU Code"       },
+  { key: "product_code",        label: "Product Code"   },
+  { key: "tenant",              label: "Tenant"         },
+  { key: "status",              label: "Status"         },
+  { key: "sim_esim",            label: "SIM/eSIM"       },
+  { key: "data_amount",         label: "Data Amount"    },
+  { key: "data_amount_unit",    label: "Data Unit"      },
+  { key: "day_amount",          label: "Days"           },
+  { key: "day_amount_unit",     label: "Day Unit"       },
+  { key: "throttle_speed",      label: "Throttle"       },
+  { key: "call",                label: "Call"           },
+  { key: "expirations",         label: "Expiration"     },
+  { key: "vendor_sku",          label: "Vendor SKU"     },
+  { key: "vendor_sku_sim",      label: "Vendor SIM"     },
+  { key: "frame",               label: "Frame SKU"      },
+  { key: "datapack",            label: "Datapack SKU"   },
+  { key: "kyc_needed",          label: "KYC"            },
+  { key: "supported_countries", label: "Countries"      },
+  { key: "country_names",       label: "Country Names"  },
+  { key: "note",                label: "Note"           },
+]
+
 const LISTING_TABLE_COLS = [
   { key: "status",                 label: "Status"       },
   { key: "tenant",                 label: "Tenant"       },
@@ -288,6 +311,16 @@ function ComboFilter({ id, label, value, onChange, width, options }: {
   )
 }
 
+// ─── Filter options hook (fetch once on mount) ───────────────────────────────
+
+function useFilterOpts(url: string) {
+  const [opts, setOpts] = useState<Record<string, string[]>>({})
+  useEffect(() => {
+    fetch(url).then(r => r.json()).then(setOpts).catch(() => {})
+  }, [url])
+  return opts
+}
+
 // ─── Tab state hook ───────────────────────────────────────────────────────────
 
 function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
@@ -397,6 +430,7 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pOperator, setPOperator] = useState("")
   const [detailRow, setDetailRow] = useState<any>(null)
 
+  const opts = useFilterOpts("/api/products/filters")
   const d = useTabData("/api/products")
 
   const applyFilters = () => {
@@ -435,33 +469,39 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
         </p>
         <div className="flex gap-3 flex-wrap items-end">
           {([
-            { label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      ph: "1–6, A–E" },
-            { label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   ph: "C, E..."  },
-            { label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, ph: "RUS, CHM" },
-            { label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  ph: "WM, 3H"   },
-            { label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   ph: "F, C..."  },
+            { id: "pf-pt",  label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      ph: "1–6, A–E", optKey: "purchaseTypes" },
+            { id: "pf-ptp", label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   ph: "C, E...",  optKey: "productTypes"  },
+            { id: "pf-cty", label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, ph: "RUS, CHM", optKey: "countries"     },
+            { id: "pf-vnd", label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  ph: "WM, 3H",  optKey: "vendors"       },
+            { id: "pf-dt",  label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   ph: "F, C...", optKey: "dataTypes"     },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1 min-w-[110px]">
+            <div key={f.id} className="flex flex-col gap-1 min-w-[110px]">
               <label className="text-[11px] font-semibold text-gray-500">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
               </label>
-              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
                 onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
                 className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
+              <datalist id={f.id}>
+                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
+              </datalist>
             </div>
           ))}
 
           <div className="w-px h-7 bg-gray-200 self-end mb-0.5 hidden sm:block" />
 
           {([
-            { label: "Vendor Code", val: pVendorF,  set: setPVendorF,  ph: "3HK, WM..." },
-            { label: "Operator",    val: pOperator, set: setPOperator, ph: "Viettel..."  },
+            { id: "pf-vc", label: "Vendor Code", val: pVendorF,  set: setPVendorF,  ph: "3HK, WM...", optKey: "vendorCodes"   },
+            { id: "pf-op", label: "Operator",    val: pOperator, set: setPOperator, ph: "Viettel...", optKey: "operatorCodes" },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1 min-w-[110px]">
+            <div key={f.id} className="flex flex-col gap-1 min-w-[110px]">
               <label className="text-[11px] font-semibold text-gray-500">{f.label}</label>
-              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
                 onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
                 className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
+              <datalist id={f.id}>
+                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
+              </datalist>
             </div>
           ))}
 
@@ -546,7 +586,9 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pDtype, setPDtype]     = useState("")
   const [pData, setPData]       = useState("")
   const [pDays, setPDays]       = useState("")
+  const [detailRow, setDetailRow] = useState<any>(null)
 
+  const opts = useFilterOpts("/api/skus/filters")
   const d = useTabData("/api/skus")
 
   const applySkuFilters = () => {
@@ -566,9 +608,20 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   }
   const hasSkuFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pData || pDays)
 
-  const cols = canSeeCost
-    ? [...SKU_COLS_BASE.slice(0, 13), ...SKU_COGS_COLS, ...SKU_COLS_BASE.slice(13)]
-    : SKU_COLS_BASE
+  const skuModalFields = [
+    ...SKU_MODAL_FIELDS_BASE,
+    ...(canSeeCost ? [
+      { key: "latest_cogs",          label: "COGS"          },
+      { key: "latest_cogs_currency", label: "COGS Currency" },
+    ] : []),
+  ]
+
+  const cols = [
+    ...(canSeeCost
+      ? [...SKU_COLS_BASE.slice(0, 13), ...SKU_COGS_COLS, ...SKU_COLS_BASE.slice(13)]
+      : SKU_COLS_BASE),
+    { key: "_detail", label: "" },
+  ]
 
   return (
     <div className="space-y-3">
@@ -580,21 +633,24 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
         </p>
         <div className="flex gap-3 flex-wrap items-end">
           {([
-            { label: "Purchase Type", pos: "pos 1",    val: pPt,      set: setPPt,      ph: "1-6, A-E" },
-            { label: "Product Type",  pos: "pos 2",    val: pPtype,   set: setPPtype,   ph: "C, E..."  },
-            { label: "Country",       pos: "pos 3–5",  val: pCountry, set: setPCountry, ph: "TWN"      },
-            { label: "Vendor",        pos: "pos 6–7",  val: pVendor,  set: setPVendor,  ph: "WM"       },
-            { label: "Data Policy",   pos: "pos 8",    val: pDtype,   set: setPDtype,   ph: "F"        },
-            { label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    ph: "UNL"      },
-            { label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    ph: "07"       },
+            { id: "sf-pt",  label: "Purchase Type", pos: "pos 1",    val: pPt,      set: setPPt,      ph: "1-6, A-E", optKey: "purchaseTypes" },
+            { id: "sf-ptp", label: "Product Type",  pos: "pos 2",    val: pPtype,   set: setPPtype,   ph: "C, E...",  optKey: "productTypes"  },
+            { id: "sf-cty", label: "Country",       pos: "pos 3–5",  val: pCountry, set: setPCountry, ph: "TWN",      optKey: "countries"     },
+            { id: "sf-vnd", label: "Vendor",        pos: "pos 6–7",  val: pVendor,  set: setPVendor,  ph: "WM",       optKey: "vendors"       },
+            { id: "sf-dt",  label: "Data Policy",   pos: "pos 8",    val: pDtype,   set: setPDtype,   ph: "F",        optKey: "dataTypes"     },
+            { id: "sf-da",  label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    ph: "UNL",      optKey: "dataAmounts"   },
+            { id: "sf-dy",  label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    ph: "07",       optKey: "dayAmounts"    },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1 min-w-[100px]">
+            <div key={f.id} className="flex flex-col gap-1 min-w-[100px]">
               <label className="text-[11px] font-semibold text-gray-500">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
               </label>
-              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
                 onKeyDown={e => { if (e.key === "Enter") applySkuFilters() }}
                 className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
+              <datalist id={f.id}>
+                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
+              </datalist>
             </div>
           ))}
           <div className="flex gap-2 pb-0.5">
@@ -613,10 +669,27 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
       </div>
       <TableShell cols={cols} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
         <tr key={row.sku_code} className="hover:bg-gray-50 transition-colors">
-          {cols.map(col => <SkuCell key={col.key} col={col.key} row={row} canSeeCost={canSeeCost} />)}
+          {cols.map(col => col.key === "_detail"
+            ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
+                <button onClick={() => setDetailRow(row)}
+                  className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
+                  Chi tiết
+                </button>
+              </td>
+            : <SkuCell key={col.key} col={col.key} row={row} canSeeCost={canSeeCost} />
+          )}
         </tr>
       )} />
       <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPrev={d.prevPage} onNext={d.nextPage} />
+
+      {detailRow && (
+        <DetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          title={`SKU: ${detailRow.sku_code}`}
+          fields={skuModalFields}
+        />
+      )}
     </div>
   )
 }
@@ -663,6 +736,7 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
 function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [lType,    setLType]    = useState("")
   const [detailRow, setDetailRow] = useState<any>(null)
+  const opts = useFilterOpts("/api/listings/filters")
   const d = useTabData("/api/listings")
   const { setExtraQuery } = d
 
@@ -682,7 +756,7 @@ function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
         onReset={() => setLType("")}
         extra={
           <ComboFilter id="ltype-f" label="Type" value={lType} onChange={setLType}
-            width="w-28" options={["Standard","Premium","Bundle"]} />
+            width="w-32" options={opts.listingTypes ?? []} />
         }
       />
       <TableShell
@@ -735,17 +809,16 @@ function ListingCell({ col, row }: { col: string; row: any }) {
 // ─── Items table ──────────────────────────────────────────────────────────────
 
 function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
-  const [iType,   setIType]   = useState("")
-  const [channel, setChannel] = useState("")
+  const [iType, setIType] = useState("")
+  const opts = useFilterOpts("/api/items/filters")
   const d = useTabData("/api/items", { defaultStatus: "Active" })
   const { setExtraQuery } = d
 
   useEffect(() => {
     const p = new URLSearchParams()
-    if (iType)   p.set("item_type", iType)
-    if (channel) p.set("channel",   channel)
+    if (iType) p.set("item_type", iType)
     setExtraQuery(p.toString())
-  }, [iType, channel, setExtraQuery])
+  }, [iType, setExtraQuery])
 
   return (
     <div className="space-y-3">
@@ -754,15 +827,11 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
         tenant={d.tenant} onTenant={d.setTenant}
         status={d.status} onStatus={d.setStatus}
         statusDefault="Active"
-        hasExtra={!!(iType || channel)}
-        onReset={() => { setIType(""); setChannel("") }}
+        hasExtra={!!iType}
+        onReset={() => setIType("")}
         extra={
-          <>
-            <ComboFilter id="itype-f" label="Item Type" value={iType} onChange={setIType}
-              width="w-24" options={["eSIM","SIM"]} />
-            <ComboFilter id="chan-f" label="Channel" value={channel} onChange={setChannel}
-              width="w-24" options={["B2C","WS","OD","Internal"]} />
-          </>
+          <ComboFilter id="itype-f" label="Type" value={iType} onChange={setIType}
+            width="w-32" options={opts.itemTypes ?? []} />
         }
       />
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (

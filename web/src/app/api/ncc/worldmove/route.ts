@@ -75,13 +75,18 @@ export async function GET(req: NextRequest) {
     dataMax:  sp.get("data_max")   || "",
   }
 
-  // Fetch system WM SKUs for in_system marking
-  const { data: sysRows } = await (supabaseAdmin.from("skus") as any)
-    .select("vendor_sku")
-    .ilike("vendor_sku", "WM-%")
-    .limit(2000)
-  const sysSkus = (sysRows ?? []).map((r: any) => r.vendor_sku as string).filter(Boolean)
-  const sysSet  = new Set(sysSkus)
+  // Fetch tất cả system WM SKUs — dùng pagination tránh Supabase 1000-row cap
+  const sysSkus: string[] = []
+  for (let off = 0; ; off += 1000) {
+    const { data: batch } = await (supabaseAdmin.from("skus") as any)
+      .select("vendor_sku")
+      .ilike("vendor_sku", "WM-%")
+      .range(off, off + 999)
+    if (!batch?.length) break
+    sysSkus.push(...batch.map((r: any) => r.vendor_sku as string).filter(Boolean))
+    if (batch.length < 1000) break
+  }
+  const sysSet = new Set(sysSkus)
 
   let rows: any[]
   let total: number
