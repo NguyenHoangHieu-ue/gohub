@@ -8,7 +8,7 @@ const PAGE_SIZE = 20
 const SELECT_COLS = [
   "listing_code","reference_product_code","tenant","status","listing_type",
   "listing_name_vn","listing_name_en","type_of_sim","product_type","network_operator",
-  "category_code","data_type_en","supported_countries",
+  "category_code","data_type_en",
   "expirations_en","kyc_needed_en","hotspot_en","apn",
   "activation_en","activation_links_en",
   "top_up_options_en","unsupported_apps_en","telco_perks_en",

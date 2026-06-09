@@ -6,10 +6,10 @@ import { supabaseAdmin } from "@/lib/supabase"
 const PAGE_SIZE = 20
 
 const SELECT_COLS = [
-  "product_code","tenant","status","product_type","vendor_code","country_group",
-  "data_policy_code","kyc_code","kyc_needed","local_phone_number","purchase_type",
+  "product_code","tenant","status","product_type","vendor_code","type_of_sim",
+  "kyc_code","kyc_needed","local_phone_number","purchase_type",
   "operator_code","network_type","apn","apn_original","note","supported_countries",
-  "activation_time","hotspot","special_activation_required",
+  "activation_time","hotspot","data_plan_type",
 ].join(",")
 
 export async function GET(req: NextRequest) {

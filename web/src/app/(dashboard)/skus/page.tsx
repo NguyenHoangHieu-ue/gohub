@@ -20,25 +20,24 @@ const TABS: { id: TabId; label: string; api: string }[] = [
 // ─── Column definitions ───────────────────────────────────────────────────────
 
 const PRODUCT_COLS = [
-  { key: "status",                    label: "Status"          },
-  { key: "tenant",                    label: "Tenant"          },
-  { key: "product_code",              label: "Product Code"    },
-  { key: "product_type",              label: "Type"            },
-  { key: "vendor_code",               label: "Vendor"          },
-  { key: "country_group",             label: "Country Group"   },
-  { key: "data_policy_code",          label: "Data Policy"     },
-  { key: "kyc_needed",                label: "KYC"             },
-  { key: "operator_code",             label: "Operator"        },
-  { key: "network_type",              label: "Network"         },
-  { key: "apn",                       label: "APN"             },
-  { key: "apn_original",              label: "APN Original"    },
-  { key: "local_phone_number",        label: "Local Phone"     },
-  { key: "hotspot",                   label: "Hotspot"         },
-  { key: "purchase_type",             label: "Purchase Type"   },
-  { key: "activation_time",           label: "Activation Time" },
-  { key: "special_activation_required", label: "Special Activ." },
-  { key: "note",                      label: "Note"            },
-  { key: "supported_countries",       label: "Countries"       },
+  { key: "status",          label: "Status"          },
+  { key: "tenant",          label: "Tenant"          },
+  { key: "product_code",    label: "Product Code"    },
+  { key: "product_type",    label: "Type"            },
+  { key: "type_of_sim",     label: "SIM/eSIM"        },
+  { key: "vendor_code",     label: "Vendor"          },
+  { key: "kyc_needed",      label: "KYC"             },
+  { key: "operator_code",   label: "Operator"        },
+  { key: "network_type",    label: "Network"         },
+  { key: "apn",             label: "APN"             },
+  { key: "apn_original",    label: "APN Original"    },
+  { key: "local_phone_number", label: "Local Phone"  },
+  { key: "hotspot",         label: "Hotspot"         },
+  { key: "purchase_type",   label: "Purchase Type"   },
+  { key: "activation_time", label: "Activation Time" },
+  { key: "data_plan_type",  label: "Data Plan"       },
+  { key: "note",            label: "Note"            },
+  { key: "supported_countries", label: "Countries"   },
 ]
 
 const SKU_COLS_BASE = [
@@ -78,7 +77,6 @@ const LISTING_COLS = [
   { key: "network_operator",       label: "Operator"       },
   { key: "category_code",          label: "Category"       },
   { key: "data_type_en",           label: "Data Type"      },
-  { key: "supported_countries",    label: "Countries"      },
   { key: "expirations_en",         label: "Expiration"     },
   { key: "kyc_needed_en",          label: "KYC"            },
   { key: "hotspot_en",             label: "Hotspot"        },
@@ -180,39 +178,49 @@ function FilterBar({
   statusDefault?: string
   extra?: React.ReactNode
 }) {
+  const hasFilter = !!(search || tenant || status !== (statusDefault ?? ""))
+  const reset = () => {
+    onSearch("")
+    onTenant("")
+    onStatus(statusDefault ?? "")
+  }
   return (
-    <div className="flex gap-3 flex-wrap items-end">
-      <div className="relative flex-1 min-w-[220px] max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+    <div className="flex gap-2 items-center flex-wrap">
+      <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text" value={search} onChange={e => onSearch(e.target.value)}
           placeholder="Tìm kiếm..."
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white bg-gray-50 transition"
+          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition"
         />
       </div>
-      <select value={tenant} onChange={e => onTenant(e.target.value)}
-        className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
-        <option value="">All Tenants</option>
-        <option value="US">US</option>
-        <option value="VN">VN</option>
-      </select>
-      <select value={status} onChange={e => onStatus(e.target.value)}
-        className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-400">
-        {statusDefault === "Active" ? (
-          <>
-            <option value="Active">Active</option>
-            <option value="">All Status</option>
-            <option value="Inactive">Inactive</option>
-          </>
-        ) : (
-          <>
-            <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </>
-        )}
-      </select>
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[10px] text-gray-400 font-medium px-0.5">Tenant</label>
+        <input list="tenant-opts" value={tenant} onChange={e => onTenant(e.target.value)}
+          placeholder="All"
+          className="w-24 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
+        <datalist id="tenant-opts">
+          <option value="US" />
+          <option value="VN" />
+        </datalist>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <label className="text-[10px] text-gray-400 font-medium px-0.5">Status</label>
+        <input list="status-opts" value={status} onChange={e => onStatus(e.target.value)}
+          placeholder="All"
+          className="w-28 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
+        <datalist id="status-opts">
+          <option value="Active" />
+          <option value="Inactive" />
+        </datalist>
+      </div>
       {extra}
+      {hasFilter && (
+        <button onClick={reset}
+          className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap self-end mb-0.5">
+          Reset
+        </button>
+      )}
     </div>
   )
 }
