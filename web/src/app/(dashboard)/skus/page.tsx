@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Package, Search, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Package, Search, ChevronLeft, ChevronRight, X, ChevronDown } from "lucide-react"
 
 const PAGE_SIZE = 20
 
@@ -282,9 +282,9 @@ function FilterBar({
           placeholder="Tìm kiếm..."
           className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition" />
       </div>
-      <ComboFilter id="tenant-f" label="Tenant" value={tenant} onChange={onTenant} width="w-20"
+      <ComboFilter label="Tenant" value={tenant} onChange={onTenant} width="w-20"
         options={["US","VN"]} />
-      <ComboFilter id="status-f" label="Status" value={status} onChange={onStatus} width="w-24"
+      <ComboFilter label="Status" value={status} onChange={onStatus} width="w-24"
         options={["Active","Inactive"]} />
       {extra}
       {hasFilter && (
@@ -297,16 +297,71 @@ function FilterBar({
   )
 }
 
-function ComboFilter({ id, label, value, onChange, width, options }: {
-  id: string; label: string; value: string; onChange: (v: string) => void
-  width: string; options: string[]
+function ComboFilter({ label, value, onChange, width = "w-28", options, small = false }: {
+  label: string; value: string; onChange: (v: string) => void
+  width?: string; options: string[]; small?: boolean
 }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
+  }, [])
+
+  const visible = open
+    ? options.filter(o => !value || o.toLowerCase().includes(value.toLowerCase()))
+    : []
+
+  const sz = small
+    ? "px-2 py-1.5 text-xs"
+    : "px-2.5 py-1.5 text-sm"
+
   return (
-    <div className="flex flex-col gap-0.5">
+    <div ref={wrapRef} className={`relative flex flex-col gap-0.5 ${width}`}>
       <label className="text-[10px] text-gray-400 font-medium px-0.5">{label}</label>
-      <input list={id} value={value} onChange={e => onChange(e.target.value)} placeholder="All"
-        className={`${width} px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400`} />
-      <datalist id={id}>{options.map(o => <option key={o} value={o} />)}</datalist>
+      <div className="relative">
+        <input
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder="Tất cả"
+          className={`w-full ${sz} border border-gray-200 rounded-lg bg-white pr-6 focus:outline-none focus:ring-2 focus:ring-brand-300 transition`}
+        />
+        <button
+          type="button"
+          onMouseDown={e => { e.preventDefault(); setOpen(o => !o) }}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors">
+          <ChevronDown size={11} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      {open && options.length > 0 && (
+        <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-gray-100 rounded-xl shadow-xl overflow-y-auto max-h-52 w-full min-w-[110px]">
+          <button
+            type="button"
+            onMouseDown={() => { onChange(""); setOpen(false) }}
+            className="w-full text-left px-3 py-2 text-[11px] text-gray-400 hover:bg-gray-50 border-b border-gray-50 transition-colors">
+            — Tất cả —
+          </button>
+          {visible.map(o => (
+            <button
+              key={o}
+              type="button"
+              onMouseDown={() => { onChange(o); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-xs transition-colors font-mono ${
+                value === o
+                  ? "bg-brand-50 text-brand-700 font-semibold"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+              }`}>
+              {o}
+            </button>
+          ))}
+          {visible.length === 0 && (
+            <p className="px-3 py-2 text-[11px] text-gray-400">Không tìm thấy</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -469,39 +524,31 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
         </p>
         <div className="flex gap-3 flex-wrap items-end">
           {([
-            { id: "pf-pt",  label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      ph: "1–6, A–E", optKey: "purchaseTypes" },
-            { id: "pf-ptp", label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   ph: "C, E...",  optKey: "productTypes"  },
-            { id: "pf-cty", label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, ph: "RUS, CHM", optKey: "countries"     },
-            { id: "pf-vnd", label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  ph: "WM, 3H",  optKey: "vendors"       },
-            { id: "pf-dt",  label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   ph: "F, C...", optKey: "dataTypes"     },
+            { label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      optKey: "purchaseTypes", w: "w-24" },
+            { label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   optKey: "productTypes",  w: "w-24" },
+            { label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, optKey: "countries",     w: "w-24" },
+            { label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  optKey: "vendors",       w: "w-24" },
+            { label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   optKey: "dataTypes",     w: "w-24" },
           ] as const).map(f => (
-            <div key={f.id} className="flex flex-col gap-1 min-w-[110px]">
-              <label className="text-[11px] font-semibold text-gray-500">
+            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applyFilters() }}>
+              <span className="text-[11px] font-semibold text-gray-500 px-0.5">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
-              </label>
-              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
-                onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
-                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
-              <datalist id={f.id}>
-                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
-              </datalist>
+              </span>
+              <ComboFilter label="" value={f.val} onChange={f.set}
+                width={f.w} options={opts[f.optKey] ?? []} small />
             </div>
           ))}
 
-          <div className="w-px h-7 bg-gray-200 self-end mb-0.5 hidden sm:block" />
+          <div className="w-px h-7 bg-gray-200 self-end mb-5 hidden sm:block" />
 
           {([
-            { id: "pf-vc", label: "Vendor Code", val: pVendorF,  set: setPVendorF,  ph: "3HK, WM...", optKey: "vendorCodes"   },
-            { id: "pf-op", label: "Operator",    val: pOperator, set: setPOperator, ph: "Viettel...", optKey: "operatorCodes" },
+            { label: "Vendor Code", val: pVendorF,  set: setPVendorF,  optKey: "vendorCodes",   w: "w-28" },
+            { label: "Operator",    val: pOperator, set: setPOperator, optKey: "operatorCodes", w: "w-28" },
           ] as const).map(f => (
-            <div key={f.id} className="flex flex-col gap-1 min-w-[110px]">
-              <label className="text-[11px] font-semibold text-gray-500">{f.label}</label>
-              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
-                onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
-                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
-              <datalist id={f.id}>
-                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
-              </datalist>
+            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applyFilters() }}>
+              <span className="text-[11px] font-semibold text-gray-500 px-0.5">{f.label}</span>
+              <ComboFilter label="" value={f.val} onChange={f.set}
+                width={f.w} options={opts[f.optKey] ?? []} small />
             </div>
           ))}
 
@@ -633,24 +680,20 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
         </p>
         <div className="flex gap-3 flex-wrap items-end">
           {([
-            { id: "sf-pt",  label: "Purchase Type", pos: "pos 1",    val: pPt,      set: setPPt,      ph: "1-6, A-E", optKey: "purchaseTypes" },
-            { id: "sf-ptp", label: "Product Type",  pos: "pos 2",    val: pPtype,   set: setPPtype,   ph: "C, E...",  optKey: "productTypes"  },
-            { id: "sf-cty", label: "Country",       pos: "pos 3–5",  val: pCountry, set: setPCountry, ph: "TWN",      optKey: "countries"     },
-            { id: "sf-vnd", label: "Vendor",        pos: "pos 6–7",  val: pVendor,  set: setPVendor,  ph: "WM",       optKey: "vendors"       },
-            { id: "sf-dt",  label: "Data Policy",   pos: "pos 8",    val: pDtype,   set: setPDtype,   ph: "F",        optKey: "dataTypes"     },
-            { id: "sf-da",  label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    ph: "UNL",      optKey: "dataAmounts"   },
-            { id: "sf-dy",  label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    ph: "07",       optKey: "dayAmounts"    },
+            { label: "Purchase Type", pos: "pos 1",    val: pPt,      set: setPPt,      optKey: "purchaseTypes", w: "w-24" },
+            { label: "Product Type",  pos: "pos 2",    val: pPtype,   set: setPPtype,   optKey: "productTypes",  w: "w-24" },
+            { label: "Country",       pos: "pos 3–5",  val: pCountry, set: setPCountry, optKey: "countries",     w: "w-24" },
+            { label: "Vendor",        pos: "pos 6–7",  val: pVendor,  set: setPVendor,  optKey: "vendors",       w: "w-24" },
+            { label: "Data Policy",   pos: "pos 8",    val: pDtype,   set: setPDtype,   optKey: "dataTypes",     w: "w-24" },
+            { label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    optKey: "dataAmounts",   w: "w-24" },
+            { label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    optKey: "dayAmounts",    w: "w-24" },
           ] as const).map(f => (
-            <div key={f.id} className="flex flex-col gap-1 min-w-[100px]">
-              <label className="text-[11px] font-semibold text-gray-500">
+            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applySkuFilters() }}>
+              <span className="text-[11px] font-semibold text-gray-500 px-0.5">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
-              </label>
-              <input list={f.id} value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
-                onKeyDown={e => { if (e.key === "Enter") applySkuFilters() }}
-                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
-              <datalist id={f.id}>
-                {(opts[f.optKey] ?? []).map((o: string) => <option key={o} value={o} />)}
-              </datalist>
+              </span>
+              <ComboFilter label="" value={f.val} onChange={f.set}
+                width={f.w} options={opts[f.optKey] ?? []} small />
             </div>
           ))}
           <div className="flex gap-2 pb-0.5">
@@ -755,7 +798,7 @@ function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
         hasExtra={!!lType}
         onReset={() => setLType("")}
         extra={
-          <ComboFilter id="ltype-f" label="Type" value={lType} onChange={setLType}
+          <ComboFilter label="Type" value={lType} onChange={setLType}
             width="w-32" options={opts.listingTypes ?? []} />
         }
       />
@@ -830,7 +873,7 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
         hasExtra={!!iType}
         onReset={() => setIType("")}
         extra={
-          <ComboFilter id="itype-f" label="Type" value={iType} onChange={setIType}
+          <ComboFilter label="Type" value={iType} onChange={setIType}
             width="w-32" options={opts.itemTypes ?? []} />
         }
       />
