@@ -108,30 +108,75 @@ async function buildToolContext(
   }
 
   if (agentId === "tra-cuu") {
-    const code = params.skuCode || params.listingCode
-    if (code) {
-      const identified = await identifyCode(code)
-      sections.push(`=== NHẬN DẠNG MÃ: ${code} ===`, JSON.stringify(identified, null, 2))
-      if (identified.found) {
-        if (identified.type === "SKU") {
-          const detail = await getProductDetail(code)
-          if (isCost && detail?.sku?.latest_cogs != null) {
-            const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
-            detail.sku.cogs_usd = usd
-            detail.sku.cogs_vnd = vnd
+    const productCodes = params.productCodes ?? (params.productCode ? [params.productCode] : [])
+    const skuCodes     = params.skuCodes     ?? (params.skuCode     ? [params.skuCode]     : [])
+    const listingCodes = params.listingCodes ?? (params.listingCode ? [params.listingCode] : [])
+    const allCodes = [...skuCodes, ...listingCodes]
+    const isMulti = (productCodes.length + allCodes.length) > 1
+
+    if (productCodes.length) {
+      const results = await Promise.all(productCodes.map(pc => getProductByCode(pc)))
+      if (isMulti) {
+        sections.push(`=== MULTI LOOKUP: ${productCodes.length} Product Code ===`)
+        for (let i = 0; i < productCodes.length; i++) {
+          const d = results[i]
+          if (d?.error) { sections.push(`[${i+1}] ${productCodes[i]}: Không tìm thấy`); continue }
+          const skuSummary = (d.skus ?? []).slice(0, 5).map((s: any) => {
+            const dataStr = s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "?"
+            const cogsStr = isCost && s.latest_cogs
+              ? ` cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd}USD` : ""
+            return `${s.sku_code}|${dataStr}|${s.day_amount ?? "?"}d${cogsStr}`
+          }).join("; ")
+          sections.push(`[${i+1}] ${productCodes[i]} | ${d.product?.status ?? "?"} | SKUs: ${skuSummary}`)
+        }
+      } else {
+        sections.push(`=== CHI TIẾT PRODUCT CODE: ${productCodes[0]} ===`, JSON.stringify(results[0], null, 2))
+      }
+    }
+
+    if (allCodes.length) {
+      const identified = await Promise.all(allCodes.map(c => identifyCode(c)))
+      if (isMulti || allCodes.length > 1) {
+        sections.push(`=== MULTI LOOKUP: ${allCodes.length} mã ===`)
+        const detailResults = await Promise.all(allCodes.map(async (code, i) => {
+          const id = identified[i]
+          if (!id.found) return `[${i+1}] ${code}: Không tìm thấy`
+          if (id.type === "SKU") {
+            const d = await getProductDetail(code)
+            if (!d || d.error) return `[${i+1}] ${code}: Lỗi`
+            const s = d.sku
+            const dataStr = s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "Unlimited"
+            const cogsStr = isCost && s.latest_cogs
+              ? ` | cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd}USD` : ""
+            return `[${i+1}] SKU:${code} | ${s.status} | ${dataStr} | ${s.day_amount ?? "?"}d${cogsStr}`
           }
-          sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
-          sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
-        } else if (identified.type === "Alias (Item)") {
-          const items = await getItems({ listing_code: identified.item_code })
-          sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
-        } else if (identified.type === "Listing Code") {
-          const [listings, items] = await Promise.all([
-            searchListings({ product_code: code }),
-            getItems({ listing_code: code }),
-          ])
-          sections.push(`=== LISTING ===`, JSON.stringify(listings, null, 2))
-          sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
+          return `[${i+1}] ${code}: loại ${id.type}`
+        }))
+        sections.push(...detailResults)
+      } else {
+        const code = allCodes[0]
+        const id   = identified[0]
+        sections.push(`=== NHẬN DẠNG MÃ: ${code} ===`, JSON.stringify(id, null, 2))
+        if (id.found) {
+          if (id.type === "SKU") {
+            const detail = await getProductDetail(code)
+            if (isCost && detail?.sku?.latest_cogs != null) {
+              const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+              detail.sku.cogs_usd = usd; detail.sku.cogs_vnd = vnd
+            }
+            sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
+            sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
+          } else if (id.type === "Alias (Item)") {
+            const items = await getItems({ listing_code: id.item_code })
+            sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
+          } else if (id.type === "Listing Code") {
+            const [listings, items] = await Promise.all([
+              searchListings({ product_code: code }),
+              getItems({ listing_code: code }),
+            ])
+            sections.push(`=== LISTING ===`, JSON.stringify(listings, null, 2))
+            sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
+          }
         }
       }
     }

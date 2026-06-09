@@ -50,32 +50,54 @@ const CITY_TO_COUNTRY: Record<string, string> = {
 }
 
 export interface ExtractedParams {
-  country?:      string
-  skuCode?:      string
-  productCode?:  string
-  listingCode?:  string
-  days?:         number
-  dataGB?:       number
-  isUnlimited?:  boolean
-  vendor?:       string   // "WM", "3H"
-  nccVendor?:    "wm" | "3hk" | "all"
+  country?:       string
+  skuCodes?:      string[]   // hỗ trợ nhiều mã SKU (13 ký tự)
+  productCodes?:  string[]   // hỗ trợ nhiều Product Code (8 ký tự)
+  listingCodes?:  string[]   // hỗ trợ nhiều Listing Code
+  // backward-compat aliases (first element of arrays)
+  skuCode?:       string
+  productCode?:   string
+  listingCode?:   string
+  days?:          number
+  dataGB?:        number
+  isUnlimited?:   boolean
+  vendor?:        string
+  nccVendor?:     "wm" | "3hk" | "all"
 }
+
+const MAX_CODES = 10  // tối đa bao nhiêu mã xử lý mỗi lần
 
 export function extractParams(message: string): ExtractedParams {
   const msg = message.toLowerCase()
   const params: ExtractedParams = {}
 
-  // SKU code (13 chars)
-  const skuMatch = message.match(/\b([A-Z0-9]{13})\b/i)
-  if (skuMatch) params.skuCode = skuMatch[1].toUpperCase()
+  // Tất cả SKU codes (13 ký tự)
+  const skuMatches = [...message.matchAll(/\b([A-Z0-9]{13})\b/gi)]
+  const skuCodes = [...new Set(skuMatches.map(m => m[1].toUpperCase()))].slice(0, MAX_CODES)
+  if (skuCodes.length) {
+    params.skuCodes = skuCodes
+    params.skuCode  = skuCodes[0]
+  }
 
-  // Product code VN: bắt đầu bằng chữ số (ví dụ: 1CVNMWMD)
-  const prodCodeMatch = !params.skuCode ? message.match(/\b([1-6][A-Z0-9]{7})\b/i) : null
-  if (prodCodeMatch) params.productCode = prodCodeMatch[1].toUpperCase()
+  // Tất cả Product codes VN (8 ký tự, bắt đầu bằng 1-6)
+  if (!skuCodes.length) {
+    const prodMatches = [...message.matchAll(/\b([1-6][A-Z0-9]{7})\b/gi)]
+    const productCodes = [...new Set(prodMatches.map(m => m[1].toUpperCase()))].slice(0, MAX_CODES)
+    if (productCodes.length) {
+      params.productCodes = productCodes
+      params.productCode  = productCodes[0]
+    }
+  }
 
-  // Listing code (thường bắt đầu bằng chữ + số, ví dụ: EJPN3DP001)
-  const listingMatch = message.match(/\b([A-Z]{1,3}[A-Z0-9]{5,9})\b/i)
-  if (listingMatch && !params.skuCode && !params.productCode) params.listingCode = listingMatch[1].toUpperCase()
+  // Tất cả Listing/Item codes (nếu chưa match SKU/Product)
+  if (!skuCodes.length && !params.productCodes?.length) {
+    const listingMatches = [...message.matchAll(/\b([A-Z]{1,3}[A-Z0-9]{5,9})\b/gi)]
+    const listingCodes = [...new Set(listingMatches.map(m => m[1].toUpperCase()))].slice(0, MAX_CODES)
+    if (listingCodes.length) {
+      params.listingCodes = listingCodes
+      params.listingCode  = listingCodes[0]
+    }
+  }
 
   // Country
   const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
@@ -126,8 +148,8 @@ const AGENT_NAMES: Record<AgentId, string> = {
 function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
   const m = msg.toLowerCase()
 
-  // Direct code lookup
-  if (params.skuCode || params.productCode) return "tra-cuu"
+  // Direct code lookup (single hoặc multiple)
+  if (params.skuCodes?.length || params.productCodes?.length) return "tra-cuu"
   if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
 
   // Gap analysis
