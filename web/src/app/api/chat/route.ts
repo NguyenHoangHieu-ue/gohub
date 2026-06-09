@@ -93,13 +93,15 @@ async function buildToolContext(
         const dataStr2 = p.is_unlimited ? "Unlimited" : p.data_gb != null ? `${p.data_gb}GB` : "?"
         const cogsStr2 = isCost && p.cogs != null ? `${p.cogs}${p.cogs_currency ?? ""}` : null
         const status   = p.exist === "Yes" ? "ĐÃ CÓ trong GoHub" : "CHƯA TẠO trong GoHub"
-        return [p.vendor_product_id, p.sim_type, `${p.days}d`, dataStr2, status, cogsStr2]
+        const notif    = p.notification ? `notification:${p.notification}` : null
+        const apnStr   = p.apn ? `apn:${p.apn}` : null
+        return [p.vendor_product_id, p.sim_type, `${p.days}d`, dataStr2, status, cogsStr2, apnStr, notif]
           .filter(Boolean).join("|")
       })
       sections.push(
         `=== WORLDMOVE CATALOG cho ${params.country} (tổng ${wmResults.length}: đã tạo=${existYes}, chưa tạo=${existNo}) ===`,
         `[Lưu ý: đây là danh sách NCC, KHÔNG phải sản phẩm GoHub. exist="ĐÃ CÓ trong GoHub" mới có thể bán]`,
-        `vendor_id|sim_type|days|data|trạng_thái_GoHub${isCost ? "|cogs" : ""}`,
+        `vendor_id|sim_type|days|data|trạng_thái_GoHub${isCost ? "|cogs" : ""}|apn|notification`,
         ...wmRows,
         wmResults.length > 15 ? `... (còn ${wmResults.length - 15} sản phẩm WM khác cho nước này)` : ""
       )

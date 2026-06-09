@@ -51,7 +51,7 @@ export async function getRefCache(): Promise<RefCache> {
   // ncc_worldmove có 8921 rows — phải dùng pagination
   const wm = await fetchAllRows(
     "ncc_worldmove",
-    "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,exist",
+    "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,apn,network_type,onsite_carrier,providers,coverage,data_reset,notification,prepaid_card,exist",
     { col: "status", val: "active" }
   )
 
