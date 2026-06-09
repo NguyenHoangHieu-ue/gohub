@@ -149,7 +149,7 @@ export async function searchSkus(params: {
   let result = [...rows].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
 
   if (params.vendor) {
-    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7).toUpperCase() === params.vendor.toUpperCase())
+    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7).toUpperCase() === params.vendor!.toUpperCase())
     if (v.length) result = v
     else note += ` | Không có vendor ${params.vendor}, hiển thị tất cả`
   }
