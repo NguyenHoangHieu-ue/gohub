@@ -12,7 +12,7 @@ import {
   getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import {
-  searchSkus, getProductDetail, decodeSkuCode,
+  searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, getSkuCogs,
   findGaps, getItems, searchListings, identifyCode,
