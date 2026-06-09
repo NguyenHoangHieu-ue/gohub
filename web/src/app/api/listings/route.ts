@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   const search = sp.get("search") || ""
   const tenant = sp.get("tenant") || ""
   const status = sp.get("status") || ""
+  const ltype  = sp.get("ltype")  || ""
 
   let q = supabaseAdmin.from("listings").select(SELECT_COLS, { count: "exact" })
 
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   )
   if (tenant) q = (q as any).eq("tenant", tenant)
   if (status) q = (q as any).eq("status", status)
+  if (ltype)  q = (q as any).ilike("listing_type", `%${ltype}%`)
 
   const from = (page - 1) * PAGE_SIZE
   const { data, count, error } = await (q as any)

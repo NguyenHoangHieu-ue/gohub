@@ -2,114 +2,142 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Package, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { Package, Search, ChevronLeft, ChevronRight, X } from "lucide-react"
 
 const PAGE_SIZE = 20
 
-// ─── Tab definitions ──────────────────────────────────────────────────────────
+// ─── Tab defs ─────────────────────────────────────────────────────────────────
 
 type TabId = "products" | "skus" | "listings" | "items"
 
-const TABS: { id: TabId; label: string; api: string }[] = [
-  { id: "products", label: "Products",  api: "/api/products"  },
-  { id: "skus",     label: "SKUs",      api: "/api/skus"      },
-  { id: "listings", label: "Listings",  api: "/api/listings"  },
-  { id: "items",    label: "Items",     api: "/api/items"     },
+const TABS: { id: TabId; label: string }[] = [
+  { id: "products", label: "Products" },
+  { id: "skus",     label: "SKUs"     },
+  { id: "listings", label: "Listings" },
+  { id: "items",    label: "Items"    },
 ]
 
-// ─── Column definitions ───────────────────────────────────────────────────────
+// ─── Column defs ─────────────────────────────────────────────────────────────
 
-const PRODUCT_COLS = [
-  { key: "status",          label: "Status"          },
-  { key: "tenant",          label: "Tenant"          },
-  { key: "product_code",    label: "Product Code"    },
-  { key: "product_type",    label: "Type"            },
-  { key: "type_of_sim",     label: "SIM/eSIM"        },
-  { key: "vendor_code",     label: "Vendor"          },
-  { key: "kyc_needed",      label: "KYC"             },
-  { key: "operator_code",   label: "Operator"        },
-  { key: "network_type",    label: "Network"         },
-  { key: "apn",             label: "APN"             },
-  { key: "apn_original",    label: "APN Original"    },
-  { key: "local_phone_number", label: "Local Phone"  },
-  { key: "hotspot",         label: "Hotspot"         },
-  { key: "purchase_type",   label: "Purchase Type"   },
-  { key: "activation_time", label: "Activation Time" },
-  { key: "data_plan_type",  label: "Data Plan"       },
-  { key: "note",            label: "Note"            },
-  { key: "supported_countries", label: "Countries"   },
+const PRODUCT_TABLE_COLS = [
+  { key: "status",              label: "Status"       },
+  { key: "tenant",              label: "Tenant"       },
+  { key: "product_code",        label: "Product Code" },
+  { key: "product_type",        label: "Type"         },
+  { key: "type_of_sim",         label: "SIM/eSIM"     },
+  { key: "vendor_code",         label: "Vendor"       },
+  { key: "operator_code",       label: "Operator"     },
+  { key: "kyc_needed",          label: "KYC"          },
+  { key: "supported_countries", label: "Countries"    },
+  { key: "note",                label: "Note"         },
+  { key: "_detail",             label: ""             },
+]
+
+const PRODUCT_MODAL_FIELDS = [
+  { key: "product_code",        label: "Product Code"    },
+  { key: "tenant",              label: "Tenant"          },
+  { key: "status",              label: "Status"          },
+  { key: "product_type",        label: "Type"            },
+  { key: "type_of_sim",         label: "SIM/eSIM"        },
+  { key: "vendor_code",         label: "Vendor"          },
+  { key: "operator_code",       label: "Operator"        },
+  { key: "purchase_type",       label: "Purchase Type"   },
+  { key: "network_type",        label: "Network"         },
+  { key: "kyc_needed",          label: "KYC"             },
+  { key: "apn",                 label: "APN"             },
+  { key: "apn_original",        label: "APN Original"    },
+  { key: "local_phone_number",  label: "Local Phone"     },
+  { key: "hotspot",             label: "Hotspot"         },
+  { key: "activation_time",     label: "Activation Time" },
+  { key: "data_plan_type",      label: "Data Plan"       },
+  { key: "supported_countries", label: "Countries"       },
+  { key: "note",                label: "Note"            },
 ]
 
 const SKU_COLS_BASE = [
-  { key: "status",              label: "Status"       },
-  { key: "tenant",              label: "Tenant"       },
-  { key: "sku_code",            label: "SKU Code"     },
-  { key: "product_code",        label: "Product Code" },
-  { key: "sim_esim",            label: "SIM/eSIM"     },
-  { key: "data",                label: "Data"         },
-  { key: "days",                label: "Days"         },
-  { key: "throttle_speed",      label: "Throttle"     },
-  { key: "call",                label: "Call"         },
-  { key: "expirations",         label: "Expiration"   },
-  { key: "vendor_sku",          label: "Vendor SKU"   },
-  { key: "vendor_sku_sim",      label: "Vendor SIM"   },
-  { key: "frame",               label: "Frame SKU"    },
-  { key: "datapack",            label: "Datapack SKU" },
-  { key: "kyc_needed",          label: "KYC"          },
-  { key: "supported_countries", label: "Countries"    },
-  { key: "country_names",       label: "Country Names"},
-  { key: "note",                label: "Note"         },
+  { key: "status",              label: "Status"        },
+  { key: "tenant",              label: "Tenant"        },
+  { key: "sku_code",            label: "SKU Code"      },
+  { key: "product_code",        label: "Product Code"  },
+  { key: "sim_esim",            label: "SIM/eSIM"      },
+  { key: "data",                label: "Data"          },
+  { key: "days",                label: "Days"          },
+  { key: "throttle_speed",      label: "Throttle"      },
+  { key: "call",                label: "Call"          },
+  { key: "expirations",         label: "Expiration"    },
+  { key: "vendor_sku",          label: "Vendor SKU"    },
+  { key: "vendor_sku_sim",      label: "Vendor SIM"    },
+  { key: "frame",               label: "Frame SKU"     },
+  { key: "datapack",            label: "Datapack SKU"  },
+  { key: "kyc_needed",          label: "KYC"           },
+  { key: "supported_countries", label: "Countries"     },
+  { key: "country_names",       label: "Country Names" },
+  { key: "note",                label: "Note"          },
 ]
 const SKU_COGS_COLS = [
   { key: "latest_cogs",          label: "COGS"     },
   { key: "latest_cogs_currency", label: "Currency" },
 ]
 
-const LISTING_COLS = [
-  { key: "status",                 label: "Status"         },
-  { key: "tenant",                 label: "Tenant"         },
-  { key: "listing_code",           label: "Listing Code"   },
-  { key: "reference_product_code", label: "Product Code"   },
-  { key: "listing_type",           label: "Type"           },
-  { key: "listing_name_vn",        label: "Tên VN"         },
-  { key: "listing_name_en",        label: "Name EN"        },
-  { key: "type_of_sim",            label: "SIM/eSIM"       },
-  { key: "network_operator",       label: "Operator"       },
-  { key: "category_code",          label: "Category"       },
-  { key: "data_type_en",           label: "Data Type"      },
-  { key: "expirations_en",         label: "Expiration"     },
-  { key: "kyc_needed_en",          label: "KYC"            },
-  { key: "hotspot_en",             label: "Hotspot"        },
-  { key: "apn",                    label: "APN"            },
-  { key: "call_en",                label: "Call"           },
-  { key: "local_phone_number_en",  label: "Local Phone"    },
-  { key: "top_up_options_en",      label: "Top-Up"         },
-  { key: "unsupported_apps_en",    label: "No Apps"        },
-  { key: "telco_perks_en",         label: "Perks"          },
-  { key: "activation_en",          label: "Activation"     },
-  { key: "activation_links_en",    label: "Activ. Links"   },
-  { key: "note_vn",                label: "Note VN"        },
-  { key: "note_en",                label: "Note EN"        },
+const LISTING_TABLE_COLS = [
+  { key: "status",                 label: "Status"       },
+  { key: "tenant",                 label: "Tenant"       },
+  { key: "listing_code",           label: "Listing Code" },
+  { key: "reference_product_code", label: "Product Code" },
+  { key: "listing_type",           label: "Type"         },
+  { key: "listing_name_vn",        label: "Tên VN"       },
+  { key: "type_of_sim",            label: "SIM/eSIM"     },
+  { key: "network_operator",       label: "Operator"     },
+  { key: "kyc_needed_en",          label: "KYC"          },
+  { key: "_detail",                label: ""             },
+]
+
+const LISTING_MODAL_FIELDS = [
+  { key: "listing_code",           label: "Listing Code"  },
+  { key: "reference_product_code", label: "Product Code"  },
+  { key: "tenant",                 label: "Tenant"        },
+  { key: "status",                 label: "Status"        },
+  { key: "listing_type",           label: "Type"          },
+  { key: "listing_name_vn",        label: "Tên VN"        },
+  { key: "listing_name_en",        label: "Name EN"       },
+  { key: "type_of_sim",            label: "SIM/eSIM"      },
+  { key: "product_type",           label: "Product Type"  },
+  { key: "network_operator",       label: "Operator"      },
+  { key: "category_code",          label: "Category"      },
+  { key: "data_type_en",           label: "Data Type"     },
+  { key: "expirations_en",         label: "Expiration"    },
+  { key: "kyc_needed_en",          label: "KYC"           },
+  { key: "hotspot_en",             label: "Hotspot"       },
+  { key: "apn",                    label: "APN"           },
+  { key: "call_en",                label: "Call"          },
+  { key: "local_phone_number_en",  label: "Local Phone"   },
+  { key: "top_up_options_en",      label: "Top-Up"        },
+  { key: "unsupported_apps_en",    label: "No Apps"       },
+  { key: "telco_perks_en",         label: "Perks"         },
+  { key: "activation_en",          label: "Activation"    },
+  { key: "activation_links_en",    label: "Activ. Links"  },
+  { key: "note_vn",                label: "Note VN"       },
+  { key: "note_en",                label: "Note EN"       },
 ]
 
 const ITEM_COLS = [
-  { key: "status",         label: "Status"      },
-  { key: "tenant",         label: "Tenant"      },
-  { key: "item_code",      label: "Item Code"   },
-  { key: "alias",          label: "Alias"       },
-  { key: "sku_code",       label: "SKU Code"    },
-  { key: "listing_code",   label: "Listing Code"},
-  { key: "item_type",      label: "Item Type"   },
-  { key: "sales_channel",  label: "Channel"     },
-  { key: "category_code",  label: "Category"    },
-  { key: "item_name_vn",   label: "Tên VN"      },
-  { key: "item_name_en",   label: "Name EN"     },
-  { key: "data",           label: "Data"        },
-  { key: "days",           label: "Days"        },
+  { key: "status",           label: "Status"    },
+  { key: "tenant",           label: "Tenant"    },
+  { key: "item_code",        label: "Item Code" },
+  { key: "alias",            label: "Alias"     },
+  { key: "sku_code",         label: "SKU Code"  },
+  { key: "listing_code",     label: "Listing"   },
+  { key: "item_type",        label: "Type"      },
+  { key: "sales_channel",    label: "Channel"   },
+  { key: "category_code",    label: "Category"  },
+  { key: "item_name_vn",     label: "Tên VN"    },
+  { key: "item_name_en",     label: "Name EN"   },
+  { key: "data",             label: "Data"      },
+  { key: "days",             label: "Days"      },
   { key: "throttle_speed_en", label: "Throttle" },
-  { key: "call_en",        label: "Call"        },
-  { key: "unitprice",      label: "Giá bán"     },
-  { key: "currency",       label: "Currency"    },
+  { key: "call_en",          label: "Call"      },
+  { key: "unitprice",        label: "Giá bán"   },
+  { key: "currency",         label: "Currency"  },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,15 +156,6 @@ function KycBadge({ value }: { value: string | null }) {
   if (!value) return <span className="text-gray-300">—</span>
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${value === "Yes" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-400"}`}>
-      {value}
-    </span>
-  )
-}
-
-function TruncateCell({ value, mono = false }: { value: string | null; mono?: boolean }) {
-  if (!value) return <span className="text-gray-300">—</span>
-  return (
-    <span className={`${mono ? "font-mono text-brand-700" : ""}`} title={value}>
       {value}
     </span>
   )
@@ -167,60 +186,104 @@ function Pagination({ page, totalPages, total, onPrev, onNext }: {
   )
 }
 
+// ─── Detail Modal ─────────────────────────────────────────────────────────────
+
+function DetailModal({ row, onClose, title, fields }: {
+  row: any
+  onClose: () => void
+  title: string
+  fields: { key: string; label: string }[]
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+            {fields.map(f => {
+              const v = row[f.key]
+              if (!v && v !== 0) return null
+              return (
+                <div key={f.key} className="flex flex-col gap-0.5">
+                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{f.label}</dt>
+                  <dd className="text-xs text-gray-800 leading-relaxed break-words">{String(v)}</dd>
+                </div>
+              )
+            })}
+          </dl>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Filter Bar ───────────────────────────────────────────────────────────────
+
 function FilterBar({
   search, onSearch, tenant, onTenant,
   status, onStatus, statusDefault,
-  extra,
+  extra, hasExtra, onReset,
 }: {
   search: string; onSearch: (v: string) => void
   tenant: string; onTenant: (v: string) => void
   status: string; onStatus: (v: string) => void
   statusDefault?: string
   extra?: React.ReactNode
+  hasExtra?: boolean
+  onReset?: () => void
 }) {
-  const hasFilter = !!(search || tenant || status !== (statusDefault ?? ""))
+  const hasFilter = !!(search || tenant || status !== (statusDefault ?? "") || hasExtra)
   const reset = () => {
-    onSearch("")
-    onTenant("")
-    onStatus(statusDefault ?? "")
+    onSearch(""); onTenant(""); onStatus(statusDefault ?? "")
+    onReset?.()
   }
   return (
-    <div className="flex gap-2 items-center flex-wrap">
+    <div className="flex gap-2 items-end flex-wrap">
       <div className="relative flex-1 min-w-[180px] max-w-xs">
         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text" value={search} onChange={e => onSearch(e.target.value)}
+        <input type="text" value={search} onChange={e => onSearch(e.target.value)}
           placeholder="Tìm kiếm..."
-          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition"
-        />
+          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition" />
       </div>
-      <div className="flex flex-col gap-0.5">
-        <label className="text-[10px] text-gray-400 font-medium px-0.5">Tenant</label>
-        <input list="tenant-opts" value={tenant} onChange={e => onTenant(e.target.value)}
-          placeholder="All"
-          className="w-24 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
-        <datalist id="tenant-opts">
-          <option value="US" />
-          <option value="VN" />
-        </datalist>
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <label className="text-[10px] text-gray-400 font-medium px-0.5">Status</label>
-        <input list="status-opts" value={status} onChange={e => onStatus(e.target.value)}
-          placeholder="All"
-          className="w-28 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
-        <datalist id="status-opts">
-          <option value="Active" />
-          <option value="Inactive" />
-        </datalist>
-      </div>
+      <ComboFilter id="tenant-f" label="Tenant" value={tenant} onChange={onTenant} width="w-20"
+        options={["US","VN"]} />
+      <ComboFilter id="status-f" label="Status" value={status} onChange={onStatus} width="w-24"
+        options={["Active","Inactive"]} />
       {extra}
       {hasFilter && (
         <button onClick={reset}
-          className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap self-end mb-0.5">
+          className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap">
           Reset
         </button>
       )}
+    </div>
+  )
+}
+
+function ComboFilter({ id, label, value, onChange, width, options }: {
+  id: string; label: string; value: string; onChange: (v: string) => void
+  width: string; options: string[]
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <label className="text-[10px] text-gray-400 font-medium px-0.5">{label}</label>
+      <input list={id} value={value} onChange={e => onChange(e.target.value)} placeholder="All"
+        className={`${width} px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-400`} />
+      <datalist id={id}>{options.map(o => <option key={o} value={o} />)}</datalist>
     </div>
   )
 }
@@ -236,7 +299,7 @@ function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
   const [query,      setQuery]      = useState("")
   const [tenant,     setTenant]     = useState("")
   const [status,     setStatus]     = useState(opts?.defaultStatus ?? "")
-  const [extraQuery, setExtraQuery] = useState("")   // serialized extra params (for SKU filters)
+  const [extraQuery, setExtraQuery] = useState("")
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
@@ -246,9 +309,7 @@ function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
       const p = new URLSearchParams({ page: String(page), search: query })
       if (tenant) p.set("tenant", tenant)
       if (status) p.set("status", status)
-      if (extraQuery) {
-        new URLSearchParams(extraQuery).forEach((v, k) => p.set(k, v))
-      }
+      if (extraQuery) new URLSearchParams(extraQuery).forEach((v, k) => p.set(k, v))
       const res  = await fetch(`${apiPath}?${p}`)
       const json = await res.json()
       setRows(json.data  ?? [])
@@ -278,19 +339,175 @@ function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
   }
 }
 
-// ─── Sub-table components ─────────────────────────────────────────────────────
+// ─── TableShell ───────────────────────────────────────────────────────────────
+
+function TableShell({ cols, rows, loading, renderRow }: {
+  cols: { key: string; label: string }[]
+  rows: any[]
+  loading: boolean
+  renderRow: (row: any, cols: { key: string; label: string }[]) => React.ReactNode
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {cols.map(h => (
+                <th key={h.key} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap select-none">
+                  {h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {loading ? (
+              [...Array(5)].map((_, i) => (
+                <tr key={i}>
+                  {cols.map(c => (
+                    <td key={c.key} className="px-3 py-2.5">
+                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + (i * 17 + c.key.length * 3) % 40}%` }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={cols.length} className="px-4 py-12 text-center text-sm text-gray-400">
+                  Không có dữ liệu
+                </td>
+              </tr>
+            ) : rows.map(row => renderRow(row, cols))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Products table ───────────────────────────────────────────────────────────
 
 function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
+  const [pPt,       setPPt]       = useState("")
+  const [pPtype,    setPPtype]    = useState("")
+  const [pCountry,  setPCountry]  = useState("")
+  const [pVendor,   setPVendor]   = useState("")
+  const [pDtype,    setPDtype]    = useState("")
+  const [pVendorF,  setPVendorF]  = useState("")
+  const [pOperator, setPOperator] = useState("")
+  const [detailRow, setDetailRow] = useState<any>(null)
+
   const d = useTabData("/api/products")
+
+  const applyFilters = () => {
+    const p = new URLSearchParams()
+    if (pPt)       p.set("pt",       pPt)
+    if (pPtype)    p.set("ptype",    pPtype)
+    if (pCountry)  p.set("country",  pCountry)
+    if (pVendor)   p.set("vendor",   pVendor)
+    if (pDtype)    p.set("dtype",    pDtype)
+    if (pVendorF)  p.set("vendor_f", pVendorF)
+    if (pOperator) p.set("operator", pOperator)
+    d.setExtraQuery(p.toString())
+  }
+  const clearFilters = () => {
+    setPPt(""); setPPtype(""); setPCountry(""); setPVendor("")
+    setPDtype(""); setPVendorF(""); setPOperator("")
+    d.setExtraQuery("")
+  }
+  const hasFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pVendorF || pOperator)
+
   return (
     <div className="space-y-3">
-      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant} status={d.status} onStatus={d.setStatus} />
-      <TableShell cols={PRODUCT_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
-        <tr key={row.product_code} className="hover:bg-gray-50 transition-colors">
-          {cols.map(col => <ProductCell key={col.key} col={col.key} row={row} />)}
-        </tr>
-      )} />
+      <FilterBar
+        search={d.search} onSearch={d.setSearch}
+        tenant={d.tenant} onTenant={d.setTenant}
+        status={d.status} onStatus={d.setStatus}
+        hasExtra={hasFilter} onReset={clearFilters}
+      />
+
+      {/* Product code + extra filters */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
+          Bộ lọc — <span className="font-normal normal-case text-gray-400">
+            Product Code: [PurchaseType · ProductType · Country(3) · Vendor(2) · DataType] &nbsp;|&nbsp; Lọc thêm: Vendor Code · Operator
+          </span>
+        </p>
+        <div className="flex gap-3 flex-wrap items-end">
+          {([
+            { label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      ph: "1–6, A–E" },
+            { label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   ph: "C, E..."  },
+            { label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, ph: "RUS, CHM" },
+            { label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  ph: "WM, 3H"   },
+            { label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   ph: "F, C..."  },
+          ] as const).map(f => (
+            <div key={f.label} className="flex flex-col gap-1 min-w-[110px]">
+              <label className="text-[11px] font-semibold text-gray-500">
+                {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
+              </label>
+              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
+                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
+            </div>
+          ))}
+
+          <div className="w-px h-7 bg-gray-200 self-end mb-0.5 hidden sm:block" />
+
+          {([
+            { label: "Vendor Code", val: pVendorF,  set: setPVendorF,  ph: "3HK, WM..." },
+            { label: "Operator",    val: pOperator, set: setPOperator, ph: "Viettel..."  },
+          ] as const).map(f => (
+            <div key={f.label} className="flex flex-col gap-1 min-w-[110px]">
+              <label className="text-[11px] font-semibold text-gray-500">{f.label}</label>
+              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                onKeyDown={e => { if (e.key === "Enter") applyFilters() }}
+                className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
+            </div>
+          ))}
+
+          <div className="flex gap-2 pb-0.5">
+            <button onClick={applyFilters}
+              className="px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-500 transition-colors">
+              Tìm
+            </button>
+            {hasFilter && (
+              <button onClick={clearFilters}
+                className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">
+                Xóa
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <TableShell
+        cols={PRODUCT_TABLE_COLS}
+        rows={d.rows}
+        loading={d.loading}
+        renderRow={(row, cols) => (
+          <tr key={row.product_code} className="hover:bg-gray-50 transition-colors">
+            {cols.map(col => col.key === "_detail"
+              ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
+                  <button onClick={() => setDetailRow(row)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
+                    Chi tiết
+                  </button>
+                </td>
+              : <ProductCell key={col.key} col={col.key} row={row} />
+            )}
+          </tr>
+        )}
+      />
       <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPrev={d.prevPage} onNext={d.nextPage} />
+
+      {detailRow && (
+        <DetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          title={`Product: ${detailRow.product_code}`}
+          fields={PRODUCT_MODAL_FIELDS}
+        />
+      )}
     </div>
   )
 }
@@ -301,18 +518,25 @@ function ProductCell({ col, row }: { col: string; row: any }) {
   if (col === "tenant")       return <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">{v || "—"}</td>
   if (col === "product_code") return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700">{v}</td>
   if (col === "kyc_needed")   return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
-  if (col === "note")         return <td className="px-3 py-2 text-xs text-gray-600 max-w-[240px] leading-relaxed">{v || <span className="text-gray-300">—</span>}</td>
+  if (col === "note") {
+    if (!v) return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">—</td>
+    const short = v.length > 55 ? v.slice(0, 55) + "…" : v
+    return <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px]" title={v}>{short}</td>
+  }
   if (col === "supported_countries") {
     if (!v) return <td className="px-3 py-2 text-xs text-gray-400">—</td>
-    const codes = v.split(/[,\s]+/).filter(Boolean)
+    const codes = (v as string).split(/[,\s]+/).filter(Boolean)
     return (
-      <td className="px-3 py-2 text-xs font-mono text-gray-500" title={v}>
-        {codes.slice(0, 4).join(", ")}{codes.length > 4 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 4}</span>}
+      <td className="px-3 py-2 text-xs font-mono text-gray-500 whitespace-nowrap" title={v}>
+        {codes.slice(0, 3).join(", ")}
+        {codes.length > 3 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 3}</span>}
       </td>
     )
   }
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }
+
+// ─── SKUs table ───────────────────────────────────────────────────────────────
 
 function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pPt, setPPt]           = useState("")
@@ -348,14 +572,14 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
 
   return (
     <div className="space-y-3">
-      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant} status={d.status} onStatus={d.setStatus} />
-      {/* SKU code filter */}
+      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant}
+        status={d.status} onStatus={d.setStatus} hasExtra={hasSkuFilter} onReset={clearSkuFilters} />
       <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
-          SKU Code Filter — <span className="font-normal normal-case">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
+          SKU Code — <span className="font-normal normal-case">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
         </p>
         <div className="flex gap-3 flex-wrap items-end">
-          {[
+          {([
             { label: "Purchase Type", pos: "pos 1",    val: pPt,      set: setPPt,      ph: "1-6, A-E" },
             { label: "Product Type",  pos: "pos 2",    val: pPtype,   set: setPPtype,   ph: "C, E..."  },
             { label: "Country",       pos: "pos 3–5",  val: pCountry, set: setPCountry, ph: "TWN"      },
@@ -363,12 +587,13 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
             { label: "Data Policy",   pos: "pos 8",    val: pDtype,   set: setPDtype,   ph: "F"        },
             { label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    ph: "UNL"      },
             { label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    ph: "07"       },
-          ].map(f => (
+          ] as const).map(f => (
             <div key={f.label} className="flex flex-col gap-1 min-w-[100px]">
               <label className="text-[11px] font-semibold text-gray-500">
-                {f.label} <span className="text-gray-300 font-normal">{f.pos}</span>
+                {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
               </label>
               <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                onKeyDown={e => { if (e.key === "Enter") applySkuFilters() }}
                 className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white" />
             </div>
           ))}
@@ -403,18 +628,17 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
   if (col === "sku_code")     return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700">{v}</td>
   if (col === "product_code") return <td className="px-3 py-2 whitespace-nowrap text-xs">{v}</td>
   if (col === "data") {
-    const amt = row.data_amount
-    const unit = row.data_amount_unit ?? "GB"
+    const amt = row.data_amount; const unit = row.data_amount_unit ?? "GB"
     return <td className="px-3 py-2 whitespace-nowrap text-xs">{amt != null ? `${amt}${unit}` : "—"}</td>
   }
   if (col === "days") {
     return <td className="px-3 py-2 whitespace-nowrap text-xs">{row.day_amount != null ? `${row.day_amount} ${row.day_amount_unit ?? "d"}` : "—"}</td>
   }
-  if (col === "kyc_needed")   return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
-  if (col === "latest_cogs")  return <td className="px-3 py-2 whitespace-nowrap text-xs text-right">{v != null ? Number(v).toLocaleString() : "—"}</td>
+  if (col === "kyc_needed")  return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
+  if (col === "latest_cogs") return <td className="px-3 py-2 whitespace-nowrap text-xs text-right">{v != null ? Number(v).toLocaleString() : "—"}</td>
   if (col === "supported_countries") {
     if (!v) return <td className="px-3 py-2 text-xs text-gray-400">—</td>
-    const codes = v.split(/[,\s]+/).filter(Boolean)
+    const codes = (v as string).split(/[,\s]+/).filter(Boolean)
     return (
       <td className="px-3 py-2 text-xs font-mono text-gray-500" title={v}>
         {codes.slice(0, 4).join(", ")}{codes.length > 4 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 4}</span>}
@@ -423,7 +647,7 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
   }
   if (col === "country_names") {
     if (!v) return <td className="px-3 py-2 text-xs text-gray-400">—</td>
-    const names = v.split(", ").filter(Boolean)
+    const names = (v as string).split(", ").filter(Boolean)
     return (
       <td className="px-3 py-2 text-xs text-gray-600" title={v}>
         {names.slice(0, 2).join(", ")}{names.length > 2 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{names.length - 2}</span>}
@@ -434,17 +658,61 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }
 
+// ─── Listings table ───────────────────────────────────────────────────────────
+
 function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
+  const [lType,    setLType]    = useState("")
+  const [detailRow, setDetailRow] = useState<any>(null)
   const d = useTabData("/api/listings")
+  const { setExtraQuery } = d
+
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (lType) p.set("ltype", lType)
+    setExtraQuery(p.toString())
+  }, [lType, setExtraQuery])
+
   return (
     <div className="space-y-3">
-      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant} status={d.status} onStatus={d.setStatus} />
-      <TableShell cols={LISTING_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
-        <tr key={row.listing_code} className="hover:bg-gray-50 transition-colors">
-          {cols.map(col => <ListingCell key={col.key} col={col.key} row={row} />)}
-        </tr>
-      )} />
+      <FilterBar
+        search={d.search} onSearch={d.setSearch}
+        tenant={d.tenant} onTenant={d.setTenant}
+        status={d.status} onStatus={d.setStatus}
+        hasExtra={!!lType}
+        onReset={() => setLType("")}
+        extra={
+          <ComboFilter id="ltype-f" label="Type" value={lType} onChange={setLType}
+            width="w-28" options={["Standard","Premium","Bundle"]} />
+        }
+      />
+      <TableShell
+        cols={LISTING_TABLE_COLS}
+        rows={d.rows}
+        loading={d.loading}
+        renderRow={(row, cols) => (
+          <tr key={row.listing_code} className="hover:bg-gray-50 transition-colors">
+            {cols.map(col => col.key === "_detail"
+              ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
+                  <button onClick={() => setDetailRow(row)}
+                    className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
+                    Chi tiết
+                  </button>
+                </td>
+              : <ListingCell key={col.key} col={col.key} row={row} />
+            )}
+          </tr>
+        )}
+      />
       <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPrev={d.prevPage} onNext={d.nextPage} />
+
+      {detailRow && (
+        <DetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          title={`Listing: ${detailRow.listing_code}`}
+          fields={LISTING_MODAL_FIELDS}
+        />
+      )}
     </div>
   )
 }
@@ -456,19 +724,47 @@ function ListingCell({ col, row }: { col: string; row: any }) {
   if (col === "listing_code")     return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700">{v}</td>
   if (col === "reference_product_code") return <td className="px-3 py-2 whitespace-nowrap text-xs font-mono">{v || "—"}</td>
   if (col === "kyc_needed_en")    return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
-  if (col === "listing_name_vn" || col === "listing_name_en")
-    return <td className="px-3 py-2 text-xs text-gray-700 min-w-[160px] max-w-[240px]">{v || <span className="text-gray-300">—</span>}</td>
-  if (col === "activation_en" || col === "activation_links_en" || col === "top_up_options_en" ||
-      col === "unsupported_apps_en" || col === "telco_perks_en" || col === "note_vn" || col === "note_en")
-    return <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] leading-relaxed">{v || <span className="text-gray-300">—</span>}</td>
+  if (col === "listing_name_vn") {
+    if (!v) return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">—</td>
+    const short = (v as string).length > 48 ? (v as string).slice(0, 48) + "…" : v
+    return <td className="px-3 py-2 text-xs text-gray-700 min-w-[150px] max-w-[220px]" title={v}>{short}</td>
+  }
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }
 
+// ─── Items table ──────────────────────────────────────────────────────────────
+
 function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
+  const [iType,   setIType]   = useState("")
+  const [channel, setChannel] = useState("")
   const d = useTabData("/api/items", { defaultStatus: "Active" })
+  const { setExtraQuery } = d
+
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (iType)   p.set("item_type", iType)
+    if (channel) p.set("channel",   channel)
+    setExtraQuery(p.toString())
+  }, [iType, channel, setExtraQuery])
+
   return (
     <div className="space-y-3">
-      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant} status={d.status} onStatus={d.setStatus} statusDefault="Active" />
+      <FilterBar
+        search={d.search} onSearch={d.setSearch}
+        tenant={d.tenant} onTenant={d.setTenant}
+        status={d.status} onStatus={d.setStatus}
+        statusDefault="Active"
+        hasExtra={!!(iType || channel)}
+        onReset={() => { setIType(""); setChannel("") }}
+        extra={
+          <>
+            <ComboFilter id="itype-f" label="Item Type" value={iType} onChange={setIType}
+              width="w-24" options={["eSIM","SIM"]} />
+            <ComboFilter id="chan-f" label="Channel" value={channel} onChange={setChannel}
+              width="w-24" options={["B2C","WS","OD","Internal"]} />
+          </>
+        }
+      />
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
         <tr key={row.item_code} className="hover:bg-gray-50 transition-colors">
           {cols.map(col => <ItemCell key={col.key} col={col.key} row={row} />)}
@@ -500,48 +796,6 @@ function ItemCell({ col, row }: { col: string; row: any }) {
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }
 
-// ─── Shared table shell ───────────────────────────────────────────────────────
-
-function TableShell({ cols, rows, loading, renderRow }: {
-  cols: { key: string; label: string }[]
-  rows: any[]
-  loading: boolean
-  renderRow: (row: any, cols: { key: string; label: string }[]) => React.ReactNode
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              {cols.map(h => (
-                <th key={h.key} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap select-none">
-                  {h.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {loading ? (
-              [...Array(5)].map((_, i) => (
-                <tr key={i}>
-                  {cols.map(c => (
-                    <td key={c.key} className="px-3 py-2.5">
-                      <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${60 + (i * 17 + c.key.length * 3) % 40}%` }} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={cols.length} className="px-4 py-12 text-center text-sm text-gray-400">Không có dữ liệu</td></tr>
-            ) : rows.map(row => renderRow(row, cols))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SkusPage() {
@@ -553,13 +807,11 @@ export default function SkusPage() {
 
   return (
     <div className="p-6 space-y-5">
-      {/* Header */}
       <div className="flex items-center gap-2.5">
         <Package size={20} className="text-brand-600" />
         <h1 className="text-xl font-semibold text-gray-900">SP Hệ Thống</h1>
       </div>
 
-      {/* Tab switcher */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -573,7 +825,6 @@ export default function SkusPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       {activeTab === "products" && <ProductsTable canSeeCost={canSeeCost} />}
       {activeTab === "skus"     && <SkusTable     canSeeCost={canSeeCost} />}
       {activeTab === "listings" && <ListingsTable canSeeCost={canSeeCost} />}

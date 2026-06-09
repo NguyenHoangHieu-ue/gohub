@@ -18,19 +18,23 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const sp     = req.nextUrl.searchParams
-  const page   = Math.max(1, parseInt(sp.get("page") || "1"))
-  const search = sp.get("search") || ""
-  const tenant = sp.get("tenant") || ""
-  const status = sp.get("status") || "Active"   // default Active (130k/137k)
+  const sp        = req.nextUrl.searchParams
+  const page      = Math.max(1, parseInt(sp.get("page") || "1"))
+  const search    = sp.get("search")    || ""
+  const tenant    = sp.get("tenant")    || ""
+  const status    = sp.get("status")    || "Active"
+  const itemType  = sp.get("item_type") || ""
+  const channel   = sp.get("channel")   || ""
 
   let q = supabaseAdmin.from("items").select(SELECT_COLS, { count: "exact" })
 
   if (search) q = (q as any).or(
     `item_code.ilike.%${search}%,alias.ilike.%${search}%,sku_code.ilike.%${search}%,listing_code.ilike.%${search}%,item_name_vn.ilike.%${search}%`
   )
-  if (tenant) q = (q as any).eq("tenant", tenant)
-  if (status) q = (q as any).eq("status", status)
+  if (tenant)   q = (q as any).eq("tenant", tenant)
+  if (status)   q = (q as any).eq("status", status)
+  if (itemType) q = (q as any).ilike("item_type", `%${itemType}%`)
+  if (channel)  q = (q as any).ilike("sales_channel", `%${channel}%`)
 
   const from = (page - 1) * PAGE_SIZE
   const { data, count, error } = await (q as any)
