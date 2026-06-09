@@ -1,6 +1,20 @@
 import type { AgentId, UserRole, Message, RouterResult } from "./types"
 
-// ─── Parameter extraction ─────────────────────────────────────────────────────
+// ─── Text normalization ───────────────────────────────────────────────────────
+
+// Chuẩn hóa text: bỏ dấu tiếng Việt, lowercase, chuẩn hóa space
+// "Hồng Kông" → "hong kong", "nhật bản" → "nhat ban"
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+// ─── Country / City lookup tables ────────────────────────────────────────────
 
 const VN_TO_EN: Record<string, string> = {
   "nhật bản":"Japan","nhat ban":"Japan","nhật":"Japan","nhat":"Japan",
@@ -49,6 +63,21 @@ const CITY_TO_COUNTRY: Record<string, string> = {
   "istanbul":"Turkey","barcelona":"Spain","lisbon":"Portugal",
 }
 
+// Build normalized lookup: mỗi entry thêm cả dạng không dấu + dạng liền chữ
+// "hồng kông" → "hong kong" (bỏ dấu) VÀ "hongkong" (liền chữ)
+function buildNormalizedLookup(map: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, val] of Object.entries(map)) {
+    const norm = normalizeText(key)
+    result[norm] = val                          // dạng chuẩn: "hong kong"
+    result[norm.replace(/\s/g, "")] = val       // dạng liền:  "hongkong"
+  }
+  return result
+}
+
+const VN_TO_EN_NORM   = buildNormalizedLookup(VN_TO_EN)
+const CITY_TO_COUNTRY_NORM = buildNormalizedLookup(CITY_TO_COUNTRY)
+
 export interface ExtractedParams {
   country?:       string
   skuCodes?:      string[]   // hỗ trợ nhiều mã SKU (13 ký tự)
@@ -68,7 +97,8 @@ export interface ExtractedParams {
 const MAX_CODES = 10  // tối đa bao nhiêu mã xử lý mỗi lần
 
 export function extractParams(message: string): ExtractedParams {
-  const msg = message.toLowerCase()
+  const msg     = message.toLowerCase()
+  const msgNorm = normalizeText(message)   // bỏ dấu + lowercase + chuẩn space
   const params: ExtractedParams = {}
 
   // Tất cả SKU codes (13 ký tự)
@@ -99,15 +129,16 @@ export function extractParams(message: string): ExtractedParams {
     }
   }
 
-  // Country
-  const sorted = Object.entries(VN_TO_EN).sort((a, b) => b[0].length - a[0].length)
-  for (const [vn, en] of sorted) {
-    if (msg.includes(vn)) { params.country = en; break }
+  // Country — dùng normalized lookup để match cả có dấu, không dấu, liền chữ
+  // Ví dụ: "hongkong", "hong kong", "Hồng Kông" đều → "Hong Kong"
+  const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
+  for (const [key, en] of sortedNorm) {
+    if (msgNorm.includes(key)) { params.country = en; break }
   }
   if (!params.country) {
-    const sortedCity = Object.entries(CITY_TO_COUNTRY).sort((a, b) => b[0].length - a[0].length)
-    for (const [city, country] of sortedCity) {
-      if (msg.includes(city)) { params.country = country; break }
+    const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
+    for (const [key, country] of sortedCity) {
+      if (msgNorm.includes(key)) { params.country = country; break }
     }
   }
 
