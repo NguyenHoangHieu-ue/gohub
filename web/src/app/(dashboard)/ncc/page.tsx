@@ -32,6 +32,7 @@ interface WMProduct {
   data_reset: string | null
   notification: string | null
   prepaid_card: string | null
+  apn_summary: string | null
   in_system: boolean
   system_skus: SystemSku[]
 }
@@ -486,6 +487,14 @@ function WMTab({ role }: { role?: string }) {
               <ChevronRight size={14} />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* APN Summary */}
+      {products.length > 0 && products[0]?.apn_summary && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-xs font-semibold text-gray-600 mb-2">Thông tin APN từ nhà cung cấp</p>
+          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{products[0].apn_summary}</p>
         </div>
       )}
     </div>
