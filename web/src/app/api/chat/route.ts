@@ -82,9 +82,13 @@ async function buildToolContext(
       ...rows
     )
 
-    // Inject NCC catalog cho cùng nước — để bot biết WM/3HK có gì, đã/chưa tạo trong GoHub
+    // ── Inject NCC catalog (WORLDMOVE) ──────────────────────────────────────────
+    // exist=Yes  → WM product này GoHub ĐÃ TẠO thành SKU
+    // exist=No   → WM product này GoHub CHƯA TẠO, không thể bán cho khách
     const wmResults = searchNccWm({ country: params.country, days: params.days }, ref)
     if (wmResults.length) {
+      const existYes = wmResults.filter((p: any) => p.exist === "Yes").length
+      const existNo  = wmResults.filter((p: any) => p.exist === "No").length
       const wmRows = wmResults.slice(0, 15).map((p: any) => {
         const dataStr2 = p.is_unlimited ? "Unlimited" : p.data_gb != null ? `${p.data_gb}GB` : "?"
         const cogsStr2 = isCost && p.cogs != null ? `${p.cogs}${p.cogs_currency ?? ""}` : null
@@ -93,19 +97,23 @@ async function buildToolContext(
           .filter(Boolean).join("|")
       })
       sections.push(
-        `=== WORLDMOVE CATALOG cho ${params.country} (${wmResults.length} sản phẩm) ===`,
-        `vendor_id|sim_type|days|data|trạng_thái${isCost ? "|cogs" : ""}`,
+        `=== WORLDMOVE CATALOG cho ${params.country} (tổng ${wmResults.length}: đã tạo=${existYes}, chưa tạo=${existNo}) ===`,
+        `[Lưu ý: đây là danh sách NCC, KHÔNG phải sản phẩm GoHub. exist="ĐÃ CÓ trong GoHub" mới có thể bán]`,
+        `vendor_id|sim_type|days|data|trạng_thái_GoHub${isCost ? "|cogs" : ""}`,
         ...wmRows,
-        wmResults.length > 15 ? `... (còn ${wmResults.length - 15} sản phẩm khác)` : ""
+        wmResults.length > 15 ? `... (còn ${wmResults.length - 15} sản phẩm WM khác cho nước này)` : ""
       )
+    } else {
+      sections.push(`=== WORLDMOVE CATALOG cho ${params.country}: 0 sản phẩm ===`)
     }
 
+    // ── Inject NCC catalog (3HK) ─────────────────────────────────────────────
     const hkResults = searchNcc3hk(params.country, ref)
     if (hkResults.length) {
       sections.push(
-        `=== 3HK ZONES cho ${params.country} (${hkResults.length} zones) ===`,
+        `=== 3HK ZONES cho ${params.country} (${hkResults.length} zones) — tham khảo, KHÔNG phải sản phẩm GoHub ===`,
         hkResults.map((z: any) =>
-          `zone:${z.zone}|network:${z.network ?? "?"}|${isCost ? `${z.price_per_gb_hkd}HKD/GB` : ""}|KYC:${z.is_kyc ? "Yes" : "No"}`
+          `zone:${z.zone}|mạng:${z.network ?? "?"}|${isCost ? `giá:${z.price_per_gb_hkd}HKD/GB` : ""}|KYC:${z.is_kyc ? "Yes" : "No"}`
         ).join("\n")
       )
     }
@@ -181,7 +189,28 @@ async function buildToolContext(
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
     if (params.skuCode) sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
-    if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
+    if (params.country) {
+      sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
+      // Inject NCC nếu hỏi về nước cụ thể
+      const wmR = searchNccWm({ country: params.country }, ref)
+      if (wmR.length) {
+        const existYes = wmR.filter((p: any) => p.exist === "Yes").length
+        sections.push(
+          `=== WORLDMOVE cho ${params.country} (${wmR.length} SP: đã tạo GoHub=${existYes}, chưa tạo=${wmR.length - existYes}) ===`,
+          `[Đây là catalog NCC — exist="ĐÃ CÓ trong GoHub" mới có thể bán]`
+        )
+      }
+    }
+    // Inject NCC nếu hỏi trực tiếp về WM/3HK
+    if (params.nccVendor === "wm") {
+      const wmAll = searchNccWm({}, ref)
+      const existYes = wmAll.filter((p: any) => p.exist === "Yes").length
+      sections.push(
+        `=== WORLDMOVE CATALOG — TỔNG QUAN ===`,
+        `Tổng: ${wmAll.length} SP | Đã tạo trong GoHub: ${existYes} | Chưa tạo: ${wmAll.length - existYes}`,
+        `[Đây là catalog NCC — KHÔNG phải sản phẩm GoHub]`
+      )
+    }
   }
 
   if (agentId === "gia-cogs") {
