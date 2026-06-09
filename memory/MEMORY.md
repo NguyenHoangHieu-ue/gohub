@@ -7,3 +7,4 @@
 - [Feedback: No Push Sensitive](feedback_no_push_sensitive.md) — Không commit VENDOR, Add_product, TaiLieuCongTy_Chung, .env lên GitHub
 - [Feedback: Update Session](feedback_update_session.md) — Cập nhật session_summary.txt sau mỗi session
 - [Feedback: Autonomous](feedback_autonomous.md) — Tự test/fix/push, chỉ hỏi khi thao tác web/chưa rõ ý
+- [Session 18: WORLDMOVE APN Fix](session_18_worldmove_apn.md) — Country+Network separation, CJK removal, UI improvements

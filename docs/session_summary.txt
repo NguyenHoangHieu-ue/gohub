@@ -293,6 +293,47 @@ Mục tiêu 5 tính năng:
 110. Multi-lookup limit 10 → 50:
      - router.ts MAX_CODES: 10 → 50
 
+111. Fix deploy TypeScript error — Supabase Promise type:
+     - saveLarkMessage: Supabase .insert() trả về PromiseLike<void> (không có .catch() method)
+     - Fix: cast sang (any) để dùng .catch()
+     - Compile clean, ready to deploy
+
+## Session 17 (2026-06-09) — Lark error message fix + WORLDMOVE APN data
+
+112. Fix Lark double error message bug:
+     - Root cause: khi response gửi thành công (replyLarkMessage), nhưy saveLarkMessage hoặc code sau bị error
+     → catch block trigger → gửi "Hệ thống đang xử lý..." message mới (sendLarkMessage)
+     → user thấy cả correct response + error message
+     - Fix: thêm responseSent flag, chỉ gửi error message nếu response chưa gửi được
+     - Thay sendLarkMessage → replyLarkMessage (reply vào thread gốc thay vì message mới)
+     - Bug.txt: 3/3 issues đã fix ✓
+
+113. Rewrite WORLDMOVE import script (import_worldmove_v2.py):
+     - Root cause: APN file rows 1-8 (header description) không được lưu
+     - APN matching logic không handle grouped packages (China, HK, Macao sử dụng same APN)
+     - Fix: smart APN matching dựa trên product group extraction
+       1. Extract base product name (first 2-3 words) → match plan keys
+       2. Exact plan key match in product name
+       3. Region match (fallback)
+     - Thêm apn_summary column: lưu rows 1-8 từ file (tiếng Việt, tóm gọn)
+     - Thêm local_source column từ APN file
+     - Script giờ correctly match: "Global Orange World 30 days" → plan key "Global Orange World"
+
+114. Database migration (add_ncc_summary.sql):
+     - Thêm apn_summary TEXT column vào ncc_worldmove table
+     - Tất cả products share cùng summary (dùng cho info display)
+
+115. Web UI update (SP Vendor WM tab):
+     - Thêm apn_summary field vào WMProduct interface
+     - Display APN summary section ở dưới cùng tab (rows 1-8 từ file)
+     - Format: gray box với "Thông tin APN từ nhà cung cấp" header
+     - Hiển thị 1 lần khi data load xong
+
+Next steps (user chạy):
+1. Run migration trong Supabase SQL Editor: database/migrations/add_ncc_summary.sql
+2. Set env vars + run import: python database/import/import_worldmove_v2.py
+3. Reload web → SP Vendor WM tab sẽ show APN summary + corrected APN cho all gói
+
 ## Session 15 (2026-06-09) — NCC notification + APN format
 
 104. Fix cache.ts — thêm toàn bộ APN fields vào nccWm select:
