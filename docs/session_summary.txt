@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 14)
+Cập nhật lần cuối: 2026-06-09 (session 15)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,23 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 15 (2026-06-09) — NCC notification + APN format
+
+104. Fix cache.ts — thêm toàn bộ APN fields vào nccWm select:
+     - Trước: cache chỉ lấy vendor_product_id, product_name, region, sim_type, days, data_gb...
+     - Sau: thêm is_lesim, apn, network_type, onsite_carrier, providers, coverage, data_reset, notification, prepaid_card
+     - Chatbot giờ đọc được notification và các thông tin APN đầy đủ
+
+105. Fix route.ts — inject apn + notification vào WM context rows:
+     - Chatbot thấy được APN và notification khi tư vấn sản phẩm WM
+
+106. Fix ncc/page.tsx — APN column format:
+     - Trước: "m-wap • 4G/LTE • Mobifone"
+     - Sau: "Vietnam (Mobifone, Viettel, Vinaphone)" — region (nhà mạng 1, nhà mạng 2, ...)
+     - providers (nhiều carriers cách nhau \n) được gộp + dedup với onsite_carrier
+     - Hover tooltip: "APN: m-wap\nNetwork: 4G/LTE\nVietnam (Mobifone, ...)"
+     - Cập nhật AGENTS.md với toàn bộ thay đổi chatbot từ session 13-15
 
 ## Session 14 (2026-06-09) — Chatbot NCC awareness + terminology
 
