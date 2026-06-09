@@ -94,7 +94,7 @@ export interface ExtractedParams {
   nccVendor?:     "wm" | "3hk" | "all"
 }
 
-const MAX_CODES = 10  // tối đa bao nhiêu mã xử lý mỗi lần
+const MAX_CODES = 50  // tối đa bao nhiêu mã xử lý mỗi lần
 
 export function extractParams(message: string): ExtractedParams {
   const msg     = message.toLowerCase()

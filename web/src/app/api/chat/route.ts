@@ -61,24 +61,27 @@ async function buildToolContext(
         : s.data_amount != null
           ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}`
           : null
-      let cogsStr: string | null = null
+      let cogsVnd: string | null = null
+      let cogsUsd: string | null = null
       if (isCost && s.latest_cogs != null) {
         const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-        cogsStr = `cogs:${vnd.toLocaleString("en-US")} VND ($${usd} USD)`
+        cogsVnd = vnd.toLocaleString("en-US")
+        cogsUsd = `$${usd}`
       }
       const parts = [
         s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
         s.operator_code  ? `operator:${s.operator_code}`  : null,
         s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-        cogsStr,
+        cogsVnd,
+        cogsUsd,
       ]
       return parts.filter(Boolean).join("|")
     })
     sections.push(
       `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
       note ? `Lưu ý: ${note}` : "",
-      `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs(USD/VND)" : ""}`,
+      `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs_vnd|cogs_usd" : ""}`,
       ...rows
     )
 
@@ -138,7 +141,7 @@ async function buildToolContext(
           const skuSummary = (d.skus ?? []).slice(0, 5).map((s: any) => {
             const dataStr = s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "?"
             const cogsStr = isCost && s.latest_cogs
-              ? ` cogs:${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).vnd.toLocaleString("en-US")} VND ($${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd} USD)` : ""
+              ? ` | ${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).vnd.toLocaleString("en-US")} | $${convertCogs(s.latest_cogs, s.latest_cogs_currency, fx).usd}` : ""
             return `${s.sku_code}|${dataStr}|${s.day_amount ?? "?"}d${cogsStr}`
           }).join("; ")
           sections.push(`[${i+1}] ${productCodes[i]} | ${d.product?.status ?? "?"} | SKUs: ${skuSummary}`)
