@@ -314,9 +314,18 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     await saveLarkMessage(openId, threadId, "assistant", replyText)
 
   } catch (err: any) {
-    console.error("[Lark bot]", err.message)
+    console.error("[Lark bot] ERROR:", err?.message ?? err)
+    // Lấy role để quyết định hiển thị lỗi chi tiết hay không
+    let errRole = "standard"
     try {
-      await sendLarkMessage(chatId, "chat_id", "Hệ thống đang xử lý, vui lòng thử lại sau.")
+      const { role } = await getUserRole(openId)
+      errRole = role
+    } catch {}
+    const errMsg = errRole === "admin"
+      ? `⚠️ Lỗi hệ thống: ${err?.message ?? "unknown error"}`
+      : "Hệ thống đang xử lý, vui lòng thử lại sau."
+    try {
+      await sendLarkMessage(chatId, "chat_id", errMsg)
     } catch {}
   }
 }
