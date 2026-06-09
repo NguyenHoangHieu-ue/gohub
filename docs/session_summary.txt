@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-08 (session 8)
+Cập nhật lần cuối: 2026-06-09 (session 11)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,59 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 11 (2026-06-09) — SP Hệ Thống bug fix
+
+78. Fix tab Products không có dữ liệu:
+    - Root cause: /api/products SELECT_COLS có country_group, data_policy_code, special_activation_required → không tồn tại trong schema → Supabase error → data rỗng
+    - Fix: bỏ 3 cột sai, thay bằng type_of_sim và data_plan_type (có trong schema)
+    - Update PRODUCT_COLS trong page.tsx khớp schema thực tế
+
+79. Fix tab Listings không có dữ liệu:
+    - Root cause: /api/listings SELECT_COLS có supported_countries → bảng listings không có cột này
+    - Fix: bỏ cột sai, update LISTING_COLS trong page.tsx
+
+80. FilterBar cải tiến:
+    - Tenant và Status: input + datalist (vừa gõ vừa có dropdown chọn giá trị)
+    - Label hiển thị trên mỗi ô lọc
+    - Nút Reset xuất hiện khi có filter đang áp dụng, xóa về mặc định
+
+## Session 10 (2026-06-09) — SP Vendor WM fix APN + View Detail
+
+76. Fix import script `database/import/import_worldmove.py` — 3 bugs:
+    - Bug 1: empty-string hint từ multi-line plan_name → match mọi thứ (Vodafone APN cho all) → skip hint rỗng
+    - Bug 2: tất cả Vietnam products đều nhận Vietnamobile APN (longest substring match)
+      Fix: detect operator trong product_name trước → match hint có operator đó (Viettel→v-internet, Mobifone→m-wap...)
+      Generic products → hint ngắn nhất không có operator (Vietnam→3HK)
+    - Bug 3: batch cuối upsert sai table `ncc_products` → `ncc_worldmove`
+    - Re-import 8921 rows, 81% APN matched, Vietnam Viettel/Mobifone/Vietnamobile đúng
+
+77. SP Vendor WM — thêm "Chi tiết" button (View Detail modal):
+    - Nút "Chi tiết" cuối mỗi row (thay double-click APN modal cũ)
+    - DetailModal 3 sections: Thông tin sản phẩm + APN & Mạng + SKU trong hệ thống
+    - COGS chỉ hiện admin/manager
+
+## Session 9 (2026-06-09) — UI polish + SP Hệ Thống 4 tabs
+
+74. UI polish toàn bộ web (FESkill):
+    - Font: Inter → Outfit (Google Fonts, clean/modern; Geist không có trên next/font/google)
+    - tailwind.config: thêm brand 300/400/800, fontFamily config
+    - globals.css: better focus ring (brand-400), lighter scrollbar
+    - sidebar.tsx: emoji 📡 → Radio icon (Lucide), active state border+shadow, brand-700 header solid
+    - login/page.tsx: emoji → Radio icon, solid brand-700 bg + subtle grid overlay
+    - chatbot/page.tsx: bot avatar rounded-xl brand-600, AI bubbles white+border thay gray, empty state cải tiến, table markdown đẹp hơn, loading dots brand-300
+    - `_Skills_AI/FESkill.md`: cài skill Anti-Slop Frontend từ https://github.com/Leonxlnx/taste-skill
+
+75. SP Hệ Thống (/skus) — 4 tabs:
+    - Tabs: Products (769) | SKUs (10,957) | Listings (10,674) | Items (130k active)
+    - Mỗi tab: 20 rows/trang, search + filter tenant/status, skeleton loading, pagination
+    - Mới: /api/products — full cols trừ COGS (product_code, type, vendor, country, KYC, APN, note...)
+    - Mới: /api/listings — full cols (listing_code, tên VN/EN, operator, APN, activation, KYC, notes...)
+    - Mới: /api/items — default filter Active, full cols trừ COGS (item_code, alias highlight, sku_code, giá bán)
+    - /api/skus: PAGE_SIZE 50→20, bỏ final_cogs_*/wr_group/currency, chỉ giữ latest_cogs+currency
+    - useTabData hook: shared fetch/pagination/search/filter per tab
+    - Items tab default "Active" (130k/137k)
+    - Alias column: font-mono brand-700 bold (quan trọng — mã gửi KH/partner)
 
 ## Session 8 (2026-06-08) — Chatbot bug fixes
 
