@@ -123,8 +123,7 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
       rows: [
         ["APN",          product.apn],
         ["Network",      product.network_type],
-        ["Carrier",      product.onsite_carrier],
-        ["Providers",    product.providers],
+        ["Nhà mạng",     apnNote(product) || null],
         ["Coverage",     product.coverage],
         ["Data Reset",   product.data_reset],
         ["Notification", product.notification],
