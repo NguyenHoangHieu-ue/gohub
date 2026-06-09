@@ -7,18 +7,19 @@ export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // item_type có ít distinct values → fetch 2000 rows là đủ bao phủ
-  const { data, error } = await supabaseAdmin
-    .from("items")
-    .select("item_type")
-    .not("item_type", "is", null)
-    .limit(2000)
+  // Pagination loop để không bị Supabase 1000-row cap
+  const allTypes: string[] = []
+  for (let off = 0; ; off += 1000) {
+    const { data: batch, error } = await supabaseAdmin
+      .from("items")
+      .select("item_type")
+      .not("item_type", "is", null)
+      .range(off, off + 999)
+    if (error || !batch?.length) break
+    allTypes.push(...batch.map((r: any) => r.item_type as string).filter(Boolean))
+    if (batch.length < 1000) break
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const itemTypes = [...new Set(
-    (data ?? []).map((r: any) => r.item_type as string).filter(Boolean)
-  )].sort()
-
+  const itemTypes = [...new Set(allTypes)].sort()
   return NextResponse.json({ itemTypes })
 }
