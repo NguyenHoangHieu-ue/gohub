@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 13)
+Cập nhật lần cuối: 2026-06-09 (session 14)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,35 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 14 (2026-06-09) — Chatbot NCC awareness + terminology
+
+99. Fix items/filters — Supabase 1000-row cap:
+    - Đổi .limit(2000) → pagination loop → lấy đủ tất cả item_type distinct từ 137k rows
+
+100. Chatbot inject NCC catalog vào tu-van context (route.ts):
+    - Root cause: tu-van chỉ search GoHub SKUs → không biết WM/3HK có gì
+    - Fix: sau searchSkus, inject thêm searchNccWm + searchNcc3hk cho cùng nước
+    - WM section: header tổng (đã tạo=X, chưa tạo=Y), note "đây là catalog NCC"
+    - 3HK section: note "tham khảo, không phải sản phẩm GoHub"
+    - WM=0: vẫn inject section để bot biết WM không có (không im lặng)
+    - giai-dap: inject NCC khi hỏi về nước cụ thể hoặc WM trực tiếp
+
+101. searchNccWm fallback (tools.ts):
+    - Phase 2: nếu region không match tên nước, dùng group codes → map sang WM region
+    - groupMap từ ref_support_countries để match broader regional names
+
+102. Thuật ngữ 4 trạng thái bắt buộc (agents.ts DISPLAY_RULES):
+    - "Có trong hệ thống GoHub" = SKU active, bán được
+    - "Chưa có trong hệ thống GoHub" = GoHub chưa tạo SKU
+    - "WM có, GoHub đã tạo" = exist=Yes
+    - "WM có, GoHub chưa tạo" = exist=No
+    - Cấm dùng từ mơ hồ "có sẵn", "tồn tại" không rõ nguồn
+
+103. tu-van system prompt:
+    - Mô tả rõ 3 nguồn: [GoHub SKU] / [WM Catalog] / [3HK Zones]
+    - Hướng dẫn đọc cột trạng_thái_GoHub trong WM context
+    - Format trả lời theo thứ tự ưu tiên
 
 ## Session 13 (2026-06-09) — Chatbot fixes + NCC exist column
 
