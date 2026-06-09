@@ -77,7 +77,26 @@ function fmtThrottle(kbps: number | null) {
 }
 
 function apnNote(p: WMProduct): string {
-  return [p.apn, p.network_type, p.onsite_carrier].filter(Boolean).join(" • ")
+  // Gộp onsite_carrier + providers thành danh sách nhà mạng, bỏ trùng
+  const carriersRaw = [
+    p.onsite_carrier,
+    ...(p.providers?.split("\n").map(s => s.trim()).filter(Boolean) ?? []),
+  ].filter(Boolean)
+  const carriers = [...new Set(carriersRaw)]
+
+  const region = p.region ?? ""
+  if (!region && !carriers.length) return p.apn ?? ""
+  if (carriers.length) return `${region} (${carriers.join(", ")})`
+  return region
+}
+
+function apnTooltip(p: WMProduct): string {
+  // Full detail cho title tooltip
+  return [
+    p.apn       ? `APN: ${p.apn}`             : null,
+    p.network_type ? `Network: ${p.network_type}` : null,
+    apnNote(p),
+  ].filter(Boolean).join("\n")
 }
 
 // ─── APN Modal ──────────────────────────────────────────────────────────────
@@ -411,9 +430,9 @@ function WMTab({ role }: { role?: string }) {
                       ? <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium text-[10px]">KYC</span>
                       : <span className="text-gray-300">No</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[160px]">
+                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[180px]">
                     {apnNote(p) ? (
-                      <span className="truncate block cursor-pointer hover:text-brand-600" title="Double-click để xem chi tiết">
+                      <span className="truncate block cursor-pointer hover:text-brand-600" title={apnTooltip(p)}>
                         {apnNote(p)}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
