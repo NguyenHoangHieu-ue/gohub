@@ -313,6 +313,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function processAndReply(openId: string, chatId: string, messageId: string, threadId: string, userText: string) {
+  let responseSent = false
   try {
     // Get user info
     const { role, name } = await getUserRole(openId)
@@ -356,6 +357,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     } else {
       await replyLarkMessage(messageId, stripMarkdown(response))
     }
+    responseSent = true
 
     const replyText = table
       ? (split!.preText ? stripMarkdown(split!.preText) + "\n[bảng đã gửi kèm]" : "[bảng đã gửi kèm]")
@@ -365,17 +367,20 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
   } catch (err: any) {
     console.error("[Lark bot] ERROR:", err?.message ?? err)
-    // Lấy role để quyết định hiển thị lỗi chi tiết hay không
-    let errRole = "standard"
-    try {
-      const { role } = await getUserRole(openId)
-      errRole = role
-    } catch {}
-    const errMsg = errRole === "admin"
-      ? `⚠️ Lỗi hệ thống: ${err?.message ?? "unknown error"}`
-      : "Hệ thống đang xử lý, vui lòng thử lại sau."
-    try {
-      await sendLarkMessage(chatId, "chat_id", errMsg)
-    } catch {}
+    // Chỉ gửi error message nếu response chưa gửi được
+    if (!responseSent) {
+      // Lấy role để quyết định hiển thị lỗi chi tiết hay không
+      let errRole = "standard"
+      try {
+        const { role } = await getUserRole(openId)
+        errRole = role
+      } catch {}
+      const errMsg = errRole === "admin"
+        ? `⚠️ Lỗi hệ thống: ${err?.message ?? "unknown error"}`
+        : "Hệ thống đang xử lý, vui lòng thử lại sau."
+      try {
+        await replyLarkMessage(messageId, errMsg)
+      } catch {}
+    }
   }
 }
