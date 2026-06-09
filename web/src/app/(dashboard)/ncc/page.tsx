@@ -150,7 +150,6 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
       rows: [
         ["APN",          product.apn],
         ["Network",      product.network_type],
-        ["Nhà mạng",     apnNote(product) || null],
         ["Coverage",     product.coverage],
         ["Data Reset",   product.data_reset],
         ["Notification", product.notification],
@@ -192,6 +191,28 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
               </div>
             )
           })}
+
+          {/* Providers by Country */}
+          {product.providers && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Nhà mạng theo quốc gia</p>
+              <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+                {product.providers.split("\n")
+                  .map(p => p.trim())
+                  .filter(Boolean)
+                  .map((provider, idx) => (
+                    <div key={idx} className="px-3 py-2.5 flex items-center justify-between">
+                      <span className="text-xs text-gray-700">{provider}</span>
+                      {provider.includes("(") && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                          Multi
+                        </span>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* System SKUs */}
           {product.in_system && product.system_skus.length > 0 && (
