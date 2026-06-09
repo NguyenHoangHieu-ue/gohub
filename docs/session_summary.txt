@@ -274,7 +274,32 @@ Mục tiêu 5 tính năng:
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
 
-## Session 11 (2026-06-09) — SP Hệ Thống bug fix
+## Session 11 (2026-06-09) — SP Hệ Thống nâng cấp toàn diện
+
+81. Products table — filter nâng cao + compact view + Detail modal:
+    - Bộ lọc product code 5 vị trí (PurchaseType/ProductType/Country/Vendor/DataType)
+    - Lọc thêm Vendor Code và Operator (text input, ilike)
+    - Enter để tìm trong mọi input filter
+    - Compact table (10 cột) — bỏ cột text dài
+    - Nút "Chi tiết" → DetailModal 18 trường, skip trường rỗng, ESC/click ngoài để đóng
+
+82. Listings table — compact + filter Type + Detail modal:
+    - Filter listing_type (combo datalist, auto-apply khi chọn)
+    - Compact table 9 cột (listing_name_vn truncate 48 chars)
+    - Nút "Chi tiết" → DetailModal 25 trường đầy đủ
+
+83. Items table — filter Item Type + Channel:
+    - Filter item_type và sales_channel (combo datalist, auto-apply)
+
+84. APIs cập nhật:
+    - products/route: buildProductPattern (8 chars) + vendor_f + operator filters
+    - listings/route: ltype filter
+    - items/route: item_type + channel filters
+
+85. Shared components mới:
+    - ComboFilter (input + datalist, reusable)
+    - DetailModal (ESC close, backdrop close, skip empty fields)
+    - FilterBar: onReset + hasExtra props
 
 78. Fix tab Products không có dữ liệu:
     - Root cause: /api/products SELECT_COLS có country_group, data_policy_code, special_activation_required → không tồn tại trong schema → Supabase error → data rỗng
