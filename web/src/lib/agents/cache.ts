@@ -48,12 +48,19 @@ export async function getRefCache(): Promise<RefCache> {
       .then(r => r.data ?? []),
   ])
 
-  // ncc_worldmove có 8921 rows — phải dùng pagination
-  const wm = await fetchAllRows(
-    "ncc_worldmove",
-    "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,apn,network_type,onsite_carrier,providers,coverage,data_reset,notification,prepaid_card,exist",
-    { col: "status", val: "active" }
+  // ncc_worldmove: 8921 rows — parallel fetch thay vì sequential để tránh timeout
+  // 12 requests đồng thời (~200ms) vs 9 requests nối tiếp (~2000ms)
+  const WM_SELECT = "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,apn,network_type,onsite_carrier,providers,coverage,data_reset,notification,prepaid_card,exist"
+  const wmBatches = await Promise.all(
+    Array.from({ length: 12 }, (_, i) =>
+      (supabaseAdmin.from("ncc_worldmove") as any)
+        .select(WM_SELECT)
+        .eq("status", "active")
+        .range(i * 1000, i * 1000 + 999)
+        .then((r: any) => (r.data ?? []) as any[])
+    )
   )
+  const wm = wmBatches.flat().filter((r: any) => r.vendor_product_id)
 
   const groupMap: Record<string, string> = {}
   for (const s of sc as any[]) groupMap[s.code] = s.support_country ?? s.code
