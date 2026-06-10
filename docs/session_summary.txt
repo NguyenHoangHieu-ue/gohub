@@ -640,6 +640,29 @@ Next steps (user chạy):
 - ✅ Bug #4 APN Data Fix — XONG (migration + import_worldmove_v2.py đã chạy)
 - ✅ Phase 2 embeddings — XONG (7107 SKUs embedded)
 
+## Session 31 (2026-06-10) — Phase 4 Neo4j Auto-Sync
+
+### Kiểm tra Bug.txt: tất cả 16 bugs ✅ fixed, không có bug mới.
+
+### Phase 4 hoàn thành:
+- Tạo `web/scripts/neo4j_sync.js`:
+  · Upsert Product nodes (Active) từ Supabase vào Neo4j
+  · Upsert SKU nodes + HAS_SKU relationships (từ sku_catalog, Active)
+  · Embed SKUs mới (Gemini gemini-embedding-001) — chỉ embed WHERE embedding IS NULL
+  · Health check: compare count Neo4j vs Supabase (threshold 95%), log warning nếu mismatch
+- Tạo `.github/workflows/neo4j_sync.yml`:
+  · Trigger: workflow_run sau "Sync GoHub Data to Supabase" (conclusion=success)
+  · Cũng có workflow_dispatch để chạy tay
+  · Node.js 20 + npm ci --omit=dev + node scripts/neo4j_sync.js
+  · Env vars: NEO4J_PASSWORD, GEMINI_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
+- Update WORK.md: Phase 4 ✅ + user action còn lại (add 2 secrets GitHub)
+
+### User cần làm (để workflow chạy được):
+1. Vào GitHub repo → Settings → Secrets → Actions → New secret:
+   - `NEO4J_PASSWORD` = password Neo4j AuraDB (từ .env.local)
+   - `GEMINI_KEY` = Gemini API key (từ .env.local)
+2. Sau đó mỗi ngày lúc 01:00 UTC: sync.yml chạy xong → neo4j_sync.yml tự trigger
+
 ## Session 24 (2026-06-10) — Dọn dẹp tài liệu + Refactor agents
 - Gộp PHASE_1_COMPLETED.md + PHASE_1_GUIDE.md → xóa, kết quả Phase 1 fold vào WORK.md
 - Xóa root session_summary.txt (duplicate của docs/session_summary.txt)
