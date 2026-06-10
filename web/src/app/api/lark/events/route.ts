@@ -305,6 +305,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!event || eventType !== "im.message.receive_v1") {
+    console.log("[Lark] skip non-message event:", eventType)
     return NextResponse.json({ ok: true })
   }
 
@@ -318,7 +319,16 @@ export async function POST(req: NextRequest) {
   const messageId = msg?.message_id as string | undefined
   const threadId  = (msg?.root_id ?? msg?.message_id) as string | undefined
   const chatType  = msg?.chat_type as string  // "p2p" | "group"
-  if (!openId || !chatId || !messageId || !threadId || msgType !== "text") return NextResponse.json({ ok: true })
+
+  console.log("[Lark] event | type:", eventType, "| chatType:", chatType,
+    "| msgType:", msgType, "| openId:", openId ? "ok" : "MISSING",
+    "| chatId:", chatId ? "ok" : "MISSING", "| messageId:", messageId ? "ok" : "MISSING")
+
+  if (!openId || !chatId || !messageId || !threadId || msgType !== "text") {
+    console.log("[Lark] skip: missing field or non-text | msgType:", msgType,
+      "| openId:", openId, "| chatId:", chatId, "| messageId:", messageId, "| threadId:", threadId)
+    return NextResponse.json({ ok: true })
+  }
 
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
