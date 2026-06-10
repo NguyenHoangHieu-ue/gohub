@@ -73,15 +73,18 @@ async function buildToolContext(
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
         s.operator_code  ? `operator:${s.operator_code}`  : null,
         s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+        s.call           ? `call:${s.call}`                : null,
+        s.hotspot        ? `hotspot:${s.hotspot}`          : null,
         cogsVnd,
         cogsUsd,
+        s.note           ? `[note:${s.note}]`              : null,
       ]
       return parts.filter(Boolean).join("|")
     })
     sections.push(
       `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
       note ? `Lưu ý: ${note}` : "",
-      `sku_code|tenant|sim|data|days|throttle|operator|kyc${isCost ? "|cogs_vnd|cogs_usd" : ""}`,
+      `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}|[note nếu có]`,
       ...rows
     )
 

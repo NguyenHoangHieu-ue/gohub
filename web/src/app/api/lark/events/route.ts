@@ -104,8 +104,11 @@ async function buildToolContext(
         s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
         s.operator_code  ? `operator:${s.operator_code}`  : null,
         s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+        s.call           ? `call:${s.call}`                : null,
+        s.hotspot        ? `hotspot:${s.hotspot}`          : null,
         cogsVnd,
         cogsUsd,
+        s.note           ? `[note:${s.note}]`              : null,
       ]
       return parts.filter(Boolean).join("|")
     })

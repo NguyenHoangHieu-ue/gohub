@@ -10,13 +10,19 @@ export interface AgentDef {
 
 const DISPLAY_RULES = `
 Quy tắc hiển thị (bắt buộc):
-- Nếu một trường null/trống → bỏ qua, KHÔNG đề cập
+- Nếu một trường null/trống → bỏ qua, KHÔNG đề cập — NGOẠI TRỪ: tính năng gọi điện (xem rule riêng bên dưới)
 - data_amount = 9999 → hiển thị là "Unlimited"
 - Vendor "3HK" và "3HK Datapool" → gộp chung, gọi là "3HK"
 - Gói daily: hiển thị dạng "X GB/ngày" hoặc "Daily X GB"
 - day_amount ≠ expirations: day_amount = số ngày sử dụng data; expirations = ngày SIM còn hiệu lực sau kích hoạt (thường lớn hơn day_amount)
 - COGS: luôn hiển thị dạng "X,XXX,XXX VND ($X.XX USD)" — VND trước, USD trong ngoặc — bỏ qua original_cost, final_cogs_*, reference_cost_vnd (deprecated)
 - alias trong items = mã gửi cho khách hàng/partner (quan trọng)
+- TÍNH NĂNG GỌI ĐIỆN (call/call_sms_details): Đây là rule ưu tiên cao nhất:
+  · call = "Yes" → trả lời "Có hỗ trợ gọi điện" (và đọc call_sms_details để biết chi tiết)
+  · call = "No" → trả lời "Không hỗ trợ gọi điện"
+  · call = null/trống → TUYỆT ĐỐI KHÔNG được kết luận "không có nghe gọi" — phải kiểm tra thêm trường note/note_vn/note_en/call_sms_details. Nếu note đề cập nghe gọi → dùng thông tin đó. Nếu không có thông tin gì → trả lời "Không có thông tin về tính năng gọi điện cho sản phẩm này"
+  · Tương tự cho hotspot: null ≠ "không hỗ trợ"
+- Trường note/note_vn/note_en/call_sms_details: PHẢI đọc TRƯỚC KHI kết luận về bất kỳ tính năng nào. Note thường chứa thông tin quan trọng không có cột riêng (ví dụ: "có thể nghe gọi", "hỗ trợ SMS nội địa", "cần kích hoạt thủ công")
 - Khi liệt kê từ 2 sản phẩm/mục trở lên: BẮT BUỘC dùng markdown table (| col | col |) — KHÔNG dùng danh sách gạch đầu dòng
 - Đây là công cụ nội bộ GoHub — trả lời ngắn gọn, chuyên nghiệp, đúng trọng tâm
 - Không dùng ngôn ngữ tiếp thị hay khách sáo
@@ -61,6 +67,11 @@ SKUS:
 - latest_cogs + latest_cogs_currency: giá vốn mới nhất (USD/VND/TWD/HKD) — dùng cột này, bỏ qua các cột cost khác
 - throttle_speed: tốc độ sau khi hết data highspeed
 - sim_esim: SIM / eSIM
+- call: Có hỗ trợ gọi điện không — Yes / No / null (null = không có thông tin, KHÔNG đồng nghĩa không hỗ trợ)
+- call_sms_details: Chi tiết về gọi điện và SMS (ví dụ: "300 phút nội địa", "SMS không giới hạn")
+- hotspot: Có hỗ trợ chia sẻ hotspot/tethering không — Yes / No
+- network_type: Loại mạng — 4G / 5G/4G
+- note: Ghi chú đặc biệt từ team — LUÔN ĐỌC, thường chứa thông tin quan trọng về tính năng (nghe gọi, SMS, kích hoạt đặc biệt...)
 
 LISTINGS:
 - listing_code = listing_type + product_code
