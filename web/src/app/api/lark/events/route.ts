@@ -384,13 +384,19 @@ export async function POST(req: NextRequest) {
       return match
     })
 
-    // Fallback cho thread messages: msg.mentions có thể rỗng khi reply trong thread
+    // Fallback cho thread replies: msg.mentions có thể rỗng khi reply trong thread
     // → kiểm tra tên bot trong raw content string (chứa user_name của at-element)
     const threadFallback = !isMentioned && isInThread && botName
       && typeof msg.content === "string"
       && msg.content.toLowerCase().includes(botName)
 
-    if (!isMentioned && !threadFallback) {
+    // Fallback cho root group message (msgType="post"): msg.mentions thường rỗng với post format
+    // → cùng logic content check nhưng cho !isInThread (root của thread / group message thường)
+    const rootMsgFallback = !isMentioned && !isInThread && botName
+      && typeof msg.content === "string"
+      && msg.content.toLowerCase().includes(botName)
+
+    if (!isMentioned && !threadFallback && !rootMsgFallback) {
       console.log("[Lark] not mentioned → skip | mentions:", allMentions.length)
       return NextResponse.json({ ok: true })
     }
