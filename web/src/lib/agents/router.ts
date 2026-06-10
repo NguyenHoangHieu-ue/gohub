@@ -18,9 +18,10 @@ function normalizeText(s: string): string {
 // ─── Country / City lookup tables ────────────────────────────────────────────
 
 const VN_TO_EN: Record<string, string> = {
+  // ── Tiếng Việt đầy đủ ──
   "nhật bản":"Japan","nhat ban":"Japan","nhật":"Japan","nhat":"Japan",
   "hàn quốc":"South Korea","han quoc":"South Korea","hàn":"South Korea",
-  "hoa kỳ":"United States","hoa ky":"United States","mỹ":"United States",
+  "hoa kỳ":"United States","hoa ky":"United States","mỹ":"United States","my":"United States",
   "thái lan":"Thailand","thai lan":"Thailand","thái":"Thailand","thai":"Thailand",
   "hồng kông":"Hong Kong","hong kong":"Hong Kong",
   "trung quốc":"China","trung quoc":"China","trung":"China",
@@ -43,11 +44,54 @@ const VN_TO_EN: Record<string, string> = {
   "phần lan":"Finland","phan lan":"Finland",
   "đan mạch":"Denmark","dan mach":"Denmark",
   "hy lạp":"Greece","hy lap":"Greece",
+  "na uy":"Norway","na-uy":"Norway",
+  "bỉ":"Belgium","bi":"Belgium",
+  "áo":"Austria",
+  "séc":"Czech Republic","cong hoa sec":"Czech Republic",
+  "hungary":"Hungary","hung ga ri":"Hungary",
+  "romania":"Romania",
+  "croatia":"Croatia",
+  "serbia":"Serbia",
   "singapore":"Singapore","indonesia":"Indonesia",
   "malaysia":"Malaysia","philippines":"Philippines",
+  "myanmar":"Myanmar","campuchia":"Cambodia","lao":"Laos",
   "dubai":"United Arab Emirates","uae":"United Arab Emirates",
   "canada":"Canada","mexico":"Mexico","brazil":"Brazil",
-  "châu âu":"Europe",
+  "argentina":"Argentina","chile":"Chile","colombia":"Colombia",
+  "nigeria":"Nigeria","kenya":"Kenya","ghana":"Ghana","ethiopia":"Ethiopia",
+  "ai cap":"Egypt","ai cập":"Egypt",
+  "chau au":"Europe","châu âu":"Europe",
+  "chau a":"Asia","châu á":"Asia",
+
+  // ── "nước X" (normalized: "nuoc X") ──
+  "nuoc anh":"United Kingdom",
+  "nuoc nhat":"Japan","nuoc nhat ban":"Japan",
+  "nuoc my":"United States","nuoc hoa ky":"United States",
+  "nuoc han":"South Korea","nuoc han quoc":"South Korea",
+  "nuoc duc":"Germany",
+  "nuoc phap":"France",
+  "nuoc y":"Italy",
+  "nuoc uc":"Australia",
+  "nuoc nga":"Russia",
+  "nuoc trung":"China","nuoc trung quoc":"China",
+  "nuoc thai":"Thailand","nuoc thai lan":"Thailand",
+  "nuoc dai loan":"Taiwan",
+  "nuoc singapore":"Singapore",
+  "nuoc an do":"India",
+  "nuoc ba lan":"Poland",
+  "nuoc ha lan":"Netherlands",
+  "nuoc thuy si":"Switzerland",
+  "nuoc tay ban nha":"Spain",
+  "nuoc bo dao nha":"Portugal",
+  "nuoc phan lan":"Finland",
+  "nuoc dan mach":"Denmark",
+  "nuoc na uy":"Norway",
+
+  // ── Tên tiếng Anh thông dụng / viết tắt dài ──
+  "england":"United Kingdom","britain":"United Kingdom","great britain":"United Kingdom",
+  "south korea":"South Korea","korea":"South Korea",
+  "new zealand":"New Zealand","new-zealand":"New Zealand",
+  "saudi arabia":"Saudi Arabia","arab saudi":"Saudi Arabia",
 }
 
 const CITY_TO_COUNTRY: Record<string, string> = {
@@ -76,8 +120,50 @@ function buildNormalizedLookup(map: Record<string, string>): Record<string, stri
   return result
 }
 
-const VN_TO_EN_NORM   = buildNormalizedLookup(VN_TO_EN)
+const VN_TO_EN_NORM        = buildNormalizedLookup(VN_TO_EN)
 const CITY_TO_COUNTRY_NORM = buildNormalizedLookup(CITY_TO_COUNTRY)
+
+// ISO 2-letter codes + common abbreviations — word-exact match only
+// (tránh false positive: "us" quá phổ biến, "in" trùng tiếng Anh → bỏ qua)
+const ISO_TO_EN: Record<string, string> = {
+  "uk":"United Kingdom",  "gb":"United Kingdom",
+  "tw":"Taiwan",
+  "jp":"Japan",
+  "kr":"South Korea",
+  "hk":"Hong Kong",
+  "sg":"Singapore",
+  "de":"Germany",
+  "fr":"France",
+  "ae":"United Arab Emirates",  "uae":"United Arab Emirates",
+  "usa":"United States",        "us":"United States",
+  "au":"Australia",
+  "nz":"New Zealand",
+  "ru":"Russia",
+  "cn":"China",
+  "ca":"Canada",
+  "br":"Brazil",
+  "mx":"Mexico",
+  "pl":"Poland",
+  "tr":"Turkey",
+  "gr":"Greece",
+  "no":"Norway",
+  "se":"Sweden",
+  "dk":"Denmark",
+  "fi":"Finland",
+  "pt":"Portugal",
+  "es":"Spain",
+  "it":"Italy",
+  "nl":"Netherlands",
+  "ch":"Switzerland",
+  "be":"Belgium",
+  "at":"Austria",
+  "my":"Malaysia",
+  "th":"Thailand",
+  "id":"Indonesia",
+  "ph":"Philippines",
+  "vn":"Vietnam",
+  "in":"India",
+}
 
 export interface ExtractedParams {
   country?:       string
@@ -131,16 +217,25 @@ export function extractParams(message: string): ExtractedParams {
     }
   }
 
-  // Country — dùng normalized lookup để match cả có dấu, không dấu, liền chữ
-  // Ví dụ: "hongkong", "hong kong", "Hồng Kông" đều → "Hong Kong"
+  // Country — 3 bước ưu tiên giảm dần
+  // Bước 1: VN/EN name lookup (dài → ngắn để tránh "nhat" match trước "nhat ban")
   const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
   for (const [key, en] of sortedNorm) {
     if (msgNorm.includes(key)) { params.country = en; break }
   }
+  // Bước 2: City lookup
   if (!params.country) {
     const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
     for (const [key, country] of sortedCity) {
       if (msgNorm.includes(key)) { params.country = country; break }
+    }
+  }
+  // Bước 3: ISO code / abbreviation — word-exact match
+  // "UK", "TW", "jp", "KR"... cần khớp đúng từ, không khớp trong từ khác
+  if (!params.country) {
+    const words = msgNorm.split(/[\s,.\-\/]+/).filter(Boolean)
+    for (const w of words) {
+      if (ISO_TO_EN[w]) { params.country = ISO_TO_EN[w]; break }
     }
   }
 
