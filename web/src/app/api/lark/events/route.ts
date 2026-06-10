@@ -366,23 +366,35 @@ export async function POST(req: NextRequest) {
   }
   if (!userText) return NextResponse.json({ ok: true })
 
-  // Group chat + thread: chỉ reply khi được @mention tên bot
-  if (chatType === "group") {
+  // Group + thread chat: chỉ reply khi được @mention tên bot
+  if (chatType === "group" || chatType === "thread") {
     const topMentions: any[] = msg?.mentions ?? []
     const allMentions = [...topMentions, ...postMentions]
-    const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
+    const botName = (process.env.LARK_BOT_NAME ?? "").normalize("NFC").trim().toLowerCase()
 
-    console.log("[Lark] group msg | msgType:", msgType, "| chatId:", chatId,
-      "| botName:", botName, "| mentions:", JSON.stringify(allMentions),
-      "| userText:", userText.slice(0, 80))
+    console.log("[Lark] group/thread msg | chatType:", chatType, "| isInThread:", isInThread,
+      "| msgType:", msgType, "| botName:", botName,
+      "| mentions:", JSON.stringify(allMentions), "| userText:", userText.slice(0, 80))
 
-    const isMentioned = allMentions.length > 0 && allMentions.some((m: any) => {
+    let isMentioned = allMentions.some((m: any) => {
       if (!botName) return true
-      const mName = (m.name ?? "").trim().toLowerCase()
+      const mName = (m.name ?? "").normalize("NFC").trim().toLowerCase()
       const match = mName === botName || mName.includes(botName) || botName.includes(mName)
-      if (!match) console.log("[Lark] mention mismatch | got:", m.name, "| expected:", botName)
+      if (!match) console.log("[Lark] mention mismatch | got:", JSON.stringify(m.name), "| expected:", JSON.stringify(botName))
       return match
     })
+
+    // Fallback cho thread messages: Lark đôi khi không populate msg.mentions cho thread replies
+    // → kiểm tra raw content string có chứa tên bot không
+    if (!isMentioned && (isInThread || chatType === "thread") && botName) {
+      try {
+        const rawContent = msg.content ?? ""
+        if (rawContent.normalize("NFC").toLowerCase().includes(botName)) {
+          console.log("[Lark] thread fallback: bot name found in raw content")
+          isMentioned = true
+        }
+      } catch {}
+    }
 
     if (!isMentioned) {
       console.log("[Lark] not mentioned → skip | mentions:", allMentions.length)
