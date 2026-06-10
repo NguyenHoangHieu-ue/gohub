@@ -174,7 +174,6 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "tu-van":       "Tư Vấn",
   "tra-cuu":      "Tra Cứu",
   "giai-dap":     "Giải Đáp",
-  "gia-cogs":     "Giá & COGS",
   "gap-analysis": "Gap Analysis",
 }
 
@@ -189,9 +188,9 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))
     return "gap-analysis"
 
-  // Pricing / COGS
+  // Pricing / COGS — gộp vào tra-cuu
   if (/cogs|gi[aá] v[oố]n|gi[aá] nh[aậ]p|l[oợ]i nhu[aậ]n|t[yỷ] gi[aá]|chi ph[ií]/.test(m))
-    return "gia-cogs"
+    return "tra-cuu"
 
   // System knowledge
   if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))

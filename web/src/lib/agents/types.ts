@@ -1,4 +1,4 @@
-export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gia-cogs' | 'gap-analysis'
+export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gap-analysis'
 export type UserRole = 'admin' | 'manager' | 'standard'
 
 export interface Message {

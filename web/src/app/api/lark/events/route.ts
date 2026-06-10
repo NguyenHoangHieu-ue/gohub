@@ -14,8 +14,8 @@ import {
 import {
   searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
-  getFxRates, getSkuCogs,
-  findGaps, getItems, searchListings, identifyCode,
+  getFxRates, findGaps,
+  getItems, searchListings, identifyCode,
 } from "@/lib/agents/tools"
 import type { Message, UserRole }    from "@/lib/agents/types"
 
@@ -214,17 +214,12 @@ async function buildToolContext(
     if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
   }
 
-  if (agentId === "gia-cogs") {
-    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2))
-    if (params.skuCode) {
-      const cogs = await getSkuCogs(params.skuCode)
-      if (cogs && !cogs.error && cogs.latest_cogs != null) {
-        const { usd, vnd } = convertCogs(cogs.latest_cogs, cogs.latest_cogs_currency, fx)
-        cogs.cogs_usd = usd
-        cogs.cogs_vnd = vnd
-      }
-      sections.push(`=== COGS SKU ${params.skuCode} ===`, JSON.stringify(cogs, null, 2))
-    }
+  // Inject FX rates cho tra-cuu (COGS display + query tỷ giá thuần)
+  if (agentId === "tra-cuu" && isCost && Object.keys(fx).length) {
+    sections.push(
+      `=== TỶ GIÁ NỘI BỘ ===`,
+      JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2)
+    )
   }
 
   if (agentId === "gap-analysis") {

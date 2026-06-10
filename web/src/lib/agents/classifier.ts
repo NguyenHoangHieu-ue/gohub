@@ -19,7 +19,7 @@ const INTENT_TO_AGENT: Record<IntentType, AgentId> = {
   product_search: "tu-van",
   product_lookup: "tra-cuu",
   system_explain: "giai-dap",
-  price_cogs:     "gia-cogs",
+  price_cogs:     "tra-cuu",
   gap_analysis:   "gap-analysis",
 }
 

@@ -8,8 +8,7 @@ import { route, type ExtractedParams } from "@/lib/agents/router"
 import {
   searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
-  getFxRates, getSkuCogs, calculate3hkCogs,
-  searchNccWm, searchNcc3hk, findGaps,
+  getFxRates, findGaps,
   getItems, searchListings, identifyCode,
 } from "@/lib/agents/tools"
 import type { Message, UserRole }   from "@/lib/agents/types"
@@ -89,43 +88,6 @@ async function buildToolContext(
       ...rows
     )
 
-    // ── Inject NCC catalog (WORLDMOVE) ──────────────────────────────────────────
-    // exist=Yes  → WM product này GoHub ĐÃ TẠO thành SKU
-    // exist=No   → WM product này GoHub CHƯA TẠO, không thể bán cho khách
-    const wmResults = searchNccWm({ country: params.country, days: params.days }, ref)
-    if (wmResults.length) {
-      const existYes = wmResults.filter((p: any) => p.exist === "Yes").length
-      const existNo  = wmResults.filter((p: any) => p.exist === "No").length
-      const wmRows = wmResults.slice(0, 15).map((p: any) => {
-        const dataStr2 = p.is_unlimited ? "Unlimited" : p.data_gb != null ? `${p.data_gb}GB` : "?"
-        const cogsStr2 = isCost && p.cogs != null ? `${p.cogs}${p.cogs_currency ?? ""}` : null
-        const status   = p.exist === "Yes" ? "ĐÃ CÓ trong GoHub" : "CHƯA TẠO trong GoHub"
-        const notif    = p.notification ? `notification:${p.notification}` : null
-        const apnStr   = p.apn ? `apn:${p.apn}` : null
-        return [p.vendor_product_id, p.sim_type, `${p.days}d`, dataStr2, status, cogsStr2, apnStr, notif]
-          .filter(Boolean).join("|")
-      })
-      sections.push(
-        `=== WORLDMOVE CATALOG cho ${params.country} (tổng ${wmResults.length}: đã tạo=${existYes}, chưa tạo=${existNo}) ===`,
-        `[Lưu ý: đây là danh sách NCC, KHÔNG phải sản phẩm GoHub. exist="ĐÃ CÓ trong GoHub" mới có thể bán]`,
-        `vendor_id|sim_type|days|data|trạng_thái_GoHub${isCost ? "|cogs" : ""}|apn|notification`,
-        ...wmRows,
-        wmResults.length > 15 ? `... (còn ${wmResults.length - 15} sản phẩm WM khác cho nước này)` : ""
-      )
-    } else {
-      sections.push(`=== WORLDMOVE CATALOG cho ${params.country}: 0 sản phẩm ===`)
-    }
-
-    // ── Inject NCC catalog (3HK) ─────────────────────────────────────────────
-    const hkResults = searchNcc3hk(params.country, ref)
-    if (hkResults.length) {
-      sections.push(
-        `=== 3HK ZONES cho ${params.country} (${hkResults.length} zones) — tham khảo, KHÔNG phải sản phẩm GoHub ===`,
-        hkResults.map((z: any) =>
-          `zone:${z.zone}|mạng:${z.network ?? "?"}|${isCost ? `giá:${z.price_per_gb_hkd}HKD/GB` : ""}|KYC:${z.is_kyc ? "Yes" : "No"}`
-        ).join("\n")
-      )
-    }
   }
 
   if (agentId === "tra-cuu") {
@@ -245,41 +207,15 @@ async function buildToolContext(
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
     if (params.skuCode) sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
-    if (params.country) {
-      sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
-      // Inject NCC nếu hỏi về nước cụ thể
-      const wmR = searchNccWm({ country: params.country }, ref)
-      if (wmR.length) {
-        const existYes = wmR.filter((p: any) => p.exist === "Yes").length
-        sections.push(
-          `=== WORLDMOVE cho ${params.country} (${wmR.length} SP: đã tạo GoHub=${existYes}, chưa tạo=${wmR.length - existYes}) ===`,
-          `[Đây là catalog NCC — exist="ĐÃ CÓ trong GoHub" mới có thể bán]`
-        )
-      }
-    }
-    // Inject NCC nếu hỏi trực tiếp về WM/3HK
-    if (params.nccVendor === "wm") {
-      const wmAll = searchNccWm({}, ref)
-      const existYes = wmAll.filter((p: any) => p.exist === "Yes").length
-      sections.push(
-        `=== WORLDMOVE CATALOG — TỔNG QUAN ===`,
-        `Tổng: ${wmAll.length} SP | Đã tạo trong GoHub: ${existYes} | Chưa tạo: ${wmAll.length - existYes}`,
-        `[Đây là catalog NCC — KHÔNG phải sản phẩm GoHub]`
-      )
-    }
+    if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
   }
 
-  if (agentId === "gia-cogs") {
-    sections.push(`=== TỶ GIÁ NỘI BỘ ===`, JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2))
-    if (params.skuCode) {
-      const cogs = await getSkuCogs(params.skuCode)
-      if (cogs && !cogs.error && cogs.latest_cogs != null) {
-        const { usd, vnd } = convertCogs(cogs.latest_cogs, cogs.latest_cogs_currency, fx)
-        cogs.cogs_usd = usd
-        cogs.cogs_vnd = vnd
-      }
-      sections.push(`=== COGS SKU ${params.skuCode} ===`, JSON.stringify(cogs, null, 2))
-    }
+  // Inject FX rates cho tra-cuu (COGS display + query tỷ giá thuần)
+  if (agentId === "tra-cuu" && isCost && Object.keys(fx).length) {
+    sections.push(
+      `=== TỶ GIÁ NỘI BỘ ===`,
+      JSON.stringify(Object.entries(fx).map(([key, value]) => ({ key, value })), null, 2)
+    )
   }
 
   if (agentId === "gap-analysis") {
