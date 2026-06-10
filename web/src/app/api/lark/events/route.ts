@@ -365,11 +365,10 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       responseSent = true
     }
 
-    const replyText = table
-      ? (split!.preText ? stripMarkdown(split!.preText) + "\n[bảng đã gửi kèm]" : "[bảng đã gửi kèm]")
-      : stripMarkdown(response)
-    await saveLarkMessage(openId, threadId, "user",      userText)
-    await saveLarkMessage(openId, threadId, "assistant", replyText)
+    // Lưu full response vào history để Gemini có context đầy đủ ở turn sau
+    // (display gửi Lark đã strip/card rồi, history cần giữ nguyên nội dung)
+    saveLarkMessage(openId, threadId, "user",      userText)
+    saveLarkMessage(openId, threadId, "assistant", response)
 
   } catch (err: any) {
     console.error("[Lark bot] ERROR:", err?.message ?? err)
