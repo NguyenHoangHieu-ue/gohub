@@ -324,54 +324,69 @@ export async function POST(req: NextRequest) {
     "| msgType:", msgType, "| openId:", openId ? "ok" : "MISSING",
     "| chatId:", chatId ? "ok" : "MISSING", "| messageId:", messageId ? "ok" : "MISSING")
 
-  if (!openId || !chatId || !messageId || !threadId || msgType !== "text") {
-    console.log("[Lark] skip: missing field or non-text | msgType:", msgType,
-      "| openId:", openId, "| chatId:", chatId, "| messageId:", messageId, "| threadId:", threadId)
+  // Chỉ xử lý "text" và "post" (rich text khi @mention trong group)
+  if (!openId || !chatId || !messageId || !threadId ||
+      (msgType !== "text" && msgType !== "post")) {
+    console.log("[Lark] skip: missing field or unsupported msgType:", msgType)
     return NextResponse.json({ ok: true })
   }
 
+  // Parse content — xử lý cả "text" và "post" format
+  let userText = ""
+  let postMentions: any[] = []
+  try {
+    const rawContent = JSON.parse(msg.content)
+
+    if (msgType === "text") {
+      // Format: { "text": "hello @_user_1" }
+      userText = (rawContent.text ?? "").replace(/@\S+\s*/g, "").trim()
+
+    } else {
+      // Format post: { "zh_cn": { "content": [[{tag,text/user_name},...]] } }
+      const body = rawContent.zh_cn ?? rawContent.en_us
+        ?? (Object.values(rawContent)[0] as any) ?? {}
+      const blocks: any[][] = body.content ?? []
+      const textParts: string[] = []
+      for (const block of blocks) {
+        for (const el of block) {
+          if (el.tag === "text") {
+            textParts.push(el.text ?? "")
+          } else if (el.tag === "at") {
+            // Collect bot mention, skip @mention text in user query
+            postMentions.push({ name: el.user_name, id: { open_id: el.user_id } })
+          }
+        }
+      }
+      userText = textParts.join("").trim()
+    }
+  } catch {
+    return NextResponse.json({ ok: true })
+  }
+  if (!userText) return NextResponse.json({ ok: true })
+
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
-    // Lark có thể để mentions ở msg.mentions HOẶC trong content JSON
     const topMentions: any[] = msg?.mentions ?? []
-    let contentMentions: any[] = []
-    try {
-      const parsed = JSON.parse(msg?.content ?? "{}")
-      contentMentions = parsed.mentions ?? []
-    } catch {}
-    const allMentions = [...topMentions, ...contentMentions]
-
+    const allMentions = [...topMentions, ...postMentions]
     const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
 
-    console.log("[Lark] group msg | chatId:", chatId,
-      "| msgId:", messageId,
-      "| botName:", botName,
-      "| mentions:", JSON.stringify(allMentions))
+    console.log("[Lark] group msg | msgType:", msgType, "| chatId:", chatId,
+      "| botName:", botName, "| mentions:", JSON.stringify(allMentions),
+      "| userText:", userText.slice(0, 80))
 
     const isMentioned = allMentions.length > 0 && allMentions.some((m: any) => {
       if (!botName) return true
       const mName = (m.name ?? "").trim().toLowerCase()
       const match = mName === botName || mName.includes(botName) || botName.includes(mName)
-      if (!match) console.log("[Lark] mention name mismatch | got:", JSON.stringify(m.name), "| expected:", botName)
+      if (!match) console.log("[Lark] mention mismatch | got:", m.name, "| expected:", botName)
       return match
     })
 
     if (!isMentioned) {
-      console.log("[Lark] not mentioned → skip | total mentions:", allMentions.length)
+      console.log("[Lark] not mentioned → skip | mentions:", allMentions.length)
       return NextResponse.json({ ok: true })
     }
   }
-
-  // Parse text content
-  let userText: string
-  try {
-    const parsed = JSON.parse(msg.content)
-    // Strip @mention placeholders (e.g. "@_user_1 ") khỏi text
-    userText = (parsed.text ?? "").replace(/@\S+\s*/g, "").trim()
-  } catch {
-    return NextResponse.json({ ok: true })
-  }
-  if (!userText) return NextResponse.json({ ok: true })
 
   // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
   waitUntil(processAndReply(openId, chatId, messageId, threadId, userText))
