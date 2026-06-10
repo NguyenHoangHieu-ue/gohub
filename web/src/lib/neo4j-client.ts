@@ -1,4 +1,4 @@
-import neo4j, { Session } from 'neo4j-driver'
+import neo4j from 'neo4j-driver'
 
 let driver: ReturnType<typeof neo4j.driver> | null = null
 
@@ -29,7 +29,7 @@ export async function runQuery<T = any>(
 
   try {
     const result = await session.run(query, params)
-    return result.records.map((record) => record.toObject())
+    return result.records.map((record) => record.toObject() as unknown as T)
   } finally {
     await session.close()
   }

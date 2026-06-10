@@ -171,7 +171,7 @@ async function createRelationships() {
     RETURN count(*) as count
   `
 
-  const result = await runQuery<{ count: number }>(query)
+  const result = await runQuery(query)
   const count = result[0]?.count || 0
   console.log(`  ✓ Created ${count} Product-[:HAS_SKU]->SKU relationships`)
   return count
