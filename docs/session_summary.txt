@@ -651,6 +651,24 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 30 (2026-06-10) — Fix Lark thread @mention (Bug #15 ✅)
+
+### Root cause chuỗi (3 commits):
+1. commit 78b20eb: thêm rootMsgFallback cho isInThread=false
+2. commit b6c5260: fix userText="" khi user chỉ gõ "@Bot" không kèm text
+3. commit e23da2e: **ROOT CAUSE THẬT** — post content format khác nhau:
+   - Group cũ: `{"zh_cn": {"content": [[...]]}}`
+   - Thread/group mới: `{"title": "", "content": [[...]]}` — không có wrapper zh_cn!
+   - Code cũ dùng `Object.values(rawContent)[0]` → lấy title="" → parse sai toàn bộ
+   - Fix: `body = rawContent.zh_cn ?? rawContent.en_us ?? rawContent`
+
+### Lesson ghi nhớ (quan trọng):
+Lark có 2 format post khác nhau. Khi sửa parser post phải handle cả 2:
+- Format 1 (group cũ): `rawContent.zh_cn.content`
+- Format 2 (thread): `rawContent.content` (trực tiếp, có thêm title field)
+
+---
+
 ## Session 29 (2026-06-10) — Inject Bug#16 business rules vào chatbot
 
 ### agents.ts — BUSINESS_RULES constant (commit e41b750)
