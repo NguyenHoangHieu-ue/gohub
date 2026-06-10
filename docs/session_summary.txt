@@ -650,6 +650,25 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 28 (2026-06-10) — Bug fixes: country matching + COGS display + routing
+
+### Fix country name matching (router.ts — commit 41ea02f)
+- Bug: "taiwan", "japan", "china"... không nhận dạng được (chỉ có tiếng Việt trong map)
+- Fix: thêm 25+ tên tiếng Anh vào VN_TO_EN
+- Fix: classifyAgent route tu-van khi có params.vendor / params.isUnlimited (không cần params.country)
+- Fix: classifier.ts clarify "list SKU by criteria" = product_search, không phải product_lookup
+
+### Fix COGS display (agents.ts — commit 4e4654c)
+- Bug: COGS luôn hiển thị cả VND + USD dù tenant
+- Fix: tenant=VN → VND only; tenant=US → USD only
+
+### Bug.txt #16 (user viết thủ công)
+- Business rules: combo chuẩn GoHub (Daily/Fix/Unlimited × 6 ngày = 42 combo/country)
+- Vendor priority: WM cho HK/TW, 3HK cho các nước khác, KDDI cho Japan
+- Rule "thiếu" = cần request vendor tạo thêm SKU (không phải vendor không có)
+
+---
+
 ## Session 27 (2026-06-10) — Phase 3 Graph + Country matching
 
 ### Phase 3 — Graph relationships (build-phase3-graph.js)
