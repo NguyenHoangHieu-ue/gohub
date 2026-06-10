@@ -354,9 +354,20 @@ interface AppSetting {
 }
 
 const SETTING_UNITS: Record<string, string> = {
-  "fx.usd_vnd":              "VND per 1 USD",
-  "fx.hkd_usd":              "USD per 1 HKD",
-  "fx.twd_usd":              "USD per 1 TWD",
+  // Tỷ giá — Gohub JSC (VND)
+  "fx.usd_vnd":              "VND / 1 USD",
+  "fx.vnd_cny":              "VND / 1 CNY (JSC)",
+  "fx.vnd_gbp":              "VND / 1 GBP (JSC)",
+  // Tỷ giá — Gohub Inc (1 USD = X)
+  "fx.hkd_usd":              "USD / 1 HKD  (= 1 / HKD/USD)",
+  "fx.twd_usd":              "USD / 1 TWD  (= 1 / TWD/USD)",
+  "fx.usd_jpy":              "JPY / 1 USD",
+  "fx.usd_thb":              "THB / 1 USD",
+  "fx.usd_cny":              "CNY / 1 USD (Inc)",
+  "fx.usd_eur":              "EUR / 1 USD",
+  "fx.usd_gbp":              "GBP / 1 USD (Inc)",
+  "fx.usd_sgd":              "SGD / 1 USD",
+  // 3HK formula
   "3hk.fixed_factor":        "(0 – 1)",
   "3hk.daily_factor":        "(0 – 1)",
   "3hk.unlim_10mbps_gb_day": "GB/day",
