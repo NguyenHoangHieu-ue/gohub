@@ -316,9 +316,11 @@ export async function POST(req: NextRequest) {
   const chatId     = msg?.chat_id as string | undefined
   const msgType    = msg?.message_type as string
 
-  const messageId = msg?.message_id as string | undefined
-  const threadId  = (msg?.root_id ?? msg?.message_id) as string | undefined
-  const chatType  = msg?.chat_type as string  // "p2p" | "group"
+  const messageId  = msg?.message_id as string | undefined
+  const rootId     = msg?.root_id as string | undefined
+  const threadId   = (rootId ?? messageId) as string | undefined
+  const chatType   = msg?.chat_type as string  // "p2p" | "group" | "thread"
+  const isInThread = !!rootId && rootId !== messageId  // message là reply trong thread
 
   console.log("[Lark] event | type:", eventType, "| chatType:", chatType,
     "| msgType:", msgType, "| openId:", openId ? "ok" : "MISSING",
@@ -364,8 +366,9 @@ export async function POST(req: NextRequest) {
   }
   if (!userText) return NextResponse.json({ ok: true })
 
-  // Group chat: chỉ reply khi được @mention
-  if (chatType === "group") {
+  // Group chat: chỉ reply khi @mention HOẶC khi đang trong thread
+  // (thread = user đang reply trong 1 conversation thread → không cần @mention)
+  if (chatType === "group" && !isInThread) {
     const topMentions: any[] = msg?.mentions ?? []
     const allMentions = [...topMentions, ...postMentions]
     const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
@@ -387,6 +390,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
   }
+
+  console.log("[Lark] processing | chatType:", chatType, "| isInThread:", isInThread,
+    "| msgType:", msgType, "| text:", userText.slice(0, 60))
 
   // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
   waitUntil(processAndReply(openId, chatId, messageId, threadId, userText))
