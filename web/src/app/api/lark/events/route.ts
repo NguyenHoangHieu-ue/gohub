@@ -31,8 +31,25 @@ async function getLarkHistory(openId: string, threadId: string): Promise<Message
     .eq("thread_id", threadId)
     .order("created_at", { ascending: false })
     .limit(HISTORY_LIMIT)
-  if (!data) return []
-  return data.reverse() as Message[]
+  if (!data || data.length === 0) return []
+
+  const msgs = data.reverse() as Message[]
+
+  // Gemini requires history to start with 'user' and strictly alternate user/model.
+  // Trim leading assistant messages (happens when HISTORY_LIMIT cuts mid-pair).
+  let start = 0
+  while (start < msgs.length && msgs[start].role !== "user") start++
+  const trimmed = msgs.slice(start)
+
+  // Ensure strict alternating: drop consecutive same-role messages
+  const clean: Message[] = []
+  for (const m of trimmed) {
+    const last = clean[clean.length - 1]
+    if (!last || last.role !== m.role) clean.push(m)
+    // If same role consecutive, skip — prefer keeping the later one
+  }
+
+  return clean
 }
 
 // Save a message to lark_chat_history
