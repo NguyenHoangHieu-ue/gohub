@@ -650,6 +650,17 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 29 (2026-06-10) — Inject Bug#16 business rules vào chatbot
+
+### agents.ts — BUSINESS_RULES constant (commit e41b750)
+Inject vào tu-van + gap-analysis:
+- Combo chuẩn GoHub: 42 combo/country (Daily 1/2/3GB × 6 ngày, Fix 5/10/20GB × 6 ngày, Unlimited × 6 ngày)
+- Thuật ngữ: "thiếu" → "Cần request vendor tạo thêm SKU" (không phải vendor không có hàng)
+- Vendor priority: HK/TW → WM (no-KYC); Japan → KDDI; nước khác → 3HK trước; BC/JY last resort
+- Tiebreak giá: latestCogs thấp hơn → local > regional > global
+
+---
+
 ## Session 28 (2026-06-10) — Bug fixes: country matching + COGS display + routing
 
 ### Fix country name matching (router.ts — commit 41ea02f)
