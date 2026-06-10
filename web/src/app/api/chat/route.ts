@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { GoogleGenerativeAI }       from "@google/generative-ai"
+import { supabaseAdmin }            from "@/lib/supabase"
 import { getRefCache }              from "@/lib/agents/cache"
 import { AGENTS }                   from "@/lib/agents/agents"
 import { route, type ExtractedParams } from "@/lib/agents/router"
 import {
-  searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
+  searchSkus, searchSkusSemantic,
+  getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, findGaps,
   getItems, searchListings, identifyCode,
@@ -88,6 +90,42 @@ async function buildToolContext(
       ...rows
     )
 
+    // Semantic fallback: standard search trả về 0 → thử vector search
+    if (skus.length === 0) {
+      const semQuery = [params.country, params.days ? `${params.days} ngày` : "",
+        params.isUnlimited ? "unlimited" : "", params.dataGB ? `${params.dataGB}GB` : "",
+        params.simType || ""].filter(Boolean).join(" ")
+      const semCodes = await searchSkusSemantic(semQuery, 10)
+      if (semCodes.length) {
+        const { data: semSkus } = await supabaseAdmin
+          .from("sku_catalog")
+          .select("sku_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,operator_code,latest_cogs,latest_cogs_currency,note")
+          .eq("status", "Active").in("sku_code", semCodes)
+        if (semSkus?.length) {
+          const semRows = semSkus.map((s: any) => {
+            const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+              : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+            let cogsVnd: string | null = null, cogsUsd: string | null = null
+            if (isCost && s.latest_cogs != null) {
+              const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+              cogsVnd = vnd.toLocaleString("en-US"); cogsUsd = `$${usd}`
+            }
+            return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
+              s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+              s.operator_code  ? `operator:${s.operator_code}`  : null,
+              s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+              s.call           ? `call:${s.call}`                : null,
+              cogsVnd, cogsUsd, s.note ? `[note:${s.note}]` : null,
+            ].filter(Boolean).join("|")
+          })
+          sections.push(
+            `=== SEMANTIC SEARCH: ${semSkus.length} SKU tương tự (gợi ý, xác nhận với team) ===`,
+            `[Không có gói chính xác cho ${params.country} — kết quả tìm kiếm ngữ nghĩa]`,
+            ...semRows
+          )
+        }
+      }
+    }
   }
 
   if (agentId === "tra-cuu") {

@@ -1,55 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI }       from '@google/generative-ai'
-import { runQuery }                 from '@/lib/neo4j-client'
+import { NextRequest, NextResponse } from "next/server"
+import { GoogleGenerativeAI }       from "@google/generative-ai"
+import { runQuery }                 from "@/lib/neo4j-client"
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
 
-async function embedQuery(text: string): Promise<number[]> {
-  const model  = genAI.getGenerativeModel({ model: 'text-embedding-004' })
-  const result = await model.embedContent(text)
+async function embedText(text: string): Promise<number[]> {
+  const model  = genAI.getGenerativeModel({ model: "text-embedding-004" })
+  const result = await model.embedContent(text.slice(0, 500))
   return result.embedding.values
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { query, limit = 10 } = await req.json()
-    if (!query) return NextResponse.json({ error: 'Query required' }, { status: 400 })
+    const { query, topK = 10 } = await req.json()
+    if (!query || typeof query !== "string") {
+      return NextResponse.json({ error: "query required" }, { status: 400 })
+    }
 
-    // Embed the query
-    const queryVec = await embedQuery(query)
+    const embedding = await embedText(query)
 
-    // Neo4j vector similarity search
-    const results = await runQuery<{
-      code: string
-      name: string
-      vendor: string
-      sim_type: string
-      score: number
-    }>(
-      `CALL db.index.vector.queryNodes('product_embeddings', $limit, $queryVec)
-       YIELD node AS p, score
-       RETURN p.product_code AS code, p.product_name AS name,
-              p.vendor_code AS vendor, p.type_of_sim AS sim_type,
-              score
+    // Vector search — index 'sku_embedding' created by embed-skus.js
+    const records = await runQuery<{ sku_code: string; score: number }>(
+      `CALL db.index.vector.queryNodes('sku_embedding', $topK, $embedding)
+       YIELD node AS sku, score
+       WHERE score > 0.65
+       RETURN sku.sku_code AS sku_code, score
        ORDER BY score DESC`,
-      { limit, queryVec }
+      { topK, embedding }
     )
 
-    return NextResponse.json({ query, results, count: results.length })
-  } catch (error: any) {
-    // Graceful fallback if vector index not ready
-    if (error.message?.includes('index') || error.message?.includes('embedding')) {
+    return NextResponse.json({
+      query,
+      results: records.map(r => ({ sku_code: r.sku_code, score: r.score })),
+    })
+  } catch (err: any) {
+    const isIndexMissing = err?.message?.includes("index") || err?.message?.includes("embedding")
+    if (isIndexMissing) {
       return NextResponse.json({
-        query: req.url,
+        query: "",
         results: [],
-        count: 0,
-        note: 'Vector index not ready — run scripts/embed-products.js first',
+        note: "Vector index not ready — run: node scripts/embed-skus.js",
       })
     }
-    console.error('[Semantic Search] Error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', message: String(error) },
-      { status: 500 }
-    )
+    console.error("[semantic-search]", err?.message)
+    return NextResponse.json({ error: err?.message ?? "internal error" }, { status: 500 })
   }
 }

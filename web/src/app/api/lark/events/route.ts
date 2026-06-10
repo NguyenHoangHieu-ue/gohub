@@ -12,7 +12,8 @@ import {
   getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import {
-  searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
+  searchSkus, searchSkusSemantic,
+  getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, findGaps,
   getItems, searchListings, identifyCode,
@@ -130,6 +131,40 @@ async function buildToolContext(
       return parts.filter(Boolean).join("|")
     })
     sections.push(`=== KẾT QUẢ TÌM KIẾM: ${skus.length} SKU (nước=${params.country}) ===`, note ?? "", ...rows)
+
+    // Semantic fallback: standard search trả về 0 → thử vector search
+    if (skus.length === 0) {
+      const semQuery = [params.country, params.days ? `${params.days} ngày` : "",
+        params.isUnlimited ? "unlimited" : "", params.simType || ""].filter(Boolean).join(" ")
+      const semCodes = await searchSkusSemantic(semQuery, 10)
+      if (semCodes.length) {
+        const { data: semSkus } = await (supabaseAdmin as any)
+          .from("sku_catalog")
+          .select("sku_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,operator_code,latest_cogs,latest_cogs_currency,note")
+          .eq("status", "Active").in("sku_code", semCodes)
+        if (semSkus?.length) {
+          const semRows = (semSkus as any[]).map(s => {
+            const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+              : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+            let cogsVnd: string | null = null, cogsUsd: string | null = null
+            if (isCost && s.latest_cogs != null) {
+              const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+              cogsVnd = vnd.toLocaleString("en-US"); cogsUsd = `$${usd}`
+            }
+            return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
+              s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+              s.operator_code  ? `operator:${s.operator_code}`  : null,
+              cogsVnd, cogsUsd, s.note ? `[note:${s.note}]` : null,
+            ].filter(Boolean).join("|")
+          })
+          sections.push(
+            `=== SEMANTIC SEARCH: ${semSkus.length} SKU tương tự (gợi ý, xác nhận với team) ===`,
+            `[Không có gói chính xác cho ${params.country} — kết quả tìm kiếm ngữ nghĩa]`,
+            ...semRows
+          )
+        }
+      }
+    }
   }
 
   if (agentId === "tra-cuu") {
