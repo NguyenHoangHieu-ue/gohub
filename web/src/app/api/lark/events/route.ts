@@ -322,18 +322,34 @@ export async function POST(req: NextRequest) {
 
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
-    const mentions: any[] = msg?.mentions ?? []
+    // Lark có thể để mentions ở msg.mentions HOẶC trong content JSON
+    const topMentions: any[] = msg?.mentions ?? []
+    let contentMentions: any[] = []
+    try {
+      const parsed = JSON.parse(msg?.content ?? "{}")
+      contentMentions = parsed.mentions ?? []
+    } catch {}
+    const allMentions = [...topMentions, ...contentMentions]
+
     const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
 
-    // Log để debug group mới
-    console.log("[Lark] group msg | chatId:", chatId, "| mentions:", JSON.stringify(mentions))
+    console.log("[Lark] group msg | chatId:", chatId,
+      "| msgId:", messageId,
+      "| botName:", botName,
+      "| mentions:", JSON.stringify(allMentions))
 
-    const isMentioned = mentions.some((m: any) => {
-      if (!botName) return true  // LARK_BOT_NAME chưa set → reply tất cả mention
+    const isMentioned = allMentions.length > 0 && allMentions.some((m: any) => {
+      if (!botName) return true
       const mName = (m.name ?? "").trim().toLowerCase()
-      return mName === botName || mName.includes(botName) || botName.includes(mName)
+      const match = mName === botName || mName.includes(botName) || botName.includes(mName)
+      if (!match) console.log("[Lark] mention name mismatch | got:", JSON.stringify(m.name), "| expected:", botName)
+      return match
     })
-    if (!isMentioned) return NextResponse.json({ ok: true })
+
+    if (!isMentioned) {
+      console.log("[Lark] not mentioned → skip | total mentions:", allMentions.length)
+      return NextResponse.json({ ok: true })
+    }
   }
 
   // Parse text content
