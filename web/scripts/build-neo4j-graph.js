@@ -133,7 +133,7 @@ async function buildProductRelationships() {
   console.log('\n▶ Step 4: Enrich Products + COVERS_GROUP...')
   const rows = await fetchAll(
     'products',
-    'product_code,type_of_sim,vendor_code,kyc_needed,call,note,network_type,hotspot',
+    'product_code,type_of_sim,vendor_code,kyc_needed,note,network_type,hotspot',
     [['status', 'Active']]
   )
 
@@ -144,7 +144,6 @@ async function buildProductRelationships() {
       type_of_sim:    r.type_of_sim    ?? null,
       vendor_code:    r.vendor_code    ?? null,
       kyc_needed:     r.kyc_needed     ?? null,
-      call:           r.call           ?? null,
       note:           r.note           ?? null,
       network_type:   r.network_type   ?? null,
       hotspot:        r.hotspot        ?? null,
