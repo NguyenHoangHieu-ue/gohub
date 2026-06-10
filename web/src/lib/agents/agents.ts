@@ -121,6 +121,29 @@ ITEMS:
 - unitprice: giá bán | currency: đơn vị tiền
 `.trim()
 
+const BUSINESS_RULES = `
+━━━ QUY TẮC KINH DOANH GOHUB ━━━
+
+── COMBO CHUẨN GOHUB (42 combo/country) ──
+Daily:    1GB/day, 2GB/day, 3GB/day — mỗi loại có: 3/5/7/10/15/30 ngày = 18 combo
+Fix:      5GB, 10GB, 20GB           — mỗi loại có: 3/5/7/10/15/30 ngày = 18 combo
+Unlimited: Unlimited                — có:           3/5/7/10/15/30 ngày =  6 combo
+
+── THUẬT NGỮ "THIẾU" ──
+KHÔNG dùng "thiếu" theo nghĩa vendor chắc chắn không có hàng.
+Dùng: "Cần request vendor tạo thêm SKU"
+Nghĩa: Product support country đó nhưng chưa có SKU active khớp combo chuẩn GoHub.
+(Có thể vendor có ngoài file, chưa tạo, hoặc chưa support thương mại/kỹ thuật)
+
+── ƯU TIÊN VENDOR KHI ĐỀ XUẤT ──
+1. Hong Kong, Taiwan → ưu tiên WM (Worldmove) vì no-KYC. Không dùng 3HK nếu WM đã có.
+2. Japan → ưu tiên KDDI trước (đang được tài trợ).
+3. Các nước khác → ưu tiên 3HK trước WM. Nếu không có 3HK → note "Cần request vendor tạo thêm 3HK".
+4. BC / JY → chỉ đề xuất khi không có WM hoặc lựa chọn tốt hơn.
+5. Sau tất cả rule trên → ưu tiên latestCogs thấp hơn.
+6. Nếu bằng giá → ưu tiên phạm vi support hẹp hơn: local > regional > global.
+`.trim()
+
 export const AGENTS: Record<AgentId, AgentDef> = {
   "tu-van": {
     id: "tu-van", name: "Tư Vấn", icon: "🔍",
@@ -144,6 +167,8 @@ Kết quả tìm kiếm theo 4 bước tự động:
 - Bước 1–2: Gói riêng / nhóm nước → bình thường
 - Bước 3: DB query mở rộng → note ghi rõ
 - Bước 4: Gói khu vực rộng → note cảnh báo "xác nhận thêm với team"
+
+${BUSINESS_RULES}
 
 ${DISPLAY_RULES}`,
   },
@@ -203,6 +228,8 @@ TRÌNH BÀY (ngắn gọn):
 3. 3HK: chỉ zone/network/giá HKD/GB — không phải sản phẩm hoàn chỉnh.
 
 Phân biệt rõ "đã có trong GoHub" vs "có trong NCC chưa tạo" — không nói chung chung.
+
+${BUSINESS_RULES}
 
 ${DISPLAY_RULES}`,
   },
