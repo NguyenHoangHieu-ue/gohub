@@ -366,9 +366,8 @@ export async function POST(req: NextRequest) {
   }
   if (!userText) return NextResponse.json({ ok: true })
 
-  // Group chat: chỉ reply khi @mention HOẶC khi đang trong thread
-  // (thread = user đang reply trong 1 conversation thread → không cần @mention)
-  if (chatType === "group" && !isInThread) {
+  // Group chat + thread: chỉ reply khi được @mention tên bot
+  if (chatType === "group") {
     const topMentions: any[] = msg?.mentions ?? []
     const allMentions = [...topMentions, ...postMentions]
     const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
