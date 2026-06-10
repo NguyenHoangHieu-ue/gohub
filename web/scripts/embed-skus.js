@@ -3,7 +3,7 @@
  * Run AFTER build-neo4j-graph.js:
  *   cd web && node scripts/embed-skus.js
  *
- * Rate limit: Gemini text-embedding-004 = 1500 QPM free tier
+ * Rate limit: Gemini gemini-embedding-001 = 1500 QPM free tier
  * Strategy: sequential batches of 5, 250ms delay → ~1200 QPM, ~9 min for 11k SKUs
  * Resume: skips SKUs that already have embeddings (MERGE + WHERE NOT exists)
  */
@@ -36,7 +36,7 @@ if (!NEO4J_PASS || !SB_URL || !SB_KEY || !GEMINI_KEY) {
 const driver  = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASS))
 const sb      = createClient(SB_URL, SB_KEY)
 const genAI   = new GoogleGenerativeAI(GEMINI_KEY)
-const embedModel = genAI.getGenerativeModel({ model: 'text-embedding-004' })
+const embedModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' })
 
 const BATCH_SIZE   = 5     // concurrent Gemini calls per batch
 const BATCH_DELAY  = 250   // ms between batches
@@ -108,7 +108,7 @@ async function ensureVectorIndex() {
       CREATE VECTOR INDEX sku_embedding IF NOT EXISTS
       FOR (s:SKU) ON (s.embedding)
       OPTIONS { indexConfig: {
-        \`vector.dimensions\`: 768,
+        \`vector.dimensions\`: 3072,
         \`vector.similarity_function\`: 'cosine'
       }}
     `)
@@ -145,7 +145,7 @@ async function writeEmbeddings(batch) {
 
 async function main() {
   console.log('=== Embed SKUs (Phase 2) ===')
-  console.log(`Gemini: text-embedding-004 | Neo4j: ${NEO4J_URI}\n`)
+  console.log(`Gemini: gemini-embedding-001 | Neo4j: ${NEO4J_URI}\n`)
 
   // 1. Ensure vector index exists
   await ensureVectorIndex()
@@ -161,12 +161,14 @@ async function main() {
   console.log('\n▶ Fetching active SKUs from sku_catalog...')
   const allSkus = await fetchAll(
     'sku_catalog',
-    'sku_code,product_code,country_group,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,hotspot,network_type,vendor_sku,note',
+    'sku_code,product_code,country_group,sim_esim,data_amount,data_amount_unit,is_unlimited,day_amount,throttle_speed,call,kyc_needed,hotspot,network_type,note',
     [['status', 'Active']]
   )
-  // Add vendor_code from product_code[5:7]
+  // Derive vendor_code from product_code[5:7], is_daily from data_policy char (sku_code[7])
+  const DAILY_POLICIES = new Set(['A', 'B', 'P', 'Z'])
   for (const s of allSkus) {
     s.vendor_code = s.product_code?.slice(5, 7) ?? ''
+    s.is_daily    = DAILY_POLICIES.has(s.sku_code?.[7] ?? '')
   }
   console.log(`  ${allSkus.length} active SKUs total`)
 

@@ -546,7 +546,7 @@ export function findGaps(params: {
 export async function searchSkusSemantic(query: string, topK = 10): Promise<string[]> {
   try {
     const genAI    = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model    = genAI.getGenerativeModel({ model: "text-embedding-004" })
+    const model    = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
     const result   = await model.embedContent(query.slice(0, 500))
     const embedding = result.embedding.values
 

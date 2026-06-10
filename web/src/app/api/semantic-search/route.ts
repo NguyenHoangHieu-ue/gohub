@@ -5,7 +5,7 @@ import { runQuery }                 from "@/lib/neo4j-client"
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
 
 async function embedText(text: string): Promise<number[]> {
-  const model  = genAI.getGenerativeModel({ model: "text-embedding-004" })
+  const model  = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
   const result = await model.embedContent(text.slice(0, 500))
   return result.embedding.values
 }
