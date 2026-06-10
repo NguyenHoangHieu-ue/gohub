@@ -394,7 +394,13 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: true })
   }
-  if (!userText) return NextResponse.json({ ok: true })
+  // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
+  // Với p2p: bỏ qua (blank message)
+  // Với group/post có at-mention: dùng fallback "xin chào" thay vì bỏ qua
+  if (!userText) {
+    if (postMentions.length === 0) return NextResponse.json({ ok: true })
+    userText = "xin chào"
+  }
 
   // Group chat + thread: chỉ reply khi được @mention tên bot
   if (chatType === "group") {
