@@ -292,6 +292,18 @@ export async function POST(req: NextRequest) {
   // ── Message event ──────────────────────────────────────────────────────────
   const event = body.event
   const eventType = body.header?.event_type ?? body.type
+
+  // Bot được add vào group → gửi welcome để kích hoạt subscription
+  if (eventType === "im.chat.member.bot.added_v1" && event?.chat_id) {
+    console.log("[Lark] bot added to group:", event.chat_id)
+    waitUntil(
+      sendLarkMessage(event.chat_id, "chat_id",
+        `👋 Xin chào! Tôi là ${process.env.LARK_BOT_NAME ?? "Bot GoHub"}.\n@mention tôi trong group để đặt câu hỏi về sản phẩm SIM/eSIM.`
+      ).catch((e: any) => console.error("[Lark] welcome msg failed:", e?.message))
+    )
+    return NextResponse.json({ ok: true })
+  }
+
   if (!event || eventType !== "im.message.receive_v1") {
     return NextResponse.json({ ok: true })
   }
