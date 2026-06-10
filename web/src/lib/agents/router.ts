@@ -87,11 +87,36 @@ const VN_TO_EN: Record<string, string> = {
   "nuoc dan mach":"Denmark",
   "nuoc na uy":"Norway",
 
-  // ── Tên tiếng Anh thông dụng / viết tắt dài ──
-  "england":"United Kingdom","britain":"United Kingdom","great britain":"United Kingdom",
+  // ── Tên tiếng Anh đầy đủ (không có trong VN forms) ──
+  "taiwan":"Taiwan",
+  "japan":"Japan",
+  "china":"China",
+  "vietnam":"Vietnam",
+  "thailand":"Thailand",
+  "india":"India",
+  "russia":"Russia",
+  "australia":"Australia",
+  "germany":"Germany",
+  "france":"France",
+  "italy":"Italy",
+  "spain":"Spain",
+  "portugal":"Portugal",
+  "netherlands":"Netherlands",
+  "switzerland":"Switzerland",
+  "sweden":"Sweden",
+  "norway":"Norway",
+  "denmark":"Denmark",
+  "finland":"Finland",
+  "poland":"Poland",
+  "greece":"Greece",
+  "turkey":"Turkey",
+  "czechia":"Czech Republic","czech republic":"Czech Republic",
+  "united states":"United States","united kingdom":"United Kingdom",
   "south korea":"South Korea","korea":"South Korea",
   "new zealand":"New Zealand","new-zealand":"New Zealand",
   "saudi arabia":"Saudi Arabia","arab saudi":"Saudi Arabia",
+  "egypt":"Egypt",
+  "england":"United Kingdom","britain":"United Kingdom","great britain":"United Kingdom",
 }
 
 const CITY_TO_COUNTRY: Record<string, string> = {
@@ -291,8 +316,10 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))
     return "giai-dap"
 
-  // Product search (has country or explicit search keywords)
-  if (params.country || /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói/.test(m))
+  // Product search — có criteria tìm kiếm (nước / vendor / unlimited) hoặc từ khóa tìm kiếm
+  // Note: "list sku taiwan unlimited worldmove" = product search, KHÔNG phải code lookup
+  if (params.country || params.vendor || params.isUnlimited ||
+      /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói|list|li[eê]t k[eê]/.test(m))
     return "tu-van"
 
   return "giai-dap"

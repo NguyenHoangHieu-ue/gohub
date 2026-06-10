@@ -28,8 +28,8 @@ const SYSTEM_PROMPT = `Bạn là bộ phân loại (classifier) cho hệ thống
 Phân tích tin nhắn người dùng và trả về JSON (chỉ JSON thuần, không có markdown, không có text khác).
 
 INTENT TYPES (chọn 1):
-- product_search: hỏi tìm/đề xuất gói cước theo nước/ngày/GB. Ví dụ: "đi Nhật có gói nào", "tìm eSIM Thái 7 ngày", "có gói unlimited không"
-- product_lookup: tra cứu mã cụ thể (SKU 13 ký tự, Product code 8 ký tự, listing code, item code). Ví dụ: "tra mã 1CJPNWM1010014", "thông tin SKU này", "APN của gói X"
+- product_search: hỏi tìm/đề xuất/liệt kê gói cước theo nước/ngày/GB/vendor/loại. Ví dụ: "đi Nhật có gói nào", "tìm eSIM Thái 7 ngày", "có gói unlimited không", "list SKU Taiwan unlimited của WorldMove", "các gói Hàn Quốc vendor WM", "show me Japan eSIM"
+- product_lookup: tra cứu MÃ CỤ THỂ đã biết (SKU 13 ký tự, Product code 8 ký tự, listing code, item code). Ví dụ: "tra mã 1CJPNWM1010014", "APN của mã XXXXX", "thông tin SKU 1CTWN...". KHÔNG dùng khi user hỏi "list SKU" theo criteria
 - system_explain: giải thích thuật ngữ, cấu trúc mã, chính sách, hệ thống. Ví dụ: "KYC là gì", "throttle nghĩa là gì", "cấu trúc mã SKU", "data policy"
 - price_cogs: hỏi giá vốn, COGS, tỷ giá, lợi nhuận. Ví dụ: "COGS bao nhiêu", "giá nhập", "tỷ giá USD VND"
 - gap_analysis: so sánh catalog NCC (WorldMove/3HK) với hệ thống GoHub. Ví dụ: "WM có gì chưa import", "gap analysis", "NCC chưa tạo", "so sánh NCC"
