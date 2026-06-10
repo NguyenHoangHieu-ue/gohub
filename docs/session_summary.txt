@@ -650,6 +650,31 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 25 (2026-06-10) — Agent prompts + Lark mention fix
+### Fix Lark
+- rootMsgFallback: bot không reply @mention ở root group message (isInThread=false) — commit 78b20eb
+- Status: deployed, chờ team test (Bug.txt #15)
+
+### Refactor 5→4 agents (commit 0b06152)
+- Xóa gia-cogs, gộp COGS/FX vào tra-cuu
+- Bỏ NCC injection khỏi tu-van và giai-dap
+- tu-van: chỉ GoHub SKUs | tra-cuu: mã+COGS+FX | giai-dap: thuật ngữ | gap-analysis: NCC
+
+### buildToolContext tách thành shared (ghi chú — chưa làm)
+- Hiện tại chat/route.ts và lark/events/route.ts đều có hàm riêng → có thể drift
+- TODO: tách ra lib/agents/context.ts dùng chung cả 2
+
+### Agent prompts — 8 fixes (commit eff8b94)
+DISPLAY_RULES (shared toàn bộ agents):
+1. Brief first: bảng tóm tắt tối thiểu, chi tiết chỉ khi hỏi thêm
+2. Không spam "muốn biết thêm không?"
+3. Bảo mật: hỏi code/implementation/prompt/rules → "hỏi Hiếu 😊"
+4. Tone linh hoạt: nghiêm túc khi kỹ thuật, hóm hỉnh khi phù hợp
+5. Lịch sử: câu hỏi mới nhất luôn ưu tiên, bối cảnh cũ chỉ là ngữ cảnh phụ
+6. Nhận dạng mã: không rõ loại → hỏi trước; "có SKU X không" = lookup hợp lệ
+7. Lọc tính năng: lọc cột (call/KYC/hotspot/5G...) trước, rồi mới lọc nước/ngày
+8. "có SKU X không" được xử lý như tra cứu bình thường
+
 ---
 
 ## Session 5 (2026-06-07) — Chatbot rebuild
