@@ -17,6 +17,19 @@
 
 const path  = require('path')
 const fs    = require('fs')
+
+// @supabase/realtime-js throws if globalThis.WebSocket is undefined (Node < 22).
+// We don't use Realtime in this script, so a stub class is enough.
+if (typeof globalThis.WebSocket === 'undefined') {
+  const { EventEmitter } = require('events')
+  class _WS extends EventEmitter {
+    constructor() { super(); this.readyState = 3 }
+    close() {} send() {}
+  }
+  _WS.CONNECTING = 0; _WS.OPEN = 1; _WS.CLOSING = 2; _WS.CLOSED = 3
+  globalThis.WebSocket = _WS
+}
+
 const neo4j = require('neo4j-driver')
 const { createClient }       = require('@supabase/supabase-js')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
