@@ -639,11 +639,16 @@ Next steps (user chạy):
 - Chạy SQL: `database/migrations/add_fx_rates_t06_2026.sql` trong Supabase (FX rates T06/2026)
 - Chạy: `node web/scripts/embed-products.js` (Phase 2 vector embeddings — sau khi setup xong)
 
-## Session 24 (2026-06-10) — Dọn dẹp tài liệu
+## Session 24 (2026-06-10) — Dọn dẹp tài liệu + Refactor agents
 - Gộp PHASE_1_COMPLETED.md + PHASE_1_GUIDE.md → xóa, kết quả Phase 1 fold vào WORK.md
 - Xóa root session_summary.txt (duplicate của docs/session_summary.txt)
 - Tạo _Skills_AI/RULES.md — quy tắc AI: thêm vào file có sẵn, không tạo mới; ký hiệu trạng thái
 - Update WORK.md: đánh dấu Phase 1 ✅ với kết quả thực tế (777 products, 11,033 SKUs, 212 countries)
+- Fix Lark bot không reply @mention ở root group message (rootMsgFallback — commit 78b20eb)
+- Refactor agents 5→4: xóa gia-cogs, gộp COGS vào tra-cuu, bỏ NCC khỏi tu-van và giai-dap
+  · tu-van: chỉ GoHub SKUs | tra-cuu: mã + COGS + FX | giai-dap: thuật ngữ | gap-analysis: NCC
+  · commit 0b06152
+- Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
 ---
 
