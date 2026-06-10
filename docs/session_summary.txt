@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-09 (session 16)
+Cập nhật lần cuối: 2026-06-10 (session 23)
 
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
@@ -273,6 +273,15 @@ Mục tiêu 5 tính năng:
       (green/gray status badge, font-mono brand-700 sku_code, whitespace-nowrap)
     - Xóa bảng "Chi tiết SKU" phẳng ở dưới, thay bằng accordion per-row
     - Fix bug: p.sku_codes không tồn tại → dùng p.system_skus[].sku_code
+
+## Session 23 (2026-06-10) — Lark thread @mention fix
+
+116. Fix Lark bot không reply khi user tạo thread và @mention:
+     - Root cause: khi `msgType = "text"` trong thread, `msg.mentions` có thể rỗng, `postMentions` không được populate → `allMentions = []` → `isMentioned = false` → skip
+     - Fix 1: extend `chatType` check từ chỉ `"group"` sang cả `"group" || "thread"` (handle Lark thread chat type)
+     - Fix 2: add Unicode NFC normalization cho bot name comparison (phòng NFC/NFD mismatch)
+     - Fix 3: add fallback cho thread messages — check raw `msg.content` string có chứa tên bot không (khi `msg.mentions` rỗng)
+     - Commit: a930bff
 
 ## Session 16 (2026-06-09) — Lark issues + multi-lookup limit
 

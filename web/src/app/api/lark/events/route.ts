@@ -366,37 +366,31 @@ export async function POST(req: NextRequest) {
   }
   if (!userText) return NextResponse.json({ ok: true })
 
-  // Group + thread chat: chỉ reply khi được @mention tên bot
-  if (chatType === "group" || chatType === "thread") {
+  // Group chat + thread: chỉ reply khi được @mention tên bot
+  if (chatType === "group") {
     const topMentions: any[] = msg?.mentions ?? []
     const allMentions = [...topMentions, ...postMentions]
-    const botName = (process.env.LARK_BOT_NAME ?? "").normalize("NFC").trim().toLowerCase()
+    const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
 
-    console.log("[Lark] group/thread msg | chatType:", chatType, "| isInThread:", isInThread,
-      "| msgType:", msgType, "| botName:", botName,
+    console.log("[Lark] group msg | msgType:", msgType, "| chatId:", chatId,
+      "| isInThread:", isInThread, "| botName:", botName,
       "| mentions:", JSON.stringify(allMentions), "| userText:", userText.slice(0, 80))
 
-    let isMentioned = allMentions.some((m: any) => {
+    const isMentioned = allMentions.length > 0 && allMentions.some((m: any) => {
       if (!botName) return true
-      const mName = (m.name ?? "").normalize("NFC").trim().toLowerCase()
+      const mName = (m.name ?? "").trim().toLowerCase()
       const match = mName === botName || mName.includes(botName) || botName.includes(mName)
-      if (!match) console.log("[Lark] mention mismatch | got:", JSON.stringify(m.name), "| expected:", JSON.stringify(botName))
+      if (!match) console.log("[Lark] mention mismatch | got:", m.name, "| expected:", botName)
       return match
     })
 
-    // Fallback cho thread messages: Lark đôi khi không populate msg.mentions cho thread replies
-    // → kiểm tra raw content string có chứa tên bot không
-    if (!isMentioned && (isInThread || chatType === "thread") && botName) {
-      try {
-        const rawContent = msg.content ?? ""
-        if (rawContent.normalize("NFC").toLowerCase().includes(botName)) {
-          console.log("[Lark] thread fallback: bot name found in raw content")
-          isMentioned = true
-        }
-      } catch {}
-    }
+    // Fallback cho thread messages: msg.mentions có thể rỗng khi reply trong thread
+    // → kiểm tra tên bot trong raw content string (chứa user_name của at-element)
+    const threadFallback = !isMentioned && isInThread && botName
+      && typeof msg.content === "string"
+      && msg.content.toLowerCase().includes(botName)
 
-    if (!isMentioned) {
+    if (!isMentioned && !threadFallback) {
       console.log("[Lark] not mentioned → skip | mentions:", allMentions.length)
       return NextResponse.json({ ok: true })
     }
