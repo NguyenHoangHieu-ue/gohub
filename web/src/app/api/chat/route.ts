@@ -4,7 +4,7 @@ import { authOptions }              from "@/lib/auth"
 import { GoogleGenerativeAI }       from "@google/generative-ai"
 import { getRefCache }              from "@/lib/agents/cache"
 import { AGENTS }                   from "@/lib/agents/agents"
-import { route }                    from "@/lib/agents/router"
+import { route, type ExtractedParams } from "@/lib/agents/router"
 import {
   searchSkus, getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
@@ -33,7 +33,7 @@ function convertCogs(cogs: number, currency: string, fx: Record<string, number>)
 // Pre-execute tools based on agent + extracted params, return context string
 async function buildToolContext(
   agentId: string,
-  params:  ReturnType<typeof import("@/lib/agents/router").route>["params"],
+  params:  ExtractedParams,
   ref:     Awaited<ReturnType<typeof getRefCache>>,
   isCost:  boolean
 ): Promise<string> {
@@ -302,10 +302,11 @@ export async function POST(req: NextRequest) {
   const isCost  = true
 
   try {
-    const refCache = await getRefCache()
-
-    // Route (rule-based, instant)
-    const { agentId, agentName, params } = route(lastMsg, history, role)
+    // Run classifier + refCache in parallel → zero extra latency
+    const [refCache, { agentId, agentName, params }] = await Promise.all([
+      getRefCache(),
+      route(lastMsg, history, role),
+    ])
     const agent = AGENTS[agentId]
 
     // Pre-execute tools, build context

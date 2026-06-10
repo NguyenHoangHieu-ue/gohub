@@ -1,4 +1,5 @@
 ﻿import type { AgentId, UserRole, Message, RouterResult } from "./types"
+import { classify, intentToAgentId } from "./classifier"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ export interface ExtractedParams {
   isUnlimited?:   boolean
   vendor?:        string
   nccVendor?:     "wm" | "3hk" | "all"
+  simType?:       "esim" | "sim"
 }
 
 const MAX_CODES = 50  // tối đa bao nhiêu mã xử lý mỗi lần
@@ -202,8 +204,34 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   return "giai-dap"
 }
 
-export function route(message: string, history: Message[], role: UserRole): RouterResult & { params: ExtractedParams } {
+// Sync route — fallback / used internally
+function routeSync(message: string, role: UserRole): RouterResult & { params: ExtractedParams } {
   const params  = extractParams(message)
   const agentId = classifyAgent(message, params, role)
+  return { agentId, agentName: AGENT_NAMES[agentId], params }
+}
+
+// Async route — dùng Gemini classifier cho intent + country chính xác hơn
+// Chạy song song với getRefCache() trong chat route → zero extra latency
+export async function route(message: string, history: Message[], role: UserRole): Promise<RouterResult & { params: ExtractedParams }> {
+  const params = extractParams(message)
+
+  const classified = await classify(message)
+
+  // Dùng AI intent nếu confidence đủ cao
+  const agentId: AgentId = classified.confidence >= 0.6
+    ? intentToAgentId(classified.intent)
+    : classifyAgent(message, params, role)
+
+  // AI country ghi đè regex nếu confidence cao VÀ regex không tìm được
+  if (classified.confidence >= 0.7 && classified.country && !params.country) {
+    params.country = classified.country
+  }
+
+  // AI sim_type
+  if (classified.sim_type) {
+    params.simType = classified.sim_type
+  }
+
   return { agentId, agentName: AGENT_NAMES[agentId], params }
 }

@@ -4,7 +4,7 @@ import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { getRefCache }               from "@/lib/agents/cache"
 import { AGENTS }                    from "@/lib/agents/agents"
-import { route }                     from "@/lib/agents/router"
+import { route, type ExtractedParams } from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
@@ -76,7 +76,7 @@ function convertCogs(cogs: number, currency: string, fx: Record<string, number>)
 // Reuse buildToolContext logic (same as /api/chat)
 async function buildToolContext(
   agentId: string,
-  params:  ReturnType<typeof route>["params"],
+  params:  ExtractedParams,
   ref:     Awaited<ReturnType<typeof getRefCache>>,
   isCost:  boolean
 ): Promise<string> {
@@ -323,9 +323,11 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const history = await getLarkHistory(openId, threadId)
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
-    // Route + build context
-    const refCache = await getRefCache()
-    const { agentId, params } = route(userText, history, role)
+    // Route + refCache in parallel
+    const [refCache, { agentId, params }] = await Promise.all([
+      getRefCache(),
+      route(userText, history, role),
+    ])
     const agent    = AGENTS[agentId]
     const toolCtx  = await buildToolContext(agentId, params, refCache, isCost)
 
