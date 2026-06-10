@@ -368,6 +368,7 @@ export async function POST(req: NextRequest) {
   let postMentions: any[] = []
   try {
     const rawContent = JSON.parse(msg.content)
+    console.log("[Lark] content preview:", JSON.stringify(rawContent).slice(0, 200))
 
     if (msgType === "text") {
       // Format: { "text": "hello @_user_1" }
@@ -391,14 +392,21 @@ export async function POST(req: NextRequest) {
       }
       userText = textParts.join("").trim()
     }
-  } catch {
+  } catch (e: any) {
+    console.log("[Lark] content parse error:", e?.message, "| raw:", String(msg.content).slice(0, 100))
     return NextResponse.json({ ok: true })
   }
+
+  console.log("[Lark] parsed | userText:", JSON.stringify(userText), "| postMentions:", postMentions.length, "| topMentions:", (msg?.mentions ?? []).length)
+
   // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
   // Với p2p: bỏ qua (blank message)
   // Với group/post có at-mention: dùng fallback "xin chào" thay vì bỏ qua
   if (!userText) {
-    if (postMentions.length === 0) return NextResponse.json({ ok: true })
+    if (postMentions.length === 0) {
+      console.log("[Lark] skip: empty text + no mentions")
+      return NextResponse.json({ ok: true })
+    }
     userText = "xin chào"
   }
 
