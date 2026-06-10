@@ -650,6 +650,23 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 27 (2026-06-10) — Phase 3 Graph + Country matching
+
+### Phase 3 — Graph relationships (build-phase3-graph.js)
+- 5035 `(Product)-[:COVERS]->(Country)` từ supported_countries (ISO 2-letter: JP, KR, GB...)
+- 5 Neo4j indexes: product_code, sku_code, country code/name, cg_code
+- Japan: 1391 SKUs direct + 1435 via CountryGroup chain
+- UK: 625 SKUs direct
+- Fix: supported_countries dùng ISO 2-letter (JP) không phải 3-letter group code (JPN)
+
+### Country name matching (router.ts)
+- Thêm ISO_TO_EN (word-exact): UK, TW, JP, KR, HK, SG, DE, FR, US, USA, UAE, AU...
+- Thêm "nước X" forms: nuoc anh, nuoc nhat, nuoc my, nuoc han, nuoc duc...
+- Thêm ~30 tên tiếng Anh/viết tắt: England, Britain, south korea, new zealand...
+- 3-bước fallback: VN names → cities → ISO codes
+
+---
+
 ## Session 26 (2026-06-10) — Phase 2 Semantic Search hoàn thành
 
 ### Gemini API key
