@@ -162,7 +162,8 @@ export async function searchSkus(params: {
     if (v.length) result = v
   }
   if (params.is_unlimited) {
-    const v = result.filter((s: any) => s.is_unlimited)
+    // Unlimited = is_unlimited flag OR data_amount >= 9999 (flag không phải lúc nào cũng đồng bộ)
+    const v = result.filter((s: any) => s.is_unlimited || (s.data_amount ?? 0) >= 9999)
     if (v.length) result = v
     else note += ` | Không có gói unlimited`
   } else if (params.data_gb != null) {

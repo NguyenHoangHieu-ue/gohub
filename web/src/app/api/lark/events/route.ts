@@ -106,7 +106,7 @@ async function buildToolContext(
   }
 
   if (agentId === "tu-van" && params.country) {
-    const { skus, note } = await searchSkus({ country: params.country, days: params.days, data_gb: params.dataGB, is_unlimited: params.isUnlimited, vendor: params.vendor }, ref)
+    const { skus, note } = await searchSkus({ country: params.country, days: params.days, data_gb: params.dataGB, is_unlimited: params.isUnlimited, vendor: params.vendor, sim_type: params.simType }, ref)
     const rows = skus.map(s => {
       const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
         : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
