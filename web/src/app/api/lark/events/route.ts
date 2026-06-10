@@ -356,10 +356,11 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     if (table) {
       const preText = split!.preText ? stripMarkdown(split!.preText) : ""
       await replyLarkTable(messageId, chatId, preText, table.headers, table.rows)
+      responseSent = true  // card đã gửi (xlsx là optional, không throw)
     } else {
       await replyLarkMessage(messageId, stripMarkdown(response))
+      responseSent = true
     }
-    responseSent = true
 
     const replyText = table
       ? (split!.preText ? stripMarkdown(split!.preText) + "\n[bảng đã gửi kèm]" : "[bảng đã gửi kèm]")

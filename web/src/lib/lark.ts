@@ -103,39 +103,43 @@ export async function replyLarkTable(
     }),
   })
 
-  // 2. Generate xlsx và upload + gửi vào chat
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-  XLSX.utils.book_append_sheet(wb, ws, "Data")
-  const xlsxBuf: Uint8Array = XLSX.write(wb, { type: "array", bookType: "xlsx" })
-  const xlsxArrayBuf = xlsxBuf.buffer.slice(xlsxBuf.byteOffset, xlsxBuf.byteOffset + xlsxBuf.byteLength) as ArrayBuffer
-  const xlsxBlob = new Blob([xlsxArrayBuf], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  })
-
-  const formData = new FormData()
-  formData.append("file_type", "xlsx")
-  formData.append("file_name", "data.xlsx")
-  formData.append("file", xlsxBlob, "data.xlsx")
-
-  const uploadRes = await fetch(`${LARK_API}/im/v1/files`, {
-    method:  "POST",
-    headers: { "Authorization": `Bearer ${token}` },
-    body:    formData,
-  })
-  const uploadData = await uploadRes.json()
-
-  if (uploadData.code === 0) {
-    const fileKey = uploadData.data?.file_key
-    await fetch(`${LARK_API}/im/v1/messages?receive_id_type=chat_id`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({
-        receive_id: chatId,
-        msg_type:   "file",
-        content:    JSON.stringify({ file_key: fileKey }),
-      }),
+  // 2. Generate xlsx và upload + gửi vào chat (optional — không throw nếu fail)
+  try {
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    XLSX.utils.book_append_sheet(wb, ws, "Data")
+    const xlsxBuf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as Uint8Array
+    const xlsxBlob = new Blob([Buffer.from(xlsxBuf)], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
+
+    const formData = new FormData()
+    formData.append("file_type", "xlsx")
+    formData.append("file_name", "data.xlsx")
+    formData.append("file", xlsxBlob, "data.xlsx")
+
+    const uploadRes = await fetch(`${LARK_API}/im/v1/files`, {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${token}` },
+      body:    formData,
+    })
+    const uploadData = await uploadRes.json()
+
+    if (uploadData.code === 0) {
+      const fileKey = uploadData.data?.file_key
+      await fetch(`${LARK_API}/im/v1/messages?receive_id_type=chat_id`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          receive_id: chatId,
+          msg_type:   "file",
+          content:    JSON.stringify({ file_key: fileKey }),
+        }),
+      })
+    }
+  } catch (e: any) {
+    console.error("[Lark] xlsx upload failed (card already sent):", e?.message)
+    // Không re-throw — card đã gửi thành công rồi
   }
 }
 
