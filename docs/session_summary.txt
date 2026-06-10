@@ -1,6 +1,31 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-10 (session 23)
 
+## File Thường Dùng (đọc đầu mỗi session)
+
+### Tài liệu / Tracking
+D:\Kien_Thuc\Work\gohub\LamViec\HeThong\docs\session_summary.txt   ← file này
+D:\Kien_Thuc\Work\gohub\LamViec\HeThong\Bug.txt                    ← danh sách bug cần fix
+
+### Memory (Claude persistent)
+C:\Users\hieuh\.claude\projects\D--Kien-Thuc-Work-gohub-LamViec-HeThong\memory\MEMORY.md
+
+### Skills AI (hướng dẫn cho Claude)
+D:\Kien_Thuc\Work\gohub\LamViec\HeThong\_Skills_AI\CLAUDE.md
+D:\Kien_Thuc\Work\gohub\LamViec\HeThong\_Skills_AI\FESkill.md
+D:\Kien_Thuc\Work\gohub\LamViec\HeThong\_Skills_AI\agents\AGENTS.md
+
+### Code chính (hay sửa)
+web/src/app/api/lark/events/route.ts     ← Lark bot handler
+web/src/lib/agents/agents.ts             ← system prompts + DISPLAY_RULES
+web/src/lib/agents/router.ts             ← routing logic
+web/src/lib/agents/tools.ts              ← tool implementations
+web/src/lib/agents/cache.ts              ← ref data cache 30 phút
+web/src/app/api/chat/route.ts            ← chat API + buildToolContext
+web/src/lib/lark.ts                      ← Lark API helpers
+
+---
+
 ## Trạng thái hiện tại
 Branch: main — đã sync với GitHub (https://github.com/NguyenHoangHieu-ue/gohub)
 Deploy: Next.js trên Vercel (https://gohub-murex.vercel.app) — ĐANG HOẠT ĐỘNG
@@ -277,11 +302,13 @@ Mục tiêu 5 tính năng:
 ## Session 23 (2026-06-10) — Lark thread @mention fix
 
 116. Fix Lark bot không reply khi user tạo thread và @mention:
-     - Root cause: khi `msgType = "text"` trong thread, `msg.mentions` có thể rỗng, `postMentions` không được populate → `allMentions = []` → `isMentioned = false` → skip
-     - Fix 1: extend `chatType` check từ chỉ `"group"` sang cả `"group" || "thread"` (handle Lark thread chat type)
-     - Fix 2: add Unicode NFC normalization cho bot name comparison (phòng NFC/NFD mismatch)
-     - Fix 3: add fallback cho thread messages — check raw `msg.content` string có chứa tên bot không (khi `msg.mentions` rỗng)
-     - Commit: a930bff
+     - Root cause: trong thread reply, `msg.mentions` có thể rỗng (Lark không populate)
+       → `allMentions = []` → `isMentioned = false` → skip, không reply
+     - Attempt 1 (a930bff): extend chatType, add NFC normalize → gây regression: main group chat cũng stop working
+     - Fix cuối (ee6183d): revert về 100% code gốc cho main group, chỉ thêm minimal thread fallback:
+       `const threadFallback = !isMentioned && isInThread && botName && typeof msg.content === "string" && msg.content.toLowerCase().includes(botName)`
+     - Lesson: khi fix Lark, chỉ thêm code mới, KHÔNG sửa existing logic dù có vẻ tương đương
+     - File: `web/src/app/api/lark/events/route.ts`
 
 ## Session 16 (2026-06-09) — Lark issues + multi-lookup limit
 
@@ -609,6 +636,14 @@ Next steps (user chạy):
 ## Pending (kỹ thuật — chưa fix)
 - Fix giới hạn 2000 SKU WM trong gap analysis (`/api/ncc/worldmove` dòng 82):
   Dùng pagination loop thay `.limit(2000)` để lấy đủ toàn bộ sysSet
+- Chạy SQL: `database/migrations/add_fx_rates_t06_2026.sql` trong Supabase (FX rates T06/2026)
+- Chạy: `node web/scripts/embed-products.js` (Phase 2 vector embeddings — sau khi setup xong)
+
+## Session 24 (2026-06-10) — Dọn dẹp tài liệu
+- Gộp PHASE_1_COMPLETED.md + PHASE_1_GUIDE.md → xóa, kết quả Phase 1 fold vào WORK.md
+- Xóa root session_summary.txt (duplicate của docs/session_summary.txt)
+- Tạo _Skills_AI/RULES.md — quy tắc AI: thêm vào file có sẵn, không tạo mới; ký hiệu trạng thái
+- Update WORK.md: đánh dấu Phase 1 ✅ với kết quả thực tế (777 products, 11,033 SKUs, 212 countries)
 
 ---
 
