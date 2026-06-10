@@ -375,9 +375,10 @@ export async function POST(req: NextRequest) {
       userText = (rawContent.text ?? "").replace(/@\S+\s*/g, "").trim()
 
     } else {
-      // Format post: { "zh_cn": { "content": [[{tag,text/user_name},...]] } }
-      const body = rawContent.zh_cn ?? rawContent.en_us
-        ?? (Object.values(rawContent)[0] as any) ?? {}
+      // Format post — 2 dạng:
+      // 1. {"zh_cn":{"content":[[...]]}}  (cũ)
+      // 2. {"title":"","content":[[...]]}  (thread/group mới)
+      const body = rawContent.zh_cn ?? rawContent.en_us ?? rawContent
       const blocks: any[][] = body.content ?? []
       const textParts: string[] = []
       for (const block of blocks) {
@@ -403,7 +404,9 @@ export async function POST(req: NextRequest) {
   // Với p2p: bỏ qua (blank message)
   // Với group/post có at-mention: dùng fallback "xin chào" thay vì bỏ qua
   if (!userText) {
-    if (postMentions.length === 0) {
+    // Xét cả postMentions (từ parse content) lẫn msg.mentions (từ Lark API)
+    const hasMentions = postMentions.length > 0 || (msg?.mentions ?? []).length > 0
+    if (!hasMentions) {
       console.log("[Lark] skip: empty text + no mentions")
       return NextResponse.json({ ok: true })
     }
