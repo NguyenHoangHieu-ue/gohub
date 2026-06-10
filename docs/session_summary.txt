@@ -674,6 +674,11 @@ Next steps (user chạy):
 - tools.ts: searchSkusSemantic() — Gemini embed + Neo4j vector query
 - chat/route.ts + lark/events/route.ts: semantic fallback khi tu-van trả 0 kết quả
 
+### Security fix (quan trọng)
+- Root cause leak key cũ: .env.local bị tracked trong git từ trước
+- Fix: git rm --cached .env.local + thêm .env.local/.env*.local vào .gitignore
+- Commit: 18fbe45 — key mới sẽ không bao giờ bị commit lên GitHub nữa
+
 ## Session 25 (2026-06-10) — Agent prompts + Lark mention fix
 ### Fix Lark
 - rootMsgFallback: bot không reply @mention ở root group message (isInThread=false) — commit 78b20eb
