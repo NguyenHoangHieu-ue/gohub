@@ -650,6 +650,30 @@ Next steps (user chạy):
   · commit 0b06152
 - Cập nhật _Skills_AI/agents/AGENTS.md với cấu trúc 4 agents mới
 
+## Session 26 (2026-06-10) — Phase 2 Semantic Search hoàn thành
+
+### Gemini API key
+- Key cũ (AIzaSyByOn...) bị Google revoke do bị commit trong session_summary.txt root (trước khi gitignore được fix)
+- Đã tạo key mới, cập nhật .env.local + Vercel
+
+### Neo4j graph build (build-neo4j-graph.js)
+- 212 Country nodes + 77 CountryGroup nodes
+- 1287 INCLUDES relationships (CountryGroup → Country)
+- 763 Products enriched + COVERS_GROUP
+- 12,619 Listing nodes + HAS_LISTING
+- Fix: `call` không có trong products table (chỉ có trong skus)
+
+### Embeddings (embed-skus.js)
+- Model: gemini-embedding-001 (3072 dims) — text-embedding-004 không support v1beta
+- 7107 active SKUs embedded, 0 errors (~20 phút)
+- Vector index: sku_embedding (cosine, 3072 dims)
+- 3926 inactive SKUs không embed (intentional)
+
+### Code changes
+- /api/semantic-search/route.ts: real vector search thay mock
+- tools.ts: searchSkusSemantic() — Gemini embed + Neo4j vector query
+- chat/route.ts + lark/events/route.ts: semantic fallback khi tu-van trả 0 kết quả
+
 ## Session 25 (2026-06-10) — Agent prompts + Lark mention fix
 ### Fix Lark
 - rootMsgFallback: bot không reply @mention ở root group message (isInThread=false) — commit 78b20eb
