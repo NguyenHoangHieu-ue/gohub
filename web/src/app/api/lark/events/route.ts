@@ -311,8 +311,16 @@ export async function POST(req: NextRequest) {
   // Group chat: chỉ reply khi được @mention
   if (chatType === "group") {
     const mentions: any[] = msg?.mentions ?? []
-    const botName = process.env.LARK_BOT_NAME
-    const isMentioned = mentions.some((m: any) => !botName || m.name === botName)
+    const botName = (process.env.LARK_BOT_NAME ?? "").trim().toLowerCase()
+
+    // Log để debug group mới
+    console.log("[Lark] group msg | chatId:", chatId, "| mentions:", JSON.stringify(mentions))
+
+    const isMentioned = mentions.some((m: any) => {
+      if (!botName) return true  // LARK_BOT_NAME chưa set → reply tất cả mention
+      const mName = (m.name ?? "").trim().toLowerCase()
+      return mName === botName || mName.includes(botName) || botName.includes(mName)
+    })
     if (!isMentioned) return NextResponse.json({ ok: true })
   }
 
