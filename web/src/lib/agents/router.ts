@@ -192,6 +192,7 @@ const ISO_TO_EN: Record<string, string> = {
 
 export interface ExtractedParams {
   country?:       string
+  region?:        string     // "asia" | "southeast_asia" | "europe" | "north_america" | "americas" | "middle_east" | "africa" | "oceania"
   skuCodes?:      string[]   // hỗ trợ nhiều mã SKU (13 ký tự)
   productCodes?:  string[]   // hỗ trợ nhiều Product Code (8 ký tự)
   listingCodes?:  string[]   // hỗ trợ nhiều Listing Code
@@ -209,10 +210,59 @@ export interface ExtractedParams {
 
 const MAX_CODES = 50  // tối đa bao nhiêu mã xử lý mỗi lần
 
+// ─── Region lookup ────────────────────────────────────────────────────────────
+// Key: normalized (bỏ dấu, lowercase, no extra space) | Value: region id
+const REGION_KEYWORDS_NORM: Record<string, string> = {
+  // Châu Á (tổng quát + Đông Bắc Á)
+  "chau a":           "asia",
+  "chaua":            "asia",
+  "chau a thai binh duong": "asia",
+  "dong bac a":       "asia",
+  // Đông Nam Á
+  "dong nam a":       "southeast_asia",
+  "dongnama":         "southeast_asia",
+  "southeast asia":   "southeast_asia",
+  "southeastasia":    "southeast_asia",
+  // Châu Âu
+  "chau au":          "europe",
+  "chauu":            "europe",
+  "europe":           "europe",
+  // Bắc Mỹ
+  "bac my":           "north_america",
+  "bacmy":            "north_america",
+  "north america":    "north_america",
+  "northamerica":     "north_america",
+  // Châu Mỹ (tổng quát)
+  "chau my":          "americas",
+  "chaumy":           "americas",
+  "my latin":         "americas",
+  // Trung Đông
+  "trung dong":       "middle_east",
+  "trungdong":        "middle_east",
+  "middle east":      "middle_east",
+  "middleeast":       "middle_east",
+  // Châu Phi
+  "chau phi":         "africa",
+  "chauphi":          "africa",
+  "africa":           "africa",
+  // Châu Đại Dương
+  "chau dai duong":   "oceania",
+  "chaudaiduong":     "oceania",
+  "oceania":          "oceania",
+  "uc new zealand":   "oceania",
+}
+// Sorted longest-first to avoid partial matches
+const REGION_SORTED = Object.entries(REGION_KEYWORDS_NORM).sort((a, b) => b[0].length - a[0].length)
+
 export function extractParams(message: string): ExtractedParams {
   const msg     = message.toLowerCase()
   const msgNorm = normalizeText(message)   // bỏ dấu + lowercase + chuẩn space
   const params: ExtractedParams = {}
+
+  // Region detection — TRƯỚC country lookup để tránh "châu á" → country="Asia"
+  for (const [key, region] of REGION_SORTED) {
+    if (msgNorm.includes(key)) { params.region = region; break }
+  }
 
   // Tất cả SKU codes (13 ký tự)
   const skuMatches = [...message.matchAll(/\b([A-Z0-9]{13})\b/gi)]
@@ -242,25 +292,26 @@ export function extractParams(message: string): ExtractedParams {
     }
   }
 
-  // Country — 3 bước ưu tiên giảm dần
-  // Bước 1: VN/EN name lookup (dài → ngắn để tránh "nhat" match trước "nhat ban")
-  const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
-  for (const [key, en] of sortedNorm) {
-    if (msgNorm.includes(key)) { params.country = en; break }
-  }
-  // Bước 2: City lookup
-  if (!params.country) {
-    const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
-    for (const [key, country] of sortedCity) {
-      if (msgNorm.includes(key)) { params.country = country; break }
+  // Country — chỉ chạy khi không phải regional query
+  if (!params.region) {
+    // Bước 1: VN/EN name lookup (dài → ngắn để tránh "nhat" match trước "nhat ban")
+    const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
+    for (const [key, en] of sortedNorm) {
+      if (msgNorm.includes(key)) { params.country = en; break }
     }
-  }
-  // Bước 3: ISO code / abbreviation — word-exact match
-  // "UK", "TW", "jp", "KR"... cần khớp đúng từ, không khớp trong từ khác
-  if (!params.country) {
-    const words = msgNorm.split(/[\s,.\-\/]+/).filter(Boolean)
-    for (const w of words) {
-      if (ISO_TO_EN[w]) { params.country = ISO_TO_EN[w]; break }
+    // Bước 2: City lookup
+    if (!params.country) {
+      const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
+      for (const [key, country] of sortedCity) {
+        if (msgNorm.includes(key)) { params.country = country; break }
+      }
+    }
+    // Bước 3: ISO code / abbreviation — word-exact match
+    if (!params.country) {
+      const words = msgNorm.split(/[\s,.\-\/]+/).filter(Boolean)
+      for (const w of words) {
+        if (ISO_TO_EN[w]) { params.country = ISO_TO_EN[w]; break }
+      }
     }
   }
 
@@ -316,9 +367,8 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))
     return "giai-dap"
 
-  // Product search — có criteria tìm kiếm (nước / vendor / unlimited) hoặc từ khóa tìm kiếm
-  // Note: "list sku taiwan unlimited worldmove" = product search, KHÔNG phải code lookup
-  if (params.country || params.vendor || params.isUnlimited ||
+  // Product search — có criteria tìm kiếm (nước / khu vực / vendor / unlimited) hoặc từ khóa tìm kiếm
+  if (params.country || params.region || params.vendor || params.isUnlimited ||
       /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói|list|li[eê]t k[eê]/.test(m))
     return "tu-van"
 

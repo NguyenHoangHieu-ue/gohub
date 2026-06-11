@@ -2,7 +2,8 @@ import { supabaseAdmin }            from "@/lib/supabase"
 import { getRefCache }              from "@/lib/agents/cache"
 import type { ExtractedParams }     from "@/lib/agents/router"
 import {
-  searchSkus, searchSkusSemantic,
+  searchSkus, searchSkusSemantic, searchSkusForRegion,
+  REGION_DISPLAY,
   getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
   getFxRates, findGaps,
@@ -38,83 +39,107 @@ export async function buildToolContext(
     for (const r of rates) fx[r.key] = parseFloat(r.value)
   }
 
-  if (agentId === "tu-van" && params.country) {
-    const { skus, note } = await searchSkus({
-      country:      params.country,
-      days:         params.days,
-      data_gb:      params.dataGB,
-      is_unlimited: params.isUnlimited,
-      vendor:       params.vendor,
-      sim_type:     params.simType,
-    }, ref)
+  if (agentId === "tu-van") {
 
-    const rows = skus.map(s => {
-      const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999
-        ? "Unlimited"
-        : s.data_amount != null
-          ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}`
-          : null
-      let cogsVnd: string | null = null
-      let cogsUsd: string | null = null
-      if (isCost && s.latest_cogs != null) {
-        const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-        cogsVnd = vnd.toLocaleString("en-US")
-        cogsUsd = `$${usd}`
-      }
-      const parts = [
-        s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
-        s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
-        s.operator_code  ? `operator:${s.operator_code}`  : null,
-        s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-        s.call           ? `call:${s.call}`                : null,
-        s.hotspot        ? `hotspot:${s.hotspot}`          : null,
-        cogsVnd,
-        cogsUsd,
-        s.note           ? `[note:${s.note}]`              : null,
-      ]
-      return parts.filter(Boolean).join("|")
-    })
-    sections.push(
-      `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
-      note ? `Lưu ý: ${note}` : "",
-      `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}|[note nếu có]`,
-      ...rows
-    )
+    // ── Case 1: Regional query (châu Á, châu Âu...) ──────────────────────────
+    if (params.region) {
+      const regionCtx = await searchSkusForRegion(
+        params.region,
+        { days: params.days, simType: params.simType, isUnlimited: params.isUnlimited, vendor: params.vendor },
+        ref
+      )
+      sections.push(regionCtx)
+    }
 
-    if (skus.length === 0) {
-      const semQuery = [params.country, params.days ? `${params.days} ngày` : "",
-        params.isUnlimited ? "unlimited" : "", params.dataGB ? `${params.dataGB}GB` : "",
-        params.simType || ""].filter(Boolean).join(" ")
-      const semCodes = await searchSkusSemantic(semQuery, 10)
-      if (semCodes.length) {
-        const { data: semSkus } = await supabaseAdmin
-          .from("sku_catalog")
-          .select("sku_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,operator_code,latest_cogs,latest_cogs_currency,note")
-          .eq("status", "Active").in("sku_code", semCodes)
-        if (semSkus?.length) {
-          const semRows = semSkus.map((s: any) => {
-            const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
-              : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
-            let cogsVnd: string | null = null, cogsUsd: string | null = null
-            if (isCost && s.latest_cogs != null) {
-              const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-              cogsVnd = vnd.toLocaleString("en-US"); cogsUsd = `$${usd}`
-            }
-            return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
-              s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
-              s.operator_code  ? `operator:${s.operator_code}`  : null,
-              s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-              s.call           ? `call:${s.call}`                : null,
-              cogsVnd, cogsUsd, s.note ? `[note:${s.note}]` : null,
-            ].filter(Boolean).join("|")
-          })
-          sections.push(
-            `=== SEMANTIC SEARCH: ${semSkus.length} SKU tương tự (gợi ý, xác nhận với team) ===`,
-            `[Không có gói chính xác cho ${params.country} — kết quả tìm kiếm ngữ nghĩa]`,
-            ...semRows
-          )
+    // ── Case 2: Single-country query ──────────────────────────────────────────
+    else if (params.country) {
+      const { skus, note } = await searchSkus({
+        country:      params.country,
+        days:         params.days,
+        data_gb:      params.dataGB,
+        is_unlimited: params.isUnlimited,
+        vendor:       params.vendor,
+        sim_type:     params.simType,
+      }, ref)
+
+      const rows = skus.map(s => {
+        const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999
+          ? "Unlimited"
+          : s.data_amount != null
+            ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}`
+            : null
+        let cogsVnd: string | null = null
+        let cogsUsd: string | null = null
+        if (isCost && s.latest_cogs != null) {
+          const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+          cogsVnd = vnd.toLocaleString("en-US")
+          cogsUsd = `$${usd}`
+        }
+        const parts = [
+          s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
+          s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+          s.operator_code  ? `operator:${s.operator_code}`  : null,
+          s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+          s.call           ? `call:${s.call}`                : null,
+          s.hotspot        ? `hotspot:${s.hotspot}`          : null,
+          cogsVnd,
+          cogsUsd,
+          s.note           ? `[note:${s.note}]`              : null,
+        ]
+        return parts.filter(Boolean).join("|")
+      })
+      sections.push(
+        `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
+        note ? `Lưu ý: ${note}` : "",
+        `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}|[note nếu có]`,
+        ...rows
+      )
+
+      // Semantic fallback: standard search trả về 0 → thử vector search
+      if (skus.length === 0) {
+        const semQuery = [params.country, params.days ? `${params.days} ngày` : "",
+          params.isUnlimited ? "unlimited" : "", params.dataGB ? `${params.dataGB}GB` : "",
+          params.simType || ""].filter(Boolean).join(" ")
+        const semCodes = await searchSkusSemantic(semQuery, 10)
+        if (semCodes.length) {
+          const { data: semSkus } = await supabaseAdmin
+            .from("sku_catalog")
+            .select("sku_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,operator_code,latest_cogs,latest_cogs_currency,note")
+            .eq("status", "Active").in("sku_code", semCodes)
+          if (semSkus?.length) {
+            const semRows = semSkus.map((s: any) => {
+              const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+                : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+              let cogsVnd: string | null = null, cogsUsd: string | null = null
+              if (isCost && s.latest_cogs != null) {
+                const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
+                cogsVnd = vnd.toLocaleString("en-US"); cogsUsd = `$${usd}`
+              }
+              return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
+                s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+                s.operator_code  ? `operator:${s.operator_code}`  : null,
+                s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
+                s.call           ? `call:${s.call}`                : null,
+                cogsVnd, cogsUsd, s.note ? `[note:${s.note}]` : null,
+              ].filter(Boolean).join("|")
+            })
+            sections.push(
+              `=== SEMANTIC SEARCH: ${semSkus.length} SKU tương tự (gợi ý, xác nhận với team) ===`,
+              `[Không có gói chính xác cho ${params.country} — kết quả tìm kiếm ngữ nghĩa]`,
+              ...semRows
+            )
+          }
         }
       }
+    }
+
+    // ── Case 3: Thiếu nước + khu vực → cần làm rõ ────────────────────────────
+    else {
+      sections.push(
+        `=== THÔNG TIN CẦN LÀM RÕ ===`,
+        `Chưa xác định được nước đến hoặc khu vực từ câu hỏi.`,
+        `Hỏi user theo cấu trúc: (1) Tóm tắt bạn hiểu gì, (2) Hỏi rõ: nước đến, số ngày (tùy chọn), SIM/eSIM (tùy chọn).`
+      )
     }
   }
 

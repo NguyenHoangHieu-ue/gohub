@@ -5,9 +5,55 @@ import type { RefCache } from "./cache"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
+// ─── Region data ──────────────────────────────────────────────────────────────
+
+export const REGION_COUNTRIES: Record<string, string[]> = {
+  asia: [
+    "Japan", "South Korea", "Taiwan", "Hong Kong", "Singapore",
+    "Thailand", "Malaysia", "Philippines", "Indonesia", "India",
+    "China", "Macao", "Mongolia", "Vietnam",
+  ],
+  southeast_asia: [
+    "Thailand", "Malaysia", "Philippines", "Indonesia", "Singapore",
+    "Vietnam", "Myanmar", "Cambodia", "Laos",
+  ],
+  europe: [
+    "United Kingdom", "France", "Germany", "Italy", "Spain",
+    "Netherlands", "Switzerland", "Sweden", "Norway", "Denmark",
+    "Finland", "Poland", "Austria", "Belgium", "Portugal",
+    "Greece", "Czech Republic", "Turkey", "Hungary", "Romania",
+    "Croatia", "Serbia", "Ukraine",
+  ],
+  north_america: ["United States", "Canada", "Mexico"],
+  americas: [
+    "United States", "Canada", "Mexico", "Brazil", "Argentina",
+    "Chile", "Colombia", "Peru",
+  ],
+  middle_east: [
+    "United Arab Emirates", "Saudi Arabia", "Qatar", "Kuwait",
+    "Bahrain", "Jordan", "Israel",
+  ],
+  africa: [
+    "South Africa", "Nigeria", "Kenya", "Ghana", "Egypt",
+    "Morocco", "Tanzania", "Ethiopia",
+  ],
+  oceania: ["Australia", "New Zealand"],
+}
+
+export const REGION_DISPLAY: Record<string, string> = {
+  asia:           "Châu Á",
+  southeast_asia: "Đông Nam Á",
+  europe:         "Châu Âu",
+  north_america:  "Bắc Mỹ",
+  americas:       "Châu Mỹ",
+  middle_east:    "Trung Đông",
+  africa:         "Châu Phi",
+  oceania:        "Châu Đại Dương",
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getCountryCodes(countryEn: string, ref: RefCache) {
+export function getCountryCodes(countryEn: string, ref: RefCache) {
   const s = countryEn.toLowerCase().trim()
 
   // Tìm ISO code từ ref_countries (exact match tên hoặc code)
@@ -188,6 +234,100 @@ export async function searchSkus(params: {
   }
 
   return { skus: result.slice(0, 15), note }
+}
+
+// ─── Tool: search_skus_for_region ────────────────────────────────────────────
+// Tìm tổng quan SKU cho cả một khu vực địa lý (châu Á, châu Âu...).
+// Trả về context string (summary theo từng nước) cho Gemini.
+
+export async function searchSkusForRegion(
+  region: string,
+  filter: { days?: number; simType?: string; isUnlimited?: boolean; vendor?: string },
+  ref: RefCache
+): Promise<string> {
+  const countries  = REGION_COUNTRIES[region]
+  const displayName = REGION_DISPLAY[region] ?? region
+  if (!countries?.length) return ""
+
+  // Collect single-country group codes per country (no DB call — pure cache)
+  const countryToGroupCodes: Record<string, string[]> = {}
+  const allGroupCodes = new Set<string>()
+
+  for (const country of countries) {
+    const { single } = getCountryCodes(country, ref)
+    if (single.length) {
+      countryToGroupCodes[country] = single
+      single.forEach(c => allGroupCodes.add(c))
+    }
+  }
+
+  if (!allGroupCodes.size) return `GoHub chưa có sản phẩm nào được phân loại riêng cho ${displayName}`
+
+  // Single DB query — all countries in region
+  let q = supabaseAdmin
+    .from("sku_catalog")
+    .select("sku_code,country_group,sim_esim,day_amount,is_unlimited,latest_cogs,latest_cogs_currency")
+    .eq("status", "Active")
+    .in("country_group", [...allGroupCodes])
+
+  if (filter.simType) {
+    q = q.eq("sim_esim", filter.simType === "esim" ? "eSIM" : "SIM") as typeof q
+  }
+  if (filter.days)        q = q.eq("day_amount", filter.days) as typeof q
+  if (filter.isUnlimited) q = q.eq("is_unlimited", true) as typeof q
+
+  const { data: allSkus } = await q
+  if (!allSkus?.length) {
+    const filterDesc = [
+      filter.simType ? filter.simType.toUpperCase() : null,
+      filter.days    ? `${filter.days} ngày`         : null,
+      filter.isUnlimited ? "Unlimited"               : null,
+    ].filter(Boolean).join(", ")
+    return `GoHub chưa có sản phẩm nào trong ${displayName}${filterDesc ? ` (${filterDesc})` : ""}`
+  }
+
+  // Reverse-map: group_code → country name
+  const groupToCountry: Record<string, string> = {}
+  for (const [country, codes] of Object.entries(countryToGroupCodes))
+    for (const code of codes) groupToCountry[code] = country
+
+  // Aggregate stats per country
+  type Stat = { count: number; simTypes: Set<string>; days: Set<number>; vendors: Set<string> }
+  const stats: Record<string, Stat> = {}
+  for (const sku of allSkus) {
+    const country = groupToCountry[sku.country_group]
+    if (!country) continue
+    if (!stats[country]) stats[country] = { count: 0, simTypes: new Set(), days: new Set(), vendors: new Set() }
+    stats[country].count++
+    if (sku.sim_esim)    stats[country].simTypes.add(sku.sim_esim)
+    if (sku.day_amount)  stats[country].days.add(sku.day_amount)
+    // vendor from sku_code[5:7] (e.g. "WM", "3H", "3D")
+    const vendor = (sku.sku_code as string)?.slice(5, 7)
+    if (vendor)          stats[country].vendors.add(vendor)
+  }
+
+  const covered   = Object.keys(stats)
+  const uncovered = countries.filter(c => !covered.includes(c))
+
+  const lines: string[] = [
+    `=== KHU VỰC: ${displayName.toUpperCase()} (${covered.length}/${countries.length} nước có sản phẩm) ===`,
+    `nước|SKU active|loại SIM|số ngày có|vendor`,
+  ]
+
+  for (const [country, s] of Object.entries(stats).sort((a, b) => b[1].count - a[1].count)) {
+    const daysArr = [...s.days].sort((a, b) => a - b)
+    const daysStr = daysArr.length <= 5
+      ? daysArr.join("/") + "d"
+      : `${daysArr[0]}–${daysArr[daysArr.length - 1]}d (${daysArr.length} mốc)`
+    lines.push(`${country}|${s.count}|${[...s.simTypes].join("/")}|${daysStr}|${[...s.vendors].join(",")}`)
+  }
+
+  if (uncovered.length) {
+    lines.push(``, `Chưa có sản phẩm riêng: ${uncovered.join(", ")}`)
+  }
+  lines.push(``, `Tổng: ${allSkus.length} SKU active trải rộng ${covered.length} nước`)
+
+  return lines.join("\n")
 }
 
 // ─── Tool: identify_code ─────────────────────────────────────────────────────

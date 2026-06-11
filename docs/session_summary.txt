@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-10 (session 23)
+Cập nhật lần cuối: 2026-06-11 (session 32)
 
 ## File Thường Dùng (đọc đầu mỗi session)
 
@@ -634,11 +634,20 @@ Next steps (user chạy):
 - Đây là file user ghi danh sách bug cần fix
 
 ## Pending (kỹ thuật — chưa fix)
-- Fix giới hạn 2000 SKU WM trong gap analysis (`/api/ncc/worldmove` dòng 82):
-  Dùng pagination loop thay `.limit(2000)` để lấy đủ toàn bộ sysSet
+- ✅ Fix giới hạn 2000 SKU WM trong gap analysis — XONG từ session 12 (pagination loop)
 - ✅ Chạy SQL: `database/migrations/add_fx_rates_t06_2026.sql` — XONG (2026-06-10)
 - ✅ Bug #4 APN Data Fix — XONG (migration + import_worldmove_v2.py đã chạy)
 - ✅ Phase 2 embeddings — XONG (7107 SKUs embedded)
+
+## Session 32 (2026-06-11) — Refactor buildToolContext
+
+### Tách buildToolContext ra lib/agents/context.ts (commit 2f1c0fd)
+- Tạo `web/src/lib/agents/context.ts` — export `convertCogs` + `buildToolContext`
+- `chat/route.ts` và `lark/events/route.ts` import từ context.ts thay vì có bản riêng
+- Sửa bug drift: Alias (Item) lookup trong lark dùng `listing_code` thay vì `sku_code` — đã fix
+- Task #1 (WM limit) đã done từ session 12, pending note trong session_summary là stale
+
+---
 
 ## Session 31 (2026-06-10) — Phase 4 Neo4j Auto-Sync
 
@@ -653,15 +662,17 @@ Next steps (user chạy):
 - Tạo `.github/workflows/neo4j_sync.yml`:
   · Trigger: workflow_run sau "Sync GoHub Data to Supabase" (conclusion=success)
   · Cũng có workflow_dispatch để chạy tay
-  · Node.js 20 + npm ci --omit=dev + node scripts/neo4j_sync.js
+  · Node.js 22 + npm ci --omit=dev + node scripts/neo4j_sync.js
   · Env vars: NEO4J_PASSWORD, GEMINI_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
-- Update WORK.md: Phase 4 ✅ + user action còn lại (add 2 secrets GitHub)
+- Update WORK.md: Phase 4 ✅
 
-### User cần làm (để workflow chạy được):
-1. Vào GitHub repo → Settings → Secrets → Actions → New secret:
-   - `NEO4J_PASSWORD` = password Neo4j AuraDB (từ .env.local)
-   - `GEMINI_KEY` = Gemini API key (từ .env.local)
-2. Sau đó mỗi ngày lúc 01:00 UTC: sync.yml chạy xong → neo4j_sync.yml tự trigger
+### Bugs gặp khi deploy:
+1. Node.js 20 không có native WebSocket → @supabase/realtime-js throw khi khởi tạo
+   Fix 1: nâng Node.js 22 trong workflow (không ăn thua vì re-run dùng commit cũ)
+   Fix 2: thêm WebSocket stub vào đầu script (globalThis.WebSocket = fake class)
+   Lesson: "Re-run failed jobs" dùng commit cũ → phải trigger "Run workflow" mới
+
+### Status: ✅ Workflow chạy thành công, tất cả 4 phases WORK.md hoàn thành.
 
 ## Session 24 (2026-06-10) — Dọn dẹp tài liệu + Refactor agents
 - Gộp PHASE_1_COMPLETED.md + PHASE_1_GUIDE.md → xóa, kết quả Phase 1 fold vào WORK.md
