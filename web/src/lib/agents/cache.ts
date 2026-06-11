@@ -57,7 +57,7 @@ export async function getRefCache(): Promise<RefCache> {
 
   // ncc_worldmove: 8921 rows — parallel fetch thay vì sequential để tránh timeout
   // 12 requests đồng thời (~200ms) vs 9 requests nối tiếp (~2000ms)
-  const WM_SELECT = "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,apn,network_type,onsite_carrier,providers,coverage,data_reset,notification,prepaid_card,exist"
+  const WM_SELECT = "vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,is_lesim,apn,apn_summary,network_type,onsite_carrier,providers,coverage,data_reset,notification,prepaid_card,exist"
   const wmBatches = await Promise.all(
     Array.from({ length: 12 }, (_, i) =>
       (supabaseAdmin.from("ncc_worldmove") as any)
