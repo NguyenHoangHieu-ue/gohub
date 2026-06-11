@@ -245,8 +245,50 @@ export async function searchSkusForRegion(
   filter: { days?: number; simType?: string; isUnlimited?: boolean; vendor?: string },
   ref: RefCache
 ): Promise<string> {
-  const countries  = REGION_COUNTRIES[region]
   const displayName = REGION_DISPLAY[region] ?? region
+
+  // Primary: resolve countries from DB geo hierarchy (continent/sub_region in ref_countries)
+  // Fallback: hardcoded REGION_COUNTRIES (used until populate_geo_hierarchy.py is run)
+  let countries: string[] = []
+
+  const hasContinentData = Object.keys(ref.continentMap).length > 0
+
+  if (hasContinentData) {
+    // DB-driven: filter ref.countries by continent or sub_region
+    const subRegionTarget = region === "southeast_asia" ? "Southeast Asia"
+      : region === "north_america" ? "North America"
+      : region === "middle_east" ? null   // continent-level
+      : region === "africa" ? null
+      : region === "oceania" ? null
+      : null
+
+    const continentTarget = REGION_DISPLAY[region]
+      ? Object.entries({
+          asia: "Asia", europe: "Europe", americas: "Americas",
+          africa: "Africa", oceania: "Oceania", middle_east: "Middle East",
+          north_america: "Americas", southeast_asia: "Asia",
+        })[Object.keys({
+          asia: "Asia", europe: "Europe", americas: "Americas",
+          africa: "Africa", oceania: "Oceania", middle_east: "Middle East",
+          north_america: "Americas", southeast_asia: "Asia",
+        }).indexOf(region)]?.[1] ?? null
+      : null
+
+    countries = (ref.countries as any[])
+      .filter((c: any) => {
+        if (subRegionTarget) return c.sub_region === subRegionTarget
+        if (continentTarget) return c.continent === continentTarget
+        return false
+      })
+      .map((c: any) => c.name)
+      .filter(Boolean)
+  }
+
+  // Fallback to hardcoded if DB not populated yet
+  if (!countries.length) {
+    countries = REGION_COUNTRIES[region] ?? []
+  }
+
   if (!countries?.length) return ""
 
   // Collect single-country group codes per country (no DB call — pure cache)

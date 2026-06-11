@@ -1,0 +1,55 @@
+name: Sync Data Files to Supabase
+
+on:
+  # Chạy tự động khi có file thay đổi trong Data/ (push to main)
+  push:
+    branches: [main]
+    paths:
+      - "Data/**/*.xlsx"
+
+  # Chạy định kỳ mỗi ngày 02:00 UTC (sau API sync lúc 01:00 UTC)
+  schedule:
+    - cron: "0 2 * * *"
+
+  # Chạy thủ công từ GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force re-import tất cả file (bỏ qua hash check)"
+        required: false
+        default: "false"
+
+jobs:
+  sync-data-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install supabase openpyxl
+
+      - name: Run data file sync
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="--force"
+          fi
+          python sync/sync_data_files.py $ARGS
+
+      - name: Run geo hierarchy population (only on force or first run)
+        if: ${{ github.event.inputs.force == 'true' }}
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python sync/populate_geo_hierarchy.py

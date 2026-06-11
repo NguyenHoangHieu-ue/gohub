@@ -4,12 +4,16 @@ const TTL = 30 * 60 * 1000
 
 export interface RefCache {
   supportCountries: any[]
-  countries:        any[]
+  countries:        any[]   // includes continent + sub_region when populated
   vendors:          any[]
   nccWm:            any[]
   nccWmInSystem:    Set<string>
   ncc3hk:           any[]
   groupMap:         Record<string, string>
+  // Derived geo maps (computed from countries after cache load)
+  continentMap:     Record<string, string>   // ISO code → continent
+  subRegionMap:     Record<string, string>   // ISO code → sub_region
+  categoriesMap:    Record<string, any>      // category_code → ref_categories row
 }
 
 let _cache: { data: RefCache; at: number } | null = null
@@ -32,20 +36,23 @@ export async function getRefCache(): Promise<RefCache> {
   const now = Date.now()
   if (_cache && now - _cache.at < TTL) return _cache.data
 
-  // Fetch các bảng nhỏ song song
-  const [sc, ct, vd, hk] = await Promise.all([
+  // Fetch các bảng nhỏ song song — countries thêm continent + sub_region
+  const [sc, ct, vd, hk, cats] = await Promise.all([
     supabaseAdmin.from("ref_support_countries")
-      .select("code,support_country,country_codes").order("code")
+      .select("code,support_country,support_country_vn,country_codes").order("code")
       .then(r => r.data ?? []),
     supabaseAdmin.from("ref_countries")
-      .select("code,name").order("name")
+      .select("code,name,name_vn,continent,sub_region").order("name")
       .then(r => r.data ?? []),
     supabaseAdmin.from("ref_vendors")
-      .select("vendor_code,name")
+      .select("vendor_code,name,description")
       .then(r => r.data ?? []),
     supabaseAdmin.from("ncc_3hk")
       .select("zone,country,network,price_per_gb_hkd,is_kyc").order("zone")
       .then(r => r.data ?? []),
+    supabaseAdmin.from("ref_categories")
+      .select("category_code,name_en,name_vn,iso_code,region_type")
+      .then(r => r.data ?? [], () => [] as any[]),  // graceful: table may not exist yet
   ])
 
   // ncc_worldmove: 8921 rows — parallel fetch thay vì sequential để tránh timeout
@@ -65,6 +72,18 @@ export async function getRefCache(): Promise<RefCache> {
   const groupMap: Record<string, string> = {}
   for (const s of sc as any[]) groupMap[s.code] = s.support_country ?? s.code
 
+  // Derived geo maps — built from ref_countries data (empty if continent not yet populated)
+  const continentMap: Record<string, string> = {}
+  const subRegionMap: Record<string, string> = {}
+  for (const c of ct as any[]) {
+    if (c.continent)  continentMap[c.code]  = c.continent
+    if (c.sub_region) subRegionMap[c.code]  = c.sub_region
+  }
+
+  // ref_categories map
+  const categoriesMap: Record<string, any> = {}
+  for (const cat of cats as any[]) categoriesMap[cat.category_code] = cat
+
   // Dùng cột exist thay vì query skus riêng (exist được sync.py cập nhật mỗi ngày)
   const nccWmInSystem = new Set(
     (wm as any[])
@@ -80,6 +99,9 @@ export async function getRefCache(): Promise<RefCache> {
     nccWmInSystem,
     ncc3hk:           hk as any[],
     groupMap,
+    continentMap,
+    subRegionMap,
+    categoriesMap,
   }
   _cache = { data, at: now }
   return data

@@ -32,6 +32,11 @@ _Skills_AI/
 !memory/*.md
 *.md
 
+# Data folder: ref xlsx files ARE tracked (public reference data, trigger GitHub Actions)
+# ncc/ subfolders NOT tracked (may contain sensitive pricing)
+Data/ncc/
+Data/*.md
+
 # OS
 .DS_Store
 Thumbs.db
