@@ -496,55 +496,79 @@ export async function identifyCode(code: string): Promise<any> {
 
 // ─── Tool: get_product_detail ─────────────────────────────────────────────────
 
+// Chỉ đọc cột VN (bỏ _en), bỏ date_created/last_modified_date
 const LISTING_COLS = [
   "listing_code","reference_product_code","tenant","status","listing_type",
-  "listing_name_en","listing_name_vn",
+  "listing_name_vn",
   "type_of_sim","product_type","network_operator",
   "supported_countries",
-  "data_type_en","data_type_vn",
+  "data_type_vn",
   "category_code",
-  "daily_reset_time_en","daily_reset_time_vn",
-  "activation_time_en","activation_time_vn",
+  "daily_reset_time_vn",
+  "activation_time_vn",
   "network_type",
-  "hotspot_en","hotspot_vn",
-  "kyc_needed_en","kyc_needed_vn",
-  "kyc_links_en","kyc_links_vn",
-  "expirations_en","expirations_vn",
-  "top_up_options_en","top_up_options_vn",
-  "activation_en","activation_vn",
-  "activation_links_en","activation_links_vn",
-  "special_activation_required_en","special_activation_required_vn",
-  "unsupported_apps_en","unsupported_apps_vn",
-  "telco_perks_en","telco_perks_vn",
-  "note_en","note_vn",
-  "call_sms_details_en","call_sms_details_vn",
-  "local_phone_number_en","local_phone_number_vn","local_phone_number_country",
-  "call_en","call_vn",
+  "hotspot_vn",
+  "kyc_needed_vn",
+  "kyc_links_vn",
+  "expirations_vn",
+  "top_up_options_vn",
+  "activation_vn",
+  "activation_links_vn",
+  "special_activation_required_vn",
+  "unsupported_apps_vn",
+  "telco_perks_vn",
+  "note_vn",
+  "call_sms_details_vn",
+  "local_phone_number_vn","local_phone_number_country",
+  "call_vn",
   "apn",
+  "synced_at",
 ].join(",")
 
+// Chỉ đọc cột VN, bỏ _en và date fields
 const ITEM_COLS = [
   "item_code","alias","sku_code","listing_code","tenant",
   "category_code","status","item_type",
-  "item_name_en","item_name_vn",
+  "item_name_vn",
   "day_amount","day_amount_unit",
   "data_amount","data_amount_unit",
-  "throttle_speed_en","throttle_speed_vn",
-  "call_en","call_vn",
-  "call_sms_details_en","call_sms_details_vn",
+  "throttle_speed_vn",
+  "call_vn",
+  "call_sms_details_vn",
   "sales_channel","unitprice","currency",
+  "synced_at",
+].join(",")
+
+// Explicit columns cho products (bỏ data_plan_type, date_created, last_modified_date)
+const PRODUCT_COLS = [
+  "product_code","tenant","status","type_of_sim","product_type","operator_code",
+  "vendor_code","purchase_type","source_type","sku_type","data_type","import_type",
+  "supported_countries","network_type","onsite_carrier","local_phone_number",
+  "hotspot","kyc_code","kyc_needed","top_up_options","base_sim_esim_sku_code",
+  "daily_reset_time","activation_time","apn_original","apn","local_number_country",
+  "kyc_links","activation","unsupported_apps","telco_perks","note","synced_at",
+].join(",")
+
+// Explicit columns cho skus (bỏ wr_group + dropped cost cols + date fields)
+const SKU_COLS = [
+  "sku_code","product_code","tenant","status","sim_esim","product_type",
+  "throttle_speed","call","expirations","currency",
+  "day_amount","day_amount_unit","data_amount","data_amount_unit",
+  "frame","datapack","call_sms_details","vendor_sku","vendor_sku_sim",
+  "latest_cogs","latest_cogs_currency","synced_at",
 ].join(",")
 
 export async function getProductDetail(sku_code: string): Promise<any> {
   const { data: sku } = await supabaseAdmin
-    .from("skus").select("*").eq("sku_code", sku_code).maybeSingle()
+    .from("skus").select(SKU_COLS).eq("sku_code", sku_code).maybeSingle()
   if (!sku) return { error: `SKU "${sku_code}" không tồn tại trong database` }
 
+  const skuAny = sku as any
   const [{ data: product }, { data: listings }, { data: items }] = await Promise.all([
-    supabaseAdmin.from("products").select("*").eq("product_code", sku.product_code).maybeSingle(),
+    supabaseAdmin.from("products").select(PRODUCT_COLS).eq("product_code", skuAny.product_code).maybeSingle(),
     supabaseAdmin.from("listings")
       .select(LISTING_COLS)
-      .eq("reference_product_code", sku.product_code)
+      .eq("reference_product_code", skuAny.product_code)
       .eq("status", "Active")
       .limit(5),
     supabaseAdmin.from("items")
@@ -561,12 +585,12 @@ export async function getProductDetail(sku_code: string): Promise<any> {
 
 export async function getProductByCode(product_code: string): Promise<any> {
   const { data: product } = await supabaseAdmin
-    .from("products").select("*").eq("product_code", product_code).maybeSingle()
+    .from("products").select(PRODUCT_COLS).eq("product_code", product_code).maybeSingle()
   if (!product) return { error: `Product code "${product_code}" không tồn tại trong database` }
 
   const [{ data: skus }, listings] = await Promise.all([
     supabaseAdmin.from("skus")
-      .select("sku_code,status,sim_esim,data_amount,data_amount_unit,day_amount,expirations,throttle_speed,latest_cogs,latest_cogs_currency,vendor_sku,note")
+      .select("sku_code,status,sim_esim,data_amount,data_amount_unit,day_amount,expirations,throttle_speed,latest_cogs,latest_cogs_currency,vendor_sku,note,synced_at")
       .eq("product_code", product_code)
       .eq("status", "Active")
       .order("day_amount"),

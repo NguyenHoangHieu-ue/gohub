@@ -72,7 +72,7 @@ def load_xlsx_rows(path: Path, min_row: int = 2):
 # ─── Import functions (one per data type) ────────────────────────────────────
 
 def import_countries(sb, path: Path) -> int:
-    """ref_countries: code, name (nameVn)"""
+    """ref_countries: code, name (nameVn) — dùng UPSERT để giữ continent/sub_region."""
     raw = load_xlsx_rows(path)
     rows = []
     for r in raw:
@@ -81,8 +81,8 @@ def import_countries(sb, path: Path) -> int:
         name_vn = (r.get("nameVn") or r.get("name_vn") or r.get("NameVn") or "").strip() or None
         if not code:
             continue
+        # Chỉ upsert code/name/name_vn — continent/sub_region được giữ nguyên
         rows.append({"code": code, "name": name, "name_vn": name_vn})
-    sb.table("ref_countries").delete().neq("code", "PLACEHOLDER_NEVER_EXISTS").execute()
     upsert_batch(sb, "ref_countries", rows, "code")
     return len(rows)
 
@@ -102,7 +102,6 @@ def import_support_countries(sb, path: Path) -> int:
             "support_country_vn": r.get("supportCountryVn") or r.get("support_country_vn"),
             "country_codes":      r.get("countryCodes") or r.get("country_codes"),
         })
-    sb.table("ref_support_countries").delete().neq("code", "PLACEHOLDER_NEVER_EXISTS").execute()
     upsert_batch(sb, "ref_support_countries", rows, "code")
     return len(rows)
 
