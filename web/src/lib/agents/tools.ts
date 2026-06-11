@@ -237,8 +237,42 @@ export async function searchSkus(params: {
 }
 
 // ─── Tool: search_skus_for_region ────────────────────────────────────────────
-// Tìm tổng quan SKU cho cả một khu vực địa lý (châu Á, châu Âu...).
-// Trả về context string (summary theo từng nước) cho Gemini.
+// Tìm SKU cho cả một khu vực (châu Á, châu Âu...).
+// Dùng coverage ratio để phân loại nhóm nước: single-country vs multi-country.
+
+function buildRegionIsoSet(region: string, ref: RefCache): Set<string> {
+  // Map region id → continent/sub_region target
+  const REGION_TO_GEO: Record<string, { continent?: string; subRegion?: string }> = {
+    "asia":           { continent: "Asia" },
+    "southeast_asia": { subRegion: "Southeast Asia" },
+    "europe":         { continent: "Europe" },
+    "americas":       { continent: "Americas" },
+    "north_america":  { subRegion: "North America" },
+    "middle_east":    { continent: "Middle East" },
+    "africa":         { continent: "Africa" },
+    "oceania":        { continent: "Oceania" },
+  }
+  const geo = REGION_TO_GEO[region]
+  if (!geo) return new Set()
+
+  const isoSet = new Set<string>()
+  for (const c of ref.countries as any[]) {
+    if (geo.subRegion && c.sub_region === geo.subRegion) isoSet.add(c.code)
+    else if (!geo.subRegion && geo.continent && c.continent === geo.continent) isoSet.add(c.code)
+  }
+
+  // Fallback: use hardcoded if DB not populated
+  if (!isoSet.size) {
+    const fallbackCountries = REGION_COUNTRIES[region] ?? []
+    for (const name of fallbackCountries) {
+      const row = (ref.countries as any[]).find(
+        (c: any) => (c.name ?? "").toLowerCase() === name.toLowerCase()
+      )
+      if (row) isoSet.add(row.code)
+    }
+  }
+  return isoSet
+}
 
 export async function searchSkusForRegion(
   region: string,
@@ -247,127 +281,132 @@ export async function searchSkusForRegion(
 ): Promise<string> {
   const displayName = REGION_DISPLAY[region] ?? region
 
-  // Primary: resolve countries from DB geo hierarchy (continent/sub_region in ref_countries)
-  // Fallback: hardcoded REGION_COUNTRIES (used until populate_geo_hierarchy.py is run)
-  let countries: string[] = []
+  // 1. Get ISO codes belonging to this region
+  const regionIso = buildRegionIsoSet(region, ref)
+  if (!regionIso.size) return ""
 
-  const hasContinentData = Object.keys(ref.continentMap).length > 0
+  // 2. For each support_countries group, compute coverage ratio
+  //    ratio = (countries in this region) / (total countries in group)
+  //    primary  group: ratio ≥ 0.5  → group is mostly this region
+  //    mixed    group: ratio < 0.5  → skip (too broad / global)
+  type GroupMeta = {
+    code: string
+    displayName: string
+    overlapIso: string[]   // ISO codes in this group that are in the region
+    totalCodes: number
+    isSingle: boolean      // only covers 1 country
+  }
+  const primaryGroups: GroupMeta[] = []
 
-  if (hasContinentData) {
-    // DB-driven: filter ref.countries by continent or sub_region
-    const subRegionTarget = region === "southeast_asia" ? "Southeast Asia"
-      : region === "north_america" ? "North America"
-      : region === "middle_east" ? null   // continent-level
-      : region === "africa" ? null
-      : region === "oceania" ? null
-      : null
+  for (const sc of ref.supportCountries as any[]) {
+    const ccStr = (sc.country_codes ?? "")
+    const groupCodes = ccStr.split(/[\s,;|/]+/)
+      .map((c: string) => c.trim().toUpperCase()).filter(Boolean)
+    if (!groupCodes.length) continue
 
-    const continentTarget = REGION_DISPLAY[region]
-      ? Object.entries({
-          asia: "Asia", europe: "Europe", americas: "Americas",
-          africa: "Africa", oceania: "Oceania", middle_east: "Middle East",
-          north_america: "Americas", southeast_asia: "Asia",
-        })[Object.keys({
-          asia: "Asia", europe: "Europe", americas: "Americas",
-          africa: "Africa", oceania: "Oceania", middle_east: "Middle East",
-          north_america: "Americas", southeast_asia: "Asia",
-        }).indexOf(region)]?.[1] ?? null
-      : null
+    const overlap = groupCodes.filter((c: string) => regionIso.has(c))
+    if (!overlap.length) continue
 
-    countries = (ref.countries as any[])
-      .filter((c: any) => {
-        if (subRegionTarget) return c.sub_region === subRegionTarget
-        if (continentTarget) return c.continent === continentTarget
-        return false
-      })
-      .map((c: any) => c.name)
-      .filter(Boolean)
+    const ratio = overlap.length / groupCodes.length
+    if (ratio < 0.5) continue  // skip global / mixed groups
+
+    primaryGroups.push({
+      code:        sc.code,
+      displayName: sc.support_country ?? sc.code,
+      overlapIso:  overlap,
+      totalCodes:  groupCodes.length,
+      isSingle:    groupCodes.length === 1,
+    })
   }
 
-  // Fallback to hardcoded if DB not populated yet
-  if (!countries.length) {
-    countries = REGION_COUNTRIES[region] ?? []
-  }
+  if (!primaryGroups.length) return `GoHub chưa có sản phẩm nào cho ${displayName}`
 
-  if (!countries?.length) return ""
-
-  // Collect single-country group codes per country (no DB call — pure cache)
-  const countryToGroupCodes: Record<string, string[]> = {}
-  const allGroupCodes = new Set<string>()
-
-  for (const country of countries) {
-    const { single } = getCountryCodes(country, ref)
-    if (single.length) {
-      countryToGroupCodes[country] = single
-      single.forEach(c => allGroupCodes.add(c))
-    }
-  }
-
-  if (!allGroupCodes.size) return `GoHub chưa có sản phẩm nào được phân loại riêng cho ${displayName}`
-
-  // Single DB query — all countries in region
+  // 3. Single DB query for all primary groups
+  const primaryCodes = primaryGroups.map(g => g.code)
   let q = supabaseAdmin
     .from("sku_catalog")
-    .select("sku_code,country_group,sim_esim,day_amount,is_unlimited,latest_cogs,latest_cogs_currency")
+    .select("sku_code,country_group,sim_esim,day_amount,is_unlimited")
     .eq("status", "Active")
-    .in("country_group", [...allGroupCodes])
+    .in("country_group", primaryCodes)
 
-  if (filter.simType) {
-    q = q.eq("sim_esim", filter.simType === "esim" ? "eSIM" : "SIM") as typeof q
-  }
+  if (filter.simType)     q = q.eq("sim_esim", filter.simType === "esim" ? "eSIM" : "SIM") as typeof q
   if (filter.days)        q = q.eq("day_amount", filter.days) as typeof q
   if (filter.isUnlimited) q = q.eq("is_unlimited", true) as typeof q
 
   const { data: allSkus } = await q
-  if (!allSkus?.length) {
-    const filterDesc = [
-      filter.simType ? filter.simType.toUpperCase() : null,
-      filter.days    ? `${filter.days} ngày`         : null,
-      filter.isUnlimited ? "Unlimited"               : null,
-    ].filter(Boolean).join(", ")
-    return `GoHub chưa có sản phẩm nào trong ${displayName}${filterDesc ? ` (${filterDesc})` : ""}`
-  }
+  if (!allSkus?.length) return `GoHub chưa có SKU Active nào cho ${displayName}`
 
-  // Reverse-map: group_code → country name
-  const groupToCountry: Record<string, string> = {}
-  for (const [country, codes] of Object.entries(countryToGroupCodes))
-    for (const code of codes) groupToCountry[code] = country
+  // 4. Build group → meta map; SKU count per group
+  const groupMeta: Record<string, GroupMeta> = {}
+  for (const g of primaryGroups) groupMeta[g.code] = g
 
-  // Aggregate stats per country
-  type Stat = { count: number; simTypes: Set<string>; days: Set<number>; vendors: Set<string> }
-  const stats: Record<string, Stat> = {}
-  for (const sku of allSkus) {
-    const country = groupToCountry[sku.country_group]
-    if (!country) continue
-    if (!stats[country]) stats[country] = { count: 0, simTypes: new Set(), days: new Set(), vendors: new Set() }
-    stats[country].count++
-    if (sku.sim_esim)    stats[country].simTypes.add(sku.sim_esim)
-    if (sku.day_amount)  stats[country].days.add(sku.day_amount)
-    // vendor from sku_code[5:7] (e.g. "WM", "3H", "3D")
+  type Stat = { count: number; simTypes: Set<string>; days: Set<number>; vendors: Set<string>; meta: GroupMeta }
+  const statsByGroup: Record<string, Stat> = {}
+  for (const sku of allSkus as any[]) {
+    const meta = groupMeta[sku.country_group]
+    if (!meta) continue
+    if (!statsByGroup[meta.code]) {
+      statsByGroup[meta.code] = { count: 0, simTypes: new Set(), days: new Set(), vendors: new Set(), meta }
+    }
+    statsByGroup[meta.code].count++
+    if (sku.sim_esim)   statsByGroup[meta.code].simTypes.add(sku.sim_esim)
+    if (sku.day_amount) statsByGroup[meta.code].days.add(sku.day_amount)
     const vendor = (sku.sku_code as string)?.slice(5, 7)
-    if (vendor)          stats[country].vendors.add(vendor)
+    if (vendor)         statsByGroup[meta.code].vendors.add(vendor)
   }
 
-  const covered   = Object.keys(stats)
-  const uncovered = countries.filter(c => !covered.includes(c))
+  // 5. Map single-country groups to country names (for cleaner display)
+  const isoToName: Record<string, string> = {}
+  for (const c of ref.countries as any[]) isoToName[c.code] = c.name
+
+  // 6. Separate single-country vs multi-country groups
+  const singles = Object.values(statsByGroup).filter(s => s.meta.isSingle)
+  const multis  = Object.values(statsByGroup).filter(s => !s.meta.isSingle)
+
+  const fmtRow = (s: Stat, nameOverride?: string) => {
+    const daysArr = [...s.days].sort((a, b) => a - b)
+    const daysStr = daysArr.length <= 5 ? daysArr.join("/") + "d"
+      : `${daysArr[0]}-${daysArr[daysArr.length - 1]}d`
+    const name = nameOverride ?? s.meta.displayName
+    return `${name}|${s.count}|${[...s.simTypes].join("/")}|${daysStr}|${[...s.vendors].join(",")}`
+  }
+
+  // Countries with no single-country group
+  const coveredIso = new Set(singles.flatMap(s => s.meta.overlapIso))
+  const uncoveredCountries = [...regionIso]
+    .filter(iso => !coveredIso.has(iso))
+    .map(iso => isoToName[iso] || iso)
+    .filter(Boolean)
 
   const lines: string[] = [
-    `=== KHU VỰC: ${displayName.toUpperCase()} (${covered.length}/${countries.length} nước có sản phẩm) ===`,
-    `nước|SKU active|loại SIM|số ngày có|vendor`,
+    `=== KHU VỰC: ${displayName.toUpperCase()} ===`,
+    `Tổng: ${allSkus.length} SKU | ${singles.length} nước riêng | ${multis.length} gói đa quốc gia`,
+    ``,
+    `── Gói theo nước cụ thể (${singles.length}) ──`,
+    `tên nước|SKU|loại SIM|ngày có|vendor`,
   ]
 
-  for (const [country, s] of Object.entries(stats).sort((a, b) => b[1].count - a[1].count)) {
-    const daysArr = [...s.days].sort((a, b) => a - b)
-    const daysStr = daysArr.length <= 5
-      ? daysArr.join("/") + "d"
-      : `${daysArr[0]}–${daysArr[daysArr.length - 1]}d (${daysArr.length} mốc)`
-    lines.push(`${country}|${s.count}|${[...s.simTypes].join("/")}|${daysStr}|${[...s.vendors].join(",")}`)
+  for (const s of singles.sort((a, b) => b.count - a.count)) {
+    const countryName = s.meta.overlapIso.length === 1
+      ? (isoToName[s.meta.overlapIso[0]] || s.meta.displayName)
+      : s.meta.displayName
+    lines.push(fmtRow(s, countryName))
   }
 
-  if (uncovered.length) {
-    lines.push(``, `Chưa có sản phẩm riêng: ${uncovered.join(", ")}`)
+  if (multis.length) {
+    lines.push(``, `── Gói đa quốc gia trong khu vực (${multis.length}) ──`)
+    lines.push(`mã nhóm|nước gồm|SKU|loại SIM|ngày có|vendor`)
+    for (const s of multis.sort((a, b) => b.count - a.count)) {
+      const isoNames = s.meta.overlapIso.map(iso => isoToName[iso] || iso).join("+")
+      const daysArr = [...s.days].sort((a, b) => a - b)
+      const daysStr = daysArr.length <= 5 ? daysArr.join("/") + "d" : `${daysArr[0]}-${daysArr[daysArr.length - 1]}d`
+      lines.push(`${s.meta.code}|${isoNames}|${s.count}|${[...s.simTypes].join("/")}|${daysStr}|${[...s.vendors].join(",")}`)
+    }
   }
-  lines.push(``, `Tổng: ${allSkus.length} SKU active trải rộng ${covered.length} nước`)
+
+  if (uncoveredCountries.length) {
+    lines.push(``, `Không có gói riêng: ${uncoveredCountries.slice(0, 10).join(", ")}${uncoveredCountries.length > 10 ? `... (+${uncoveredCountries.length - 10})` : ""}`)
+  }
 
   return lines.join("\n")
 }

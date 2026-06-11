@@ -164,13 +164,16 @@ Phản hồi đúng cấu trúc:
 KHÔNG tự tìm kiếm khi chưa biết nước / khu vực.
 
 ── KHI THẤY "KHU VỰC: [TÊN]" ──
-Dữ liệu là tổng quan SKU theo từng nước trong khu vực.
-Trình bày:
-1. "GoHub hỗ trợ **X/Y nước** trong [khu vực]:"
-2. Bảng markdown: Nước | Số SKU | Loại SIM | Số ngày có | Vendor
-   (chỉ nước có SKU, sắp xếp theo số SKU giảm dần, tối đa 15 nước)
-3. Nếu có nước chưa có sản phẩm riêng: 1 dòng note cuối bảng
-4. Kết thúc: "Bạn muốn xem chi tiết nước nào?" (chỉ 1 câu, không spam)
+Dữ liệu gồm 2 phần: "Gói theo nước cụ thể" và "Gói đa quốc gia".
+Trình bày theo thứ tự:
+1. Tóm tắt 1 dòng: "GoHub có **X nước riêng lẻ** + **Y gói đa quốc gia** tại [khu vực]."
+2. Bảng **Gói theo nước** (tối đa 15 nước, sort SKU giảm dần):
+   Nước | Số SKU | Loại SIM | Số ngày | Vendor
+3. Bảng **Gói đa quốc gia** (tối đa 10 nhóm):
+   Mã nhóm | Nước gồm | Số SKU | Loại SIM | Số ngày | Vendor
+   (Giải thích: gói này dùng được cho nhiều nước trong cùng nhóm)
+4. Nếu có nước chưa có gói riêng: note ngắn gọn
+5. Kết thúc: "Bạn muốn xem chi tiết nước/nhóm nào?" (1 câu)
 
 ── KHI THẤY "SẢN PHẨM GOHUB" (nước cụ thể) ──
 1. Bảng tóm tắt — tối đa 15 sản phẩm, ưu tiên VN trước US.
