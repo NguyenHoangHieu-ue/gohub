@@ -126,21 +126,46 @@ def import_vendors(sb, path: Path) -> int:
 
 
 def import_categories(sb, path: Path) -> int:
-    """ref_categories: category_code, name_en, name_vn, iso_code"""
+    """
+    ref_categories — xử lý cả 2 format file:
+      - categories-single-country-*.xlsx: code=ISO 2-char (JP, VN...)
+      - categories-multi-country-*.xlsx:  code=3-char GoHub (CHM, ASI, EUR...)
+    Columns từ GoHub export: code, name, type, description, seoUrlKey, isPopular, sortOrder, isShow
+    """
     raw = load_xlsx_rows(path)
     rows = []
+    fname = path.name.lower()
+
     for r in raw:
-        code = (r.get("category_code") or r.get("Category Code") or "").strip()
+        # Support cả format export mới (code/name/type) và format cũ (category_code/name_en)
+        code = (r.get("code") or r.get("category_code") or r.get("Category Code") or "").strip()
+        name = (r.get("name") or r.get("name_en") or r.get("Name EN") or "").strip()
+        rtype = (r.get("type") or r.get("region_type") or "").strip()
         if not code:
             continue
+
+        # Xác định region_type và iso_code từ tên file và dữ liệu
+        if "single" in fname or rtype.lower() in ("single-country", "single"):
+            region_type = "Single-Country"
+            # Với single-country: code chính là ISO 2-char
+            iso_code = code if len(code) == 2 else None
+        elif "multi" in fname or rtype.lower() in ("multi-country", "multi"):
+            region_type = "Multi-Country"
+            iso_code = None   # multi-country không có iso đơn
+        else:
+            region_type = r.get("region_type") or "country"
+            iso_code = code if len(code) == 2 else None
+
         rows.append({
             "category_code": code,
-            "name_en":       r.get("name_en") or r.get("Name EN"),
-            "name_vn":       r.get("name_vn") or r.get("Name VN"),
-            "iso_code":      r.get("iso_code") or r.get("ISO Code"),
-            "region_type":   r.get("region_type") or "country",
-            "notes":         r.get("notes"),
+            "name_en":       name,
+            "name_vn":       r.get("name_vn"),
+            "iso_code":      iso_code,
+            "region_type":   region_type,
+            "notes":         r.get("description") or r.get("notes"),
+            "updated_at":    NOW(),
         })
+
     upsert_batch(sb, "ref_categories", rows, "category_code")
     return len(rows)
 
@@ -260,15 +285,19 @@ def import_3hk_ncc(sb, path: Path) -> int:
 
 # Map: (subfolder, filename_pattern) → import_function
 FILE_MAP = {
-    "countries":         import_countries,
-    "support_countries": import_support_countries,
-    "vendors":           import_vendors,
-    "categories":        import_categories,
-    "fx_rates":          import_fx_rates,
-    "fx":                import_fx_rates,        # alias
-    "worldmove":         import_worldmove_ncc,
-    "3hk":               import_3hk_ncc,
-    "3hk_zones":         import_3hk_ncc,
+    "countries":                    import_countries,
+    "support_countries":            import_support_countries,
+    "vendors":                      import_vendors,
+    "categories":                   import_categories,
+    "categories_single_country":    import_categories,   # categories-single-country-*.xlsx
+    "categories_multi_country":     import_categories,   # categories-multi-country-*.xlsx
+    "categories_single":            import_categories,
+    "categories_multi":             import_categories,
+    "fx_rates":                     import_fx_rates,
+    "fx":                           import_fx_rates,
+    "worldmove":                    import_worldmove_ncc,
+    "3hk":                          import_3hk_ncc,
+    "3hk_zones":                    import_3hk_ncc,
 }
 
 

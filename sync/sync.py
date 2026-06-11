@@ -105,10 +105,16 @@ def main():
         ("items",    client.get_all_items,    "item_code"),
     ]
 
+    # Cột đã DROP khỏi DB sau migration v2 — phải loại bỏ trước khi upsert
+    SKUS_DROP = {"original_cost", "reference_cost_vnd",
+                 "final_cogs_included_vat_vnd", "final_cogs_usd"}
+
     for table, fetch_fn, pk in tasks:
         print(f"[{table}] Fetching...", flush=True)
         records = fetch_fn()
-        rows    = [dataclasses.asdict(r) for r in records]
+        rows = [dataclasses.asdict(r) for r in records]
+        if table == "skus":
+            rows = [{k: v for k, v in r.items() if k not in SKUS_DROP} for r in rows]
         print(f"[{table}] Upserting {len(rows):,} rows...", flush=True)
         upsert(sb, table, rows, pk)
         sb.table("sync_log").upsert(

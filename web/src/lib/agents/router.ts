@@ -191,21 +191,21 @@ const ISO_TO_EN: Record<string, string> = {
 }
 
 export interface ExtractedParams {
-  country?:       string
-  region?:        string     // "asia" | "southeast_asia" | "europe" | "north_america" | "americas" | "middle_east" | "africa" | "oceania"
-  skuCodes?:      string[]   // hỗ trợ nhiều mã SKU (13 ký tự)
-  productCodes?:  string[]   // hỗ trợ nhiều Product Code (8 ký tự)
-  listingCodes?:  string[]   // hỗ trợ nhiều Listing Code
-  // backward-compat aliases (first element of arrays)
-  skuCode?:       string
-  productCode?:   string
-  listingCode?:   string
-  days?:          number
-  dataGB?:        number
-  isUnlimited?:   boolean
-  vendor?:        string
-  nccVendor?:     "wm" | "3hk" | "all"
-  simType?:       "esim" | "sim"
+  country?:        string
+  region?:         string     // "asia" | "southeast_asia" | "europe" | etc.
+  groupCode?:      string     // GoHub 3-char code trực tiếp: JPN, CHM, EU1, APA, GLO...
+  skuCodes?:       string[]
+  productCodes?:   string[]
+  listingCodes?:   string[]
+  skuCode?:        string
+  productCode?:    string
+  listingCode?:    string
+  days?:           number
+  dataGB?:         number
+  isUnlimited?:    boolean
+  vendor?:         string
+  nccVendor?:      "wm" | "3hk" | "all"
+  simType?:        "esim" | "sim"
 }
 
 const MAX_CODES = 50  // tối đa bao nhiêu mã xử lý mỗi lần
@@ -262,6 +262,34 @@ export function extractParams(message: string): ExtractedParams {
   // Region detection — TRƯỚC country lookup để tránh "châu á" → country="Asia"
   for (const [key, region] of REGION_SORTED) {
     if (msgNorm.includes(key)) { params.region = region; break }
+  }
+
+  // GoHub 3-char group/category code detection (word-exact, uppercase 2-4 chars)
+  // Ví dụ: JPN, CHM, EU1, APA, GLO, STA, MDE, JAK, TWN, KOR, HKM, SGP...
+  // Chỉ detect khi user gõ rõ mã, không extract từ giữa từ khác
+  if (!params.region) {
+    const words = message.toUpperCase().split(/[\s,.\-\/()]+/).filter(Boolean)
+    const GROUP_CODE_RE = /^[A-Z0-9]{3,4}$/
+    // Known multi-country category codes (from ref_categories multi)
+    const MULTI_CAT_CODES = new Set(["CHM","ASI","EUR","STA","SAM","APA","AFA","MDE","ATA","OCN","NAM","SMI","SMT","JKR","GLO"])
+    for (const w of words) {
+      if (GROUP_CODE_RE.test(w) && w.length >= 3 && w.length <= 4) {
+        // Tránh nhầm với số ngày (3, 5, 7...) hoặc GB (3GB → đã xử lý bên dưới)
+        if (/^\d+$/.test(w)) continue
+        params.groupCode = w
+        // Map multi-country category codes → region
+        if (MULTI_CAT_CODES.has(w)) {
+          const CAT_TO_REGION: Record<string, string> = {
+            "ASI":"asia","ATA":"asia","APA":"asia","STA":"southeast_asia",
+            "EUR":"europe","MDE":"middle_east","AFA":"africa",
+            "OCN":"oceania","NAM":"north_america","SAM":"americas","GLO":"global",
+            "JKR":"asia","CHM":"asia","SMI":"asia","SMT":"asia",
+          }
+          if (CAT_TO_REGION[w]) params.region = CAT_TO_REGION[w]
+        }
+        break
+      }
+    }
   }
 
   // Tất cả SKU codes (13 ký tự)
@@ -367,8 +395,8 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))
     return "giai-dap"
 
-  // Product search — có criteria tìm kiếm (nước / khu vực / vendor / unlimited) hoặc từ khóa tìm kiếm
-  if (params.country || params.region || params.vendor || params.isUnlimited ||
+  // Product search — có criteria tìm kiếm (nước / khu vực / group code / vendor / unlimited)
+  if (params.country || params.region || params.groupCode || params.vendor || params.isUnlimited ||
       /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói|list|li[eê]t k[eê]/.test(m))
     return "tu-van"
 

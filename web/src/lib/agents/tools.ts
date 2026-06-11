@@ -372,6 +372,78 @@ export async function searchSkusForRegion(
   return lines.join("\n")
 }
 
+// ─── Tool: search_skus_by_group_code ─────────────────────────────────────────
+// Query trực tiếp bằng GoHub 3-char code (JPN, CHM, EU1, APA, GLO...)
+// Dùng khi user gõ thẳng mã nhóm nước hoặc category code
+
+export async function searchSkusByGroupCode(
+  groupCode: string,
+  filter: { days?: number; simType?: string; isUnlimited?: boolean; vendor?: string; dataGB?: number },
+  isCost: boolean,
+  fx: Record<string, number>
+): Promise<string> {
+  const code = groupCode.toUpperCase()
+
+  let q = supabaseAdmin
+    .from("sku_catalog")
+    .select("sku_code,product_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,hotspot,kyc_needed,operator_code,vendor_sku,latest_cogs,latest_cogs_currency,note")
+    .eq("status", "Active")
+    .eq("country_group", code)
+
+  if (filter.simType)     q = q.eq("sim_esim", filter.simType === "esim" ? "eSIM" : "SIM") as typeof q
+  if (filter.days)        q = q.eq("day_amount", filter.days) as typeof q
+  if (filter.isUnlimited) q = q.eq("is_unlimited", true) as typeof q
+
+  const { data: skus, error } = await q.order("tenant").order("day_amount")
+  if (error || !skus?.length) {
+    return `=== MÃ NHÓM "${code}" ===\nKhông tìm thấy SKU Active nào cho mã nhóm ${code}`
+  }
+
+  let result = skus as any[]
+  if (filter.vendor) {
+    const v = result.filter(s => s.sku_code.slice(5, 7).toUpperCase() === filter.vendor!.toUpperCase())
+    if (v.length) result = v
+  }
+  if (filter.dataGB != null) {
+    const exact = result.filter(s => s.data_amount === filter.dataGB)
+    if (exact.length) result = exact
+  }
+
+  const rows = result.slice(0, 20).map((s: any) => {
+    const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+      : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+    let cogsVnd: string | null = null, cogsUsd: string | null = null
+    if (isCost && s.latest_cogs != null) {
+      const usdVnd = fx["fx.usd_vnd"] ?? 26000
+      const hkdUsd = fx["fx.hkd_usd"] ?? 0.128
+      const twdUsd = fx["fx.twd_usd"] ?? 0.031
+      let usd = 0
+      switch ((s.latest_cogs_currency ?? "").toUpperCase()) {
+        case "USD": usd = s.latest_cogs; break
+        case "VND": usd = s.latest_cogs / usdVnd; break
+        case "HKD": usd = s.latest_cogs * hkdUsd; break
+        case "TWD": usd = s.latest_cogs * twdUsd; break
+        default:    usd = s.latest_cogs; break
+      }
+      cogsVnd = Math.round(usd * usdVnd).toLocaleString("en-US")
+      cogsUsd = `$${Math.round(usd * 10000) / 10000}`
+    }
+    return [s.sku_code, s.tenant, s.sim_esim, dataStr, `${s.day_amount}d`,
+      s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
+      s.kyc_needed ? `kyc:${s.kyc_needed}` : null,
+      s.call ? `call:${s.call}` : null,
+      cogsVnd, cogsUsd,
+      s.note ? `[note:${s.note}]` : null,
+    ].filter(Boolean).join("|")
+  })
+
+  return [
+    `=== MÃ NHÓM "${code}": ${result.length} SKU Active ===`,
+    `sku_code|tenant|sim|data|days|throttle|kyc|call${isCost ? "|cogs_vnd|cogs_usd" : ""}`,
+    ...rows
+  ].join("\n")
+}
+
 // ─── Tool: identify_code ─────────────────────────────────────────────────────
 
 export async function identifyCode(code: string): Promise<any> {

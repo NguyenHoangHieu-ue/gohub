@@ -2,7 +2,7 @@ import { supabaseAdmin }            from "@/lib/supabase"
 import { getRefCache }              from "@/lib/agents/cache"
 import type { ExtractedParams }     from "@/lib/agents/router"
 import {
-  searchSkus, searchSkusSemantic, searchSkusForRegion,
+  searchSkus, searchSkusSemantic, searchSkusForRegion, searchSkusByGroupCode,
   REGION_DISPLAY,
   getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
@@ -41,17 +41,30 @@ export async function buildToolContext(
 
   if (agentId === "tu-van") {
 
-    // ── Case 1: Regional query (châu Á, châu Âu...) ──────────────────────────
-    if (params.region) {
-      const regionCtx = await searchSkusForRegion(
-        params.region,
-        { days: params.days, simType: params.simType, isUnlimited: params.isUnlimited, vendor: params.vendor },
-        ref
-      )
-      sections.push(regionCtx)
+    // ── Case 1: Direct 3-char group/category code (JPN, CHM, EU1, APA...) ─────
+    if (params.groupCode && !params.region) {
+      const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
+      sections.push(groupCtx)
     }
 
-    // ── Case 2: Single-country query ──────────────────────────────────────────
+    // ── Case 2: Regional query (châu Á, châu Âu...) — có thể kết hợp groupCode ─
+    else if (params.region) {
+      // Nếu có groupCode cụ thể trong khu vực (vd: "gói CHM" → region=asia, groupCode=CHM)
+      // thì dùng groupCode; nếu không thì dùng regional search
+      if (params.groupCode) {
+        const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
+        sections.push(groupCtx)
+      } else {
+        const regionCtx = await searchSkusForRegion(
+          params.region,
+          { days: params.days, simType: params.simType, isUnlimited: params.isUnlimited, vendor: params.vendor },
+          ref
+        )
+        sections.push(regionCtx)
+      }
+    }
+
+    // ── Case 3: Single-country query ──────────────────────────────────────────
     else if (params.country) {
       const { skus, note } = await searchSkus({
         country:      params.country,
