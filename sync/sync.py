@@ -41,7 +41,7 @@ def sync_sku_catalog(sb):
     skus_raw = fetch_all_rows(sb,
         "skus",
         "sku_code,product_code,tenant,status,sim_esim,product_type,"
-        "data_amount,data_amount_unit,day_amount,throttle_speed,call,"
+        "data_amount,data_amount_unit,day_amount,expirations,throttle_speed,call,"
         "vendor_sku,latest_cogs,latest_cogs_currency"
     )
 
@@ -75,7 +75,9 @@ def sync_sku_catalog(sb):
             "data_amount":          amt,
             "data_amount_unit":     s.get("data_amount_unit"),
             "is_unlimited":         (amt or 0) >= 9999,
+            "is_daily":             len(code) >= 8 and code[7] in ("A","B","P","Z"),  # A/B=Daily Unlimited, P=Daily throttle<2M, Z=Daily no-throttle
             "day_amount":           s.get("day_amount"),
+            "expirations":          s.get("expirations"),
             "throttle_speed":       s.get("throttle_speed"),
             "call":                 s.get("call"),
             "hotspot":              p.get("hotspot"),

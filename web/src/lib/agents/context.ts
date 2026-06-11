@@ -269,6 +269,32 @@ export async function buildToolContext(
       `=== DANH SÁCH VENDOR (${vendors.length}) ===`,
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
+
+    // Inject ref_categories để bot hiểu mã nhóm hiển thị (CHM, STA, ASI...)
+    const allCats = Object.values(ref.categoriesMap as Record<string, any>)
+    if (allCats.length) {
+      const multi = allCats.filter((c: any) => c.region_type === "Multi-Country")
+      const single = allCats.filter((c: any) => c.region_type === "Single-Country")
+      sections.push(
+        `=== MÃ CATEGORY (${allCats.length} tổng: ${single.length} nước đơn + ${multi.length} đa quốc gia) ===`,
+        `Đa quốc gia (dùng cho listings/items hiển thị trên web):`,
+        multi.map((c: any) => `${c.category_code} = ${c.name_en}`).join(" | "),
+        `Nước đơn: mã 2 ký tự ISO (JP, KR, VN...) = tên nước tương ứng`
+      )
+    }
+
+    // Inject ref_support_countries khi hỏi về nhóm nước cụ thể
+    if (params.groupCode) {
+      const group = (ref.supportCountries as any[]).find((s: any) => s.code === params.groupCode)
+      if (group) {
+        sections.push(
+          `=== MÃ NHÓM "${params.groupCode}" ===`,
+          `Tên: ${group.support_country ?? ""}`,
+          `Nước gồm (ISO codes): ${group.country_codes ?? ""}`,
+        )
+      }
+    }
+
     if (params.skuCode) sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
     if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
   }

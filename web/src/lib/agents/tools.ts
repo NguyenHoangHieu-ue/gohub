@@ -126,7 +126,7 @@ export async function searchSkus(params: {
     if (!codes.length) return []
     const { data, error } = await supabaseAdmin
       .from("sku_catalog")
-      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,day_amount,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
       .eq("status", "Active")
       .in("country_group", codes)
     if (error) console.error("[searchSkus]", error.message)
@@ -325,7 +325,7 @@ export async function searchSkusForRegion(
   const primaryCodes = primaryGroups.map(g => g.code)
   let q = supabaseAdmin
     .from("sku_catalog")
-    .select("sku_code,country_group,sim_esim,day_amount,is_unlimited")
+    .select("sku_code,country_group,sim_esim,day_amount,is_unlimited,is_daily")
     .eq("status", "Active")
     .in("country_group", primaryCodes)
 
