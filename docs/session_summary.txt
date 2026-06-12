@@ -1,4 +1,30 @@
 == TÓM TẮT SESSION ==
+Cập nhật lần cuối: 2026-06-12 (session 42)
+
+## Session 42 (2026-06-12) — Phase 5 NCC Processing (WM Import)
+
+### Files mới
+- web/src/types/ncc-import.ts — shared types: ParsedWMItem, ChangedPriceItem
+- web/src/app/api/ncc/import-preview/route.ts — POST: parse CSV/XLSX WM → diff vs DB
+- web/src/app/api/ncc/import-confirm/route.ts — POST: upsert + mark inactive + log
+
+### Tính năng
+- Parse file WM (CSV hoặc XLSX) — cùng format WORLDMOVE1.csv (wmproductId, product name, region, type, cost price NT, leSIM)
+- Diff logic:
+  · New: vendor_product_id có trong file nhưng không có trong DB
+  · Changed price: cogs khác nhau giữa file và DB
+  · Discontinued: status=active trong DB nhưng không có trong file
+- Upsert bảo toàn APN data (apn, network_type, providers... không bị overwrite)
+- Log vào data_file_registry (last_imported, row_count, sha256, status=ok)
+- UI: nút "Import CSV" (admin/manager only) trong WMTab → modal diff 3 sections
+  · Mới (green) / Giá thay đổi (amber) / Ngưng cung cấp (red)
+  · Mỗi section collapsible, hiện 5 mẫu
+  · Confirm → refresh table
+
+### Commit: 3d7f018 — pushed to main → Vercel redeploy tự động
+
+---
+
 Cập nhật lần cuối: 2026-06-12 (session 41)
 
 ## Session 41 (2026-06-12) — Activate Phase 2 Wiki + Phase 4 MCP
