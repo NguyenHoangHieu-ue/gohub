@@ -8,6 +8,7 @@ import {
   getCountryInfo, getVendorInfo,
   getFxRates, findGaps,
   getItems, searchListings, identifyCode,
+  searchKnowledgeBase,
 } from "@/lib/agents/tools"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
@@ -26,10 +27,11 @@ export function convertCogs(cogs: number, currency: string, fx: Record<string, n
 }
 
 export async function buildToolContext(
-  agentId: string,
-  params:  ExtractedParams,
-  ref:     Awaited<ReturnType<typeof getRefCache>>,
-  isCost:  boolean
+  agentId:  string,
+  params:   ExtractedParams,
+  ref:      Awaited<ReturnType<typeof getRefCache>>,
+  isCost:   boolean,
+  userMsg?: string
 ): Promise<string> {
   const sections: string[] = []
 
@@ -297,6 +299,17 @@ export async function buildToolContext(
 
     if (params.skuCode) sections.push(`=== GIẢI MÃ SKU ===`, JSON.stringify(decodeSkuCode(params.skuCode), null, 2))
     if (params.country) sections.push(`=== NHÓM NƯỚC "${params.country}" ===`, JSON.stringify(getCountryInfo(params.country, ref), null, 2))
+
+    // Inject KB results nếu có tài liệu nội bộ liên quan
+    if (userMsg && userMsg.length > 10) {
+      const kbResult = await searchKnowledgeBase(userMsg)
+      if (kbResult) {
+        sections.push(
+          `=== TÀI LIỆU NỘI BỘ ===`,
+          `[Tìm thấy trong knowledge base — trích dẫn nếu liên quan]\n${kbResult}`
+        )
+      }
+    }
   }
 
   if (agentId === "tra-cuu" && isCost && Object.keys(fx).length) {

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const agent = AGENTS[agentId]
 
     // Pre-execute tools, build context
-    const toolCtx = await buildToolContext(agentId, params, refCache, isCost)
+    const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg)
 
     // Build system prompt with injected data
     const systemInstruction = [

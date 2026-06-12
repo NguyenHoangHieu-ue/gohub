@@ -3,15 +3,16 @@
 import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 
 const NAV = [
-  { href: "/chatbot",    label: "Telco Chat",  icon: Sparkles },
-  { href: "/promotions", label: "Khuyến Mãi",  icon: Gift     },
-  { href: "/skus",       label: "SP Hệ Thống", icon: Package  },
-  { href: "/ncc",        label: "SP Vendor",    icon: Truck    },
-  { href: "/countries",  label: "Thông tin",    icon: Globe    },
+  { href: "/chatbot",    label: "Telco Chat",   icon: Sparkles  },
+  { href: "/promotions", label: "Khuyến Mãi",   icon: Gift      },
+  { href: "/kb",         label: "Kiến Thức",    icon: BookOpen  },
+  { href: "/skus",       label: "SP Hệ Thống",  icon: Package   },
+  { href: "/ncc",        label: "SP Vendor",     icon: Truck     },
+  { href: "/countries",  label: "Thông tin",     icon: Globe     },
 ]
 
 function roleBadgeClass(role: string) {

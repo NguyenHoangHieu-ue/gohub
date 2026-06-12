@@ -882,6 +882,27 @@ export async function searchSkusSemantic(query: string, topK = 10): Promise<stri
   }
 }
 
+// ─── KB Search ───────────────────────────────────────────────────────────────
+
+export async function searchKnowledgeBase(query: string, department?: string): Promise<string> {
+  try {
+    const res = await fetch(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/api/kb/search`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ query, department: department || null, limit: 5 }),
+    })
+    if (!res.ok) return ""
+    const data = await res.json()
+    const results: any[] = data.results ?? []
+    if (results.length === 0) return ""
+    return results
+      .map((r: any) => `[${r.document_name}]\n${r.content}`)
+      .join("\n\n---\n\n")
+  } catch {
+    return ""
+  }
+}
+
 // ─── Tool dispatcher ──────────────────────────────────────────────────────────
 
 export async function executeTool(

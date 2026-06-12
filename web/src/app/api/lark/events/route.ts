@@ -279,7 +279,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       route(userText, history, role),
     ])
     const agent    = AGENTS[agentId]
-    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost)
+    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText)
 
     const systemInstruction = [
       agent.systemPrompt,
