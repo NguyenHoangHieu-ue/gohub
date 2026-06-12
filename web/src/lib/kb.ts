@@ -37,7 +37,7 @@ export function chunkText(text: string, chunkSize = 800, overlap = 100): string[
 
 export async function embedText(text: string): Promise<number[]> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${process.env.GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GEMINI_KEY}`,
     {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
