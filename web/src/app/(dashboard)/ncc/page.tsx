@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
 import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle } from "lucide-react"
-import type { ParsedWMItem, ChangedPriceItem } from "@/types/ncc-import"
+import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
 
 const canSeeCost = (role?: string) => role === "admin" || role === "manager"
 
@@ -64,15 +64,25 @@ type GapFilter = "all" | "in_system" | "not_in_system"
 type VendorTab = "wm" | "3hk"
 
 type PreviewResult = {
-  counts: { new: number; changedPrice: number; discontinued: number; total: number }
+  format: "standard" | "wm_native"
+  counts: {
+    readyMade: { new: number; changedPrice: number; discontinued: number; total: number }
+    datapool:  { new: number; changedPrice: number; discontinued: number; total: number }
+  }
   sample: {
     new: ParsedWMItem[]
     changedPrice: ChangedPriceItem[]
     discontinuedIds: string[]
+    dpNew: ParsedDatapoolItem[]
+    dpChangedPrice: { item: ParsedDatapoolItem; oldPricePerGb: number|null }[]
+    dpDiscontinuedKeys: string[]
   }
   allNew: ParsedWMItem[]
   allChanged: ParsedWMItem[]
   allDiscontinuedIds: string[]
+  allDpNew: ParsedDatapoolItem[]
+  allDpChanged: ParsedDatapoolItem[]
+  allDpDiscontinuedKeys: string[]
   fileName: string
 }
 
@@ -96,7 +106,9 @@ function ImportModal({
     setError(null)
     try {
       await onConfirm(preview)
-      setDone({ upserted: preview.counts.new + preview.counts.changedPrice, discontinued: preview.counts.discontinued })
+      const rm = preview.counts.readyMade
+      const dp = preview.counts.datapool
+      setDone({ upserted: rm.new + rm.changedPrice + dp.new + dp.changedPrice, discontinued: rm.discontinued + dp.discontinued })
     } catch (e: any) {
       setError(e.message ?? "Import thất bại")
     } finally {
@@ -104,7 +116,9 @@ function ImportModal({
     }
   }
 
-  const hasChanges = preview.counts.new > 0 || preview.counts.changedPrice > 0 || preview.counts.discontinued > 0
+  const rm = preview.counts.readyMade
+  const dp = preview.counts.datapool
+  const hasChanges = rm.new > 0 || rm.changedPrice > 0 || rm.discontinued > 0 || dp.new > 0 || dp.changedPrice > 0 || dp.discontinued > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={!confirming && !done ? onClose : undefined}>
@@ -154,24 +168,49 @@ function ImportModal({
           {!done && (
             <>
               {/* Summary bar */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-3 bg-green-50 rounded-xl text-center">
-                  <p className="text-lg font-bold text-green-700">{preview.counts.new.toLocaleString()}</p>
-                  <p className="text-[10px] text-green-600 mt-0.5">Sản phẩm mới</p>
+              {(rm.total > 0 || !dp.total) && (
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Gói có sẵn ({rm.total.toLocaleString()} SP)
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-3 bg-green-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-green-700">{rm.new.toLocaleString()}</p>
+                      <p className="text-[10px] text-green-600 mt-0.5">Sản phẩm mới</p>
+                    </div>
+                    <div className="p-3 bg-amber-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-amber-700">{rm.changedPrice.toLocaleString()}</p>
+                      <p className="text-[10px] text-amber-600 mt-0.5">Giá thay đổi</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-red-700">{rm.discontinued.toLocaleString()}</p>
+                      <p className="text-[10px] text-red-600 mt-0.5">Ngưng cung cấp</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-3 bg-amber-50 rounded-xl text-center">
-                  <p className="text-lg font-bold text-amber-700">{preview.counts.changedPrice.toLocaleString()}</p>
-                  <p className="text-[10px] text-amber-600 mt-0.5">Giá thay đổi</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-xl text-center">
-                  <p className="text-lg font-bold text-red-700">{preview.counts.discontinued.toLocaleString()}</p>
-                  <p className="text-[10px] text-red-600 mt-0.5">Ngưng cung cấp</p>
-                </div>
-              </div>
+              )}
 
-              <p className="text-xs text-gray-400 text-center">
-                File: <span className="font-semibold text-gray-600">{preview.counts.total.toLocaleString()}</span> sản phẩm
-              </p>
+              {dp.total > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                    Datapool ({dp.total.toLocaleString()} zones)
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-3 bg-green-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-green-700">{dp.new.toLocaleString()}</p>
+                      <p className="text-[10px] text-green-600 mt-0.5">Zone mới</p>
+                    </div>
+                    <div className="p-3 bg-amber-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-amber-700">{dp.changedPrice.toLocaleString()}</p>
+                      <p className="text-[10px] text-amber-600 mt-0.5">Giá thay đổi</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-xl text-center">
+                      <p className="text-lg font-bold text-red-700">{dp.discontinued.toLocaleString()}</p>
+                      <p className="text-[10px] text-red-600 mt-0.5">Ngưng</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {!hasChanges && (
                 <p className="text-center text-sm text-gray-500 py-4">Không có thay đổi so với dữ liệu hiện tại.</p>
@@ -179,7 +218,7 @@ function ImportModal({
 
               {/* New products sample */}
               {preview.sample.new.length > 0 && (
-                <DiffSection title="Sản phẩm mới" color="green" count={preview.counts.new}>
+                <DiffSection title="Sản phẩm mới" color="green" count={rm.new}>
                   {preview.sample.new.map(p => (
                     <div key={p.vendor_product_id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
                       <div>
@@ -196,7 +235,7 @@ function ImportModal({
 
               {/* Changed price sample */}
               {preview.sample.changedPrice.length > 0 && (
-                <DiffSection title="Giá thay đổi" color="amber" count={preview.counts.changedPrice}>
+                <DiffSection title="Giá thay đổi" color="amber" count={rm.changedPrice}>
                   {preview.sample.changedPrice.map(({ item, oldCogs }) => (
                     <div key={item.vendor_product_id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
                       <div>
@@ -214,15 +253,46 @@ function ImportModal({
 
               {/* Discontinued sample */}
               {preview.sample.discontinuedIds.length > 0 && (
-                <DiffSection title="Ngưng cung cấp" color="red" count={preview.counts.discontinued}>
+                <DiffSection title="Ngưng cung cấp" color="red" count={rm.discontinued}>
                   <div className="flex flex-wrap gap-1.5 py-1">
                     {preview.sample.discontinuedIds.map(id => (
                       <span key={id} className="font-mono text-[10px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded">{id}</span>
                     ))}
-                    {preview.counts.discontinued > preview.sample.discontinuedIds.length && (
-                      <span className="text-[10px] text-gray-400">+{preview.counts.discontinued - preview.sample.discontinuedIds.length} khác</span>
+                    {rm.discontinued > preview.sample.discontinuedIds.length && (
+                      <span className="text-[10px] text-gray-400">+{rm.discontinued - preview.sample.discontinuedIds.length} khác</span>
                     )}
                   </div>
+                </DiffSection>
+              )}
+
+              {/* Datapool diff sections */}
+              {preview.sample.dpNew.length > 0 && (
+                <DiffSection title="Datapool — Zone mới" color="green" count={dp.new}>
+                  {preview.sample.dpNew.map(z => (
+                    <div key={`${z.vendor_code}:${z.zone_id}`} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <div>
+                        <p className="font-mono text-[11px] font-semibold text-brand-700">{z.vendor_code} / {z.zone_id}</p>
+                        <p className="text-[10px] text-gray-500 truncate max-w-[240px]">{z.zone_name} — {z.countries?.slice(0, 60)}</p>
+                      </div>
+                      <p className="text-[11px] text-gray-600 ml-2 whitespace-nowrap">
+                        {z.price_per_gb} {z.currency}/GB
+                      </p>
+                    </div>
+                  ))}
+                </DiffSection>
+              )}
+
+              {preview.sample.dpChangedPrice.length > 0 && (
+                <DiffSection title="Datapool — Giá thay đổi" color="amber" count={dp.changedPrice}>
+                  {preview.sample.dpChangedPrice.map(({ item, oldPricePerGb }) => (
+                    <div key={`${item.vendor_code}:${item.zone_id}`} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <p className="font-mono text-[11px] font-semibold text-brand-700">{item.vendor_code} / {item.zone_id}</p>
+                      <p className="text-[11px] ml-2 whitespace-nowrap">
+                        <span className="line-through text-gray-400">{oldPricePerGb ?? "—"}</span>
+                        <span className="text-amber-700 font-semibold ml-1">→ {item.price_per_gb} {item.currency}/GB</span>
+                      </p>
+                    </div>
+                  ))}
                 </DiffSection>
               )}
             </>
@@ -561,12 +631,14 @@ function WMTab({ role }: { role?: string }) {
         newItems: p.allNew,
         changedItems: p.allChanged,
         discontinuedIds: p.allDiscontinuedIds,
+        dpNewItems: p.allDpNew,
+        dpChangedItems: p.allDpChanged,
+        dpDiscontinuedKeys: p.allDpDiscontinuedKeys,
         fileName: p.fileName,
       }),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error ?? "Import thất bại")
-    // Refresh table after import
     fetchData(1, gap)
     setPage(1)
   }
@@ -678,16 +750,25 @@ function WMTab({ role }: { role?: string }) {
           <RefreshCw size={14} />
         </button>
         {showCost && (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 hover:border-brand-400 transition-colors disabled:opacity-50"
-          >
-            {importing
-              ? <><span className="w-3 h-3 border-2 border-brand-400/40 border-t-brand-600 rounded-full animate-spin" />Đang phân tích...</>
-              : <><Upload size={13} />Import CSV</>
-            }
-          </button>
+          <>
+            <a
+              href="/api/ncc/template"
+              download="GoHub_NCC_Template.xlsx"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Tải template
+            </a>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 hover:border-brand-400 transition-colors disabled:opacity-50"
+            >
+              {importing
+                ? <><span className="w-3 h-3 border-2 border-brand-400/40 border-t-brand-600 rounded-full animate-spin" />Đang phân tích...</>
+                : <><Upload size={13} />Import</>
+              }
+            </button>
+          </>
         )}
       </div>
 

@@ -3,20 +3,25 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createHash } from "crypto"
-import type { ParsedWMItem } from "@/types/ncc-import"
+import type { ParsedWMItem, ParsedDatapoolItem } from "@/types/ncc-import"
 
 export const maxDuration = 60
 
 const BATCH = 500
 
-async function upsertBatches(items: ParsedWMItem[]) {
+async function upsertBatches(table: string, items: object[], conflict: string) {
   for (let i = 0; i < items.length; i += BATCH) {
-    const batch = items.slice(i, i + BATCH)
-    const { error } = await (supabaseAdmin.from("ncc_worldmove") as any).upsert(
-      batch,
-      { onConflict: "vendor_product_id" }
-    )
-    if (error) throw new Error(error.message)
+    const { error } = await (supabaseAdmin.from(table) as any)
+      .upsert(items.slice(i, i + BATCH), { onConflict: conflict })
+    if (error) throw new Error(`${table} upsert: ${error.message}`)
+  }
+}
+
+async function markInactive(table: string, idCol: string, ids: string[]) {
+  for (let i = 0; i < ids.length; i += BATCH) {
+    await (supabaseAdmin.from(table) as any)
+      .update({ status: "inactive" })
+      .in(idCol, ids.slice(i, i + BATCH))
   }
 }
 
@@ -29,61 +34,72 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const {
-    newItems,
-    changedItems,
-    discontinuedIds,
+    newItems = [],
+    changedItems = [],
+    discontinuedIds = [],
+    dpNewItems = [],
+    dpChangedItems = [],
+    dpDiscontinuedKeys = [],
     fileName,
   }: {
     newItems: ParsedWMItem[]
     changedItems: ParsedWMItem[]
     discontinuedIds: string[]
+    dpNewItems: ParsedDatapoolItem[]
+    dpChangedItems: ParsedDatapoolItem[]
+    dpDiscontinuedKeys: string[]
     fileName: string
   } = body
 
-  if (!Array.isArray(newItems) || !Array.isArray(changedItems) || !Array.isArray(discontinuedIds))
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 })
-
-  const toUpsert = [...newItems, ...changedItems]
+  const readyMadeToUpsert = [...newItems, ...changedItems]
+  const datapoolToUpsert = [...dpNewItems, ...dpChangedItems]
 
   try {
-    // 1. Upsert new + changed products (APN columns not included → preserved in DB)
-    if (toUpsert.length) {
-      await upsertBatches(toUpsert)
-    }
+    // 1. Upsert ready-made → ncc_worldmove
+    if (readyMadeToUpsert.length)
+      await upsertBatches("ncc_worldmove", readyMadeToUpsert, "vendor_product_id")
 
-    // 2. Mark discontinued as inactive
-    if (discontinuedIds.length) {
-      for (let i = 0; i < discontinuedIds.length; i += BATCH) {
-        const batch = discontinuedIds.slice(i, i + BATCH)
-        await (supabaseAdmin.from("ncc_worldmove") as any)
+    // 2. Mark discontinued ready-made as inactive
+    if (discontinuedIds.length)
+      await markInactive("ncc_worldmove", "vendor_product_id", discontinuedIds)
+
+    // 3. Upsert datapool → ncc_datapool
+    if (datapoolToUpsert.length)
+      await upsertBatches("ncc_datapool", datapoolToUpsert, "vendor_code,zone_id")
+
+    // 4. Mark discontinued datapool as inactive (key = "vendor_code:zone_id")
+    for (const key of dpDiscontinuedKeys) {
+      const [vc, zi] = key.split(":")
+      if (vc && zi) {
+        await (supabaseAdmin.from("ncc_datapool") as any)
           .update({ status: "inactive" })
-          .in("vendor_product_id", batch)
+          .eq("vendor_code", vc)
+          .eq("zone_id", zi)
       }
     }
 
-    // 3. Log to data_file_registry
-    const sha256 = createHash("sha256")
-      .update(fileName + Date.now())
-      .digest("hex")
-    const totalCount = toUpsert.length + discontinuedIds.length
+    // 5. Log to data_file_registry
+    const sha256 = createHash("sha256").update(fileName + Date.now()).digest("hex")
     await (supabaseAdmin.from("data_file_registry") as any).upsert(
       {
-        file_key: "ncc/worldmove",
+        file_key: "ncc/standard",
         file_name: fileName,
         sha256,
-        row_count: totalCount,
+        row_count: readyMadeToUpsert.length + datapoolToUpsert.length,
         last_imported: new Date().toISOString(),
         status: "ok",
       },
       { onConflict: "file_key" }
     )
   } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Import failed" }, { status: 500 })
+    return NextResponse.json({ error: e.message ?? "Import thất bại" }, { status: 500 })
   }
 
   return NextResponse.json({
     ok: true,
-    upserted: toUpsert.length,
-    discontinued: discontinuedIds.length,
+    upsertedReadyMade: readyMadeToUpsert.length,
+    discontinuedReadyMade: discontinuedIds.length,
+    upsertedDatapool: datapoolToUpsert.length,
+    discontinuedDatapool: dpDiscontinuedKeys.length,
   })
 }
