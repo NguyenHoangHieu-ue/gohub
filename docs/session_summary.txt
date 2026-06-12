@@ -1,5 +1,16 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-12 (session 37)
+Cập nhật lần cuối: 2026-06-12 (session 41)
+
+## Session 41 (2026-06-12) — Activate Phase 2 Wiki + Phase 4 MCP
+
+- v7_wiki_pages.sql: đã chạy thủ công trong Supabase → Phase 2 Wiki hoạt động
+- MCP_SECRET: set vào Vercel env vars → Vercel redeploy → MCP Server live
+- Health check: GET /api/mcp trả về 9 tools (search_products, get_sku_detail, search_ncc_catalog, search_kb, get_fx_rates, get_promotions, list_vendors, decode_sku_code, get_db_schema)
+- Claude Code config: ~/.claude/settings.json merge mcpServers vào JSON hợp lệ
+- Tất cả 2 phases pending từ session 40 đã hoàn thành ✅
+
+---
+
 
 ## File Thường Dùng (đọc đầu mỗi session)
 
@@ -638,6 +649,79 @@ Next steps (user chạy):
 - ✅ Chạy SQL: `database/migrations/add_fx_rates_t06_2026.sql` — XONG (2026-06-10)
 - ✅ Bug #4 APN Data Fix — XONG (migration + import_worldmove_v2.py đã chạy)
 - ✅ Phase 2 embeddings — XONG (7107 SKUs embedded)
+
+## Session 40 (2026-06-12) — Lưu trạng thái + MCP_SECRET hướng dẫn
+
+### MCP_SECRET
+- Là chuỗi bí mật do USER tự đặt (không phải key có sẵn)
+- Set trong Vercel env vars: MCP_SECRET = <bất kỳ string nào>
+- Dùng lại trong ~/.claude/settings.json: Authorization: Bearer <cùng string>
+- Chuỗi trong Vercel và settings.json phải khớp nhau
+
+### Trạng thái pending cuối session 40
+- v7_wiki_pages.sql: ĐÃ CHẠY ✅ (2026-06-12)
+- MCP_SECRET: ĐÃ set Vercel ✅ (2026-06-12) — đã config ~/.claude/settings.json
+- v5_promotions_dates.sql: đã chạy ✅
+- KB (v6 + v6c): đã chạy ✅
+- chat tables (v5): đã chạy ✅
+
+---
+
+## Session 39 (2026-06-12) — Phase 2 Wiki + Phase 4 MCP Server
+
+### Phase 2 — Wiki nội bộ (commit a957221)
+- DB: kb_wiki_pages (title, content MD, page_type, department, tags, embedding 3072, version) + kb_wiki_versions (history)
+- 7 page types: vendor_profile | product_guide | process_sop | pricing_rule | meeting_note | reference | note
+- API: GET+POST /api/kb/wiki, GET+PATCH+DELETE /api/kb/wiki/[id]
+  - Auto-embed title+content khi create/update
+  - PATCH tự lưu version cũ vào kb_wiki_versions trước khi update
+  - Owner hoặc admin mới được sửa/xóa
+- search_wiki RPC trong Supabase (search wiki pages)
+- /api/kb/search: merge kết quả KB chunks + wiki pages, sort by similarity
+- /kb tab Wiki: list view (search+filter type+dept) → read view (render MD, history) → edit view (editor+preview)
+- Cần chạy: database/migrations/v7_wiki_pages.sql
+
+### Phase 4 — MCP Server (commit a957221)
+- POST /api/mcp: JSON-RPC 2.0, auth Bearer MCP_SECRET (Vercel env var)
+- 9 tools: search_products, get_sku_detail, search_ncc_catalog, search_kb,
+           get_fx_rates, get_promotions, list_vendors, decode_sku_code, get_db_schema
+- GET /api/mcp: health check (không cần auth)
+- Claude Code config: thêm vào ~/.claude/settings.json
+  { mcpServers: { gohub: { type:"http", url:"https://gohub-murex.vercel.app/api/mcp", headers:{Authorization:"Bearer <MCP_SECRET>"} } } }
+- Cần: thêm MCP_SECRET vào Vercel env vars
+
+### Second brain plan — WORK.md
+- Thay thế toàn bộ WORK.md bằng kế hoạch Second Brain 7 phases
+- Tham khảo Arkon (https://github.com/nduckmink/arkon)
+- Phase 1 KB ✅, Phase 2 Wiki ✅, Phase 4 MCP ✅
+- Còn: Phase 3 MRP, Phase 5 NCC Processing, Phase 6 Automation, Phase 7 RBAC
+
+---
+
+## Session 38 (2026-06-12) — Knowledge Base (second brain) MVP
+
+### Knowledge Base — commit de74c62
+**Stack:** Supabase pgvector (768 dims) + Gemini text-embedding-004 + pdf-parse + mammoth
+**Tính năng:**
+- Tab /kb: upload PDF/DOCX/MD/TXT → parse → chunk 800 chars → embed → lưu kb_chunks
+- Department tags: all/sales/product/tech/finance (filter khi view + search)
+- Semantic search: embed query → Supabase RPC search_kb → top 8 chunks + % similarity
+- Delete: admin xóa bất kỳ, user chỉ xóa của mình (double-click confirm)
+- Chatbot giai-dap: auto-search KB, inject TÀI LIỆU NỘI BỘ vào context khi có kết quả
+**Files mới:**
+- web/src/lib/kb.ts — parseFileToText, chunkText, embedText, DEPARTMENTS
+- web/src/app/api/kb/documents/route.ts — GET list, POST upload+embed
+- web/src/app/api/kb/documents/[id]/route.ts — DELETE
+- web/src/app/api/kb/search/route.ts — POST semantic search
+- web/src/app/(dashboard)/kb/page.tsx — full UI (upload form + doc list + search tab)
+**Cần chạy trước khi dùng:**
+- database/migrations/v6_knowledge_base.sql (pgvector extension + kb_documents + kb_chunks + search_kb function)
+
+### Các migration cần chạy (chưa confirm):
+- v5_promotions_dates.sql — ADD telco_perks_start/end DATE vào products
+- v6_knowledge_base.sql — KB tables + pgvector + search function
+
+---
 
 ## Session 37 (2026-06-12) — Tab Khuyến Mãi + Admin CRUD
 
