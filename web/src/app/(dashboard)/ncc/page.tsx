@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
-import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X } from "lucide-react"
+import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle } from "lucide-react"
+import type { ParsedWMItem, ChangedPriceItem } from "@/types/ncc-import"
 
 const canSeeCost = (role?: string) => role === "admin" || role === "manager"
 
@@ -61,6 +62,227 @@ interface Zone {
 
 type GapFilter = "all" | "in_system" | "not_in_system"
 type VendorTab = "wm" | "3hk"
+
+type PreviewResult = {
+  counts: { new: number; changedPrice: number; discontinued: number; total: number }
+  sample: {
+    new: ParsedWMItem[]
+    changedPrice: ChangedPriceItem[]
+    discontinuedIds: string[]
+  }
+  allNew: ParsedWMItem[]
+  allChanged: ParsedWMItem[]
+  allDiscontinuedIds: string[]
+  fileName: string
+}
+
+// ─── Import Modal ─────────────────────────────────────────────────────────────
+
+function ImportModal({
+  preview,
+  onConfirm,
+  onClose,
+}: {
+  preview: PreviewResult
+  onConfirm: (p: PreviewResult) => Promise<void>
+  onClose: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const [done, setDone] = useState<{ upserted: number; discontinued: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleConfirm() {
+    setConfirming(true)
+    setError(null)
+    try {
+      await onConfirm(preview)
+      setDone({ upserted: preview.counts.new + preview.counts.changedPrice, discontinued: preview.counts.discontinued })
+    } catch (e: any) {
+      setError(e.message ?? "Import thất bại")
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  const hasChanges = preview.counts.new > 0 || preview.counts.changedPrice > 0 || preview.counts.discontinued > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={!confirming && !done ? onClose : undefined}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">Import WM Catalog</p>
+            <p className="text-xs text-gray-400 mt-0.5 font-mono">{preview.fileName}</p>
+          </div>
+          {!confirming && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Success */}
+          {done && (
+            <div className="flex flex-col items-center py-6 gap-3">
+              <CheckCircle2 size={40} className="text-green-500" />
+              <p className="font-semibold text-gray-800">Import hoàn thành</p>
+              <div className="text-xs text-gray-500 text-center space-y-1">
+                <p>Đã upsert <span className="font-semibold text-gray-700">{done.upserted}</span> sản phẩm</p>
+                {done.discontinued > 0 && (
+                  <p>Đã ngưng <span className="font-semibold text-gray-700">{done.discontinued}</span> sản phẩm cũ</p>
+                )}
+              </div>
+              <button onClick={onClose} className="mt-2 px-4 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+                Đóng
+              </button>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-xs text-red-700">
+              <AlertTriangle size={14} className="flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {/* Preview content */}
+          {!done && (
+            <>
+              {/* Summary bar */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-3 bg-green-50 rounded-xl text-center">
+                  <p className="text-lg font-bold text-green-700">{preview.counts.new.toLocaleString()}</p>
+                  <p className="text-[10px] text-green-600 mt-0.5">Sản phẩm mới</p>
+                </div>
+                <div className="p-3 bg-amber-50 rounded-xl text-center">
+                  <p className="text-lg font-bold text-amber-700">{preview.counts.changedPrice.toLocaleString()}</p>
+                  <p className="text-[10px] text-amber-600 mt-0.5">Giá thay đổi</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-xl text-center">
+                  <p className="text-lg font-bold text-red-700">{preview.counts.discontinued.toLocaleString()}</p>
+                  <p className="text-[10px] text-red-600 mt-0.5">Ngưng cung cấp</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 text-center">
+                File: <span className="font-semibold text-gray-600">{preview.counts.total.toLocaleString()}</span> sản phẩm
+              </p>
+
+              {!hasChanges && (
+                <p className="text-center text-sm text-gray-500 py-4">Không có thay đổi so với dữ liệu hiện tại.</p>
+              )}
+
+              {/* New products sample */}
+              {preview.sample.new.length > 0 && (
+                <DiffSection title="Sản phẩm mới" color="green" count={preview.counts.new}>
+                  {preview.sample.new.map(p => (
+                    <div key={p.vendor_product_id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <div>
+                        <p className="font-mono text-[11px] font-semibold text-brand-700">{p.vendor_product_id}</p>
+                        <p className="text-[10px] text-gray-500 truncate max-w-[250px]">{p.product_name}</p>
+                      </div>
+                      <p className="text-[11px] text-gray-600 whitespace-nowrap ml-2">
+                        {p.cogs ? `${p.cogs} TWD` : "—"}
+                      </p>
+                    </div>
+                  ))}
+                </DiffSection>
+              )}
+
+              {/* Changed price sample */}
+              {preview.sample.changedPrice.length > 0 && (
+                <DiffSection title="Giá thay đổi" color="amber" count={preview.counts.changedPrice}>
+                  {preview.sample.changedPrice.map(({ item, oldCogs }) => (
+                    <div key={item.vendor_product_id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                      <div>
+                        <p className="font-mono text-[11px] font-semibold text-brand-700">{item.vendor_product_id}</p>
+                        <p className="text-[10px] text-gray-500 truncate max-w-[200px]">{item.product_name}</p>
+                      </div>
+                      <p className="text-[11px] whitespace-nowrap ml-2">
+                        <span className="line-through text-gray-400">{oldCogs ?? "—"}</span>
+                        <span className="text-amber-700 font-semibold ml-1">→ {item.cogs ?? "—"} TWD</span>
+                      </p>
+                    </div>
+                  ))}
+                </DiffSection>
+              )}
+
+              {/* Discontinued sample */}
+              {preview.sample.discontinuedIds.length > 0 && (
+                <DiffSection title="Ngưng cung cấp" color="red" count={preview.counts.discontinued}>
+                  <div className="flex flex-wrap gap-1.5 py-1">
+                    {preview.sample.discontinuedIds.map(id => (
+                      <span key={id} className="font-mono text-[10px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded">{id}</span>
+                    ))}
+                    {preview.counts.discontinued > preview.sample.discontinuedIds.length && (
+                      <span className="text-[10px] text-gray-400">+{preview.counts.discontinued - preview.sample.discontinuedIds.length} khác</span>
+                    )}
+                  </div>
+                </DiffSection>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!done && (
+          <div className="flex items-center justify-end gap-2 p-5 border-t border-gray-100">
+            <button onClick={onClose} disabled={confirming}
+              className="px-4 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">
+              Bỏ qua
+            </button>
+            {hasChanges && (
+              <button onClick={handleConfirm} disabled={confirming}
+                className="px-4 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1.5">
+                {confirming ? (
+                  <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Đang import...</>
+                ) : "Import tất cả"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DiffSection({
+  title, color, count, children,
+}: {
+  title: string
+  color: "green" | "amber" | "red"
+  count: number
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  const colors = {
+    green: "text-green-700 bg-green-50 border-green-100",
+    amber: "text-amber-700 bg-amber-50 border-amber-100",
+    red:   "text-red-700 bg-red-50 border-red-100",
+  }
+  return (
+    <div className={`rounded-xl border ${colors[color]} overflow-hidden`}>
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left">
+        <span className="text-xs font-semibold">{title}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-xs font-bold">{count.toLocaleString()}</span>
+          <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 bg-white border-t border-gray-100">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -308,6 +530,47 @@ function WMTab({ role }: { role?: string }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [detailModal, setDetailModal] = useState<WMProduct | null>(null)
 
+  const [importing, setImporting]   = useState(false)
+  const [preview, setPreview]       = useState<PreviewResult | null>(null)
+  const fileInputRef                = useRef<HTMLInputElement>(null)
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    setImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/ncc/import-preview", { method: "POST", body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Lỗi phân tích file")
+      setPreview(data)
+    } catch (err: any) {
+      alert(err.message ?? "Không thể phân tích file")
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function handleConfirm(p: PreviewResult) {
+    const res = await fetch("/api/ncc/import-confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newItems: p.allNew,
+        changedItems: p.allChanged,
+        discontinuedIds: p.allDiscontinuedIds,
+        fileName: p.fileName,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "Import thất bại")
+    // Refresh table after import
+    fetchData(1, gap)
+    setPage(1)
+  }
+
   const [search,   setSearch]   = useState("")
   const [simType,  setSimType]  = useState("")
   const [region,   setRegion]   = useState("")
@@ -368,6 +631,20 @@ function WMTab({ role }: { role?: string }) {
   return (
     <div className="space-y-3">
       {detailModal && <DetailModal product={detailModal} showCost={showCost} onClose={() => setDetailModal(null)} />}
+      {preview && (
+        <ImportModal
+          preview={preview}
+          onConfirm={handleConfirm}
+          onClose={() => setPreview(null)}
+        />
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
@@ -400,6 +677,18 @@ function WMTab({ role }: { role?: string }) {
         <button onClick={() => fetchData(page, gap)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">
           <RefreshCw size={14} />
         </button>
+        {showCost && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 hover:border-brand-400 transition-colors disabled:opacity-50"
+          >
+            {importing
+              ? <><span className="w-3 h-3 border-2 border-brand-400/40 border-t-brand-600 rounded-full animate-spin" />Đang phân tích...</>
+              : <><Upload size={13} />Import CSV</>
+            }
+          </button>
+        )}
       </div>
 
       {/* Gap filter + count */}
