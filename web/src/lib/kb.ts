@@ -1,4 +1,5 @@
 // KB utilities: parse, chunk, embed
+import { GoogleGenerativeAI } from "@google/generative-ai"
 
 export async function parseFileToText(buffer: Buffer, mimeType: string, filename: string): Promise<string> {
   const ext = filename.split(".").pop()?.toLowerCase() ?? ""
@@ -35,21 +36,12 @@ export function chunkText(text: string, chunkSize = 800, overlap = 100): string[
   return chunks
 }
 
+// gemini-embedding-001 → 3072 dims (same model used for Neo4j SKU embeddings)
 export async function embedText(text: string): Promise<number[]> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GEMINI_KEY}`,
-    {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ content: { parts: [{ text }] } }),
-    }
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`Embed failed: ${err.error?.message ?? res.status}`)
-  }
-  const data = await res.json()
-  return data.embedding.values as number[]
+  const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+  const model  = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
+  const result = await model.embedContent(text.slice(0, 2048))
+  return result.embedding.values
 }
 
 export const DEPARTMENTS = ["all", "sales", "product", "tech", "finance"] as const
