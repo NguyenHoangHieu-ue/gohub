@@ -1151,6 +1151,8 @@ interface PromoProduct {
   type_of_sim:         string | null
   supported_countries: string | null
   telco_perks:         string | null
+  telco_perks_start:   string | null
+  telco_perks_end:     string | null
   status:              string | null
 }
 
@@ -1165,9 +1167,11 @@ function PromotionsTab({ onNotify }: {
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState("")
   const [onlyHas,  setOnlyHas]  = useState(false)
-  const [editing,  setEditing]  = useState<string | null>(null)
-  const [editVal,  setEditVal]  = useState("")
-  const [saving,   setSaving]   = useState(false)
+  const [editing,    setEditing]    = useState<string | null>(null)
+  const [editVal,    setEditVal]    = useState("")
+  const [editStart,  setEditStart]  = useState("")
+  const [editEnd,    setEditEnd]    = useState("")
+  const [saving,     setSaving]     = useState(false)
 
   const fetchItems = useCallback(async (pg: number, q: string, has: boolean) => {
     setLoading(true)
@@ -1189,20 +1193,29 @@ function PromotionsTab({ onNotify }: {
   const startEdit = (p: PromoProduct) => {
     setEditing(p.product_code)
     setEditVal(p.telco_perks ?? "")
+    setEditStart(p.telco_perks_start ?? "")
+    setEditEnd(p.telco_perks_end ?? "")
   }
-  const cancelEdit = () => { setEditing(null); setEditVal("") }
+  const cancelEdit = () => { setEditing(null); setEditVal(""); setEditStart(""); setEditEnd("") }
 
   const saveEdit = async (product_code: string) => {
     setSaving(true)
     const res = await fetch("/api/admin/promotions", {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ product_code, telco_perks: editVal }),
+      body:    JSON.stringify({
+        product_code,
+        telco_perks:       editVal,
+        telco_perks_start: editStart || null,
+        telco_perks_end:   editEnd   || null,
+      }),
     })
     setSaving(false)
     if (res.ok) {
       setItems(prev => prev.map(p =>
-        p.product_code === product_code ? { ...p, telco_perks: editVal.trim() || null } : p
+        p.product_code === product_code
+          ? { ...p, telco_perks: editVal.trim() || null, telco_perks_start: editStart || null, telco_perks_end: editEnd || null }
+          : p
       ))
       setEditing(null)
       onNotify("success", `Đã lưu khuyến mãi cho ${product_code}`)
@@ -1271,7 +1284,7 @@ function PromotionsTab({ onNotify }: {
               <th className="px-4 py-3 font-medium">Mã SP</th>
               <th className="px-4 py-3 font-medium">Vendor</th>
               <th className="px-4 py-3 font-medium">Loại</th>
-              <th className="px-4 py-3 font-medium w-1/3">Nội dung khuyến mãi</th>
+              <th className="px-4 py-3 font-medium w-1/3">Nội dung + Ngày</th>
               <th className="px-4 py-3 font-medium text-right">Thao tác</th>
             </tr>
           </thead>
@@ -1297,18 +1310,39 @@ function PromotionsTab({ onNotify }: {
                 <td className="px-4 py-3 text-xs text-gray-500">{p.type_of_sim}</td>
                 <td className="px-4 py-3">
                   {editing === p.product_code ? (
-                    <textarea
-                      value={editVal}
-                      onChange={e => setEditVal(e.target.value)}
-                      rows={3}
-                      autoFocus
-                      placeholder="Nhập nội dung khuyến mãi..."
-                      className="w-full px-3 py-2 text-sm border border-brand-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                    />
+                    <div className="space-y-2">
+                      <textarea
+                        value={editVal}
+                        onChange={e => setEditVal(e.target.value)}
+                        rows={3}
+                        autoFocus
+                        placeholder="Nhập nội dung khuyến mãi..."
+                        className="w-full px-3 py-2 text-sm border border-brand-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-[10px] text-gray-400 mb-0.5">Từ ngày</label>
+                          <input type="date" value={editStart} onChange={e => setEditStart(e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-[10px] text-gray-400 mb-0.5">Đến ngày</label>
+                          <input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                            className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <span className={`text-sm whitespace-pre-wrap ${p.telco_perks ? "text-gray-800" : "text-gray-300 italic"}`}>
-                      {p.telco_perks || "Chưa có"}
-                    </span>
+                    <div className="space-y-1">
+                      <span className={`text-sm whitespace-pre-wrap ${p.telco_perks ? "text-gray-800" : "text-gray-300 italic"}`}>
+                        {p.telco_perks || "Chưa có"}
+                      </span>
+                      {(p.telco_perks_start || p.telco_perks_end) && (
+                        <div className="text-[10px] text-gray-400">
+                          {p.telco_perks_start ?? "?"} → {p.telco_perks_end ?? "?"}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">

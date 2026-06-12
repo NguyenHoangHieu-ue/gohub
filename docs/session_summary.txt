@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-11 (session 32)
+Cập nhật lần cuối: 2026-06-12 (session 37)
 
 ## File Thường Dùng (đọc đầu mỗi session)
 
@@ -638,6 +638,123 @@ Next steps (user chạy):
 - ✅ Chạy SQL: `database/migrations/add_fx_rates_t06_2026.sql` — XONG (2026-06-10)
 - ✅ Bug #4 APN Data Fix — XONG (migration + import_worldmove_v2.py đã chạy)
 - ✅ Phase 2 embeddings — XONG (7107 SKUs embedded)
+
+## Session 37 (2026-06-12) — Tab Khuyến Mãi + Admin CRUD
+
+### Promotions feature (commit 79654cc)
+- `/promotions` page: view-only cho tất cả role, hiển thị products có telco_perks từ bảng products
+  - Cột: Mã SP (mono brand-700), Vendor badge, SIM type badge, Countries (3 + "+N more"), Nội dung KM
+  - Search client-side theo mã/vendor/nước/nội dung
+- `GET /api/promotions`: fetch products WHERE telco_perks NOT NULL AND != ''
+- `GET /api/admin/promotions`: paginate 50/trang, search by product_code/vendor, filter only_has=1
+- `PATCH /api/admin/promotions`: update telco_perks (admin only, set null khi xóa)
+- Admin tab "Khuyến mãi": mới thêm vào admin page
+  - Toggle "Tất cả SP" / "Có khuyến mãi"
+  - Inline edit per row: click Pencil → textarea + Save/Cancel
+  - Xóa: click Trash2 → clear telco_perks về null
+  - Pagination 50/trang
+
+---
+
+## Session 36 (2026-06-11) — ncc_worldmove data clean + DB audit
+
+### ncc_worldmove data formatting fix (local script — đã re-import)
+Vấn đề: 3 cột có ký tự CJK dính vào tiếng Anh, bố cục không đọc được:
+- providers: 'AustraliaTelstra\nNew ZealandSpark' → **'Australia: Telstra | New Zealand: Spark'**
+- coverage:  'New ZealandAustralia'            → **'New Zealand, Australia'**
+- data_reset:'24(11)\n00:00 TaiwanUTC+8\n...' → **'00:00 UTC+8'**
+Root cause: dấu phẩy CJK (、) bị xóa cùng CJK chars → mất separator
+Fix: replace 、 → ", " TRƯỚC khi strip CJK; extract time+tz từ data_reset
+8921 rows re-imported (99% APN match)
+
+### DB audit kết quả
+- Supabase: 19 bảng, tất cả đang dùng, gần full data
+- Còn thiếu: sku_catalog.is_daily + expirations = NULL → chờ sync.yml chạy để populate
+- Neo4j: chỉ dùng cho semantic vector search fallback (không phải nguồn data chính)
+
+---
+
+## Session 35 (2026-06-11) — DB cleanup + country recognition
+
+### Migration v3 (user đã chạy):
+- DROP skus.wr_group
+- DROP products.data_plan_type
+
+### DROP bảng orphaned (user đã chạy thủ công):
+- `chat_messages` (202 rows) — data cũ từ chatbot v1, không còn dùng
+- `conversations` (28 rows) — tương tự
+
+### Danh sách bảng hiện tại (19 bảng/view):
+Core API: products, skus, listings, items, sku_catalog, sync_log
+Ref data: ref_countries (212), ref_support_countries (77), ref_vendors (20), ref_categories (271), app_settings (15), data_file_registry (6)
+NCC: ncc_worldmove (8921), ncc_3hk (45), ncc_products_unified (VIEW), ncc_vendor_config (7)
+Users/Chat: users, lark_chat_history (238)
+
+### Fix API sync (sync.py):
+- skus upsert: filter 4 cột đã DROP (original_cost, reference_cost_vnd, final_cogs_included_vat_vnd, final_cogs_usd) trước khi upsert → tránh lỗi sau migration v2
+
+### Country/group recognition (c88eba9):
+- ExtractedParams.groupCode: detect 3-char GoHub codes (JPN, CHM, EU1, APA, GLO...)
+- ref_categories: 271 rows (256 single-country ISO + 15 multi-country 3-char)
+- searchSkusByGroupCode(): query trực tiếp sku_catalog.country_group
+- Multi-country category map: ASI→asia, EUR→europe, STA→southeast_asia...
+
+---
+
+## Session 34 (2026-06-11) — Comprehensive data foundation v2
+
+### Schema migration (database/migrations/v2_comprehensive_schema.sql — CẦN CHẠY THỦ CÔNG)
+- skus: DROP original_cost, reference_cost_vnd, final_cogs_included_vat_vnd, final_cogs_usd
+- ref_countries: ADD continent, sub_region, phone_code
+- NEW ref_categories (category_code → iso_code, B2C display)
+- NEW ncc_vendor_config (registry WM/3H/BC/SS/VT/TM → extensible NCC)
+- NEW ncc_products_unified VIEW (WM + 3HK normalized)
+- NEW data_file_registry (hash tracking cho file imports)
+- Comprehensive indexes tất cả bảng lớn
+
+### File pipeline (sync/sync_data_files.py)
+- Hash-based change detection (SHA-256) → chỉ import file thay đổi
+- Extensible: mỗi loại file có importer riêng (countries, vendors, fx_rates, categories...)
+- GitHub Actions data_sync.yml: trigger trên push Data/**/*.xlsx + daily 02:00 UTC + manual dispatch
+- Data/ folder: xlsx files tracked on GitHub, Data/ncc/ NOT tracked (sensitive pricing)
+
+### Geo hierarchy (sync/populate_geo_hierarchy.py)
+- Map 212 nước × continent (Asia/Europe/Americas/Africa/Oceania/Middle East) + sub_region
+- cache.ts: continentMap, subRegionMap, categoriesMap thêm vào RefCache
+- tools.ts: searchSkusForRegion dùng DB geo trước, fallback sang REGION_COUNTRIES hardcode
+
+### Run order sau session này:
+1. Supabase SQL Editor: database/migrations/v2_comprehensive_schema.sql
+2. python sync/populate_geo_hierarchy.py  (add continent/sub_region)
+3. GitHub Actions data_sync.yml với force=true (import tất cả Data/ files)
+
+### Second brain direction (note từ Arkon)
+- Stack tương lai: FastAPI + PostgreSQL + pgvector + Redis + MinIO + MCP server
+- Pattern: LLM MRP pipeline (Map→Reduce→Plan→Refine→Verify→Commit)
+- Scope-based permissions (department isolation)
+- Current Supabase schema compatible với migration sang PostgreSQL
+
+---
+
+## Session 33 (2026-06-11) — Clarification flow + Regional search
+
+### Feature 1: Clarification flow (commit 6dacde5)
+- Khi tu-van không detect được nước/khu vực → inject "THÔNG TIN CẦN LÀM RÕ" context
+- Gemini trả lời có cấu trúc: "Tôi hiểu bạn muốn [X]. Bạn cho tôi biết thêm: 🌍 Điểm đến / 📅 Số ngày / 📱 Loại"
+- Không tự search khi chưa có nước — giống cách Claude xử lý câu hỏi ambiguous
+
+### Feature 2: Regional search (commit 6dacde5)
+- router.ts: Detect "châu á", "châu âu", "đông nam á", "trung đông"... → params.region (chạy trước country lookup)
+- tools.ts: REGION_COUNTRIES (8 khu vực × danh sách nước), REGION_DISPLAY (tên tiếng Việt), searchSkusForRegion() — 1 DB query cho toàn khu vực, trả summary theo nước
+- context.ts: tu-van có 3 nhánh: region / country / clarify
+- agents.ts: tu-van prompt handle rõ 3 loại context
+
+### Supported regions:
+châu Á (asia), Đông Nam Á (southeast_asia), châu Âu (europe),
+Bắc Mỹ (north_america), châu Mỹ (americas), Trung Đông (middle_east),
+châu Phi (africa), châu Đại Dương (oceania)
+
+---
 
 ## Session 32 (2026-06-11) — Refactor buildToolContext
 

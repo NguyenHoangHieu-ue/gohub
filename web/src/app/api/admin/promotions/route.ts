@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabaseAdmin
     .from("products")
-    .select("product_code, vendor_code, type_of_sim, supported_countries, telco_perks, status", { count: "exact" })
+    .select("product_code, vendor_code, type_of_sim, supported_countries, telco_perks, telco_perks_start, telco_perks_end, status", { count: "exact" })
     .order("vendor_code")
     .order("product_code")
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
@@ -34,13 +34,17 @@ export async function PATCH(req: NextRequest) {
   if (!session || session.user.role !== "admin")
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const { product_code, telco_perks } = await req.json()
+  const { product_code, telco_perks, telco_perks_start, telco_perks_end } = await req.json()
   if (!product_code)
     return NextResponse.json({ error: "product_code required" }, { status: 400 })
 
   const { error } = await supabaseAdmin
     .from("products")
-    .update({ telco_perks: telco_perks?.trim() || null })
+    .update({
+      telco_perks:       telco_perks?.trim()       || null,
+      telco_perks_start: telco_perks_start         || null,
+      telco_perks_end:   telco_perks_end           || null,
+    })
     .eq("product_code", product_code)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

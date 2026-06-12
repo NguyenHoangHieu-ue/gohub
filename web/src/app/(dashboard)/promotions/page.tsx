@@ -1,30 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Gift, Search } from "lucide-react"
 
 interface Promotion {
   product_code:        string
   vendor_code:         string | null
   type_of_sim:         string | null
-  product_type:        string | null
   supported_countries: string | null
   telco_perks:         string
+  telco_perks_start:   string | null
+  telco_perks_end:     string | null
   tenant:              string | null
-  status:              string | null
+  listing_name_vn:     string | null
+  telco_perks_vn:      string | null
+  telco_perks_en:      string | null
 }
 
 function vendorBadge(vendor: string | null) {
   if (!vendor) return null
   const colors: Record<string, string> = {
-    WM:   "bg-blue-100 text-blue-700",
-    "3H": "bg-purple-100 text-purple-700",
-    BC:   "bg-orange-100 text-orange-700",
-    SS:   "bg-teal-100 text-teal-700",
+    WM: "bg-blue-100 text-blue-700", "3H": "bg-purple-100 text-purple-700",
+    BC: "bg-orange-100 text-orange-700", SS: "bg-teal-100 text-teal-700",
   }
-  const cls = colors[vendor] ?? "bg-gray-100 text-gray-600"
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${cls}`}>
+    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${colors[vendor] ?? "bg-gray-100 text-gray-600"}`}>
       {vendor}
     </span>
   )
@@ -34,26 +34,35 @@ function simBadge(sim: string | null) {
   if (!sim) return null
   const isEsim = sim.toLowerCase().includes("esim")
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
-      isEsim ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-    }`}>
+    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${isEsim ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
       {sim}
     </span>
   )
 }
 
-function parseCountries(raw: string | null): string {
-  if (!raw) return ""
-  const codes = raw.split(",").map(s => s.trim()).filter(Boolean)
-  if (codes.length === 0) return ""
-  if (codes.length <= 3) return codes.join(", ")
-  return `${codes.slice(0, 3).join(", ")} +${codes.length - 3}`
+function dateBadge(start: string | null, end: string | null) {
+  if (!start && !end) return null
+  const today = new Date().toISOString().slice(0, 10)
+  const active = (!start || start <= today) && (!end || end >= today)
+  return (
+    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"}`}>
+      {active ? "Đang KM" : "Hết hạn"}
+    </span>
+  )
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return null
+  const [y, m, day] = d.split("-")
+  return `${day}/${m}/${y}`
 }
 
 export default function PromotionsPage() {
   const [items,   setItems]   = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
   const [search,  setSearch]  = useState("")
+  const [vendor,  setVendor]  = useState("")
+  const [simType, setSimType] = useState("")
 
   useEffect(() => {
     fetch("/api/promotions")
@@ -62,79 +71,114 @@ export default function PromotionsPage() {
       .catch(() => setLoading(false))
   }, [])
 
-  const filtered = search.trim()
-    ? items.filter(p =>
-        p.product_code.toLowerCase().includes(search.toLowerCase()) ||
-        (p.vendor_code ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        (p.supported_countries ?? "").toLowerCase().includes(search.toLowerCase()) ||
-        p.telco_perks.toLowerCase().includes(search.toLowerCase())
+  const vendors  = useMemo(() => [...new Set(items.map(p => p.vendor_code).filter(Boolean))].sort() as string[], [items])
+  const simTypes = useMemo(() => [...new Set(items.map(p => p.type_of_sim).filter(Boolean))].sort() as string[], [items])
+
+  const filtered = useMemo(() => {
+    let out = items
+    if (vendor)  out = out.filter(p => p.vendor_code  === vendor)
+    if (simType) out = out.filter(p => p.type_of_sim  === simType)
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      out = out.filter(p =>
+        p.product_code.toLowerCase().includes(q) ||
+        (p.vendor_code       ?? "").toLowerCase().includes(q) ||
+        (p.supported_countries ?? "").toLowerCase().includes(q) ||
+        p.telco_perks.toLowerCase().includes(q) ||
+        (p.telco_perks_vn    ?? "").toLowerCase().includes(q)
       )
-    : items
+    }
+    return out
+  }, [items, vendor, simType, search])
 
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-baseline gap-2">
         <Gift size={20} className="text-brand-600 mt-0.5" />
         <h1 className="text-xl font-bold text-gray-900">Khuyến Mãi</h1>
-        {!loading && (
-          <span className="text-sm text-gray-400 ml-1">{items.length} sản phẩm</span>
-        )}
+        {!loading && <span className="text-sm text-gray-400 ml-1">{filtered.length}/{items.length} sản phẩm</span>}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Tìm theo mã, vendor, nước, nội dung..."
-          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm mã SP, nội dung, nước..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        <select value={vendor} onChange={e => setVendor(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+          <option value="">Tất cả Vendor</option>
+          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={simType} onChange={e => setSimType(e.target.value)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+          <option value="">Tất cả SIM</option>
+          {simTypes.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {(vendor || simType || search) && (
+          <button onClick={() => { setVendor(""); setSimType(""); setSearch("") }}
+            className="px-3 py-2 text-sm text-gray-500 hover:text-red-600 border border-gray-200 rounded-xl hover:border-red-200 transition-colors">
+            Xóa filter
+          </button>
+        )}
       </div>
 
       {loading ? (
         <div className="space-y-2">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />
-          ))}
+          {[...Array(6)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center text-gray-400">
-          {search ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
+          {search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 font-medium">Mã sản phẩm</th>
+                <th className="px-4 py-3 font-medium">Mã SP</th>
                 <th className="px-4 py-3 font-medium">Vendor</th>
                 <th className="px-4 py-3 font-medium">Loại</th>
-                <th className="px-4 py-3 font-medium">Nước</th>
-                <th className="px-4 py-3 font-medium">Nội dung khuyến mãi</th>
+                <th className="px-4 py-3 font-medium">Thời gian KM</th>
+                <th className="px-4 py-3 font-medium">Nội dung</th>
+                <th className="px-4 py-3 font-medium">Tên gói (VN)</th>
+                <th className="px-4 py-3 font-medium">Perks VN</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(p => (
                 <tr key={p.product_code} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">
-                    {p.product_code}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">{p.product_code}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {vendorBadge(p.vendor_code)}
-                      {p.tenant && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                          {p.tenant}
-                        </span>
-                      )}
+                      {simBadge(p.type_of_sim)}
                     </div>
                   </td>
-                  <td className="px-4 py-3">{simBadge(p.type_of_sim)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[120px]">
-                    {parseCountries(p.supported_countries)}
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {p.tenant && <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{p.tenant}</span>}
                   </td>
-                  <td className="px-4 py-3 text-gray-800 max-w-md whitespace-pre-wrap leading-relaxed">
-                    {p.telco_perks}
+                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap space-y-1">
+                    {(p.telco_perks_start || p.telco_perks_end) ? (
+                      <>
+                        <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
+                        {dateBadge(p.telco_perks_start, p.telco_perks_end)}
+                      </>
+                    ) : (
+                      <span className="text-gray-300">Không giới hạn</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-800 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
+                    {p.listing_name_vn ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-700 max-w-[200px] whitespace-pre-wrap leading-relaxed">
+                    {p.telco_perks_vn ?? <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               ))}
