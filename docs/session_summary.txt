@@ -1,4 +1,38 @@
 == TÓM TẮT SESSION ==
+Cập nhật lần cuối: 2026-06-12 (session 43)
+
+## Session 43 (2026-06-12) — GoHub NCC Standard Format
+
+### Vấn đề giải quyết
+Mỗi NCC (WM, 3HK, BC...) có format file riêng → mỗi vendor cần parser riêng (tốn công).
+Giải pháp: GoHub định nghĩa 1 format chuẩn, vendor điền theo.
+
+### Standard Format — 2 loại
+**Sheet "Goi co san"** (ready-made packages): vendor_code, vendor_id, product_name, region,
+sim_type, days, data_gb, is_daily, is_unlimited, **throttle_mbps**, cost_price, currency,
+apn, network_type, is_kyc, is_lesim, notes
+
+**Sheet "Datapool"** (giá/GB như 3HK): vendor_code, zone_id, zone_name, countries,
+sim_type, price_per_gb, currency, network_type, is_kyc, notes
+
+### Files thay đổi (commit 3b41446)
+- web/src/types/ncc-import.ts: thêm ParsedDatapoolItem, ChangedDatapoolItem; ParsedWMItem có vendor_code + apn + network_type optional
+- web/src/app/api/ncc/template/route.ts (MỚI): GET → download GoHub_NCC_Template.xlsx
+- web/src/app/api/ncc/import-preview/route.ts: auto-detect standard vs WM-native, parse cả 2 sheet
+- web/src/app/api/ncc/import-confirm/route.ts: upsert ncc_worldmove + ncc_datapool
+- web/src/app/(dashboard)/ncc/page.tsx: nút "Tải template" + "Import", modal hiển thị diff 2 loại
+
+### Migration cần chạy trong Supabase (trước khi dùng datapool import)
+File: database/migrations/v8_ncc_standard_format.sql
+- ALTER TABLE ncc_worldmove ADD COLUMN vendor_code TEXT DEFAULT 'WM'
+- CREATE TABLE ncc_datapool (vendor_code, zone_id UNIQUE, zone_name, countries, price_per_gb, currency...)
+
+### Backward compat
+- WM native CSV vẫn hoạt động (auto-detect "wmproductId" header → WM native parser)
+- Standard format detect bằng sheet name "Goi co san" hoặc column "vendor_code"
+
+---
+
 Cập nhật lần cuối: 2026-06-12 (session 42)
 
 ## Session 42 (2026-06-12) — Phase 5 NCC Processing (WM Import)
