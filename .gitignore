@@ -23,14 +23,29 @@ TaiLieuCongTy_Chung/
 # DB scripts / schema / import (local only — không public)
 database/
 
-# Docs / notes (local only, but track session summary + memory)
-docs/
+# Docs / notes (local only, but track session summary + wiki + memory)
+docs/*
 !docs/session_summary.txt
+!docs/wiki/
+docs/wiki/*
+!docs/wiki/*.md
+!docs/wiki/vendors/
+!docs/wiki/vendors/*.md
+!docs/wiki/products/
+!docs/wiki/products/*.md
+!docs/wiki/pricing/
+!docs/wiki/pricing/*.md
+!docs/wiki/processes/
+!docs/wiki/processes/*.md
+!docs/wiki/company/
+!docs/wiki/company/*.md
 _Skills_AI/
 *.txt
 !memory/
 !memory/*.md
 *.md
+!docs/wiki/*.md
+!docs/wiki/**/*.md
 
 # Data folder: ref xlsx files ARE tracked (public reference data, trigger GitHub Actions)
 # ncc/ subfolders NOT tracked (may contain sensitive pricing)
