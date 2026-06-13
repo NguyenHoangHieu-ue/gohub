@@ -70,23 +70,21 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
-// Xoá Obsidian wikilinks khỏi nội dung trước khi render (công ty xem, không cần internal links)
-function stripWikilinks(md: string): string {
+// Chuyển Obsidian wikilinks thành markdown links có protocol wiki://
+// để ReactMarkdown render thành button navigate nội bộ
+function processWikilinks(md: string): string {
   return md
-    .split("\n")
-    .filter(line => {
-      const t = line.trim()
-      // Xoá toàn bộ dòng chứa "Xem thêm / See also" kèm wikilink
-      if (/^[-*>]?\s*(Xem thêm|See also|Related|Liên quan)\s*:.*\[\[/i.test(t)) return false
-      // Xoá dòng chỉ là wikilink đơn thuần
-      if (/^\[\[.*\]\]\s*$/.test(t)) return false
-      return true
+    // Xoá dataview code blocks (Obsidian-only, không render trên web)
+    .replace(/```dataview[\s\S]*?```/g, "")
+    // [[path|display]] → [display](wiki://display)
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_, _path, display) =>
+      `[${display.trim()}](wiki://${encodeURIComponent(display.trim())})`
+    )
+    // [[path]] → [Page Name](wiki://Page Name)  (dùng filename, replace - thành space)
+    .replace(/\[\[([^\]]+)\]\]/g, (_, path) => {
+      const name = (path.split("/").pop() ?? path).replace(/-/g, " ")
+      return `[${name}](wiki://${encodeURIComponent(name)})`
     })
-    .join("\n")
-    // [[path|display text]] → display text
-    .replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, "$1")
-    // [[page]] → page name (bỏ path prefix và anchor)
-    .replace(/\[\[(?:[^/\]#]*\/)*([^#\]]+)(?:#[^\]]*)?\]\]/g, "$1")
 }
 
 // ─── Permissions hook ─────────────────────────────────────────────────────────
@@ -403,6 +401,23 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
     if (r.ok) fetchPages()
   }
 
+  // Navigate sang wiki page khác khi user bấm vào wikilink trong nội dung
+  const handleWikiLink = async (display: string) => {
+    // Tìm trong pages đã load trước
+    const d = display.toLowerCase()
+    const local = pages.find(p => {
+      const t = p.title.toLowerCase()
+      if (t.includes(d) || d.includes(t.split("—")[0].trim())) return true
+      return d.split(/[\s—–]+/).filter(w => w.length > 2).some(w => t.includes(w))
+    })
+    if (local) { openPage(local); return }
+    // Fallback: gọi API tìm theo title
+    const term = display.split(" ").slice(0, 3).join(" ")
+    const r = await fetch(`/api/kb/wiki?search=${encodeURIComponent(term)}`)
+    const d2 = await r.json()
+    if (d2.data?.[0]) openPage(d2.data[0])
+  }
+
   const runSemanticSearch = async (q: string) => {
     if (!q.trim()) { setWikiResults([]); return }
     setSemanticSearching(true)
@@ -547,7 +562,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
           <h2 className="text-xl font-bold text-gray-900 flex-1">{selected.title}</h2>
           <div className="flex gap-1.5 flex-wrap">{typeBadge(selected.page_type)}{deptBadge(selected.department)}</div>
         </div>
-        <p className="text-xs text-gray-400 mb-4">v{selected.version} · Cập nhật {fmtDate(selected.updated_at)} bởi {selected.updated_by}</p>
+        <p className="text-xs text-gray-400 mb-4">Cập nhật {fmtDate(selected.updated_at)} bởi {selected.updated_by}</p>
         {selected.tags?.length > 0 && (
           <div className="flex gap-1 flex-wrap mb-4">
             {selected.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{t}</span>)}
@@ -566,6 +581,20 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
             thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
             th:    ({children}) => <th className="px-3 py-2 text-left font-semibold border-b border-gray-200">{children}</th>,
             td:    ({children}) => <td className="px-3 py-2 border-b border-gray-100">{children}</td>,
+            a: ({ href, children }) => {
+              if (href?.startsWith("wiki://")) {
+                const query = decodeURIComponent(href.slice(7))
+                return (
+                  <button
+                    onClick={() => handleWikiLink(query)}
+                    className="text-brand-600 hover:text-brand-700 underline decoration-brand-200 cursor-pointer font-medium"
+                  >
+                    {children}
+                  </button>
+                )
+              }
+              return <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">{children}</a>
+            },
             code: ({ className, children }) => {
               const lang = /language-(\w+)/.exec(className ?? "")?.[1]
               if (lang === "mermaid")
@@ -574,7 +603,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
             },
             pre: ({ children }) => <>{children}</>,
           }}>
-            {stripWikilinks(selected.content ?? "")}
+            {processWikilinks(selected.content ?? "")}
           </ReactMarkdown>
         </div>
       </div>
