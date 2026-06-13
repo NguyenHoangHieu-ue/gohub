@@ -53,6 +53,12 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 
 ---
 
+## Kiến Trúc & Diagram
+
+- [[system/Second-Brain-Architecture|Second Brain — Flow Diagrams]] — 6 Mermaid diagrams: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 4 Agents · 7 Phases Roadmap
+
+---
+
 ## Ghi Chú Sử Dụng
 
 - Tất cả file dùng YAML frontmatter — query bằng **Dataview** trong Obsidian

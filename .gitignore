@@ -39,6 +39,8 @@ docs/wiki/*
 !docs/wiki/processes/*.md
 !docs/wiki/company/
 !docs/wiki/company/*.md
+!docs/wiki/system/
+!docs/wiki/system/*.md
 _Skills_AI/
 *.txt
 !memory/
