@@ -1443,8 +1443,9 @@ function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:
       .then(d => {
         const p: Record<string, Set<string>> = {}
         for (const f of PERM_FEATURES) {
-          const allowed = d.perms?.[f.key] ?? PERM_DEFAULTS[f.key] ?? []
-          p[f.key] = new Set(allowed)
+          const allowed = (d.perms?.[f.key] ?? PERM_DEFAULTS[f.key] ?? []) as string[]
+          // Không include "admin" vào Set — admin luôn được prepend khi save
+          p[f.key] = new Set(allowed.filter(r => r !== "admin"))
         }
         setPerms(p)
         setLoading(false)

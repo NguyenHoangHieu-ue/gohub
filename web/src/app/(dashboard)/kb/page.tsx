@@ -91,10 +91,12 @@ function processWikilinks(md: string): string {
 function usePermissions(role: string) {
   const [perms, setPerms] = useState<Record<string, string[]>>({})
   useEffect(() => {
-    fetch("/api/permissions").then(r => r.json()).then(d => {
-      if (d.perms) setPerms(d.perms)
-    }).catch(() => {})
-  }, [])
+    if (!role) return
+    fetch("/api/permissions", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.perms) setPerms(d.perms) })
+      .catch(() => {})
+  }, [role]) // re-fetch khi role thay đổi (session vừa load xong)
   return (key: string) => {
     if (role === "admin") return true
     const allowed = perms[key]

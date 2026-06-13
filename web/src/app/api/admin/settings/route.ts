@@ -38,6 +38,8 @@ export async function PATCH(req: NextRequest) {
     const rows = updates.map(u => ({
       key:        u.key,
       value:      String(u.value),
+      // perm_* keys cần category để INSERT không fail nếu row chưa tồn tại
+      ...(u.key.startsWith("perm_") && { category: "permission" }),
       updated_at: new Date().toISOString(),
     }))
 
