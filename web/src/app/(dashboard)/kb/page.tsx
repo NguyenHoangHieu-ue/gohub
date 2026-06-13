@@ -9,6 +9,8 @@ import {
   PenLine, Eye, History, Plus, ChevronLeft, X,
 } from "lucide-react"
 import { DEPT_LABELS, type Department } from "@/lib/kb"
+import { ConfirmModal } from "@/components/confirm-modal"
+import { MermaidBlock  } from "@/components/mermaid-block"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface KBDoc {
@@ -68,12 +70,45 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
+// ─── Permissions hook ─────────────────────────────────────────────────────────
+function usePermissions(role: string) {
+  const [perms, setPerms] = useState<Record<string, string[]>>({})
+  useEffect(() => {
+    fetch("/api/permissions").then(r => r.json()).then(d => {
+      if (d.perms) setPerms(d.perms)
+    }).catch(() => {})
+  }, [])
+  return (key: string) => {
+    if (role === "admin") return true
+    const allowed = perms[key]
+    if (!allowed) return role === "manager" // safe default while loading
+    return allowed.includes(role)
+  }
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function KBPage() {
   const { data: session } = useSession()
   const role     = (session?.user as any)?.role ?? "standard"
   const username = session?.user?.name ?? ""
   const [tab, setTab] = useState<"docs" | "wiki" | "search">("docs")
+  const can = usePermissions(role)
+
+  const canUpload   = can("perm_kb_upload")
+  const canWikiView = can("perm_kb_wiki_view")
+  const canWikiEdit = can("perm_kb_wiki_edit")
+
+  type TabId = "docs" | "wiki" | "search"
+  const ALL_TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: "docs",   label: "Tài liệu",  icon: <FileText size={14}/> },
+    { id: "wiki",   label: "Wiki",      icon: <PenLine  size={14}/> },
+    { id: "search", label: "Tìm kiếm",  icon: <Search   size={14}/> },
+  ]
+  const visibleTabs = ALL_TABS.filter(t => t.id !== "wiki" || canWikiView)
+
+  useEffect(() => {
+    if (tab === "wiki" && !canWikiView) setTab("docs")
+  }, [canWikiView, tab])
 
   return (
     <div className="p-6 space-y-5">
@@ -83,32 +118,32 @@ export default function KBPage() {
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {([["docs","Tài liệu",<FileText size={14}/>],["wiki","Wiki",<PenLine size={14}/>],["search","Tìm kiếm",<Search size={14}/>]] as const).map(([id,label,icon]) => (
-          <button key={id} onClick={() => setTab(id as any)}
+        {visibleTabs.map(({ id, label, icon }) => (
+          <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${tab===id?"bg-white text-brand-700 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>
             {icon}{label}
           </button>
         ))}
       </div>
 
-      {tab === "docs"   && <DocsTab   role={role} username={username} />}
-      {tab === "wiki"   && <WikiTab   role={role} username={username} />}
+      {tab === "docs"   && <DocsTab   role={role} username={username} canUpload={canUpload} />}
+      {tab === "wiki"   && <WikiTab   role={role} username={username} canWikiEdit={canWikiEdit} />}
       {tab === "search" && <SearchTab />}
     </div>
   )
 }
 
 // ─── Docs Tab ─────────────────────────────────────────────────────────────────
-function DocsTab({ role, username }: { role: string; username: string }) {
-  const canManage = role === "admin" || role === "manager"
-  const [docs,       setDocs]       = useState<KBDoc[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [deptFilter, setDeptFilter] = useState<Department | "">("")
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [uploading,  setUploading]  = useState(false)
-  const [uploadMsg,  setUploadMsg]  = useState<{type:"success"|"error";text:string}|null>(null)
-  const [form,       setForm]       = useState({ department: "all" as Department, name: "" })
-  const [fileRef,    setFileRef]    = useState<File | null>(null)
+function DocsTab({ role, username, canUpload }: { role: string; username: string; canUpload: boolean }) {
+  const canDelete = (uploadedBy: string) => role === "admin" || role === "manager" || uploadedBy === username
+  const [docs,          setDocs]          = useState<KBDoc[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [deptFilter,    setDeptFilter]    = useState<Department | "">("")
+  const [confirmDelete, setConfirmDelete] = useState<{id:string;name:string}|null>(null)
+  const [uploading,     setUploading]     = useState(false)
+  const [uploadMsg,     setUploadMsg]     = useState<{type:"success"|"error";text:string}|null>(null)
+  const [form,          setForm]          = useState({ department: "all" as Department, name: "" })
+  const [fileRef,       setFileRef]       = useState<File | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const fetchDocs = useCallback(async () => {
@@ -123,10 +158,9 @@ function DocsTab({ role, username }: { role: string; username: string }) {
   useEffect(() => { fetchDocs() }, [fetchDocs])
 
   const deleteDoc = async (id: string) => {
-    if (deletingId !== id) { setDeletingId(id); return }
-    setDeletingId(null)
     const r = await fetch(`/api/kb/documents/${id}`, { method: "DELETE" })
     if (r.ok) setDocs(p => p.filter(d => d.id !== id))
+    setConfirmDelete(null)
   }
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -150,7 +184,7 @@ function DocsTab({ role, username }: { role: string; username: string }) {
 
   return (
     <div className="space-y-5">
-      {canManage && (
+      {canUpload && (
       <form onSubmit={handleUpload} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Upload size={15} className="text-brand-500"/>Upload tài liệu mới</h3>
         {uploadMsg && (
@@ -217,9 +251,9 @@ function DocsTab({ role, username }: { role: string; username: string }) {
                   <td className="px-4 py-3 text-xs text-gray-500">{d.uploaded_by}</td>
                   <td className="px-4 py-3 text-xs text-gray-400">{fmtDate(d.created_at)}</td>
                   <td className="px-4 py-3 text-right">
-                    {(role==="admin"||d.uploaded_by===username) && (
-                      <button onClick={() => deleteDoc(d.id)} title={deletingId===d.id?"Bấm lại để xác nhận xóa":"Xóa"}
-                        className={`p-1.5 rounded-lg transition-colors ${deletingId===d.id?"bg-red-100 text-red-600":"text-gray-400 hover:text-red-600 hover:bg-red-50"}`}>
+                    {canDelete(d.uploaded_by) && (
+                      <button onClick={() => setConfirmDelete({id:d.id, name:d.name})} title="Xóa"
+                        className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-red-600 hover:bg-red-50">
                         <Trash2 size={13}/>
                       </button>
                     )}
@@ -230,13 +264,20 @@ function DocsTab({ role, username }: { role: string; username: string }) {
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmDelete}
+        message={`Xóa tài liệu "${confirmDelete?.name}"? Toàn bộ chunks và embeddings sẽ bị xóa vĩnh viễn.`}
+        onConfirm={() => confirmDelete && deleteDoc(confirmDelete.id)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }
 
 // ─── Wiki Tab ─────────────────────────────────────────────────────────────────
-function WikiTab({ role, username }: { role: string; username: string }) {
-  const canManage = role === "admin" || role === "manager"
+function WikiTab({ role, username, canWikiEdit }: { role: string; username: string; canWikiEdit: boolean }) {
+  const canEdit = (createdBy: string) => canWikiEdit || createdBy === username
   const [view,       setView]       = useState<"list"|"read"|"edit">("list")
   const [pages,      setPages]      = useState<WikiPage[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -246,7 +287,8 @@ function WikiTab({ role, username }: { role: string; username: string }) {
   const [search,     setSearch]     = useState("")
   const [typeFilter, setTypeFilter] = useState("")
   const [deptFilter, setDeptFilter] = useState("")
-  const [saving,     setSaving]     = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [confirmDel,   setConfirmDel]   = useState(false)
   const [msg,        setMsg]        = useState<{type:"success"|"error";text:string}|null>(null)
   const [editForm,   setEditForm]   = useState({ title:"", content:"", page_type:"note", department:"all", tags:"" })
   const [previewMd,  setPreviewMd]  = useState(false)
@@ -321,6 +363,7 @@ function WikiTab({ role, username }: { role: string; username: string }) {
     if (!selected) return
     const r = await fetch(`/api/kb/wiki/${selected.id}`, { method:"DELETE" })
     if (r.ok) { setView("list"); setSelected(null) }
+    setConfirmDel(false)
   }
 
   // ── List view ──
@@ -344,7 +387,7 @@ function WikiTab({ role, username }: { role: string; username: string }) {
         </select>
         <button onClick={() => { setSearch(""); setTypeFilter(""); setDeptFilter(""); fetchPages() }}
           className="px-3 py-2 text-sm border border-gray-200 text-gray-500 rounded-xl hover:border-gray-300 transition-colors">Reset</button>
-        {canManage && (
+        {canWikiEdit && (
           <button onClick={startCreate}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors ml-auto">
             <Plus size={14}/>Tạo trang
@@ -395,12 +438,12 @@ function WikiTab({ role, username }: { role: string; username: string }) {
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${showHistory?"bg-brand-50 border-brand-300 text-brand-700":"border-gray-200 text-gray-500 hover:border-gray-300"}`}>
             <History size={13}/>Lịch sử ({versions.length})
           </button>
-          {(canManage||selected.created_by===username) && (
+          {canEdit(selected.created_by) && (
             <>
               <button onClick={startEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:border-brand-300 hover:text-brand-700 transition-colors">
                 <PenLine size={13}/>Sửa
               </button>
-              <button onClick={deletePage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
+              <button onClick={() => setConfirmDel(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
                 <Trash2 size={13}/>Xóa
               </button>
             </>
@@ -421,18 +464,24 @@ function WikiTab({ role, username }: { role: string; username: string }) {
         )}
         <div className="markdown-body prose prose-sm max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-            p:({children})=><p className="mb-3">{children}</p>,
-            h1:({children})=><h1 className="text-lg font-bold mb-2 mt-4">{children}</h1>,
-            h2:({children})=><h2 className="text-base font-semibold mb-2 mt-3">{children}</h2>,
-            h3:({children})=><h3 className="text-sm font-semibold mb-1 mt-2">{children}</h3>,
-            ul:({children})=><ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
-            ol:({children})=><ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
-            li:({children})=><li className="text-gray-700">{children}</li>,
-            code:({children})=><code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-            table:({children})=><div className="overflow-x-auto mb-3 rounded-lg border border-gray-200"><table className="text-xs w-full border-collapse">{children}</table></div>,
-            thead:({children})=><thead className="bg-gray-50">{children}</thead>,
-            th:({children})=><th className="px-3 py-2 text-left font-semibold border-b border-gray-200">{children}</th>,
-            td:({children})=><td className="px-3 py-2 border-b border-gray-100">{children}</td>,
+            p:  ({children}) => <p  className="mb-3">{children}</p>,
+            h1: ({children}) => <h1 className="text-lg font-bold mb-2 mt-4">{children}</h1>,
+            h2: ({children}) => <h2 className="text-base font-semibold mb-2 mt-3 border-b border-gray-100 pb-1">{children}</h2>,
+            h3: ({children}) => <h3 className="text-sm font-semibold mb-1 mt-3">{children}</h3>,
+            ul: ({children}) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+            ol: ({children}) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+            li: ({children}) => <li className="text-gray-700">{children}</li>,
+            table: ({children}) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200"><table className="text-xs w-full border-collapse">{children}</table></div>,
+            thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
+            th:    ({children}) => <th className="px-3 py-2 text-left font-semibold border-b border-gray-200">{children}</th>,
+            td:    ({children}) => <td className="px-3 py-2 border-b border-gray-100">{children}</td>,
+            code: ({ className, children }) => {
+              const lang = /language-(\w+)/.exec(className ?? "")?.[1]
+              if (lang === "mermaid")
+                return <MermaidBlock code={String(children).trim()} />
+              return <code className="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+            },
+            pre: ({ children }) => <>{children}</>,
           }}>
             {selected.content ?? ""}
           </ReactMarkdown>
@@ -533,6 +582,13 @@ function WikiTab({ role, username }: { role: string; username: string }) {
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        open={confirmDel}
+        message={`Xóa trang "${selected?.title}"? Lịch sử các phiên bản cũng sẽ bị xóa vĩnh viễn.`}
+        onConfirm={deletePage}
+        onCancel={() => setConfirmDel(false)}
+      />
     </div>
   )
 }

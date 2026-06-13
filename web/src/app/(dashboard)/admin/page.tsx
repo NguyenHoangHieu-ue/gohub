@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, Gift, Pencil, X, Check } from "lucide-react"
+import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, Gift, Pencil, X, Check, Lock } from "lucide-react"
+import { ConfirmModal } from "@/components/confirm-modal"
 
 interface User {
   username:      string
@@ -14,7 +15,7 @@ interface User {
   lark_open_id?: string
 }
 
-type Tab = "list" | "add" | "password" | "settings" | "template" | "promotions"
+type Tab = "list" | "add" | "password" | "settings" | "permissions" | "template" | "promotions"
 
 export default function AdminPage() {
   const { data: session, status } = useSession()
@@ -60,8 +61,9 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
     { id: "list",       label: "Danh sách",    icon: <Users           size={15} /> },
     { id: "add",        label: "Thêm user",    icon: <Plus            size={15} /> },
     { id: "password",   label: "Đổi password", icon: <Key             size={15} /> },
-    { id: "settings",   label: "Cài đặt",      icon: <Settings        size={15} /> },
-    { id: "template",   label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
+    { id: "settings",     label: "Cài đặt",      icon: <Settings        size={15} /> },
+    { id: "permissions",  label: "Phân quyền",   icon: <Lock            size={15} /> },
+    { id: "template",     label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
     { id: "promotions", label: "Khuyến mãi",   icon: <Gift            size={15} /> },
   ]
 
@@ -102,8 +104,9 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
       {tab === "list"       && <UserList users={users} loading={loading} currentUser={currentUser} onRefresh={fetchUsers} onNotify={notify} />}
       {tab === "add"        && <AddUser   onRefresh={fetchUsers} onNotify={notify} setTab={setTab} />}
       {tab === "password"   && <ChangePassword users={users} onNotify={notify} />}
-      {tab === "settings"   && <SettingsTab onNotify={notify} />}
-      {tab === "template"   && <TemplateTab onNotify={notify} />}
+      {tab === "settings"     && <SettingsTab     onNotify={notify} />}
+      {tab === "permissions"  && <PermissionsTab  onNotify={notify} />}
+      {tab === "template"     && <TemplateTab     onNotify={notify} />}
       {tab === "promotions" && <PromotionsTab onNotify={notify} />}
     </div>
   )
@@ -116,8 +119,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   onRefresh:   () => void
   onNotify:    (type: "success" | "error", text: string) => void
 }) {
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
+  const [saving,     setSaving]     = useState<string | null>(null)
 
   const changeRole = async (username: string, role: string) => {
     setSaving(username)
@@ -132,9 +135,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   }
 
   const deleteUser = async (username: string) => {
-    if (pendingDelete !== username) { setPendingDelete(username); return }
     const res = await fetch(`/api/admin/users/${username}`, { method: "DELETE" })
-    setPendingDelete(null)
+    setConfirmDel(null)
     if (res.ok) { onRefresh(); onNotify("success", `Đã xóa user ${username}`) }
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
@@ -143,13 +145,16 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
 
   return (
     <div className="space-y-2">
+      <ConfirmModal
+        open={!!confirmDel}
+        title="Xóa user"
+        message={`Xóa tài khoản "${confirmDel}"? Hành động này không thể hoàn tác.`}
+        confirmLabel="Xóa user"
+        onConfirm={() => confirmDel && deleteUser(confirmDel)}
+        onCancel={() => setConfirmDel(null)}
+      />
       {users.map(u => (
         <div key={u.username} className="bg-white border border-gray-200 rounded-xl px-5 py-4">
-          {pendingDelete === u.username && (
-            <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg mb-3">
-              Bấm 🗑 lần nữa để xác nhận xóa <strong>{u.username}</strong>, hoặc click nơi khác để hủy.
-            </div>
-          )}
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -188,13 +193,9 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
 
               {u.username !== currentUser && (
                 <button
-                  onClick={() => deleteUser(u.username)}
+                  onClick={() => setConfirmDel(u.username)}
                   title="Xóa user"
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    pendingDelete === u.username
-                      ? "bg-red-100 text-red-600"
-                      : "text-gray-400 hover:text-red-600 hover:bg-red-50"
-                  }`}
+                  className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-red-600 hover:bg-red-50"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -1405,6 +1406,127 @@ function PromotionsTab({ onNotify }: {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Permissions Tab ──────────────────────────────────────────────────────────
+const PERM_FEATURES = [
+  { key: "perm_kb_upload",    label: "KB — Upload tài liệu",   desc: "Ai có thể upload PDF/DOCX vào Knowledge Base" },
+  { key: "perm_kb_wiki_view", label: "KB — Xem tab Wiki",       desc: "Ai thấy tab Wiki trong trang Kiến Thức" },
+  { key: "perm_kb_wiki_edit", label: "KB — Tạo / Sửa Wiki",    desc: "Ai có thể tạo và chỉnh sửa wiki pages" },
+  { key: "perm_ncc_import",   label: "NCC — Import dữ liệu",   desc: "Ai có thể upload file NCC để cập nhật giá" },
+] as const
+
+const PERM_ROLES = ["manager", "standard"] as const
+
+const PERM_DEFAULTS: Record<string, string[]> = {
+  perm_kb_upload:    ["manager"],
+  perm_kb_wiki_view: ["manager"],
+  perm_kb_wiki_edit: ["manager"],
+  perm_ncc_import:   ["manager"],
+}
+
+function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:string) => void }) {
+  // perms[key] = set of roles that have this permission (admin always has all)
+  const [perms,   setPerms]   = useState<Record<string, Set<string>>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+
+  useEffect(() => {
+    fetch("/api/permissions")
+      .then(r => r.json())
+      .then(d => {
+        const p: Record<string, Set<string>> = {}
+        for (const f of PERM_FEATURES) {
+          const allowed = d.perms?.[f.key] ?? PERM_DEFAULTS[f.key] ?? []
+          p[f.key] = new Set(allowed)
+        }
+        setPerms(p)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const toggle = (key: string, role: string) => {
+    setPerms(prev => {
+      const next = { ...prev, [key]: new Set(prev[key]) }
+      if (next[key].has(role)) next[key].delete(role)
+      else next[key].add(role)
+      return next
+    })
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const updates = PERM_FEATURES.map(f => ({
+      key:   f.key,
+      value: ["admin", ...Array.from(perms[f.key] ?? [])].join(","),
+    }))
+    const res = await fetch("/api/admin/settings", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ updates }),
+    })
+    setSaving(false)
+    if (res.ok) onNotify("success", "Đã lưu cài đặt phân quyền")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+  }
+
+  if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+        <strong>Admin</strong> luôn có toàn quyền và không thể bị giới hạn.
+        Bảng này chỉ áp dụng cho <strong>Manager</strong> và <strong>Standard</strong>.
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
+              <th className="px-5 py-3 text-left font-medium w-1/2">Tính năng</th>
+              <th className="px-4 py-3 text-center font-medium">Manager</th>
+              <th className="px-4 py-3 text-center font-medium">Standard</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {PERM_FEATURES.map(f => (
+              <tr key={f.key} className="hover:bg-gray-50 transition-colors">
+                <td className="px-5 py-4">
+                  <p className="font-medium text-gray-800">{f.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{f.desc}</p>
+                </td>
+                {PERM_ROLES.map(role => (
+                  <td key={role} className="px-4 py-4 text-center">
+                    <button
+                      onClick={() => toggle(f.key, role)}
+                      className={`w-10 h-6 rounded-full transition-colors relative ${
+                        perms[f.key]?.has(role)
+                          ? "bg-brand-600"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
+                        perms[f.key]?.has(role) ? "left-[18px]" : "left-0.5"
+                      }`}/>
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        <Save size={14}/>{saving ? "Đang lưu..." : "Lưu thay đổi"}
+      </button>
     </div>
   )
 }
