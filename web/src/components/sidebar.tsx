@@ -5,6 +5,7 @@ import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
+import { NotificationBell }   from "./notification-bell"
 
 const NAV = [
   { href: "/chatbot",    label: "Telco Chat",   icon: Sparkles  },
@@ -90,6 +91,9 @@ export function Sidebar() {
             </Link>
           )
         })}
+        <div className={`pt-1 border-t border-gray-100 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
+          <NotificationBell collapsed={collapsed} />
+        </div>
       </nav>
 
       {/* Toggle tab — dán vào cạnh phải sidebar */}

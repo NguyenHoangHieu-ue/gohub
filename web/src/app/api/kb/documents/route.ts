@@ -3,6 +3,7 @@ import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
 import { parseFileToText, chunkText, embedText, DEPARTMENTS } from "@/lib/kb"
+import { createNotification } from "@/lib/notifications"
 
 // GET — list documents
 export async function GET(req: NextRequest) {
@@ -98,6 +99,14 @@ export async function POST(req: NextRequest) {
 
   // Update chunk count
   await supabaseAdmin.from("kb_documents").update({ chunk_count: chunks.length }).eq("id", doc.id)
+
+  // Notification (fire-and-forget)
+  createNotification(
+    "kb_doc",
+    `Tài liệu mới: ${docName}`,
+    `Upload bởi ${username} — ${chunks.length} chunks`,
+    { name: docName, action: "upload", department, chunks: chunks.length, uploaded_by: username },
+  )
 
   return NextResponse.json({ id: doc.id, name: docName, chunk_count: chunks.length })
 }

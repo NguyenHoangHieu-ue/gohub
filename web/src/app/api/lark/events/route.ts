@@ -157,6 +157,15 @@ export async function POST(req: NextRequest) {
   const chatType   = msg?.chat_type as string  // "p2p" | "group" | "thread"
   const isInThread = !!rootId && rootId !== messageId  // message là reply trong thread
 
+  // Auto-capture group chat_id lần đầu (dùng cho Lark notifications sau này)
+  if (chatType === "group" && chatId) {
+    ;(supabaseAdmin
+      .from("app_settings")
+      .upsert({ key: "lark_notify_chat_id", value: chatId, category: "lark" },
+               { onConflict: "key", ignoreDuplicates: true } as any) as any)
+      .then(() => {}).catch(() => {})
+  }
+
   console.log("[Lark] event | type:", eventType, "| chatType:", chatType,
     "| msgType:", msgType, "| openId:", openId ? "ok" : "MISSING",
     "| chatId:", chatId ? "ok" : "MISSING", "| messageId:", messageId ? "ok" : "MISSING")

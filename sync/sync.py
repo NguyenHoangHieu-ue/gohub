@@ -95,11 +95,107 @@ def sync_sku_catalog(sb):
     upsert(sb, "sku_catalog", rows, "sku_code")
     print(f"[sku_catalog] Done ({len(rows)} rows)", flush=True)
 
+def detect_sku_changes(old_skus: dict, new_rows: list) -> tuple:
+    """So sánh snapshot DB cũ vs dữ liệu mới từ API."""
+    non_price = []
+    price_changes = []
+
+    for row in new_rows:
+        sku = row.get("sku_code") or ""
+        if not sku:
+            continue
+        pcode  = row.get("product_code") or sku[:8]
+        status = row.get("status") or ""
+        old    = old_skus.get(sku)
+
+        if old is None:
+            non_price.append({"sku_code": sku, "product_code": pcode, "status": status, "changed": "Mới"})
+        else:
+            old_st = old.get("status") or ""
+            if old_st != status:
+                if status == "Active" and old_st != "Active":
+                    label = "Kích hoạt lại"
+                elif status != "Active" and old_st == "Active":
+                    label = "Ngưng"
+                else:
+                    label = f"{old_st}→{status}"
+                non_price.append({"sku_code": sku, "product_code": pcode, "status": status, "changed": label})
+
+            old_cogs = old.get("latest_cogs")
+            new_cogs = row.get("latest_cogs")
+            if old_cogs is not None and new_cogs is not None and old_cogs != new_cogs:
+                curr = row.get("latest_cogs_currency") or ""
+                price_changes.append({
+                    "sku_code": sku, "product_code": pcode, "status": status,
+                    "changed": f"Giá: {old_cogs}→{new_cogs} {curr}".strip()
+                })
+
+    return non_price, price_changes
+
+
+def insert_sync_notifications(sb, non_price: list, price_changes: list):
+    """Insert thông báo sau sync vào bảng notifications."""
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+
+    if non_price:
+        new_c  = sum(1 for c in non_price if c["changed"] == "Mới")
+        stop_c = sum(1 for c in non_price if c["changed"] == "Ngưng")
+        back_c = sum(1 for c in non_price if c["changed"] == "Kích hoạt lại")
+        other_c = len(non_price) - new_c - stop_c - back_c
+
+        parts = []
+        if new_c:   parts.append(f"+{new_c} mới")
+        if stop_c:  parts.append(f"{stop_c} ngưng")
+        if back_c:  parts.append(f"{back_c} kích hoạt lại")
+        if other_c: parts.append(f"{other_c} khác")
+
+        sb.table("notifications").insert({
+            "type": "sync",
+            "title": f"Sync {now_str} — " + ", ".join(parts),
+            "body": f"{len(non_price)} thay đổi trạng thái SKU",
+            "data": {
+                "changes": non_price[:50],
+                "summary": {"new": new_c, "discontinued": stop_c,
+                            "reactivated": back_c, "total": len(non_price)},
+            },
+            "visibility": "all",
+            "sent_to_lark": False,
+        }).execute()
+        print(f"[notify] SKU changes inserted (new={new_c}, stop={stop_c}, back={back_c})", flush=True)
+
+    if price_changes:
+        sb.table("notifications").insert({
+            "type": "price_change",
+            "title": f"Sync {now_str} — {len(price_changes)} SKU đổi giá",
+            "body": f"{len(price_changes)} SKU thay đổi COGS (chỉ admin/manager)",
+            "data": {
+                "changes": price_changes[:50],
+                "summary": {"price_changed": len(price_changes)},
+            },
+            "visibility": "admin_manager",
+            "sent_to_lark": False,
+        }).execute()
+        print(f"[notify] Price changes inserted ({len(price_changes)})", flush=True)
+
+    if not non_price and not price_changes:
+        print("[notify] No changes — no notification.", flush=True)
+
+
 def main():
     client = GohubClient(api_key=API_KEY)
     sb     = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Sync 4 bảng chính từ GoHub API
+    # Snapshot SKU state trước khi sync (để detect changes)
+    print("[changes] Snapshotting SKU state...", flush=True)
+    old_skus = {
+        r["sku_code"]: {
+            "status": r.get("status"), "product_code": r.get("product_code"),
+            "latest_cogs": r.get("latest_cogs"), "latest_cogs_currency": r.get("latest_cogs_currency"),
+        }
+        for r in fetch_all_rows(sb, "skus",
+            "sku_code,product_code,status,latest_cogs,latest_cogs_currency")
+    }
+
     tasks = [
         ("products", client.get_all_products, "product_code"),
         ("skus",     client.get_all_skus,     "sku_code"),
@@ -107,20 +203,26 @@ def main():
         ("items",    client.get_all_items,    "item_code"),
     ]
 
-    # Cột đã DROP khỏi DB — phải loại bỏ trước khi upsert
     DROP_COLS = {
         "skus":     {"original_cost", "reference_cost_vnd",
                      "final_cogs_included_vat_vnd", "final_cogs_usd", "wr_group"},
         "products": {"data_plan_type"},
     }
 
+    new_sku_rows = []  # raw rows trước khi DROP_COLS
+
     for table, fetch_fn, pk in tasks:
         print(f"[{table}] Fetching...", flush=True)
         records = fetch_fn()
         rows = [dataclasses.asdict(r) for r in records]
+
+        if table == "skus":
+            new_sku_rows = rows  # save raw (có latest_cogs) để detect changes
+
         if table in DROP_COLS:
             drop = DROP_COLS[table]
             rows = [{k: v for k, v in r.items() if k not in drop} for r in rows]
+
         print(f"[{table}] Upserting {len(rows):,} rows...", flush=True)
         upsert(sb, table, rows, pk)
         sb.table("sync_log").upsert(
@@ -130,11 +232,13 @@ def main():
         ).execute()
         print(f"[{table}] Done ✓", flush=True)
 
-    # Rebuild sku_catalog sau khi sync skus + products xong
     sync_sku_catalog(sb)
-
-    # Cập nhật cột exist trên ncc_worldmove sau khi sync skus xong
     sync_ncc_exist(sb)
+
+    # Detect changes + insert notifications
+    if new_sku_rows:
+        non_price, price_ch = detect_sku_changes(old_skus, new_sku_rows)
+        insert_sync_notifications(sb, non_price, price_ch)
 
 def sync_ncc_exist(sb):
     """Cập nhật cột exist (Yes/No) trên ncc_worldmove.

@@ -3,6 +3,7 @@ import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
 import { embedText }                from "@/lib/kb"
+import { createNotification }       from "@/lib/notifications"
 
 type Ctx = { params: { id: string } }
 
@@ -93,6 +94,17 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notification for content edits only (skip is_hidden toggles)
+  if (title !== undefined || content !== undefined) {
+    createNotification(
+      "wiki",
+      `Wiki cập nhật: ${title ?? current.title}`,
+      `Sửa bởi ${username} (v${current.version + 1})`,
+      { title: title ?? current.title, action: "update", page_id: params.id },
+    )
+  }
+
   return NextResponse.json(data)
 }
 
@@ -115,5 +127,13 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
 
   const { error } = await supabaseAdmin.from("kb_wiki_pages").delete().eq("id", params.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  createNotification(
+    "wiki",
+    `Xóa wiki page`,
+    `ID ${params.id} xóa bởi ${username}`,
+    { action: "delete", page_id: params.id, deleted_by: username },
+  )
+
   return NextResponse.json({ ok: true })
 }

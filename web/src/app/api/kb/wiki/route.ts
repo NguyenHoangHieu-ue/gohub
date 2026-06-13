@@ -3,6 +3,7 @@ import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
 import { embedText, DEPARTMENTS }   from "@/lib/kb"
+import { createNotification }       from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -62,5 +63,13 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  createNotification(
+    "wiki",
+    `Wiki mới: ${title.trim()}`,
+    `Tạo bởi ${username}`,
+    { title: title.trim(), action: "create", page_type: page_type ?? "note", department: department ?? "all" },
+  )
+
   return NextResponse.json(data)
 }
