@@ -14,7 +14,7 @@ const DEFAULTS: Record<string, string> = {
   perm_skus_view:     "admin,manager,standard",
 }
 
-export const PERM_KEYS = Object.keys(DEFAULTS)
+const PERM_KEYS = Object.keys(DEFAULTS)
 
 export async function GET() {
   const session = await getServerSession(authOptions)
