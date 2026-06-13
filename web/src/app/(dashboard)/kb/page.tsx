@@ -100,6 +100,7 @@ export default function KBPage() {
 
 // ─── Docs Tab ─────────────────────────────────────────────────────────────────
 function DocsTab({ role, username }: { role: string; username: string }) {
+  const canManage = role === "admin" || role === "manager"
   const [docs,       setDocs]       = useState<KBDoc[]>([])
   const [loading,    setLoading]    = useState(true)
   const [deptFilter, setDeptFilter] = useState<Department | "">("")
@@ -149,6 +150,7 @@ function DocsTab({ role, username }: { role: string; username: string }) {
 
   return (
     <div className="space-y-5">
+      {canManage && (
       <form onSubmit={handleUpload} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Upload size={15} className="text-brand-500"/>Upload tài liệu mới</h3>
         {uploadMsg && (
@@ -179,6 +181,7 @@ function DocsTab({ role, username }: { role: string; username: string }) {
           {uploading?<><Loader2 size={14} className="animate-spin"/>Đang xử lý...</>:<><Upload size={14}/>Upload & Embed</>}
         </button>
       </form>
+      )}
 
       <div className="flex items-center gap-3">
         <span className="text-sm text-gray-500">Lọc:</span>
@@ -233,6 +236,7 @@ function DocsTab({ role, username }: { role: string; username: string }) {
 
 // ─── Wiki Tab ─────────────────────────────────────────────────────────────────
 function WikiTab({ role, username }: { role: string; username: string }) {
+  const canManage = role === "admin" || role === "manager"
   const [view,       setView]       = useState<"list"|"read"|"edit">("list")
   const [pages,      setPages]      = useState<WikiPage[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -340,10 +344,12 @@ function WikiTab({ role, username }: { role: string; username: string }) {
         </select>
         <button onClick={() => { setSearch(""); setTypeFilter(""); setDeptFilter(""); fetchPages() }}
           className="px-3 py-2 text-sm border border-gray-200 text-gray-500 rounded-xl hover:border-gray-300 transition-colors">Reset</button>
-        <button onClick={startCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors ml-auto">
-          <Plus size={14}/>Tạo trang
-        </button>
+        {canManage && (
+          <button onClick={startCreate}
+            className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors ml-auto">
+            <Plus size={14}/>Tạo trang
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -389,7 +395,7 @@ function WikiTab({ role, username }: { role: string; username: string }) {
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${showHistory?"bg-brand-50 border-brand-300 text-brand-700":"border-gray-200 text-gray-500 hover:border-gray-300"}`}>
             <History size={13}/>Lịch sử ({versions.length})
           </button>
-          {(role==="admin"||selected.created_by===username) && (
+          {(canManage||selected.created_by===username) && (
             <>
               <button onClick={startEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:border-brand-300 hover:text-brand-700 transition-colors">
                 <PenLine size={13}/>Sửa
