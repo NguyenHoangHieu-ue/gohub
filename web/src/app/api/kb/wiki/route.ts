@@ -8,14 +8,18 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  const role   = (session.user as any).role
   const search = req.nextUrl.searchParams.get("search") || ""
   const dept   = req.nextUrl.searchParams.get("dept")   || ""
   const type   = req.nextUrl.searchParams.get("type")   || ""
 
   let query = supabaseAdmin
     .from("kb_wiki_pages")
-    .select("id, title, page_type, department, tags, version, created_by, updated_by, updated_at")
+    .select("id, title, page_type, department, tags, version, is_hidden, created_by, updated_by, updated_at")
     .order("updated_at", { ascending: false })
+
+  // Non-admin users cannot see hidden pages
+  if (role !== "admin") query = query.eq("is_hidden", false)
 
   if (search) query = query.ilike("title", `%${search}%`)
   if (dept && DEPARTMENTS.includes(dept as any)) query = query.eq("department", dept)

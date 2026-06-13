@@ -35,7 +35,19 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const username = session.user.name!
   const role     = (session.user as any).role
 
-  const { title, content, page_type, department, tags } = await req.json()
+  const body = await req.json()
+  const { title, content, page_type, department, tags, is_hidden } = body
+
+  // is_hidden toggle: admin only, no version history needed
+  if (is_hidden !== undefined && Object.keys(body).length === 1) {
+    if (role !== "admin") return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
+    const { error } = await supabaseAdmin
+      .from("kb_wiki_pages")
+      .update({ is_hidden })
+      .eq("id", params.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, is_hidden })
+  }
 
   // Fetch current for version + ownership check
   const { data: current } = await supabaseAdmin

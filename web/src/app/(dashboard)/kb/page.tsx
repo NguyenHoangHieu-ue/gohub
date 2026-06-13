@@ -6,7 +6,7 @@ import ReactMarkdown      from "react-markdown"
 import remarkGfm          from "remark-gfm"
 import {
   BookOpen, Upload, Search, Trash2, FileText, File, FileCode, Loader2,
-  PenLine, Eye, History, Plus, ChevronLeft, X,
+  PenLine, Eye, EyeOff, History, Plus, ChevronLeft, X,
 } from "lucide-react"
 import { DEPT_LABELS, type Department } from "@/lib/kb"
 import { ConfirmModal } from "@/components/confirm-modal"
@@ -26,7 +26,7 @@ interface SearchResult {
 
 interface WikiPage {
   id: string; title: string; content?: string; page_type: string
-  department: string; tags: string[]; version: number
+  department: string; tags: string[]; version: number; is_hidden?: boolean
   created_by: string; updated_by: string; updated_at: string; created_at?: string
 }
 
@@ -140,6 +140,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
   const [loading,       setLoading]       = useState(true)
   const [deptFilter,    setDeptFilter]    = useState<Department | "">("")
   const [confirmDelete, setConfirmDelete] = useState<{id:string;name:string}|null>(null)
+  const [deleting,      setDeleting]      = useState(false)
   const [uploading,     setUploading]     = useState(false)
   const [uploadMsg,     setUploadMsg]     = useState<{type:"success"|"error";text:string}|null>(null)
   const [form,          setForm]          = useState({ department: "all" as Department, name: "" })
@@ -158,7 +159,9 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
   useEffect(() => { fetchDocs() }, [fetchDocs])
 
   const deleteDoc = async (id: string) => {
+    setDeleting(true)
     const r = await fetch(`/api/kb/documents/${id}`, { method: "DELETE" })
+    setDeleting(false)
     if (r.ok) setDocs(p => p.filter(d => d.id !== id))
     setConfirmDelete(null)
   }
@@ -267,6 +270,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
 
       <ConfirmModal
         open={!!confirmDelete}
+        loading={deleting}
         message={`Xóa tài liệu "${confirmDelete?.name}"? Toàn bộ chunks và embeddings sẽ bị xóa vĩnh viễn.`}
         onConfirm={() => confirmDelete && deleteDoc(confirmDelete.id)}
         onCancel={() => setConfirmDelete(null)}
@@ -287,8 +291,11 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
   const [search,     setSearch]     = useState("")
   const [typeFilter, setTypeFilter] = useState("")
   const [deptFilter, setDeptFilter] = useState("")
-  const [saving,       setSaving]       = useState(false)
-  const [confirmDel,   setConfirmDel]   = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
+  const [confirmDel,    setConfirmDel]    = useState(false)
+  const [wikiResults,   setWikiResults]   = useState<SearchResult[]>([])
+  const [semanticSearching, setSemanticSearching] = useState(false)
   const [msg,        setMsg]        = useState<{type:"success"|"error";text:string}|null>(null)
   const [editForm,   setEditForm]   = useState({ title:"", content:"", page_type:"note", department:"all", tags:"" })
   const [previewMd,  setPreviewMd]  = useState(false)
@@ -361,9 +368,34 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
 
   const deletePage = async () => {
     if (!selected) return
+    setDeleting(true)
     const r = await fetch(`/api/kb/wiki/${selected.id}`, { method:"DELETE" })
+    setDeleting(false)
     if (r.ok) { setView("list"); setSelected(null) }
     setConfirmDel(false)
+  }
+
+  const toggleHidden = async (page: WikiPage) => {
+    const r = await fetch(`/api/kb/wiki/${page.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_hidden: !page.is_hidden }),
+    })
+    if (r.ok) fetchPages()
+  }
+
+  const runSemanticSearch = async (q: string) => {
+    if (!q.trim()) { setWikiResults([]); return }
+    setSemanticSearching(true)
+    try {
+      const r = await fetch("/api/kb/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, limit: 6 }),
+      })
+      const d = await r.json()
+      setWikiResults((d.results ?? []).filter((x: SearchResult) => x.source === "wiki"))
+    } catch { setWikiResults([]) }
+    setSemanticSearching(false)
   }
 
   // ── List view ──
@@ -372,8 +404,11 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key==="Enter"&&fetchPages()}
-            placeholder="Tìm tiêu đề..." className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"/>
+          <input value={search}
+            onChange={e => { setSearch(e.target.value); if (!e.target.value) setWikiResults([]) }}
+            onKeyDown={e => { if (e.key === "Enter") { fetchPages(); runSemanticSearch(search) } }}
+            placeholder="Tìm tiêu đề... (Enter = tìm ngữ nghĩa)"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"/>
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
@@ -408,19 +443,56 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
               <th className="px-4 py-3 font-medium">Phòng ban</th>
               <th className="px-4 py-3 font-medium">Cập nhật</th>
               <th className="px-4 py-3 font-medium">Bởi</th>
+              {role === "admin" && <th className="px-4 py-3"/>}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
               {pages.map(p => (
-                <tr key={p.id} onClick={() => openPage(p)} className="hover:bg-gray-50 cursor-pointer transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-800">{p.title}</td>
-                  <td className="px-4 py-3">{typeBadge(p.page_type)}</td>
-                  <td className="px-4 py-3">{deptBadge(p.department)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{fmtDate(p.updated_at)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{p.updated_by}</td>
+                <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${p.is_hidden ? "opacity-60" : ""}`}>
+                  <td className="px-4 py-3 font-medium text-gray-800 cursor-pointer" onClick={() => openPage(p)}>
+                    <span className="flex items-center gap-2">
+                      {p.title}
+                      {p.is_hidden && <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded-full font-normal">Ẩn</span>}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 cursor-pointer" onClick={() => openPage(p)}>{typeBadge(p.page_type)}</td>
+                  <td className="px-4 py-3 cursor-pointer" onClick={() => openPage(p)}>{deptBadge(p.department)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400 cursor-pointer" onClick={() => openPage(p)}>{fmtDate(p.updated_at)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 cursor-pointer" onClick={() => openPage(p)}>{p.updated_by}</td>
+                  {role === "admin" && (
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => toggleHidden(p)} title={p.is_hidden ? "Hiện trang" : "Ẩn trang"}
+                        className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                        {p.is_hidden ? <Eye size={13}/> : <EyeOff size={13}/>}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Semantic search results */}
+      {(semanticSearching || wikiResults.length > 0) && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            <Search size={12}/> Kết quả ngữ nghĩa {semanticSearching && <Loader2 size={11} className="animate-spin ml-1"/>}
+          </p>
+          {wikiResults.map((r, i) => (
+            <div key={i} className="bg-white border border-brand-100 rounded-xl p-3 space-y-1 hover:border-brand-300 transition-colors cursor-pointer"
+              onClick={() => { const p = pages.find(pg => pg.id === String(r.document_id)); if (p) openPage(p) }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                {r.page_type && typeBadge(r.page_type)}
+                <span className="text-sm font-semibold text-gray-800">{r.document_name}</span>
+                {deptBadge(r.department)}
+                <span className="text-xs text-gray-400 ml-auto">{Math.round(r.similarity * 100)}% khớp</span>
+              </div>
+              <p className="text-xs text-gray-500 line-clamp-2">{r.content}</p>
+            </div>
+          ))}
+          {!semanticSearching && wikiResults.length === 0 && search && (
+            <p className="text-xs text-gray-400 pl-1">Không có kết quả ngữ nghĩa</p>
+          )}
         </div>
       )}
     </div>
@@ -585,6 +657,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
 
       <ConfirmModal
         open={confirmDel}
+        loading={deleting}
         message={`Xóa trang "${selected?.title}"? Lịch sử các phiên bản cũng sẽ bị xóa vĩnh viễn.`}
         onConfirm={deletePage}
         onCancel={() => setConfirmDel(false)}

@@ -121,6 +121,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
 }) {
   const [confirmDel, setConfirmDel] = useState<string | null>(null)
   const [saving,     setSaving]     = useState<string | null>(null)
+  const [deleting,   setDeleting]   = useState(false)
 
   const changeRole = async (username: string, role: string) => {
     setSaving(username)
@@ -135,7 +136,9 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   }
 
   const deleteUser = async (username: string) => {
+    setDeleting(true)
     const res = await fetch(`/api/admin/users/${username}`, { method: "DELETE" })
+    setDeleting(false)
     setConfirmDel(null)
     if (res.ok) { onRefresh(); onNotify("success", `Đã xóa user ${username}`) }
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
@@ -147,6 +150,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     <div className="space-y-2">
       <ConfirmModal
         open={!!confirmDel}
+        loading={deleting}
         title="Xóa user"
         message={`Xóa tài khoản "${confirmDel}"? Hành động này không thể hoàn tác.`}
         confirmLabel="Xóa user"
