@@ -70,6 +70,25 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
+// Xoá Obsidian wikilinks khỏi nội dung trước khi render (công ty xem, không cần internal links)
+function stripWikilinks(md: string): string {
+  return md
+    .split("\n")
+    .filter(line => {
+      const t = line.trim()
+      // Xoá toàn bộ dòng chứa "Xem thêm / See also" kèm wikilink
+      if (/^[-*>]?\s*(Xem thêm|See also|Related|Liên quan)\s*:.*\[\[/i.test(t)) return false
+      // Xoá dòng chỉ là wikilink đơn thuần
+      if (/^\[\[.*\]\]\s*$/.test(t)) return false
+      return true
+    })
+    .join("\n")
+    // [[path|display text]] → display text
+    .replace(/\[\[[^\]|]+\|([^\]]+)\]\]/g, "$1")
+    // [[page]] → page name (bỏ path prefix và anchor)
+    .replace(/\[\[(?:[^/\]#]*\/)*([^#\]]+)(?:#[^\]]*)?\]\]/g, "$1")
+}
+
 // ─── Permissions hook ─────────────────────────────────────────────────────────
 function usePermissions(role: string) {
   const [perms, setPerms] = useState<Record<string, string[]>>({})
@@ -555,7 +574,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
             },
             pre: ({ children }) => <>{children}</>,
           }}>
-            {selected.content ?? ""}
+            {stripWikilinks(selected.content ?? "")}
           </ReactMarkdown>
         </div>
       </div>
@@ -574,6 +593,14 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmDel}
+        loading={deleting}
+        message={`Xóa trang "${selected?.title}"? Lịch sử các phiên bản cũng sẽ bị xóa vĩnh viễn.`}
+        onConfirm={deletePage}
+        onCancel={() => setConfirmDel(false)}
+      />
     </div>
   )
 
