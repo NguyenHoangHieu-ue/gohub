@@ -1,5 +1,44 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-14 (session 50)
+Cập nhật lần cuối: 2026-06-14 (session 51)
+
+## Session 51 (2026-06-14) — Bug fixes #26-30
+
+### #26 — Phân quyền không cần re-login (commit 67ad222)
+- Tạo `/api/user/me` → GET `department` từ Supabase trực tiếp
+- Sidebar: `useMyDept(username)` hook gọi API này thay vì đọc JWT
+- Admin đổi dept → user F5 là thấy ngay, không cần đăng xuất
+
+### #27 — Products tab có dữ liệu trở lại (commit 67ad222)
+- Root cause: `data_plan_type` còn trong SELECT_COLS của `/api/products` nhưng cột đã DROP từ session 35
+- Fix: xóa `data_plan_type` khỏi SELECT_COLS
+
+### #28 — Chi tiết ItemsTable (commit 67ad222)
+- Bỏ bớt cột ít dùng trong table: channel, listing, category, name_en, throttle, call
+- Thêm `ITEM_MODAL_FIELDS` (19 fields) + Chi tiết button → DetailModal
+- Truncate: `item_name_vn` >40 chars, SKU `note` >60 chars
+
+### #29 — Category tab trong Thông tin (commit a7869e4)
+- `/api/countries`: thêm `ref_categories` vào response
+- `countries/page.tsx`: sub-tab "Category" thứ 3 (sau Nhóm Nước)
+  Hiển thị: category_code, tên EN/VN, iso_code, loại (Đa quốc gia / Đơn)
+  Filter search theo mã, tên, ISO
+
+### #30 — Chatbot mã nhóm nước AP2 — CHƯA FIX ❌
+**Các attempt đã thử:**
+1. Inject toàn bộ ref_support_countries (77 mã) vào giai-dap context (commit a7869e4)
+2. Fallback query sku_catalog.country_group khi không tìm thấy trong ref tables (commit 6d1ec25)
+3. Thêm instruction vào tu-van + giai-dap system prompt (commit ef21473)
+
+**Triệu chứng:** Bot trả lời vague: "Hiện tại không có thông tin chi tiết về các sản phẩm thuộc nhóm AP2"
+
+**Cần debug lần sau:**
+- Kiểm tra AP2 có thực sự tồn tại trong ref_support_countries, ref_categories, sku_catalog không
+  (có thể AP2 là mã không tồn tại trong DB → bot đúng khi không biết)
+- Log context thực tế được inject vào prompt (thêm console.log tạm vào context.ts)
+- Kiểm tra router có detect groupCode="AP2" không (có thể user gõ "AP2" chưa trigger GROUP_CODE_RE)
+- Kiểm tra Vercel deployment có apply đúng không (cache serverless function cũ)
+
+---
 
 ## Session 50 (2026-06-14) — Fix Bug #21-25 (commit 4480a3c)
 
