@@ -106,11 +106,12 @@ export const authOptions: NextAuthOptions = {
         if (!ok) return null
 
         return {
-          id:       user.username,
-          name:     user.name,
-          email:    user.email || "",
-          username: user.username,
-          role:     user.role,
+          id:         user.username,
+          name:       user.name,
+          email:      user.email || "",
+          username:   user.username,
+          role:       user.role,
+          department: user.department ?? "all",
         }
       },
     }),
@@ -200,20 +201,22 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account }) {
       // First sign-in: copy fields from user object
       if (user) {
-        token.role     = (user as any).role
-        token.username = (user as any).username
+        token.role       = (user as any).role
+        token.username   = (user as any).username
+        token.department = (user as any).department ?? "all"
       }
 
       // For Lark: re-read from DB on first token creation to confirm persisted role
       if (account?.provider === "lark" && token.username) {
         const { data: dbUser } = await adminClient()
           .from("users")
-          .select("username, role")
+          .select("username, role, department")
           .eq("username", token.username as string)
           .maybeSingle()
         if (dbUser) {
-          token.role     = dbUser.role
-          token.username = dbUser.username
+          token.role       = dbUser.role
+          token.username   = dbUser.username
+          token.department = dbUser.department ?? "all"
         }
       }
 
@@ -221,8 +224,9 @@ export const authOptions: NextAuthOptions = {
     },
 
     session({ session, token }) {
-      session.user.role     = token.role as string
-      session.user.username = token.username as string
+      session.user.role       = token.role as string
+      session.user.username   = token.username as string
+      session.user.department = (token.department as string) ?? "all"
       return session
     },
   },

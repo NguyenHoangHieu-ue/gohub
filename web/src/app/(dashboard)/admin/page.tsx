@@ -11,6 +11,7 @@ interface User {
   name:          string
   email:         string
   role:          string
+  department:    string
   created_at:    string
   lark_open_id?: string
 }
@@ -135,6 +136,16 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
+  const changeDept = async (username: string, department: string) => {
+    const res = await fetch(`/api/admin/users/${username}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ department }),
+    })
+    if (res.ok) { onRefresh(); onNotify("success", `Đã đổi phòng ban ${username} → ${department}`) }
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+  }
+
   const deleteUser = async (username: string) => {
     setDeleting(true)
     const res = await fetch(`/api/admin/users/${username}`, { method: "DELETE" })
@@ -189,6 +200,18 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 <option value="standard">Standard</option>
                 <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
+              </select>
+              <select
+                defaultValue={u.department ?? "all"}
+                onChange={e => changeDept(u.username, e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                title="Phòng ban"
+              >
+                <option value="all">Tất cả</option>
+                <option value="sales">Sales</option>
+                <option value="product">Product</option>
+                <option value="tech">Tech</option>
+                <option value="finance">Finance</option>
               </select>
 
               {saving === u.username && (
@@ -1159,6 +1182,7 @@ interface PromoProduct {
   telco_perks_start:   string | null
   telco_perks_end:     string | null
   status:              string | null
+  sku_codes:           string[]
 }
 
 const PROMO_PAGE_SIZE = 50
@@ -1289,6 +1313,7 @@ function PromotionsTab({ onNotify }: {
               <th className="px-4 py-3 font-medium">Mã SP</th>
               <th className="px-4 py-3 font-medium">Vendor</th>
               <th className="px-4 py-3 font-medium">Loại</th>
+              <th className="px-4 py-3 font-medium">SKUs</th>
               <th className="px-4 py-3 font-medium w-1/3">Nội dung + Ngày</th>
               <th className="px-4 py-3 font-medium text-right">Thao tác</th>
             </tr>
@@ -1296,12 +1321,12 @@ function PromotionsTab({ onNotify }: {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               [...Array(6)].map((_, i) => (
-                <tr key={i}><td colSpan={5} className="px-4 py-3">
+                <tr key={i}><td colSpan={6} className="px-4 py-3">
                   <div className="h-4 bg-gray-100 rounded animate-pulse" />
                 </td></tr>
               ))
             ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Không có dữ liệu</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Không có dữ liệu</td></tr>
             ) : items.map(p => (
               <tr key={p.product_code} className={`hover:bg-gray-50 transition-colors ${editing === p.product_code ? "bg-brand-50/40" : ""}`}>
                 <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">{p.product_code}</td>
@@ -1313,6 +1338,9 @@ function PromotionsTab({ onNotify }: {
                   )}
                 </td>
                 <td className="px-4 py-3 text-xs text-gray-500">{p.type_of_sim}</td>
+                <td className="px-4 py-3">
+                  <span className="text-xs text-gray-500">{(p.sku_codes ?? []).length} SKUs</span>
+                </td>
                 <td className="px-4 py-3">
                   {editing === p.product_code ? (
                     <div className="space-y-2">
@@ -1531,6 +1559,128 @@ function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:
         className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
       >
         <Save size={14}/>{saving ? "Đang lưu..." : "Lưu thay đổi"}
+      </button>
+
+      {/* ─── Dept × Tab matrix ─── */}
+      <DeptTabMatrix onNotify={onNotify} />
+    </div>
+  )
+}
+
+// Tabs có thể unlock thêm cho standard users theo phòng ban
+const DEPT_UNLOCKABLE_TABS = [
+  { key: "kb",   label: "Kiến Thức"   },
+  { key: "skus", label: "SP Hệ Thống" },
+  { key: "ncc",  label: "SP Vendor"   },
+] as const
+
+const DEPARTMENTS = [
+  { key: "sales",   label: "Sales"   },
+  { key: "product", label: "Product" },
+  { key: "tech",    label: "Tech"    },
+  { key: "finance", label: "Finance" },
+] as const
+
+function DeptTabMatrix({ onNotify }: { onNotify: (type: "success"|"error", text: string) => void }) {
+  const [matrix, setMatrix]   = useState<Record<string, Set<string>>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+
+  const DEPT_DEFAULTS: Record<string, string[]> = {
+    sales:   ["kb"],
+    product: ["kb", "skus", "ncc"],
+    tech:    ["kb", "skus", "ncc"],
+    finance: ["skus"],
+  }
+
+  useEffect(() => {
+    fetch("/api/permissions")
+      .then(r => r.json())
+      .then(d => {
+        const m: Record<string, Set<string>> = {}
+        for (const dept of DEPARTMENTS) {
+          const key = `perm_dept_${dept.key}_tabs`
+          const tabs = (d.perms?.[key] ?? DEPT_DEFAULTS[dept.key] ?? []) as string[]
+          m[dept.key] = new Set(tabs)
+        }
+        setMatrix(m)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (dept: string, tab: string) => {
+    setMatrix(prev => {
+      const next = { ...prev, [dept]: new Set(prev[dept]) }
+      if (next[dept].has(tab)) next[dept].delete(tab)
+      else next[dept].add(tab)
+      return next
+    })
+  }
+
+  const saveDeptMatrix = async () => {
+    setSaving(true)
+    const updates = DEPARTMENTS.map(d => ({
+      key:   `perm_dept_${d.key}_tabs`,
+      value: Array.from(matrix[d.key] ?? []).join(","),
+    }))
+    const res = await fetch("/api/admin/settings", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ updates }),
+    })
+    setSaving(false)
+    if (res.ok) onNotify("success", "Đã lưu phân quyền phòng ban")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="space-y-3 pt-2 border-t border-gray-100">
+      <div>
+        <h4 className="text-sm font-semibold text-gray-700">Phân quyền theo phòng ban</h4>
+        <p className="text-xs text-gray-400 mt-0.5">Tabs nào Standard user được xem khi thuộc phòng ban này (ngoài Chatbot, Khuyến Mãi, Thông tin)</p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
+              <th className="px-5 py-3 text-left font-medium">Phòng ban</th>
+              {DEPT_UNLOCKABLE_TABS.map(t => (
+                <th key={t.key} className="px-4 py-3 text-center font-medium">{t.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {DEPARTMENTS.map(dept => (
+              <tr key={dept.key} className="hover:bg-gray-50 transition-colors">
+                <td className="px-5 py-3 font-medium text-gray-700">{dept.label}</td>
+                {DEPT_UNLOCKABLE_TABS.map(tab => (
+                  <td key={tab.key} className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => toggle(dept.key, tab.key)}
+                      className={`w-10 h-6 rounded-full transition-colors relative ${
+                        matrix[dept.key]?.has(tab.key) ? "bg-brand-600" : "bg-gray-200"
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
+                        matrix[dept.key]?.has(tab.key) ? "left-[18px]" : "left-0.5"
+                      }`}/>
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button
+        onClick={saveDeptMatrix}
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        <Save size={14}/>{saving ? "Đang lưu..." : "Lưu phòng ban"}
       </button>
     </div>
   )

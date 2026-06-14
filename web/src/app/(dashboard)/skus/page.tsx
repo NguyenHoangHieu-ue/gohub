@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Package, Search, ChevronLeft, ChevronRight, X, ChevronDown } from "lucide-react"
+import { Package, Search, ChevronLeft, ChevronRight, X, ChevronDown, Download, Loader2 } from "lucide-react"
+import * as XLSX from "xlsx"
 
 const PAGE_SIZE = 20
 
@@ -254,6 +255,49 @@ function DetailModal({ row, onClose, title, fields }: {
   )
 }
 
+// ─── Export helpers ───────────────────────────────────────────────────────────
+
+async function fetchAllPages(apiPath: string, params: URLSearchParams): Promise<any[]> {
+  const result: any[] = []
+  let page = 1
+  while (true) {
+    const p = new URLSearchParams(params)
+    p.set("page", String(page))
+    const res = await fetch(`${apiPath}?${p}`)
+    const json = await res.json()
+    const data = json.data ?? []
+    result.push(...data)
+    if (result.length >= (json.total ?? 0) || data.length === 0) break
+    page++
+  }
+  return result
+}
+
+function downloadXlsx(data: any[], columns: { key: string; label: string }[], filename: string) {
+  const rows = data.map(row => {
+    const obj: Record<string, any> = {}
+    for (const col of columns) {
+      const v = row[col.key]
+      obj[col.label] = v != null ? String(v) : ""
+    }
+    return obj
+  })
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1")
+  XLSX.writeFile(wb, filename)
+}
+
+function ExportBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button onClick={onClick} disabled={loading}
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+      {loading ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
+      {loading ? "Đang xuất..." : "Export XLSX"}
+    </button>
+  )
+}
+
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 
 function FilterBar({
@@ -484,6 +528,7 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pVendorF,  setPVendorF]  = useState("")
   const [pOperator, setPOperator] = useState("")
   const [detailRow, setDetailRow] = useState<any>(null)
+  const [exporting, setExporting] = useState(false)
 
   const opts = useFilterOpts("/api/products/filters")
   const d = useTabData("/api/products")
@@ -506,14 +551,38 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
   }
   const hasFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pVendorF || pOperator)
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ search: d.search })
+      if (d.tenant)  p.set("tenant",   d.tenant)
+      if (d.status)  p.set("status",   d.status)
+      if (pPt)       p.set("pt",       pPt)
+      if (pPtype)    p.set("ptype",    pPtype)
+      if (pCountry)  p.set("country",  pCountry)
+      if (pVendor)   p.set("vendor",   pVendor)
+      if (pDtype)    p.set("dtype",    pDtype)
+      if (pVendorF)  p.set("vendor_f", pVendorF)
+      if (pOperator) p.set("operator", pOperator)
+      const data = await fetchAllPages("/api/products", p)
+      const cols = PRODUCT_TABLE_COLS.filter(c => c.key !== "_detail")
+      downloadXlsx(data, cols, `products_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="space-y-3">
-      <FilterBar
-        search={d.search} onSearch={d.setSearch}
-        tenant={d.tenant} onTenant={d.setTenant}
-        status={d.status} onStatus={d.setStatus}
-        hasExtra={hasFilter} onReset={clearFilters}
-      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1">
+          <FilterBar
+            search={d.search} onSearch={d.setSearch}
+            tenant={d.tenant} onTenant={d.setTenant}
+            status={d.status} onStatus={d.setStatus}
+            hasExtra={hasFilter} onReset={clearFilters}
+          />
+        </div>
+        <ExportBtn onClick={handleExport} loading={exporting} />
+      </div>
 
       {/* Product code + extra filters */}
       <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
@@ -634,6 +703,7 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pData, setPData]       = useState("")
   const [pDays, setPDays]       = useState("")
   const [detailRow, setDetailRow] = useState<any>(null)
+  const [exporting, setExporting] = useState(false)
 
   const opts = useFilterOpts("/api/skus/filters")
   const d = useTabData("/api/skus")
@@ -655,6 +725,25 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   }
   const hasSkuFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pData || pDays)
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ search: d.search })
+      if (d.tenant)  p.set("tenant",  d.tenant)
+      if (d.status)  p.set("status",  d.status)
+      if (pPt)       p.set("pt",      pPt)
+      if (pPtype)    p.set("ptype",   pPtype)
+      if (pCountry)  p.set("country", pCountry)
+      if (pVendor)   p.set("vendor",  pVendor)
+      if (pDtype)    p.set("dtype",   pDtype)
+      if (pData)     p.set("data",    pData)
+      if (pDays)     p.set("days",    pDays)
+      const data = await fetchAllPages("/api/skus", p)
+      const exportCols = canSeeCost ? [...SKU_COLS_BASE, ...SKU_COGS_COLS] : SKU_COLS_BASE
+      downloadXlsx(data, exportCols, `skus_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } finally { setExporting(false) }
+  }
+
   const skuModalFields = [
     ...SKU_MODAL_FIELDS_BASE,
     ...(canSeeCost ? [
@@ -672,8 +761,13 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
 
   return (
     <div className="space-y-3">
-      <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant}
-        status={d.status} onStatus={d.setStatus} hasExtra={hasSkuFilter} onReset={clearSkuFilters} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1">
+          <FilterBar search={d.search} onSearch={d.setSearch} tenant={d.tenant} onTenant={d.setTenant}
+            status={d.status} onStatus={d.setStatus} hasExtra={hasSkuFilter} onReset={clearSkuFilters} />
+        </div>
+        <ExportBtn onClick={handleExport} loading={exporting} />
+      </div>
       <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
           SKU Code — <span className="font-normal normal-case">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
@@ -853,6 +947,7 @@ function ListingCell({ col, row }: { col: string; row: any }) {
 
 function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [iType, setIType] = useState("")
+  const [exporting, setExporting] = useState(false)
   const opts = useFilterOpts("/api/items/filters")
   const d = useTabData("/api/items", { defaultStatus: "Active" })
   const { setExtraQuery } = d
@@ -863,20 +958,36 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
     setExtraQuery(p.toString())
   }, [iType, setExtraQuery])
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ search: d.search, status: d.status || "Active" })
+      if (d.tenant) p.set("tenant", d.tenant)
+      if (iType)    p.set("item_type", iType)
+      const data = await fetchAllPages("/api/items", p)
+      downloadXlsx(data, ITEM_COLS, `items_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="space-y-3">
-      <FilterBar
-        search={d.search} onSearch={d.setSearch}
-        tenant={d.tenant} onTenant={d.setTenant}
-        status={d.status} onStatus={d.setStatus}
-        statusDefault="Active"
-        hasExtra={!!iType}
-        onReset={() => setIType("")}
-        extra={
-          <ComboFilter label="Type" value={iType} onChange={setIType}
-            width="w-32" options={opts.itemTypes ?? []} />
-        }
-      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1">
+          <FilterBar
+            search={d.search} onSearch={d.setSearch}
+            tenant={d.tenant} onTenant={d.setTenant}
+            status={d.status} onStatus={d.setStatus}
+            statusDefault="Active"
+            hasExtra={!!iType}
+            onReset={() => setIType("")}
+            extra={
+              <ComboFilter label="Type" value={iType} onChange={setIType}
+                width="w-32" options={opts.itemTypes ?? []} />
+            }
+          />
+        </div>
+        <ExportBtn onClick={handleExport} loading={exporting} />
+      </div>
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
         <tr key={row.item_code} className="hover:bg-gray-50 transition-colors">
           {cols.map(col => <ItemCell key={col.key} col={col.key} row={row} />)}

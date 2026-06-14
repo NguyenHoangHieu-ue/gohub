@@ -316,6 +316,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
   const [wikiResults,   setWikiResults]   = useState<SearchResult[]>([])
   const [semanticSearching, setSemanticSearching] = useState(false)
   const [msg,        setMsg]        = useState<{type:"success"|"error";text:string}|null>(null)
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null)
   const [editForm,   setEditForm]   = useState({ title:"", content:"", page_type:"note", department:"all", tags:"" })
   const [previewMd,  setPreviewMd]  = useState(false)
 
@@ -401,6 +402,16 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       body: JSON.stringify({ is_hidden: !page.is_hidden }),
     })
     if (r.ok) fetchPages()
+  }
+
+  const changeDept = async (id: string, dept: string) => {
+    setEditingDeptId(null)
+    const r = await fetch(`/api/kb/wiki/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ department: dept }),
+    })
+    if (r.ok) setPages(prev => prev.map(p => p.id === id ? { ...p, department: dept } : p))
   }
 
   // Navigate sang wiki page khác khi user bấm vào wikilink trong nội dung
@@ -491,7 +502,27 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
                     </span>
                   </td>
                   <td className="px-4 py-3 cursor-pointer" onClick={() => openPage(p)}>{typeBadge(p.page_type)}</td>
-                  <td className="px-4 py-3 cursor-pointer" onClick={() => openPage(p)}>{deptBadge(p.department)}</td>
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    {role === "admin" && editingDeptId === p.id ? (
+                      <select
+                        autoFocus
+                        defaultValue={p.department}
+                        onBlur={e => changeDept(p.id, e.target.value)}
+                        onChange={e => changeDept(p.id, e.target.value)}
+                        className="text-xs border border-brand-400 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      >
+                        {DEPTS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    ) : (
+                      <span
+                        onClick={() => role === "admin" ? setEditingDeptId(p.id) : openPage(p)}
+                        className={role === "admin" ? "cursor-pointer" : "cursor-pointer"}
+                        title={role === "admin" ? "Click để đổi phòng ban" : undefined}
+                      >
+                        {deptBadge(p.department)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-xs text-gray-400 cursor-pointer" onClick={() => openPage(p)}>{fmtDate(p.updated_at)}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 cursor-pointer" onClick={() => openPage(p)}>{p.updated_by}</td>
                   {role === "admin" && (

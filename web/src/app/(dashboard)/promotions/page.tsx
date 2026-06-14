@@ -147,7 +147,6 @@ export default function PromotionsPage() {
                 <th className="px-4 py-3 font-medium">Thời gian KM</th>
                 <th className="px-4 py-3 font-medium">Nội dung</th>
                 <th className="px-4 py-3 font-medium">Tên gói (VN)</th>
-                <th className="px-4 py-3 font-medium">Perks VN</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -170,15 +169,12 @@ export default function PromotionsPage() {
                         {dateBadge(p.telco_perks_start, p.telco_perks_end)}
                       </>
                     ) : (
-                      <span className="text-gray-300">Không giới hạn</span>
+                      <span className="text-gray-400">-</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-800 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
                     {p.listing_name_vn ?? <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-700 max-w-[200px] whitespace-pre-wrap leading-relaxed">
-                    {p.telco_perks_vn ?? <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               ))}

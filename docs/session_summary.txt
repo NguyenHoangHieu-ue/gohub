@@ -1,5 +1,278 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-12 (session 43)
+Cập nhật lần cuối: 2026-06-13 (session 49)
+
+## Session 49 (2026-06-13) — Fix phân quyền KB Wiki (commit 74b1730)
+
+### Root cause (3 bugs cùng lúc)
+1. `api/admin/settings` PATCH không gửi `category` khi INSERT perm row mới → fail NOT NULL constraint → row không được tạo → permissions không save
+2. `PermissionsTab` init: Set chứa cả "admin" → save ra `"admin,admin,manager,standard"` (admin bị duplicate — harmless nhưng sai)
+3. `usePermissions`: fetch không có cache control + deps=`[]` → browser có thể cache response cũ, không re-fetch sau khi session load
+
+### Fixes
+- `api/admin/settings/route.ts`: thêm `category: "permission"` khi key starts with `perm_` → INSERT row mới thành công
+- `admin/page.tsx` PermissionsTab init: `.filter(r => r !== "admin")` → Set chỉ chứa non-admin roles
+- `kb/page.tsx` usePermissions: `cache: "no-store"` + deps=`[role]` → không cache + re-fetch khi session load
+
+### Action cần làm thủ công sau deploy
+Admin → Tab Phân Quyền → bật lại Standard cho "KB — Xem tab Wiki" → Lưu
+
+---
+
+## Session 49 — tiếp (2026-06-13) — Feature backlog ghi nhận (Bug.txt #21–25)
+
+### #21 — Tab Khuyến Mãi (3 sub-issues)
+- Admin: thêm cột SKU (khuyến mãi theo gói, không chỉ theo ProductCode)
+- Tab xem: bỏ cột "Perks VN" (trùng với "Nội dung KM"), chỉ giữ 1 cột
+- Không có ngày → hiện "-" thay vì "Không giới hạn"
+
+### #22 — Wiki: phân quyền phòng ban per-page
+- Admin chọn phòng ban nào được xem từng trang wiki ngay trong UI wiki
+- Lưu vào field department của kb_wiki_pages
+
+### #23 — RBAC nâng cao: phòng ban + role
+- Role mới: sales, product, tech, finance
+- Standard mặc định: chỉ thấy Chatbot + Khuyến Mãi + Thông tin + Thông báo
+- Assign phòng ban → mở thêm tabs tương ứng
+- Cần migration: ADD COLUMN department vào users
+
+### #24 — Admin Phân Quyền: matrix phòng ban × tab
+- Thêm vào tab Phân Quyền: bảng phòng ban vs tab visibility
+- Bổ sung cho role-based hiện tại
+
+### #25 — Export XLSX cho SP Hệ Thống + SP Vendor
+- Nút Export: không lọc → all rows, đang lọc → chỉ rows đang hiển thị
+- Columns theo role (COGS chỉ admin/manager)
+
+---
+
+## Session 48 (2026-06-13) — Wiki wikilinks navigation + version display (commit 1344171)
+
+### processWikilinks() thay stripWikilinks()
+- `[[path|display]]` → `[display](wiki://display)` — ReactMarkdown render thành button navigate
+- `[[path]]` → `[Page Name](wiki://Page Name)` — dùng filename, replace `-` thành space
+- Xóa `dataview` code blocks (Obsidian-only) khỏi web render
+- External links (`http://...`) vẫn mở tab mới bình thường
+
+### handleWikiLink(display)
+- Tìm trong `pages` đã load: so title contain / keyword match
+- Fallback: gọi `/api/kb/wiki?search=...` → openPage(result[0])
+
+### Read view metadata
+- Bỏ `v{version} ·` — giờ chỉ còn "Cập nhật DD/MM/YYYY bởi username"
+
+---
+
+## Session 47 (2026-06-13) — Bug fixes Wiki + Second Brain diagram
+
+### Bug fixes (commits bc14559, 01c359d)
+
+**Wiki delete modal không hiện (bug sau khi thêm early return):**
+- Root cause: `ConfirmModal` chỉ render trong edit view (early return). Click Xóa từ read view → confirmDel=true nhưng modal chưa mount.
+- Fix: thêm `ConfirmModal` vào cuối read view.
+
+**Wiki render wikilinks Obsidian `[[...]]`:**
+- Thêm `stripWikilinks()` helper trong `kb/page.tsx`
+- Lọc bỏ dòng "Xem thêm: [[...]]" + transform `[[path|text]]` → text
+- Áp dụng trong wiki read view trước khi pass vào ReactMarkdown
+
+**Second Brain diagram cleanup (`docs/wiki/system/Second-Brain-Architecture.md`):**
+- Xóa tất cả emoji khỏi 6 Mermaid diagrams (flowchart, sequence, timeline, ER)
+- Thêm `(Done)` cho: Phase 1 KB, Phase 2 Wiki, Phase 4 MCP, Phase 5 NCC, Phase 6 Automation
+- Thêm `(Chua lam)` cho: Phase 3 MRP, Phase 7 RBAC
+- Diagram 6 timeline: Phase 6 Automation chuyển sang section Done
+- Xóa section "Liên Quan" wikilinks cuối file
+- Update Supabase wiki page trực tiếp via Python (update_second_brain.py)
+
+---
+
+## Session 46 (2026-06-13) — Phase 6A Notification Center (commit 8a9c457)
+
+### Web Notification Bell
+- `components/notification-bell.tsx`: bell icon trong sidebar, badge đỏ unread count
+- Slide-in panel từ phải (animate-slide-in-right), list 30 notifications gần nhất
+- Sync type: expandable bảng 4 cột (Status | SKU | ProductCode | Thay đổi)
+- `price_change` visibility: ẩn với standard role (chỉ admin/manager)
+- Unread tracking: localStorage `notif_last_seen`, auto-refresh 5 phút
+- `sidebar.tsx`: thêm NotificationBell giữa nav items và footer
+
+### API
+- `GET /api/notifications`: filter visibility theo role (standard chỉ thấy 'all')
+- `POST /api/notify/lark`: Bearer MCP_SECRET, đọc unsent+visibility=all, gửi Lark, mark sent
+- `lib/notifications.ts`: `createNotification()` helper fire-and-forget
+
+### KB/Wiki auto-trigger notifications
+- kb_doc upload → "Tài liệu mới: {name}"
+- kb_doc delete → "Xóa tài liệu"
+- wiki create → "Wiki mới: {title}"
+- wiki update (content only) → "Wiki cập nhật: {title}"
+- wiki delete → "Xóa wiki page"
+
+### Lark events: auto-save chat_id
+- Khi nhận group message: upsert `lark_notify_chat_id` vào app_settings (ignoreDuplicates=true)
+- Chat_id tự động được lưu lần đầu bot nhận message từ group
+
+### sync.py: change detection
+- Snapshot SKU state (sku_code, status, latest_cogs) trước sync
+- `detect_sku_changes()`: Mới / Ngưng / Kích hoạt lại / đổi giá
+- `insert_sync_notifications()`: non-price → visibility=all, price → visibility=admin_manager
+
+### sync.yml
+- Bước "Notify Lark" sau sync: curl POST /api/notify/lark (continue-on-error)
+
+### Đã hoàn thành thủ công ✅
+1. `v10_notifications.sql` đã chạy trong Supabase ✓
+2. `MCP_SECRET` đã thêm vào GitHub Actions secrets ✓
+→ Hệ thống live hoàn toàn. Sync tiếp theo (01:00 UTC) sẽ tự detect changes + notify Lark.
+
+---
+
+## Session 45 (2026-06-13) — Fix Bug #17-19 (commit a6f6fc1)
+
+### Bug #17 — ConfirmModal UX
+- `globals.css`: thêm @keyframes `modal-in` (scale+fade) và `overlay-in` (fade)
+- `confirm-modal.tsx`: prop `loading?: boolean` → spinner + "Đang xóa..." trên nút confirm, disable cả 2 nút, X ẩn khi loading, ESC bị chặn khi loading
+- `DocsTab`, `WikiTab` (kb/page.tsx): thêm `deleting` state, `deleteDoc/deletePage` set deleting trước/sau fetch
+- `UserList` (admin/page.tsx): thêm `deleting` state, `deleteUser` set deleting trước/sau fetch
+
+### Bug #18 — Wiki is_hidden toggle
+- Migration: `database/migrations/v9_wiki_hidden.sql` → ADD COLUMN `is_hidden BOOLEAN DEFAULT false` + index
+  ⚠️ **Cần chạy thủ công trong Supabase SQL Editor**
+- `GET /api/kb/wiki`: include `is_hidden` trong SELECT; non-admin users filter `is_hidden=false`
+- `PATCH /api/kb/wiki/[id]`: nếu body chỉ có `is_hidden` → early return (không tạo version history, không re-embed), chỉ admin được toggle
+- `WikiTab`: cột action cho admin (EyeOff=đang hiển thị → ẩn; Eye=đang ẩn → hiện); badge "Ẩn" trên title; row opacity-60 khi hidden
+
+### Bug #19 — Wiki inline semantic search
+- WikiTab search bar: `onChange` clear wikiResults khi xóa query; `onKeyDown Enter` → gọi `fetchPages()` + `runSemanticSearch(search)`
+- `runSemanticSearch`: POST `/api/kb/search` → filter `source==="wiki"` → set wikiResults
+- UI: section "Kết quả ngữ nghĩa" hiện bên dưới list khi có results; click result → navigate đến page trong list
+
+### Bug #20 — Re-embed wiki pages ✅
+- Chạy migration v9_wiki_hidden.sql trong Supabase ✓
+- Cập nhật GEMINI_KEY mới trong `web/.env.local` ✓
+- Chạy `reembed_wiki.py` → OK=13, FAIL=0 ✓
+- 13/13 wiki pages đã có embedding 3072 dims → chatbot giai-dap search được wiki
+- GEMINI_KEY mới đã update lên Vercel env vars → production app hoạt động đầy đủ
+
+---
+
+## Session 44 — tiếp (2026-06-13) — Deploy fix + Wiki restore + Pending notes
+
+### Deploy fixes
+- `package.json` + `package-lock.json` chưa commit → fix (commit 2ee5e30)
+- `export const PERM_KEYS` trong route file → Next.js reject → bỏ export (commit 243294c)
+
+### Wiki restore
+- Trang "GoHub — Tổng Quan Công Ty" bị xóa nhầm → chạy lại `import_wiki.py` → restored (13/13 pages)
+
+### Pending items (Bug.txt #17-20)
+- #17: UX ConfirmModal cần cải tiến (fade-in, loading state khi đang xóa)
+- #18: Wiki — toggle ẩn/hiện page (cần cột `is_hidden` trong kb_wiki_pages)
+- #19: Wiki — search bar inline trong tab Wiki
+- #20: Re-embed 13 wiki pages (cập nhật GEMINI_KEY → chạy reembed_wiki.py)
+
+---
+
+## Session 44 — tiếp (2026-06-13) — Permissions + ConfirmModal + Mermaid
+
+### Commit c3f59b7
+**Confirm Modal toàn bộ delete:**
+- `components/confirm-modal.tsx` — reusable, ESC để hủy, click ngoài để đóng
+- KB docs delete: bỏ double-click, dùng ConfirmModal
+- Wiki page delete: bỏ double-click, dùng ConfirmModal
+- Admin user delete: bỏ double-click, dùng ConfirmModal
+
+**Mermaid rendering trong Wiki:**
+- `components/mermaid-block.tsx` — lazy load, client-side render
+- Wiki read view: code block với `\`\`\`mermaid` → render thành diagram thật
+- Architecture/Flow page sẽ hiện diagram đúng
+
+**Dynamic Permissions:**
+- `api/permissions/route.ts` — public endpoint, đọc từ app_settings, fallback defaults
+- KB page load permissions khi mount → kiểm soát: wiki tab visibility, upload form, create button
+- Default: admin=all, manager=all, standard=không thấy wiki, không upload
+
+**Admin — Tab Phân Quyền:**
+- Toggle matrix: Feature × Role (Manager / Standard)
+- 4 features: KB Upload, KB Wiki View, KB Wiki Edit, NCC Import
+- Lưu vào app_settings khi bấm "Lưu thay đổi"
+- Admin luôn full quyền (không hiện trong bảng)
+
+**Pending approval workflow** — defer, cần migration DB riêng:
+- Cần table `kb_pending_changes`: resource, action, data, requested_by, status (pending/approved/rejected)
+- Cần modify PATCH /api/kb/wiki/[id] → route sang pending khi role != admin
+- Cần admin review queue UI
+
+---
+
+## Session 44 — tiếp (2026-06-13) — KB page RBAC fix
+
+### Thay đổi (commit 41a4b3a)
+- KB page (`/kb`): tab hiển thị cho **mọi role** (sidebar đã đúng từ trước)
+- DocsTab upload form: chỉ hiện với admin/manager (`canManage`)
+- WikiTab "Tạo trang": chỉ hiện với admin/manager
+- WikiTab Sửa/Xóa: admin+manager+chủ trang (trước chỉ admin+chủ trang)
+- Standard user: xem, đọc, tìm kiếm — không upload/tạo/sửa
+
+---
+
+## Session 44 — tiếp (2026-06-13) — Wiki import vào Supabase
+
+### Import kết quả
+- 13/13 wiki pages đã insert vào bảng `kb_wiki_pages` (Supabase) thành công
+- Script: `database/import/import_wiki.py` (local only, gitignored)
+- Script re-embed: `database/import/reembed_wiki.py`
+
+### Trạng thái embedding
+- Tất cả 13 pages: `embedding = NULL` (chưa có semantic search)
+- Root cause: GEMINI_KEY trong `web/.env.local` là key CŨ đã bị revoke
+- **Cần làm:** Cập nhật GEMINI_KEY trong `web/.env.local` → chạy `python database/import/reembed_wiki.py`
+
+### Python command để re-embed
+```
+set PYTHONIOENCODING=utf-8
+C:\Users\hieuh\AppData\Local\Programs\Python\Python311\python.exe database/import/reembed_wiki.py
+```
+
+---
+
+## Session 44 (2026-06-13) — GoHub Wiki v1 (Obsidian + KB)
+
+### Mục tiêu
+Tạo hệ thống tài liệu .md để nạp vào wiki/KB, kết hợp Obsidian để quản lý.
+
+### Cấu trúc tạo mới
+`docs/wiki/` trong repo — Obsidian mở folder này làm vault.
+
+### YAML frontmatter schema (chuẩn GoHub wiki API + Obsidian Dataview)
+```yaml
+title, page_type, department, tags, aliases, created, updated, status
+```
+
+### 12 file đã tạo (commit bb72894)
+- `docs/wiki/HOME.md` — Index + Map of Content + Dataview query
+- `docs/wiki/company/GoHub-Overview.md` — Pháp nhân, B2B/B2C, kênh bán, workflow
+- `docs/wiki/vendors/WM-WorldMove.md` — APN, throttle rules, 8921 products, Standard Format
+- `docs/wiki/vendors/3HK.md` — Zone pricing, 45 zones, COGS overview
+- `docs/wiki/products/SKU-Code-Structure.md` — Giải mã đầy đủ 13 ký tự SKU
+- `docs/wiki/products/Item-Code-Structure.md` — 18 ký tự Item/Alias, channel, partner
+- `docs/wiki/products/Data-Policy-Codes.md` — Mã A/B/C/D.../Z đầy đủ + auto-derive logic
+- `docs/wiki/products/Combo-Chuan-GoHub.md` — 42 combo chuẩn, thuật ngữ gap analysis
+- `docs/wiki/pricing/FX-Rates.md` — T06/2026: USD/VND=26394, HKD/USD=7.798, TWD/USD=31.452
+- `docs/wiki/pricing/3HK-COGS-Formula.md` — Fixed×55%, Daily×40%, Unlim 1.8/1.6 GB/d
+- `docs/wiki/pricing/Vendor-Priority.md` — WM vs 3HK vs KDDI, tiebreak rules
+- `docs/wiki/processes/Import-NCC.md` — Upload → Diff → Confirm, auto-detect format
+
+### .gitignore update
+Thêm whitelist `!docs/wiki/` và `!docs/wiki/**/*.md` để track wiki files lên GitHub.
+
+### Obsidian setup
+Mở `docs/wiki/` folder trong Obsidian làm vault.
+Hỗ trợ: Wikilinks [[]], Tags #tag, YAML frontmatter, Dataview plugin.
+
+### Tiếp theo
+User sẽ cung cấp thêm tài liệu → tôi viết thêm wiki pages theo cùng format.
+
+---
 
 ## Session 43 (2026-06-12) — GoHub NCC Standard Format
 
@@ -22,7 +295,7 @@ sim_type, price_per_gb, currency, network_type, is_kyc, notes
 - web/src/app/api/ncc/import-confirm/route.ts: upsert ncc_worldmove + ncc_datapool
 - web/src/app/(dashboard)/ncc/page.tsx: nút "Tải template" + "Import", modal hiển thị diff 2 loại
 
-### Migration cần chạy trong Supabase (trước khi dùng datapool import)
+### Migration đã chạy trong Supabase ✅ (2026-06-12)
 File: database/migrations/v8_ncc_standard_format.sql
 - ALTER TABLE ncc_worldmove ADD COLUMN vendor_code TEXT DEFAULT 'WM'
 - CREATE TABLE ncc_datapool (vendor_code, zone_id UNIQUE, zone_name, countries, price_per_gb, currency...)

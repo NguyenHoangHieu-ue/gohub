@@ -26,7 +26,24 @@ export async function GET(req: NextRequest) {
 
   const { data, count, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data: data ?? [], total: count ?? 0 })
+
+  // Enrich với sku_codes per product
+  let enriched = data ?? []
+  if (enriched.length > 0) {
+    const codes = enriched.map((d: any) => d.product_code)
+    const { data: skuRows } = await supabaseAdmin
+      .from("skus")
+      .select("product_code, sku_code")
+      .in("product_code", codes)
+    const skuMap: Record<string, string[]> = {}
+    for (const s of (skuRows ?? [])) {
+      if (!skuMap[s.product_code]) skuMap[s.product_code] = []
+      skuMap[s.product_code].push(s.sku_code)
+    }
+    enriched = enriched.map((p: any) => ({ ...p, sku_codes: skuMap[p.product_code] ?? [] }))
+  }
+
+  return NextResponse.json({ data: enriched, total: count ?? 0 })
 }
 
 export async function PATCH(req: NextRequest) {

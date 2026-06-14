@@ -3,18 +3,40 @@
 import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
+import { useEffect, useState } from "react"
 import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
-const NAV = [
-  { href: "/chatbot",    label: "Telco Chat",   icon: Sparkles  },
-  { href: "/promotions", label: "Khuyến Mãi",   icon: Gift      },
-  { href: "/kb",         label: "Kiến Thức",    icon: BookOpen  },
-  { href: "/skus",       label: "SP Hệ Thống",  icon: Package   },
-  { href: "/ncc",        label: "SP Vendor",     icon: Truck     },
-  { href: "/countries",  label: "Thông tin",     icon: Globe     },
+const NAV_ALL = [
+  { href: "/chatbot",    label: "Telco Chat",   icon: Sparkles, key: "chatbot"    },
+  { href: "/promotions", label: "Khuyến Mãi",   icon: Gift,     key: "promotions" },
+  { href: "/kb",         label: "Kiến Thức",    icon: BookOpen, key: "kb"         },
+  { href: "/skus",       label: "SP Hệ Thống",  icon: Package,  key: "skus"       },
+  { href: "/ncc",        label: "SP Vendor",     icon: Truck,    key: "ncc"        },
+  { href: "/countries",  label: "Thông tin",     icon: Globe,    key: "countries"  },
 ]
+
+// Tab mặc định standard user không cần department
+const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
+
+function useDeptTabs(role: string, department: string) {
+  const [extraTabs, setExtraTabs] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (role === "admin" || role === "manager") return
+    if (!department || department === "all") return
+    fetch("/api/permissions", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.perms) return
+        const key = `perm_dept_${department}_tabs`
+        const tabs = (d.perms[key] ?? []) as string[]
+        setExtraTabs(new Set(tabs))
+      })
+      .catch(() => {})
+  }, [role, department])
+  return extraTabs
+}
 
 function roleBadgeClass(role: string) {
   if (role === "admin")   return "bg-amber-100 text-amber-700"
@@ -33,13 +55,20 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
 
-  const role     = session?.user?.role     || "standard"
-  const name     = session?.user?.name     || ""
-  const initials = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
+  const role       = session?.user?.role       || "standard"
+  const department = (session?.user as any)?.department || "all"
+  const name       = session?.user?.name       || ""
+  const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const navItems = role === "admin"
-    ? [...NAV, { href: "/admin", label: "Admin", icon: Users }]
-    : NAV
+  const extraTabs = useDeptTabs(role, department)
+
+  const navItems = (() => {
+    if (role === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
+    if (role === "manager") return NAV_ALL
+    // standard: chỉ hiện tabs theo dept
+    const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
+    return NAV_ALL.filter(n => allowed.has(n.key))
+  })()
 
   return (
     <aside className={`

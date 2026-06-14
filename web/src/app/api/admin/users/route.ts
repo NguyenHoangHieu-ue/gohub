@@ -16,7 +16,7 @@ export async function GET() {
     await requireAdmin()
     const { data } = await supabaseAdmin
       .from("users")
-      .select("username, name, email, role, created_at, lark_open_id")
+      .select("username, name, email, role, department, created_at, lark_open_id")
       .order("username")
     return NextResponse.json({ users: data })
   } catch {

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
-import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle, Download, Loader2 } from "lucide-react"
+import * as XLSX from "xlsx"
 import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
 
 const canSeeCost = (role?: string) => role === "admin" || role === "manager"
@@ -601,6 +602,7 @@ function WMTab({ role }: { role?: string }) {
   const [detailModal, setDetailModal] = useState<WMProduct | null>(null)
 
   const [importing, setImporting]   = useState(false)
+  const [exporting, setExporting]   = useState(false)
   const [preview, setPreview]       = useState<PreviewResult | null>(null)
   const fileInputRef                = useRef<HTMLInputElement>(null)
 
@@ -688,6 +690,58 @@ function WMTab({ role }: { role?: string }) {
     fetchData(1, gap)
   }
 
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const allData: WMProduct[] = []
+      let pg = 1
+      while (true) {
+        const params = new URLSearchParams({
+          page: String(pg), gap,
+          ...(search   && { search     }),
+          ...(simType  && { sim_type:  simType  }),
+          ...(region   && { region               }),
+          ...(dataType && { data_type: dataType  }),
+          ...(days     && { days                 }),
+          ...(dataMin  && { data_min:  dataMin   }),
+          ...(dataMax  && { data_max:  dataMax   }),
+        })
+        const res = await fetch(`/api/ncc/worldmove?${params}`)
+        const j = await res.json()
+        const chunk: WMProduct[] = j.data ?? []
+        allData.push(...chunk)
+        if (allData.length >= (j.total ?? 0) || chunk.length === 0) break
+        pg++
+      }
+      const cols = [
+        { key: "vendor_product_id", label: "Vendor ID" },
+        { key: "product_name",      label: "Tên sản phẩm" },
+        { key: "region",            label: "Region" },
+        { key: "sim_type",          label: "SIM/eSIM" },
+        { key: "days",              label: "Days" },
+        { key: "data_gb",           label: "Data (GB)" },
+        { key: "is_unlimited",      label: "Unlimited" },
+        { key: "is_daily",          label: "Daily" },
+        { key: "throttle_kbps",     label: "Throttle (kbps)" },
+        { key: "is_kyc",            label: "KYC" },
+        { key: "apn",               label: "APN" },
+        { key: "in_system",         label: "Trong HT" },
+        ...(showCost ? [{ key: "cogs", label: "COGS" }, { key: "cogs_currency", label: "Currency" }] : []),
+      ]
+      const rows = allData.map(p => {
+        const obj: Record<string, any> = {}
+        for (const c of cols) obj[c.label] = (p as any)[c.key] ?? ""
+        return obj
+      })
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "WM Catalog")
+      XLSX.writeFile(wb, `wm_catalog_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function changeGap(g: GapFilter) {
     setGap(g)
     setPage(1)
@@ -748,6 +802,11 @@ function WMTab({ role }: { role?: string }) {
           type="number" step="0.1" className="w-24 py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400" />
         <button onClick={() => fetchData(page, gap)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">
           <RefreshCw size={14} />
+        </button>
+        <button onClick={handleExport} disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50">
+          {exporting ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
+          {exporting ? "Đang xuất..." : "Export XLSX"}
         </button>
         {showCost && (
           <>
