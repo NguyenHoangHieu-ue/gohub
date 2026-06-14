@@ -48,19 +48,30 @@ export async function buildToolContext(
       const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
       sections.push(groupCtx)
 
-      // Nếu không tìm thấy SKU, bổ sung context từ ref_support_countries để bot biết mã này là gì
+      // Nếu không tìm thấy SKU, bổ sung context để bot giải thích được mã này
       if (groupCtx.includes("Không tìm thấy")) {
         const grp = (ref.supportCountries as any[]).find((s: any) => s.code === params.groupCode)
         if (grp) {
           sections.push(
             `Thông tin mã "${params.groupCode}": Nhóm nước "${grp.support_country ?? ""}" — ISO codes: ${grp.country_codes ?? ""}`,
-            `GoHub hiện chưa có sản phẩm nào được mã hoá trực tiếp với country_group=${params.groupCode}.`
+            `GoHub hiện chưa có sản phẩm nào cho mã nhóm ${params.groupCode}.`
           )
         } else {
-          // Không có trong ref_support_countries, thử ref_categories
           const cat = (ref.categoriesMap as any)[params.groupCode]
           if (cat) {
-            sections.push(`Thông tin mã "${params.groupCode}": Category "${cat.name_en}" (${cat.region_type ?? ""}) — iso_code: ${cat.iso_code ?? ""}`)
+            sections.push(`Mã "${params.groupCode}" là category "${cat.name_en}" (${cat.region_type ?? ""}) — iso_code: ${cat.iso_code ?? ""}`)
+          } else {
+            // Thử query trực tiếp sku_catalog — AP2 có thể tồn tại nhưng chưa có mô tả
+            const { count } = await supabaseAdmin
+              .from("sku_catalog")
+              .select("*", { count: "exact", head: true })
+              .eq("country_group", params.groupCode)
+            if (count && count > 0) {
+              sections.push(`Mã "${params.groupCode}" có ${count} SKU trong sku_catalog nhưng chưa có mô tả trong ref_support_countries. Có thể là mã nhóm nước hợp lệ nhưng chưa được đăng ký.`)
+            } else {
+              const knownCodes = (ref.supportCountries as any[]).slice(0, 20).map((s: any) => s.code).join(", ")
+              sections.push(`Mã "${params.groupCode}" KHÔNG tồn tại trong hệ thống GoHub (không có SKU, không có trong ref_support_countries/ref_categories). Một số mã hợp lệ: ${knownCodes}...`)
+            }
           }
         }
       }
@@ -310,15 +321,51 @@ export async function buildToolContext(
       )
     }
 
-    // Nếu hỏi về 1 mã cụ thể → highlight mã đó
+    // Nếu hỏi về 1 mã cụ thể → tra cứu và highlight
     if (params.groupCode) {
-      const group = (ref.supportCountries as any[]).find((s: any) => s.code === params.groupCode)
+      const code = params.groupCode.toUpperCase()
+      const group = (ref.supportCountries as any[]).find((s: any) => s.code === code)
       if (group) {
         sections.push(
-          `=== CHI TIẾT MÃ "${params.groupCode}" ===`,
+          `=== CHI TIẾT MÃ "${code}" ===`,
           `Tên nhóm: ${group.support_country ?? ""}`,
           `Nước gồm (ISO codes): ${group.country_codes ?? ""}`,
         )
+      } else {
+        const cat = (ref.categoriesMap as any)[code]
+        if (cat) {
+          sections.push(
+            `=== MÃ CATEGORY "${code}" ===`,
+            `Tên: ${cat.name_en}${cat.name_vn ? ` / ${cat.name_vn}` : ""}`,
+            `Loại: ${cat.region_type ?? ""}`,
+            `ISO code: ${cat.iso_code ?? "không có"}`,
+          )
+        } else {
+          // Fallback: query sku_catalog.country_group trực tiếp
+          const { data: skuSample, count } = await supabaseAdmin
+            .from("sku_catalog")
+            .select("sku_code,tenant,sim_esim,day_amount,status", { count: "exact" })
+            .eq("country_group", code)
+            .eq("status", "Active")
+            .limit(3)
+          if (count && count > 0) {
+            sections.push(
+              `=== MÃ "${code}" trong sku_catalog ===`,
+              `Có ${count} SKU Active với country_group=${code} (chưa có mô tả trong ref_support_countries).`,
+              `Ví dụ: ${(skuSample ?? []).map((s: any) => `${s.sku_code} (${s.sim_esim}, ${s.day_amount}d)`).join(", ")}`,
+            )
+          } else {
+            const knownCodes = (ref.supportCountries as any[]).slice(0, 15).map((s: any) => s.code).join(", ")
+            sections.push(
+              `=== KẾT QUẢ TRA MÃ "${code}" ===`,
+              `KHÔNG tìm thấy mã "${code}" trong:`,
+              `- ref_support_countries (${(ref.supportCountries as any[]).length} mã): ${knownCodes}...`,
+              `- ref_categories (${Object.keys(ref.categoriesMap as any).length} mã)`,
+              `- sku_catalog (không có SKU Active nào với country_group=${code})`,
+              `=> Đây có thể không phải mã hợp lệ trong hệ thống GoHub. Vui lòng kiểm tra lại.`,
+            )
+          }
+        }
       }
     }
 
