@@ -45,10 +45,8 @@ export async function buildToolContext(
 
     // ── Case 1: Direct 3-char group/category code (JPN, CHM, EU1, APA...) ─────
     if (params.groupCode && !params.region) {
-      console.error(`[groupCode:tu-van] code=${params.groupCode}`)
       const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
       sections.push(groupCtx)
-      console.error(`[groupCode:tu-van] result_preview=${groupCtx.slice(0, 100)}`)
 
       // Nếu không tìm thấy SKU, bổ sung context để bot giải thích được mã này
       if (groupCtx.includes("Không tìm thấy")) {
@@ -334,7 +332,6 @@ export async function buildToolContext(
     // Nếu hỏi về 1 mã cụ thể → tra cứu và highlight
     if (params.groupCode) {
       const code = params.groupCode.toUpperCase()
-      console.error(`[groupCode:giai-dap] code=${code} supportCountries=${(ref.supportCountries as any[]).length}`)
       const group = (ref.supportCountries as any[]).find((s: any) => s.code === code)
       if (group) {
         sections.push(
@@ -362,7 +359,6 @@ export async function buildToolContext(
             .from("sku_catalog")
             .select("*", { count: "exact", head: true })
             .eq("country_group", code)
-          console.error(`[groupCode:giai-dap] code=${code} activeCount=${activeCount} totalCount=${totalCount}`)
           if (activeCount && activeCount > 0) {
             // Inject đầy đủ SKU list — bot cần data thực để trả lời
             const fullSkuCtx = await searchSkusByGroupCode(code, {
