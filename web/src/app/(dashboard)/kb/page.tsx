@@ -7,7 +7,9 @@ import remarkGfm          from "remark-gfm"
 import {
   BookOpen, Upload, Search, Trash2, FileText, File, FileCode, Loader2,
   PenLine, Eye, EyeOff, History, Plus, ChevronLeft, X,
+  Brain, CheckCircle2, XCircle,
 } from "lucide-react"
+import type { MrpPlan } from "@/lib/mrp"
 import { DEPT_LABELS, type Department } from "@/lib/kb"
 import { ConfirmModal } from "@/components/confirm-modal"
 import { MermaidBlock  } from "@/components/mermaid-block"
@@ -153,6 +155,14 @@ export default function KBPage() {
 }
 
 // ─── Docs Tab ─────────────────────────────────────────────────────────────────
+type MrpState = {
+  jobId:    string
+  status:   "analyzing" | "plan_ready" | "done" | "rejected" | "error"
+  plan?:    MrpPlan
+  created?: string[]
+  error?:   string
+}
+
 function DocsTab({ role, username, canUpload }: { role: string; username: string; canUpload: boolean }) {
   const canDelete = (uploadedBy: string) => role === "admin" || role === "manager" || uploadedBy === username
   const [docs,          setDocs]          = useState<KBDoc[]>([])
@@ -164,6 +174,8 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
   const [uploadMsg,     setUploadMsg]     = useState<{type:"success"|"error";text:string}|null>(null)
   const [form,          setForm]          = useState({ department: "all" as Department, name: "" })
   const [fileRef,       setFileRef]       = useState<File | null>(null)
+  const [mrp,           setMrp]           = useState<MrpState | null>(null)
+  const [approving,     setApproving]     = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const fetchDocs = useCallback(async () => {
@@ -185,10 +197,49 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
     setConfirmDelete(null)
   }
 
+  const triggerMrp = async (documentId: string) => {
+    setMrp({ jobId: "", status: "analyzing" })
+    const r = await fetch("/api/kb/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_id: documentId }),
+    })
+    const d = await r.json()
+    if (r.ok) {
+      setMrp({ jobId: d.id, status: "plan_ready", plan: d.plan })
+    } else {
+      setMrp({ jobId: "", status: "error", error: d.error ?? "Lỗi phân tích" })
+    }
+  }
+
+  const approveMrp = async () => {
+    if (!mrp?.jobId) return
+    setApproving(true)
+    const r = await fetch(`/api/kb/process/${mrp.jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    })
+    const d = await r.json()
+    setApproving(false)
+    if (r.ok) setMrp(m => m ? { ...m, status: "done", created: d.created_pages } : null)
+    else setMrp(m => m ? { ...m, status: "error", error: d.error } : null)
+  }
+
+  const rejectMrp = async () => {
+    if (!mrp?.jobId) return
+    await fetch(`/api/kb/process/${mrp.jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject" }),
+    })
+    setMrp(m => m ? { ...m, status: "rejected" } : null)
+  }
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fileRef) { setUploadMsg({ type: "error", text: "Chưa chọn file" }); return }
-    setUploading(true); setUploadMsg(null)
+    setUploading(true); setUploadMsg(null); setMrp(null)
     const fd = new FormData()
     fd.append("file", fileRef); fd.append("department", form.department); fd.append("name", form.name)
     const r = await fetch("/api/kb/documents", { method: "POST", body: fd })
@@ -199,6 +250,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
       setFileRef(null); setForm({ department: "all", name: "" })
       if (inputRef.current) inputRef.current.value = ""
       fetchDocs()
+      triggerMrp(d.id)
     } else {
       setUploadMsg({ type: "error", text: d.error ?? "Hiếu đang fix, vui lòng đợi" })
     }
@@ -237,6 +289,96 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
           {uploading?<><Loader2 size={14} className="animate-spin"/>Đang xử lý...</>:<><Upload size={14}/>Upload & Embed</>}
         </button>
       </form>
+      )}
+
+      {/* ── MRP Analysis Panel ─────────────────────────────────────────────── */}
+      {mrp && (
+        <div className="bg-white border border-brand-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-brand-700">
+              <Brain size={15}/> AI Phân Tích (MRP)
+            </div>
+            <button onClick={() => setMrp(null)} className="text-gray-400 hover:text-gray-600"><X size={14}/></button>
+          </div>
+
+          {mrp.status === "analyzing" && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Loader2 size={14} className="animate-spin"/> AI đang phân tích tài liệu...
+            </div>
+          )}
+
+          {mrp.status === "plan_ready" && mrp.plan && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 italic">{mrp.plan.summary}</p>
+
+              {(mrp.plan.key_extractions?.length ?? 0) > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Thông tin trích xuất</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mrp.plan.key_extractions.slice(0, 8).map((ex, i) => (
+                      <span key={i} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                        {ex.item}{ex.value ? ` → ${ex.value}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(mrp.plan.proposed_pages?.length ?? 0) > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
+                    Wiki pages đề xuất ({mrp.plan.proposed_pages.length})
+                  </p>
+                  {mrp.plan.proposed_pages.map((p, i) => (
+                    <div key={i} className="border border-gray-200 rounded-lg p-3 space-y-1.5 bg-gray-50">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-800">{p.title}</span>
+                        {typeBadge(p.page_type)}
+                        {deptBadge(p.department)}
+                      </div>
+                      <p className="text-xs text-gray-500">{p.reason}</p>
+                      {p.tags?.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {p.tags.map(t => <span key={t} className="text-[10px] px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded">{t}</span>)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={approveMrp} disabled={approving}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors">
+                      {approving ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle2 size={12}/>}
+                      Tạo {mrp.plan.proposed_pages.length} wiki page{mrp.plan.proposed_pages.length > 1 ? "s" : ""}
+                    </button>
+                    <button onClick={rejectMrp}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium rounded-lg transition-colors">
+                      <XCircle size={12}/> Bỏ qua
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">Không có wiki page nào được đề xuất cho tài liệu này.</p>
+              )}
+            </div>
+          )}
+
+          {mrp.status === "done" && (
+            <div className="flex items-start gap-2 text-sm text-green-700">
+              <CheckCircle2 size={15} className="mt-0.5 shrink-0"/>
+              <span>Đã tạo {mrp.created?.length ?? 0} wiki page{(mrp.created?.length ?? 0) > 1 ? "s" : ""}:{" "}
+                <span className="font-medium">{mrp.created?.join(", ")}</span>
+              </span>
+            </div>
+          )}
+
+          {mrp.status === "rejected" && (
+            <p className="text-sm text-gray-400">Đã bỏ qua — không tạo wiki page.</p>
+          )}
+
+          {mrp.status === "error" && (
+            <p className="text-sm text-red-600">Lỗi phân tích: {mrp.error}</p>
+          )}
+        </div>
       )}
 
       <div className="flex items-center gap-3">
