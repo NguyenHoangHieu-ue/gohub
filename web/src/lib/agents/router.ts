@@ -268,14 +268,20 @@ export function extractParams(message: string): ExtractedParams {
   // Ví dụ: JPN, CHM, EU1, APA, GLO, STA, MDE, JAK, TWN, KOR, HKM, SGP...
   // Chỉ detect khi user gõ rõ mã, không extract từ giữa từ khác
   if (!params.region) {
-    const words = message.toUpperCase().split(/[\s,.\-\/()]+/).filter(Boolean)
+    const originalWords = message.split(/[\s,.\-\/()]+/).filter(Boolean)
+    const words = originalWords.map(w => w.toUpperCase())
     const GROUP_CODE_RE = /^[A-Z0-9]{3,4}$/
     // Known multi-country category codes (from ref_categories multi)
     const MULTI_CAT_CODES = new Set(["CHM","ASI","EUR","STA","SAM","APA","AFA","MDE","ATA","OCN","NAM","SMI","SMT","JKR","GLO"])
-    for (const w of words) {
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]
+      const orig = originalWords[i] ?? ""
       if (GROUP_CODE_RE.test(w) && w.length >= 3 && w.length <= 4) {
-        // Tránh nhầm với số ngày (3, 5, 7...) hoặc GB (3GB → đã xử lý bên dưới)
+        // Tránh nhầm với số ngày (3, 5, 7...) hoặc GB
         if (/^\d+$/.test(w)) continue
+        // Bỏ qua các từ thuần chữ thường lowercase (ví dụ "cho", "toi", "biet", "nao")
+        // GoHub group codes phải có chữ số (AP2, EU1) hoặc đã viết hoa sẵn trong message gốc
+        if (/^[a-z]+$/.test(orig)) continue
         params.groupCode = w
         // Map multi-country category codes → region
         if (MULTI_CAT_CODES.has(w)) {
