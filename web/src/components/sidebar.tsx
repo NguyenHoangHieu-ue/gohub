@@ -20,11 +20,13 @@ const NAV_ALL = [
 // Tab mặc định standard user không cần department
 const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
 
+const SPECIFIC_DEPTS = ["sales", "product", "tech", "finance"]
+
 function useDeptTabs(role: string, department: string) {
   const [extraTabs, setExtraTabs] = useState<Set<string>>(new Set())
   useEffect(() => {
     if (role === "admin" || role === "manager") return
-    if (!department || department === "all") return
+    if (!SPECIFIC_DEPTS.includes(department)) return  // none/all/empty → không extra tab
     fetch("/api/permissions", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -65,9 +67,7 @@ export function Sidebar() {
   const navItems = (() => {
     if (role === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     if (role === "manager") return NAV_ALL
-    // standard + dept=all (chưa được gán phòng ban) → thấy tất cả như cũ
-    if (!department || department === "all") return NAV_ALL
-    // standard + dept cụ thể → lọc theo cài đặt phòng ban
+    // standard: lọc tabs theo phòng ban (không phòng ban → chỉ 3 tab mặc định)
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()

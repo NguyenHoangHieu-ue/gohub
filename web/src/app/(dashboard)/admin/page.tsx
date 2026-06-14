@@ -202,12 +202,12 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 <option value="admin">Admin</option>
               </select>
               <select
-                defaultValue={u.department ?? "all"}
+                defaultValue={u.department ?? "none"}
                 onChange={e => changeDept(u.username, e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                 title="Phòng ban"
               >
-                <option value="all">Tất cả</option>
+                <option value="none">Không phòng ban</option>
                 <option value="sales">Sales</option>
                 <option value="product">Product</option>
                 <option value="tech">Tech</option>
