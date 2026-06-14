@@ -10,6 +10,7 @@ interface SupportCountry {
   country_codes: string | null
 }
 interface Vendor { vendor_code: string; name: string; description: string | null }
+interface Category { category_code: string; name_en: string; name_vn: string | null; iso_code: string | null; region_type: string | null }
 
 function SearchInput({ value, onChange, placeholder }: {
   value: string; onChange: (v: string) => void; placeholder: string
@@ -26,17 +27,19 @@ function SearchInput({ value, onChange, placeholder }: {
   )
 }
 
-type Tab = "countries" | "support" | "vendors"
+type Tab = "countries" | "support" | "vendors" | "categories"
 
 export default function InfoPage() {
   const [countries, setCountries]               = useState<Country[]>([])
   const [supportCountries, setSupportCountries] = useState<SupportCountry[]>([])
   const [vendors, setVendors]                   = useState<Vendor[]>([])
+  const [categories, setCategories]             = useState<Category[]>([])
   const [loading, setLoading]                   = useState(true)
   const [activeTab, setActiveTab]               = useState<Tab>("countries")
   const [searchC, setSearchC]   = useState("")
   const [searchSC, setSearchSC] = useState("")
   const [searchV, setSearchV]   = useState("")
+  const [searchCat, setSearchCat] = useState("")
 
   useEffect(() => {
     fetch("/api/countries")
@@ -45,6 +48,7 @@ export default function InfoPage() {
         setCountries(j.countries ?? [])
         setSupportCountries(j.supportCountries ?? [])
         setVendors(j.vendors ?? [])
+        setCategories(j.categories ?? [])
       })
       .finally(() => setLoading(false))
   }, [])
@@ -76,10 +80,22 @@ export default function InfoPage() {
     )
   }, [vendors, searchV])
 
+  const filteredCat = useMemo(() => {
+    if (!searchCat) return categories
+    const q = searchCat.toLowerCase()
+    return categories.filter(c =>
+      c.category_code.toLowerCase().includes(q) ||
+      c.name_en.toLowerCase().includes(q) ||
+      (c.name_vn ?? "").toLowerCase().includes(q) ||
+      (c.iso_code ?? "").toLowerCase().includes(q)
+    )
+  }, [categories, searchCat])
+
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: "countries", label: "Mã Nước",           count: countries.length },
-    { key: "support",   label: "Nhóm Nước Hỗ Trợ", count: supportCountries.length },
-    { key: "vendors",   label: "Mã Vendor",          count: vendors.length },
+    { key: "countries",  label: "Mã Nước",           count: countries.length },
+    { key: "support",    label: "Nhóm Nước Hỗ Trợ", count: supportCountries.length },
+    { key: "categories", label: "Category",           count: categories.length },
+    { key: "vendors",    label: "Mã Vendor",          count: vendors.length },
   ]
 
   return (
@@ -158,6 +174,46 @@ export default function InfoPage() {
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{sc.code}</td>
                       <td className="px-4 py-2 text-gray-700 text-xs leading-relaxed">{sc.support_country ?? <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-2 text-gray-400 text-xs font-mono leading-relaxed">{sc.country_codes ?? <span className="text-gray-300">—</span>}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : activeTab === "categories" ? (
+        /* ── Category ── */
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400">{filteredCat.length} / {categories.length} category</p>
+            <SearchInput value={searchCat} onChange={setSearchCat} placeholder="Tìm mã, tên..." />
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-24">Mã</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (EN)</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (VN)</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-32">ISO Code</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-28">Loại</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCat.length === 0
+                  ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+                  : filteredCat.map(c => (
+                    <tr key={c.category_code} className="border-b border-gray-50 hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.category_code}</td>
+                      <td className="px-4 py-2 text-gray-800">{c.name_en}</td>
+                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-400">{c.iso_code ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 text-xs">
+                        {c.region_type === "Multi-Country"
+                          ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[11px] font-medium">Đa quốc gia</span>
+                          : <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px]">Đơn</span>
+                        }
+                      </td>
                     </tr>
                   ))
                 }

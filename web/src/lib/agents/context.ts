@@ -47,6 +47,23 @@ export async function buildToolContext(
     if (params.groupCode && !params.region) {
       const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
       sections.push(groupCtx)
+
+      // Nếu không tìm thấy SKU, bổ sung context từ ref_support_countries để bot biết mã này là gì
+      if (groupCtx.includes("Không tìm thấy")) {
+        const grp = (ref.supportCountries as any[]).find((s: any) => s.code === params.groupCode)
+        if (grp) {
+          sections.push(
+            `Thông tin mã "${params.groupCode}": Nhóm nước "${grp.support_country ?? ""}" — ISO codes: ${grp.country_codes ?? ""}`,
+            `GoHub hiện chưa có sản phẩm nào được mã hoá trực tiếp với country_group=${params.groupCode}.`
+          )
+        } else {
+          // Không có trong ref_support_countries, thử ref_categories
+          const cat = (ref.categoriesMap as any)[params.groupCode]
+          if (cat) {
+            sections.push(`Thông tin mã "${params.groupCode}": Category "${cat.name_en}" (${cat.region_type ?? ""}) — iso_code: ${cat.iso_code ?? ""}`)
+          }
+        }
+      }
     }
 
     // ── Case 2: Regional query (châu Á, châu Âu...) — có thể kết hợp groupCode ─
@@ -276,22 +293,30 @@ export async function buildToolContext(
     const allCats = Object.values(ref.categoriesMap as Record<string, any>)
     if (allCats.length) {
       const multi = allCats.filter((c: any) => c.region_type === "Multi-Country")
-      const single = allCats.filter((c: any) => c.region_type === "Single-Country")
       sections.push(
-        `=== MÃ CATEGORY (${allCats.length} tổng: ${single.length} nước đơn + ${multi.length} đa quốc gia) ===`,
-        `Đa quốc gia (dùng cho listings/items hiển thị trên web):`,
-        multi.map((c: any) => `${c.category_code} = ${c.name_en}`).join(" | "),
-        `Nước đơn: mã 2 ký tự ISO (JP, KR, VN...) = tên nước tương ứng`
+        `=== MÃ CATEGORY ĐA QUỐC GIA (${multi.length}) ===`,
+        multi.map((c: any) => `${c.category_code} = ${c.name_en}${c.iso_code ? ` (ISO: ${c.iso_code})` : ""}`).join("\n"),
       )
     }
 
-    // Inject ref_support_countries khi hỏi về nhóm nước cụ thể
+    // Inject TOÀN BỘ ref_support_countries — để bot biết mọi mã nhóm nước (AP2, EU1, RUS...)
+    if ((ref.supportCountries as any[]).length) {
+      sections.push(
+        `=== MÃ NHÓM NƯỚC HỖ TRỢ (${(ref.supportCountries as any[]).length}) — dùng làm country_group trong SKU ===`,
+        `Định dạng: MÃ = Tên nhóm | ISO codes`,
+        ...(ref.supportCountries as any[]).map((s: any) =>
+          `${s.code} = ${s.support_country ?? ""}${s.country_codes ? ` | ${s.country_codes}` : ""}`
+        )
+      )
+    }
+
+    // Nếu hỏi về 1 mã cụ thể → highlight mã đó
     if (params.groupCode) {
       const group = (ref.supportCountries as any[]).find((s: any) => s.code === params.groupCode)
       if (group) {
         sections.push(
-          `=== MÃ NHÓM "${params.groupCode}" ===`,
-          `Tên: ${group.support_country ?? ""}`,
+          `=== CHI TIẾT MÃ "${params.groupCode}" ===`,
+          `Tên nhóm: ${group.support_country ?? ""}`,
           `Nước gồm (ISO codes): ${group.country_codes ?? ""}`,
         )
       }
