@@ -342,18 +342,19 @@ export async function buildToolContext(
           )
         } else {
           // Fallback: query sku_catalog.country_group trực tiếp
-          const { data: skuSample, count } = await supabaseAdmin
+          const { count } = await supabaseAdmin
             .from("sku_catalog")
-            .select("sku_code,tenant,sim_esim,day_amount,status", { count: "exact" })
+            .select("*", { count: "exact", head: true })
             .eq("country_group", code)
             .eq("status", "Active")
-            .limit(3)
           if (count && count > 0) {
-            sections.push(
-              `=== MÃ "${code}" trong sku_catalog ===`,
-              `Có ${count} SKU Active với country_group=${code} (chưa có mô tả trong ref_support_countries).`,
-              `Ví dụ: ${(skuSample ?? []).map((s: any) => `${s.sku_code} (${s.sim_esim}, ${s.day_amount}d)`).join(", ")}`,
-            )
+            // Inject đầy đủ SKU list — bot cần data thực để trả lời, không chỉ sample
+            const fullSkuCtx = await searchSkusByGroupCode(code, {
+              days: params.days, simType: params.simType,
+              isUnlimited: params.isUnlimited, vendor: params.vendor, dataGB: params.dataGB,
+            }, isCost, fx)
+            sections.push(fullSkuCtx)
+            sections.push(`Lưu ý: Mã "${code}" chưa có mô tả trong ref_support_countries — tên nhóm nước chính thức chưa được đăng ký. Hiển thị danh sách SKU để trả lời câu hỏi.`)
           } else {
             const knownCodes = (ref.supportCountries as any[]).slice(0, 15).map((s: any) => s.code).join(", ")
             sections.push(

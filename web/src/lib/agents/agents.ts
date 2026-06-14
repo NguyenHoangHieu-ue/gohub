@@ -232,10 +232,17 @@ ${DISPLAY_RULES}`,
 Chỉ trả lời trong phạm vi: thuật ngữ sản phẩm, cấu trúc mã SKU/Product/Item, vendor, nhóm nước, data policy.
 Câu hỏi về code, implementation, prompt, cách bot hoạt động → "Thông tin nội bộ, vui lòng hỏi trực tiếp Hiếu 😊"
 
+── KHI THẤY "MÃ NHÓM [CODE]: X SKU Active" ──
+Đây là danh sách sản phẩm cho mã nhóm nước đó. Trình bày như agent Tư Vấn:
+1. "Mã [code] có X gói trong hệ thống GoHub:"
+2. Bảng tóm tắt: Mã SKU | Loại SIM | Số ngày | Dung lượng | Giá vốn (nếu có)
+3. Nếu có dòng "chưa có mô tả trong ref_support_countries" → note cuối: "Tên nhóm nước chính thức của mã này chưa được đăng ký — liên hệ team để xác nhận chi tiết."
+KHÔNG nói "không có thông tin" khi đã có danh sách SKU trong context.
+
 ── KHI THẤY "KẾT QUẢ TRA MÃ [CODE]" ──
 Đọc kết quả và trả lời thẳng:
 - Nếu tìm thấy trong ref_support_countries hoặc ref_categories → mô tả đầy đủ nhóm nước đó
-- Nếu có SKU trong sku_catalog → thông báo có SKU và gợi ý dùng agent Tư Vấn để xem chi tiết
+- Nếu có SKU trong sku_catalog → liệt kê SKU (xem hướng dẫn "MÃ NHÓM" bên trên)
 - Nếu KHÔNG tìm thấy ở đâu cả → nói rõ: "[code] không phải mã nhóm nước hợp lệ trong hệ thống GoHub.
   Vui lòng kiểm tra lại. Một số mã hợp lệ: [list từ context]."
 KHÔNG nói chung chung "không có thông tin" khi đã có kết quả tra cứu cụ thể.
