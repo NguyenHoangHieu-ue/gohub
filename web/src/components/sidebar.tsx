@@ -65,7 +65,9 @@ export function Sidebar() {
   const navItems = (() => {
     if (role === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     if (role === "manager") return NAV_ALL
-    // standard: chỉ hiện tabs theo dept
+    // standard + dept=all (chưa được gán phòng ban) → thấy tất cả như cũ
+    if (!department || department === "all") return NAV_ALL
+    // standard + dept cụ thể → lọc theo cài đặt phòng ban
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
