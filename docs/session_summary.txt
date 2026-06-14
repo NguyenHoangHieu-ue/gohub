@@ -1,5 +1,61 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-14 (session 51)
+Cập nhật lần cuối: 2026-06-14 (session 53)
+
+## Session 53 (2026-06-14) — Phase 3 MRP + Bug #30 fix (commit 57209bf)
+
+### Phase 3 MRP — AI Smart Ingestion ✅
+Upload tài liệu → AI phân tích → đề xuất wiki pages → Approve/Reject
+
+**Files mới:**
+- `database/migrations/v12_mrp_jobs.sql`: bảng `kb_processing_jobs`
+  (id, document_id, document_name, status, plan_json, result_json, error_text)
+  status flow: analyzing → plan_ready → done / rejected / error
+- `web/src/lib/mrp.ts`: `analyzeMrpDocument(text, docName)` → `MrpPlan`
+  Gemini-3.5-flash với system prompt GoHub-specific
+  Output: doc_type, summary, proposed_pages (max 3), key_extractions (max 8)
+- `web/src/app/api/kb/process/route.ts`: POST — nhận document_id
+  Reconstruct text từ kb_chunks → Gemini phân tích → lưu job + trả plan
+- `web/src/app/api/kb/process/[id]/route.ts`: GET status, PATCH approve/reject
+  Approve → tạo wiki pages với embedding vào kb_wiki_pages
+
+**UI (kb/page.tsx DocsTab):**
+- Auto-trigger MRP ngay sau upload thành công
+- Panel hiện "AI đang phân tích..." (spinner)
+- Khi plan_ready: summary + key_extractions (badge) + proposed pages (title/type/dept/reason/tags)
+- Nút "Tạo N wiki pages" → approve + embed + tạo vào Wiki tab
+- Nút "Bỏ qua" → reject
+- Kết quả: "Đã tạo X wiki pages: ..."
+
+**⚠️ Action cần làm thủ công:**
+Chạy `database/migrations/v12_mrp_jobs.sql` trong Supabase SQL Editor
+
+### Bug #30 fixes (commits 5a19af6, 9b7d102, 2fb23d7)
+Root cause: router.ts split "cho tôi biết AP2" → "CHO" match regex trước "AP2"
+Fix: bỏ qua word thuần chữ thường /^[a-z]+$/ khi detect groupCode
+AP2 tồn tại trong ref_support_countries từ đầu
+
+---
+
+## Session 52 (2026-06-14) — Bug #30 debug + fix (commit 2fb23d7)
+
+### #30 — Chatbot mã nhóm nước AP2 — ĐÃ FIX ✅ (confirmed working)
+
+**Root cause thực sự (tìm ra sau 3 commits):**
+Router split "cho tôi biết AP2" → `["CHO", "TÔI", "BIẾT", "AP2"]`
+→ "CHO" là word đầu tiên match `/^[A-Z0-9]{3,4}$/` → `groupCode = "CHO"` thay vì "AP2"
+→ Bot tra "CHO" → không tìm thấy → nói "Mã CHO không hợp lệ, mã đúng là: AP2, ..."
+→ AP2 hoàn toàn tồn tại trong `ref_support_countries`, không có lỗi DB
+
+**Fix chính (commit 2fb23d7) — `router.ts`:**
+- So sánh word gốc (trước khi uppercase) với regex `/^[a-z]+$/`
+- Nếu word thuần chữ thường (cho, toi, biet, nao...) → bỏ qua, không set groupCode
+- GoHub codes phải có chữ số (AP2, EU1) hoặc user gõ hoa sẵn (CHM, APA)
+
+**Commits phụ (hữu ích nhưng không phải root cause fix):**
+- 5a19af6: classifier.ts thêm ví dụ group code, context.ts giai-dap inject full SKU list
+- 9b7d102: context.ts phân biệt Inactive vs không tồn tại, prompt "PHẢI nói" directive, debug logs
+
+---
 
 ## Session 51 (2026-06-14) — Bug fixes #26-30
 
