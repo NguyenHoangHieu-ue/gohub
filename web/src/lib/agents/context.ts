@@ -45,8 +45,10 @@ export async function buildToolContext(
 
     // ── Case 1: Direct 3-char group/category code (JPN, CHM, EU1, APA...) ─────
     if (params.groupCode && !params.region) {
+      console.error(`[groupCode:tu-van] code=${params.groupCode}`)
       const groupCtx = await searchSkusByGroupCode(params.groupCode, params, isCost, fx)
       sections.push(groupCtx)
+      console.error(`[groupCode:tu-van] result_preview=${groupCtx.slice(0, 100)}`)
 
       // Nếu không tìm thấy SKU, bổ sung context để bot giải thích được mã này
       if (groupCtx.includes("Không tìm thấy")) {
@@ -61,16 +63,24 @@ export async function buildToolContext(
           if (cat) {
             sections.push(`Mã "${params.groupCode}" là category "${cat.name_en}" (${cat.region_type ?? ""}) — iso_code: ${cat.iso_code ?? ""}`)
           } else {
-            // Thử query trực tiếp sku_catalog — AP2 có thể tồn tại nhưng chưa có mô tả
-            const { count } = await supabaseAdmin
+            // Thử query sku_catalog (không lọc status — để phân biệt Inactive vs không tồn tại)
+            const { count: totalCount } = await supabaseAdmin
               .from("sku_catalog")
               .select("*", { count: "exact", head: true })
               .eq("country_group", params.groupCode)
-            if (count && count > 0) {
-              sections.push(`Mã "${params.groupCode}" có ${count} SKU trong sku_catalog nhưng chưa có mô tả trong ref_support_countries. Có thể là mã nhóm nước hợp lệ nhưng chưa được đăng ký.`)
+            const knownCodes = (ref.supportCountries as any[]).slice(0, 20).map((s: any) => s.code).join(", ")
+            if (totalCount && totalCount > 0) {
+              sections.push(
+                `=== MÃ "${params.groupCode}" — TẤT CẢ INACTIVE ===`,
+                `Có ${totalCount} SKU với country_group=${params.groupCode} trong sku_catalog nhưng TẤT CẢ đều INACTIVE (ngưng hoạt động).`,
+                `PHẢI nói với user: "Mã ${params.groupCode} tồn tại trong hệ thống nhưng hiện không có sản phẩm nào đang hoạt động (đã ngưng). Liên hệ team để xác nhận."`,
+              )
             } else {
-              const knownCodes = (ref.supportCountries as any[]).slice(0, 20).map((s: any) => s.code).join(", ")
-              sections.push(`Mã "${params.groupCode}" KHÔNG tồn tại trong hệ thống GoHub (không có SKU, không có trong ref_support_countries/ref_categories). Một số mã hợp lệ: ${knownCodes}...`)
+              sections.push(
+                `=== MÃ "${params.groupCode}" — KHÔNG TỒN TẠI ===`,
+                `Mã này KHÔNG có trong: ref_support_countries, ref_categories, sku_catalog.`,
+                `PHẢI nói với user: "Mã '${params.groupCode}' không phải mã nhóm nước hợp lệ trong hệ thống GoHub. Vui lòng kiểm tra lại. Một số mã hợp lệ: ${knownCodes}..."`,
+              )
             }
           }
         }
@@ -324,6 +334,7 @@ export async function buildToolContext(
     // Nếu hỏi về 1 mã cụ thể → tra cứu và highlight
     if (params.groupCode) {
       const code = params.groupCode.toUpperCase()
+      console.error(`[groupCode:giai-dap] code=${code} supportCountries=${(ref.supportCountries as any[]).length}`)
       const group = (ref.supportCountries as any[]).find((s: any) => s.code === code)
       if (group) {
         sections.push(
@@ -342,28 +353,37 @@ export async function buildToolContext(
           )
         } else {
           // Fallback: query sku_catalog.country_group trực tiếp
-          const { count } = await supabaseAdmin
+          const { count: activeCount } = await supabaseAdmin
             .from("sku_catalog")
             .select("*", { count: "exact", head: true })
             .eq("country_group", code)
             .eq("status", "Active")
-          if (count && count > 0) {
-            // Inject đầy đủ SKU list — bot cần data thực để trả lời, không chỉ sample
+          const { count: totalCount } = await supabaseAdmin
+            .from("sku_catalog")
+            .select("*", { count: "exact", head: true })
+            .eq("country_group", code)
+          console.error(`[groupCode:giai-dap] code=${code} activeCount=${activeCount} totalCount=${totalCount}`)
+          if (activeCount && activeCount > 0) {
+            // Inject đầy đủ SKU list — bot cần data thực để trả lời
             const fullSkuCtx = await searchSkusByGroupCode(code, {
               days: params.days, simType: params.simType,
               isUnlimited: params.isUnlimited, vendor: params.vendor, dataGB: params.dataGB,
             }, isCost, fx)
             sections.push(fullSkuCtx)
             sections.push(`Lưu ý: Mã "${code}" chưa có mô tả trong ref_support_countries — tên nhóm nước chính thức chưa được đăng ký. Hiển thị danh sách SKU để trả lời câu hỏi.`)
+          } else if (totalCount && totalCount > 0) {
+            const knownCodes = (ref.supportCountries as any[]).slice(0, 15).map((s: any) => s.code).join(", ")
+            sections.push(
+              `=== MÃ "${code}" — TẤT CẢ INACTIVE ===`,
+              `Có ${totalCount} SKU với country_group=${code} nhưng TẤT CẢ đều INACTIVE.`,
+              `PHẢI nói với user: "Mã '${code}' tồn tại trong hệ thống nhưng hiện không có sản phẩm nào đang hoạt động (đã ngưng). Liên hệ team để xác nhận."`,
+            )
           } else {
             const knownCodes = (ref.supportCountries as any[]).slice(0, 15).map((s: any) => s.code).join(", ")
             sections.push(
-              `=== KẾT QUẢ TRA MÃ "${code}" ===`,
-              `KHÔNG tìm thấy mã "${code}" trong:`,
-              `- ref_support_countries (${(ref.supportCountries as any[]).length} mã): ${knownCodes}...`,
-              `- ref_categories (${Object.keys(ref.categoriesMap as any).length} mã)`,
-              `- sku_catalog (không có SKU Active nào với country_group=${code})`,
-              `=> Đây có thể không phải mã hợp lệ trong hệ thống GoHub. Vui lòng kiểm tra lại.`,
+              `=== MÃ "${code}" — KHÔNG TỒN TẠI ===`,
+              `Mã này KHÔNG có trong: ref_support_countries, ref_categories, sku_catalog.`,
+              `PHẢI nói với user: "Mã '${code}' không phải mã nhóm nước hợp lệ trong hệ thống GoHub. Vui lòng kiểm tra lại. Một số mã hợp lệ: ${knownCodes}..."`,
             )
           }
         }
