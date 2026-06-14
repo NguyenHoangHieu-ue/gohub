@@ -9,7 +9,7 @@ const SELECT_COLS = [
   "product_code","tenant","status","product_type","vendor_code","type_of_sim",
   "kyc_code","kyc_needed","local_phone_number","purchase_type",
   "operator_code","network_type","apn","apn_original","note","supported_countries",
-  "activation_time","hotspot","data_plan_type",
+  "activation_time","hotspot",
 ].join(",")
 
 // Product code = 8 chars: [PurchaseType(1)][ProductType(1)][Country(3)][Vendor(2)][DataType(1)]

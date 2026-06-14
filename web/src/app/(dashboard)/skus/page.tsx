@@ -152,16 +152,34 @@ const ITEM_COLS = [
   { key: "sku_code",         label: "SKU Code"  },
   { key: "listing_code",     label: "Listing"   },
   { key: "item_type",        label: "Type"      },
-  { key: "sales_channel",    label: "Channel"   },
-  { key: "category_code",    label: "Category"  },
   { key: "item_name_vn",     label: "Tên VN"    },
-  { key: "item_name_en",     label: "Name EN"   },
   { key: "data",             label: "Data"      },
   { key: "days",             label: "Days"      },
-  { key: "throttle_speed_en", label: "Throttle" },
-  { key: "call_en",          label: "Call"      },
   { key: "unitprice",        label: "Giá bán"   },
   { key: "currency",         label: "Currency"  },
+  { key: "_detail",          label: ""          },
+]
+
+const ITEM_MODAL_FIELDS = [
+  { key: "item_code",        label: "Item Code"     },
+  { key: "alias",            label: "Alias"         },
+  { key: "sku_code",         label: "SKU Code"      },
+  { key: "listing_code",     label: "Listing Code"  },
+  { key: "tenant",           label: "Tenant"        },
+  { key: "status",           label: "Status"        },
+  { key: "item_type",        label: "Type"          },
+  { key: "sales_channel",    label: "Channel"       },
+  { key: "category_code",    label: "Category"      },
+  { key: "item_name_vn",     label: "Tên VN"        },
+  { key: "item_name_en",     label: "Name EN"       },
+  { key: "data_amount",      label: "Data Amount"   },
+  { key: "data_amount_unit", label: "Data Unit"     },
+  { key: "day_amount",       label: "Days"          },
+  { key: "day_amount_unit",  label: "Day Unit"      },
+  { key: "throttle_speed_en",label: "Throttle"      },
+  { key: "call_en",          label: "Call"          },
+  { key: "unitprice",        label: "Giá bán"       },
+  { key: "currency",         label: "Currency"      },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -864,7 +882,11 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
       </td>
     )
   }
-  if (col === "note") return <td className="px-3 py-2 text-xs text-gray-600 min-w-[160px] max-w-[280px] leading-relaxed">{v || <span className="text-gray-300">—</span>}</td>
+  if (col === "note") {
+    if (!v) return <td className="px-3 py-2 text-xs text-gray-300">—</td>
+    const s = v.length > 60 ? v.slice(0, 60) + "…" : v
+    return <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px]" title={v}>{s}</td>
+  }
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }
 
@@ -946,8 +968,9 @@ function ListingCell({ col, row }: { col: string; row: any }) {
 // ─── Items table ──────────────────────────────────────────────────────────────
 
 function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
-  const [iType, setIType] = useState("")
+  const [iType, setIType]         = useState("")
   const [exporting, setExporting] = useState(false)
+  const [detailRow, setDetailRow] = useState<any>(null)
   const opts = useFilterOpts("/api/items/filters")
   const d = useTabData("/api/items", { defaultStatus: "Active" })
   const { setExtraQuery } = d
@@ -990,10 +1013,27 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
       </div>
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
         <tr key={row.item_code} className="hover:bg-gray-50 transition-colors">
-          {cols.map(col => <ItemCell key={col.key} col={col.key} row={row} />)}
+          {cols.map(col => col.key === "_detail"
+            ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
+                <button onClick={() => setDetailRow(row)}
+                  className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
+                  Chi tiết
+                </button>
+              </td>
+            : <ItemCell key={col.key} col={col.key} row={row} />
+          )}
         </tr>
       )} />
       <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPrev={d.prevPage} onNext={d.nextPage} />
+
+      {detailRow && (
+        <DetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          title={`Item: ${detailRow.item_code}`}
+          fields={ITEM_MODAL_FIELDS}
+        />
+      )}
     </div>
   )
 }
@@ -1014,7 +1054,12 @@ function ItemCell({ col, row }: { col: string; row: any }) {
     return <td className="px-3 py-2 whitespace-nowrap text-xs">{row.day_amount != null ? `${row.day_amount} ${row.day_amount_unit ?? "d"}` : "—"}</td>
   }
   if (col === "unitprice") return <td className="px-3 py-2 whitespace-nowrap text-xs text-right">{v != null ? Number(v).toLocaleString() : "—"}</td>
-  if (col === "item_name_vn" || col === "item_name_en")
+  if (col === "item_name_vn") {
+    if (!v) return <td className="px-3 py-2 text-xs text-gray-300">—</td>
+    const s = v.length > 40 ? v.slice(0, 40) + "…" : v
+    return <td className="px-3 py-2 text-xs text-gray-700 max-w-[180px]" title={v}>{s}</td>
+  }
+  if (col === "item_name_en")
     return <td className="px-3 py-2 text-xs text-gray-700 min-w-[140px] max-w-[220px]">{v || <span className="text-gray-300">—</span>}</td>
   return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
 }

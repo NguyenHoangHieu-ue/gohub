@@ -22,11 +22,24 @@ const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
 
 const SPECIFIC_DEPTS = ["sales", "product", "tech", "finance"]
 
+// Fetch dept từ DB mỗi lần load → không cần re-login khi admin đổi dept
+function useMyDept(username: string) {
+  const [dept, setDept] = useState<string | null>(null)
+  useEffect(() => {
+    if (!username) return
+    fetch("/api/user/me", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.department) setDept(d.department) })
+      .catch(() => {})
+  }, [username])
+  return dept
+}
+
 function useDeptTabs(role: string, department: string) {
   const [extraTabs, setExtraTabs] = useState<Set<string>>(new Set())
   useEffect(() => {
     if (role === "admin" || role === "manager") return
-    if (!SPECIFIC_DEPTS.includes(department)) return  // none/all/empty → không extra tab
+    if (!SPECIFIC_DEPTS.includes(department)) return
     fetch("/api/permissions", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -57,10 +70,13 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
 
-  const role       = session?.user?.role       || "standard"
-  const department = (session?.user as any)?.department || "all"
-  const name       = session?.user?.name       || ""
+  const role       = session?.user?.role     || "standard"
+  const username   = session?.user?.username || ""
+  const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
+
+  const dbDept    = useMyDept(username)          // fetch từ DB, không cần re-login
+  const department = dbDept ?? "none"
 
   const extraTabs = useDeptTabs(role, department)
 
