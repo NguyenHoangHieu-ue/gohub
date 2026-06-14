@@ -1,5 +1,40 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-13 (session 49)
+Cập nhật lần cuối: 2026-06-14 (session 50)
+
+## Session 50 (2026-06-14) — Fix Bug #21-25 (commit 4480a3c)
+
+### #21 — Tab Khuyến Mãi
+- **#21a** `api/admin/promotions/route.ts`: sau khi fetch products, query skus để count SKU per product_code → thêm `sku_codes[]` vào response. `admin/page.tsx` PromotionsTab: thêm cột "SKUs" hiện số lượng SKU. colspan skeleton/empty từ 5→6.
+- **#21b** `promotions/page.tsx`: xóa cột "Perks VN" (th + td) — đã trùng với "Nội dung KM".
+- **#21c** `promotions/page.tsx`: date trống → "-" thay vì "Không giới hạn".
+
+### #22 — Wiki per-page dept
+- `kb/page.tsx` WikiTab list view: thêm `editingDeptId` state + `changeDept()` function.
+- Admin click vào dept badge → inline `<select>` dropdown (autoFocus + onBlur/onChange). On change: PATCH `/api/kb/wiki/${id}` với `{department}`, update pages state.
+
+### #23 — RBAC nâng cao: phòng ban + role
+- Migration: `database/migrations/v11_users_department.sql` — `ALTER TABLE users ADD COLUMN department TEXT DEFAULT 'all'` (chạy thủ công trong Supabase)
+- `types/next-auth.d.ts`: thêm `department: string` vào Session.user
+- `lib/auth.ts`: thêm `department` vào Credentials authorize return, JWT callback, session callback. Lark re-read cũng fetch `department` từ DB.
+- `api/admin/users/route.ts`: thêm `department` vào SELECT.
+- `api/admin/users/[username]/route.ts`: PATCH accept `department` field.
+- `components/sidebar.tsx`: thêm `useDeptTabs` hook (fetch `/api/permissions` → lấy `perm_dept_{dept}_tabs`). Sidebar: admin/manager thấy tất cả; standard thấy {chatbot, promotions, countries} + extra tabs theo dept. `changeDept()` function trong UserList.
+- `admin/page.tsx` UserList: thêm `department` vào User interface, thêm `changeDept()`, thêm dept dropdown per user.
+
+### #24 — Admin Phân Quyền: matrix phòng ban × tab
+- `api/permissions/route.ts`: thêm defaults cho 4 keys: `perm_dept_sales_tabs="kb"`, `perm_dept_product_tabs="kb,skus,ncc"`, `perm_dept_tech_tabs="kb,skus,ncc"`, `perm_dept_finance_tabs="skus"`.
+- `admin/page.tsx`: thêm `DeptTabMatrix` component vào PermissionsTab — matrix 4 depts × 3 tabs (KB/SKUs/NCC), toggle switches, save vào app_settings. `DEPT_UNLOCKABLE_TABS` + `DEPARTMENTS` constants.
+
+### #25 — Export XLSX
+- `skus/page.tsx`: import `xlsx` + `Download/Loader2`. Thêm `fetchAllPages()` + `downloadXlsx()` + `ExportBtn` component. Export button cho ProductsTable, SkusTable, ItemsTable — mỗi table build params từ filter hiện tại, fetch all pages, tạo XLSX client-side.
+- `ncc/page.tsx`: import `xlsx` + icons. Thêm `handleExport()` trong WMTab — loop tất cả pages với current filters, export WM catalog (+ COGS cols nếu admin/manager). Nút "Export XLSX" cạnh RefreshCw button.
+
+### Action cần làm thủ công
+1. Chạy `database/migrations/v11_users_department.sql` trong Supabase SQL Editor
+2. Admin → Tab Phân Quyền → cuộn xuống → set department × tab matrix → Lưu phòng ban
+3. Admin → Tab Danh sách → gán phòng ban cho từng user
+
+---
 
 ## Session 49 (2026-06-13) — Fix phân quyền KB Wiki (commit 74b1730)
 
