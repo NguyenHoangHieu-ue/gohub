@@ -1,6 +1,55 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-15 (session 54)
 
+## Session 54 — tiếp (2026-06-15) — WM coverage research + Wiki overhaul (commits c18df57, 9fcd37c)
+
+### Nghiên cứu WM coverage cho danh sách nước đặc biệt
+Query trực tiếp Supabase REST API để kiểm tra catalog WM (8.921 sản phẩm).
+
+**Kết quả chính:**
+- WM Africa A chỉ cover **6 nước**: Algeria, Tunisia, Egypt, South Africa, Ghana, Reunion — không phải toàn châu Phi
+- WM SE Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam — **không có Myanmar, Timor-Leste**
+- WM North America A: USA, Canada, Mexico, Panama, Costa Rica, El Salvador — **không có Belize, Bermuda, Cayman, Haiti, Dominica**
+- Global Orange World cover ~70 nước nhưng phân loại region="Worldwide"
+- Trong danh sách ~53 nước user hỏi: **chỉ 2 nước có WM** = Guinea (Conakry) + Northern Mariana Islands (Saipan&Guam)
+- 3 nước không khả dụng do cấm vận: Iran, North Korea, Syria
+- Nhiều nước không có hạ tầng mobile: Antarctica, Bouvet Island, Heard Island, Pitcairn...
+
+**Plan fix chatbot (chưa implement):**
+1. `searchNccWm` bổ sung query theo `coverage` field (chứa danh sách nước thực tế) — hiện chỉ match `region`
+2. Inject `coverage` vào context khi chatbot tư vấn WM — tránh hallucinate "Africa A cover Kenya"
+3. DISPLAY_RULES: thêm 3 loại "không có" — WM không có / không có hạ tầng / cấm vận
+
+### Wiki overhaul (2 vòng, 9+8 pages updated)
+
+**Vòng 1 — xóa từ ngữ hệ thống:**
+- Xóa tên bảng/cột DB: `ncc_worldmove`, `ref_support_countries`, `app_settings`, `data_file_registry`, `is_unlimited`, `throttle_mbps`, `vendor_product_id`, `sha256`, `status=inactive`
+- Đổi "upsert", "PATCH", "SHA-256 hash" → ngôn ngữ tự nhiên
+- Fix Product Type A: "gói cước dữ liệu NCC cung cấp — chưa tích hợp profile riêng, nhưng một số NCC (như WM) cũng cung cấp kèm eSIM đầy đủ"
+- Files: SKU-Code, GoHub-Overview, WM, 3HK, Import-NCC, FX-Rates, 3HK-COGS, Data-Policy, Combo
+
+**Vòng 2 — xóa ký tự ASCII + ngôn ngữ nội bộ:**
+- Xóa toàn bộ `▼` / `▲` từ code blocks → thay bằng bảng Markdown rõ ràng
+- SKU-Code-Structure: diagram → bảng cấu trúc + bảng giải mã ví dụ
+- Item-Code-Structure: rewrite hoàn toàn với bảng sạch
+- Xóa "Chatbot và gap analysis chỉ xét loại C và E" → "Loại C và E là sản phẩm chính bán ra thị trường"
+- Xóa "Chatbot chỉ thông báo" → "Khi tư vấn nước dùng 3HK, cần thông báo..."
+- Xóa "chatbot / gap analysis nói thiếu combo" → "khi phân tích gap thấy thiếu combo"
+- Vendor-Priority: rewrite sạch, thay ASCII flowchart bằng văn bản
+- 3HK-COGS-Formula: "chatbot không tự tính" → "3HK là nguồn tham khảo để tạo sản phẩm"
+- Data-Policy: code logic → bảng tra cứu
+
+**Supabase:** Đã PATCH 9+8 = 17 wiki pages (content sync với local files)
+
+**Quy trình update web wiki (cần dùng lại sau):**
+```python
+# C:/Users/hieuh/AppData/Local/Programs/Python/Python311/python.exe
+# Đọc file local → strip frontmatter → PATCH Supabase REST API
+# ssl verify=False vì msys64 không có local CA
+```
+
+---
+
 ## Session 54 (2026-06-15) — UI/UX fixes (commits 173c445, 43a9c86)
 
 ### Fix: Listings Export XLSX (commit 173c445)
