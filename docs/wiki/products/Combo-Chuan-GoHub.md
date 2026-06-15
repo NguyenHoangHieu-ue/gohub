@@ -15,7 +15,7 @@ status: active
 
 > Mỗi nước GoHub triển khai đều cần **đủ 42 combo** — gồm 3 nhóm × 7 biến thể ngày.
 
-Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần yêu cầu vendor tạo thêm**, không phải vendor hết hàng.
+Khi phân tích gap thấy "thiếu combo" → nghĩa là **cần yêu cầu vendor tạo thêm sản phẩm**, không phải vendor hết hàng.
 
 ---
 

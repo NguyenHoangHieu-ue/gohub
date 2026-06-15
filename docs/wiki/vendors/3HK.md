@@ -76,9 +76,9 @@ status: active
 
 ## Lưu Ý Quan Trọng
 
-> **3HK chỉ là tham khảo** — không phải sản phẩm GoHub đang bán trực tiếp.
-> Chatbot chỉ thông báo: vùng phủ sóng / giá HKD/GB / yêu cầu KYC.
-> **Không tự tính gói cước từ công thức** — đó là việc của team product.
+> **3HK là nguồn tham khảo để tạo sản phẩm** — không phải gói GoHub đang bán trực tiếp cho khách.
+> Khi tư vấn cho nước dùng 3HK, cần thông báo: vùng phủ sóng, loại mạng, giá HKD/GB, yêu cầu KYC.
+> **Việc tính giá và tạo sản phẩm từ 3HK do team product thực hiện.**
 
 ### Khi nào dùng 3HK?
 - Khách cần nước mà WM không có (hoặc giá WM không cạnh tranh)

@@ -79,16 +79,16 @@ K  → Mã khung / Profile — không có data thực, chỉ là template/hồ s
 
 ---
 
-## Cách Tự Xác Định Data Policy Khi Tạo Sản Phẩm
+## Xác Định Mã Data Policy Khi Tạo Sản Phẩm
 
-```
-Không giới hạn + không throttle          → D
-Không giới hạn + throttle 10 Mbps        → A
-Không giới hạn + throttle 5 Mbps         → B
-Không giới hạn + throttle 128 kbps       → P
-Data theo ngày (không unlimited)          → P
-Data cố định (không daily, không unlim)  → F
-```
+| Loại gói từ vendor | Mã phù hợp |
+|---|---|
+| Không giới hạn, không bao giờ giảm tốc | `D` |
+| Không giới hạn, giảm xuống 10 Mbps sau quota | `A` |
+| Không giới hạn, giảm xuống 5 Mbps sau quota | `B` |
+| Không giới hạn, giảm xuống 128 kbps sau quota | `P` |
+| Data cấp theo ngày (không unlimited) | `P` |
+| Data tổng cố định (không theo ngày, không unlimited) | `F` |
 
 ---
 

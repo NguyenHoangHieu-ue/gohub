@@ -11,59 +11,58 @@ status: active
 
 # Cấu Trúc Mã SKU (13 ký tự)
 
-Mã SKU là mã **13 ký tự** định danh duy nhất cho từng sản phẩm trong hệ thống GoHub. Mỗi ký tự mang thông tin cụ thể về loại sản phẩm, nước, vendor và data.
+Mã SKU là mã **13 ký tự** định danh duy nhất cho từng sản phẩm trong hệ thống GoHub. Mỗi ký tự mang thông tin cụ thể về loại sản phẩm, nước, vendor và dữ liệu.
 
-## Sơ Đồ
+## Tổng Quan Cấu Trúc
 
-```
-Vị trí:  1       2       3–5       6–7     8      9–11    12–13
-          ▼       ▼       ▼▼▼       ▼▼      ▼      ▼▼▼     ▼▼
-          Pháp   Loại   Nước/    Vendor   Data   Dung    Số
-          nhân   SP     Nhóm             Policy  lượng   ngày
-```
-
-**Ví dụ:** `1CRUS12A00107`
-
-```
-1    C    R U S    1 2    A    0 0 1    0 7
-▼    ▼    ▼ ▼ ▼    ▼ ▼    ▼    ▼ ▼ ▼   ▼  ▼
-VN   eSIM Russia  WM     Daily  1GB    7 ngày
-     Full         (WM)   1GB/d
-                         cap
-```
+| Vị trí | 1 | 2 | 3–5 | 6–7 | 8 | 9–11 | 12–13 |
+|---|---|---|---|---|---|---|---|
+| **Ý nghĩa** | Pháp nhân | Loại sản phẩm | Nước / Nhóm nước | Vendor | Loại data | Dung lượng | Số ngày |
 
 ---
 
-## Ký Tự 1 — Pháp Nhân (Purchase Type)
+## Ví Dụ Giải Mã: `1CRUS12A00107`
+
+| Ký tự | Vị trí | Ý nghĩa |
+|---|---|---|
+| `1` | 1 | GoHub JSC — kênh Việt Nam |
+| `C` | 2 | eSIM Full |
+| `RUS` | 3–5 | Nga (Russia) |
+| `WM` | 6–7 | WorldMove |
+| `A` | 8 | Daily cap, tốc độ tối thiểu 10 Mbps |
+| `001` | 9–11 | 1 GB |
+| `07` | 12–13 | 7 ngày |
+
+---
+
+## Ký Tự 1 — Pháp Nhân
 
 | Ký tự | Pháp nhân | Thị trường |
 |---|---|---|
 | `1` – `6` | GoHub JSC | Việt Nam |
 | `A` – `E` | GoHub Inc | Mỹ và quốc tế |
 
-> `1`–`6` = sản phẩm bán qua kênh VN &nbsp;|&nbsp; `A`–`E` = kênh US
-
 ---
 
-## Ký Tự 2 — Loại Sản Phẩm (Product Type)
+## Ký Tự 2 — Loại Sản Phẩm
 
 | Ký tự | Tên | Mô tả |
 |---|---|---|
-| `C` | eSIM Full | eSIM kỹ thuật số đầy đủ — có profile cài sẵn, bán trực tiếp cho khách &nbsp;**[loại chính]** |
-| `E` | SIM Full | SIM vật lý đầy đủ — bán trực tiếp cho khách &nbsp;**[loại chính]** |
+| `C` | eSIM Full | eSIM kỹ thuật số đầy đủ — có sẵn profile, khách hàng cài trực tiếp trên điện thoại |
+| `E` | SIM Full | SIM vật lý đầy đủ — giao tận tay khách hàng |
 | `A` | SIM/eSIM Data | Gói cước dữ liệu NCC cung cấp — chưa tích hợp profile riêng, nhưng một số NCC (như WM) cũng cung cấp kèm eSIM đầy đủ |
-| `1` | Frame SKU | Mã khung — không có data thật, dùng làm template |
+| `1` | Frame SKU | Mã khung — không có data thật, dùng làm mẫu |
 | `2` | Datapack | Gói bổ sung data thêm (add-on) |
 | `K` | Profile | Hồ sơ kết nối riêng — không kèm data |
 | `B`, `D` | Loại khác | Ít sử dụng |
 
-> **Chatbot và gap analysis chỉ xét loại C và E** (eSIM/SIM Full bán được ngay).
+> **Lưu ý:** Loại **C** và **E** là hai loại sản phẩm chính mà GoHub bán ra thị trường — sản phẩm hoàn chỉnh dành cho khách hàng. Các loại còn lại là sản phẩm hỗ trợ nội bộ.
 
 ---
 
 ## Ký Tự 3–5 — Mã Nước / Nhóm Nước
 
-GoHub dùng mã **3 ký tự riêng** (không phải mã ISO chuẩn quốc tế).
+GoHub dùng mã **3 ký tự riêng** — không phải mã ISO chuẩn quốc tế.
 
 ### Nước đơn lẻ
 
@@ -112,7 +111,7 @@ GoHub dùng mã **3 ký tự riêng** (không phải mã ISO chuẩn quốc tế
 
 ---
 
-## Ký Tự 8 — Loại Data (Data Policy)
+## Ký Tự 8 — Loại Data
 
 > Giải thích chi tiết: [[products/Data-Policy-Codes]]
 
@@ -120,12 +119,12 @@ GoHub dùng mã **3 ký tự riêng** (không phải mã ISO chuẩn quốc tế
 |---|---|---|
 | `A` | Daily cap, tốc độ tối thiểu 10 Mbps | 10 Mbps |
 | `B` | Daily cap, tốc độ tối thiểu 5 Mbps | 5 Mbps |
-| `C` | Unlimited cố định | — |
+| `C` | Không giới hạn cố định | — |
 | `D` | True Unlimited — không giảm tốc | Không giới hạn |
 | `E` | Fixed data, sau đó tốc độ tối thiểu 10 Mbps | 10 Mbps |
 | `F` | Fixed data, sau đó tốc độ rất chậm | Dưới 2 Mbps |
 | `G` | Fixed data, sau đó tốc độ tối thiểu 5 Mbps | 5 Mbps |
-| `H` | Unlimited cố định (biến thể 2) | — |
+| `H` | Không giới hạn cố định (biến thể 2) | — |
 | `K` | Mã khung / Profile — không có data | — |
 | `P` | Data theo ngày, tốc độ chậm sau hết quota ngày | 128 kbps |
 | `Y` | Fixed data, không giảm tốc | Không giới hạn |
@@ -163,13 +162,10 @@ GoHub dùng mã **3 ký tự riêng** (không phải mã ISO chuẩn quốc tế
 
 ## Quan Hệ SKU và Product Code
 
-**Product Code = 8 ký tự đầu của SKU.**
+**Product Code = 8 ký tự đầu của SKU Code.**
 
-```
-SKU:      1  C  R U S  W M  A  0 0 1  0 7
-          ▼  ▼  ▼▼▼    ▼▼   ▼  ▼▼▼    ▼▼
-Product:  1  C  R U S  W M
-          (8 ký tự đầu)
-```
+Ví dụ: SKU `1CRUS12A00107` → Product Code `1CRUS12A`
 
-Tất cả SKU có cùng 8 ký tự đầu thuộc cùng 1 Product — chỉ khác nhau ở dung lượng và số ngày.
+Tất cả SKU có cùng Product Code thuộc cùng một sản phẩm, chỉ khác nhau ở dung lượng và số ngày.
+
+> Cấu trúc mã Item/Alias: [[products/Item-Code-Structure]]

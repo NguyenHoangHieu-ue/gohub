@@ -68,7 +68,7 @@ Bán trực tiếp tới người dùng cuối qua các nền tảng lớn:
 | `A` | SIM/eSIM Data | Gói cước dữ liệu NCC cung cấp — chưa tích hợp profile, nhưng một số NCC (như WM) cũng cung cấp kèm eSIM đầy đủ |
 | `1`, `2`, `K` | Loại hỗ trợ | Frame SKU, Datapack bổ sung, Profile |
 
-> Chatbot và gap analysis **chỉ xét loại C và E** (sản phẩm hoàn chỉnh bán được ngay).
+> Loại **C** và **E** là hai loại sản phẩm chính mà GoHub bán ra thị trường. Các loại còn lại (`1`, `2`, `K`) là sản phẩm hỗ trợ nội bộ, không bán trực tiếp cho khách hàng.
 
 ---
 

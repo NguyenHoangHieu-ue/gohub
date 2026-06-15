@@ -5,86 +5,80 @@ department: product
 tags: [vendor, priority, wm, 3hk, kddi, gap-analysis]
 aliases: ["Vendor Priority", "Chọn Vendor", "Ưu tiên vendor"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 status: active
 ---
 
 # Quy Tắc Chọn Vendor
 
-## Bảng Ưu Tiên Theo Nước
+## Ưu Tiên Theo Nước
 
 | Nước / Khu vực | Vendor ưu tiên | Lý do |
 |---|---|---|
-| **Hong Kong (HK)** | WM | no-KYC, giá cạnh tranh, coverage tốt |
-| **Đài Loan (TW)** | WM | no-KYC, coverage tốt |
-| **Nhật Bản (JP)** | KDDI | Partnership riêng, chất lượng cao |
+| **Hồng Kông** | WM | Không cần KYC, giá cạnh tranh, phủ sóng tốt |
+| **Đài Loan** | WM | Không cần KYC, phủ sóng tốt |
+| **Nhật Bản** | KDDI | Partnership riêng, chất lượng cao |
 | **Các nước khác** | 3HK trước, WM sau | 3HK phủ sóng rộng hơn |
-| **BC / JY** | Last resort | Khi WM + 3HK + KDDI đều không có |
+| **BC / JY** | Phương án cuối | Khi WM, 3HK và KDDI đều không có |
 
 ---
 
-## Nguyên Tắc Tiebreak Giá
+## Nguyên Tắc Chọn Khi Có Nhiều Vendor
 
-Khi nhiều vendor cùng có sản phẩm phù hợp:
+Khi nhiều vendor cùng có sản phẩm phù hợp, ưu tiên theo thứ tự:
 
-1. **COGS thấp hơn** → ưu tiên
-2. **Local > Regional > Global** — gói đặc thù cho nước đó tốt hơn gói khu vực
-3. **no-KYC** luôn được ưu tiên nếu giá tương đương (giảm ma sát cho khách)
-
----
-
-## Flowchart Chọn Vendor
-
-```
-Khách cần nước X
-    │
-    ├─ HK / TW? ──────────────────────→ WM (no-KYC)
-    │
-    ├─ Japan? ─────────────────────────→ KDDI
-    │
-    ├─ Nước khác?
-    │       │
-    │       ├─ 3HK có zone cho nước X? → 3HK (tính COGS formula)
-    │       │
-    │       ├─ WM có sản phẩm? ────────→ WM
-    │       │
-    │       └─ Cả 2 đều không có ──────→ BC / JY (last resort)
-    │
-    └─ Không vendor nào có ────────────→ "GoHub chưa có, cần request vendor"
-```
+1. **Giá nhập thấp hơn** → ưu tiên
+2. **Gói đặc thù cho nước đó > Gói khu vực > Gói toàn cầu** — gói càng cụ thể thì chất lượng và giá thường tốt hơn
+3. **Không cần KYC** → ưu tiên nếu giá tương đương (giảm ma sát cho khách hàng)
 
 ---
 
-## Phân Biệt "Thiếu" vs "Vendor Không Có"
+## Sơ Đồ Chọn Vendor
 
-| Tình huống | Diễn đạt đúng | Hành động |
+**Nước cần triển khai là HK hoặc TW?**
+→ Dùng WM (không cần KYC)
+
+**Nước cần triển khai là Nhật?**
+→ Dùng KDDI
+
+**Nước khác:**
+- 3HK có vùng giá cho nước đó? → Dùng 3HK (tính giá theo công thức)
+- WM có sản phẩm? → Dùng WM
+- Cả hai đều không có → BC / JY (phương án cuối)
+- Không vendor nào có → Ghi nhận và liên hệ vendor mới
+
+---
+
+## Phân Biệt "Thiếu" và "Vendor Không Có"
+
+| Tình huống | Cách diễn đạt đúng | Hành động |
 |---|---|---|
-| GoHub chưa tạo SKU nhưng WM có gói | **"Cần request vendor tạo thêm SKU"** | Tạo SKU trong hệ thống |
-| WM không có gói phù hợp | "WM không có, thử 3HK" | Dùng 3HK + tính COGS |
-| Cả WM + 3HK đều không có | "Chưa có trong GoHub ecosystem" | Liên hệ vendor mới |
+| GoHub chưa tạo SKU nhưng WM có gói | **"Cần tạo thêm SKU trong hệ thống"** | Tạo SKU |
+| WM không có gói phù hợp | "WM không có, thử 3HK" | Dùng 3HK + tính giá |
+| Cả WM và 3HK đều không có | "GoHub chưa có sản phẩm cho nước này" | Liên hệ vendor mới |
 
-> Thuật ngữ "thiếu" = **GoHub chưa tạo SKU**, không phải vendor hết hàng.
+> Thuật ngữ "thiếu" = **GoHub chưa tạo SKU**, không phải vendor hết hàng hay không cung cấp.
 
 ---
 
-## Vendor Tiers
+## Phân Cấp Vendor
 
 ### Tier 1 — Đang hoạt động đầy đủ
 
-| Vendor | Sản phẩm trong DB | Import data |
+| Vendor | Số sản phẩm | Dữ liệu |
 |---|---|---|
-| WM (WorldMove) | 8,921 gói | ✅ Đầy đủ + APN |
-| 3HK | 45 zones | ✅ Đầy đủ |
+| WM (WorldMove) | 8.921 gói | Đầy đủ, có thông tin APN |
+| 3HK | 45 vùng giá | Đầy đủ |
 
-### Tier 2 — Defer (chưa import data)
+### Tier 2 — Chưa triển khai
 
-| Vendor | Lý do defer |
+| Vendor | Lý do |
 |---|---|
-| BillionConnect (BC) | Chưa có yêu cầu cụ thể |
-| SimStore (SS) | Chưa có yêu cầu cụ thể |
-| Viettel (VT) | Chưa có yêu cầu cụ thể |
-| TruemovH (TM) | Chưa có yêu cầu cụ thể |
-| KDDI | Partnership riêng, ít gói |
+| BillionConnect (BC) | Chưa có nhu cầu cụ thể |
+| SimStore (SS) | Chưa có nhu cầu cụ thể |
+| Viettel (VT) | Chưa có nhu cầu cụ thể |
+| TruemovH (TM) | Chưa có nhu cầu cụ thể |
+| KDDI | Partnership riêng, số lượng gói ít |
 
 ---
 

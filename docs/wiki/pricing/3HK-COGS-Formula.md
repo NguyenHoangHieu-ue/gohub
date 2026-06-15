@@ -95,7 +95,7 @@ Giá nhập VND  = 8.08 × 26.394 = 213.264 VND
 
 ## Lưu Ý
 
-> **3HK chỉ là tham khảo** — chatbot không tự tính gói, chỉ thông báo vùng/giá/KYC.
+> **3HK là nguồn tham khảo để tạo sản phẩm**, không phải gói GoHub đang bán trực tiếp.
 > Tính giá nhập thực tế là việc của team product khi tạo SKU mới.
 
 ### Khi nào dùng công thức này?
