@@ -1,7 +1,32 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-15 (session 54)
 
-## Session 54 — tiếp (2026-06-15) — WM coverage research + Wiki overhaul (commits c18df57, 9fcd37c)
+## Session 54 — tiếp 3 (2026-06-15) — 3HK FUP pricing formula (commits ea81e58, fc1acb2)
+
+### File mới: `docs/wiki/pricing/3HK-Custom-Package-Pricing.md`
+Tài liệu định giá cho gói cấu trúc FUP: **X GB tốc độ cao + Y GB FUP @ Z Mbps**
+
+**Insight chính:**
+- Tách COGS thành 2 thành phần: util_hs (highspeed) + util_fup (FUP riêng)
+- util_fup > util_hs vì FUP chỉ dùng khi đã hết hs cap → user đang cần data → dùng nhiều hơn
+- Chi phí 3HK giữa các mức throttle không chênh nhiều, nhưng giá trị với khách chênh lớn → cơ hội tier pricing
+- FUP > 2GB @ 1Mbps thường không hiệu quả → nên tăng highspeed cap thay vì tăng FUP
+
+**Bảng hệ số:**
+- util_hs: 70–90% theo cap size (cap nhỏ utilization cao)
+- util_fup: 35–88% theo (FUP size, throttle speed)
+- Hệ số giá trị FUP vs highspeed: 2Mbps=60%, 1Mbps=45%, 512kbps=25%, 128kbps=10%
+
+**Tier system gợi ý (7 ngày, Châu Á, margin ~40%):**
+Starter (1+0.5GB 512k) → Basic (1+1GB 1M) → Standard (2+1GB 1M) → Pro (3+1GB 1M) → Pro+ (3+2GB 1M) → Max (5+2GB 2M)
+
+**Pending:**
+- Validate hệ số FUP sau 1–2 tháng đầu triển khai thực tế
+- So sánh với WM cùng cấu hình trước khi ra giá chính thức
+
+---
+
+## Session 54 — tiếp 2 (2026-06-15) — Wiki ASCII cleanup + ngôn ngữ (commit 9fcd37c)
 
 ### Nghiên cứu WM coverage cho danh sách nước đặc biệt
 Query trực tiếp Supabase REST API để kiểm tra catalog WM (8.921 sản phẩm).
