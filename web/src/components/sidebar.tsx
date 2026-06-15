@@ -9,7 +9,7 @@ import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
 const NAV_ALL = [
-  { href: "/chatbot",    label: "Telco Chat",   icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "GoHub AI",     icon: Sparkles, key: "chatbot"    },
   { href: "/promotions", label: "Khuyến Mãi",   icon: Gift,     key: "promotions" },
   { href: "/kb",         label: "Kiến Thức",    icon: BookOpen, key: "kb"         },
   { href: "/skus",       label: "SP Hệ Thống",  icon: Package,  key: "skus"       },

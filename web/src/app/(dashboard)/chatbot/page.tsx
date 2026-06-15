@@ -455,7 +455,7 @@ export default function ChatbotPage() {
               }
             </button>
             <Sparkles size={20} className="text-brand-600" />
-            <h1 className="text-lg md:text-xl font-bold text-gray-900">Telco Chat</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900">GoHub AI</h1>
           </div>
           <div className="flex items-center gap-2">
             {agentName && (
@@ -478,7 +478,7 @@ export default function ChatbotPage() {
                 </div>
                 <p className="font-semibold text-gray-900 text-base mb-1">GoHub AI Agent</p>
                 <p className="text-sm text-gray-400 mb-8 max-w-xs leading-relaxed">
-                  Tư vấn sản phẩm, tra cứu SKU, phân tích giá và gap analysis.
+                  Tư vấn sản phẩm, tra cứu SKU, phân tích giá và so sánh gap NCC.
                 </p>
                 <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
                   {QUICK.map(q => (
@@ -574,7 +574,7 @@ export default function ChatbotPage() {
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
-                placeholder="Hỏi về sản phẩm, SKU, giá, gap analysis..."
+                placeholder="Hỏi về sản phẩm, SKU, giá, phân tích gap NCC..."
                 disabled={busy}
                 className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white disabled:opacity-60 transition"
               />

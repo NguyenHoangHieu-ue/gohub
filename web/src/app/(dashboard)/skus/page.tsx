@@ -12,10 +12,10 @@ const PAGE_SIZE = 20
 type TabId = "products" | "skus" | "listings" | "items"
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "products", label: "Products" },
-  { id: "skus",     label: "SKUs"     },
-  { id: "listings", label: "Listings" },
-  { id: "items",    label: "Items"    },
+  { id: "products", label: "Sản Phẩm" },
+  { id: "skus",     label: "SKU"      },
+  { id: "listings", label: "Listing"  },
+  { id: "items",    label: "Item"     },
 ]
 
 // ─── Column defs ─────────────────────────────────────────────────────────────
@@ -551,7 +551,14 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const opts = useFilterOpts("/api/products/filters")
   const d = useTabData("/api/products")
 
-  const applyFilters = () => {
+  const clearFilters = () => {
+    setPPt(""); setPPtype(""); setPCountry(""); setPVendor("")
+    setPDtype(""); setPVendorF(""); setPOperator("")
+  }
+  const hasFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pVendorF || pOperator)
+
+  const { setExtraQuery: setProductExtraQuery } = d
+  useEffect(() => {
     const p = new URLSearchParams()
     if (pPt)       p.set("pt",       pPt)
     if (pPtype)    p.set("ptype",    pPtype)
@@ -560,14 +567,9 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
     if (pDtype)    p.set("dtype",    pDtype)
     if (pVendorF)  p.set("vendor_f", pVendorF)
     if (pOperator) p.set("operator", pOperator)
-    d.setExtraQuery(p.toString())
-  }
-  const clearFilters = () => {
-    setPPt(""); setPPtype(""); setPCountry(""); setPVendor("")
-    setPDtype(""); setPVendorF(""); setPOperator("")
-    d.setExtraQuery("")
-  }
-  const hasFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pVendorF || pOperator)
+    const t = setTimeout(() => setProductExtraQuery(p.toString()), 300)
+    return () => clearTimeout(t)
+  }, [pPt, pPtype, pCountry, pVendor, pDtype, pVendorF, pOperator, setProductExtraQuery])
 
   const handleExport = async () => {
     setExporting(true)
@@ -617,7 +619,7 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
             { label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  optKey: "vendors",       w: "w-24" },
             { label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   optKey: "dataTypes",     w: "w-24" },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applyFilters() }}>
+            <div key={f.label} className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold text-gray-500 px-0.5">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
               </span>
@@ -632,25 +634,12 @@ function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
             { label: "Vendor Code", val: pVendorF,  set: setPVendorF,  optKey: "vendorCodes",   w: "w-28" },
             { label: "Operator",    val: pOperator, set: setPOperator, optKey: "operatorCodes", w: "w-28" },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applyFilters() }}>
+            <div key={f.label} className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold text-gray-500 px-0.5">{f.label}</span>
               <ComboFilter label="" value={f.val} onChange={f.set}
                 width={f.w} options={opts[f.optKey] ?? []} small />
             </div>
           ))}
-
-          <div className="flex gap-2 pb-0.5">
-            <button onClick={applyFilters}
-              className="px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-500 transition-colors">
-              Tìm
-            </button>
-            {hasFilter && (
-              <button onClick={clearFilters}
-                className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">
-                Xóa
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
@@ -726,7 +715,13 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   const opts = useFilterOpts("/api/skus/filters")
   const d = useTabData("/api/skus")
 
-  const applySkuFilters = () => {
+  const clearSkuFilters = () => {
+    setPPt(""); setPPtype(""); setPCountry(""); setPVendor(""); setPDtype(""); setPData(""); setPDays("")
+  }
+  const hasSkuFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pData || pDays)
+
+  const { setExtraQuery: setSkuExtraQuery } = d
+  useEffect(() => {
     const p = new URLSearchParams()
     if (pPt)      p.set("pt",      pPt)
     if (pPtype)   p.set("ptype",   pPtype)
@@ -735,13 +730,9 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
     if (pDtype)   p.set("dtype",   pDtype)
     if (pData)    p.set("data",    pData)
     if (pDays)    p.set("days",    pDays)
-    d.setExtraQuery(p.toString())
-  }
-  const clearSkuFilters = () => {
-    setPPt(""); setPPtype(""); setPCountry(""); setPVendor(""); setPDtype(""); setPData(""); setPDays("")
-    d.setExtraQuery("")
-  }
-  const hasSkuFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pData || pDays)
+    const t = setTimeout(() => setSkuExtraQuery(p.toString()), 300)
+    return () => clearTimeout(t)
+  }, [pPt, pPtype, pCountry, pVendor, pDtype, pData, pDays, setSkuExtraQuery])
 
   const handleExport = async () => {
     setExporting(true)
@@ -800,7 +791,7 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
             { label: "Data Amount",   pos: "pos 9–11", val: pData,    set: setPData,    optKey: "dataAmounts",   w: "w-24" },
             { label: "Day Amount",    pos: "pos 12–13",val: pDays,    set: setPDays,    optKey: "dayAmounts",    w: "w-24" },
           ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1" onKeyDown={e => { if (e.key === "Enter") applySkuFilters() }}>
+            <div key={f.label} className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold text-gray-500 px-0.5">
                 {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
               </span>
@@ -808,18 +799,6 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
                 width={f.w} options={opts[f.optKey] ?? []} small />
             </div>
           ))}
-          <div className="flex gap-2 pb-0.5">
-            <button onClick={applySkuFilters}
-              className="px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-500 transition-colors">
-              Tìm
-            </button>
-            {hasSkuFilter && (
-              <button onClick={clearSkuFilters}
-                className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">
-                Xóa
-              </button>
-            )}
-          </div>
         </div>
       </div>
       <TableShell cols={cols} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
@@ -1030,6 +1009,11 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
         </div>
         <ExportBtn onClick={handleExport} loading={exporting} />
       </div>
+      {d.status === "Active" && (
+        <p className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+          Mặc định chỉ hiển thị Item Active. Xóa filter Status để xem tất cả.
+        </p>
+      )}
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
         <tr key={row.item_code} className="hover:bg-gray-50 transition-colors">
           {cols.map(col => col.key === "_detail"
