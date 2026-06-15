@@ -895,6 +895,7 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
 function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [lType,    setLType]    = useState("")
   const [detailRow, setDetailRow] = useState<any>(null)
+  const [exporting, setExporting] = useState(false)
   const opts = useFilterOpts("/api/listings/filters")
   const d = useTabData("/api/listings")
   const { setExtraQuery } = d
@@ -905,19 +906,37 @@ function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
     setExtraQuery(p.toString())
   }, [lType, setExtraQuery])
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ search: d.search })
+      if (d.tenant) p.set("tenant", d.tenant)
+      if (d.status) p.set("status", d.status)
+      if (lType)    p.set("ltype",  lType)
+      const data = await fetchAllPages("/api/listings", p)
+      const cols = LISTING_TABLE_COLS.filter(c => c.key !== "_detail")
+      downloadXlsx(data, cols, `listings_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="space-y-3">
-      <FilterBar
-        search={d.search} onSearch={d.setSearch}
-        tenant={d.tenant} onTenant={d.setTenant}
-        status={d.status} onStatus={d.setStatus}
-        hasExtra={!!lType}
-        onReset={() => setLType("")}
-        extra={
-          <ComboFilter label="Type" value={lType} onChange={setLType}
-            width="w-32" options={opts.listingTypes ?? []} />
-        }
-      />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1">
+          <FilterBar
+            search={d.search} onSearch={d.setSearch}
+            tenant={d.tenant} onTenant={d.setTenant}
+            status={d.status} onStatus={d.setStatus}
+            hasExtra={!!lType}
+            onReset={() => setLType("")}
+            extra={
+              <ComboFilter label="Type" value={lType} onChange={setLType}
+                width="w-32" options={opts.listingTypes ?? []} />
+            }
+          />
+        </div>
+        <ExportBtn onClick={handleExport} loading={exporting} />
+      </div>
       <TableShell
         cols={LISTING_TABLE_COLS}
         rows={d.rows}
