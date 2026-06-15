@@ -42,7 +42,8 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 ## Giá & Tỷ Giá
 
 - [[pricing/FX-Rates|Tỷ Giá Nội Bộ]] — USD/VND, HKD/USD, TWD/USD (T06/2026)
-- [[pricing/3HK-COGS-Formula|Công Thức COGS 3HK]] — Fixed×55%, Daily×40%, Unlimited
+- [[pricing/3HK-COGS-Formula|Công Thức Giá Nhập 3HK]] — Fixed×55%, Daily×40%, Unlimited
+- [[pricing/3HK-Custom-Package-Pricing|Gói Tùy Chỉnh 3HK]] — Tính giá khi cap và throttle khác 500MB/10-5Mbps
 - [[pricing/Vendor-Priority|Quy Tắc Chọn Vendor]] — WM vs 3HK vs KDDI theo nước
 
 ---
