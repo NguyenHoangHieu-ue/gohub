@@ -5,7 +5,7 @@ department: finance
 tags: [ty-gia, fx-rates, usd, vnd, hkd, pricing]
 aliases: ["Tỷ giá", "FX Rates", "Exchange Rates"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 status: active
 ---
 
@@ -15,81 +15,78 @@ status: active
 
 | Cặp tiền | Tỷ giá | Ghi chú |
 |---|---|---|
-| **USD/VND** | **26,394** | 1 USD = 26,394 VND |
+| **USD/VND** | **26.394** | 1 USD = 26.394 VND |
 | **HKD/USD** | **7.798** | 1 USD = 7.798 HKD |
 | **TWD/USD** | **31.452** | 1 USD = 31.452 TWD |
 
-> Tỷ giá được lưu trong bảng `app_settings` (Supabase) và cập nhật thủ công bởi admin.  
-> Web UI: `/admin` → Tab **Cài đặt** → Tỷ giá nội bộ.
+> Tỷ giá do admin cập nhật thủ công. Cập nhật tại: Web **Admin** → Tab **Cài đặt** → Tỷ giá nội bộ.
 
 ---
 
-## Danh Sách Currencies Hỗ Trợ (11 loại)
+## Đơn Vị Tiền Hỗ Trợ (11 loại)
 
-| Ký hiệu | Tên | Dùng cho vendor |
+| Ký hiệu | Tên | Dùng cho |
 |---|---|---|
-| `USD` | US Dollar | Giá gốc chuẩn |
-| `VND` | Vietnamese Dong | Hiển thị VN |
-| `HKD` | Hong Kong Dollar | 3HK |
-| `TWD` | New Taiwan Dollar | — |
-| `JPY` | Japanese Yen | KDDI |
+| `USD` | Đô la Mỹ | Giá gốc chuẩn |
+| `VND` | Đồng Việt Nam | Hiển thị kênh VN |
+| `HKD` | Đô la Hồng Kông | 3HK |
+| `TWD` | Đô la Đài Loan | — |
+| `JPY` | Yên Nhật | KDDI |
 | `EUR` | Euro | — |
-| `GBP` | British Pound | — |
-| `AUD` | Australian Dollar | — |
-| `SGD` | Singapore Dollar | — |
-| `THB` | Thai Baht | — |
-| `KRW` | Korean Won | — |
+| `GBP` | Bảng Anh | — |
+| `AUD` | Đô la Úc | — |
+| `SGD` | Đô la Singapore | — |
+| `THB` | Baht Thái | — |
+| `KRW` | Won Hàn | — |
 
 ---
 
-## Quy Đổi COGS
+## Quy Đổi Giá Nhập
 
-### WM Products (giá tính bằng đồng ngoại tệ vendor)
+### Sản phẩm WM
 
 ```
-COGS (USD) = cost_price / exchange_rate_to_usd
-COGS (VND) = COGS (USD) × 26,394
+Giá nhập (USD) = giá vendor / tỷ giá đơn vị tiền → USD
+Giá nhập (VND) = Giá nhập (USD) × 26.394
 ```
 
-**Ví dụ:** WM gói Japan giá 5.5 USD
+**Ví dụ:** Gói Japan giá 5.5 USD
 ```
-COGS USD = 5.5 USD
-COGS VND = 5.5 × 26,394 = 145,167 VND
+Giá nhập VND = 5.5 × 26.394 = 145.167 VND
 ```
 
-### 3HK (giá HKD/GB → tính thành USD)
+### Sản phẩm 3HK
 
 ```
 GB thực = GB danh nghĩa × hệ số (xem công thức 3HK)
-COGS (HKD) = GB thực × price_per_gb
-COGS (USD) = COGS (HKD) / 7.798
-COGS (VND) = COGS (USD) × 26,394
+Giá nhập (HKD) = GB thực × giá/GB
+Giá nhập (USD) = Giá nhập (HKD) / 7.798
+Giá nhập (VND) = Giá nhập (USD) × 26.394
 ```
 
 > Công thức chi tiết: [[pricing/3HK-COGS-Formula]]
 
 ---
 
-## Hiển Thị COGS trong Hệ Thống
+## Hiển Thị Giá Theo Role
 
 | Role | Hiển thị |
 |---|---|
-| Admin | USD + VND |
-| Manager | USD + VND |
-| Standard | Ẩn (không thấy giá vốn) |
+| Admin | USD và VND |
+| Manager | USD và VND |
+| Standard | Ẩn — không thấy giá vốn |
 
-**Quy tắc hiển thị theo tenant:**
-- Tenant **VN** → chỉ hiện VND
-- Tenant **US** → chỉ hiện USD
+**Theo kênh bán:**
+- Kênh **VN** → hiển thị VND
+- Kênh **US** → hiển thị USD
 
 ---
 
 ## Cập Nhật Tỷ Giá
 
-1. Truy cập web `/admin` → **Cài đặt**
-2. Chỉnh sửa tỷ giá trực tiếp trong bảng
-3. Lưu → hệ thống cập nhật `app_settings` trong Supabase
-4. Chatbot và COGS calculation tự động dùng tỷ giá mới (cache refresh 30 phút)
+1. Vào web **Admin** → **Cài đặt**
+2. Chỉnh sửa tỷ giá trực tiếp
+3. Lưu → toàn bộ tính toán tự động dùng tỷ giá mới (làm mới sau 30 phút)
 
 ---
 
@@ -97,7 +94,7 @@ COGS (VND) = COGS (USD) × 26,394
 
 | Kỳ | USD/VND | HKD/USD | TWD/USD |
 |---|---|---|---|
-| T03/2026 | 26,394 | 7.798 | 31.452 |
-| T06/2026 | 26,394 | 7.798 | 31.452 |
+| T03/2026 | 26.394 | 7.798 | 31.452 |
+| T06/2026 | 26.394 | 7.798 | 31.452 |
 
 *(Cập nhật khi có thay đổi)*

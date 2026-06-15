@@ -1,11 +1,11 @@
 ---
-title: "Quy Trình Import NCC — Upload → Diff → Confirm"
+title: "Quy Trình Import NCC — Upload → Kiểm tra → Xác nhận"
 page_type: process_sop
 department: product
 tags: [process, import, ncc, wm, 3hk, upload, diff]
 aliases: ["Import NCC", "Upload NCC", "Cập nhật giá vendor"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 status: active
 ---
 
@@ -13,87 +13,86 @@ status: active
 
 ## Tổng Quan
 
-Khi vendor (WM, 3HK...) gửi file báo giá mới → GoHub cần cập nhật vào DB mà **không mất dữ liệu** (APN, network info...) và **thấy rõ những gì thay đổi** trước khi confirm.
+Khi vendor (WM, 3HK...) gửi file báo giá mới, GoHub cần cập nhật vào hệ thống mà **không làm mất thông tin cũ** (APN, cấu hình mạng...) và **thấy rõ những gì thay đổi** trước khi xác nhận.
 
 ---
 
-## Luồng Xử Lý (Web UI)
+## Các Bước Thực Hiện
 
 ```
 Vendor gửi file (Excel/CSV)
     │
     ▼
-[1] Upload file tại web /ncc
+[1] Upload file tại web — SP Vendor
     │
     ▼
-[2] API parse + so sánh với DB
-    → Hiện diff 3 nhóm:
+[2] Hệ thống phân tích + so sánh với dữ liệu hiện có
+    → Hiện danh sách thay đổi chia 3 nhóm:
        🟢 Sản phẩm mới
-       🟡 Giá thay đổi  
+       🟡 Giá thay đổi
        🔴 Ngưng cung cấp
     │
     ▼
-[3] Review → Confirm
+[3] Xem lại → Xác nhận
     │
     ▼
-[4] Upsert vào DB + log vào data_file_registry
+[4] Cập nhật vào hệ thống + ghi lại lịch sử import
 ```
 
 ---
 
 ## Bước 1 — Chuẩn Bị File
 
-### Format được hỗ trợ
+### Các format được hỗ trợ
 
 **WM Native Format (CSV/XLSX):**
-- Có cột `wmproductId` → tự động nhận dạng
-- Cột: wmproductId, product name, region, type, cost price NT, leSIM
+Nhận dạng tự động bằng cột `wmproductId`.
+Các cột: ID sản phẩm, tên, khu vực, loại, giá nhập, eSIM.
 
 **GoHub Standard Format (XLSX):**
-- Sheet tên **"Goi co san"** (gói cố định) và/hoặc **"Datapool"** (giá/GB)
-- Có cột `vendor_code`
-- Template tải về tại: web `/ncc` → nút **"Tải template"**
+Sheet tên **"Goi co san"** (gói cố định) và/hoặc **"Datapool"** (giá/GB).
+Template tải về tại: web **SP Vendor** → nút **"Tải template"**.
 
 > Nếu vendor dùng format riêng → chuyển sang GoHub Standard trước khi import.
 
 ---
 
-## Bước 2 — Upload và Xem Diff
+## Bước 2 — Upload và Xem Thay Đổi
 
-1. Vào web `/ncc` → **Tab WM** (hoặc vendor tương ứng)
-2. Click nút **"Import CSV"** (chỉ hiện với admin/manager)
-3. Chọn file từ máy → hệ thống tự parse
+1. Vào web **SP Vendor** → Tab WM (hoặc vendor tương ứng)
+2. Click **"Import CSV"** *(chỉ hiện với Admin/Manager)*
+3. Chọn file từ máy → hệ thống tự phân tích
 
-**Diff được hiển thị theo 3 nhóm:**
+**Danh sách thay đổi chia 3 nhóm:**
 
 | Nhóm | Màu | Nghĩa |
 |---|---|---|
-| Sản phẩm mới | 🟢 Xanh | vendor_product_id có trong file nhưng không có trong DB |
-| Giá thay đổi | 🟡 Vàng | COGS khác nhau giữa file và DB |
-| Ngưng cung cấp | 🔴 Đỏ | status=active trong DB nhưng không có trong file |
+| Sản phẩm mới | 🟢 Xanh | Có trong file nhưng chưa có trong hệ thống |
+| Giá thay đổi | 🟡 Vàng | Giá nhập khác so với dữ liệu hiện tại |
+| Ngưng cung cấp | 🔴 Đỏ | Có trong hệ thống nhưng không còn trong file mới |
 
-Mỗi nhóm collapsible, hiện tối đa 5 mẫu đầu.
-
----
-
-## Bước 3 — Confirm Import
-
-- Review diff → click **"Xác nhận Import"**
-- Hệ thống upsert toàn bộ vào DB
-- **Bảo toàn APN data:** các cột apn, network_type, providers... **không bị overwrite** khi chỉ có giá thay đổi
-- Log vào `data_file_registry`: last_imported, row_count, sha256, status=ok
+Mỗi nhóm có thể mở/thu gọn, hiện tối đa 5 mẫu đầu.
 
 ---
 
-## Auto-Detect Format
+## Bước 3 — Xác Nhận Import
+
+- Xem lại danh sách → click **"Xác nhận Import"**
+- Hệ thống cập nhật toàn bộ
+- **Thông tin APN được giữ nguyên:** cấu hình mạng, nhà mạng... **không bị ghi đè** khi chỉ có giá thay đổi
+- Lịch sử import được lưu lại (ngày giờ, số lượng dòng, trạng thái)
+
+---
+
+## Nhận Dạng Format Tự Động
 
 ```
 File upload
     │
-    ├─ Có cột "wmproductId"? ──────→ WM native parser
+    ├─ Có cột "wmproductId"? ──────→ WM native
     │
     └─ Có sheet "Goi co san"
-       hoặc cột "vendor_code"? ──→ GoHub Standard parser
+       hoặc cột "vendor_code"? ──→ GoHub Standard
 ```
 
 ---
@@ -106,7 +105,7 @@ Các cột bắt buộc: `vendor_code`, `vendor_id`, `product_name`, `region`, `
 
 Các cột tùy chọn: `throttle_mbps`, `apn`, `network_type`, `is_lesim`, `notes`
 
-### Sheet "Datapool" — giá/GB (3HK, ...)
+### Sheet "Datapool" — giá/GB (3HK...)
 
 Các cột bắt buộc: `vendor_code`, `zone_id`, `zone_name`, `countries`, `sim_type`, `price_per_gb`, `currency`, `is_kyc`
 
@@ -114,23 +113,16 @@ Các cột tùy chọn: `network_type`, `notes`
 
 ---
 
-## Backward Compatibility
+## Một Số Lưu Ý
 
-- **WM native CSV** (format cũ từ trước session 43) vẫn hoạt động
-- Hệ thống auto-detect → không cần migration file cũ
-
----
-
-## Lưu Ý Kỹ Thuật
-
-- **SHA-256 hash checking:** File trùng hash với lần import trước → cảnh báo "file không thay đổi"
-- **Upsert không xóa:** Sản phẩm "ngưng cung cấp" được mark `status=inactive`, không xóa khỏi DB
-- **Re-embed sau import:** Cần trigger re-embed các SKU bị ảnh hưởng (TODO: Phase 5 pending)
+- **Kiểm tra trùng file:** Nếu file giống hệt lần trước → hệ thống cảnh báo "file không có thay đổi mới"
+- **Không xóa dữ liệu cũ:** Sản phẩm "ngưng cung cấp" được đánh dấu, không xóa khỏi hệ thống
+- **WM format cũ vẫn hoạt động:** Backward compatible, không cần chuyển đổi
 
 ---
 
 ## Liên Quan
 
-- [[vendors/WM-WorldMove#Cấu Trúc File Báo Giá (WM Native Format)|WM file format]]
-- [[vendors/3HK#Cấu Trúc File Báo Giá (GoHub Standard)|3HK standard format]]
-- [[pricing/FX-Rates]] — tỷ giá khi tính COGS
+- [[vendors/WM-WorldMove#Format File Báo Giá|WM — Format file]]
+- [[vendors/3HK#Format File Báo Giá|3HK — Format file]]
+- [[pricing/FX-Rates]] — tỷ giá khi tính giá nhập

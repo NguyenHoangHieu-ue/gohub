@@ -5,7 +5,7 @@ department: product
 tags: [vendor, worldmove, wm, apn, esim, sim]
 aliases: ["WorldMove", "WM", "WORLDMOVE"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 status: active
 ---
 
@@ -16,144 +16,124 @@ status: active
 | Thuộc tính | Giá trị |
 |---|---|
 | Mã vendor | `WM` |
-| Ký tự vendor trong SKU (pos 6-7) | `WM` |
-| Loại báo giá | Gói cố định (fixed catalog) |
-| Tổng sản phẩm trong DB | **8,921 sản phẩm** |
-| KYC yêu cầu | Không (is_kyc = No) |
-| leSIM hỗ trợ | Có (is_lesim = Yes/No per gói) |
+| Ký tự trong SKU (vị trí 6–7) | `WM` |
+| Loại báo giá | Gói cố định |
+| Tổng sản phẩm | **8.921 gói** |
+| Yêu cầu KYC | Không |
+| Hỗ trợ eSIM | Có (tùy gói) |
 
 ---
 
-## Loại Gói (Product Types)
+## Các Loại Gói WM
 
 ### 1. Titanium AYCE (All You Can Eat)
-- **Data:** Không giới hạn tốc độ (truly unlimited)
-- **Throttle:** `NULL` — không bị giới hạn tốc độ
-- **Data Policy Code:** `D` (unlimited, no throttle)
+- **Data:** Không giới hạn, không giảm tốc độ
+- **Data Policy:** `D`
 
 ### 2. Premium Unlimited
-- **Data:** Unlimited với highspeed cap **1 GB/ngày**
-- **Sau cap:** Throttle xuống **10 Mbps**
-- **Data Policy Code:** `A` (daily cap → unlimited 10Mbps)
+- **Data:** Không giới hạn — tốc độ cao 1 GB/ngày, sau đó tối thiểu **10 Mbps**
+- **Data Policy:** `A`
 
 ### 3. Standard Unlimited
-- **Data:** Unlimited với highspeed cap **2 GB/ngày**
-- **Sau cap:** Throttle xuống **5 Mbps**
-- **Data Policy Code:** `B` (daily cap → unlimited 5Mbps)
+- **Data:** Không giới hạn — tốc độ cao 2 GB/ngày, sau đó tối thiểu **5 Mbps**
+- **Data Policy:** `B`
 
 ### 4. Fixed Data
-- **Data:** Tổng cố định (ví dụ 5GB, 10GB)
-- **Throttle sau hết data:** **128 kbps** (browsing nhẹ)
-- **Data Policy Code:** `F` hoặc `P`
+- **Data:** Tổng cố định (ví dụ 5 GB, 10 GB)
+- **Sau khi hết:** Tốc độ giảm xuống 128 kbps
+- **Data Policy:** `F` hoặc `P`
 
 ### 5. Daily Data
-- **Data:** Cấp theo ngày (ví dụ 1GB/ngày)
-- **Throttle sau hết quota ngày:** **128 kbps**
-- **Data Policy Code:** `P`
+- **Data:** Cấp theo từng ngày (ví dụ 1 GB/ngày)
+- **Sau khi hết quota ngày:** Tốc độ giảm xuống 128 kbps
+- **Data Policy:** `P`
 
-> Mapping đầy đủ: [[products/Data-Policy-Codes]]
+> Bảng đầy đủ: [[products/Data-Policy-Codes]]
 
 ---
 
-## APN Information
+## Thông Tin APN
 
-APN (Access Point Name) là cấu hình mạng cần thiết để thiết bị kết nối internet.
+APN (Access Point Name) là cấu hình mạng thiết bị cần để kết nối internet khi dùng gói WM.
 
-### Format Hiển Thị trong Hệ Thống
+### Cách hiển thị trong hệ thống
 
 ```
 Vietnam (Mobifone, Viettel, Vinaphone)
 ```
-— tức là: **Tên vùng/nước (Danh sách nhà mạng)**
+→ Tên vùng/nước + danh sách nhà mạng hỗ trợ
 
-### Các Trường APN trong DB (`ncc_worldmove`)
-
-| Cột | Mô tả |
-|---|---|
-| `apn` | Chuỗi APN (ví dụ: `m-wap`, `v-internet`) |
-| `network_type` | Loại mạng (`4G/LTE`, `5G`) |
-| `onsite_carrier` | Nhà mạng chính |
-| `providers` | Danh sách nhà mạng hỗ trợ (nhiều dòng) |
-| `coverage` | Vùng phủ sóng |
-| `data_reset` | Giờ reset data hàng ngày |
-| `notification` | Thông báo gửi khi hết quota |
-| `apn_summary` | Tóm tắt APN từ file (8 dòng header của WM) |
-
-### APN theo Nhà Mạng VN
+### APN theo nhà mạng Việt Nam
 
 | Nhà mạng | APN |
 |---|---|
 | Mobifone | `m-wap` |
 | Viettel | `v-internet` |
-| Vietnamobile | *(riêng)* |
-| Generic VN | `3HK` fallback |
+| Vietnamobile | Riêng theo gói |
+
+### Thông tin kèm theo mỗi gói
+
+- Loại mạng (4G/LTE, 5G)
+- Nhà mạng chính và danh sách nhà mạng hỗ trợ
+- Vùng phủ sóng
+- Giờ reset data hàng ngày
+- Thông báo khi hết quota
 
 ---
 
-## Cấu Trúc File Báo Giá (WM Native Format)
+## Format File Báo Giá
 
-File CSV/XLSX với các cột:
+### WM Native Format (CSV/XLSX cũ)
+Nhận dạng bằng cột `wmproductId`.
 
-| Cột | Tên cột gốc | Mô tả |
-|---|---|---|
-| ID sản phẩm | `wmproductId` | Mã WM nội bộ |
-| Tên sản phẩm | `product name` | Tên đầy đủ |
-| Khu vực | `region` | Tên vùng/nước |
-| Loại | `type` | SIM/eSIM |
-| Giá nhập | `cost price NT` | Giá theo đơn vị ngoại tệ |
-| leSIM | `leSIM` | `Yes`/`No` |
+Các cột: ID sản phẩm, tên, khu vực, loại SIM/eSIM, giá nhập, có leSIM hay không.
 
-**Detect tự động:** Nếu file có cột `wmproductId` → parser WM native.  
-**GoHub Standard Format:** Nếu sheet tên `Goi co san` hoặc có cột `vendor_code` → parser chuẩn.
+### GoHub Standard Format (XLSX mới)
 
-> Quy trình import: [[processes/Import-NCC]]
-
----
-
-## GoHub Standard Format (Mới — v8)
-
-GoHub định nghĩa template chuẩn để WM (và các vendor khác) điền vào:
+Template chuẩn GoHub — WM (và các vendor khác) điền theo. Tải template tại web **SP Vendor → Tải template**.
 
 **Sheet "Goi co san"** — gói cố định:
 
 | Cột | Bắt buộc | Mô tả |
 |---|---|---|
 | `vendor_code` | ✅ | `WM` |
-| `vendor_id` | ✅ | ID vendor nội bộ |
+| `vendor_id` | ✅ | ID nội bộ vendor |
 | `product_name` | ✅ | Tên gói |
-| `region` | ✅ | Khu vực/nước |
+| `region` | ✅ | Khu vực / nước |
 | `sim_type` | ✅ | `SIM` hoặc `eSIM` |
 | `days` | ✅ | Số ngày |
 | `data_gb` | ✅ | Dung lượng GB |
-| `is_daily` | ✅ | `true`/`false` |
-| `is_unlimited` | ✅ | `true`/`false` |
-| `throttle_mbps` | — | Tốc độ sau throttle (null = no limit) |
+| `is_daily` | ✅ | `true` / `false` |
+| `is_unlimited` | ✅ | `true` / `false` |
+| `throttle_mbps` | — | Tốc độ tối thiểu sau hết quota (để trống = không giới hạn) |
 | `cost_price` | ✅ | Giá nhập |
 | `currency` | ✅ | Đơn vị tiền |
 | `apn` | — | APN string |
 | `network_type` | — | `4G/LTE`, `5G` |
-| `is_kyc` | ✅ | `true`/`false` |
-| `is_lesim` | — | `true`/`false` |
-| `notes` | — | Ghi chú thêm |
+| `is_kyc` | ✅ | `true` / `false` |
+| `is_lesim` | — | `true` / `false` |
+| `notes` | — | Ghi chú |
+
+> Quy trình import: [[processes/Import-NCC]]
 
 ---
 
 ## Gap Analysis
 
-Mỗi sản phẩm WM trong DB có cột `exist`:
-- `Yes` — GoHub đã tạo SKU tương ứng
-- `No` — GoHub **chưa** tạo SKU
+Mỗi sản phẩm WM được đánh dấu:
+- **Đã tạo** — GoHub đã có SKU tương ứng
+- **Chưa tạo** — GoHub chưa nhập vào hệ thống
 
-**Cập nhật tự động:** `sync.py` chạy daily sẽ re-sync `exist` theo bảng `skus` hiện tại.
+Trạng thái cập nhật tự động mỗi ngày sau khi đồng bộ.
 
-> Xem gap: [[products/Combo-Chuan-GoHub#Vendor Priority|Vendor Priority]] + web `/ncc` tab WM
+> Xem chi tiết: Web **SP Vendor** → Tab WM → Bộ lọc "Chưa có trong HT"
 
 ---
 
-## Vendor Priority
+## Ưu Tiên Vendor
 
-WM là vendor **ưu tiên** cho:
-- **Hồng Kông (HK)** — no-KYC, giá tốt
-- **Đài Loan (TW)** — no-KYC, coverage tốt
+WM là lựa chọn **ưu tiên** cho:
+- **Hồng Kông** — không cần KYC, giá cạnh tranh
+- **Đài Loan** — không cần KYC, phủ sóng tốt
 
-> Bảng priority đầy đủ: [[pricing/Vendor-Priority]]
+> Bảng ưu tiên đầy đủ: [[pricing/Vendor-Priority]]

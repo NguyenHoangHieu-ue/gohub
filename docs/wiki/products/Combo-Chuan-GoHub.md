@@ -5,7 +5,7 @@ department: product
 tags: [combo, sku, standard, gap-analysis, product-guide]
 aliases: ["Combo Chuẩn", "42 combo", "GoHub Standard Combo"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 status: active
 ---
 
@@ -13,13 +13,13 @@ status: active
 
 ## Quy Tắc Cốt Lõi
 
-> Mỗi nước GoHub triển khai đều cần **đủ 42 combo** — bao gồm 3 nhóm × 7 biến thể ngày.
+> Mỗi nước GoHub triển khai đều cần **đủ 42 combo** — gồm 3 nhóm × 7 biến thể ngày.
 
-Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần request vendor tạo thêm SKU**, không phải vendor không có hàng.
+Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần yêu cầu vendor tạo thêm**, không phải vendor hết hàng.
 
 ---
 
-## 42 Combo = 3 Nhóm × 14 (6+1 variants × ngày)
+## 42 Combo = 3 Nhóm × 6 Biến Thể Ngày
 
 ### Nhóm 1: Daily Data (Data theo ngày)
 
@@ -29,17 +29,17 @@ Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần request v
 | 2 GB/ngày | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 3 GB/ngày | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-→ **18 combo** (3 loại GB × 6 variants ngày)
+→ **18 combo** (3 mức GB × 6 mốc ngày)
 
 ### Nhóm 2: Fixed Data (Tổng cố định)
 
 | Dung lượng | 7 ngày | 14 ngày | 21 ngày | 30 ngày | 60 ngày | 90 ngày |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| 5 GB total | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 10 GB total | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 20 GB total | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 5 GB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 10 GB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 20 GB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-→ **18 combo** (3 loại GB × 6 variants ngày)
+→ **18 combo** (3 mức GB × 6 mốc ngày)
 
 ### Nhóm 3: Unlimited
 
@@ -47,7 +47,7 @@ Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần request v
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | Unlimited | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-→ **6 combo** (1 loại × 6 variants ngày)
+→ **6 combo** (1 loại × 6 mốc ngày)
 
 ---
 
@@ -59,38 +59,38 @@ Khi chatbot / gap analysis nói "thiếu combo" → nghĩa là **cần request v
 
 | Tình huống | Diễn đạt ĐÚNG | Diễn đạt SAI |
 |---|---|---|
-| GoHub chưa tạo SKU cho gói đó | "Cần request vendor tạo thêm SKU" | "Vendor không có hàng" |
-| SKU active, bán được | "Có trong hệ thống GoHub" | "Có sẵn" (mơ hồ) |
+| GoHub chưa tạo SKU cho gói đó | "Cần yêu cầu vendor tạo thêm SKU" | "Vendor không có hàng" |
+| SKU đang bán được | "Có trong hệ thống GoHub" | "Có sẵn" (mơ hồ) |
 | GoHub chưa tạo SKU | "Chưa có trong hệ thống GoHub" | "Hết hàng" |
 | WM có gói, GoHub đã tạo SKU | "WM có, GoHub đã tạo" | — |
 | WM có gói, GoHub chưa tạo SKU | "WM có, GoHub chưa tạo" | — |
 
 ---
 
-## Vendor Priority Theo Nước
+## Ưu Tiên Vendor Theo Nước
 
 > Chi tiết đầy đủ: [[pricing/Vendor-Priority]]
 
 | Nước / Khu vực | Vendor ưu tiên | Lý do |
 |---|---|---|
-| Hong Kong (HK) | **WM** | no-KYC, giá tốt |
-| Đài Loan (TW) | **WM** | no-KYC, coverage tốt |
-| Nhật Bản (JP) | **KDDI** | partnership riêng |
-| Các nước khác | **3HK** trước | Phủ sóng rộng |
+| Hồng Kông | **WM** | Không cần KYC, giá tốt |
+| Đài Loan | **WM** | Không cần KYC, phủ sóng tốt |
+| Nhật Bản | **KDDI** | Partnership riêng |
+| Các nước khác | **3HK** trước | Phủ sóng rộng hơn |
 | BC / JY | Last resort | Khi WM + 3HK không có |
 
 ---
 
-## Gap Analysis Flow
+## Quy Trình Gap Analysis
 
 ```
 1. Lấy 42 combo chuẩn cho nước X
-2. Kiểm tra SKU active trong GoHub DB (sku_catalog)
-3. Kiểm tra WM catalog (ncc_worldmove, cột exist=Yes/No)
-4. Output:
+2. Kiểm tra SKU đang bán được trong GoHub
+3. Kiểm tra catalog WM (gói nào đã tạo / chưa tạo)
+4. Kết quả:
    - GoHub đã có: N/42 combo
-   - WM có sẵn nhưng GoHub chưa tạo: M combo
-   - WM không có: K combo → cần request vendor
+   - WM có nhưng GoHub chưa tạo: M combo
+   - WM không có: K combo → cần yêu cầu vendor
 ```
 
-> Web UI gap analysis: `/ncc` → tab WM → filter "Chưa có trong HT"
+> Xem trực tiếp: Web **SP Vendor** → Tab WM → Bộ lọc "Chưa có trong HT"
