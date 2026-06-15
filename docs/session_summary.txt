@@ -1,5 +1,38 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-14 (session 53)
+Cập nhật lần cuối: 2026-06-15 (session 54)
+
+## Session 54 (2026-06-15) — UI/UX fixes (commits 173c445, 43a9c86)
+
+### Fix: Listings Export XLSX (commit 173c445)
+- `ListingsTable` thiếu `ExportBtn` + `handleExport` — 3 tab còn lại đều có
+- Thêm `exporting` state, `handleExport` function (fetch all pages với filter hiện tại)
+- Wrap FilterBar trong flex div cùng ExportBtn, chuẩn pattern với Products/SKUs/Items
+
+### Fix: 4 UX issues (commit 43a9c86)
+
+**1. Tab labels SP Hệ Thống → tiếng Việt**
+- `Products → Sản Phẩm`, `SKUs → SKU`, `Listings → Listing`, `Items → Item`
+- File: `web/src/app/(dashboard)/skus/page.tsx` — const TABS
+
+**2. Filter auto-apply nhất quán (Products + SKUs)**
+- Trước: Products/SKUs cần nhấn nút "Tìm" để apply; Listings/Items auto-apply ngay
+- Fix: xóa `applyFilters`/`applySkuFilters` function + xóa nút "Tìm"/"Xóa" trong filter panel
+- Thay bằng `useEffect` với debounce 300ms — chọn dropdown option là apply ngay
+- Xóa `onKeyDown` handlers trên filter panel divs
+- Pattern mới: destructure `setExtraQuery` từ `d` để dùng làm stable dep trong useEffect
+
+**3. Item tab — banner thông báo filter Active mặc định**
+- Thêm `<p>` xanh nhỏ bên dưới filter bar khi `d.status === "Active"`
+- Text: "Mặc định chỉ hiển thị Item Active. Xóa filter Status để xem tất cả."
+- Tự ẩn khi user đổi Status sang filter khác
+
+**4. "Telco Chat" → "GoHub AI"**
+- `sidebar.tsx`: label "Telco Chat" → "GoHub AI"
+- `chatbot/page.tsx`: h1 "Telco Chat" → "GoHub AI"
+- Description: "gap analysis" → "so sánh gap NCC"
+- Input placeholder: "gap analysis" → "phân tích gap NCC"
+
+---
 
 ## Session 53 (2026-06-14) — Phase 3 MRP + Bug #30 fix (commit 57209bf)
 
