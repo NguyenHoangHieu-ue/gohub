@@ -1,6 +1,20 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-16 (session 55)
 
+## Session 55 — tiếp (2026-06-16) — Temp rule Hiếu vắng (commit df56331)
+
+### Rule tạm thời 28/6–8/7/2026
+- Khi chatbot không biết câu trả lời → trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊"
+- Áp dụng: web chatbot + Lark bot (cả 2 route)
+- Tự động tắt sau 8/7/2026 (kiểm tra `new Date()` tại runtime mỗi request)
+- Files: `web/src/app/api/chat/route.ts`, `web/src/app/api/lark/events/route.ts`
+
+### Bug.txt pending (ghi tay, không commit)
+- #31: Template UX — phân rõ auto-fill vs admin nhập
+- #32: 3HK template cần cả eSIM + Top-up SIM
+
+---
+
 ## Session 55 (2026-06-16) — 3HK Template + Chatbot NCC + Agent tao-template (commit 1bbbfe1)
 
 ### 1. Template WM fix + 3HK mới
