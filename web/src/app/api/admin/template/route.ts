@@ -138,6 +138,152 @@ function nameEn(p: WMProduct, cfg: TemplateConfig): string {
   return `${cfg.typeOfSim} ${cfg.countryNameEn} ${fmtData(p)} ${dayLabel}`
 }
 
+// ─── 3HK generator ────────────────────────────────────────────────────────────
+
+function generate3HKTemplate(
+  combos:   ThreeHKProduct[],
+  config:   TemplateConfig,
+  settings: FxSettings
+): NextResponse {
+  const fx_usd_vnd = Number(settings.fx_usd_vnd) || 26394
+  const wb = XLSX.utils.book_new()
+
+  // Helpers
+  const build3HKProductCode = (purchaseType: string, dp: string) =>
+    purchaseType + config.productType + config.supportCountryCode + "3D" + dp
+
+  const build3HKSku = (purchaseType: string, dp: string, c: ThreeHKProduct) =>
+    build3HKProductCode(purchaseType, dp)
+    + dataAmountCode(c.data_gb, c.combo_type === "unlimited")
+    + zeroPad(c.days, 2)
+
+  const makeName = (c: ThreeHKProduct, lang: "vn" | "en") => {
+    const days = zeroPad(c.days, 2)
+    const dayLabel = lang === "vn" ? `${days} Ngày` : `${days} Days`
+    const sim  = config.typeOfSim || "eSIM"
+    const name = lang === "vn" ? config.countryNameVn : config.countryNameEn
+    if (c.combo_type === "unlimited") return `${sim} ${name} Unlimited ${dayLabel}`
+    if (c.combo_type === "daily")     return `${sim} ${name} ${c.data_gb}GB/Ngày ${dayLabel}`
+    return `${sim} ${name} ${c.data_gb}GB ${dayLabel}`
+  }
+
+  const skuCols = [
+    "tenant","productCode","dataAmount","dataAmountUnit","dayAmount","dayAmountUnit",
+    "nameVn","nameEn","frameSku","datapackSku","latestCogs","latestCogsCurrency",
+    "throttleSpeed","call","callSmsDetails","expirations","vendorSku","vendorSkuSim","SKU",
+  ]
+
+  const makeSkuRow = (c: ThreeHKProduct, tenant: "US" | "VN") => {
+    const dp   = c.data_policy_code
+    const pcUS = build3HKProductCode(config.purchaseType_US, dp)
+    const pcVN = build3HKProductCode(config.purchaseType_VN, dp)
+    const pc   = tenant === "US" ? pcUS : pcVN
+    const sku  = build3HKSku(tenant === "US" ? config.purchaseType_US : config.purchaseType_VN, dp, c)
+    const skuUS = build3HKSku(config.purchaseType_US, dp, c)
+    return {
+      tenant,
+      productCode:        pc,
+      dataAmount:         c.data_gb ?? 9999,
+      dataAmountUnit:     "GB",
+      dayAmount:          c.days,
+      dayAmountUnit:      "Day(s)",
+      nameVn:             makeName(c, "vn"),
+      nameEn:             makeName(c, "en"),
+      frameSku:           "",
+      datapackSku:        "",
+      latestCogs:         tenant === "US" ? c.cogs_usd : roundUp(c.cogs_usd * fx_usd_vnd, 0),
+      latestCogsCurrency: tenant === "US" ? "USD" : "VND",
+      throttleSpeed:      c.throttle_mbps ? `${c.throttle_mbps} Mbps` : "",
+      call:               config.call,
+      callSmsDetails:     "",
+      expirations:        config.expirationDays,
+      vendorSku:          tenant === "VN" ? skuUS : c.vendor_sku,
+      vendorSkuSim:       "",
+      SKU:                sku,
+    }
+  }
+
+  // Sheet 1: Danh sách sản phẩm
+  const s1 = combos.map(c => ({
+    combo:    c.vendor_sku,
+    days:     c.days,
+    data:     c.data_gb ? `${c.data_gb}${c.combo_type === "daily" ? "GB/ngày" : "GB"}` : "Unlimited",
+    throttle: c.throttle_mbps ? `${c.throttle_mbps} Mbps` : "",
+    cogs_usd: c.cogs_usd,
+    cogs_vnd: roundUp(c.cogs_usd * fx_usd_vnd, 0),
+  }))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s1), "Danh sách combo")
+
+  // Sheet 2: COGS info
+  const s2 = [[`3HK Datapool Template — ${config.countryNameEn || config.supportCountryCode}`],
+    [`Formula: Fixed×55%, Daily×40%, Unlimited(10M)=1.8GB/day×40%, Unlimited(5M)=1.6GB/day×40%`],
+    [`FX: 1 USD = ${fx_usd_vnd} VND`]]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), "Cấu trúc & cogs")
+
+  // Sheet 3+4: Template_SKU_US / VN
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(combos.map(c => makeSkuRow(c, "US")), { header: skuCols }), "Template_SKU_US")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(combos.map(c => makeSkuRow(c, "VN")), { header: skuCols }), "Template_SKU_VN")
+
+  // Sheet 5+6: Template_Product — collect unique product codes
+  const productCols = [
+    "tenant","sourceType","productType","supportCountryCode","supportedCountries",
+    "vendorCode","dataPolicyCode","typeOfSim","operatorCode","purchaseType","skuType",
+    "dataType","baseSimEsimSkuCode","importType","dailyResetTime","activationTime",
+    "networkType","apnOriginal","apn","onsiteCarrier","localPhoneNumber","localNumberCountry",
+    "hotspot","kycCode","kycNeeded","kycLinks","topUpOptions","activation","unsupportedApps",
+    "telcoPerks","note","dataPlanType",
+  ]
+  const makeProductRow = (tenant: "US" | "VN", dp: string) => {
+    const pt = tenant === "US" ? config.purchaseType_US : config.purchaseType_VN
+    const pc = build3HKProductCode(pt, dp)
+    return {
+      tenant, sourceType: pt, productType: config.productType,
+      supportCountryCode: config.supportCountryCode,
+      supportedCountries: config.isoCodes,
+      vendorCode: "3D", dataPolicyCode: dp,
+      typeOfSim: config.typeOfSim, operatorCode: "3HK",
+      purchaseType: "API Purchase", skuType: "Base + Datapack",
+      dataType: "", baseSimEsimSkuCode: pc, importType: "Official",
+      dailyResetTime: "", activationTime: "", networkType: "4G/LTE",
+      apnOriginal: "mobile.three.com.hk", apn: "mobile.three.com.hk",
+      onsiteCarrier: "", localPhoneNumber: "", localNumberCountry: "",
+      hotspot: "Yes", kycCode: 1, kycNeeded: "No",
+      kycLinks: "", topUpOptions: "", activation: "", unsupportedApps: "",
+      telcoPerks: "", note: "", dataPlanType: "",
+    }
+  }
+
+  // Distinct data policy codes used in this batch
+  const usedDP = [...new Set(combos.map(c => c.data_policy_code))]
+  const prodRowsUS = usedDP.map(dp => makeProductRow("US", dp))
+  const prodRowsVN = usedDP.map(dp => makeProductRow("VN", dp))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRowsUS, { header: productCols }), "Template_Product_US")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRowsVN, { header: productCols }), "Template_Product_VN")
+
+  const buf  = XLSX.write(wb, { type: "buffer", bookType: "xlsx" })
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "")
+  return new NextResponse(buf, {
+    status: 200,
+    headers: {
+      "Content-Type":        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="template_3HK_${date}.xlsx"`,
+    },
+  })
+}
+
+// ─── 3HK types ───────────────────────────────────────────────────────────────
+
+interface ThreeHKProduct {
+  combo_type:       "daily" | "fixed" | "unlimited"
+  data_gb:          number | null
+  days:             number
+  throttle_mbps:    number | null
+  data_policy_code: string
+  vendor_sku:       string
+  cogs_usd:         number
+  cogs_vnd:         number
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -147,15 +293,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  let body: { products: WMProduct[]; config: TemplateConfig; settings: FxSettings }
+  let body: {
+    vendor?:          string
+    products?:        WMProduct[]
+    threeHKProducts?: ThreeHKProduct[]
+    config:           TemplateConfig
+    settings:         FxSettings
+  }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { products, config, settings } = body
-  if (!products?.length || !config || !settings)
+  const { vendor = "WM", products, threeHKProducts, config, settings } = body
+  if (!config || !settings)
+    return NextResponse.json({ error: "Thiếu dữ liệu đầu vào" }, { status: 400 })
+
+  // ── Route to 3HK generator ──────────────────────────────────────────────────
+  if (vendor === "3HK") {
+    if (!threeHKProducts?.length)
+      return NextResponse.json({ error: "Thiếu combo 3HK" }, { status: 400 })
+    return generate3HKTemplate(threeHKProducts, config, settings)
+  }
+
+  // ── WM (default) ─────────────────────────────────────────────────────────
+  if (!products?.length)
     return NextResponse.json({ error: "Thiếu dữ liệu đầu vào" }, { status: 400 })
 
   const fx_twd_usd = Number(settings.fx_twd_usd) || 0.03165

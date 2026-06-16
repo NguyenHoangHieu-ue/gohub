@@ -9,6 +9,7 @@ import {
   getFxRates, findGaps,
   getItems, searchListings, identifyCode,
   searchKnowledgeBase,
+  searchNccWm, searchNcc3hk,
 } from "@/lib/agents/tools"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
@@ -145,6 +146,28 @@ export async function buildToolContext(
         `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}|[note nếu có]`,
         ...rows
       )
+
+      // ── NCC context: WM + 3HK summary cho nước đó ──────────────────────────
+      {
+        const wmProducts = searchNccWm({ country: params.country }, ref)
+        const wmTotal    = wmProducts.length
+        const wmInSys    = wmProducts.filter((p: any) => p.in_system).length
+        const wmNotYet   = wmTotal - wmInSys
+        if (wmTotal > 0) {
+          sections.push(
+            `=== NCC VENDOR — WorldMove (WM) cho ${params.country} ===`,
+            `Tổng WM: ${wmTotal} SP · Đã tạo GoHub: ${wmInSys} · Chưa tạo: ${wmNotYet}`,
+            wmNotYet > 0 ? `Top chưa tạo: ${wmProducts.filter((p: any) => !p.in_system).slice(0, 5).map((p: any) => p.product_name ?? p.vendor_product_id).join(" | ")}` : ""
+          )
+        } else {
+          sections.push(`=== NCC WorldMove: không có sản phẩm cho ${params.country} ===`)
+        }
+        const hkZones = searchNcc3hk(params.country, ref)
+        if (hkZones.length > 0) {
+          const zoneInfo = hkZones.slice(0, 3).map((z: any) => `Zone ${z.zone} (${z.price_per_gb_hkd ?? "?"} HKD/GB)`).join(" | ")
+          sections.push(`=== NCC 3HK cho ${params.country}: ${zoneInfo} ===`)
+        }
+      }
 
       // Semantic fallback: standard search trả về 0 → thử vector search
       if (skus.length === 0) {
@@ -414,6 +437,29 @@ export async function buildToolContext(
       `=== GAP ANALYSIS${params.country ? ` — ${params.country}` : ""} ===`,
       JSON.stringify(gaps, null, 2)
     )
+  }
+
+  if (agentId === "tao-template") {
+    // Inject WM products for the requested country (to auto-fill APN, network type)
+    if (params.country) {
+      const wmProducts = searchNccWm({ country: params.country, sim_type: params.simType }, ref)
+      const notInSys   = wmProducts.filter((p: any) => !p.in_system).slice(0, 30)
+      sections.push(
+        `=== WM CATALOG CHO ${params.country} (${wmProducts.length} SP, ${notInSys.length} chưa tạo GoHub) ===`,
+        `Format: vendor_id | product_name | days | data_gb | is_daily | is_unlimited | throttle_kbps | sim_type | apn`,
+        ...notInSys.map((p: any) =>
+          `${p.vendor_product_id}|${p.product_name}|${p.days}|${p.data_gb ?? "UNL"}|${p.is_daily}|${p.is_unlimited}|${p.throttle_kbps ?? ""}|${p.sim_type}|${p.apn ?? ""}`
+        )
+      )
+      // 3HK zones for this country
+      const hkZones = searchNcc3hk(params.country, ref)
+      if (hkZones.length)
+        sections.push(`=== 3HK ZONES CHO ${params.country} ===`, JSON.stringify(hkZones.slice(0, 5), null, 2))
+    } else {
+      // No country yet: inject zone list so agent can suggest
+      const zonesSummary = ref.ncc3hk.slice(0, 10).map((z: any) => `Zone ${z.zone}: ${z.country} (${z.price_per_gb_hkd ?? "?"} HKD/GB)`)
+      sections.push(`=== DANH SÁCH ZONE 3HK ===`, ...zonesSummary)
+    }
   }
 
   const filtered = sections.filter(Boolean)

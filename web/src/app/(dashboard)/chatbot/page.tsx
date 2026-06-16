@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
@@ -25,11 +25,120 @@ interface StoredMessage extends Message {
 }
 
 const AGENT_COLORS: Record<string, string> = {
-  "tu-van":       "bg-brand-100 text-brand-700",
-  "tra-cuu":      "bg-blue-100 text-blue-700",
-  "giai-dap":     "bg-amber-100 text-amber-700",
-  "gia-cogs":     "bg-green-100 text-green-700",
-  "gap-analysis": "bg-purple-100 text-purple-700",
+  "tu-van":        "bg-brand-100 text-brand-700",
+  "tra-cuu":       "bg-blue-100 text-blue-700",
+  "giai-dap":      "bg-amber-100 text-amber-700",
+  "gia-cogs":      "bg-green-100 text-green-700",
+  "gap-analysis":  "bg-purple-100 text-purple-700",
+  "tao-template":  "bg-emerald-100 text-emerald-700",
+}
+
+// ─── Template action helpers ──────────────────────────────────────────────────
+
+function extractTemplateAction(text: string): Record<string, any> | null {
+  const m = text.match(/```json\s*([\s\S]*?)\s*```/)
+  if (!m) return null
+  try {
+    const parsed = JSON.parse(m[1])
+    if (parsed.action === "generate_template") return parsed
+  } catch {}
+  return null
+}
+
+function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
+  const [loading, setLoading] = useState(false)
+  const [done,    setDone]    = useState(false)
+
+  async function download() {
+    setLoading(true)
+    try {
+      // Fetch FX settings
+      const settingsRes = await fetch("/api/admin/settings")
+      const settingsData = await settingsRes.json()
+      const rows = settingsData.settings ?? []
+      const get  = (key: string, def: number) => {
+        const r = rows.find((s: any) => s.key === key)
+        return r ? parseFloat(r.value) : def
+      }
+      const fxSettings = {
+        fx_usd_vnd: get("fx.usd_vnd", 26394),
+        fx_twd_usd: get("fx.twd_usd", 0.03165),
+        fx_hkd_usd: get("fx.hkd_usd", 0.1282),
+      }
+
+      let body: Record<string, any>
+
+      if (action.vendor === "3HK") {
+        const { dailyGB = [], fixedGB = [], days = [3, 5, 7, 10, 15, 30], unlimitedEnabled = true, unlimThrottle = 5 } = action
+        const sortedDays: number[] = [...days].sort((a, b) => a - b)
+        const combos: any[] = []
+
+        const getDP = (type: string, mb: number | null) =>
+          type === "fixed" ? "F" : type === "daily" ? "P" : (mb === 10 ? "B" : "A")
+        const calcCogs = (type: string, gb: number | null, d: number, mb: number | null) => {
+          const price = action.zone_price ?? 5
+          const hkd   = type === "fixed" ? (gb ?? 0) * price * 0.55
+                      : type === "daily" ? (gb ?? 0) * d * price * 0.40
+                      : (mb === 10 ? 1.8 : 1.6) * d * price * 0.40
+          return Math.ceil(hkd * fxSettings.fx_hkd_usd * 100) / 100
+        }
+
+        for (const gb of [...dailyGB].sort((a: number, b: number) => a - b))
+          for (const d of sortedDays)
+            combos.push({ combo_type: "daily", data_gb: gb, days: d, throttle_mbps: null, data_policy_code: getDP("daily", null), vendor_sku: `3HK-D${gb}GB-${d}D`, cogs_usd: calcCogs("daily", gb, d, null), cogs_vnd: Math.ceil(calcCogs("daily", gb, d, null) * fxSettings.fx_usd_vnd) })
+        for (const gb of [...fixedGB].sort((a: number, b: number) => a - b))
+          for (const d of sortedDays)
+            combos.push({ combo_type: "fixed", data_gb: gb, days: d, throttle_mbps: null, data_policy_code: getDP("fixed", null), vendor_sku: `3HK-F${gb}GB-${d}D`, cogs_usd: calcCogs("fixed", gb, d, null), cogs_vnd: Math.ceil(calcCogs("fixed", gb, d, null) * fxSettings.fx_usd_vnd) })
+        if (unlimitedEnabled)
+          for (const d of sortedDays)
+            combos.push({ combo_type: "unlimited", data_gb: null, days: d, throttle_mbps: unlimThrottle, data_policy_code: getDP("unlimited", unlimThrottle), vendor_sku: `3HK-UNL${unlimThrottle}M-${d}D`, cogs_usd: calcCogs("unlimited", null, d, unlimThrottle), cogs_vnd: Math.ceil(calcCogs("unlimited", null, d, unlimThrottle) * fxSettings.fx_usd_vnd) })
+
+        body = { vendor: "3HK", threeHKProducts: combos, config: action.config ?? {}, settings: fxSettings }
+      } else {
+        // WM: fetch products
+        const { filters = {} } = action
+        const sp = new URLSearchParams({ gap: "not_in_system", page: "1" })
+        if (filters.country)  sp.set("search",    filters.country)
+        if (filters.sim_type) sp.set("sim_type",  filters.sim_type)
+        if (filters.data_type) sp.set("data_type", filters.data_type)
+        const prodRes = await fetch(`/api/ncc/worldmove?${sp}`)
+        const prodData = await prodRes.json()
+        const products = prodData.data ?? []
+        body = { vendor: "WM", products, config: action.config ?? {}, settings: fxSettings }
+      }
+
+      const res = await fetch("/api/admin/template", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      })
+      if (!res.ok) { alert("Lỗi tạo template. Vui lòng thử lại."); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement("a")
+      a.href     = url
+      a.download = `template_${action.vendor}_${action.config?.supportCountryCode ?? "XX"}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      setDone(true)
+    } catch {
+      alert("Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={download}
+      disabled={loading || done}
+      className={`mt-3 flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
+        done ? "bg-green-100 text-green-700 border border-green-200"
+             : "bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
+      }`}
+    >
+      <FileSpreadsheet size={15} />
+      {loading ? "Đang tạo file..." : done ? "Đã tải xuống" : "Tải file template Excel"}
+    </button>
+  )
 }
 
 const QUICK = [
@@ -540,6 +649,11 @@ export default function ChatbotPage() {
                         )}
                       </div>
                     )}
+                    {/* Template download button for tao-template agent */}
+                    {msg.role === "assistant" && msg.agent?.id === "tao-template" && !streaming && (() => {
+                      const action = extractTemplateAction(msg.content)
+                      return action ? <TemplateDownloadButton key={i} action={action} /> : null
+                    })()}
                   </div>
                 </div>
                 {msg.role === "user" && (

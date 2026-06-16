@@ -635,6 +635,72 @@ function fmtWMData(p: WMProduct): string {
   return `${p.data_gb}GB${p.is_daily ? "/day" : ""}`
 }
 
+// ─── 3HK types & helpers ──────────────────────────────────────────────────────
+
+interface ThreeHKZone {
+  zone:             string
+  country:          string
+  network?:         string
+  price_per_gb_hkd: number
+  is_kyc?:          boolean
+}
+
+interface ZoneGroup {
+  zone:        string
+  countries:   string[]
+  price_per_gb: number
+}
+
+interface ThreeHKCombo {
+  combo_type:       "daily" | "fixed" | "unlimited"
+  data_gb:          number | null
+  days:             number
+  throttle_mbps:    number | null
+  data_policy_code: string
+  vendor_sku:       string
+  cogs_usd:         number
+  cogs_vnd:         number
+}
+
+const DAILY_DATA_OPTIONS = [1, 2, 3]
+const FIXED_DATA_OPTIONS = [5, 10, 20]
+const DAY_OPTIONS        = [3, 5, 7, 10, 15, 30]
+
+function get3HKDataPolicyCode(
+  combo_type: "daily" | "fixed" | "unlimited",
+  throttle_mbps: number | null
+): string {
+  if (combo_type === "fixed")     return "F"
+  if (combo_type === "daily")     return "P"
+  if (combo_type === "unlimited") return throttle_mbps === 10 ? "B" : "A"
+  return "P"
+}
+
+function compute3HKCogs(
+  combo_type:       "daily" | "fixed" | "unlimited",
+  data_gb:          number | null,
+  days:             number,
+  throttle_mbps:    number | null,
+  price_per_gb_hkd: number,
+  fx_hkd_usd:       number,
+  fx_usd_vnd:       number
+): { cogs_usd: number; cogs_vnd: number } {
+  let cogs_hkd: number
+  if (combo_type === "fixed") {
+    cogs_hkd = (data_gb ?? 0) * price_per_gb_hkd * 0.55
+  } else if (combo_type === "daily") {
+    cogs_hkd = (data_gb ?? 0) * days * price_per_gb_hkd * 0.40
+  } else {
+    const daily_util = throttle_mbps === 10 ? 1.8 : 1.6
+    cogs_hkd = daily_util * days * price_per_gb_hkd * 0.40
+  }
+  const cogs_usd = Math.ceil(cogs_hkd * fx_hkd_usd * 100) / 100
+  const cogs_vnd = Math.ceil(cogs_usd * fx_usd_vnd)
+  return { cogs_usd, cogs_vnd }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const WM_PAGE_SIZE = 50
 
 function TemplateTab({ onNotify }: {
@@ -653,10 +719,20 @@ function TemplateTab({ onNotify }: {
   const [searchQ, setSearchQ]       = useState("")
   const [filterSim, setFilterSim]   = useState("")
   const [filterUnlim, setFilterUnlim] = useState("")
-  const [fxSettings, setFxSettings] = useState({ fx_usd_vnd: 26394, fx_twd_usd: 0.03165 })
+  const [fxSettings, setFxSettings] = useState({ fx_usd_vnd: 26394, fx_twd_usd: 0.03165, fx_hkd_usd: 0.1282 })
   const [previewRows, setPreviewRows] = useState<{ us: PreviewRow[]; vn: PreviewRow[]; pcUS: string; pcVN: string } | null>(null)
   const [previewTab, setPreviewTab]   = useState<"us" | "vn" | "prod">("us")
   const previewRef = useRef<HTMLDivElement>(null)
+
+  // 3HK state
+  const [zoneGroups,       setZoneGroups]       = useState<ZoneGroup[]>([])
+  const [loadingZones,     setLoadingZones]      = useState(false)
+  const [selectedZone,     setSelectedZone]      = useState<ZoneGroup | null>(null)
+  const [dailyGB,          setDailyGB]           = useState<Set<number>>(new Set([1, 2, 3]))
+  const [fixedGB,          setFixedGB]           = useState<Set<number>>(new Set([5, 10, 20]))
+  const [unlimitedEnabled, setUnlimitedEnabled]  = useState(true)
+  const [selectedDays,     setSelectedDays]      = useState<Set<number>>(new Set([3, 5, 7, 10, 15, 30]))
+  const [unlimThrottle,    setUnlimThrottle]     = useState<10 | 5>(5)
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -665,9 +741,11 @@ function TemplateTab({ onNotify }: {
         const rows: AppSetting[] = d.settings ?? []
         const usd_vnd = rows.find(s => s.key === "fx.usd_vnd")
         const twd_usd = rows.find(s => s.key === "fx.twd_usd")
+        const hkd_usd = rows.find(s => s.key === "fx.hkd_usd")
         setFxSettings({
           fx_usd_vnd: usd_vnd ? parseFloat(usd_vnd.value) : 26394,
           fx_twd_usd: twd_usd ? parseFloat(twd_usd.value) : 0.03165,
+          fx_hkd_usd: hkd_usd ? parseFloat(hkd_usd.value) : 0.1282,
         })
       })
   }, [])
@@ -678,7 +756,7 @@ function TemplateTab({ onNotify }: {
     const params = new URLSearchParams({ page: String(pg), gap: "not_in_system" })
     if (searchQ)      params.set("search",       searchQ)
     if (filterSim)    params.set("sim_type",      filterSim)
-    if (filterUnlim)  params.set("is_unlimited",  filterUnlim)
+    if (filterUnlim)  params.set("data_type", filterUnlim)
     const res = await fetch(`/api/ncc/worldmove?${params}`)
     const d   = await res.json()
     setProducts(d.data ?? [])
@@ -687,6 +765,26 @@ function TemplateTab({ onNotify }: {
   }, [searchQ, filterSim, filterUnlim])
 
   useEffect(() => { fetchProducts(page) }, [page]) // eslint-disable-line
+
+  // Fetch 3HK zones khi switch sang 3H
+  useEffect(() => {
+    if (selectedNCC !== "3H" || zoneGroups.length > 0) return
+    setLoadingZones(true)
+    fetch("/api/ncc/3hk-zones")
+      .then(r => r.json())
+      .then(d => {
+        const raw: ThreeHKZone[] = d.data ?? []
+        const map = new Map<string, ZoneGroup>()
+        for (const z of raw) {
+          if (!map.has(z.zone))
+            map.set(z.zone, { zone: z.zone, countries: [], price_per_gb: z.price_per_gb_hkd })
+          map.get(z.zone)!.countries.push(z.country)
+        }
+        setZoneGroups(Array.from(map.values()))
+      })
+      .catch(() => {})
+      .finally(() => setLoadingZones(false))
+  }, [selectedNCC]) // eslint-disable-line
 
   const doSearch = () => { setPage(1); fetchProducts(1) }
 
@@ -767,18 +865,117 @@ function TemplateTab({ onNotify }: {
     setTimeout(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80)
   }
 
+  // ─── 3HK helpers ──────────────────────────────────────────────────────────
+
+  function build3HKCombos(): ThreeHKCombo[] {
+    if (!selectedZone) return []
+    const { fx_hkd_usd, fx_usd_vnd } = fxSettings
+    const sortedDays = Array.from(selectedDays).sort((a, b) => a - b)
+    const combos: ThreeHKCombo[] = []
+
+    for (const gb of Array.from(dailyGB).sort((a, b) => a - b)) {
+      for (const d of sortedDays) {
+        const dp = get3HKDataPolicyCode("daily", null)
+        const { cogs_usd, cogs_vnd } = compute3HKCogs("daily", gb, d, null, selectedZone.price_per_gb, fx_hkd_usd, fx_usd_vnd)
+        combos.push({ combo_type: "daily", data_gb: gb, days: d, throttle_mbps: null, data_policy_code: dp, vendor_sku: `3HK-${selectedZone.zone}-D${gb}GB-${d}D`, cogs_usd, cogs_vnd })
+      }
+    }
+    for (const gb of Array.from(fixedGB).sort((a, b) => a - b)) {
+      for (const d of sortedDays) {
+        const dp = get3HKDataPolicyCode("fixed", null)
+        const { cogs_usd, cogs_vnd } = compute3HKCogs("fixed", gb, d, null, selectedZone.price_per_gb, fx_hkd_usd, fx_usd_vnd)
+        combos.push({ combo_type: "fixed", data_gb: gb, days: d, throttle_mbps: null, data_policy_code: dp, vendor_sku: `3HK-${selectedZone.zone}-F${gb}GB-${d}D`, cogs_usd, cogs_vnd })
+      }
+    }
+    if (unlimitedEnabled) {
+      for (const d of sortedDays) {
+        const dp = get3HKDataPolicyCode("unlimited", unlimThrottle)
+        const { cogs_usd, cogs_vnd } = compute3HKCogs("unlimited", null, d, unlimThrottle, selectedZone.price_per_gb, fx_hkd_usd, fx_usd_vnd)
+        combos.push({ combo_type: "unlimited", data_gb: null, days: d, throttle_mbps: unlimThrottle, data_policy_code: dp, vendor_sku: `3HK-${selectedZone.zone}-UNL${unlimThrottle}M-${d}D`, cogs_usd, cogs_vnd })
+      }
+    }
+    return combos
+  }
+
+  function build3HKPreview() {
+    if (!selectedZone)              { onNotify("error", "Chưa chọn zone"); return }
+    if (!config.supportCountryCode) { onNotify("error", "Nhập Country Code (3 ký tự)"); return }
+    if (dailyGB.size === 0 && fixedGB.size === 0 && !unlimitedEnabled) { onNotify("error", "Chưa chọn loại data"); return }
+    if (selectedDays.size === 0)    { onNotify("error", "Chưa chọn số ngày"); return }
+
+    const combos = build3HKCombos()
+    const typeOfSim = config.typeOfSim || "eSIM"
+    const vnName = config.countryNameVn
+    const enName = config.countryNameEn
+
+    const toRow = (c: ThreeHKCombo, tenant: "US" | "VN"): PreviewRow => {
+      const pc = (tenant === "US" ? config.purchaseType_US : config.purchaseType_VN)
+        + config.productType + config.supportCountryCode + "3D" + c.data_policy_code
+      const suffix = _dataAmountCode(c.data_gb, c.combo_type === "unlimited") + _zeroPad(c.days, 2)
+      const dStr   = _zeroPad(c.days, 2)
+      const nameVn = c.combo_type === "unlimited" ? `${typeOfSim} ${vnName} Unlimited ${dStr} Ngày`
+                   : c.combo_type === "daily"     ? `${typeOfSim} ${vnName} ${c.data_gb}GB/Ngày ${dStr} Ngày`
+                   :                                `${typeOfSim} ${vnName} ${c.data_gb}GB ${dStr} Ngày`
+      const nameEn = c.combo_type === "unlimited" ? `${typeOfSim} ${enName} Unlimited ${dStr} Days`
+                   : c.combo_type === "daily"     ? `${typeOfSim} ${enName} ${c.data_gb}GB/Day ${dStr} Days`
+                   :                                `${typeOfSim} ${enName} ${c.data_gb}GB ${dStr} Days`
+      const pcUS = config.purchaseType_US + config.productType + config.supportCountryCode + "3D" + c.data_policy_code
+      return {
+        sku:        pc + suffix,
+        name_vn:    nameVn,
+        name_en:    nameEn,
+        cogs:       tenant === "US" ? c.cogs_usd.toLocaleString() : c.cogs_vnd.toLocaleString(),
+        currency:   tenant === "US" ? "USD" : "VND",
+        throttle:   c.throttle_mbps ? `${c.throttle_mbps} Mbps` : "",
+        days:       c.days,
+        data:       c.combo_type === "unlimited" ? "UNL" : c.combo_type === "daily" ? `${c.data_gb}GB/ngày` : `${c.data_gb}GB`,
+        vendor_sku: tenant === "VN" ? pcUS + suffix : c.vendor_sku,
+      }
+    }
+
+    setPreviewRows({
+      us:  combos.map(c => toRow(c, "US")),
+      vn:  combos.map(c => toRow(c, "VN")),
+      pcUS: `${config.purchaseType_US}${config.productType}${config.supportCountryCode}3D[F/P/A/B]`,
+      pcVN: `${config.purchaseType_VN}${config.productType}${config.supportCountryCode}3D[F/P/A/B]`,
+    })
+    setPreviewTab("us")
+    setTimeout(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80)
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   async function downloadExcel() {
-    if (selObjs.size === 0) { onNotify("error", "Chưa có sản phẩm để tải"); return }
     setGenerating(true)
     try {
-      const res = await fetch("/api/admin/template", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
+      let body: object
+      let successMsg: string
+
+      if (selectedNCC === "3H") {
+        const combos = build3HKCombos()
+        if (!combos.length) { onNotify("error", "Chưa có combo để tải"); setGenerating(false); return }
+        body = {
+          vendor:          "3HK",
+          threeHKProducts: combos,
+          config:          { ...config, vendorCode: "3D", operatorCode: "3HK" },
+          settings:        fxSettings,
+        }
+        successMsg = `Đã tải template 3HK ${combos.length} combo`
+      } else {
+        if (selObjs.size === 0) { onNotify("error", "Chưa có sản phẩm để tải"); setGenerating(false); return }
+        body = {
+          vendor:   "WM",
           products: [...selObjs.values()],
           config:   { ...config },
           settings: fxSettings,
-        }),
+        }
+        successMsg = `Đã tải template ${selObjs.size} sản phẩm`
+      }
+
+      const res = await fetch("/api/admin/template", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -789,10 +986,10 @@ function TemplateTab({ onNotify }: {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")
       a.href     = url
-      a.download = `template_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.xlsx`
+      a.download = `template_${selectedNCC}_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-      onNotify("success", `Đã tải template ${selObjs.size} sản phẩm`)
+      onNotify("success", successMsg)
     } catch {
       onNotify("error", "Hiếu đang fix, vui lòng đợi")
     } finally {
@@ -831,7 +1028,7 @@ function TemplateTab({ onNotify }: {
           <span className="text-sm font-semibold text-gray-700">Nhà cung cấp (NCC):</span>
           {[
             { code: "WM",  name: "WORLDMOVE",      available: true  },
-            { code: "3H",  name: "3HK",             available: false },
+            { code: "3H",  name: "3HK",             available: true  },
             { code: "BC",  name: "BILLIONCONNECT",  available: false },
             { code: "SS",  name: "SIMSTORE",        available: false },
           ].map(ncc => (
@@ -853,7 +1050,51 @@ function TemplateTab({ onNotify }: {
         </div>
       </div>
 
-      {/* ─── Step 1: Chọn sản phẩm ─────────────────────────────── */}
+      {/* ─── Step 1: 3HK — Chọn zone ──────────────────────────── */}
+      {selectedNCC === "3H" && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">1. Chọn Zone 3HK</h3>
+          {loadingZones ? (
+            <p className="text-sm text-gray-400">Đang tải zones...</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-100">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+                    <th className="px-3 py-2 w-8" />
+                    <th className="px-3 py-2">Zone</th>
+                    <th className="px-3 py-2">Nước cover</th>
+                    <th className="px-3 py-2 text-right">Giá/GB (HKD)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {zoneGroups.map(z => (
+                    <tr key={z.zone}
+                      className={`cursor-pointer hover:bg-gray-50 transition-colors ${selectedZone?.zone === z.zone ? "bg-brand-50" : ""}`}
+                      onClick={() => setSelectedZone(z)}
+                    >
+                      <td className="px-3 py-2">
+                        <input type="radio" readOnly checked={selectedZone?.zone === z.zone} />
+                      </td>
+                      <td className="px-3 py-2 font-mono font-bold text-brand-700">{z.zone}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600">{z.countries.slice(0, 8).join(", ")}{z.countries.length > 8 ? ` +${z.countries.length - 8}` : ""}</td>
+                      <td className="px-3 py-2 text-right font-mono">{z.price_per_gb}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {selectedZone && (
+            <p className="text-xs text-brand-600 font-medium">
+              Zone <strong>{selectedZone.zone}</strong> đã chọn · {selectedZone.countries.length} nước · {selectedZone.price_per_gb} HKD/GB
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ─── Step 1: WM — Chọn sản phẩm ────────────────────────── */}
+      {selectedNCC === "WM" && (
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
@@ -886,8 +1127,8 @@ function TemplateTab({ onNotify }: {
           <select value={filterUnlim} onChange={e => { setFilterUnlim(e.target.value); setPage(1) }}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
             <option value="">Tất cả gói</option>
-            <option value="true">Unlimited</option>
-            <option value="false">Fixed</option>
+            <option value="unlimited">Unlimited</option>
+            <option value="fixed">Fixed</option>
           </select>
           <button onClick={doSearch}
             className="px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors">
@@ -962,8 +1203,94 @@ function TemplateTab({ onNotify }: {
           )}
         </div>
       </div>
+      )} {/* end WM Step 1 */}
 
-      {/* ─── Step 2: Cấu hình ──────────────────────────────────── */}
+      {/* ─── Step 2: 3HK — Combo builder ──────────────────────── */}
+      {selectedNCC === "3H" && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">2. Cấu hình Combo 3HK</h3>
+
+          {/* Country config */}
+          <div>
+            <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wide mb-2">Thông tin nước / pháp nhân</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-3 bg-brand-50/40 border border-brand-100 rounded-lg">
+              <TemplField label="Purchase Type US *" value={config.purchaseType_US} onChange={v => setC("purchaseType_US", v)} placeholder="D" />
+              <TemplField label="Purchase Type VN *" value={config.purchaseType_VN} onChange={v => setC("purchaseType_VN", v)} placeholder="3" />
+              <TemplField label="Country Code (3 ký tự) *" value={config.supportCountryCode} onChange={v => setC("supportCountryCode", v)} placeholder="JPN" />
+              <TemplField label="Tên nước (VN)" value={config.countryNameVn} onChange={v => setC("countryNameVn", v)} placeholder="Nhật Bản" />
+              <TemplField label="Tên nước (EN)" value={config.countryNameEn} onChange={v => setC("countryNameEn", v)} placeholder="Japan" />
+              <TemplField label="ISO Codes" value={config.isoCodes} onChange={v => setC("isoCodes", v)} placeholder="JP" />
+            </div>
+          </div>
+
+          {/* Data types */}
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Loại data</p>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-sm font-medium text-gray-700 w-20">Daily</span>
+                {DAILY_DATA_OPTIONS.map(gb => (
+                  <label key={gb} className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={dailyGB.has(gb)}
+                      onChange={() => setDailyGB(prev => { const s = new Set(prev); s.has(gb) ? s.delete(gb) : s.add(gb); return s })} />
+                    <span className="text-sm text-gray-700">{gb}GB/ngày</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-sm font-medium text-gray-700 w-20">Fixed</span>
+                {FIXED_DATA_OPTIONS.map(gb => (
+                  <label key={gb} className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={fixedGB.has(gb)}
+                      onChange={() => setFixedGB(prev => { const s = new Set(prev); s.has(gb) ? s.delete(gb) : s.add(gb); return s })} />
+                    <span className="text-sm text-gray-700">{gb}GB</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={unlimitedEnabled} onChange={e => setUnlimitedEnabled(e.target.checked)} />
+                  <span className="text-sm font-medium text-gray-700 w-20">Unlimited</span>
+                </label>
+                {unlimitedEnabled && (
+                  <div className="flex items-center gap-3 ml-2">
+                    <span className="text-xs text-gray-500">Throttle:</span>
+                    {([10, 5] as const).map(m => (
+                      <label key={m} className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="radio" checked={unlimThrottle === m} onChange={() => setUnlimThrottle(m)} />
+                        <span className="text-sm text-gray-700">{m} Mbps</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Days */}
+          <div>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Số ngày</p>
+            <div className="flex flex-wrap gap-4">
+              {DAY_OPTIONS.map(d => (
+                <label key={d} className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={selectedDays.has(d)}
+                    onChange={() => setSelectedDays(prev => { const s = new Set(prev); s.has(d) ? s.delete(d) : s.add(d); return s })} />
+                  <span className="text-sm text-gray-700">{d} ngày</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {selectedZone && (
+            <p className="text-xs text-gray-400 pt-1">
+              Zone {selectedZone.zone} · {selectedZone.price_per_gb} HKD/GB · 1 HKD = {fxSettings.fx_hkd_usd} USD · 1 USD = {fxSettings.fx_usd_vnd} VND
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ─── Step 2: WM — Cấu hình ─────────────────────────────── */}
+      {selectedNCC === "WM" && (
       <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">2. Cấu hình Template</h3>
@@ -1040,15 +1367,22 @@ function TemplateTab({ onNotify }: {
           &nbsp;(từ tab Cài đặt)
         </div>
       </div>
+      )} {/* end WM Step 2 */}
 
       {/* ─── Step 3: Xem trước ─────────────────────────────────── */}
       <button
-        onClick={buildPreview}
-        disabled={selected.size === 0}
+        onClick={selectedNCC === "3H" ? build3HKPreview : buildPreview}
+        disabled={
+          selectedNCC === "3H"
+            ? !selectedZone || selectedDays.size === 0
+            : selected.size === 0
+        }
         className="flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
       >
         <FileSpreadsheet size={16} />
-        {selected.size === 0 ? "Xem trước (chưa chọn SP)" : `3. Xem trước ${selected.size} sản phẩm`}
+        {selectedNCC === "3H"
+          ? (!selectedZone ? "Xem trước (chưa chọn zone)" : `3. Xem trước combos`)
+          : (selected.size === 0 ? "Xem trước (chưa chọn SP)" : `3. Xem trước ${selected.size} sản phẩm`)}
       </button>
 
       {/* ─── Step 4: Preview panel ─────────────────────────────── */}

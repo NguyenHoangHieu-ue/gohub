@@ -376,10 +376,11 @@ export function extractParams(message: string): ExtractedParams {
 // ─── Rule-based router ────────────────────────────────────────────────────────
 
 const AGENT_NAMES: Record<AgentId, string> = {
-  "tu-van":       "Tư Vấn",
-  "tra-cuu":      "Tra Cứu",
-  "giai-dap":     "Giải Đáp",
-  "gap-analysis": "Gap Analysis",
+  "tu-van":        "Tư Vấn",
+  "tra-cuu":       "Tra Cứu",
+  "giai-dap":      "Giải Đáp",
+  "gap-analysis":  "Gap Analysis",
+  "tao-template":  "Tạo Template",
 }
 
 function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
@@ -388,6 +389,10 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   // Direct code lookup (single hoặc multiple)
   if (params.skuCodes?.length || params.productCodes?.length) return "tra-cuu"
   if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
+
+  // Template creation
+  if (/t[aạ]o template|t[aạ]o file|xu[aấ]t template|template wm|template 3hk|t[aạ]i template|generate template/.test(m))
+    return "tao-template"
 
   // Gap analysis
   if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))
