@@ -1,5 +1,42 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-16 (session 57)
+Cập nhật lần cuối: 2026-06-17 (session 58)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
+    MERGE gohub-intel vào GoHub PM
+    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 🔜
+    Plan đầy đủ: docs/MERGE_PLAN.md
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 58 (2026-06-17) — Sidebar grouping + Analytics performance (commit 74c3e1d)
+
+### Sidebar: nhóm Sản Phẩm collapsible
+- SP Hệ Thống + SP Vendor + Thông tin → nhóm "Sản Phẩm" (click mở/đóng)
+- GoHub AI + Khuyến Mãi + Kiến Thức vẫn ở trên (luôn hiển thị)
+- Collapsed mode: icon Package là trigger toggle
+- File: `web/src/components/sidebar.tsx`
+  - NAV_MAIN (3 tabs trên) + NAV_PRODUCTS (3 tabs gom nhóm) + NAV_ALL (giữ cho permission logic)
+  - State `productOpen` (default false = thu gọn)
+
+### Performance Analytics (3 lớp)
+
+**Lớp 1: Server-side in-memory cache (analytics-helpers.ts)**
+- `cachedQuery(key, fn)`: cache Map 5 phút TTL, auto-evict khi > 200 entries
+- Lần đầu → query gohub_dw; lần sau cùng params → trả từ cache ngay
+- Applied: kpis, revenue-chart, region-chart, performance-source, performance-channel, recent-orders
+
+**Lớp 2: Browser + CDN cache**
+- `CACHE_HEADERS = "s-maxage=300, stale-while-revalidate=600"`
+- Tất cả 13+ analytics API routes trả header này
+- Browser cache 5 phút → F5 không query lại server
+
+**Lớp 3: Priority loading trên client**
+- Dashboard: Phase1 KPI+tiers (~1-2s, setIsLoading=false sớm) → Phase2 charts+tables → Phase3 strategic+recent
+- BOD: summary first → report+group+channel sau
+- B2B/B2C/Channel: KPIs first → trend+performance sau
+- Kết quả: cards hiện ngay ~1-2s, full page ~3-4s (trước: chờ ~8-10s)
+
+---
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
