@@ -1,5 +1,55 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-16 (session 55)
+Cập nhật lần cuối: 2026-06-16 (session 56)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
+    MERGE gohub-intel vào GoHub PM
+    Plan đầy đủ: docs/MERGE_PLAN.md
+    Phase 1 ✅ DONE — Phase 2 ✅ DONE — Tiếp theo: Phase 3
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 56 (2026-06-16) — Phase 2 Core Analytics (commit bcf51ec)
+
+### APIs tạo mới (20 Next.js API routes từ 80+ Express endpoints gohub-intel)
+- `web/src/lib/analytics-helpers.ts`: shared SQL helpers (getDateFilter, getPrevDateFilter, getAnalyticsSource, getGroupCaseSQL, getStrategicPartnersList, getSkuDestinationRule, getTargetSummary)
+- `/api/config/partner-tiers`: GET/POST strategic partners từ Supabase app_settings
+- `/api/analytics/kpis`: KPI cards (revenue, orders, AOV, units) với MoM comparison
+- `/api/analytics/revenue-chart`: Line chart B2B-Strategic / B2B-Non-Strategic / B2C / Other
+- `/api/analytics/region-chart`: Bar chart Top Destinations by revenue
+- `/api/analytics/performance-source`: B2B/B2C breakdown với MoM
+- `/api/analytics/performance-channel`: Per-channel breakdown với business_group
+- `/api/analytics/recent-orders`: 10 đơn gần nhất
+- `/api/analytics/targets-summary`: Progress vs target (từ Supabase target_planning)
+- `/api/analytics/b2b/{kpis,trend,performance,strategic-performance}`: B2B full suite
+- `/api/analytics/b2c/{kpis,trend,performance}`: B2C full suite
+- `/api/analytics/channels/{kpis,trend,performance}`: Channel full suite
+- `/api/analytics/{bod-summary,bod-report,bod-group-margin,bod-channel-performance}`: BOD full suite
+
+### Pages cập nhật (5 trang)
+- `analytics/page.tsx`: Full Dashboard — KPI cards, projection pro-rata, target progress, revenue line chart, region bar chart, B2B/B2C tables with Strategic breakdown
+- `analytics/bod/page.tsx`: BOD Report — summary cards, target progress, projection, trend ComposedChart, group margin table, channel perf grouped
+- `analytics/b2b/page.tsx`: B2B Performance — KPIs, Strategic Partners panel, trend LineChart, channel/vendor perf table
+- `analytics/b2c/page.tsx`: B2C Performance — KPIs (5 cards), trend AreaChart, top5 BarChart, perf table với share %
+- `analytics/channels/page.tsx`: Channel Performance — KPIs, trend AreaChart, B2B/B2C grouped channel table
+
+### Sidebar reorganization
+- `components/sidebar.tsx`: ANALYTICS_NAV flat → ANALYTICS_GROUPS 4 nhóm:
+  - **Tổng Quan**: Dashboard, BOD Report
+  - **Doanh Thu**: Kênh bán, B2B, B2C
+  - **Vận Hành**: Đơn hàng, Nhân viên, Fulfillment, CS Troubleshoot
+  - **Phân Tích**: Sản phẩm BI, KPI/Target
+
+### Pending — bạn cần làm để data hiện thị:
+1. **Vercel env vars** (nếu chưa set từ Phase 1): ANALYTICS_DB_HOST=34.61.204.98, ANALYTICS_DB_PORT=5432, ANALYTICS_DB_NAME=gohub_dw, ANALYTICS_DB_USER=gohub_dw_user, ANALYTICS_DB_PASSWORD=...
+2. **Test**: GET /api/analytics/health → `{"status":"ok"}`
+3. **(Optional)**: Upsert Supabase app_settings key=`partner_tiers` value=`{"Strategic":["Klook","Traveloka",...]}` để Strategic Partners hiện đúng
+
+### Chưa port (defer Phase 4/5)
+- CostManagementModal (channel costs, GPM2 chính xác)
+- PDF export (jsPDF, modern-screenshot)
+- AllTimeReport, WebsiteAnalytics, VendorPerformance, CustomerPerformance, StaffPerformance
+
+---
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
