@@ -1,5 +1,38 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-16 (session 56)
+Cập nhật lần cuối: 2026-06-16 (session 57)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
+    MERGE gohub-intel vào GoHub PM
+    Plan đầy đủ: docs/MERGE_PLAN.md
+    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ — Tiếp theo: Phase 4
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 57 (2026-06-16) — Phase 3 Merge AI Agent (commit ec1cd47)
+
+### Đã làm
+- `types.ts`: thêm 'bi-analyst' vào AgentId
+- `agents.ts`: bi-analyst system prompt — biết gohub_dw schema, business rules, chart format
+  - Schema: fact_fulfillment_revenue, fact_sales_revenue, dim_order_source, dim_sku, dim_staff, dim_location
+  - Business rules: B2B/B2C grouping, no double-counting, Strategic Partners
+  - Chart format: ```chart JSON block → ChatChart
+- `router.ts`: BI routing rules (doanh thu, đơn hàng, kênh bán, target, B2B/B2C, fulfillment, margin, GPM2...)
+- `classifier.ts`: thêm 'bi_analytics' IntentType → bi-analyst
+- `chat/route.ts`: bi-analyst dùng Gemini function calling
+  - executeSQL tool → queryAnalytics() trên gohub_dw
+  - Function call loop max 8 iterations
+  - Security: chỉ SELECT/WITH, không multi-statement
+  - Non-streaming (function calling) → stream text kết quả
+- `/api/analytics/schema`: trả gohub_dw schema (cached 1h)
+- `chat-chart.tsx`: ChatChart component (bar/line/pie) với recharts
+- `chatbot/page.tsx`: render ```chart blocks → ChatChart, bi-analyst color (indigo), quick prompts BI
+
+### Cách dùng
+- Trong chatbot, hỏi ví dụ: "Doanh thu tháng này bao nhiêu?"
+- AI sẽ tự generate SQL → query gohub_dw → trả lời
+- Nếu hỏi "vẽ biểu đồ doanh thu theo ngày" → AI trả về chart JSON → hiện biểu đồ
+
+---
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
