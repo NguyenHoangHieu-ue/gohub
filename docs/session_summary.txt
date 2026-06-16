@@ -1,5 +1,65 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-15 (session 54)
+Cập nhật lần cuối: 2026-06-16 (session 55)
+
+## Session 55 (2026-06-16) — 3HK Template + Chatbot NCC + Agent tao-template (commit 1bbbfe1)
+
+### 1. Template WM fix + 3HK mới
+
+**WM fix (minor bug):**
+- Filter "Unlimited/Fixed" trong TemplateTab gửi sai param `is_unlimited` → đổi thành `data_type=unlimited/fixed`
+- Fix dropdown option values: `"true"/"false"` → `"unlimited"/"fixed"`
+
+**3HK Template (full build):**
+- Enable 3HK trong NCC selector (available: true)
+- Step 1: Chọn zone từ bảng `ncc_3hk` (zone, countries, giá HKD/GB)
+- Step 2: Combo builder — chọn Daily (1/2/3 GB/ngày) + Fixed (5/10/20 GB) + Unlimited; chọn ngày (3/5/7/10/15/30); throttle cho Unlimited (10/5 Mbps)
+- COGS formula: Fixed×55%, Daily×40%, Unlimited 1.8/1.6 GB/day × 40% (tính theo HKD → USD → VND)
+- Preview giống WM (bảng SKU US/VN + Product row)
+- Download Excel: 6 sheets (Danh sách combo, Cấu trúc cogs, Template_SKU_US, Template_SKU_VN, Template_Product_US, Template_Product_VN)
+- vendor_code = "3D" (3HK Datapool), data_policy_code tự động (Fixed=F, Daily=P, Unlimited 10M=B, 5M=A)
+
+**Files thay đổi:**
+- `web/src/app/(dashboard)/admin/page.tsx`: ThreeHKZone/ZoneGroup/ThreeHKCombo interfaces, helpers, 3HK state, zones fetch, UI Steps 1+2, build3HKPreview, build3HKCombos, download
+- `web/src/app/api/admin/template/route.ts`: ThreeHKProduct interface, generate3HKTemplate() function, POST handler branch vendor="3HK"
+
+### 2. Chatbot NCC awareness (Feature 2)
+
+**tu-van context — inject NCC summary khi có country:**
+- Sau GoHub SKU search, inject thêm: WM total/in-system/not-yet + 3HK zones cho nước đó
+- context.ts: gọi searchNccWm() + searchNcc3hk() sau SKU section
+- agents.ts tu-van prompt: hướng dẫn dùng NCC context, trả lời cả GoHub + NCC khi không rõ
+
+**gap-analysis multi-turn:**
+- System prompt: đọc history chat trước khi hỏi lại, chỉ hỏi khi thực sự không đủ thông tin
+
+### 3. Agent tao-template (Feature 3)
+
+**New agent `tao-template`** (admin/manager only):
+- Router rule: "tạo template / xuất template / tạo file" → tao-template
+- Context: inject WM products + 3HK zones cho country trong câu hỏi
+- System prompt: thu thập info theo thứ tự, xuất JSON action block khi đủ
+- JSON format: `{"action":"generate_template","vendor":"WM","config":{...},"filters":{...}}`
+
+**Chatbot UI — TemplateDownloadButton:**
+- `chatbot/page.tsx`: detect JSON block trong response `tao-template`
+- TemplateDownloadButton component: fetch products → POST /api/admin/template → download Excel
+- Hỗ trợ cả WM (fetch /api/ncc/worldmove) và 3HK (compute combos client-side)
+
+**Files thay đổi:**
+- `web/src/lib/agents/types.ts`: thêm 'tao-template' vào AgentId
+- `web/src/lib/agents/agents.ts`: AGENTS.tao-template, cập nhật gap-analysis prompt
+- `web/src/lib/agents/router.ts`: routing rule + AGENT_NAMES entry
+- `web/src/lib/agents/classifier.ts`: IntentType template_create, INTENT_TO_AGENT mapping
+- `web/src/lib/agents/context.ts`: import searchNccWm/searchNcc3hk, tao-template context builder
+- `web/src/app/(dashboard)/chatbot/page.tsx`: FileSpreadsheet icon, tao-template color, extractTemplateAction(), TemplateDownloadButton, render button in message
+
+### Test plan
+1. Admin → Tạo template → Chọn WM → Chọn 3 gói Nhật → Auto-fill → Preview → Tải Excel → Mở Excel kiểm tra 6 sheets
+2. Admin → Tạo template → Chọn 3HK → Chọn Zone A → Chọn combo Daily+Fixed 7/30 ngày → Preview → Tải Excel
+3. Chatbot: "Japan có gói nào?" → xem GoHub SKUs + WM/3HK summary bên dưới
+4. Chatbot: "tạo template Japan WM" → agent hỏi country code → trả lời "JPN" → xuất JSON → click "Tải file template Excel"
+
+---
 
 ## Session 54 — tiếp 3 (2026-06-15) — 3HK FUP pricing formula (commits ea81e58, fc1acb2)
 
