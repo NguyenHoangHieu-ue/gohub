@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
@@ -16,6 +16,23 @@ const NAV_ALL = [
   { href: "/ncc",        label: "SP Vendor",     icon: Truck,    key: "ncc"        },
   { href: "/countries",  label: "Thông tin",     icon: Globe,    key: "countries"  },
 ]
+
+// Analytics section — chỉ admin / manager / bod / staff
+const ANALYTICS_NAV = [
+  { href: "/analytics",              label: "Dashboard",       icon: LayoutDashboard },
+  { href: "/analytics/bod",          label: "BOD Report",      icon: PieChart        },
+  { href: "/analytics/channels",     label: "Kênh bán",        icon: Globe2          },
+  { href: "/analytics/b2b",          label: "B2B",             icon: Building2       },
+  { href: "/analytics/b2c",          label: "B2C",             icon: ShoppingBag     },
+  { href: "/analytics/orders",       label: "Đơn hàng",        icon: ClipboardList   },
+  { href: "/analytics/staff",        label: "Nhân viên",       icon: Users           },
+  { href: "/analytics/products",     label: "Sản phẩm (BI)",   icon: BarChart3       },
+  { href: "/analytics/targets",      label: "KPI / Target",    icon: Target          },
+  { href: "/analytics/fulfillment",  label: "Fulfillment",     icon: Zap             },
+  { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse   },
+]
+
+const ANALYTICS_ROLES = new Set(["admin", "manager", "bod", "staff"])
 
 // Tab mặc định standard user không cần department
 const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
@@ -56,12 +73,16 @@ function useDeptTabs(role: string, department: string) {
 function roleBadgeClass(role: string) {
   if (role === "admin")   return "bg-amber-100 text-amber-700"
   if (role === "manager") return "bg-purple-100 text-purple-700"
+  if (role === "bod")     return "bg-blue-100 text-blue-700"
+  if (role === "staff")   return "bg-teal-100 text-teal-700"
   return "bg-green-100 text-green-700"
 }
 
 function roleLabel(role: string) {
   if (role === "admin")   return "Admin"
   if (role === "manager") return "Manager"
+  if (role === "bod")     return "BOD"
+  if (role === "staff")   return "Staff"
   return "Standard"
 }
 
@@ -69,21 +90,28 @@ export function Sidebar() {
   const pathname  = usePathname()
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
+  const [analyticsOpen, setAnalyticsOpen] = useState(true)
 
   const role       = session?.user?.role     || "standard"
   const username   = session?.user?.username || ""
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const dbDept    = useMyDept(username)          // fetch từ DB, không cần re-login
+  const dbDept    = useMyDept(username)
   const department = dbDept ?? "none"
 
   const extraTabs = useDeptTabs(role, department)
 
+  const showAnalytics = ANALYTICS_ROLES.has(role)
+
   const navItems = (() => {
+    if (role === "bod" || role === "staff") {
+      // BOD/Staff: chỉ thấy chatbot + analytics (không thấy PM tabs)
+      return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }]
+    }
     if (role === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     if (role === "manager") return NAV_ALL
-    // standard: lọc tabs theo phòng ban (không phòng ban → chỉ 3 tab mặc định)
+    // standard: lọc tabs theo phòng ban
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
@@ -114,30 +142,79 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? "px-1.5" : "px-2.5"}`}>
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/")
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
-              className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
-                ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
-                ${active
-                  ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                }`}
-            >
-              <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-brand-500" : "text-gray-400"}`} />
-              {!collapsed && (
-                <>
-                  <span className="flex-1 whitespace-nowrap">{label}</span>
-                  {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
-                </>
-              )}
-            </Link>
-          )
-        })}
+
+        {/* PM tabs */}
+        {navItems.length > 0 && (
+          <>
+            {!collapsed && navItems.length > 1 && (
+              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quản Lý Sản Phẩm</p>
+            )}
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + "/")
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={collapsed ? label : undefined}
+                  className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
+                    ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
+                    ${active
+                      ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
+                >
+                  <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-brand-500" : "text-gray-400"}`} />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 whitespace-nowrap">{label}</span>
+                      {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
+                    </>
+                  )}
+                </Link>
+              )
+            })}
+          </>
+        )}
+
+        {/* Analytics section — admin / manager / bod / staff */}
+        {showAnalytics && (
+          <div className={`${navItems.length > 1 ? "pt-2 mt-1 border-t border-gray-100" : ""}`}>
+            {!collapsed && (
+              <button
+                onClick={() => setAnalyticsOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+              >
+                <span>Báo Cáo &amp; BI</span>
+                {analyticsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              </button>
+            )}
+            {(analyticsOpen || collapsed) && ANALYTICS_NAV.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + "/")
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={collapsed ? label : undefined}
+                  className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
+                    ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
+                    ${active
+                      ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
+                >
+                  <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-blue-500" : "text-gray-400"}`} />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 whitespace-nowrap">{label}</span>
+                      {active && <span className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0" />}
+                    </>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
         <div className={`pt-1 border-t border-gray-100 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
           <NotificationBell collapsed={collapsed} />
         </div>

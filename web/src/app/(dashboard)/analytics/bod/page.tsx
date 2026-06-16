@@ -1,0 +1,3 @@
+export default function Page() {
+  return <div className="p-6"><div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 text-sm text-blue-700">BOD Report — đang phát triển trong Phase 2.</div></div>
+}
