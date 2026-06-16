@@ -36,18 +36,20 @@ export default function B2BPerformancePage() {
 
   const fetchData = async () => {
     setLoading(true); setError(null)
+    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&comparisonType=${comparisonType}&granularity=${granularity}&groupBy=${groupBy}`
+    const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
     try {
-      const q = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&comparisonType=${comparisonType}&granularity=${granularity}&groupBy=${groupBy}`
-      const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
-      const [k, t, p, s] = await Promise.all([
-        fj(`/api/analytics/b2b/kpis${q}`),
+      // Phase 1: KPIs (show immediately)
+      const k = await fj(`/api/analytics/b2b/kpis${q}`)
+      setKpis(k); setLoading(false)
+      // Phase 2: charts + tables + strategic (parallel)
+      const [t, p, s] = await Promise.all([
         fj(`/api/analytics/b2b/trend${q}`),
         fj(`/api/analytics/b2b/performance${q}`),
         fj(`/api/analytics/b2b/strategic-performance${q}`).catch(() => []),
       ])
-      setKpis(k); setTrend(t); setPerf(p); setStrategic(s)
-    } catch (err: any) { setError(err.message) }
-    finally { setLoading(false) }
+      setTrend(t); setPerf(p); setStrategic(s)
+    } catch (err: any) { setError(err.message); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn, granularity, groupBy, comparisonType])

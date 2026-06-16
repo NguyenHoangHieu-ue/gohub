@@ -1,6 +1,30 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 
+// ── Server-side query cache (5 phút TTL, per serverless instance) ─────────────
+// Giúp tránh query lại gohub_dw khi cùng params được gọi nhiều lần
+
+const _cache = new Map<string, { data: unknown; exp: number }>()
+const CACHE_TTL = 5 * 60_000 // 5 minutes
+
+export async function cachedQuery<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const hit = _cache.get(key)
+  if (hit && Date.now() < hit.exp) return hit.data as T
+  const data = await fn()
+  _cache.set(key, { data, exp: Date.now() + CACHE_TTL })
+  // Prevent unbounded growth
+  if (_cache.size > 200) {
+    const now = Date.now()
+    for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
+  }
+  return data
+}
+
+// Cache-Control header value for API responses (browser + CDN cache 5 min)
+export const CACHE_HEADERS = {
+  "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+} as const
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 export function getDateFilter(

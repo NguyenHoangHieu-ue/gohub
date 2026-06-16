@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
   getStrategicPartnersList, getGroupCaseSQL, getTargetSummary
-} from "@/lib/analytics-helpers"
+, CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 async function fetchBODSummaryData(startDate: string, endDate: string, dateColumn = "fulfiled_date") {
   const source        = getAnalyticsSource(dateColumn)

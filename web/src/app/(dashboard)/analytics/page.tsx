@@ -107,47 +107,56 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     setIsLoading(true); setError(null)
+
+    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&companyCode=${companyCode}`
+    const fj = async (url: string) => {
+      const r = await fetch(url, { cache: "default" })
+      if (!r.ok) throw new Error(`${r.status}`)
+      return r.json()
+    }
+
     try {
-      const q = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&companyCode=${companyCode}`
-      const fetchJson = async (url: string) => {
-        const r = await fetch(url)
-        if (!r.ok) throw new Error(`${url}: ${r.status}`)
-        return r.json()
-      }
-
-      const [kpiData, revData, regData, perfSrc, perfChan, recent, targetData, tiersData, strategicData] = await Promise.all([
-        fetchJson(`/api/analytics/kpis${q}`),
-        fetchJson(`/api/analytics/revenue-chart${q}`),
-        fetchJson(`/api/analytics/region-chart${q}`),
-        fetchJson(`/api/analytics/performance-source${q}`),
-        fetchJson(`/api/analytics/performance-channel${q}`),
-        fetchJson(`/api/analytics/recent-orders?companyCode=${companyCode}`),
-        fetchJson(`/api/analytics/targets-summary?startDate=${startDate}&endDate=${endDate}`),
-        fetchJson(`/api/config/partner-tiers`),
-        fetchJson(`/api/analytics/b2b/strategic-performance${q}`),
+      // ── Phase 1: KPI cards (show first, ~1s) ─────────────────────────────
+      const [kpiData, tiersData] = await Promise.all([
+        fj(`/api/analytics/kpis${q}`),
+        fj(`/api/config/partner-tiers`),
       ])
-
       setKpis(kpiData)
+      setPartnerTiers(tiersData)
+      setIsLoading(false) // show KPI cards immediately
+
+      // ── Phase 2: Charts + tables (load in background) ────────────────────
+      const [revData, regData, perfSrc, perfChan, targetData] = await Promise.all([
+        fj(`/api/analytics/revenue-chart${q}`),
+        fj(`/api/analytics/region-chart${q}`),
+        fj(`/api/analytics/performance-source${q}`),
+        fj(`/api/analytics/performance-channel${q}`),
+        fj(`/api/analytics/targets-summary?startDate=${startDate}&endDate=${endDate}`).catch(() => null),
+      ])
       setRevenueData(revData)
       setRegionData(regData)
       setPerformanceSource(perfSrc)
       setPerformanceChannel(perfChan)
-      setRecentOrders(recent)
-      setTargetProgress(targetData)
-      setPartnerTiers(tiersData)
-      setStrategicPerformance(strategicData)
+      if (targetData) setTargetProgress(targetData)
 
-      // prev month KPIs for projection
+      // ── Phase 3: Secondary data (non-blocking) ────────────────────────────
+      const [strategicData, recentData] = await Promise.all([
+        fj(`/api/analytics/b2b/strategic-performance${q}`).catch(() => []),
+        fj(`/api/analytics/recent-orders?companyCode=${companyCode}`).catch(() => []),
+      ])
+      setStrategicPerformance(strategicData)
+      setRecentOrders(recentData)
+
+      // prev month KPIs for projection (fire-and-forget)
       try {
         const d = new Date(startDate)
-        const pm = new Date(d.getFullYear(), d.getMonth(), 0)
         const pm1 = new Date(d.getFullYear(), d.getMonth() - 1, 1)
+        const pm  = new Date(d.getFullYear(), d.getMonth(), 0)
         const r = await fetch(`/api/analytics/kpis?startDate=${pm1.toISOString().split("T")[0]}&endDate=${pm.toISOString().split("T")[0]}&dateColumn=${dateColumn}`)
         if (r.ok) setPrevMonthKpis(await r.json())
       } catch {}
     } catch (err: any) {
       setError(err.message)
-    } finally {
       setIsLoading(false)
     }
   }

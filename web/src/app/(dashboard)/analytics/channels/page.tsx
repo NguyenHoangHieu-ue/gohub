@@ -31,17 +31,17 @@ export default function ChannelPerformancePage() {
 
   const fetchData = async () => {
     setLoading(true); setError(null)
+    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&channelGroup=${channelGroup}`
+    const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
     try {
-      const q = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&channelGroup=${channelGroup}`
-      const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
-      const [m, t, p] = await Promise.all([
-        fj(`/api/analytics/channels/kpis${q}`),
+      const m = await fj(`/api/analytics/channels/kpis${q}`)
+      setMetrics(m); setLoading(false)
+      const [t, p] = await Promise.all([
         fj(`/api/analytics/channels/trend${q}`),
         fj(`/api/analytics/channels/performance${q}`),
       ])
-      setMetrics(m); setTrend(t); setPerf(p)
-    } catch (err: any) { setError(err.message) }
-    finally { setLoading(false) }
+      setTrend(t); setPerf(p)
+    } catch (err: any) { setError(err.message); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn, channelGroup])

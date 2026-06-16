@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getDateFilter } from "@/lib/analytics-helpers"
+import { getDateFilter , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 async function fetchBODReport(startDate: string, endDate: string) {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")

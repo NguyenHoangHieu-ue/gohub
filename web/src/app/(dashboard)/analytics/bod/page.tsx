@@ -68,18 +68,20 @@ export default function BODReportPage() {
 
   const fetchData = async () => {
     setLoading(true); setError(null)
+    const q  = `?startDate=${startDate}&endDate=${endDate}&comparisonType=${comparisonType}&dateColumn=${dateColumn}`
+    const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
     try {
-      const q = `?startDate=${startDate}&endDate=${endDate}&comparisonType=${comparisonType}&dateColumn=${dateColumn}`
-      const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json() }
-      const [sum, rep, grp, ch] = await Promise.all([
-        fj(`/api/analytics/bod-summary${q}`),
+      // Phase 1: summary (KPI cards visible immediately)
+      const sum = await fj(`/api/analytics/bod-summary${q}`)
+      setSummary(sum); setLoading(false)
+      // Phase 2: charts + tables
+      const [rep, grp, ch] = await Promise.all([
         fj(`/api/analytics/bod-report${q}`),
         fj(`/api/analytics/bod-group-margin${q}`),
         fj(`/api/analytics/bod-channel-performance${q}`),
       ])
-      setSummary(sum); setData(rep); setGroupMargins(grp); setChannelPerf(ch)
-    } catch (err: any) { setError(err.message) }
-    finally { setLoading(false) }
+      setData(rep); setGroupMargins(grp); setChannelPerf(ch)
+    } catch (err: any) { setError(err.message); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn])

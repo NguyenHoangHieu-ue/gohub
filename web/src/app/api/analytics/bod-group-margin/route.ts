@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 async function fetchGroupMargin(startDate: string, endDate: string, dateColumn = "fulfiled_date") {
   const source        = getAnalyticsSource(dateColumn)

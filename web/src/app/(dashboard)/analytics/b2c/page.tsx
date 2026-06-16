@@ -35,17 +35,17 @@ export default function B2CPerformancePage() {
 
   const fetchData = async () => {
     setLoading(true); setError(null)
+    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&groupBy=${groupBy}&period=${period}`
+    const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
     try {
-      const q = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&groupBy=${groupBy}&period=${period}`
-      const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
-      const [k, t, p] = await Promise.all([
-        fj(`/api/analytics/b2c/kpis${q}`),
+      const k = await fj(`/api/analytics/b2c/kpis${q}`)
+      setKpis(k); setLoading(false)
+      const [t, p] = await Promise.all([
         fj(`/api/analytics/b2c/trend${q}`),
         fj(`/api/analytics/b2c/performance${q}`),
       ])
-      setKpis(k); setTrend(t); setPerf(p)
-    } catch (err: any) { setError(err.message) }
-    finally { setLoading(false) }
+      setTrend(t); setPerf(p)
+    } catch (err: any) { setError(err.message); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn, groupBy, period])

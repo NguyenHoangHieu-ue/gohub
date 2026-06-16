@@ -8,14 +8,22 @@ import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, Chev
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
-const NAV_ALL = [
-  { href: "/chatbot",    label: "GoHub AI",     icon: Sparkles, key: "chatbot"    },
-  { href: "/promotions", label: "Khuyến Mãi",   icon: Gift,     key: "promotions" },
-  { href: "/kb",         label: "Kiến Thức",    icon: BookOpen, key: "kb"         },
-  { href: "/skus",       label: "SP Hệ Thống",  icon: Package,  key: "skus"       },
-  { href: "/ncc",        label: "SP Vendor",     icon: Truck,    key: "ncc"        },
-  { href: "/countries",  label: "Thông tin",     icon: Globe,    key: "countries"  },
+// Tabs luôn hiển thị ở trên
+const NAV_MAIN = [
+  { href: "/chatbot",    label: "GoHub AI",    icon: Sparkles, key: "chatbot"    },
+  { href: "/promotions", label: "Khuyến Mãi",  icon: Gift,     key: "promotions" },
+  { href: "/kb",         label: "Kiến Thức",   icon: BookOpen, key: "kb"         },
 ]
+
+// Tabs nhóm Sản Phẩm (collapsible)
+const NAV_PRODUCTS = [
+  { href: "/skus",      label: "SP Hệ Thống", icon: Package, key: "skus"      },
+  { href: "/ncc",       label: "SP Vendor",    icon: Truck,   key: "ncc"       },
+  { href: "/countries", label: "Thông tin",    icon: Globe,   key: "countries" },
+]
+
+// NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
+const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
 // Analytics section — chỉ admin / manager / bod / staff — phân nhóm theo chức năng
 const ANALYTICS_GROUPS = [
@@ -114,6 +122,7 @@ export function Sidebar() {
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
   const [analyticsOpen, setAnalyticsOpen] = useState(true)
+  const [productOpen,   setProductOpen]   = useState(false)
 
   const role       = session?.user?.role     || "standard"
   const username   = session?.user?.username || ""
@@ -170,9 +179,9 @@ export function Sidebar() {
         {navItems.length > 0 && (
           <>
             {!collapsed && navItems.length > 1 && (
-              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quản Lý Sản Phẩm</p>
+              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quản Lý</p>
             )}
-            {navItems.map(({ href, label, icon: Icon }) => {
+            {navItems.filter(n => NAV_MAIN.some(m => m.key === n.key) || n.key === "chatbot" || n.key === "admin").map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(href + "/")
               return (
                 <Link
@@ -196,6 +205,64 @@ export function Sidebar() {
                 </Link>
               )
             })}
+
+            {/* ── Nhóm Sản Phẩm (collapsible) ── */}
+            {navItems.some(n => NAV_PRODUCTS.some(p => p.key === n.key)) && (
+              <div className="mt-0.5">
+                {!collapsed ? (
+                  <button
+                    onClick={() => setProductOpen(o => !o)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 rounded-lg transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Package size={16} className="text-gray-400 flex-shrink-0" />
+                      <span>Sản Phẩm</span>
+                    </div>
+                    {productOpen ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setProductOpen(o => !o)}
+                    title="Sản Phẩm"
+                    className={`w-full flex justify-center items-center py-2.5 rounded-lg transition-colors ${
+                      NAV_PRODUCTS.some(p => pathname.startsWith(p.href))
+                        ? "bg-brand-50 text-brand-700 border border-brand-100"
+                        : "text-gray-400 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
+                  >
+                    <Package size={16} />
+                  </button>
+                )}
+
+                {productOpen && navItems
+                  .filter(n => NAV_PRODUCTS.some(p => p.key === n.key))
+                  .map(({ href, label, icon: Icon }) => {
+                    const active = pathname === href || pathname.startsWith(href + "/")
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        title={collapsed ? label : undefined}
+                        className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
+                          ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2 pl-8"}
+                          ${active
+                            ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
+                            : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                          }`}
+                      >
+                        <Icon size={15} className={`flex-shrink-0 ${active ? "text-brand-500" : "text-gray-400"}`} />
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1 whitespace-nowrap">{label}</span>
+                            {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
+                          </>
+                        )}
+                      </Link>
+                    )
+                  })
+                }
+              </div>
+            )}
           </>
         )}
 
