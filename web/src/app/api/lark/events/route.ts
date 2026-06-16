@@ -290,10 +290,17 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const agent    = AGENTS[agentId]
     const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText)
 
+    // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
+    const _now = new Date()
+    const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
+      ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
+      : ""
+
     const systemInstruction = [
       agent.systemPrompt,
       toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
       `\nNgười dùng: ${name || openId} (vai trò: ${role}, kênh: Lark)`,
+      _tempRule,
     ].join("")
 
     // Call Gemini (non-streaming for Lark)

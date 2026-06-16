@@ -30,11 +30,18 @@ export async function POST(req: NextRequest) {
     // Pre-execute tools, build context
     const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg)
 
+    // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
+    const _now = new Date()
+    const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
+      ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
+      : ""
+
     // Build system prompt with injected data
     const systemInstruction = [
       agent.systemPrompt,
       toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
       `\nNgười dùng: ${name} (vai trò: ${role})`,
+      _tempRule,
     ].join("")
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
