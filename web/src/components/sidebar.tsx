@@ -17,20 +17,43 @@ const NAV_ALL = [
   { href: "/countries",  label: "Thông tin",     icon: Globe,    key: "countries"  },
 ]
 
-// Analytics section — chỉ admin / manager / bod / staff
-const ANALYTICS_NAV = [
-  { href: "/analytics",              label: "Dashboard",       icon: LayoutDashboard },
-  { href: "/analytics/bod",          label: "BOD Report",      icon: PieChart        },
-  { href: "/analytics/channels",     label: "Kênh bán",        icon: Globe2          },
-  { href: "/analytics/b2b",          label: "B2B",             icon: Building2       },
-  { href: "/analytics/b2c",          label: "B2C",             icon: ShoppingBag     },
-  { href: "/analytics/orders",       label: "Đơn hàng",        icon: ClipboardList   },
-  { href: "/analytics/staff",        label: "Nhân viên",       icon: Users           },
-  { href: "/analytics/products",     label: "Sản phẩm (BI)",   icon: BarChart3       },
-  { href: "/analytics/targets",      label: "KPI / Target",    icon: Target          },
-  { href: "/analytics/fulfillment",  label: "Fulfillment",     icon: Zap             },
-  { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse   },
+// Analytics section — chỉ admin / manager / bod / staff — phân nhóm theo chức năng
+const ANALYTICS_GROUPS = [
+  {
+    label: "Tổng Quan",
+    items: [
+      { href: "/analytics",     label: "Dashboard",   icon: LayoutDashboard },
+      { href: "/analytics/bod", label: "BOD Report",  icon: PieChart        },
+    ],
+  },
+  {
+    label: "Doanh Thu",
+    items: [
+      { href: "/analytics/channels", label: "Kênh bán",  icon: Globe2    },
+      { href: "/analytics/b2b",      label: "B2B",        icon: Building2 },
+      { href: "/analytics/b2c",      label: "B2C",        icon: ShoppingBag },
+    ],
+  },
+  {
+    label: "Vận Hành",
+    items: [
+      { href: "/analytics/orders",          label: "Đơn hàng",       icon: ClipboardList },
+      { href: "/analytics/staff",           label: "Nhân viên",      icon: Users         },
+      { href: "/analytics/fulfillment",     label: "Fulfillment",    icon: Zap           },
+      { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot",icon: HeartPulse    },
+    ],
+  },
+  {
+    label: "Phân Tích",
+    items: [
+      { href: "/analytics/products", label: "Sản phẩm (BI)", icon: BarChart3 },
+      { href: "/analytics/targets",  label: "KPI / Target",  icon: Target    },
+    ],
+  },
 ]
+
+// Flat list for collapsed mode
+const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
 
 const ANALYTICS_ROLES = new Set(["admin", "manager", "bod", "staff"])
 
@@ -188,30 +211,44 @@ export function Sidebar() {
                 {analyticsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
             )}
-            {(analyticsOpen || collapsed) && ANALYTICS_NAV.map(({ href, label, icon: Icon }) => {
-              const active = pathname === href || pathname.startsWith(href + "/")
+
+            {/* Collapsed mode: flat icon list */}
+            {collapsed && ANALYTICS_NAV_FLAT.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
+                          || (href === "/analytics" && pathname === "/analytics")
               return (
-                <Link
-                  key={href}
-                  href={href}
-                  title={collapsed ? label : undefined}
-                  className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
-                    ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
-                    ${active
-                      ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                    }`}
+                <Link key={href} href={href} title={label}
+                  className={`flex justify-center items-center py-2.5 rounded-lg transition-all duration-150
+                    ${active ? "bg-blue-50 text-blue-700 border border-blue-100 shadow-sm" : "text-gray-400 hover:bg-gray-50 hover:text-gray-800"}`}
                 >
-                  <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-blue-500" : "text-gray-400"}`} />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 whitespace-nowrap">{label}</span>
-                      {active && <span className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0" />}
-                    </>
-                  )}
+                  <Icon size={16} className={`flex-shrink-0 ${active ? "text-blue-500" : "text-gray-400"}`} />
                 </Link>
               )
             })}
+
+            {/* Expanded mode: grouped */}
+            {!collapsed && analyticsOpen && ANALYTICS_GROUPS.map(group => (
+              <div key={group.label} className="mt-1">
+                <p className="px-3 pt-1.5 pb-0.5 text-[9px] font-bold text-gray-300 uppercase tracking-widest">{group.label}</p>
+                {group.items.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
+                              || (href === "/analytics" && pathname === "/analytics")
+                  return (
+                    <Link key={href} href={href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
+                        ${active
+                          ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
+                          : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                        }`}
+                    >
+                      <Icon size={15} className={`flex-shrink-0 ${active ? "text-blue-500" : "text-gray-400"}`} />
+                      <span className="flex-1 whitespace-nowrap">{label}</span>
+                      {active && <span className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0" />}
+                    </Link>
+                  )
+                })}
+              </div>
+            ))}
           </div>
         )}
 
