@@ -1,6 +1,42 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-16 (session 55)
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  ƯU TIÊN CAO NHẤT — LÀM TRƯỚC TẤT CẢ TASK KHÁC:
+    MERGE gohub-intel vào GoHub PM
+    Plan đầy đủ: docs/MERGE_PLAN.md
+    Bắt đầu từ: Phase 1 — Unified Shell
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 55 — tiếp 2 (2026-06-16) — Merge Plan gohub-intel
+
+### Phân tích 2 project
+- **GoHub PM** (gohub-murex.vercel.app): Next.js 14 + Vercel + Supabase + NextAuth — quản lý sản phẩm
+- **gohub-intel** (intel.gohub.cloud): React 19 + Express (9500 dòng) + PostgreSQL gohub_dw + Clerk — Business Intelligence
+
+### Quyết định đã chốt
+- Auth: giữ **NextAuth**, migrate Clerk users → users table
+- Deploy: giữ **Vercel**
+- Merge: **hoàn toàn** — 1 codebase Next.js, không proxy, không iframe
+- Phương thức: tuần tự Phase 1→5
+
+### File plan đầy đủ
+`docs/MERGE_PLAN.md` — chi tiết toàn bộ 5 phases, tasks, files, env vars, migration
+
+### 5 Phases tóm tắt
+1. **Phase 1 — Unified Shell** 🔜: pg client gohub_dw, roles mới (bod/staff), sidebar analytics section, migrate Clerk users, Supabase migration v13
+2. **Phase 2 — Core Analytics**: Dashboard, BOD, B2B/B2C, Channel — port 20 API + 5 components
+3. **Phase 3 — Merge AI Agent**: agent bi-analyst, query gohub_dw, chart rendering trong chatbot
+4. **Phase 4 — Operations**: Orders, Staff, Customer, Fulfillment, CS, 3HK usage, Targets
+5. **Phase 5 — Admin Complete**: UserMgmt, Settings, SQL Explorer, Lark cron, xóa Clerk
+
+### Nguồn gốc gohub-intel
+- ZIP: D:\Kien_Thuc\Work\gohub\gohub-intel-main.zip
+- Đã extract: D:\Kien_Thuc\Work\gohub\gohub-intel\gohub-intel-main\
+- Repo: seikobao/gohub-intel (private)
+
+---
+
 ## Session 55 — tiếp (2026-06-16) — Temp rule Hiếu vắng (commit df56331)
 
 ### Rule tạm thời 28/6–8/7/2026
