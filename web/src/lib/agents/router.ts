@@ -381,13 +381,21 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "giai-dap":      "Giải Đáp",
   "gap-analysis":  "Gap Analysis",
   "tao-template":  "Tạo Template",
+  "bi-analyst":    "BI Analyst",
 }
 
-function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
-  const m = msg.toLowerCase()
+// BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
+const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng/
 
-  // Direct code lookup (single hoặc multiple)
+function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
+  const m    = msg.toLowerCase()
+  const norm = normalizeText(msg)
+
+  // BI questions — TRƯỚC tất cả rule khác (nhưng sau code lookup)
   if (params.skuCodes?.length || params.productCodes?.length) return "tra-cuu"
+
+  if (BI_RE.test(norm) || BI_RE.test(m)) return "bi-analyst"
+
   if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
 
   // Template creation

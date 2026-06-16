@@ -6,6 +6,7 @@ import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelL
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
+import ChatChart from "@/components/chat-chart"
 
 // sessionStorage keys
 const SS_CONV_ID      = "gohub_conv_id"
@@ -31,6 +32,21 @@ const AGENT_COLORS: Record<string, string> = {
   "gia-cogs":      "bg-green-100 text-green-700",
   "gap-analysis":  "bg-purple-100 text-purple-700",
   "tao-template":  "bg-emerald-100 text-emerald-700",
+  "bi-analyst":    "bg-indigo-100 text-indigo-700",
+}
+
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+
+function extractChartData(text: string): { chart: any; before: string; after: string } | null {
+  const m = text.match(/```chart\s*([\s\S]*?)\s*```/)
+  if (!m) return null
+  try {
+    const chart = JSON.parse(m[1])
+    if (!chart.chart_type || !chart.data) return null
+    const idx = text.indexOf("```chart")
+    const end = text.indexOf("```", idx + 7) + 3
+    return { chart, before: text.slice(0, idx).trim(), after: text.slice(end).trim() }
+  } catch { return null }
 }
 
 // ─── Template action helpers ──────────────────────────────────────────────────
@@ -144,6 +160,8 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
 const QUICK = [
   "Tìm gói eSIM đi Nhật 7 ngày",
   "Có gói unlimited đi Thái Lan không?",
+  "Doanh thu tháng này bao nhiêu?",
+  "Top 5 kênh bán doanh thu cao nhất tháng này",
   "WM có sản phẩm nào chưa có trong hệ thống?",
   "Giải thích cấu trúc mã SKU",
 ]
@@ -621,34 +639,52 @@ export default function ChatbotPage() {
                   }`}>
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
-                    ) : (
-                      <div className="markdown-body">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                          p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                          strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                          em:     ({ children }) => <em className="italic">{children}</em>,
-                          ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
-                          ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
-                          li:     ({ children }) => <li className="text-gray-700">{children}</li>,
-                          h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
-                          h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                          h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                          hr:     () => <hr className="my-2 border-gray-300" />,
-                          code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                          table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                          thead:  ({ children }) => <thead className="bg-gray-100 text-gray-600">{children}</thead>,
-                          tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
-                          tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
-                          th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700">{children}</th>,
-                          td:     ({ children }) => <td className="px-3 py-2 text-gray-600">{children}</td>,
-                        }}>
-                          {msg.content}
-                        </ReactMarkdown>
-                        {streaming && i === messages.length - 1 && (
-                          <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
-                        )}
-                      </div>
-                    )}
+                    ) : (() => {
+                      // Extract chart block from bi-analyst messages
+                      const chartResult = msg.agent?.id === "bi-analyst"
+                        ? extractChartData(msg.content) : null
+
+                      const renderMarkdown = (text: string) => (
+                        <div className="markdown-body">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                            p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            em:     ({ children }) => <em className="italic">{children}</em>,
+                            ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+                            ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+                            li:     ({ children }) => <li className="text-gray-700">{children}</li>,
+                            h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+                            h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                            h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                            hr:     () => <hr className="my-2 border-gray-300" />,
+                            code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                            table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
+                            thead:  ({ children }) => <thead className="bg-gray-100 text-gray-600">{children}</thead>,
+                            tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
+                            tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
+                            th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700">{children}</th>,
+                            td:     ({ children }) => <td className="px-3 py-2 text-gray-600">{children}</td>,
+                          }}>
+                            {text}
+                          </ReactMarkdown>
+                        </div>
+                      )
+
+                      return (
+                        <div>
+                          {chartResult ? (
+                            <>
+                              {chartResult.before && renderMarkdown(chartResult.before)}
+                              <ChatChart data={chartResult.chart} />
+                              {chartResult.after && renderMarkdown(chartResult.after)}
+                            </>
+                          ) : renderMarkdown(msg.content)}
+                          {streaming && i === messages.length - 1 && (
+                            <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+                          )}
+                        </div>
+                      )
+                    })()}
                     {/* Template download button for tao-template agent */}
                     {msg.role === "assistant" && msg.agent?.id === "tao-template" && !streaming && (() => {
                       const action = extractTemplateAction(msg.content)

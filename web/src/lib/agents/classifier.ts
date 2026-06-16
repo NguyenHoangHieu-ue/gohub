@@ -8,6 +8,7 @@ export type IntentType =
   | "price_cogs"
   | "gap_analysis"
   | "template_create"
+  | "bi_analytics"
 
 export interface ClassifyResult {
   intent:     IntentType
@@ -23,6 +24,7 @@ const INTENT_TO_AGENT: Record<IntentType, AgentId> = {
   price_cogs:      "tra-cuu",
   gap_analysis:    "gap-analysis",
   template_create: "tao-template",
+  bi_analytics:    "bi-analyst",
 }
 
 const SYSTEM_PROMPT = `Bạn là bộ phân loại (classifier) cho hệ thống quản lý Sim/eSim GoHub.
