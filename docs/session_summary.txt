@@ -65,6 +65,33 @@ Cập nhật lần cuối: 2026-06-17 (session 59 — 6 lần cập nhật)
 - CS Troubleshoot (cần migrate lark_tickets Turso → Supabase)
 - 3HK Data Usage, All-Time Report, Target Planning, Product Performance, Website Analytics
 
+## Session 60 (2026-06-17) — Bug #31/#32 + All-Time Report + Polish (commit f8661d1)
+
+### Bug #31 ✅ — Template WM UX phân rõ auto-fill vs bắt buộc
+- dataPolicyCode chuyển từ "Bắt buộc nhập" → "Auto-fill" (đúng với `_deriveDataPolicy()`)
+- Section labels rõ hơn: "Bắt buộc nhập thủ công" / "Auto-fill từ SP đã chọn"
+- Thêm mô tả ngắn dưới mỗi section hướng dẫn usage
+
+### Bug #32 ✅ — 3HK template thiếu Top-up SIM
+- Thêm checkbox "Top-up SIM (SIM vật lý)" trong 3HK Step 2 (default: tắt)
+- Khi bật: mỗi combo eSIM → 2 rows: eSIM (productType=C) + SIM (productType=E)
+- Tên SP dùng "SIM" thay "eSIM", vendor_sku thêm suffix "-SIM"
+- File template/route.ts: `generate3HKTemplate(combos, config, settings, includeSIM)`
+  - simVariants: [{simLabel:"eSIM", pt:"C"}, ...includeSIM ? [{simLabel:"SIM",pt:"E"}] : []]
+  - makeSkuRow/makeProductRow/makeName đều nhận simLabel+productType
+
+### All-Time Report (/analytics/all-time)
+- `/api/analytics/all-time-performance` (GET): group monthly+quarterly từ gohub_dw
+  - B2B-Strategic vs B2B-Non-Strategic vs B2C phân theo strategic partners list
+  - GPM2 = GPM (không có channel_costs data từ Turso)
+  - Cached 5 phút
+- Page: Monthly/Quarterly toggle, 3 metric selectors (Revenue/GPM/GPM2),
+  filter panel (date/channelGroup/tier/channel), AreaChart 3 areas,
+  pivot table per period × segment, Export CSV
+- Sidebar: thêm vào nhóm Tổng Quan
+
+---
+
 ## Session 59 — tiếp 5 (2026-06-17) — Phase 5: SQL Explorer + Scheduled Messages + Partner Tiers (commit 59ddef3)
 
 ### SQL Explorer (/analytics/sql — admin only)
