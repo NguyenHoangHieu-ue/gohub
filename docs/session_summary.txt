@@ -1,12 +1,145 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-17 (session 58)
+Cập nhật lần cuối: 2026-06-17 (session 59 — 4 lần cập nhật)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
     MERGE gohub-intel vào GoHub PM
-    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 🔜
+    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 🔜
     Plan đầy đủ: docs/MERGE_PLAN.md
+
+    Phase 4 DONE (commit 7e72b5c):
+    ✅ Orders + Staff + Fulfillment
+    ✅ Customer Performance
+    ✅ Product Performance + Target Planning
+    ✅ CS Troubleshoot + 3HK Data Usage
+    ⚠️  Action: chạy database/migrations/v14_lark_cs_tickets.sql trong Supabase
+
+    Phase 5 tiếp theo:
+    - UserManagement → Admin tab
+    - Channel Costs UI
+    - SQL Explorer (admin)
+    - Scheduled Lark Messages
+    - Xóa Clerk dependency
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 59 (2026-06-17) — Phase 4 Operations lõi (commit 3dced79)
+
+### Update MERGE_PLAN.md
+- Phase 3 đánh dấu ✅ Done (commit ec1cd47, đã làm session 57)
+- Phase 4 bắt đầu
+
+### 8 API routes mới
+
+**Orders:**
+- `/api/orders` — GET paginated orders, filter: startDate/endDate, channelGroup, tier, channel, staff, orderSource, dataSource (fulfilled/created), companyCode, search
+- `/api/orders/export` — GET CSV export với full filters
+- `/api/channels` — GET danh sách kênh từ dim_order_source, merge strategic partners từ Supabase app_settings
+- `/api/staff` — GET dim_staff, filter by channel/channelGroup
+- `/api/order-sources` — GET dim_order_source, filter by channel/channelGroup
+
+**Staff:**
+- `/api/staff-list` — GET staff list for performance page (filter dataSource, companyCode)
+- `/api/staff-performance` — GET leaderboard nhân viên (total_orders, total_units, total_revenue), sort by revenue DESC
+
+**Fulfillment:**
+- `/api/analytics/fulfillment-report` — GET monthly breakdown: gross/cancel/return/net, categories (eSIM/SIM), locations, chart data. Cached 5 phút.
+
+### 3 pages mới (port từ gohub-intel)
+
+**`/analytics/orders` — Quản Lý Đơn Hàng:**
+- Summary cards: tổng đơn, số lượng, doanh thu
+- Filter panel toggle: nhóm kênh, tier, kênh, nhân viên, nguồn, date range, search
+- Table: order_code, ngày, khách, kênh, nhân viên, nguồn, SKU, SL, doanh thu
+- Export CSV + pagination
+
+**`/analytics/staff` — Hiệu Suất Nhân Viên:**
+- Quick filters: B2B/B2C/All, channel, companyCode, staff multi-select (checkbox dropdown)
+- KPI cards: tổng đơn, units, doanh thu
+- Leaderboard bảng: rank badge (vàng/bạc/đồng), contribution % với progress bar
+- Recent transactions table + pagination
+
+**`/analytics/fulfillment` — Fulfillment Report:**
+- ComposedChart: gross/cancel/net orders theo tháng
+- BarChart: units by category (eSIM, SIM) stacked
+- Monthly breakdown table với totals row
+- Category progress bars + Top kho giao hàng
+
+### Adaptation từ intel sang GoHub PM
+- Thay `pool.connect()` → `queryAnalytics(sql, params)`
+- Thay Turso partner_tiers → `getPartnerTiers()` từ Supabase app_settings
+- Bỏ `motion/react` (không cài) → dùng Tailwind CSS transitions
+- Dịch UI sang tiếng Việt
+
+### Còn lại Phase 4 (defer):
+- CS Troubleshoot (cần migrate lark_tickets Turso → Supabase)
+- 3HK Data Usage, All-Time Report, Target Planning, Product Performance, Website Analytics
+
+## Session 59 — tiếp 4 (2026-06-17) — Phase 4: CS Troubleshoot + 3HK Data Usage (commit 7e72b5c)
+
+### CS Troubleshoot (/analytics/cs-troubleshoot)
+- **Migration v14**: `database/migrations/v14_lark_cs_tickets.sql` — bảng Supabase `lark_cs_tickets` thay thế Turso
+  - Columns: lark_record_id (PK), ticket_no, order_no, sku, ticket_type, issue_detail, product_action, money_action, creation_date (BIGINT ms), source_1 (B2B/B2C)
+  - ⚠️ Cần chạy thủ công trong Supabase SQL Editor
+- **`/api/reports/cs-troubleshoot`** (GET): query gohub_dw (units sold total/SKU/vendor/source) + Supabase lark_cs_tickets
+  - Aggregate TBS: ticketCount, TBS rate, shift distribution, issue/conclusion breakdown per SKU/vendor/source/group
+- **Page**: sticky header + 5 tabs (TBS Overview/SKU/Vendor/Source/Invalid)
+  - TBS Overview: 4 KPI cards + Replace/Refund + BarChart by shift
+  - Performance tabs: sortable table với expandable row (issue + conclusion breakdown)
+  - "No ticket data" banner khi Supabase chưa có data
+
+### 3HK Data Usage (/analytics/3hk-usage)
+- **`/api/analytics/3hk-usage/report`** (POST): 4 CTE queries song song từ `fact_data_usage`
+  - Totals (usage/capacity/avg%/count), by SKU type, by SKU, records paginated 50/page
+  - Filter: date range, search (ICCID/order/SKU), tab (Daily/Fixed/Unlimited), sort, page
+- **Page**: tab filter + debounced search + date range
+  - 4 summary cards, SKU Type table, SKU table (sortable), records detail table
+  - Usage % color bar: green<50, amber<80, rose>80
+  - Pagination + Export CSV
+
+---
+
+## Session 59 — tiếp 3 (2026-06-17) — Phase 4: Product Performance + Target Planning (commit c2e7eae)
+
+### Product Performance (/analytics/products)
+- `/api/analytics/products/report` (POST): 5 queries song song — metrics/trend/channels/regions/SKUs
+  - Filters: dateColumn, skus[], category, vendors[], channelGroup, channel, destination, comparisonType
+  - MoM/YoY % change, month-end projection, country mapping từ getCountryMappings()
+  - Cached 5 phút
+- `/api/config/sku-destination-rule` (GET): wrapper cho getSkuDestinationRule() từ Supabase
+- Page: filter panel (6 inputs), 5 KPI cards + % badge, projection card, AreaChart trend,
+  horizontal BarChart top-10 destinations, B2B + B2C tables (với Margin %), top-50 SKU table, Export CSV
+
+### Target Planning (/analytics/targets)
+- `/api/planning/targets` (GET): actuals prev quarter từ gohub_dw (group B2C/B2B) + targets từ Supabase `analytics_target_planning`
+- `/api/planning/targets` (POST): upsert vào `analytics_target_planning` — admin/manager only
+- Page: quarter selector (2024–2026 Q1-Q4), 3 bảng planning (Revenue/3HK%/Units),
+  inline editable inputs, growth % vs prev quarter, Save/View-only theo role, toast success/error
+
+---
+
+## Session 59 — tiếp 2 (2026-06-17) — Phase 4: Customer Performance (commit f4c69d4)
+
+### 2 API routes mới
+- `/api/customers` — GET search dim_customer by name (debounced, ILIKE, max 100)
+- `/api/analytics/customer/report` (POST) — nhận `{customers[], startDate, endDate, dateColumn, period}`:
+  - Resolve customer names → codes từ dim_customer
+  - 1 query duy nhất cover cả current + prev period (tránh N+1)
+  - Aggregate in JS: KPIs (Revenue/Orders/Units/AOV/Margin + MoM), trend (day/week/month), performance per customer, top 20 products, top 50 orders, channel distribution
+
+### Page `/analytics/customers`
+- **Customer selector**: dropdown với real-time debounced search + multi-select checkbox
+- **Empty state**: hướng dẫn chọn khách trước khi load
+- **5 KPI cards**: Revenue, Orders, Units, AOV, Margin — có so sánh "+X vs kỳ trước"
+- **Trend chart**: ComposedChart bar (kỳ trước + kỳ này), toggle ngày/tuần/tháng
+- **Top products table**: SKU + tên SP + SL + doanh thu (20 items)
+- **Orders history**: 50 đơn gần nhất (mã đơn, SP, ngày, doanh thu)
+- **Strategic Partners section**: tự động lọc từ Supabase partner_tiers → bảng riêng với Margin %
+- **Full breakdown table**: khách không phải strategic, sort by revenue, Export CSV
+- **Fulfilled/Created toggle** + **date range picker**
+
+---
+
+---
 
 ## Session 58 (2026-06-17) — Sidebar grouping + Analytics performance (commit 74c3e1d)
 
