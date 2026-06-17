@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
@@ -54,8 +54,11 @@ const ANALYTICS_GROUPS = [
   {
     label: "Phân Tích",
     items: [
-      { href: "/analytics/products", label: "Sản phẩm (BI)", icon: BarChart3 },
-      { href: "/analytics/targets",  label: "KPI / Target",  icon: Target    },
+      { href: "/analytics/products",  label: "Sản phẩm (BI)", icon: BarChart3 },
+      { href: "/analytics/targets",   label: "KPI / Target",   icon: Target    },
+      { href: "/analytics/customers", label: "Khách hàng",     icon: Users     },
+      { href: "/analytics/3hk-usage", label: "3HK Data Usage", icon: Activity  },
+      { href: "/analytics/sql",       label: "SQL Explorer",   icon: Terminal  },
     ],
   },
 ]
