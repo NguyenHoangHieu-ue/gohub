@@ -176,6 +176,37 @@ export default function CSTroubleshootPage() {
   const [startDate, setStartDate] = useState(getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState(getDefaultDateRange().endDate)
   const [channelGroup, setChannelGroup] = useState("All")
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [ticketCount, setTicketCount] = useState<number | null>(null)
+
+  // Check ticket count on mount
+  useEffect(() => {
+    fetch("/api/admin/sync-lark-tickets")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTicketCount(d.count) })
+      .catch(() => {})
+  }, [])
+
+  const syncLark = async () => {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const res = await fetch("/api/admin/sync-lark-tickets", { method: "POST" })
+      const d = await res.json()
+      if (res.ok) {
+        setSyncMsg({ ok: true, text: `Sync xong! ${d.totalSynced} tickets đã import.` })
+        setTicketCount(d.totalSynced)
+        fetchData()
+      } else {
+        setSyncMsg({ ok: false, text: d.error || "Sync thất bại" })
+      }
+    } catch (err: any) {
+      setSyncMsg({ ok: false, text: err.message })
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 5000)
+    }
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
@@ -237,6 +268,13 @@ export default function CSTroubleshootPage() {
                 className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm">
                 <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
               </button>
+              <button onClick={syncLark} disabled={syncing}
+                className={cn("flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
+                  syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-[#003B95] text-white hover:bg-[#002B70] shadow-blue-200")}>
+                <Database className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
+                {syncing ? "Syncing..." : `Sync Lark${ticketCount !== null ? ` (${ticketCount})` : ""}`}
+              </button>
             </div>
           </div>
 
@@ -258,6 +296,15 @@ export default function CSTroubleshootPage() {
       </div>
 
       <div className="max-w-[1600px] mx-auto px-5 py-6 space-y-6">
+        {/* Sync toast */}
+        {syncMsg && (
+          <div className={cn("flex items-center gap-3 p-3 rounded-xl text-sm border",
+            syncMsg.ok ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-rose-50 border-rose-100 text-rose-700")}>
+            {syncMsg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+            {syncMsg.text}
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-xl flex items-center gap-3 text-sm">
@@ -271,15 +318,18 @@ export default function CSTroubleshootPage() {
         {data && !data.hasTicketData && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
             <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="text-sm font-bold text-amber-800">Chưa có dữ liệu ticket Lark</p>
               <p className="text-xs text-amber-600 mt-1">
-                Bảng <code className="bg-amber-100 px-1 rounded">lark_cs_tickets</code> chưa có dữ liệu.
-                Cần chạy migration <code>v14_lark_cs_tickets.sql</code> trong Supabase,
-                sau đó sync ticket từ Lark Base vào bảng này để xem TBS metrics.
+                Nhấn <strong>Sync Lark</strong> để import ticket từ Lark Base vào Supabase.
+                Cần set env vars <code className="bg-amber-100 px-1 rounded">LARK_BASE_ID</code> và <code className="bg-amber-100 px-1 rounded">LARK_TABLE_ID</code> trong Vercel trước.
                 Units sold từ gohub_dw vẫn hiển thị bình thường.
               </p>
             </div>
+            <button onClick={syncLark} disabled={syncing}
+              className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50">
+              {syncing ? "Syncing..." : "Sync ngay"}
+            </button>
           </div>
         )}
 

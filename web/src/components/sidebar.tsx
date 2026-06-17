@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
@@ -38,9 +38,10 @@ const ANALYTICS_GROUPS = [
   {
     label: "Doanh Thu",
     items: [
-      { href: "/analytics/channels", label: "Kênh bán",  icon: Globe2    },
-      { href: "/analytics/b2b",      label: "B2B",        icon: Building2 },
+      { href: "/analytics/channels", label: "Kênh bán",  icon: Globe2     },
+      { href: "/analytics/b2b",      label: "B2B",        icon: Building2  },
       { href: "/analytics/b2c",      label: "B2C",        icon: ShoppingBag },
+      { href: "/analytics/vendors",  label: "Vendors",    icon: TrendingUp },
     ],
   },
   {
