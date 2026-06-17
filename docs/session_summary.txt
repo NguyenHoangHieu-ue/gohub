@@ -1,25 +1,16 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-17 (session 59 — 4 lần cập nhật)
+Cập nhật lần cuối: 2026-06-17 (session 59 — 6 lần cập nhật)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  ƯU TIÊN CAO NHẤT — ĐANG THỰC HIỆN:
-    MERGE gohub-intel vào GoHub PM
-    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 🔜
+✅  MERGE gohub-intel vào GoHub PM — HOÀN THÀNH
+    Phase 1 ✅ Phase 2 ✅ Phase 3 ✅ Phase 4 ✅ Phase 5 ✅
     Plan đầy đủ: docs/MERGE_PLAN.md
 
-    Phase 4 DONE (commit 7e72b5c):
-    ✅ Orders + Staff + Fulfillment
-    ✅ Customer Performance
-    ✅ Product Performance + Target Planning
-    ✅ CS Troubleshoot + 3HK Data Usage
-    ⚠️  Action: chạy database/migrations/v14_lark_cs_tickets.sql trong Supabase
+    Migrations đã chạy: v13 ✅ v14 ✅ v15 ✅
 
-    Phase 5 tiếp theo:
-    - UserManagement → Admin tab
-    - Channel Costs UI
-    - SQL Explorer (admin)
-    - Scheduled Lark Messages
-    - Xóa Clerk dependency
+    Defer (low priority):
+    - All-Time Report, GA4 (cần Google service account)
+    - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ## Session 59 (2026-06-17) — Phase 4 Operations lõi (commit 3dced79)
@@ -73,6 +64,29 @@ Cập nhật lần cuối: 2026-06-17 (session 59 — 4 lần cập nhật)
 ### Còn lại Phase 4 (defer):
 - CS Troubleshoot (cần migrate lark_tickets Turso → Supabase)
 - 3HK Data Usage, All-Time Report, Target Planning, Product Performance, Website Analytics
+
+## Session 59 — tiếp 5 (2026-06-17) — Phase 5: SQL Explorer + Scheduled Messages + Partner Tiers (commit 59ddef3)
+
+### SQL Explorer (/analytics/sql — admin only)
+- `/api/admin/sql-schema` (GET): gohub_dw schema (tables + columns) từ information_schema, cached 5ph
+- `/api/admin/sql-query` (POST): chỉ SELECT/WITH/EXPLAIN, block DML, admin only
+- Page: split-pane — sidebar schema browser (search + expand), editor dark bg (Ctrl+Enter run), results table + Export CSV
+
+### Scheduled Lark Messages (Admin → tab "Lịch Lark")
+- `database/migrations/v15_scheduled_messages.sql`: bảng `lark_scheduled_messages`
+  ⚠️ Cần chạy trong Supabase SQL Editor
+- `/api/admin/scheduled-messages` (GET/POST): list + create
+- `/api/admin/scheduled-messages/[id]` (PUT/DELETE/POST): update/delete/test run
+  - Test run: Gemini generate text từ prompt → gửi Lark webhook hoặc notify API
+- Admin tab "Lịch Lark": form (daily/weekly/monthly/custom cron), list với toggle/run/edit/delete
+
+### Partner Tiers UI (Admin → Cài đặt)
+- PartnerTiersSection: JSON textarea editor, load/save qua `/api/config/partner-tiers`
+
+### Sidebar cập nhật
+- Thêm vào nhóm Phân Tích: Khách hàng, 3HK Data Usage, SQL Explorer
+
+---
 
 ## Session 59 — tiếp 4 (2026-06-17) — Phase 4: CS Troubleshoot + 3HK Data Usage (commit 7e72b5c)
 
