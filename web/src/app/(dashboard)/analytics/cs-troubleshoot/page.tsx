@@ -208,6 +208,26 @@ export default function CSTroubleshootPage() {
     }
   }
 
+  const migrateTurso = async () => {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const res = await fetch("/api/admin/migrate-turso-tickets", { method: "POST" })
+      const d = await res.json()
+      if (res.ok) {
+        setSyncMsg({ ok: true, text: `Migrate xong! ${d.totalUpserted}/${d.total} tickets từ Turso.` })
+        setTicketCount(d.totalUpserted)
+        fetchData()
+      } else {
+        setSyncMsg({ ok: false, text: d.error || "Migrate thất bại" })
+      }
+    } catch (err: any) {
+      setSyncMsg({ ok: false, text: err.message })
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 8000)
+    }
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
     try {
@@ -268,7 +288,16 @@ export default function CSTroubleshootPage() {
                 className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm">
                 <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
               </button>
+              <button onClick={migrateTurso} disabled={syncing}
+                title="Migrate từ Turso gohub-intel (1 lần)"
+                className={cn("flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
+                  syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200")}>
+                <Database className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
+                {syncing ? "Migrating..." : "Migrate Turso"}
+              </button>
               <button onClick={syncLark} disabled={syncing}
+                title="Sync từ Lark Base API (cần LARK_BASE_ID + LARK_TABLE_ID)"
                 className={cn("flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
                   syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                   : "bg-[#003B95] text-white hover:bg-[#002B70] shadow-blue-200")}>
@@ -321,14 +350,13 @@ export default function CSTroubleshootPage() {
             <div className="flex-1">
               <p className="text-sm font-bold text-amber-800">Chưa có dữ liệu ticket Lark</p>
               <p className="text-xs text-amber-600 mt-1">
-                Nhấn <strong>Sync Lark</strong> để import ticket từ Lark Base vào Supabase.
-                Cần set env vars <code className="bg-amber-100 px-1 rounded">LARK_BASE_ID</code> và <code className="bg-amber-100 px-1 rounded">LARK_TABLE_ID</code> trong Vercel trước.
-                Units sold từ gohub_dw vẫn hiển thị bình thường.
+                Cách nhanh nhất: nhấn <strong className="text-emerald-700">Migrate Turso</strong> để copy ticket từ Turso (gohub-intel) sang đây.
+                Cần set <code className="bg-amber-100 px-1 rounded">TURSO_URL</code> và <code className="bg-amber-100 px-1 rounded">TURSO_AUTH_TOKEN</code> trong Vercel env vars.
               </p>
             </div>
-            <button onClick={syncLark} disabled={syncing}
-              className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50">
-              {syncing ? "Syncing..." : "Sync ngay"}
+            <button onClick={migrateTurso} disabled={syncing}
+              className="shrink-0 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+              {syncing ? "Migrating..." : "Migrate Turso"}
             </button>
           </div>
         )}
