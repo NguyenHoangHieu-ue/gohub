@@ -65,6 +65,25 @@ Cập nhật lần cuối: 2026-06-17 (session 59 — 6 lần cập nhật)
 - CS Troubleshoot (cần migrate lark_tickets Turso → Supabase)
 - 3HK Data Usage, All-Time Report, Target Planning, Product Performance, Website Analytics
 
+## Session 60 — tiếp 2 (2026-06-17) — Docs overhaul + Git cleanup + Data migrate (commits 2dfb5c4, a2bbcd3, 7b71e8b)
+
+### Fix gemini model name
+- `chat/route.ts:37` — `gemini-1.5-flash` → `gemini-3.5-flash` (bi-analyst function calling)
+- Tất cả agents đều dùng đúng `gemini-3.5-flash`
+
+### Data migration hoàn thành
+- 24,712 tickets từ Turso → Supabase `lark_cs_tickets` (script: `scripts/migrate_turso_tickets.py`)
+- CS Troubleshoot Hub giờ có đầy đủ data
+
+### Git cleanup & docs overhaul
+- Xóa `venv_phase1/` (1,217 files rác) khỏi git tracking
+- Rewrite `.gitignore` — chuyên nghiệp, rõ ràng cho team mới
+- Tạo `README.md` — overview hệ thống, stack, setup local, env vars, roles
+- Rewrite `WORK.md` — trạng thái thực tế (merge done, analytics done, KB done)
+- Rewrite `_Skills_AI/agents/AGENTS.md` — 5 agents (thêm bi-analyst đầy đủ)
+
+---
+
 ## Session 60 — tiếp (2026-06-17) — Lark Sync + Vendor Performance + CS UX (commit 47bbffe)
 
 ### Lark Ticket Sync

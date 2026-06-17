@@ -1,59 +1,49 @@
-# Secrets
+# ─── Secrets & Environment ────────────────────────────────────────────────────
 key.txt
 .env
 .env.local
 .env*.local
 auth_config.json
+*.pem
 
-# Python
+# ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
+venv_phase1/
+venv_*/
 .venv/
 
-# Vendor / NCC data files
+# ─── Node / Next.js ──────────────────────────────────────────────────────────
+node_modules/
+web/.next/
+web/out/
+web/.vercel/
+
+# ─── Vendor / Nội bộ GoHub (không public) ────────────────────────────────────
 VENDOR/
 Add_product/
 TaiLieuCongTy_Chung/
 
-# Streamlit (rác cũ)
+# ─── Database: local only ────────────────────────────────────────────────────
+*.db
+*.sqlite
+local.db
+turso.db
+
+# ─── Streamlit (rác cũ) ──────────────────────────────────────────────────────
 .streamlit/
 
-# DB scripts / schema / import (local only — không public)
-database/
-
-# Docs / notes (local only, but track session summary + wiki + memory)
-docs/*
-!docs/session_summary.txt
-!docs/wiki/
-docs/wiki/*
-!docs/wiki/*.md
-!docs/wiki/vendors/
-!docs/wiki/vendors/*.md
-!docs/wiki/products/
-!docs/wiki/products/*.md
-!docs/wiki/pricing/
-!docs/wiki/pricing/*.md
-!docs/wiki/processes/
-!docs/wiki/processes/*.md
-!docs/wiki/company/
-!docs/wiki/company/*.md
-!docs/wiki/system/
-!docs/wiki/system/*.md
-_Skills_AI/
-*.txt
-!memory/
-!memory/*.md
-*.md
-!docs/wiki/*.md
-!docs/wiki/**/*.md
-
-# Data folder: ref xlsx files ARE tracked (public reference data, trigger GitHub Actions)
-# ncc/ subfolders NOT tracked (may contain sensitive pricing)
-Data/ncc/
-Data/*.md
-
-# OS
+# ─── OS / IDE ────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
+.vscode/settings.json
+.idea/
+
+# ─── Data folder ─────────────────────────────────────────────────────────────
+# xlsx reference files ARE tracked (trigger GitHub Actions)
+# ncc/ subfolders NOT tracked (sensitive pricing)
+Data/ncc/
+Data/*.md
