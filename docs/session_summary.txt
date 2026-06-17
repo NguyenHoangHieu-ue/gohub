@@ -65,6 +65,27 @@ Cập nhật lần cuối: 2026-06-17 (session 59 — 6 lần cập nhật)
 - CS Troubleshoot (cần migrate lark_tickets Turso → Supabase)
 - 3HK Data Usage, All-Time Report, Target Planning, Product Performance, Website Analytics
 
+## Session 60 — tiếp (2026-06-17) — Lark Sync + Vendor Performance + CS UX (commit 47bbffe)
+
+### Lark Ticket Sync
+- `/api/admin/sync-lark-tickets` (POST/GET): fetch từ Lark Base API → upsert Supabase `lark_cs_tickets`
+  - Dùng `getLarkToken()` đã có, gọi `/bitable/v1/apps/{LARK_BASE_ID}/tables/{LARK_TABLE_ID}/records`
+  - Parse fields: ticket_no, order_no, sku, ticket_type, issue_detail, product_action, money_action, creation_date, leadtime_minutes, source_1
+  - GET: trả count + lastSync + configured status
+- CS Troubleshoot page UX:
+  - Nút "Sync Lark" trong header (với ticket count)
+  - Toast success/error sau sync
+  - Banner "no ticket data" cập nhật hướng dẫn + nút "Sync ngay"
+  ⚠️ Cần set `LARK_BASE_ID` + `LARK_TABLE_ID` trong Vercel env vars
+
+### Vendor Performance (/analytics/vendors)
+- `/api/analytics/vendors/list` (GET): distinct vendors từ dim_sku
+- `/api/analytics/vendors/report` (POST): 7 queries song song — metrics/prev/allRev/trend/SKUs/channels/prevMonth
+- Page: multi-select vendor dropdown, comparison type, projection card, AreaChart, BarChart channels, SKU table sortable+paginate+search
+- Sidebar: Vendors vào nhóm Doanh Thu
+
+---
+
 ## Session 60 (2026-06-17) — Bug #31/#32 + All-Time Report + Polish (commit f8661d1)
 
 ### Bug #31 ✅ — Template WM UX phân rõ auto-fill vs bắt buộc
