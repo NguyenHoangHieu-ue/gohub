@@ -141,30 +141,37 @@ function nameEn(p: WMProduct, cfg: TemplateConfig): string {
 // ─── 3HK generator ────────────────────────────────────────────────────────────
 
 function generate3HKTemplate(
-  combos:   ThreeHKProduct[],
-  config:   TemplateConfig,
-  settings: FxSettings
+  combos:     ThreeHKProduct[],
+  config:     TemplateConfig,
+  settings:   FxSettings,
+  includeSIM: boolean = false
 ): NextResponse {
   const fx_usd_vnd = Number(settings.fx_usd_vnd) || 26394
   const wb = XLSX.utils.book_new()
 
-  // Helpers
-  const build3HKProductCode = (purchaseType: string, dp: string) =>
-    purchaseType + config.productType + config.supportCountryCode + "3D" + dp
+  // When includeSIM, generate both eSIM (productType=C) and SIM (productType=E) variants
+  // productType C = eSIM Full, E = SIM Full (from SKU code structure)
+  const simVariants: Array<{ simLabel: "eSIM" | "SIM"; productType: string }> = [
+    { simLabel: "eSIM", productType: config.productType || "C" },
+    ...(includeSIM ? [{ simLabel: "SIM" as const, productType: "E" }] : []),
+  ]
 
-  const build3HKSku = (purchaseType: string, dp: string, c: ThreeHKProduct) =>
-    build3HKProductCode(purchaseType, dp)
+  // Helpers
+  const build3HKProductCode = (purchaseType: string, dp: string, productType = config.productType) =>
+    purchaseType + productType + config.supportCountryCode + "3D" + dp
+
+  const build3HKSku = (purchaseType: string, dp: string, c: ThreeHKProduct, productType = config.productType) =>
+    build3HKProductCode(purchaseType, dp, productType)
     + dataAmountCode(c.data_gb, c.combo_type === "unlimited")
     + zeroPad(c.days, 2)
 
-  const makeName = (c: ThreeHKProduct, lang: "vn" | "en") => {
+  const makeName = (c: ThreeHKProduct, lang: "vn" | "en", simLabel = config.typeOfSim || "eSIM") => {
     const days = zeroPad(c.days, 2)
     const dayLabel = lang === "vn" ? `${days} Ngày` : `${days} Days`
-    const sim  = config.typeOfSim || "eSIM"
     const name = lang === "vn" ? config.countryNameVn : config.countryNameEn
-    if (c.combo_type === "unlimited") return `${sim} ${name} Unlimited ${dayLabel}`
-    if (c.combo_type === "daily")     return `${sim} ${name} ${c.data_gb}GB/Ngày ${dayLabel}`
-    return `${sim} ${name} ${c.data_gb}GB ${dayLabel}`
+    if (c.combo_type === "unlimited") return `${simLabel} ${name} Unlimited ${dayLabel}`
+    if (c.combo_type === "daily")     return `${simLabel} ${name} ${c.data_gb}GB/Ngày ${dayLabel}`
+    return `${simLabel} ${name} ${c.data_gb}GB ${dayLabel}`
   }
 
   const skuCols = [
@@ -173,13 +180,13 @@ function generate3HKTemplate(
     "throttleSpeed","call","callSmsDetails","expirations","vendorSku","vendorSkuSim","SKU",
   ]
 
-  const makeSkuRow = (c: ThreeHKProduct, tenant: "US" | "VN") => {
-    const dp   = c.data_policy_code
-    const pcUS = build3HKProductCode(config.purchaseType_US, dp)
-    const pcVN = build3HKProductCode(config.purchaseType_VN, dp)
-    const pc   = tenant === "US" ? pcUS : pcVN
-    const sku  = build3HKSku(tenant === "US" ? config.purchaseType_US : config.purchaseType_VN, dp, c)
-    const skuUS = build3HKSku(config.purchaseType_US, dp, c)
+  const makeSkuRow = (c: ThreeHKProduct, tenant: "US" | "VN", simLabel: "eSIM" | "SIM" = "eSIM", productType = config.productType) => {
+    const dp    = c.data_policy_code
+    const pcUS  = build3HKProductCode(config.purchaseType_US, dp, productType)
+    const pcVN  = build3HKProductCode(config.purchaseType_VN, dp, productType)
+    const pc    = tenant === "US" ? pcUS : pcVN
+    const sku   = build3HKSku(tenant === "US" ? config.purchaseType_US : config.purchaseType_VN, dp, c, productType)
+    const skuUS = build3HKSku(config.purchaseType_US, dp, c, productType)
     return {
       tenant,
       productCode:        pc,
@@ -187,8 +194,8 @@ function generate3HKTemplate(
       dataAmountUnit:     "GB",
       dayAmount:          c.days,
       dayAmountUnit:      "Day(s)",
-      nameVn:             makeName(c, "vn"),
-      nameEn:             makeName(c, "en"),
+      nameVn:             makeName(c, "vn", simLabel),
+      nameEn:             makeName(c, "en", simLabel),
       frameSku:           "",
       datapackSku:        "",
       latestCogs:         tenant === "US" ? c.cogs_usd : roundUp(c.cogs_usd * fx_usd_vnd, 0),
@@ -197,34 +204,38 @@ function generate3HKTemplate(
       call:               config.call,
       callSmsDetails:     "",
       expirations:        config.expirationDays,
-      vendorSku:          tenant === "VN" ? skuUS : c.vendor_sku,
+      vendorSku:          tenant === "VN" ? skuUS : `${c.vendor_sku}${simLabel === "SIM" ? "-SIM" : ""}`,
       vendorSkuSim:       "",
       SKU:                sku,
     }
   }
 
   // Sheet 1: Danh sách sản phẩm
-  const s1 = combos.map(c => ({
-    combo:    c.vendor_sku,
+  const s1 = combos.flatMap(c => simVariants.map(sv => ({
+    combo:    `${c.vendor_sku}${sv.simLabel === "SIM" ? "-SIM" : ""}`,
+    sim_type: sv.simLabel,
     days:     c.days,
     data:     c.data_gb ? `${c.data_gb}${c.combo_type === "daily" ? "GB/ngày" : "GB"}` : "Unlimited",
     throttle: c.throttle_mbps ? `${c.throttle_mbps} Mbps` : "",
     cogs_usd: c.cogs_usd,
     cogs_vnd: roundUp(c.cogs_usd * fx_usd_vnd, 0),
-  }))
+  })))
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s1), "Danh sách combo")
 
   // Sheet 2: COGS info
   const s2 = [[`3HK Datapool Template — ${config.countryNameEn || config.supportCountryCode}`],
     [`Formula: Fixed×55%, Daily×40%, Unlimited(10M)=1.8GB/day×40%, Unlimited(5M)=1.6GB/day×40%`],
-    [`FX: 1 USD = ${fx_usd_vnd} VND`]]
+    [`FX: 1 USD = ${fx_usd_vnd} VND`],
+    [`SIM types generated: ${simVariants.map(sv => sv.simLabel).join(" + ")}`]]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2), "Cấu trúc & cogs")
 
-  // Sheet 3+4: Template_SKU_US / VN
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(combos.map(c => makeSkuRow(c, "US")), { header: skuCols }), "Template_SKU_US")
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(combos.map(c => makeSkuRow(c, "VN")), { header: skuCols }), "Template_SKU_VN")
+  // Sheet 3+4: Template_SKU_US / VN — one row per combo × sim variant
+  const allSkuRowsUS = combos.flatMap(c => simVariants.map(sv => makeSkuRow(c, "US", sv.simLabel, sv.productType)))
+  const allSkuRowsVN = combos.flatMap(c => simVariants.map(sv => makeSkuRow(c, "VN", sv.simLabel, sv.productType)))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allSkuRowsUS, { header: skuCols }), "Template_SKU_US")
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(allSkuRowsVN, { header: skuCols }), "Template_SKU_VN")
 
-  // Sheet 5+6: Template_Product — collect unique product codes
+  // Sheet 5+6: Template_Product — collect unique product codes per sim variant
   const productCols = [
     "tenant","sourceType","productType","supportCountryCode","supportedCountries",
     "vendorCode","dataPolicyCode","typeOfSim","operatorCode","purchaseType","skuType",
@@ -233,15 +244,15 @@ function generate3HKTemplate(
     "hotspot","kycCode","kycNeeded","kycLinks","topUpOptions","activation","unsupportedApps",
     "telcoPerks","note","dataPlanType",
   ]
-  const makeProductRow = (tenant: "US" | "VN", dp: string) => {
+  const makeProductRow = (tenant: "US" | "VN", dp: string, simLabel: "eSIM" | "SIM", productType: string) => {
     const pt = tenant === "US" ? config.purchaseType_US : config.purchaseType_VN
-    const pc = build3HKProductCode(pt, dp)
+    const pc = build3HKProductCode(pt, dp, productType)
     return {
-      tenant, sourceType: pt, productType: config.productType,
+      tenant, sourceType: pt, productType,
       supportCountryCode: config.supportCountryCode,
       supportedCountries: config.isoCodes,
       vendorCode: "3D", dataPolicyCode: dp,
-      typeOfSim: config.typeOfSim, operatorCode: "3HK",
+      typeOfSim: simLabel, operatorCode: "3HK",
       purchaseType: "API Purchase", skuType: "Base + Datapack",
       dataType: "", baseSimEsimSkuCode: pc, importType: "Official",
       dailyResetTime: "", activationTime: "", networkType: "4G/LTE",
@@ -253,10 +264,10 @@ function generate3HKTemplate(
     }
   }
 
-  // Distinct data policy codes used in this batch
+  // Distinct (dp × simVariant) combinations
   const usedDP = [...new Set(combos.map(c => c.data_policy_code))]
-  const prodRowsUS = usedDP.map(dp => makeProductRow("US", dp))
-  const prodRowsVN = usedDP.map(dp => makeProductRow("VN", dp))
+  const prodRowsUS = usedDP.flatMap(dp => simVariants.map(sv => makeProductRow("US", dp, sv.simLabel, sv.productType)))
+  const prodRowsVN = usedDP.flatMap(dp => simVariants.map(sv => makeProductRow("VN", dp, sv.simLabel, sv.productType)))
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRowsUS, { header: productCols }), "Template_Product_US")
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRowsVN, { header: productCols }), "Template_Product_VN")
 
@@ -299,6 +310,7 @@ export async function POST(req: NextRequest) {
     threeHKProducts?: ThreeHKProduct[]
     config:           TemplateConfig
     settings:         FxSettings
+    includeSIM?:      boolean
   }
   try {
     body = await req.json()
@@ -306,7 +318,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { vendor = "WM", products, threeHKProducts, config, settings } = body
+  const { vendor = "WM", products, threeHKProducts, config, settings, includeSIM = false } = body
   if (!config || !settings)
     return NextResponse.json({ error: "Thiếu dữ liệu đầu vào" }, { status: 400 })
 
@@ -314,7 +326,7 @@ export async function POST(req: NextRequest) {
   if (vendor === "3HK") {
     if (!threeHKProducts?.length)
       return NextResponse.json({ error: "Thiếu combo 3HK" }, { status: 400 })
-    return generate3HKTemplate(threeHKProducts, config, settings)
+    return generate3HKTemplate(threeHKProducts, config, settings, includeSIM)
   }
 
   // ── WM (default) ─────────────────────────────────────────────────────────

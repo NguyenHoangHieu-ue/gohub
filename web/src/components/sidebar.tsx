@@ -30,8 +30,9 @@ const ANALYTICS_GROUPS = [
   {
     label: "Tổng Quan",
     items: [
-      { href: "/analytics",     label: "Dashboard",   icon: LayoutDashboard },
-      { href: "/analytics/bod", label: "BOD Report",  icon: PieChart        },
+      { href: "/analytics",          label: "Dashboard",       icon: LayoutDashboard },
+      { href: "/analytics/bod",      label: "BOD Report",      icon: PieChart        },
+      { href: "/analytics/all-time", label: "All-Time Report", icon: BarChart3       },
     ],
   },
   {

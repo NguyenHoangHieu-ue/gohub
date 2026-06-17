@@ -788,6 +788,7 @@ function TemplateTab({ onNotify }: {
   const [unlimitedEnabled, setUnlimitedEnabled]  = useState(true)
   const [selectedDays,     setSelectedDays]      = useState<Set<number>>(new Set([3, 5, 7, 10, 15, 30]))
   const [unlimThrottle,    setUnlimThrottle]     = useState<10 | 5>(5)
+  const [includeSIM,       setIncludeSIM]        = useState(false)
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -1014,6 +1015,7 @@ function TemplateTab({ onNotify }: {
           threeHKProducts: combos,
           config:          { ...config, vendorCode: "3D", operatorCode: "3HK" },
           settings:        fxSettings,
+          includeSIM,
         }
         successMsg = `Đã tải template 3HK ${combos.length} combo`
       } else {
@@ -1336,6 +1338,25 @@ function TemplateTab({ onNotify }: {
             </div>
           </div>
 
+          {/* SIM type option — Bug #32 */}
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Loại SIM xuất ra</p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" checked disabled />
+                <span className="text-sm text-gray-700 font-medium">eSIM (luôn có)</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" checked={includeSIM}
+                  onChange={e => setIncludeSIM(e.target.checked)} />
+                <span className="text-sm text-gray-700">
+                  Top-up SIM (SIM vật lý)
+                  <span className="text-xs text-gray-400 ml-1">— mỗi combo sẽ tạo thêm 1 hàng SIM</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
           {selectedZone && (
             <p className="text-xs text-gray-400 pt-1">
               Zone {selectedZone.zone} · {selectedZone.price_per_gb} HKD/GB · 1 HKD = {fxSettings.fx_hkd_usd} USD · 1 USD = {fxSettings.fx_usd_vnd} VND
@@ -1360,12 +1381,12 @@ function TemplateTab({ onNotify }: {
 
         {/* Required fields */}
         <div>
-          <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wide mb-2">Bắt buộc nhập</p>
+          <p className="text-[11px] font-semibold text-brand-600 uppercase tracking-wide mb-1">Bắt buộc nhập thủ công</p>
+          <p className="text-[10px] text-gray-400 mb-2">Admin phải nhập — không thể tự động điền từ sản phẩm NCC</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-3 bg-brand-50/40 border border-brand-100 rounded-lg">
             <TemplField label="Purchase Type US *" value={config.purchaseType_US} onChange={v => setC("purchaseType_US", v)} placeholder="D" />
             <TemplField label="Purchase Type VN *" value={config.purchaseType_VN} onChange={v => setC("purchaseType_VN", v)} placeholder="3" />
             <TemplField label="Country Code (3 ký tự) *" value={config.supportCountryCode} onChange={v => setC("supportCountryCode", v)} placeholder="TWN" />
-            <TemplField label="Data Policy Code *" value={config.dataPolicyCode} onChange={v => setC("dataPolicyCode", v)} placeholder="P" />
             <TemplField label="Tên nước (VN)" value={config.countryNameVn} onChange={v => setC("countryNameVn", v)} placeholder="Đài Loan" />
             <TemplField label="Tên nước (EN)" value={config.countryNameEn} onChange={v => setC("countryNameEn", v)} placeholder="Taiwan" />
           </div>
@@ -1373,9 +1394,11 @@ function TemplateTab({ onNotify }: {
 
         {/* Auto-fillable fields */}
         <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Auto-fill (có thể chỉnh)</p>
+          <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wide mb-1">Auto-fill từ SP đã chọn (có thể chỉnh)</p>
+          <p className="text-[10px] text-gray-400 mb-2">Nhấn ⚡ Auto-fill để điền tự động từ sản phẩm đầu tiên đã chọn ở trên</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             <TemplField label="Type of SIM" value={config.typeOfSim} onChange={v => setC("typeOfSim", v)} placeholder="eSIM" />
+            <TemplField label="Data Policy Code" value={config.dataPolicyCode} onChange={v => setC("dataPolicyCode", v)} placeholder="P" />
             <TemplField label="Operator Code" value={config.operatorCode} onChange={v => setC("operatorCode", v)} placeholder="WORLDMOVE" />
             <TemplField label="Network Type" value={config.networkType} onChange={v => setC("networkType", v)} placeholder="4G" />
             <TemplField label="APN" value={config.apn} onChange={v => setC("apn", v)} placeholder="mobile.three.com.hk" />
