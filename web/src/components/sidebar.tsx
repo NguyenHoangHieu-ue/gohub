@@ -75,17 +75,25 @@ const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
 
 const SPECIFIC_DEPTS = ["sales", "product", "tech", "finance"]
 
-// Fetch dept từ DB mỗi lần load → không cần re-login khi admin đổi dept
-function useMyDept(username: string) {
+// Fetch profile từ DB mỗi lần load → không cần re-login khi admin đổi dept/quyền
+function useMyProfile(username: string) {
   const [dept, setDept] = useState<string | null>(null)
+  const [allowedAnalytics, setAllowedAnalytics] = useState<string[] | null>(null)
   useEffect(() => {
     if (!username) return
     fetch("/api/user/me", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.department) setDept(d.department) })
+      .then(d => {
+        if (d?.department) setDept(d.department)
+        setAllowedAnalytics(
+          d?.allowed_analytics
+            ? d.allowed_analytics.split(",").filter(Boolean)
+            : null
+        )
+      })
       .catch(() => {})
   }, [username])
-  return dept
+  return { dept, allowedAnalytics }
 }
 
 function useDeptTabs(role: string, department: string) {
@@ -134,10 +142,24 @@ export function Sidebar() {
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const dbDept    = useMyDept(username)
+  const { dept: dbDept, allowedAnalytics } = useMyProfile(username)
   const department = dbDept ?? "none"
 
   const extraTabs = useDeptTabs(role, department)
+
+  // Filter analytics groups theo allowed_analytics (chỉ áp dụng cho staff/bod khi có restriction)
+  const analyticsGroups = (() => {
+    if (!allowedAnalytics || role === "admin" || role === "manager") return ANALYTICS_GROUPS
+    return ANALYTICS_GROUPS
+      .map(group => ({
+        ...group,
+        items: group.items.filter(item => {
+          const id = item.href === "/analytics" ? "dashboard" : item.href.replace("/analytics/", "")
+          return allowedAnalytics.includes(id)
+        }),
+      }))
+      .filter(group => group.items.length > 0)
+  })()
 
   const showAnalytics = ANALYTICS_ROLES.has(role)
 
@@ -285,7 +307,7 @@ export function Sidebar() {
             )}
 
             {/* Collapsed mode: flat icon list */}
-            {collapsed && ANALYTICS_NAV_FLAT.map(({ href, label, icon: Icon }) => {
+            {collapsed && analyticsGroups.flatMap(g => g.items).map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
                           || (href === "/analytics" && pathname === "/analytics")
               return (
@@ -299,7 +321,7 @@ export function Sidebar() {
             })}
 
             {/* Expanded mode: grouped */}
-            {!collapsed && analyticsOpen && ANALYTICS_GROUPS.map(group => (
+            {!collapsed && analyticsOpen && analyticsGroups.map(group => (
               <div key={group.label} className="mt-1">
                 <p className="px-3 pt-1.5 pb-0.5 text-[9px] font-bold text-gray-300 uppercase tracking-widest">{group.label}</p>
                 {group.items.map(({ href, label, icon: Icon }) => {

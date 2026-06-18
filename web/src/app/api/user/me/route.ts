@@ -9,9 +9,12 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("users")
-    .select("department")
+    .select("department, allowed_analytics")
     .eq("username", session.user.username)
     .single()
 
-  return NextResponse.json({ department: data?.department ?? "none" })
+  return NextResponse.json({
+    department:        data?.department        ?? "none",
+    allowed_analytics: data?.allowed_analytics ?? null,
+  })
 }

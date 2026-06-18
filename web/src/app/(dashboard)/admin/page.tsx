@@ -7,14 +7,34 @@ import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Sear
 import { ConfirmModal } from "@/components/confirm-modal"
 
 interface User {
-  username:      string
-  name:          string
-  email:         string
-  role:          string
-  department:    string
-  created_at:    string
-  lark_open_id?: string
+  username:           string
+  name:               string
+  email:              string
+  role:               string
+  department:         string
+  allowed_analytics?: string | null
+  created_at:         string
+  lark_open_id?:      string
 }
+
+// Analytics pages có thể giới hạn per-user (staff/bod)
+const ANALYTICS_REPORTS = [
+  { id: "dashboard",       label: "Dashboard" },
+  { id: "bod",             label: "BOD Report" },
+  { id: "all-time",        label: "All-Time Report" },
+  { id: "channels",        label: "Kênh bán" },
+  { id: "b2b",             label: "B2B" },
+  { id: "b2c",             label: "B2C" },
+  { id: "vendors",         label: "Vendors" },
+  { id: "orders",          label: "Đơn hàng" },
+  { id: "staff",           label: "Nhân viên" },
+  { id: "fulfillment",     label: "Fulfillment" },
+  { id: "cs-troubleshoot", label: "CS Troubleshoot" },
+  { id: "products",        label: "Sản phẩm (BI)" },
+  { id: "targets",         label: "KPI / Target" },
+  { id: "customers",       label: "Khách hàng" },
+  { id: "3hk-usage",       label: "3HK Data Usage" },
+] as const
 
 type Tab = "list" | "add" | "password" | "settings" | "permissions" | "template" | "promotions" | "scheduled"
 
@@ -124,9 +144,10 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   onRefresh:   () => void
   onNotify:    (type: "success" | "error", text: string) => void
 }) {
-  const [confirmDel, setConfirmDel] = useState<string | null>(null)
-  const [saving,     setSaving]     = useState<string | null>(null)
-  const [deleting,   setDeleting]   = useState(false)
+  const [confirmDel,          setConfirmDel]          = useState<string | null>(null)
+  const [saving,              setSaving]              = useState<string | null>(null)
+  const [deleting,            setDeleting]            = useState(false)
+  const [activeAnalyticsUser, setActiveAnalyticsUser] = useState<string | null>(null)
 
   const changeRole = async (username: string, role: string) => {
     setSaving(username)
@@ -137,6 +158,16 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     })
     setSaving(null)
     if (res.ok) { onRefresh(); onNotify("success", `Đã đổi role ${username} → ${role}`) }
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+  }
+
+  const changeAnalytics = async (username: string, allowed: string | null) => {
+    const res = await fetch(`/api/admin/users/${username}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ allowed_analytics: allowed }),
+    })
+    if (res.ok) { onRefresh(); onNotify("success", allowed ? `Giới hạn ${allowed.split(",").length} trang Analytics cho ${username}` : `Mở full Analytics cho ${username}`) }
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
@@ -202,6 +233,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="standard">Standard</option>
+                <option value="bod">BOD</option>
+                <option value="staff">Staff</option>
                 <option value="manager">Manager</option>
                 <option value="admin">Admin</option>
               </select>
@@ -217,6 +250,68 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                 <option value="tech">Tech</option>
                 <option value="finance">Finance</option>
               </select>
+
+              {/* Analytics Access — chỉ hiện cho staff/bod */}
+              {(u.role === "staff" || u.role === "bod") && (
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveAnalyticsUser(activeAnalyticsUser === u.username ? null : u.username)}
+                    title="Cấu hình trang Analytics được phép"
+                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                      u.allowed_analytics
+                        ? "bg-blue-50 border-blue-200 text-blue-700"
+                        : "bg-gray-50 border-gray-200 text-gray-500"
+                    }`}
+                  >
+                    <Lock size={11} />
+                    {u.allowed_analytics
+                      ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
+                      : "Analytics: tất cả"}
+                  </button>
+
+                  {activeAnalyticsUser === u.username && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setActiveAnalyticsUser(null)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56">
+                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                          <span className="text-[11px] font-bold text-gray-600 uppercase">Analytics Access</span>
+                          <button
+                            onClick={() => { changeAnalytics(u.username, null); setActiveAnalyticsUser(null) }}
+                            className="text-[10px] text-blue-600 hover:underline"
+                          >
+                            Tất cả
+                          </button>
+                        </div>
+                        <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                          {ANALYTICS_REPORTS.map(r => {
+                            const current = u.allowed_analytics
+                              ? u.allowed_analytics.split(",").filter(Boolean)
+                              : ANALYTICS_REPORTS.map(x => x.id)
+                            const checked = current.includes(r.id)
+                            return (
+                              <label key={r.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={e => {
+                                    const next = e.target.checked
+                                      ? [...current, r.id]
+                                      : current.filter(x => x !== r.id)
+                                    const val = next.length === ANALYTICS_REPORTS.length ? null : (next.length > 0 ? next.join(",") : "")
+                                    changeAnalytics(u.username, val || null)
+                                  }}
+                                  className="rounded text-blue-600 w-3.5 h-3.5"
+                                />
+                                <span className="text-xs text-gray-700">{r.label}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {saving === u.username && (
                 <span className="text-xs text-gray-400">Đang lưu...</span>
@@ -284,6 +379,8 @@ function AddUser({ onRefresh, onNotify, setTab }: {
             className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="standard">Standard</option>
+            <option value="bod">BOD</option>
+            <option value="staff">Staff</option>
             <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </select>

@@ -18,6 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { username: 
     if (body.role)       update.role       = body.role
     if (body.department) update.department = body.department
     if (body.password)   update.password   = await bcrypt.hash(body.password, 12)
+    if ("allowed_analytics" in body) update.allowed_analytics = body.allowed_analytics ?? null
 
     await supabaseAdmin.from("users").update(update).eq("username", params.username)
     return NextResponse.json({ ok: true })
