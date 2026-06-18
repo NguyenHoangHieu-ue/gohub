@@ -13,6 +13,30 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp 4 (2026-06-18) — Redesign B2C theo gohub_b2c_dashboard_spec.md
+
+Spec: gohub_b2c_dashboard_spec.md — 1-page executive dashboard Apple-style, 5 section, rolling 6 tháng.
+User chọn: build layout đủ + bind data thật phần có (Section 1&2), Section 3-5 placeholder (KHÔNG số giả).
+
+### API mới: /api/analytics/b2c/monthly
+- Rolling 6 tháng (5 hoàn thành + current MTD) từ gohub_dw, B2C only (dim_order_source group_name='B2C')
+- markets: VN/US/Total revenue theo tháng (company_code)
+- customers: New/Returning/Total (revenue + count) — New = tháng có đơn B2C ĐẦU TIÊN của khách (CTE first_order)
+- elapsedDays/totalDays cho prorata. Cache 5 phút + CACHE_HEADERS.
+
+### Trang b2c/page.tsx viết lại Apple-style (bg #f5f5f7, soft cards, thin typography, spacing rộng)
+- Section 1 Doanh thu B2C: bảng rolling (VN B2C/US B2C/Total) — mỗi tháng hoàn thành: value + MoM% dưới;
+  cột current MTD (badge MTD) + MoM + Prorata (run-rate) + vs prev. Tab Revenue/KPI (KPI = placeholder → Settings).
+- Section 2 Customers: New/Returning/Total — value + count khách dưới mỗi ô, + MTD/MoM/prorata.
+- Section 3 (CAC/Users/Leads), 4 (GA4 charts), 5 (Budget/ROAS): placeholder "Chờ kết nối nguồn dữ liệu" + ghi rõ cần nguồn gì.
+
+### Ghi chú / follow-up
+- Section 1 breakdown hiện ở mức thị trường (VN/US/Total). Sub-row Web/App/Sales B2C cần xác nhận mapping channel_name → để sau.
+- Công thức prorata/MoM tính client-side từ monthly values + elapsed days.
+Typecheck PASS.
+
+---
+
 ## Session 63 — tiếp 3 (2026-06-18) — Port analytics khớp Y ĐÚC gohub-intel
 
 User yêu cầu: các tab merge từ gohub-intel phải giống y đúc format bản gốc; chỉ giữ thay đổi tốc độ/query.

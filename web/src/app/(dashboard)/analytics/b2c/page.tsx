@@ -1,229 +1,228 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { ArrowUpRight, ArrowDownRight, Filter, Download, RefreshCw } from "lucide-react"
-import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import { ArrowUpRight, ArrowDownRight, Lock } from "lucide-react"
+import { formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 
-function getDefaultDateRange() {
-  const today = new Date(); const d = today.getDate()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  if (d <= 7) return { startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) }
-  return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)) }
+// ── types ───────────────────────────────────────────────────────────────────
+interface MarketCell { vn: number; us: number; total: number }
+interface CustCell { revenue: number; count: number }
+interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
+interface MonthlyData {
+  months:       string[]
+  currentMonth: string
+  elapsedDays:  number
+  totalDays:    number
+  markets:      Record<string, MarketCell>
+  customers:    Record<string, CustRow>
 }
 
-function cn(...c: (string | boolean | undefined)[]) { return c.filter(Boolean).join(" ") }
-const Sk = ({ className }: { className?: string }) => <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
+// ── helpers ──────────────────────────────────────────────────────────────────
+const monthLabel = (m: string) => {
+  const [y, mo] = m.split("-")
+  return { top: `Thg ${parseInt(mo)}`, sub: `'${y.slice(2)}` }
+}
+const pct = (cur: number, prev: number): number | null =>
+  prev > 0 ? ((cur - prev) / prev) * 100 : null
 
-interface KPI { label: string; value: number; lastPeriod: number; change: number; isPositive: boolean; isCurrency?: boolean }
-interface PerformanceRow { name: string; revenue: number; margin: number; margin_percent: number; gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number }
+const Delta = ({ v }: { v: number | null }) => {
+  if (v === null) return <span className="text-slate-300 text-[11px]">—</span>
+  const up = v >= 0
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-[11px] ${up ? "text-emerald-600" : "text-rose-500"}`}>
+      {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+      {Math.abs(v).toFixed(1)}%
+    </span>
+  )
+}
 
-const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"]
+// Section shell — Apple-style soft card
+const Section = ({ n, title, desc, children, action }: {
+  n: number; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
+}) => (
+  <section className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="px-7 pt-6 pb-4 flex items-start justify-between gap-4">
+      <div>
+        <p className="text-[11px] font-medium text-slate-400 uppercase tracking-[0.15em]">Section {n}</p>
+        <h2 className="text-lg font-medium text-slate-800 mt-0.5">{title}</h2>
+        {desc && <p className="text-sm text-slate-400 mt-0.5">{desc}</p>}
+      </div>
+      {action}
+    </div>
+    {children}
+  </section>
+)
 
-export default function B2CPerformancePage() {
-  const [kpis, setKpis]     = useState<KPI[]>([])
-  const [trend, setTrend]   = useState<any[]>([])
-  const [perf, setPerf]     = useState<PerformanceRow[]>([])
+// Placeholder for sections waiting on data sources
+const AwaitingData = ({ note }: { note: string }) => (
+  <div className="px-7 pb-8 pt-2">
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 flex flex-col items-center justify-center text-center gap-2">
+      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+        <Lock className="w-4 h-4 text-slate-400" />
+      </div>
+      <p className="text-sm font-medium text-slate-500">Chờ kết nối nguồn dữ liệu</p>
+      <p className="text-xs text-slate-400 max-w-md">{note}</p>
+    </div>
+  </div>
+)
+
+export default function B2CDashboardPage() {
+  const [data, setData]       = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
-  const [startDate, setStartDate] = useState(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate]     = useState(() => getDefaultDateRange().endDate)
-  const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
-  const [groupBy, setGroupBy]       = useState<"channel" | "vendor" | "destination">("channel")
-  const [period, setPeriod]         = useState<"month" | "quarter">("month")
-  const [showFilters, setShowFilters] = useState(false)
+  const [tab, setTab]         = useState<"revenue" | "kpi">("revenue")
 
-  const fetchData = async () => {
-    setLoading(true); setError(null)
-    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&groupBy=${groupBy}&period=${period}`
-    const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
-    try {
-      const k = await fj(`/api/analytics/b2c/kpis${q}`)
-      setKpis(k); setLoading(false)
-      const [t, p] = await Promise.all([
-        fj(`/api/analytics/b2c/trend${q}`),
-        fj(`/api/analytics/b2c/performance${q}`),
-      ])
-      setTrend(t); setPerf(p)
-    } catch (err: any) { console.error(err); setError("Hiếu đang fix, vui lòng đợi"); setLoading(false) }
-  }
+  useEffect(() => {
+    (async () => {
+      setLoading(true); setError(null)
+      try {
+        const res = await fetch("/api/analytics/b2c/monthly")
+        if (!res.ok) throw new Error(`${res.status}`)
+        setData(await res.json())
+      } catch (err) {
+        console.error(err); setError("Hiếu đang fix, vui lòng đợi")
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
 
-  useEffect(() => { fetchData() }, [dateColumn, groupBy, period])
+  const completed = data ? data.months.slice(0, 5) : []
+  const current   = data?.currentMonth ?? ""
+  const prevFull  = data ? data.months[4] : ""
+  const proj      = (mtd: number) => data && data.elapsedDays > 0 ? mtd / data.elapsedDays * data.totalDays : 0
 
-  const exportCSV = () => {
-    if (!perf.length) return
-    const h = ["Name", "Revenue", "Margin", "Margin%", "Units"]
-    const rows = perf.map(r => [`"${r.name}"`, r.revenue, r.margin, `${r.margin_percent.toFixed(2)}%`, r.units].join(","))
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([[h.join(","), ...rows].join("\n")], { type: "text/csv" }))
-    a.download = `b2c_${groupBy}_${startDate}_${endDate}.csv`; a.click()
-  }
-
-  const top5 = perf.slice(0, 5)
-  const totalRev = perf.reduce((s, r) => s + r.revenue, 0)
+  // generic rolling-table renderer
+  const RollingTable = ({ rows }: {
+    rows: { label: string; highlight?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
+  }) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-slate-400 border-y border-slate-100">
+            <th className="text-left font-medium px-7 py-3 text-xs uppercase tracking-wider">Line</th>
+            {completed.map(m => {
+              const l = monthLabel(m)
+              return <th key={m} className="text-right font-medium px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+            })}
+            <th className="text-right font-medium px-4 py-3 text-xs text-slate-500">{monthLabel(current).top} <span className="text-slate-300">MTD</span></th>
+            <th className="text-right font-medium px-4 py-3 text-xs">MoM</th>
+            <th className="text-right font-medium px-4 py-3 text-xs">Prorata</th>
+            <th className="text-right font-medium px-4 py-3 text-xs">vs prev</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {rows.map(row => {
+            const mtd      = row.get(current)
+            const prevVal  = row.get(prevFull)
+            const prorata  = proj(mtd)
+            return (
+              <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+                <td className={`px-7 py-4 text-left ${row.highlight ? "font-semibold text-slate-800" : "font-normal text-slate-600"}`}>{row.label}</td>
+                {completed.map((m, i) => {
+                  const v = row.get(m)
+                  const prev = i > 0 ? row.get(completed[i - 1]) : null
+                  return (
+                    <td key={m} className="px-4 py-4 text-right tabular-nums">
+                      <div className="text-slate-700">{formatCompactNumber(v)}</div>
+                      <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
+                      {row.sub && <div className="text-[10px] text-slate-400 mt-0.5">{row.sub(m)}</div>}
+                    </td>
+                  )
+                })}
+                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/30">
+                  <div className="text-slate-900 font-medium">{formatCompactNumber(mtd)}</div>
+                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
+                  {row.sub && <div className="text-[10px] text-slate-400 mt-0.5">{row.sub(current)}</div>}
+                </td>
+                <td className="px-4 py-4 text-right"><Delta v={pct(mtd, prevVal)} /></td>
+                <td className="px-4 py-4 text-right tabular-nums">
+                  <div className="text-slate-700">{formatCompactNumber(prorata)}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
+                </td>
+                <td className="px-4 py-4 text-right"><Delta v={pct(prorata, prevVal)} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">B2C Performance</h1>
-          <p className="text-sm text-slate-500">Shopee, TikTok, Momo, ngân hàng, kênh B2C — {startDate} đến {endDate}</p>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm h-[38px] items-center">
-            {(["fulfiled_date", "created_date"] as const).map(col => (
-              <button key={col} onClick={() => setDateColumn(col)}
-                className={cn("px-3 py-1 text-xs font-medium rounded-md transition-all", dateColumn === col ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50")}>
-                {col === "fulfiled_date" ? "Fulfillment" : "Created"}
-              </button>
-            ))}
-          </div>
-          <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm h-[38px] items-center">
-            {(["month", "quarter"] as const).map(p => (
-              <button key={p} onClick={() => setPeriod(p)}
-                className={cn("px-3 py-1 text-xs font-medium rounded-md capitalize transition-all", period === p ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50")}>{p}</button>
-            ))}
-          </div>
-          <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
-            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none shadow-sm">
-            <option value="channel">By Channel</option>
-            <option value="vendor">By Vendor</option>
-            <option value="destination">By Destination</option>
-          </select>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={cn("flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium shadow-sm", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700")}>
-            <Filter className="w-3.5 h-3.5" /> Filters
-          </button>
-          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-            <Download className="w-3.5 h-3.5" /> CSV
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#f5f5f7] p-6 lg:p-10">
+      <div className="max-w-[1400px] mx-auto space-y-10">
 
-      {showFilters && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
-          {[{ label: "Start Date", val: startDate, set: setStartDate }, { label: "End Date", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
-            <div key={label} className="flex-1 space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
-              <input type="date" value={val} onChange={e => set(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <button onClick={() => { const r = getDefaultDateRange(); setStartDate(r.startDate); setEndDate(r.endDate) }} className="px-4 py-2 text-sm text-slate-500">Reset</button>
-            <button onClick={() => { fetchData(); setShowFilters(false) }} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Apply</button>
-            {loading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin self-center" />}
+        {/* Header */}
+        <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">gohub b2c</h1>
+            <p className="text-sm text-slate-400 mt-1">B2C executive dashboard · {current ? monthLabel(current).top + " " + current.split("-")[0] : "—"}</p>
           </div>
-        </div>
-      )}
+          {data && (
+            <p className="text-xs text-slate-400">
+              MTD: {data.elapsedDays}/{data.totalDays} ngày
+            </p>
+          )}
+        </header>
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
+        {error && <div className="bg-white border border-rose-100 text-rose-600 rounded-2xl p-5 text-sm">{error}</div>}
+        {loading && <div className="text-sm text-slate-400">Đang tải dữ liệu…</div>}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {loading ? Array(5).fill(0).map((_, i) => (
-          <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3"><Sk className="h-4 w-24" /><Sk className="h-8 w-32" /></div>
-        )) : kpis.map(kpi => (
-          <div key={kpi.label} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 mb-1">{kpi.label}</p>
-            <h2 className="text-xl font-bold text-slate-900">{kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}</h2>
-            <div className={cn("mt-2 flex items-center gap-1 text-xs font-bold", kpi.isPositive ? "text-emerald-600" : "text-rose-600")}>
-              {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-              {Math.abs(kpi.change).toFixed(1)}%
-            </div>
-          </div>
-        ))}
-      </div>
+        {data && !loading && (
+          <>
+            {/* Section 1 — Revenue + Breakdown */}
+            <Section
+              n={1}
+              title="Doanh thu B2C & Breakdown"
+              desc="Theo thị trường, rolling 6 tháng"
+              action={
+                <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
+                  {(["revenue", "kpi"] as const).map(t => (
+                    <button key={t} onClick={() => setTab(t)}
+                      className={`px-3 py-1.5 rounded-md font-medium transition-all capitalize ${tab === t ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+                      {t === "revenue" ? "Revenue" : "KPI"}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              {tab === "revenue" ? (
+                <RollingTable rows={[
+                  { label: "VN B2C",    get: m => data.markets[m]?.vn ?? 0 },
+                  { label: "US B2C",    get: m => data.markets[m]?.us ?? 0 },
+                  { label: "Total B2C", get: m => data.markets[m]?.total ?? 0, highlight: true },
+                ]} />
+              ) : (
+                <AwaitingData note="KPI target được nhập/import trong Settings (theo tháng, theo line item). Sau khi lưu, tab KPI sẽ hiển thị % đạt KPI, MTD vs target, prorata vs KPI." />
+              )}
+            </Section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Trend Chart */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-slate-800 mb-6">B2C Revenue Trend ({period})</h3>
-          <div className="h-[220px]">
-            {loading ? <Sk className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend}>
-                  <defs>
-                    <linearGradient id="b2cRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => formatCompactNumber(v)} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none" }} formatter={(v: number) => [formatCurrency(v), "Revenue"]} />
-                  <Area type="monotone" dataKey="revenue" stroke="#ec4899" strokeWidth={2.5} fill="url(#b2cRev)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
+            {/* Section 2 — Revenue by Customers */}
+            <Section n={2} title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách">
+              <RollingTable rows={[
+                { label: "New",       get: m => data.customers[m]?.new.revenue ?? 0,       sub: m => `${formatNumber(data.customers[m]?.new.count ?? 0)} khách` },
+                { label: "Returning", get: m => data.customers[m]?.returning.revenue ?? 0, sub: m => `${formatNumber(data.customers[m]?.returning.count ?? 0)} khách` },
+                { label: "Total",     get: m => data.customers[m]?.total.revenue ?? 0,     sub: m => `${formatNumber(data.customers[m]?.total.count ?? 0)} khách`, highlight: true },
+              ]} />
+            </Section>
 
-        {/* Top 5 Bar Chart */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-slate-800 mb-6">Top 5 by {groupBy === "channel" ? "Channel" : groupBy === "vendor" ? "Vendor" : "Destination"}</h3>
-          <div className="h-[220px]">
-            {loading ? <Sk className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={top5} layout="vertical" margin={{ left: 20, right: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={140} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none" }} formatter={(v: number) => [formatCurrency(v), "Revenue"]} />
-                  <Bar dataKey="revenue" radius={[0, 4, 4, 0]} barSize={22} fill="#ec4899" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
+            {/* Section 3 — CAC, Users, Leads */}
+            <Section n={3} title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US">
+              <AwaitingData note="Cần nguồn: Marketing spend (CAC), GA4 (user count New/Returning theo VN/US), và Leads (Website chat / Zalo / WhatsApp / Messenger — dedup theo identity)." />
+            </Section>
 
-      {/* Performance Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-bold text-slate-800">
-            B2C Performance by {groupBy === "channel" ? "Channel" : groupBy === "vendor" ? "Vendor" : "Destination"}
-          </h3>
-          <span className="text-sm text-slate-500">Total: {formatCurrency(totalRev)}</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 font-medium text-xs">
-              <tr>
-                {["Name", "Revenue", "Share %", "Margin", "Margin %", "GPM2", "GPM2 %", "Units"].map(h => (
-                  <th key={h} className={cn("px-4 py-3", h !== "Name" && "text-right")}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? Array(6).fill(0).map((_, i) => (
-                <tr key={i}>{Array(8).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Sk className="h-4 w-20 ml-auto" /></td>)}</tr>
-              )) : perf.map((r, i) => (
-                <tr key={r.name} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-700">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                      {r.name}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(r.revenue)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${totalRev > 0 ? (r.revenue / totalRev) * 100 : 0}%`, backgroundColor: COLORS[i % COLORS.length] }} />
-                      </div>
-                      <span className="text-slate-500 text-xs">{totalRev > 0 ? ((r.revenue / totalRev) * 100).toFixed(1) : 0}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-emerald-600">{formatCurrency(r.margin)}</td>
-                  <td className="px-4 py-3 text-right text-emerald-600">{r.margin_percent.toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-right text-blue-600">{formatCurrency(r.gpm2)}</td>
-                  <td className="px-4 py-3 text-right text-blue-600">{r.gpm2_percent.toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-right text-slate-500">{formatNumber(r.units)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            {/* Section 4 — GA4 Conversion Rate Charts */}
+            <Section n={4} title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)">
+              <AwaitingData note="Cần kết nối GA4 (Google service account + GA_PROPERTY_ID). Sau khi có, hiển thị 3 combo chart: % CR Gohub App, % CR Gohub .com, % CR Gohub .vn." />
+            </Section>
+
+            {/* Section 5 — Budget Management */}
+            <Section n={5} title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS">
+              <AwaitingData note="Cần bảng marketing: monthly_budget, spend_mtd, attributed_revenue (theo VN/US/Total + refresh_timestamp). Công thức: Spend pace = Spend MTD / Budget · ROAS = Attributed revenue / Spend." />
+            </Section>
+          </>
+        )}
       </div>
     </div>
   )

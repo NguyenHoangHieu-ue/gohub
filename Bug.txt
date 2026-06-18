@@ -1,3 +1,10 @@
+*18/6/2026 — Session 63 — tiếp 4 — Redesign B2C theo spec*
+51. ✅ DONE: Redesign trang B2C Apple-style 5 section theo gohub_b2c_dashboard_spec.md
+    - API mới /api/analytics/b2c/monthly (rolling 6 tháng: VN/US/Total + New/Returning từ gohub_dw)
+    - Section 1 (revenue rolling + MTD/MoM/prorata, tab Revenue/KPI) + Section 2 (customers) = data thật
+    - Section 3-5 (CAC/Leads, GA4 charts, Budget/ROAS) = placeholder "chờ nguồn dữ liệu" (chưa có GA4/marketing)
+    - Follow-up: sub-row Web/App/Sales cần mapping channel_name; KPI persist trong Settings chưa làm
+
 *18/6/2026 — Session 63 — tiếp 3 — Port analytics khớp y đúc gohub-intel*
 49. ✅ DONE: customers/staff/orders bị dịch VN + đổi style lúc port → port lại JSX nguyên văn từ intel (giữ data/API/tốc độ). motion.div→div (motion ko cài), API y hệt
 50. ✅ DONE: bod "BOD Report"→"Board of Directors Report", b2b "B2B Performance"→"B2B Performance Summary"
