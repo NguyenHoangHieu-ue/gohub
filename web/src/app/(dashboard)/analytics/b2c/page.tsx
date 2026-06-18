@@ -1,8 +1,14 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { ArrowUpRight, ArrowDownRight, Lock } from "lucide-react"
-import { formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts"
+import {
+  ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
+} from "lucide-react"
+import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import { cn } from "@/lib/utils"
 
 // ── types ───────────────────────────────────────────────────────────────────
 interface MarketCell { vn: number; us: number; total: number }
@@ -36,26 +42,46 @@ const Delta = ({ v }: { v: number | null }) => {
   )
 }
 
-// Section shell — Apple-style soft card
-const Section = ({ n, title, desc, children, action }: {
-  n: number; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
-}) => (
-  <section className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-    <div className="px-7 pt-6 pb-4 flex items-start justify-between gap-4">
-      <div>
-        <p className="text-[11px] font-medium text-slate-400 uppercase tracking-[0.15em]">Section {n}</p>
-        <h2 className="text-lg font-medium text-slate-800 mt-0.5">{title}</h2>
-        {desc && <p className="text-sm text-slate-400 mt-0.5">{desc}</p>}
+// Section shell — card đồng bộ với các tab analytics khác
+const Section = ({ icon, title, desc, children, action, accent = "blue" }: {
+  icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode; accent?: "blue" | "indigo" | "slate"
+}) => {
+  const chip = accent === "indigo" ? "bg-indigo-600" : accent === "slate" ? "bg-slate-700" : "bg-blue-600"
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm", chip)}>{icon}</div>
+          <div>
+            <h2 className="text-base font-bold text-slate-800 tracking-tight">{title}</h2>
+            {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
+          </div>
+        </div>
+        {action}
       </div>
-      {action}
+      {children}
+    </section>
+  )
+}
+
+// KPI card — đồng bộ format các tab khác
+const KpiCard = ({ icon, label, value, sub, delta, accent }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; delta?: number | null; accent: string
+}) => (
+  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+    <div className="flex items-center justify-between mb-3">
+      <div className={cn("p-2 rounded-xl", accent)}>{icon}</div>
+      {delta !== undefined && <Delta v={delta ?? null} />}
     </div>
-    {children}
-  </section>
+    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
+    <p className="text-xl font-bold text-slate-900 mt-1 tracking-tight">{value}</p>
+    {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+  </div>
 )
 
-// Placeholder for sections waiting on data sources
+// Placeholder cho section chờ nguồn dữ liệu
 const AwaitingData = ({ note }: { note: string }) => (
-  <div className="px-7 pb-8 pt-2">
+  <div className="px-6 pb-7 pt-5">
     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 flex flex-col items-center justify-center text-center gap-2">
       <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
         <Lock className="w-4 h-4 text-slate-400" />
@@ -92,6 +118,27 @@ export default function B2CDashboardPage() {
   const prevFull  = data ? data.months[4] : ""
   const proj      = (mtd: number) => data && data.elapsedDays > 0 ? mtd / data.elapsedDays * data.totalDays : 0
 
+  // ── KPI values (MTD tháng hiện tại) ─────────────────────────────────────────
+  const mtdTotal   = data?.markets[current]?.total ?? 0
+  const prevTotal  = data?.markets[prevFull]?.total ?? 0
+  const cust       = data?.customers[current]
+  const newRev     = cust?.new.revenue ?? 0
+  const retRev     = cust?.returning.revenue ?? 0
+  const totRev     = cust?.total.revenue ?? 0
+  const newShare   = totRev > 0 ? (newRev / totRev) * 100 : 0
+
+  // ── chart series (rolling 6 tháng) ──────────────────────────────────────────
+  const revSeries = data ? data.months.map(m => ({
+    name: `${monthLabel(m).top} ${monthLabel(m).sub}`,
+    "VN B2C": data.markets[m]?.vn ?? 0,
+    "US B2C": data.markets[m]?.us ?? 0,
+  })) : []
+  const custSeries = data ? data.months.map(m => ({
+    name: `${monthLabel(m).top} ${monthLabel(m).sub}`,
+    "Khách mới": data.customers[m]?.new.revenue ?? 0,
+    "Quay lại":  data.customers[m]?.returning.revenue ?? 0,
+  })) : []
+
   // generic rolling-table renderer
   const RollingTable = ({ rows }: {
     rows: { label: string; highlight?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
@@ -99,16 +146,16 @@ export default function B2CDashboardPage() {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-slate-400 border-y border-slate-100">
-            <th className="text-left font-medium px-7 py-3 text-xs uppercase tracking-wider">Line</th>
+          <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+            <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Line</th>
             {completed.map(m => {
               const l = monthLabel(m)
-              return <th key={m} className="text-right font-medium px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+              return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
-            <th className="text-right font-medium px-4 py-3 text-xs text-slate-500">{monthLabel(current).top} <span className="text-slate-300">MTD</span></th>
-            <th className="text-right font-medium px-4 py-3 text-xs">MoM</th>
-            <th className="text-right font-medium px-4 py-3 text-xs">Prorata</th>
-            <th className="text-right font-medium px-4 py-3 text-xs">vs prev</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
+            <th className="text-right font-semibold px-4 py-3 text-xs">MoM</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs">Prorata</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs">vs prev</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
@@ -118,7 +165,7 @@ export default function B2CDashboardPage() {
             const prorata  = proj(mtd)
             return (
               <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-                <td className={`px-7 py-4 text-left ${row.highlight ? "font-semibold text-slate-800" : "font-normal text-slate-600"}`}>{row.label}</td>
+                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-800" : "font-medium text-slate-600"}`}>{row.label}</td>
                 {completed.map((m, i) => {
                   const v = row.get(m)
                   const prev = i > 0 ? row.get(completed[i - 1]) : null
@@ -130,8 +177,8 @@ export default function B2CDashboardPage() {
                     </td>
                   )
                 })}
-                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/30">
-                  <div className="text-slate-900 font-medium">{formatCompactNumber(mtd)}</div>
+                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+                  <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
                   <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
                   {row.sub && <div className="text-[10px] text-slate-400 mt-0.5">{row.sub(current)}</div>}
                 </td>
@@ -150,37 +197,106 @@ export default function B2CDashboardPage() {
   )
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] p-6 lg:p-10">
-      <div className="max-w-[1400px] mx-auto space-y-10">
+    <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-semibold text-slate-900 tracking-tight">gohub b2c</h1>
-            <p className="text-sm text-slate-400 mt-1">B2C executive dashboard · {current ? monthLabel(current).top + " " + current.split("-")[0] : "—"}</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">B2C Performance</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Executive dashboard · rolling 6 tháng · {current ? `${monthLabel(current).top} ${current.split("-")[0]}` : "—"}</p>
           </div>
           {data && (
-            <p className="text-xs text-slate-400">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
               MTD: {data.elapsedDays}/{data.totalDays} ngày
-            </p>
+            </span>
           )}
-        </header>
+        </div>
 
-        {error && <div className="bg-white border border-rose-100 text-rose-600 rounded-2xl p-5 text-sm">{error}</div>}
-        {loading && <div className="text-sm text-slate-400">Đang tải dữ liệu…</div>}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">{error}</div>}
+        {loading && <div className="text-sm text-slate-400 py-8">Đang tải dữ liệu…</div>}
 
         {data && !loading && (
           <>
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <KpiCard icon={<DollarSign className="w-5 h-5" />} accent="bg-blue-50 text-blue-600"
+                label="Doanh thu B2C (MTD)" value={formatCurrency(mtdTotal)} delta={pct(mtdTotal, prevTotal)} sub="vs tháng trước" />
+              <KpiCard icon={<TrendingUp className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600"
+                label="Dự phóng tháng" value={formatCurrency(proj(mtdTotal))} sub="run-rate prorata" />
+              <KpiCard icon={<UserPlus className="w-5 h-5" />} accent="bg-indigo-50 text-indigo-600"
+                label="Khách mới (MTD)" value={formatNumber(cust?.new.count ?? 0)} sub={`${formatCurrency(newRev)} doanh thu`} />
+              <KpiCard icon={<Users className="w-5 h-5" />} accent="bg-purple-50 text-purple-600"
+                label="Khách quay lại (MTD)" value={formatNumber(cust?.returning.count ?? 0)} sub={`${formatCurrency(retRev)} doanh thu`} />
+              <KpiCard icon={<PieChartIcon className="w-5 h-5" />} accent="bg-orange-50 text-orange-600"
+                label="Tỷ trọng khách mới" value={`${newShare.toFixed(1)}%`} sub="doanh thu khách mới / tổng" />
+            </div>
+
+            {/* Charts row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Revenue by market */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center"><Globe className="w-4 h-4" /></div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Doanh thu B2C theo thị trường</h3>
+                    <p className="text-xs text-slate-400">VN vs US · rolling 6 tháng</p>
+                  </div>
+                </div>
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={revSeries}>
+                      <defs>
+                        <linearGradient id="gvn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} /></linearGradient>
+                        <linearGradient id="gus" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} /><stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} /></linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => formatCompactNumber(v)} />
+                      <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }} formatter={(v: number) => formatCurrency(v)} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                      <Area type="monotone" dataKey="VN B2C" stackId="1" stroke="#2563eb" strokeWidth={2} fill="url(#gvn)" />
+                      <Area type="monotone" dataKey="US B2C" stackId="1" stroke="#6366f1" strokeWidth={2} fill="url(#gus)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Customers new vs returning */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Users className="w-4 h-4" /></div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Khách mới vs quay lại</h3>
+                    <p className="text-xs text-slate-400">Doanh thu theo nhóm khách · rolling 6 tháng</p>
+                  </div>
+                </div>
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={custSeries}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => formatCompactNumber(v)} />
+                      <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }} formatter={(v: number) => formatCurrency(v)} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="Khách mới" stackId="c" fill="#6366f1" radius={[0, 0, 0, 0]} barSize={26} />
+                      <Bar dataKey="Quay lại" stackId="c" fill="#a855f7" radius={[4, 4, 0, 0]} barSize={26} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
             {/* Section 1 — Revenue + Breakdown */}
             <Section
-              n={1}
+              icon={<DollarSign className="w-5 h-5" />}
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               action={
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
                   {(["revenue", "kpi"] as const).map(t => (
                     <button key={t} onClick={() => setTab(t)}
-                      className={`px-3 py-1.5 rounded-md font-medium transition-all capitalize ${tab === t ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
+                      className={`px-3 py-1.5 rounded-md font-semibold transition-all ${tab === t ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
                       {t === "revenue" ? "Revenue" : "KPI"}
                     </button>
                   ))}
@@ -199,7 +315,7 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section n={2} title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách">
+            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách">
               <RollingTable rows={[
                 { label: "New",       get: m => data.customers[m]?.new.revenue ?? 0,       sub: m => `${formatNumber(data.customers[m]?.new.count ?? 0)} khách` },
                 { label: "Returning", get: m => data.customers[m]?.returning.revenue ?? 0, sub: m => `${formatNumber(data.customers[m]?.returning.count ?? 0)} khách` },
@@ -208,17 +324,17 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 3 — CAC, Users, Leads */}
-            <Section n={3} title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US">
+            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US">
               <AwaitingData note="Cần nguồn: Marketing spend (CAC), GA4 (user count New/Returning theo VN/US), và Leads (Website chat / Zalo / WhatsApp / Messenger — dedup theo identity)." />
             </Section>
 
             {/* Section 4 — GA4 Conversion Rate Charts */}
-            <Section n={4} title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)">
+            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)">
               <AwaitingData note="Cần kết nối GA4 (Google service account + GA_PROPERTY_ID). Sau khi có, hiển thị 3 combo chart: % CR Gohub App, % CR Gohub .com, % CR Gohub .vn." />
             </Section>
 
             {/* Section 5 — Budget Management */}
-            <Section n={5} title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS">
+            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="slate" title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS">
               <AwaitingData note="Cần bảng marketing: monthly_budget, spend_mtd, attributed_revenue (theo VN/US/Total + refresh_timestamp). Công thức: Spend pace = Spend MTD / Budget · ROAS = Attributed revenue / Spend." />
             </Section>
           </>

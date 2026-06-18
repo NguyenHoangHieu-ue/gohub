@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { Fragment, useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, ChevronDown, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
@@ -166,6 +166,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   const [saving,              setSaving]              = useState<string | null>(null)
   const [deleting,            setDeleting]            = useState(false)
   const [activeAnalyticsUser, setActiveAnalyticsUser] = useState<string | null>(null)
+  const [draftAnalytics,      setDraftAnalytics]      = useState<Set<string>>(new Set())
+  const [savingAnalytics,     setSavingAnalytics]     = useState(false)
   const [search,              setSearch]              = useState("")
 
   const changeRole = async (username: string, role: string) => {
@@ -180,14 +182,45 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
-  const changeAnalytics = async (username: string, allowed: string | null) => {
+  // Mở editor ma trận cho 1 user — khởi tạo draft từ allowed_analytics hiện tại
+  const openAnalyticsEditor = (u: User) => {
+    if (activeAnalyticsUser === u.username) { setActiveAnalyticsUser(null); return }
+    const current = u.allowed_analytics
+      ? u.allowed_analytics.split(",").filter(Boolean)
+      : ANALYTICS_REPORTS.map(x => x.id)   // null = tất cả
+    setDraftAnalytics(new Set(current))
+    setActiveAnalyticsUser(u.username)
+  }
+
+  const toggleDraftAnalytics = (id: string) => {
+    setDraftAnalytics(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  // Chỉ lưu khi bấm "Xác nhận cập nhật" — không apply ngay từng tick
+  const confirmAnalytics = async (username: string) => {
+    setSavingAnalytics(true)
+    const ids = ANALYTICS_REPORTS.filter(r => draftAnalytics.has(r.id)).map(r => r.id)
+    const all = ids.length === ANALYTICS_REPORTS.length
+    const val = all ? null : ids.join(",")   // tất cả → null; không chọn gì → "" (chặn hết)
     const res = await fetch(`/api/admin/users/${username}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ allowed_analytics: allowed }),
+      body:    JSON.stringify({ allowed_analytics: val }),
     })
-    if (res.ok) { onRefresh(); onNotify("success", allowed ? `Giới hạn ${allowed.split(",").length} trang Analytics cho ${username}` : `Mở full Analytics cho ${username}`) }
-    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+    setSavingAnalytics(false)
+    if (res.ok) {
+      onRefresh()
+      setActiveAnalyticsUser(null)
+      onNotify("success", all
+        ? `Mở tất cả ${ANALYTICS_REPORTS.length} trang Analytics cho ${username}`
+        : ids.length === 0
+          ? `Đã chặn toàn bộ Analytics của ${username}`
+          : `Cập nhật ${ids.length}/${ANALYTICS_REPORTS.length} trang Analytics cho ${username}`)
+    } else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
   const changeDept = async (username: string, department: string) => {
@@ -261,7 +294,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                   <td colSpan={5} className="px-5 py-12 text-center text-sm text-slate-400">Không tìm thấy user nào.</td>
                 </tr>
               ) : filtered.map(u => (
-                <tr key={u.username} className="hover:bg-slate-50/50 transition-colors">
+                <Fragment key={u.username}>
+                <tr className="hover:bg-slate-50/50 transition-colors">
                   {/* User */}
                   <td className="px-5 py-4">
                     <div className="flex flex-col">
@@ -308,65 +342,23 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                   {/* Analytics access */}
                   <td className="px-4 py-4">
                     {(u.role === "staff" || u.role === "bod") ? (
-                      <div className="relative">
-                        <button
-                          onClick={() => setActiveAnalyticsUser(activeAnalyticsUser === u.username ? null : u.username)}
-                          title="Cấu hình trang Analytics được phép"
-                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
-                            u.allowed_analytics
+                      <button
+                        onClick={() => openAnalyticsEditor(u)}
+                        title="Cấu hình trang Analytics được phép"
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
+                          activeAnalyticsUser === u.username
+                            ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
+                            : u.allowed_analytics
                               ? "bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100"
                               : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                          }`}
-                        >
-                          <Lock size={12} />
-                          {u.allowed_analytics
-                            ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
-                            : "Tất cả trang"}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeAnalyticsUser === u.username ? "rotate-180" : ""}`} />
-                        </button>
-
-                        {activeAnalyticsUser === u.username && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setActiveAnalyticsUser(null)} />
-                            <div className="absolute left-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl p-3 w-60">
-                              <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
-                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Cấu hình truy cập</span>
-                                <button
-                                  onClick={() => { changeAnalytics(u.username, null); setActiveAnalyticsUser(null) }}
-                                  className="text-[10px] text-blue-600 hover:underline font-semibold"
-                                >
-                                  Cho tất cả
-                                </button>
-                              </div>
-                              <div className="space-y-0.5 max-h-64 overflow-y-auto pr-1">
-                                {ANALYTICS_REPORTS.map(r => {
-                                  const current = u.allowed_analytics
-                                    ? u.allowed_analytics.split(",").filter(Boolean)
-                                    : ANALYTICS_REPORTS.map(x => x.id)
-                                  const checked = current.includes(r.id)
-                                  return (
-                                    <label key={r.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-blue-50" : "hover:bg-slate-50"}`}>
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={e => {
-                                          const next = e.target.checked
-                                            ? [...current, r.id]
-                                            : current.filter(x => x !== r.id)
-                                          const val = next.length === ANALYTICS_REPORTS.length ? null : (next.length > 0 ? next.join(",") : "")
-                                          changeAnalytics(u.username, val || null)
-                                        }}
-                                        className="rounded text-blue-600 w-4 h-4 border-slate-300 focus:ring-blue-500"
-                                      />
-                                      <span className={`text-xs ${checked ? "text-blue-900 font-medium" : "text-slate-700"}`}>{r.label}</span>
-                                    </label>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                        }`}
+                      >
+                        <Lock size={12} />
+                        {u.allowed_analytics
+                          ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
+                          : "Tất cả trang"}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeAnalyticsUser === u.username ? "rotate-180" : ""}`} />
+                      </button>
                     ) : u.role === "admin" || u.role === "manager" ? (
                       <span className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-xs font-bold uppercase tracking-wider">
                         <Shield className="w-3.5 h-3.5" /> Toàn quyền
@@ -392,6 +384,69 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                     </div>
                   </td>
                 </tr>
+
+                {/* Inline matrix editor — chọn nhiều trang rồi mới Xác nhận cập nhật */}
+                {activeAnalyticsUser === u.username && (u.role === "staff" || u.role === "bod") && (
+                  <tr className="bg-slate-50/60">
+                    <td colSpan={5} className="px-5 py-5">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
+                          <div>
+                            <p className="text-sm font-bold text-slate-700">Trang Analytics được xem — <span className="text-blue-600">{u.username}</span></p>
+                            <p className="text-xs text-slate-400 mt-0.5">Bấm chọn nhiều trang, sau đó nhấn <strong>Xác nhận cập nhật</strong>. Chọn tất cả = toàn quyền Analytics.</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500">{draftAnalytics.size}/{ANALYTICS_REPORTS.length} trang</span>
+                            <button
+                              onClick={() => setDraftAnalytics(new Set(ANALYTICS_REPORTS.map(x => x.id)))}
+                              className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold"
+                            >Chọn tất cả</button>
+                            <button
+                              onClick={() => setDraftAnalytics(new Set())}
+                              className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold"
+                            >Bỏ chọn hết</button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                          {ANALYTICS_REPORTS.map(r => {
+                            const on = draftAnalytics.has(r.id)
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => toggleDraftAnalytics(r.id)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+                                  on
+                                    ? "bg-blue-50 border-blue-200 text-blue-700"
+                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                }`}
+                              >
+                                {on ? <CheckSquare className="w-4 h-4 shrink-0 text-blue-600" /> : <Square className="w-4 h-4 shrink-0 text-slate-300" />}
+                                <span className="text-xs font-medium truncate">{r.label}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 mt-4">
+                          <button
+                            onClick={() => setActiveAnalyticsUser(null)}
+                            className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700"
+                          >Hủy</button>
+                          <button
+                            onClick={() => confirmAnalytics(u.username)}
+                            disabled={savingAnalytics}
+                            className="flex items-center gap-2 px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+                          >
+                            <Save size={14} />{savingAnalytics ? "Đang lưu..." : "Xác nhận cập nhật"}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

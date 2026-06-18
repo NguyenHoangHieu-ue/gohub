@@ -181,6 +181,74 @@ export function getDaysInRange(startDate: string, endDate: string, monthStr: str
   return Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
 }
 
+// ── Channel costs (from Supabase, replaces Turso channel_costs) ───────────────
+
+export function getMonthsInRange(startDate: string, endDate: string): string[] {
+  const start  = new Date(startDate)
+  const end    = new Date(endDate)
+  const months: string[] = []
+  let curr = new Date(start.getFullYear(), start.getMonth(), 1)
+  while (curr <= end) {
+    months.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, "0")}`)
+    curr.setMonth(curr.getMonth() + 1)
+  }
+  return months
+}
+
+export type CostValue = { type: "amount" | "percent"; value: number }
+export type ChannelCostRow = {
+  channel: string; month: string
+  ads: CostValue; platformFee: CostValue; sponsorProducts: CostValue; media: CostValue
+}
+
+function parseCostJSON(v: unknown): CostValue {
+  if (!v) return { type: "amount", value: 0 }
+  if (typeof v === "object") return v as CostValue
+  try { return JSON.parse(v as string) } catch { return { type: "amount", value: 0 } }
+}
+
+export async function getChannelCostsForMonths(months: string[]): Promise<ChannelCostRow[]> {
+  if (!months.length) return []
+  try {
+    const { data } = await supabaseAdmin
+      .from("analytics_channel_costs")
+      .select("channel, month, ads, platform_fee, sponsor_products, media")
+      .in("month", months)
+    return (data || []).map(r => ({
+      channel:         r.channel,
+      month:           r.month,
+      ads:             parseCostJSON(r.ads),
+      platformFee:     parseCostJSON(r.platform_fee),
+      sponsorProducts: parseCostJSON(r.sponsor_products),
+      media:           parseCostJSON(r.media),
+    }))
+  } catch { return [] }
+}
+
+export async function getCostSettingsForMonths(months: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  if (!months.length) return map
+  try {
+    const { data } = await supabaseAdmin
+      .from("analytics_cost_input_settings")
+      .select("channel, month, mode")
+      .in("month", months)
+    ;(data || []).forEach(r => map.set(`${r.channel}_${r.month}`, r.mode))
+  } catch {}
+  return map
+}
+
+export async function getGroupCostsForMonths(months: string[]): Promise<Array<Record<string, unknown>>> {
+  if (!months.length) return []
+  try {
+    const { data } = await supabaseAdmin
+      .from("analytics_channel_group_costs")
+      .select("*")
+      .in("month", months)
+    return data || []
+  } catch { return [] }
+}
+
 // ── Target planning (from Supabase) ───────────────────────────────────────────
 
 export async function getTargetSummary(startDate: string, endDate: string) {

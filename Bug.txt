@@ -1,3 +1,9 @@
+*18/6/2026 — Session 64 — Port B2B y đúc + Cost + UserList ma trận + B2C redesign + Audit*
+58. ✅ DONE: Audit merge gohub-intel → GoHub PM. 20/23 AVAILABLE_REPORTS đã port. Defer: Website Analytics (GA4), Schema Config. Dead code (đúng): OnDemand/Wholesale. B2C theo spec (chủ đích).
+57. ✅ DONE: Port B2B tab Y ĐÚC (B2BPerformance.tsx) đầy đủ kể cả Cost + PDF. 5 KPI Actual+Projected, ComposedChart, Strategic tier expand, Other Tiers sort+expand, Export PDF, Manage Costs. API b2b/* rewrite trả GPM2/sub_channels/cost_breakdown. Channel Costs migrate Turso→Supabase (5 API mới + CostManagementModal). Deps jspdf+modern-screenshot.
+56. ✅ DONE: UserList Analytics access — bỏ dropdown apply-ngay → ma trận ô CheckSquare/Square (giống tab Phân quyền), multi-select rồi bấm "Xác nhận cập nhật" mới lưu. Giữ allowed_analytics + endpoint.
+55. ✅ DONE: B2C redesign theo format các tab khác — thêm 5 KPI cards + 2 chart (Area thị trường, Bar khách mới/quay lại), restyle bg-slate-50 card icon. Giữ API b2c/monthly + bảng rolling.
+
 *18/6/2026 — Session 63 — tiếp 6 — UserList gán role+trang giống intel*
 53. ✅ DONE: UserList (gán role + trang analytics per user) khó dùng → đổi card→BẢNG kiểu intel (User|Role|Phòng ban|Analytics|Thao tác) + search bar + đếm user. Analytics: dropdown checkbox cho staff/bod, badge Toàn quyền cho admin/manager. Giữ endpoint + logic allowed_analytics
 

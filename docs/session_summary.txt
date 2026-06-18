@@ -13,6 +13,39 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 64 (2026-06-18) — Port B2B y đúc + Cost Mgmt + UserList ma trận + B2C redesign + Audit
+
+User giao 4 việc. Làm xong cả 4 (typecheck + next build PASS).
+
+### 1. Audit merge gohub-intel → GoHub PM (AVAILABLE_REPORTS 23 mục)
+- 20/23 đã port (Dashboard/BOD/AllTime/Channel/B2B/B2C/Staff/Orders/Customer/Vendor/Targets/AI/Product/
+  Fulfillment/3HK/CS/Feedback/SQL/Users/Scheduled/Settings). all-time + feedback + sql là trang thật (không stub).
+- CHƯA port (defer): Website Analytics (GA4 — cần Google service account), Schema Config (admin DB schema tool — đã bị thay bằng env ANALYTICS_DB_* + Settings sku_destination_rule).
+- KHÔNG port (đúng): OnDemandPerformance + WholesalePerformance = code chết (không có trong AVAILABLE_REPORTS).
+- B2C: redesign theo gohub_b2c_dashboard_spec.md (CHỦ ĐÍCH, không phải y đúc intel B2CPerformance).
+
+### 2. Port B2B tab Y ĐÚC từ intel (B2BPerformance.tsx) — ĐẦY ĐỦ kể cả Cost + PDF
+- Trang b2b/page.tsx viết lại y đúc: 5 KPI Actual + 5 Projected, ComposedChart Revenue(bar)+GPM2(line),
+  bảng Strategic tier-grouped expand (sub_channels + cost_breakdown + TOTAL), bảng Other Tiers sort+expand+getFilteredOtherTiers, Export PDF, Manage Costs. motion→div (giữ quy ước), fetch song song (tốc độ).
+- API rewrite trả GPM2/sub_channels/cost_breakdown: b2b/kpis (GPM2 cost-adjust), b2b/performance (port fetchB2BPerformanceData groupBy customer), b2b/strategic-performance (full tier + cost_breakdown), b2b/trend (gpm2 + group costs).
+- Channel Costs MIGRATE Turso→Supabase (bảng v13 đã có): API mới /api/channel-costs (GET/POST), /api/channel-group-costs (GET/POST + [id] DELETE), /api/channel-cost-settings (GET/POST), /api/config/vn-ecom-subchannels, /api/analytics/channels-with-platform-fee.
+- Helper analytics-helpers.ts: getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths, getGroupCostsForMonths.
+- Component CostManagementModal.tsx port (motion→div). Deps mới: jspdf + modern-screenshot (dynamic import).
+- LƯU Ý: GPM2 = GP khi chưa nhập Channel Costs (bảng rỗng) — đúng behavior. Cost POST yêu cầu admin/manager.
+
+### 3. UserList tab Phân quyền — dropdown → MA TRẬN + multi-select confirm
+- Bỏ dropdown checkbox apply-ngay. Thêm editor row inline (colSpan 5) khi click nút: grid ô CheckSquare/Square
+  (giống tab Phân quyền) cho 16 trang analytics. Chọn nhiều → bấm "Xác nhận cập nhật" mới PATCH.
+- draftAnalytics Set state + Chọn tất cả/Bỏ chọn hết. Giữ logic allowed_analytics (null=tất cả, ""=chặn hết, list=subset) + endpoint cũ.
+
+### 4. B2C redesign theo format các tab khác (giữ API b2c/monthly)
+- Thêm header chuẩn + dải 5 KPI cards có icon (DT MTD, Dự phóng, Khách mới, Khách quay lại, Tỷ trọng khách mới).
+- 2 biểu đồ: AreaChart DT theo thị trường (VN/US stacked), BarChart Khách mới vs quay lại (stacked).
+- Giữ bảng rolling Section 1 (Revenue/KPI) + Section 2 (Customers) restyle card icon. Section 3-5 placeholder "chờ nguồn".
+- bg-slate-50 + card rounded-2xl shadow-sm (đồng bộ B2B/dashboard) thay Apple-style #f5f5f7 đơn điệu.
+
+---
+
 ## Session 63 — tiếp 6 (2026-06-18) — UserList gán role+trang giống intel (bảng + search)
 
 User làm rõ "phân quyền" = gán ROLE + TRANG analytics cho từng user (UserList) — hiện rất khó dùng.
