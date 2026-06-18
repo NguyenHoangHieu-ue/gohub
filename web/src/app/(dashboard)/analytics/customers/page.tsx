@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface KPI {
   label: string
@@ -49,6 +50,8 @@ export default function CustomerPerformancePage() {
   const [kpis, setKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<TrendData[]>([])
   const [performanceData, setPerformanceData] = useState<CustomerRow[]>([])
+  const [custPage, setCustPage] = useState(1)
+  useEffect(() => { setCustPage(1) }, [performanceData])
   const [tierDistribution, setTierDistribution] = useState<DistributionData[]>([])
   const [channelDistribution, setChannelDistribution] = useState<DistributionData[]>([])
   const [productData, setProductData] = useState<any[]>([])
@@ -595,6 +598,7 @@ export default function CustomerPerformancePage() {
                       </tr>
                     ) : performanceData
                       .filter(p => !Object.values(partnerTiers).flat().includes(p.name))
+                      .slice((custPage - 1) * PAGE_ROWS, custPage * PAGE_ROWS)
                       .map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-8 py-5">
@@ -630,6 +634,12 @@ export default function CustomerPerformancePage() {
                   </tbody>
                 </table>
               </div>
+              <Pager
+                page={custPage}
+                total={performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name)).length}
+                onPage={setCustPage}
+                label="khách"
+              />
             </div>
           </div>
         )}

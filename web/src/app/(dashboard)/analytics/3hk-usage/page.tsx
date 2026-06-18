@@ -107,7 +107,7 @@ function MetricsTable<T extends { [k: string]: any }>({
   )
 }
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 export default function ThreeHKUsagePage() {
   const [records, setRecords] = useState<DataUsageRecord[]>([])

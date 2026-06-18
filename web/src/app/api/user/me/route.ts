@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("users")
-    .select("role, department, allowed_analytics")
+    .select("role, department, allowed_analytics, allowed_tabs")
     .eq("username", session.user.username)
     .single()
 
@@ -17,5 +17,6 @@ export async function GET() {
     role:              data?.role              ?? session.user.role,
     department:        data?.department        ?? "none",
     allowed_analytics: data?.allowed_analytics ?? null,
+    allowed_tabs:      data?.allowed_tabs      ?? null,
   })
 }

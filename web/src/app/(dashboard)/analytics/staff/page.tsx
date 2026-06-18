@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface StaffMetric {
   staff_name: string
@@ -44,6 +45,8 @@ export default function StaffPerformancePage() {
   const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
   const [page, setPage] = useState(1)
   const [totalOrdersCount, setTotalOrdersCount] = useState(0)
+  const [leaderPage, setLeaderPage] = useState(1)
+  useEffect(() => { setLeaderPage(1) }, [staffMetrics])
 
   useEffect(() => {
     fetchChannels()
@@ -478,7 +481,8 @@ export default function StaffPerformancePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {staffMetrics.map((staff, idx) => {
+                {staffMetrics.slice((leaderPage - 1) * PAGE_ROWS, leaderPage * PAGE_ROWS).map((staff, i) => {
+                  const idx = (leaderPage - 1) * PAGE_ROWS + i
                   const revValue = parseFloat(staff.total_revenue)
                   const ordValue = parseInt(staff.total_orders)
                   const contribution = (revValue / totalRevenue) * 100
@@ -536,6 +540,7 @@ export default function StaffPerformancePage() {
               </tbody>
             </table>
           </div>
+          <Pager page={leaderPage} total={staffMetrics.length} onPage={setLeaderPage} label="nhân viên" />
         </div>
 
         {/* Transaction Detail Table */}

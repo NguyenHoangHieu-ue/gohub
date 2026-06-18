@@ -54,7 +54,7 @@ const Section = ({ icon, title, desc, children, action, accent = "blue" }: {
           <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm", chip)}>{icon}</div>
           <div>
             <h2 className="text-base font-bold text-slate-800 tracking-tight">{title}</h2>
-            {desc && <p className="text-xs text-slate-400 mt-0.5">{desc}</p>}
+            {desc && <p className="text-xs font-medium text-slate-500 mt-0.5">{desc}</p>}
           </div>
         </div>
         {action}
@@ -73,9 +73,9 @@ const KpiCard = ({ icon, label, value, sub, delta, accent }: {
       <div className={cn("p-2 rounded-xl", accent)}>{icon}</div>
       {delta !== undefined && <Delta v={delta ?? null} />}
     </div>
-    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-    <p className="text-xl font-bold text-slate-900 mt-1 tracking-tight">{value}</p>
-    {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
+    <p className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">{value}</p>
+    {sub && <p className="text-xs font-medium text-slate-500 mt-0.5">{sub}</p>}
   </div>
 )
 
@@ -165,26 +165,26 @@ export default function B2CDashboardPage() {
             const prorata  = proj(mtd)
             return (
               <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-800" : "font-medium text-slate-600"}`}>{row.label}</td>
+                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{row.label}</td>
                 {completed.map((m, i) => {
                   const v = row.get(m)
                   const prev = i > 0 ? row.get(completed[i - 1]) : null
                   return (
                     <td key={m} className="px-4 py-4 text-right tabular-nums">
-                      <div className="text-slate-700">{formatCompactNumber(v)}</div>
+                      <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
                       <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
-                      {row.sub && <div className="text-[10px] text-slate-400 mt-0.5">{row.sub(m)}</div>}
+                      {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
                     </td>
                   )
                 })}
                 <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
                   <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
                   <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
-                  {row.sub && <div className="text-[10px] text-slate-400 mt-0.5">{row.sub(current)}</div>}
+                  {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
                 </td>
                 <td className="px-4 py-4 text-right"><Delta v={pct(mtd, prevVal)} /></td>
                 <td className="px-4 py-4 text-right tabular-nums">
-                  <div className="text-slate-700">{formatCompactNumber(prorata)}</div>
+                  <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
                   <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
                 </td>
                 <td className="px-4 py-4 text-right"><Delta v={pct(prorata, prevVal)} /></td>
@@ -240,7 +240,7 @@ export default function B2CDashboardPage() {
                   <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center"><Globe className="w-4 h-4" /></div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-800">Doanh thu B2C theo thị trường</h3>
-                    <p className="text-xs text-slate-400">VN vs US · rolling 6 tháng</p>
+                    <p className="text-xs font-medium text-slate-500">VN vs US · rolling 6 tháng</p>
                   </div>
                 </div>
                 <div className="h-[260px]">
@@ -268,7 +268,7 @@ export default function B2CDashboardPage() {
                   <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Users className="w-4 h-4" /></div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-800">Khách mới vs quay lại</h3>
-                    <p className="text-xs text-slate-400">Doanh thu theo nhóm khách · rolling 6 tháng</p>
+                    <p className="text-xs font-medium text-slate-500">Doanh thu theo nhóm khách · rolling 6 tháng</p>
                   </div>
                 </div>
                 <div className="h-[260px]">

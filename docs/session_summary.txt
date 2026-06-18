@@ -13,6 +13,33 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 64 — tiếp (2026-06-18) — Pagination 20 + B2C font + B2B header + Gộp tab Phân quyền
+
+User giao 4 việc tiếp. Xong cả 4 (typecheck + next build PASS).
+
+### 1. Phân trang 20 hàng/trang cho bảng danh sách
+- Component dùng chung `web/src/components/pager.tsx` (PAGE_ROWS=20, nút Trước/Sau + "X–Y / Z").
+- Thêm phân trang client: products (SKU breakdown), customers (All Customers Breakdown), staff (leaderboard — rank tính theo index tuyệt đối), cs-troubleshoot (PerformanceTable theo SKU/Vendor/Source + Invalid tickets).
+- Đổi constant: vendors PAGE_SIZE 15→20, 3hk-usage PAGE_SIZE 50→20. Orders đã 20 sẵn.
+
+### 2. B2C font đậm dễ nhìn
+- Giá trị bảng rolling text-slate-700→slate-800 font-semibold; label dòng font-semibold slate-700; sub-count slate-400→slate-500 font-medium.
+- KPI label font-bold slate-500, value text-2xl; Section desc + chart subtitle slate-400→slate-500 font-medium.
+
+### 3. B2B header bố cục lại
+- Thêm icon chip Building2 (12x12 bo tròn xanh) + title leading-tight + subtitle tiếng Việt gọn. Toolbar flex-wrap.
+
+### 4. GỘP tab "Danh sách" + "Phân quyền" → 1 tab "Người dùng & Phân quyền"
+- Bỏ tab "Phân quyền" riêng (type Tab + TAB_META + TAB_GROUPS). Tab "list" giờ là editor per-user:
+  dropdown chọn account → select Role + Phòng ban → box tích chọn (CheckSquare) Trang Analytics (16) + Tab PM (kb/skus/ncc) → nút "Cập nhật" lưu 1 lần (role+department+allowed_analytics+allowed_tabs). Có nút Xóa user.
+- Ma trận phân quyền hệ thống (Role×Tính năng + Phòng ban×Tab) giữ ở mục "nâng cao" collapsible (render <PermissionsTab>).
+- **MỚI: per-user PM tab** — migration `database/migrations/v17_allowed_tabs.sql` (ADD COLUMN allowed_tabs) ⚠️ CHẠY THỦ CÔNG TRƯỚC KHI DEPLOY (nếu không, GET /api/admin/users + /api/user/me select allowed_tabs sẽ lỗi).
+  - API: users GET + [username] PATCH + user/me đều thêm allowed_tabs.
+  - sidebar.tsx useMyProfile thêm allowedTabs; standard user: allowed_tabs (nếu set) override dept matrix, else fallback dept.
+- allowed_tabs semantics: null=theo phòng ban, ""=chỉ tab mặc định, list=subset. allowed_analytics: null=tất cả, ""=chặn hết, list=subset.
+
+---
+
 ## Session 64 (2026-06-18) — Port B2B y đúc + Cost Mgmt + UserList ma trận + B2C redesign + Audit
 
 User giao 4 việc. Làm xong cả 4 (typecheck + next build PASS).

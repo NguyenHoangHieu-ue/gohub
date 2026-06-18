@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange, formatTruncatedString } from "@/lib/analytics-formatters"
+import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface Metrics {
   revenue: number; revenueChange: number
@@ -45,6 +46,7 @@ export default function ProductsPage() {
   const [channels, setChannels] = useState<ChannelRow[]>([])
   const [regions, setRegions] = useState<any[]>([])
   const [skus, setSkus] = useState<SkuRow[]>([])
+  const [skuPage, setSkuPage] = useState(1)
 
   // Filters
   const [startDate, setStartDate] = useState(getDefaultDateRange().startDate)
@@ -62,6 +64,10 @@ export default function ProductsPage() {
   const [destination, setDestination] = useState("all")
   const [countryMap, setCountryMap] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+
+  // reset trang khi danh sách SKU đổi (fetch mới)
+  useEffect(() => { setSkuPage(1) }, [skus])
+  const pagedSkus = skus.slice((skuPage - 1) * PAGE_ROWS, skuPage * PAGE_ROWS)
 
   // Load categories, vendors from dim_sku meta
   useEffect(() => {
@@ -426,7 +432,7 @@ export default function ProductsPage() {
                   <tr key={i} className="animate-pulse">
                     {Array(8).fill(0).map((_, j) => <td key={j} className="px-5 py-3"><div className="h-4 bg-slate-100 rounded" /></td>)}
                   </tr>
-                )) : skus.map((s, idx) => {
+                )) : pagedSkus.map((s, idx) => {
                   const mp = s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0
                   return (
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
@@ -454,6 +460,7 @@ export default function ProductsPage() {
               </tbody>
             </table>
           </div>
+          <Pager page={skuPage} total={skus.length} onPage={setSkuPage} label="SKU" />
         </div>
       )}
     </div>

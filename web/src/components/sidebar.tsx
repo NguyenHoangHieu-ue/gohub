@@ -81,6 +81,7 @@ function useMyProfile(username: string) {
   const [dbRole,          setDbRole]          = useState<string | null>(null)
   const [dept,            setDept]            = useState<string | null>(null)
   const [allowedAnalytics, setAllowedAnalytics] = useState<string[] | null>(null)
+  const [allowedTabs,     setAllowedTabs]     = useState<string[] | null>(null)
   useEffect(() => {
     if (!username) return
     fetch("/api/user/me", { cache: "no-store" })
@@ -93,10 +94,15 @@ function useMyProfile(username: string) {
             ? d.allowed_analytics.split(",").filter(Boolean)
             : null
         )
+        setAllowedTabs(
+          d?.allowed_tabs
+            ? d.allowed_tabs.split(",").filter(Boolean)
+            : null
+        )
       })
       .catch(() => {})
   }, [username])
-  return { dbRole, dept, allowedAnalytics }
+  return { dbRole, dept, allowedAnalytics, allowedTabs }
 }
 
 function useDeptTabs(role: string, department: string) {
@@ -145,7 +151,7 @@ export function Sidebar() {
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const { dbRole, dept: dbDept, allowedAnalytics } = useMyProfile(username)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs } = useMyProfile(username)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -174,7 +180,9 @@ export function Sidebar() {
     }
     if (effectiveRole === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     if (effectiveRole === "manager") return NAV_ALL
-    const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
+    // per-user allowed_tabs (nếu set) override dept matrix
+    const pmTabs = allowedTabs ?? Array.from(extraTabs)
+    const allowed = new Set([...DEFAULT_STANDARD_TABS, ...pmTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
 

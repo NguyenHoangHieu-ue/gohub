@@ -304,13 +304,18 @@ export default function B2BPerformancePage() {
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8" ref={reportRef}>
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 font-sans tracking-tight">B2B Performance Summary</h1>
-            <p className="text-slate-500 font-medium tracking-tight">Main consolidated report for all B2B activities and tier-based performance.</p>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-200/60 shrink-0">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 font-sans tracking-tight leading-tight">B2B Performance Summary</h1>
+              <p className="text-sm text-slate-500 font-medium tracking-tight mt-0.5">Báo cáo tổng hợp B2B · hiệu suất theo tier &amp; strategic partners</p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+          <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 px-3">
               <Calendar className="w-4 h-4 text-slate-400" />
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer" />

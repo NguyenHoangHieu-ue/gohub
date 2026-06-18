@@ -13,6 +13,7 @@ interface User {
   role:               string
   department:         string
   allowed_analytics?: string | null
+  allowed_tabs?:      string | null
   created_at:         string
   lark_open_id?:      string
 }
@@ -37,7 +38,7 @@ const ANALYTICS_REPORTS = [
   { id: "targets",         label: "KPI / Target" },
 ] as const
 
-type Tab = "list" | "add" | "password" | "settings" | "permissions" | "template" | "promotions" | "scheduled"
+type Tab = "list" | "add" | "password" | "settings" | "template" | "promotions" | "scheduled"
 
 export default function AdminPage() {
   const { data: session, status } = useSession()
@@ -82,11 +83,10 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
   }
 
   const TAB_META: Record<Tab, { label: string; icon: React.ReactNode }> = {
-    list:        { label: "Danh sách",    icon: <Users           size={15} /> },
+    list:        { label: "Người dùng & Phân quyền", icon: <Users     size={15} /> },
     add:         { label: "Thêm user",    icon: <Plus            size={15} /> },
     password:    { label: "Đổi password", icon: <Key             size={15} /> },
     settings:    { label: "Cài đặt",      icon: <Settings        size={15} /> },
-    permissions: { label: "Phân quyền",   icon: <Lock            size={15} /> },
     template:    { label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
     promotions:  { label: "Khuyến mãi",   icon: <Gift            size={15} /> },
     scheduled:   { label: "Lịch Lark",    icon: <Clock           size={15} /> },
@@ -94,7 +94,7 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
   // Nhóm 3 cụm — mỗi tab vẫn 1-click, gọn + responsive (icon-only trên mobile)
   const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
     { label: "Người dùng", tabs: ["list", "add", "password"] },
-    { label: "Hệ thống",   tabs: ["settings", "permissions"] },
+    { label: "Hệ thống",   tabs: ["settings"] },
     { label: "Công cụ",    tabs: ["template", "promotions", "scheduled"] },
   ]
 
@@ -147,7 +147,6 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
       {tab === "add"        && <AddUser   onRefresh={fetchUsers} onNotify={notify} setTab={setTab} />}
       {tab === "password"   && <ChangePassword users={users} onNotify={notify} />}
       {tab === "settings"     && <SettingsTab     onNotify={notify} />}
-      {tab === "permissions"  && <PermissionsTab  onNotify={notify} />}
       {tab === "template"     && <TemplateTab     onNotify={notify} />}
       {tab === "promotions" && <PromotionsTab onNotify={notify} />}
       {tab === "scheduled"  && <ScheduledTab  onNotify={notify} />}
@@ -155,6 +154,14 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
   )
 }
 
+const PM_TABS = [
+  { key: "kb",   label: "Kiến Thức"   },
+  { key: "skus", label: "SP Hệ Thống" },
+  { key: "ncc",  label: "SP Vendor"   },
+] as const
+
+// Tab gộp: chọn account → phân role/phòng ban + tích trang Analytics & tab PM → Cập nhật.
+// Ma trận phân quyền hệ thống giữ ở mục "nâng cao" bên dưới.
 function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   users:       User[]
   loading:     boolean
@@ -162,295 +169,213 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   onRefresh:   () => void
   onNotify:    (type: "success" | "error", text: string) => void
 }) {
-  const [confirmDel,          setConfirmDel]          = useState<string | null>(null)
-  const [saving,              setSaving]              = useState<string | null>(null)
-  const [deleting,            setDeleting]            = useState(false)
-  const [activeAnalyticsUser, setActiveAnalyticsUser] = useState<string | null>(null)
-  const [draftAnalytics,      setDraftAnalytics]      = useState<Set<string>>(new Set())
-  const [savingAnalytics,     setSavingAnalytics]     = useState(false)
-  const [search,              setSearch]              = useState("")
+  const [selected,     setSelected]     = useState<string>("")
+  const [role,         setRole]         = useState<string>("standard")
+  const [department,   setDepartment]   = useState<string>("none")
+  const [analytics,    setAnalytics]    = useState<Set<string>>(new Set())
+  const [tabs,         setTabs]         = useState<Set<string>>(new Set())
+  const [saving,       setSaving]       = useState(false)
+  const [confirmDel,   setConfirmDel]   = useState(false)
+  const [deleting,     setDeleting]     = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
-  const changeRole = async (username: string, role: string) => {
-    setSaving(username)
-    const res = await fetch(`/api/admin/users/${username}`, {
+  const user = users.find(u => u.username === selected) || null
+
+  // Nạp draft mỗi khi chọn account (hoặc data refresh)
+  useEffect(() => {
+    if (!user) return
+    setRole(user.role)
+    setDepartment(user.department ?? "none")
+    setAnalytics(new Set(user.allowed_analytics
+      ? user.allowed_analytics.split(",").filter(Boolean)
+      : ANALYTICS_REPORTS.map(x => x.id)))
+    setTabs(new Set(user.allowed_tabs
+      ? user.allowed_tabs.split(",").filter(Boolean)
+      : PM_TABS.map(t => t.key)))
+  }, [selected, users]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleAnalytics = (id: string) =>
+    setAnalytics(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleTab = (key: string) =>
+    setTabs(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+
+  const save = async () => {
+    if (!user) return
+    setSaving(true)
+    const aIds = ANALYTICS_REPORTS.filter(r => analytics.has(r.id)).map(r => r.id)
+    const allowed_analytics = aIds.length === ANALYTICS_REPORTS.length ? null : aIds.join(",")
+    const tIds = PM_TABS.filter(t => tabs.has(t.key)).map(t => t.key)
+    const allowed_tabs = tIds.length === PM_TABS.length ? null : tIds.join(",")
+    const res = await fetch(`/api/admin/users/${user.username}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ role }),
+      body:    JSON.stringify({ role, department, allowed_analytics, allowed_tabs }),
     })
-    setSaving(null)
-    if (res.ok) { onRefresh(); onNotify("success", `Đã đổi role ${username} → ${role}`) }
+    setSaving(false)
+    if (res.ok) { onRefresh(); onNotify("success", `Đã cập nhật quyền cho ${user.username}`) }
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
-  // Mở editor ma trận cho 1 user — khởi tạo draft từ allowed_analytics hiện tại
-  const openAnalyticsEditor = (u: User) => {
-    if (activeAnalyticsUser === u.username) { setActiveAnalyticsUser(null); return }
-    const current = u.allowed_analytics
-      ? u.allowed_analytics.split(",").filter(Boolean)
-      : ANALYTICS_REPORTS.map(x => x.id)   // null = tất cả
-    setDraftAnalytics(new Set(current))
-    setActiveAnalyticsUser(u.username)
-  }
-
-  const toggleDraftAnalytics = (id: string) => {
-    setDraftAnalytics(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
-
-  // Chỉ lưu khi bấm "Xác nhận cập nhật" — không apply ngay từng tick
-  const confirmAnalytics = async (username: string) => {
-    setSavingAnalytics(true)
-    const ids = ANALYTICS_REPORTS.filter(r => draftAnalytics.has(r.id)).map(r => r.id)
-    const all = ids.length === ANALYTICS_REPORTS.length
-    const val = all ? null : ids.join(",")   // tất cả → null; không chọn gì → "" (chặn hết)
-    const res = await fetch(`/api/admin/users/${username}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ allowed_analytics: val }),
-    })
-    setSavingAnalytics(false)
-    if (res.ok) {
-      onRefresh()
-      setActiveAnalyticsUser(null)
-      onNotify("success", all
-        ? `Mở tất cả ${ANALYTICS_REPORTS.length} trang Analytics cho ${username}`
-        : ids.length === 0
-          ? `Đã chặn toàn bộ Analytics của ${username}`
-          : `Cập nhật ${ids.length}/${ANALYTICS_REPORTS.length} trang Analytics cho ${username}`)
-    } else onNotify("error", "Hiếu đang fix, vui lòng đợi")
-  }
-
-  const changeDept = async (username: string, department: string) => {
-    const res = await fetch(`/api/admin/users/${username}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ department }),
-    })
-    if (res.ok) { onRefresh(); onNotify("success", `Đã đổi phòng ban ${username} → ${department}`) }
-    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
-  }
-
-  const deleteUser = async (username: string) => {
+  const del = async () => {
+    if (!user) return
     setDeleting(true)
-    const res = await fetch(`/api/admin/users/${username}`, { method: "DELETE" })
-    setDeleting(false)
-    setConfirmDel(null)
-    if (res.ok) { onRefresh(); onNotify("success", `Đã xóa user ${username}`) }
+    const res = await fetch(`/api/admin/users/${user.username}`, { method: "DELETE" })
+    setDeleting(false); setConfirmDel(false)
+    if (res.ok) { const u = user.username; setSelected(""); onRefresh(); onNotify("success", `Đã xóa user ${u}`) }
     else onNotify("error", "Hiếu đang fix, vui lòng đợi")
   }
 
   if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
 
-  const filtered = users.filter(u =>
-    [u.username, u.name, u.email].some(v => (v || "").toLowerCase().includes(search.toLowerCase()))
+  const selectCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+  const isFullAnalytics = analytics.size === ANALYTICS_REPORTS.length
+  const isFullTabs = tabs.size === PM_TABS.length
+
+  const ToggleCell = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+        on ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+      }`}
+    >
+      {on ? <CheckSquare className="w-4 h-4 shrink-0 text-blue-600" /> : <Square className="w-4 h-4 shrink-0 text-slate-300" />}
+      <span className="text-xs font-medium truncate">{label}</span>
+    </button>
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <ConfirmModal
-        open={!!confirmDel}
+        open={confirmDel}
         loading={deleting}
         title="Xóa user"
-        message={`Xóa tài khoản "${confirmDel}"? Hành động này không thể hoàn tác.`}
+        message={`Xóa tài khoản "${user?.username}"? Hành động này không thể hoàn tác.`}
         confirmLabel="Xóa user"
-        onConfirm={() => confirmDel && deleteUser(confirmDel)}
-        onCancel={() => setConfirmDel(null)}
+        onConfirm={del}
+        onCancel={() => setConfirmDel(false)}
       />
 
-      {/* Search + count */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg w-72 focus-within:ring-2 focus-within:ring-brand-500 transition-all">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm theo tên, username, email…"
-            className="bg-transparent text-sm focus:outline-none w-full"
-          />
-          {search && <button onClick={() => setSearch("")}><X className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" /></button>}
+      {/* Bước 1: chọn account */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-5">
+        <div>
+          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chọn tài khoản</label>
+          <select value={selected} onChange={e => setSelected(e.target.value)} className={`mt-1.5 ${selectCls}`}>
+            <option value="">— Chọn tài khoản để phân quyền —</option>
+            {users.map(u => (
+              <option key={u.username} value={u.username}>
+                {u.name} ({u.username}){u.username === currentUser ? " · bạn" : ""}
+              </option>
+            ))}
+          </select>
         </div>
-        <span className="text-xs text-slate-400">{filtered.length}/{users.length} user</span>
+
+        {!user ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
+            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-500">Chọn một tài khoản ở trên để bắt đầu phân quyền</p>
+            <p className="text-xs text-slate-400 mt-1">Phân vai trò, phòng ban và tích chọn trang/tab được phép truy cập.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Role + phòng ban */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vai trò (Role)</label>
+                <select value={role} onChange={e => setRole(e.target.value)} className={`mt-1.5 ${selectCls}`}>
+                  <option value="standard">Standard</option>
+                  <option value="bod">BOD</option>
+                  <option value="staff">Staff</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Phòng ban</label>
+                <select value={department} onChange={e => setDepartment(e.target.value)} className={`mt-1.5 ${selectCls}`}>
+                  <option value="none">Không phòng ban</option>
+                  <option value="sales">Sales</option>
+                  <option value="product">Product</option>
+                  <option value="tech">Tech</option>
+                  <option value="finance">Finance</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Trang Analytics */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Trang Analytics được xem</p>
+                  <p className="text-xs text-slate-400">Áp dụng cho Staff/BOD · Admin/Manager luôn toàn quyền</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">{analytics.size}/{ANALYTICS_REPORTS.length}</span>
+                  <button onClick={() => setAnalytics(new Set(ANALYTICS_REPORTS.map(x => x.id)))} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Chọn tất cả</button>
+                  <button onClick={() => setAnalytics(new Set())} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Bỏ chọn</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {ANALYTICS_REPORTS.map(r => (
+                  <ToggleCell key={r.id} on={analytics.has(r.id)} label={r.label} onClick={() => toggleAnalytics(r.id)} />
+                ))}
+              </div>
+              {isFullAnalytics && <p className="text-[11px] text-emerald-600 mt-1.5">Chọn tất cả = toàn quyền Analytics (không giới hạn).</p>}
+            </div>
+
+            {/* Tab quản lý (PM) */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Tab quản lý (PM)</p>
+                  <p className="text-xs text-slate-400">Áp dụng cho Standard · để mặc định theo phòng ban nếu chọn tất cả</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">{tabs.size}/{PM_TABS.length}</span>
+                  <button onClick={() => setTabs(new Set(PM_TABS.map(t => t.key)))} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Chọn tất cả</button>
+                  <button onClick={() => setTabs(new Set())} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Bỏ chọn</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {PM_TABS.map(t => (
+                  <ToggleCell key={t.key} on={tabs.has(t.key)} label={t.label} onClick={() => toggleTab(t.key)} />
+                ))}
+              </div>
+              {isFullTabs && <p className="text-[11px] text-slate-400 mt-1.5">Chọn tất cả = theo mặc định phòng ban (không ghi đè per-user).</p>}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+              {user.username !== currentUser ? (
+                <button onClick={() => setConfirmDel(true)} className="flex items-center gap-1.5 text-sm font-semibold text-rose-500 hover:text-rose-600 px-2 py-2">
+                  <Trash2 size={15} /> Xóa user
+                </button>
+              ) : <span className="text-xs text-slate-400">Tài khoản của bạn</span>}
+              <button onClick={save} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+                <Save size={14} />{saving ? "Đang lưu..." : "Cập nhật"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* User table — bố trí giống gohub-intel */}
+      {/* Nâng cao: ma trận phân quyền hệ thống */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[760px]">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-5 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">User</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Role</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Phòng ban</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Trang Analytics được xem</th>
-                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-slate-400">Không tìm thấy user nào.</td>
-                </tr>
-              ) : filtered.map(u => (
-                <Fragment key={u.username}>
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  {/* User */}
-                  <td className="px-5 py-4">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-800">{u.username}</span>
-                        {u.lark_open_id
-                          ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">Lark</span>
-                          : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">PW</span>}
-                      </div>
-                      <span className="text-xs text-slate-500 mt-0.5">{u.name}{u.email ? ` · ${u.email}` : ""}</span>
-                    </div>
-                  </td>
-
-                  {/* Role */}
-                  <td className="px-4 py-4">
-                    <select
-                      defaultValue={u.role}
-                      onChange={e => changeRole(u.username, e.target.value)}
-                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    >
-                      <option value="standard">Standard</option>
-                      <option value="bod">BOD</option>
-                      <option value="staff">Staff</option>
-                      <option value="manager">Manager</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </td>
-
-                  {/* Department */}
-                  <td className="px-4 py-4">
-                    <select
-                      defaultValue={u.department ?? "none"}
-                      onChange={e => changeDept(u.username, e.target.value)}
-                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    >
-                      <option value="none">Không phòng ban</option>
-                      <option value="sales">Sales</option>
-                      <option value="product">Product</option>
-                      <option value="tech">Tech</option>
-                      <option value="finance">Finance</option>
-                    </select>
-                  </td>
-
-                  {/* Analytics access */}
-                  <td className="px-4 py-4">
-                    {(u.role === "staff" || u.role === "bod") ? (
-                      <button
-                        onClick={() => openAnalyticsEditor(u)}
-                        title="Cấu hình trang Analytics được phép"
-                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
-                          activeAnalyticsUser === u.username
-                            ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
-                            : u.allowed_analytics
-                              ? "bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100"
-                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        <Lock size={12} />
-                        {u.allowed_analytics
-                          ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
-                          : "Tất cả trang"}
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeAnalyticsUser === u.username ? "rotate-180" : ""}`} />
-                      </button>
-                    ) : u.role === "admin" || u.role === "manager" ? (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-xs font-bold uppercase tracking-wider">
-                        <Shield className="w-3.5 h-3.5" /> Toàn quyền
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">— Không có Analytics</span>
-                    )}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-4 text-right">
-                    <div className="inline-flex items-center gap-2">
-                      {saving === u.username && <span className="text-xs text-slate-400">Đang lưu…</span>}
-                      {u.username !== currentUser && (
-                        <button
-                          onClick={() => setConfirmDel(u.username)}
-                          title="Xóa user"
-                          className="p-2 rounded-lg transition-colors text-slate-400 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-
-                {/* Inline matrix editor — chọn nhiều trang rồi mới Xác nhận cập nhật */}
-                {activeAnalyticsUser === u.username && (u.role === "staff" || u.role === "bod") && (
-                  <tr className="bg-slate-50/60">
-                    <td colSpan={5} className="px-5 py-5">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
-                          <div>
-                            <p className="text-sm font-bold text-slate-700">Trang Analytics được xem — <span className="text-blue-600">{u.username}</span></p>
-                            <p className="text-xs text-slate-400 mt-0.5">Bấm chọn nhiều trang, sau đó nhấn <strong>Xác nhận cập nhật</strong>. Chọn tất cả = toàn quyền Analytics.</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">{draftAnalytics.size}/{ANALYTICS_REPORTS.length} trang</span>
-                            <button
-                              onClick={() => setDraftAnalytics(new Set(ANALYTICS_REPORTS.map(x => x.id)))}
-                              className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold"
-                            >Chọn tất cả</button>
-                            <button
-                              onClick={() => setDraftAnalytics(new Set())}
-                              className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold"
-                            >Bỏ chọn hết</button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                          {ANALYTICS_REPORTS.map(r => {
-                            const on = draftAnalytics.has(r.id)
-                            return (
-                              <button
-                                key={r.id}
-                                type="button"
-                                onClick={() => toggleDraftAnalytics(r.id)}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
-                                  on
-                                    ? "bg-blue-50 border-blue-200 text-blue-700"
-                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                                }`}
-                              >
-                                {on ? <CheckSquare className="w-4 h-4 shrink-0 text-blue-600" /> : <Square className="w-4 h-4 shrink-0 text-slate-300" />}
-                                <span className="text-xs font-medium truncate">{r.label}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2 mt-4">
-                          <button
-                            onClick={() => setActiveAnalyticsUser(null)}
-                            className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700"
-                          >Hủy</button>
-                          <button
-                            onClick={() => confirmAnalytics(u.username)}
-                            disabled={savingAnalytics}
-                            className="flex items-center gap-2 px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
-                          >
-                            <Save size={14} />{savingAnalytics ? "Đang lưu..." : "Xác nhận cập nhật"}
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <button onClick={() => setAdvancedOpen(o => !o)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500"><Lock className="w-4 h-4" /></div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-slate-700">Phân quyền hệ thống (nâng cao)</p>
+              <p className="text-xs text-slate-400">Ma trận Role × Tính năng và Phòng ban × Tab — quy tắc chung</p>
+            </div>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+        </button>
+        {advancedOpen && (
+          <div className="px-5 pb-5 border-t border-slate-100 pt-5">
+            <PermissionsTab onNotify={onNotify} />
+          </div>
+        )}
       </div>
     </div>
   )

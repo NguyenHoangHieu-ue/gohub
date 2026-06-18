@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface KPIs {
   unitsSold: number; ticketCount: number; tbsRate: number
@@ -96,12 +97,15 @@ function PerformanceTable<T extends PerformanceRow & { [k: string]: any }>({
 }) {
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: defaultSortKey, dir: "desc" })
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [data, sort])
 
   const sorted = [...data].sort((a, b) => {
     const av = a[sort.key], bv = b[sort.key]
     if (typeof av === "number" && typeof bv === "number") return sort.dir === "asc" ? av - bv : bv - av
     return sort.dir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
   })
+  const paged = sorted.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
 
   const toggle = (k: string) => { setSort(s => ({ key: k, dir: s.key === k && s.dir === "desc" ? "asc" : "desc" })) }
 
@@ -131,7 +135,7 @@ function PerformanceTable<T extends PerformanceRow & { [k: string]: any }>({
               </tr>
             )) : sorted.length === 0 ? (
               <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">Không có dữ liệu</td></tr>
-            ) : sorted.map((row, idx) => {
+            ) : paged.map((row, idx) => {
               const key = row[nameKey]
               const isExpanded = expanded === key
               return (
@@ -164,6 +168,7 @@ function PerformanceTable<T extends PerformanceRow & { [k: string]: any }>({
           </tbody>
         </table>
       </div>
+      <Pager page={page} total={sorted.length} onPage={setPage} label="dòng" />
     </div>
   )
 }
@@ -179,6 +184,8 @@ export default function CSTroubleshootPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [ticketCount, setTicketCount] = useState<number | null>(null)
+  const [invalidPage, setInvalidPage] = useState(1)
+  useEffect(() => { setInvalidPage(1) }, [data, activeTab])
 
   // Check ticket count on mount
   useEffect(() => {
@@ -491,7 +498,7 @@ export default function CSTroubleshootPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.invalidTickets || []).map((row, idx) => (
+                  {(data?.invalidTickets || []).slice((invalidPage - 1) * PAGE_ROWS, invalidPage * PAGE_ROWS).map((row, idx) => (
                     <tr key={idx} className="border-b border-slate-50 hover:bg-rose-50/20 transition-colors">
                       <td className="px-5 py-3 font-bold text-slate-900 text-sm">{row.id}</td>
                       <td className="px-5 py-3 text-slate-500 text-xs">{row.orderNo}</td>
@@ -513,6 +520,7 @@ export default function CSTroubleshootPage() {
                 </tbody>
               </table>
             </div>
+            <Pager page={invalidPage} total={data?.invalidTickets?.length || 0} onPage={setInvalidPage} label="ticket" />
           </div>
         )}
       </div>
