@@ -186,10 +186,10 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     if (!user) return
     setRole(user.role)
     setDepartment(user.department ?? "none")
-    setAnalytics(new Set(user.allowed_analytics
+    setAnalytics(new Set(user.allowed_analytics != null
       ? user.allowed_analytics.split(",").filter(Boolean)
       : ANALYTICS_REPORTS.map(x => x.id)))
-    setTabs(new Set(user.allowed_tabs
+    setTabs(new Set(user.allowed_tabs != null
       ? user.allowed_tabs.split(",").filter(Boolean)
       : PM_TABS.map(t => t.key)))
   }, [selected, users]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -264,7 +264,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
             <option value="">— Chọn tài khoản để phân quyền —</option>
             {users.map(u => (
               <option key={u.username} value={u.username}>
-                {u.name} ({u.username}){u.username === currentUser ? " · bạn" : ""}
+                {u.name || u.username}{u.username === currentUser ? " · bạn" : ""}
               </option>
             ))}
           </select>

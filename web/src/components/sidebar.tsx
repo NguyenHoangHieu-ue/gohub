@@ -90,12 +90,12 @@ function useMyProfile(username: string) {
         if (d?.role)       setDbRole(d.role)
         if (d?.department) setDept(d.department)
         setAllowedAnalytics(
-          d?.allowed_analytics
+          d?.allowed_analytics != null
             ? d.allowed_analytics.split(",").filter(Boolean)
             : null
         )
         setAllowedTabs(
-          d?.allowed_tabs
+          d?.allowed_tabs != null
             ? d.allowed_tabs.split(",").filter(Boolean)
             : null
         )
