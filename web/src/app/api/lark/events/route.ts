@@ -283,11 +283,22 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
     // Route + refCache in parallel
-    const [refCache, { agentId, params }] = await Promise.all([
+    const [refCache, routed] = await Promise.all([
       getRefCache(),
       route(userText, history, role),
     ])
+    const { agentId, params, needsClarification, clarificationQuestion } = routed
     const agent    = AGENTS[agentId]
+
+    // Bước HỎI LẠI (additive): câu hỏi quá mơ hồ (thiếu nước/khu vực/mã) → hỏi lại ngay, không gọi Gemini
+    if (needsClarification && clarificationQuestion) {
+      await replyLarkMessage(messageId, stripMarkdown(clarificationQuestion))
+      responseSent = true
+      saveLarkMessage(openId, threadId, "user",      userText)
+      saveLarkMessage(openId, threadId, "assistant", clarificationQuestion)
+      return
+    }
+
     const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText)
 
     // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng

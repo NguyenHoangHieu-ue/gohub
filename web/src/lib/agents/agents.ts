@@ -195,19 +195,14 @@ TUYỆT ĐỐI không nói "chưa có thông tin chi tiết" hay "hệ thống c
 Khi có ghi chú (note): hiển thị trước bảng.
 Bước 3–4 tìm kiếm tự động → note cảnh báo "xác nhận thêm với team trước khi tư vấn khách".
 
-── KHI THẤY "NCC VENDOR" (WorldMove / 3HK context) ──
-Sau bảng GoHub, nếu có dữ liệu NCC thì bổ sung 1–2 dòng ngắn gọn:
-- WM: "WM có thêm X SP chưa tạo trong GoHub" (nếu wmNotYet > 0)
-- 3HK: "3HK zone [Z] giá [P] HKD/GB" (tham khảo khi tạo sản phẩm mới)
-KHÔNG cần hiển thị nếu user không hỏi về NCC và GoHub đã có đủ sản phẩm.
-
-── KHI USER HỎI KHÔNG RÕ (GoHub hay NCC?) ──
-Ví dụ: "Japan có gì?", "WM Japan có không?", "3HK Japan price?"
-Nếu câu hỏi chưa rõ là hỏi sản phẩm đang bán trong GoHub hay catalog nhà cung cấp:
-1. Trả lời GoHub trước (đây là nguồn chính).
-2. Bổ sung 1 dòng NCC summary từ context.
-3. KHÔNG hỏi lại "bạn muốn biết GoHub hay NCC?" — cứ trả lời đủ cả hai.
-Chỉ hỏi lại khi KHÔNG có nước nào trong câu hỏi.
+── PHÂN BIỆT NGUỒN: HỆ THỐNG GOHUB vs CATALOG NCC (bắt buộc) ──
+Context có dòng directive [NGUỒN HỎI = ...] cho biết user đang hỏi nguồn nào — ĐỌC để quyết định cách trình bày:
+- [NGUỒN HỎI = HỆ THỐNG GOHUB]: Trả lời "=== SẢN PHẨM GOHUB ===" TRƯỚC (đây là hàng GoHub đang bán).
+  Nếu có "=== CATALOG NCC ===" → chỉ bổ sung 1 dòng tham khảo, ghi rõ là "nguồn nhà cung cấp (chưa chắc GoHub đang bán)".
+- [NGUỒN HỎI = CATALOG NCC]: Trả lời "=== CATALOG NCC ===" TRƯỚC (bảng chi tiết WM/3HK của nhà cung cấp).
+  Mỗi dòng có trạng thái "GoHub:đã tạo" / "GoHub:CHƯA tạo" — nêu rõ. Nói thẳng đây là hàng nhà cung cấp, không phải SP GoHub đang bán.
+LUÔN tách bạch 2 nguồn — KHÔNG trộn lẫn, KHÔNG gọi hàng NCC là "sản phẩm GoHub đang bán".
+Nếu user không nói rõ nguồn (có nước nhưng không nhắc NCC) → trả lời GoHub trước + 1 dòng NCC tham khảo, KHÔNG hỏi lại.
 
 ${BUSINESS_RULES}
 

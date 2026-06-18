@@ -13,6 +13,35 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp (2026-06-18) — Nâng cấp chatbot: phân biệt nguồn + bước hỏi lại
+
+User báo chatbot: đôi lúc không đọc được data hệ thống, chưa đọc được NCC catalog,
+không phân biệt GoHub vs NCC, không phân biệt intent. Yêu cầu: data-driven (không chỉ
+dựa prompt), phân biệt nguồn, phân biệt intent, thiếu info thì HỎI LẠI trước khi trả lời.
+
+### Chẩn đoán nguyên nhân gốc
+- classifier.ts prompt THIẾU 2 intent (bi_analytics, template_create) → BI bị gán nhầm intent confidence cao → route sai
+- NCC chỉ inject ở tu-van nước-cụ-thể dạng tóm tắt 5 dòng; không có intent riêng cho "hỏi catalog NCC"
+- Không có tín hiệu data_source → phân biệt GoHub/NCC chỉ dựa prompt
+- "Làm rõ" chỉ là text trong prompt, không có bước deterministic
+
+### Thay đổi (5 file, giữ kiến trúc)
+1. classifier.ts: 9 intent (thêm ncc_catalog, unclear) + data_source (gohub_system/ncc_catalog/both)
+   + needs_clarification + clarification_question. Prompt phân biệt rõ 2 nguồn + khi nào hỏi lại.
+2. router.ts: ExtractedParams thêm dataSource; route() trả needsClarification + clarificationQuestion.
+   Regex nhắc WM/3HK/ncc → dataSource=ncc_catalog (thắng vì chắc chắn). Trigger hỏi lại data-driven:
+   confidence≥0.6 + needs_clarification + KHÔNG có tín hiệu tìm kiếm (nước/khu vực/mã/vendor).
+3. chat/route.ts: short-circuit — needsClarification → stream câu hỏi làm rõ (badge clarify:Làm Rõ), không gọi Gemini.
+4. context.ts (tu-van nước cụ thể): directive [NGUỒN HỎI=...]; dataSource=ncc_catalog → inject CATALOG NCC
+   chi tiết (WM ≤20 dòng + 3HK zones), mỗi dòng có "GoHub:đã tạo/CHƯA tạo". Header tách bạch
+   "=== SẢN PHẨM GOHUB ===" vs "=== CATALOG NCC ===".
+5. agents.ts (tu-van prompt): section "PHÂN BIỆT NGUỒN" đọc directive, tách bạch 2 nguồn, không gọi NCC là SP GoHub.
+   Lark events route: thêm bước hỏi lại additive (không refactor logic Lark cũ).
+
+Typecheck tsc --noEmit: PASS. Chưa push — chờ user test với data thật.
+
+---
+
 ## Session 63 (2026-06-18) — QA/hardening analytics: chuẩn hóa error message
 
 User xác nhận: đã chạy v16, đã set Vercel env ANALYTICS_DB_* (LARK_BASE_ID/TABLE_ID để sau).

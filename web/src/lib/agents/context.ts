@@ -105,6 +105,12 @@ export async function buildToolContext(
 
     // ── Case 3: Single-country query ──────────────────────────────────────────
     else if (params.country) {
+      // Directive theo nguồn dữ liệu user muốn (data-driven, không chỉ dựa prompt)
+      if (params.dataSource === "ncc_catalog") {
+        sections.push(`[NGUỒN HỎI = CATALOG NCC: User hỏi về danh mục nhà cung cấp (WM/3HK). Trình bày dữ liệu NCC TRƯỚC, kèm trạng thái "đã tạo / CHƯA tạo trong GoHub". Nêu rõ đây là hàng của nhà cung cấp, KHÔNG phải sản phẩm GoHub đang bán.]`)
+      } else {
+        sections.push(`[NGUỒN HỎI = HỆ THỐNG GOHUB: Ưu tiên trình bày sản phẩm GoHub đang bán. Dữ liệu NCC (nếu có) chỉ là tham khảo, phải nói rõ là nguồn nhà cung cấp.]`)
+      }
       const { skus, note } = await searchSkus({
         country:      params.country,
         days:         params.days,
@@ -147,25 +153,50 @@ export async function buildToolContext(
         ...rows
       )
 
-      // ── NCC context: WM + 3HK summary cho nước đó ──────────────────────────
+      // ── CATALOG NCC (nhà cung cấp) — phân biệt RÕ với sản phẩm GoHub ─────────
       {
-        const wmProducts = searchNccWm({ country: params.country }, ref)
+        const wantNccDetail = params.dataSource === "ncc_catalog"
+        const wmProducts = searchNccWm({ country: params.country, sim_type: params.simType, days: params.days }, ref)
         const wmTotal    = wmProducts.length
         const wmInSys    = wmProducts.filter((p: any) => p.in_system).length
         const wmNotYet   = wmTotal - wmInSys
-        if (wmTotal > 0) {
+
+        if (wmTotal > 0 && wantNccDetail) {
+          // User hỏi rõ về catalog NCC → inject danh sách chi tiết
+          const wmRows = wmProducts.slice(0, 20).map((p: any) => {
+            const data = p.is_unlimited ? "Unlimited" : (p.data_gb != null ? `${p.data_gb}GB${p.is_daily ? "/ngày" : ""}` : "?")
+            return [
+              p.vendor_product_id, p.product_name ?? "", p.sim_type ?? "", `${p.days ?? "?"}d`, data,
+              p.throttle_kbps ? `throttle:${p.throttle_kbps}kbps` : null,
+              p.apn ? `apn:${p.apn}` : null,
+              p.in_system ? "GoHub:đã tạo" : "GoHub:CHƯA tạo",
+            ].filter(Boolean).join("|")
+          })
           sections.push(
-            `=== NCC VENDOR — WorldMove (WM) cho ${params.country} ===`,
-            `Tổng WM: ${wmTotal} SP · Đã tạo GoHub: ${wmInSys} · Chưa tạo: ${wmNotYet}`,
+            `=== CATALOG NCC — WorldMove cho ${params.country} (${wmTotal} SP của nhà cung cấp — KHÔNG phải sản phẩm GoHub đang bán) ===`,
+            `Đã tạo SKU GoHub: ${wmInSys} · Chưa tạo: ${wmNotYet}`,
+            `vendor_id|tên SP|sim|ngày|data|throttle|apn|trạng thái GoHub`,
+            ...wmRows
+          )
+        } else if (wmTotal > 0) {
+          sections.push(
+            `=== CATALOG NCC — WorldMove cho ${params.country} (tham khảo nguồn nhà cung cấp, không phải SP GoHub đang bán) ===`,
+            `Tổng WM: ${wmTotal} SP · GoHub đã tạo: ${wmInSys} · chưa tạo: ${wmNotYet}`,
             wmNotYet > 0 ? `Top chưa tạo: ${wmProducts.filter((p: any) => !p.in_system).slice(0, 5).map((p: any) => p.product_name ?? p.vendor_product_id).join(" | ")}` : ""
           )
         } else {
-          sections.push(`=== NCC WorldMove: không có sản phẩm cho ${params.country} ===`)
+          sections.push(`=== CATALOG NCC — WorldMove: không có sản phẩm cho ${params.country} ===`)
         }
+
         const hkZones = searchNcc3hk(params.country, ref)
-        if (hkZones.length > 0) {
+        if (hkZones.length > 0 && wantNccDetail) {
+          sections.push(
+            `=== CATALOG NCC — 3HK cho ${params.country} (nhà cung cấp) ===`,
+            ...hkZones.slice(0, 8).map((z: any) => `Zone ${z.zone} | ${z.network ?? ""} | ${z.price_per_gb_hkd ?? "?"} HKD/GB | KYC:${z.is_kyc ?? "?"}`)
+          )
+        } else if (hkZones.length > 0) {
           const zoneInfo = hkZones.slice(0, 3).map((z: any) => `Zone ${z.zone} (${z.price_per_gb_hkd ?? "?"} HKD/GB)`).join(" | ")
-          sections.push(`=== NCC 3HK cho ${params.country}: ${zoneInfo} ===`)
+          sections.push(`=== CATALOG NCC — 3HK cho ${params.country}: ${zoneInfo} ===`)
         }
       }
 

@@ -1,5 +1,6 @@
 ﻿import type { AgentId, UserRole, Message, RouterResult } from "./types"
 import { classify, intentToAgentId } from "./classifier"
+import type { DataSource } from "./classifier"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ export interface ExtractedParams {
   vendor?:         string
   nccVendor?:      "wm" | "3hk" | "all"
   simType?:        "esim" | "sim"
+  dataSource?:     DataSource   // gohub_system | ncc_catalog | both — phân biệt nguồn user muốn
 }
 
 const MAX_CODES = 50  // tối đa bao nhiêu mã xử lý mỗi lần
@@ -366,9 +368,13 @@ export function extractParams(message: string): ExtractedParams {
   if (gbMatch) params.dataGB = parseFloat(gbMatch[1])
   else if (mbMatch) params.dataGB = Math.round(parseFloat(mbMatch[1]) / 1000 * 100) / 100
 
-  // Vendor
-  if (/worldmove/.test(msg) || /\bwm\b/.test(msg)) { params.vendor = "WM"; params.nccVendor = "wm" }
-  else if (/3hk|3 hk/.test(msg)) { params.vendor = "3H"; params.nccVendor = "3hk" }
+  // Vendor — nhắc tên vendor (WM/3HK) là tín hiệu mạnh user đang hỏi catalog NCC
+  if (/worldmove/.test(msg) || /\bwm\b/.test(msg)) { params.vendor = "WM"; params.nccVendor = "wm"; params.dataSource = "ncc_catalog" }
+  else if (/3hk|3 hk/.test(msg)) { params.vendor = "3H"; params.nccVendor = "3hk"; params.dataSource = "ncc_catalog" }
+
+  // Nhắc "ncc / nha cung cap / nhà cung cấp / catalog / vendor" → catalog NCC
+  if (!params.dataSource && /\bncc\b|nha cung cap|nhà cung cấp|catalog vendor|catalog ncc/.test(msgNorm))
+    params.dataSource = "ncc_catalog"
 
   return params
 }
@@ -429,14 +435,20 @@ function routeSync(message: string, role: UserRole): RouterResult & { params: Ex
   return { agentId, agentName: AGENT_NAMES[agentId], params }
 }
 
-// Async route — dùng Gemini classifier cho intent + country chính xác hơn
+export interface RouteResult extends RouterResult {
+  params:               ExtractedParams
+  needsClarification?:  boolean
+  clarificationQuestion?: string
+}
+
+// Async route — dùng Gemini classifier cho intent + nguồn dữ liệu + làm rõ
 // Chạy song song với getRefCache() trong chat route → zero extra latency
-export async function route(message: string, history: Message[], role: UserRole): Promise<RouterResult & { params: ExtractedParams }> {
+export async function route(message: string, history: Message[], role: UserRole): Promise<RouteResult> {
   const params = extractParams(message)
 
   const classified = await classify(message)
 
-  // Dùng AI intent nếu confidence đủ cao
+  // Dùng AI intent nếu confidence đủ cao, ngược lại fallback regex
   const agentId: AgentId = classified.confidence >= 0.6
     ? intentToAgentId(classified.intent)
     : classifyAgent(message, params, role)
@@ -451,5 +463,32 @@ export async function route(message: string, history: Message[], role: UserRole)
     params.simType = classified.sim_type
   }
 
-  return { agentId, agentName: AGENT_NAMES[agentId], params }
+  // Nguồn dữ liệu: regex (nhắc vendor) thắng vì chắc chắn; nếu không có thì lấy từ AI
+  if (!params.dataSource && classified.data_source) {
+    params.dataSource = classified.data_source
+  }
+
+  // ── Bước hỏi lại (data-driven) ──────────────────────────────────────────────
+  // Chỉ hỏi lại khi KHÔNG có bất kỳ tín hiệu tìm kiếm nào (nước/khu vực/mã/vendor...)
+  // và intent thực sự cần thông tin đó để trả lời.
+  const hasSearchSignal = !!(
+    params.country || params.region || params.groupCode ||
+    params.skuCodes?.length || params.productCodes?.length || params.listingCodes?.length ||
+    params.vendor || params.isUnlimited
+  )
+  const intentNeedsTarget =
+    agentId === "tu-van" || agentId === "gap-analysis" || agentId === "tao-template"
+
+  const needsClarification =
+    classified.confidence >= 0.6 &&
+    classified.needs_clarification &&
+    !hasSearchSignal &&
+    (classified.intent === "unclear" || intentNeedsTarget)
+
+  const clarificationQuestion = needsClarification
+    ? (classified.clarification_question ||
+       "Mình chưa rõ bạn cần gì 😊 Bạn cho mình biết: đi **nước/khu vực nào**, hoặc **mã sản phẩm** cụ thể nhé?")
+    : undefined
+
+  return { agentId, agentName: AGENT_NAMES[agentId], params, needsClarification, clarificationQuestion }
 }

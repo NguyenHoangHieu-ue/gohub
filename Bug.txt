@@ -1,3 +1,9 @@
+*18/6/2026 — Session 63 — tiếp — Nâng cấp chatbot (phân biệt nguồn + hỏi lại)*
+43. ✅ FIXED: classifier thiếu intent bi_analytics/template_create → route sai. Bổ sung đủ 9 intent (thêm ncc_catalog, unclear)
+44. ✅ FIXED: chatbot không phân biệt GoHub vs NCC catalog → thêm data_source (gohub_system/ncc_catalog/both) data-driven + header context tách bạch + directive [NGUỒN HỎI]
+45. ✅ FIXED: chatbot chưa đọc được catalog NCC chi tiết → dataSource=ncc_catalog inject full WM ≤20 dòng + 3HK zones, mỗi dòng có trạng thái GoHub đã tạo/chưa tạo
+46. ✅ ADDED: bước HỎI LẠI deterministic khi câu hỏi mơ hồ (thiếu nước/khu vực/mã) — web (badge Làm Rõ) + Lark (additive). Không gọi Gemini, hỏi đúng info còn thiếu
+
 *18/6/2026 — Session 63 — QA/hardening analytics error messages*
 41. ✅ FIXED: 13 trang analytics hiện lỗi thô (err.message/status code) → chuẩn hóa "Hiếu đang fix, vui lòng đợi" + console.error giữ debug. Dashboard bỏ dòng lộ "Kiểm tra Vercel env ANALYTICS_DB_*"
 42. ✅ FIXED: orders/page.tsx + staff/page.tsx — silent failure: fetch lỗi không hiện gì (bảng rỗng). Thêm error state + catch + banner đỏ "Hiếu đang fix, vui lòng đợi"

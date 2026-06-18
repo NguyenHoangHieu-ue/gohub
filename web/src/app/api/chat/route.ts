@@ -100,11 +100,27 @@ export async function POST(req: NextRequest) {
   const isCost  = true
 
   try {
-    const [refCache, { agentId, agentName, params }] = await Promise.all([
+    const [refCache, routed] = await Promise.all([
       getRefCache(),
       route(lastMsg, history, role),
     ])
+    const { agentId, agentName, params, needsClarification, clarificationQuestion } = routed
     const agent = AGENTS[agentId]
+
+    const encoderEarly = new TextEncoder()
+
+    // ── Bước HỎI LẠI (deterministic) ──────────────────────────────────────────
+    // Câu hỏi quá mơ hồ (không có nước/khu vực/mã) → hỏi lại ngay, KHÔNG gọi Gemini.
+    if (needsClarification && clarificationQuestion) {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoderEarly.encode(`__AGENT__:clarify:Làm Rõ\n`))
+          controller.enqueue(encoderEarly.encode(clarificationQuestion))
+          controller.close()
+        },
+      })
+      return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+    }
 
     // Pre-execute tools, build context
     const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg)
