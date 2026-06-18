@@ -13,6 +13,37 @@ Cập nhật lần cuối: 2026-06-18 (session 61)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 61 — tiếp (2026-06-18) — Phân quyền Analytics per-user (commit 8b6e10e)
+
+### Merge phân quyền gohub-intel → GoHub PM
+
+**Migration:** `database/migrations/v16_allowed_analytics.sql`
+- ADD COLUMN `allowed_analytics TEXT DEFAULT NULL` vào bảng `users`
+- ⚠️ Cần chạy thủ công trong Supabase SQL Editor
+
+**API cập nhật:**
+- `GET /api/admin/users` — thêm `allowed_analytics` vào SELECT
+- `PATCH /api/admin/users/[username]` — nhận và lưu `allowed_analytics`
+- `GET /api/user/me` — trả thêm `allowed_analytics` (sidebar dùng)
+
+**Admin page — `UserList`:**
+- Thêm nút "Analytics Access" per-user (chỉ hiện với staff/bod)
+- Dropdown checkbox 15 trang analytics (từ Dashboard đến 3HK Data Usage)
+- `NULL` = tất cả; comma-separated IDs = giới hạn trang được xem
+- Overlay transparent đóng khi click ngoài
+- Role select (cả UserList + AddUser) thêm `bod` và `staff`
+
+**Sidebar:**
+- `useMyDept` → `useMyProfile` — fetch thêm `allowed_analytics`
+- Filter `analyticsGroups` theo `allowed_analytics` khi user có restriction
+- admin/manager luôn thấy tất cả; staff/bod bị lọc nếu admin set restriction
+- Collapsed mode cũng filter đúng (dùng `analyticsGroups.flatMap(g => g.items)`)
+
+### Action cần làm thủ công
+Chạy `database/migrations/v16_allowed_analytics.sql` trong Supabase SQL Editor
+
+---
+
 ## Session 61 (2026-06-18) — Tester report + 6 bugfixes (commit f5a2a4d)
 
 ### Tester chuyên nghiệp — 6 bugs phát hiện và fix
