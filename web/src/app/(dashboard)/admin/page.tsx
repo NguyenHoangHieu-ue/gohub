@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw } from "lucide-react"
+import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
 import { ConfirmModal } from "@/components/confirm-modal"
 
 interface User {
@@ -1973,10 +1973,10 @@ function PromotionsTab({ onNotify }: {
 
 // ─── Permissions Tab ──────────────────────────────────────────────────────────
 const PERM_FEATURES = [
-  { key: "perm_kb_upload",    label: "KB — Upload tài liệu",   desc: "Ai có thể upload PDF/DOCX vào Knowledge Base" },
-  { key: "perm_kb_wiki_view", label: "KB — Xem tab Wiki",       desc: "Ai thấy tab Wiki trong trang Kiến Thức" },
-  { key: "perm_kb_wiki_edit", label: "KB — Tạo / Sửa Wiki",    desc: "Ai có thể tạo và chỉnh sửa wiki pages" },
-  { key: "perm_ncc_import",   label: "NCC — Import dữ liệu",   desc: "Ai có thể upload file NCC để cập nhật giá" },
+  { key: "perm_kb_upload",    icon: FileSpreadsheet, label: "KB — Upload tài liệu",   desc: "Ai có thể upload PDF/DOCX vào Knowledge Base" },
+  { key: "perm_kb_wiki_view", icon: Eye,             label: "KB — Xem tab Wiki",       desc: "Ai thấy tab Wiki trong trang Kiến Thức" },
+  { key: "perm_kb_wiki_edit", icon: Pencil,          label: "KB — Tạo / Sửa Wiki",    desc: "Ai có thể tạo và chỉnh sửa wiki pages" },
+  { key: "perm_ncc_import",   icon: BookOpen,        label: "NCC — Import dữ liệu",   desc: "Ai có thể upload file NCC để cập nhật giá" },
 ] as const
 
 const PERM_ROLES = ["manager", "standard"] as const
@@ -2044,42 +2044,53 @@ function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:
         Bảng này chỉ áp dụng cho <strong>Manager</strong> và <strong>Standard</strong>.
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
-              <th className="px-5 py-3 text-left font-medium w-1/2">Tính năng</th>
-              <th className="px-4 py-3 text-center font-medium">Manager</th>
-              <th className="px-4 py-3 text-center font-medium">Standard</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {PERM_FEATURES.map(f => (
-              <tr key={f.key} className="hover:bg-gray-50 transition-colors">
-                <td className="px-5 py-4">
-                  <p className="font-medium text-gray-800">{f.label}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{f.desc}</p>
-                </td>
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tính năng / Báo cáo</th>
                 {PERM_ROLES.map(role => (
-                  <td key={role} className="px-4 py-4 text-center">
-                    <button
-                      onClick={() => toggle(f.key, role)}
-                      className={`w-10 h-6 rounded-full transition-colors relative ${
-                        perms[f.key]?.has(role)
-                          ? "bg-brand-600"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
-                        perms[f.key]?.has(role) ? "left-[18px]" : "left-0.5"
-                      }`}/>
-                    </button>
-                  </td>
+                  <th key={role} className="text-center py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {role}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {PERM_FEATURES.map(f => (
+                <tr key={f.key} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+                        <f.icon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{f.label}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{f.desc}</p>
+                      </div>
+                    </div>
+                  </td>
+                  {PERM_ROLES.map(role => (
+                    <td key={`${role}-${f.key}`} className="py-4 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggle(f.key, role)}
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+                          perms[f.key]?.has(role)
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-slate-100 text-slate-300 hover:text-slate-400"
+                        }`}
+                      >
+                        {perms[f.key]?.has(role) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <button
@@ -2171,38 +2182,41 @@ function DeptTabMatrix({ onNotify }: { onNotify: (type: "success"|"error", text:
         <h4 className="text-sm font-semibold text-gray-700">Phân quyền theo phòng ban</h4>
         <p className="text-xs text-gray-400 mt-0.5">Tabs nào Standard user được xem khi thuộc phòng ban này (ngoài Chatbot, Khuyến Mãi, Thông tin)</p>
       </div>
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
-              <th className="px-5 py-3 text-left font-medium">Phòng ban</th>
-              {DEPT_UNLOCKABLE_TABS.map(t => (
-                <th key={t.key} className="px-4 py-3 text-center font-medium">{t.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {DEPARTMENTS.map(dept => (
-              <tr key={dept.key} className="hover:bg-gray-50 transition-colors">
-                <td className="px-5 py-3 font-medium text-gray-700">{dept.label}</td>
-                {DEPT_UNLOCKABLE_TABS.map(tab => (
-                  <td key={tab.key} className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => toggle(dept.key, tab.key)}
-                      className={`w-10 h-6 rounded-full transition-colors relative ${
-                        matrix[dept.key]?.has(tab.key) ? "bg-brand-600" : "bg-gray-200"
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${
-                        matrix[dept.key]?.has(tab.key) ? "left-[18px]" : "left-0.5"
-                      }`}/>
-                    </button>
-                  </td>
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Phòng ban</th>
+                {DEPT_UNLOCKABLE_TABS.map(t => (
+                  <th key={t.key} className="text-center py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">{t.label}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {DEPARTMENTS.map(dept => (
+                <tr key={dept.key} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-4 px-4 text-sm font-medium text-slate-700">{dept.label}</td>
+                  {DEPT_UNLOCKABLE_TABS.map(tab => (
+                    <td key={tab.key} className="py-4 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggle(dept.key, tab.key)}
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+                          matrix[dept.key]?.has(tab.key)
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-slate-100 text-slate-300 hover:text-slate-400"
+                        }`}
+                      >
+                        {matrix[dept.key]?.has(tab.key) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <button
         onClick={saveDeptMatrix}

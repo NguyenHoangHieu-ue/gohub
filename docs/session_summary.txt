@@ -13,6 +13,26 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp 5 (2026-06-18) — Format tab Phân quyền giống bố trí intel
+
+User: format lại tab Phân quyền (admin) giống cách bố trí bên gohub-intel.
+Intel (Settings.tsx): ma trận Báo cáo×Role, ô CheckSquare(xanh)/Square(xám), header role viết hoa.
+
+### Thay đổi (admin/page.tsx, GIỮ data model + endpoint)
+- PermissionsTab ma trận chính: toggle pill → ô icon CheckSquare/Square style intel
+  (bg-blue-100/text-blue-600 khi bật, bg-slate-100/text-slate-300 khi tắt). Header "Tính năng/Báo cáo" + cột role viết hoa.
+  Mỗi feature thêm icon box (FileSpreadsheet/Eye/Pencil/BookOpen) + label + desc — giống layout report intel.
+- DeptTabMatrix: cũng đổi sang ô CheckSquare cho nhất quán.
+- Import thêm CheckSquare, Square, BookOpen, Eye từ lucide.
+Typecheck PASS.
+
+### B2C follow-up (đã note lại — chờ làm khi user sẵn sàng)
+- Section 1 sub-row Web/App/VN Sales B2C: cần mapping channel_name/order_source.
+- KPI persistence: UI Import/nhập KPI target theo tháng trong Settings → bind tab KPI Section 1.
+- Section 3-5 (CAC/Leads, GA4 charts, Budget/ROAS): chờ GA4 service account + bảng marketing + nguồn leads.
+
+---
+
 ## Session 63 — tiếp 4 (2026-06-18) — Redesign B2C theo gohub_b2c_dashboard_spec.md
 
 Spec: gohub_b2c_dashboard_spec.md — 1-page executive dashboard Apple-style, 5 section, rolling 6 tháng.
