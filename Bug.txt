@@ -75,3 +75,6 @@
 18. ✅ FIXED: Wiki ẩn/hiện — cột is_hidden trong DB (migration v9_wiki_hidden.sql, cần chạy thủ công trong Supabase), API filter cho non-admin, admin có nút EyeOff/Eye per row + badge “Ẩn” trên title.
 19. ✅ FIXED: Wiki inline search — nhấn Enter trong search bar của WikiTab → gọi /api/kb/search lọc source=wiki, hiện “Kết quả ngữ nghĩa” bên dưới list với % khớp.
 20. ✅ FIXED: Re-embed 13 wiki pages — OK=13, FAIL=0. Chatbot giai-dap giờ search được wiki.
+
+*18/6/2026 — Session 62 (2026-06-18)*
+40. ✅ FIXED: sidebar.tsx — đổi tất cả text tiếng Việt sang tiếng Anh: "Quản Lý"→"Management", "Sản Phẩm"→"Products", "Báo Cáo & BI"→"Reports & BI", "Mở rộng/Thu gọn sidebar"→"Expand/Collapse sidebar", "Đăng xuất"→"Sign Out" (commit fcef01c)

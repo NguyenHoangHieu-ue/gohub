@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-18 (session 61)
+Cập nhật lần cuối: 2026-06-18 (session 62)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅  MERGE gohub-intel vào GoHub PM — HOÀN THÀNH
@@ -12,6 +12,17 @@ Cập nhật lần cuối: 2026-06-18 (session 61)
     - All-Time Report, GA4 (cần Google service account)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 62 (2026-06-18) — Sidebar full English (commit fcef01c)
+
+Đổi tất cả text tiếng Việt trong sidebar sang tiếng Anh:
+- "Quản Lý" → "Management" (section header PM tabs)
+- "Sản Phẩm" → "Products" (collapsible group + tooltip)
+- "Báo Cáo & BI" → "Reports & BI" (analytics section header)
+- "Mở rộng/Thu gọn sidebar" → "Expand/Collapse sidebar" (toggle tooltips)
+- "Đăng xuất" → "Sign Out" (button + tooltip)
+
+---
 
 ## Session 61 — tiếp (2026-06-18) — Phân quyền Analytics per-user (commit 8b6e10e)
 
