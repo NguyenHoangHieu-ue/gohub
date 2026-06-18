@@ -34,6 +34,8 @@ export default function AdminPage() {
 function roleBadgeClass(role: string): string {
   if (role === "admin")   return "bg-amber-100 text-amber-700"
   if (role === "manager") return "bg-purple-100 text-purple-700"
+  if (role === "bod")     return "bg-blue-100 text-blue-700"
+  if (role === "staff")   return "bg-teal-100 text-teal-700"
   return "bg-green-100 text-green-700"
 }
 

@@ -195,6 +195,8 @@ export default function VendorsPage() {
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
             {showVendorDrop && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowVendorDrop(false)} />
               <div className="absolute top-full left-0 z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-2 max-h-56 overflow-auto">
                 <input type="text" placeholder="Search..." value={vendorSearch}
                   onChange={e => setVendorSearch(e.target.value)}
@@ -212,6 +214,7 @@ export default function VendorsPage() {
                   </div>
                 ))}
               </div>
+              </>
             )}
           </div>
 

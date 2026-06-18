@@ -3,16 +3,9 @@
 import React, { useState, useEffect } from "react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, Download, RefreshCw, Shield } from "lucide-react"
-import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { cn } from "@/lib/utils"
 
-function getDefaultDateRange() {
-  const today = new Date(); const d = today.getDate()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  if (d <= 7) return { startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) }
-  return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)) }
-}
-
-function cn(...c: (string | boolean | undefined)[]) { return c.filter(Boolean).join(" ") }
 const Sk = ({ className }: { className?: string }) => <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
 
 interface PerformanceRow { name: string; revenue: number; margin: number; margin_percent: number; gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number }

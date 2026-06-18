@@ -6,29 +6,10 @@ import {
   BarChart, Bar, Cell
 } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, Calendar, TrendingUp, Target, ChevronDown, Shield, Building2, RefreshCw } from "lucide-react"
-import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
+import { formatCurrency, formatNumber, formatCompactNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { cn } from "@/lib/utils"
 
 // ─── helpers ───────────────────────────────────────────────────────────────
-
-function getDefaultDateRange() {
-  const today = new Date()
-  const d = today.getDate()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  if (d <= 7) {
-    return {
-      startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
-      endDate:   fmt(new Date(today.getFullYear(), today.getMonth(), 0)),
-    }
-  }
-  return {
-    startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)),
-    endDate:   fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)),
-  }
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
-}
 
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={cn("animate-pulse bg-slate-200 rounded", className)} />

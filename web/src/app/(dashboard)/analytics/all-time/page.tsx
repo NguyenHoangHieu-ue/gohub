@@ -176,7 +176,7 @@ export default function AllTimePage() {
                     className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none">
                     <option value="">Tất cả</option>
                     <option value="Strategic">Strategic</option>
-                    <option value="Non-strategic">Non-strategic</option>
+                    <option value="Non-Strategic">Non-Strategic</option>
                   </select>
                 </div>
               </div>
