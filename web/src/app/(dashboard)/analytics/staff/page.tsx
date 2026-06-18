@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Users, Calendar, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, Filter } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatCurrency, formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
 
 interface StaffMetric {
   staff_name: string
@@ -27,359 +27,610 @@ interface Order {
   order_source: string
 }
 
-export default function StaffPage() {
-  const [startDate, setStartDate] = useState(getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState(getDefaultDateRange().endDate)
+export default function StaffPerformancePage() {
+  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
+  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
   const [channelGroup, setChannelGroup] = useState<"All" | "B2B" | "B2C">("All")
   const [selectedChannel, setSelectedChannel] = useState("")
-  const [companyCode, setCompanyCode] = useState("ALL")
+  const [companyCode, setCompanyCode] = useState<string>("ALL")
   const [searchTerm, setSearchTerm] = useState("")
+  const [staffSearchTerm, setStaffSearchTerm] = useState("")
   const [selectedStaff, setSelectedStaff] = useState<string[]>([])
   const [staffList, setStaffList] = useState<{ code: string; name: string }[]>([])
-  const [channels, setChannels] = useState<string[]>([])
   const [staffMetrics, setStaffMetrics] = useState<StaffMetric[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [channels, setChannels] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
   const [page, setPage] = useState(1)
-  const [showStaffDropdown, setShowStaffDropdown] = useState(false)
-  const [staffSearch, setStaffSearch] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const [totalOrdersCount, setTotalOrdersCount] = useState(0)
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true); setError(null)
+  useEffect(() => {
+    fetchChannels()
+    fetchStaffList()
+    fetchPerformance()
+    fetchRecentOrders()
+  }, [viewMode, page])
+
+  const fetchStaffList = async () => {
     try {
-      const baseParams = new URLSearchParams({
-        startDate, endDate,
+      const params = new URLSearchParams({
         channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel, companyCode, dataSource: viewMode,
-        staff: selectedStaff.join(","),
-        search: selectedStaff.length === 0 ? searchTerm : "",
+        channel: selectedChannel,
+        companyCode,
+        dataSource: viewMode,
       })
-
-      const [perfRes, ordersRes] = await Promise.all([
-        fetch(`/api/staff-performance?${baseParams}`),
-        fetch(`/api/orders?${baseParams}&page=${page}&pageSize=10`),
-      ])
-
-      if (perfRes.ok) setStaffMetrics(await perfRes.json())
-      else setError("Hiếu đang fix, vui lòng đợi")
-      if (ordersRes.ok) {
-        const d = await ordersRes.json()
-        setOrders(d.orders || [])
+      const response = await fetch(`/api/staff-list?${params}`)
+      if (response.ok) {
+        setStaffList(await response.json())
       }
     } catch (err) {
-      console.error(err)
-      setError("Hiếu đang fix, vui lòng đợi")
+      console.error("Error fetching staff list:", err)
+    }
+  }
+
+  const fetchChannels = async () => {
+    try {
+      const params = new URLSearchParams({
+        channelGroup: channelGroup === "All" ? "" : channelGroup,
+      })
+      const response = await fetch(`/api/channels?${params}`)
+      if (response.ok) {
+        const channels = await response.json()
+        setChannels(channels)
+      }
+    } catch (err) {
+      console.error("Error fetching channels:", err)
+    }
+  }
+
+  const fetchPerformance = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        channelGroup: channelGroup === "All" ? "" : channelGroup,
+        channel: selectedChannel,
+        companyCode,
+        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
+        search: selectedStaff.length === 0 ? searchTerm : "",
+        dataSource: viewMode,
+      })
+      const response = await fetch(`/api/staff-performance?${params}`)
+      if (response.ok) {
+        setStaffMetrics(await response.json())
+      }
+    } catch (err) {
+      console.error("Error fetching staff performance:", err)
     } finally {
       setLoading(false)
     }
-  }, [startDate, endDate, channelGroup, selectedChannel, companyCode, viewMode, selectedStaff, searchTerm, page])
-
-  const fetchChannelsAndStaff = useCallback(async () => {
-    const [chRes, stRes] = await Promise.all([
-      fetch(`/api/channels?channelGroup=${channelGroup === "All" ? "" : channelGroup}`),
-      fetch(`/api/staff-list?channelGroup=${channelGroup === "All" ? "" : channelGroup}&channel=${selectedChannel}&companyCode=${companyCode}&dataSource=${viewMode}`),
-    ])
-    if (chRes.ok) setChannels(await chRes.json())
-    if (stRes.ok) setStaffList(await stRes.json())
-  }, [channelGroup, selectedChannel, companyCode, viewMode])
-
-  useEffect(() => { fetchChannelsAndStaff() }, [viewMode, channelGroup, selectedChannel, companyCode])
-  useEffect(() => { fetchAll() }, [viewMode, page])
-
-  const totalRevenue = staffMetrics.reduce((s, m) => s + parseFloat(m.total_revenue), 0)
-  const totalUnits   = staffMetrics.reduce((s, m) => s + parseInt(m.total_units), 0)
-  const totalOrders  = staffMetrics.reduce((s, m) => s + parseInt(m.total_orders), 0)
-
-  const handleExportSummary = () => {
-    const headers = ["Rank", "Code", "Tên", "Đơn", "Units", "Doanh thu (VND)", "AOV", "Đóng góp %"]
-    const rows = [headers.join(",")]
-    staffMetrics.forEach((s, i) => {
-      const rev = parseFloat(s.total_revenue)
-      const ord = parseInt(s.total_orders)
-      const contrib = totalRevenue > 0 ? ((rev / totalRevenue) * 100).toFixed(2) : "0"
-      const aov = ord > 0 ? (rev / ord).toFixed(0) : "0"
-      rows.push([i + 1, `"${s.staff_code}"`, `"${s.staff_name}"`, ord, s.total_units, rev, aov, contrib].join(","))
-    })
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" })
-    const a = document.createElement("a")
-    a.href = URL.createObjectURL(blob)
-    a.download = `Staff_Performance_${startDate}_${endDate}.csv`
-    a.click()
   }
 
-  const filteredStaff = staffList.filter(s =>
-    (s.name || "").toLowerCase().includes(staffSearch.toLowerCase()) ||
-    (s.code || "").toLowerCase().includes(staffSearch.toLowerCase())
-  )
+  const fetchRecentOrders = async () => {
+    try {
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        channelGroup: channelGroup === "All" ? "" : channelGroup,
+        channel: selectedChannel,
+        companyCode,
+        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
+        search: selectedStaff.length === 0 ? searchTerm : "",
+        dataSource: viewMode,
+        page: page.toString(),
+        pageSize: "10",
+      })
+      const response = await fetch(`/api/orders?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setOrders(data.orders)
+        setTotalOrdersCount(data.total)
+      }
+    } catch (err) {
+      console.error("Error fetching recent orders:", err)
+    }
+  }
+
+  const handleExportTransactions = async () => {
+    try {
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        channelGroup: channelGroup === "All" ? "" : channelGroup,
+        channel: selectedChannel,
+        companyCode,
+        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
+        search: selectedStaff.length === 0 ? searchTerm : "",
+        dataSource: viewMode,
+      })
+      const response = await fetch(`/api/orders/export?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        const headers = ["Order ID", "Company", "Date", "Staff", "Customer", "Channel", "Order Source", "Product", "SKU", "Qty", "Revenue"]
+        const csvRows = [headers.join(",")]
+        data.forEach((item: any) => {
+          csvRows.push([
+            `"${item.order_id}"`,
+            `"${item.company_code}"`,
+            `"${item.date?.split("T")[0]}"`,
+            `"${item.staff}"`,
+            `"${item.customer_name?.replace(/"/g, '""')}"`,
+            `"${item.channel}"`,
+            `"${item.order_source?.replace(/"/g, '""')}"`,
+            `"${item.product_name?.replace(/"/g, '""')}"`,
+            `"${item.sku}"`,
+            item.fulfilled_quantity,
+            item.revenue,
+          ].join(","))
+        })
+        const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `Recent_Transactions_${startDate}_to_${endDate}.csv`
+        link.click()
+      }
+    } catch (err) {
+      console.error("Export failed:", err)
+    }
+  }
+
+  const handleExportSummary = () => {
+    try {
+      const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
+      const headers = ["Rank", "Staff Code", "Staff Name", "Orders", "Units", "Revenue (VND)", "Avg Order Value", "Contribution %"]
+      const csvRows = [headers.join(",")]
+
+      staffMetrics.forEach((staff, idx) => {
+        const revValue = parseFloat(staff.total_revenue)
+        const ordValue = parseInt(staff.total_orders)
+        const contribution = totalRevenue > 0 ? ((revValue / totalRevenue) * 100).toFixed(2) : "0.00"
+        const aov = ordValue > 0 ? (revValue / ordValue).toFixed(2) : "0.00"
+
+        csvRows.push([
+          idx + 1,
+          `"${staff.staff_code}"`,
+          `"${staff.staff_name}"`,
+          ordValue,
+          staff.total_units,
+          revValue,
+          aov,
+          contribution,
+        ].join(","))
+      })
+
+      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `Staff_Performance_Summary_${startDate}_to_${endDate}.csv`
+      link.click()
+    } catch (err) {
+      console.error("Export summary failed:", err)
+    }
+  }
+
+  const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
+  const totalUnits = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_units), 0)
+  const totalOrders = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_orders), 0)
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 bg-slate-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
-            <Users className="w-5 h-5" />
+    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-24 lg:pb-8">
+      {/* Header section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-4 lg:gap-6">
+          <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 rotate-3 transform group-hover:rotate-0 transition-transform">
+            <Users className="w-6 h-6 lg:w-8 lg:h-8" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Hiệu Suất Nhân Viên</h1>
-            <p className="text-xs text-slate-500">Ranking và theo dõi đội sales</p>
+            <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
+            <p className="text-sm lg:text-lg text-slate-500 font-medium italic">Ranking and tracking our sales team's execution</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-slate-200 p-1 rounded-lg">
-            {(["fulfilled", "created"] as const).map(m => (
-              <button key={m} onClick={() => setViewMode(m)}
-                className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                  viewMode === m ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}>
-                {m === "fulfilled" ? "Giao hàng" : "Tạo đơn"}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
+            <button
+              onClick={() => setViewMode("fulfilled")}
+              className={cn(
+                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
+                viewMode === "fulfilled" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Fulfilled
+            </button>
+            <button
+              onClick={() => setViewMode("created")}
+              className={cn(
+                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
+                viewMode === "created" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Created
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="border-none bg-transparent text-xs focus:ring-0 p-0" />
-            <span className="text-slate-300">—</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="border-none bg-transparent text-xs focus:ring-0 p-0" />
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
+            />
+            <span className="text-slate-300 font-bold">→</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
+            />
           </div>
-
-          <button onClick={fetchAll}
-            className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">
-            Áp dụng
+          <button
+            onClick={() => {
+              fetchChannels()
+              fetchStaffList()
+              fetchPerformance()
+              fetchRecentOrders()
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm"
+          >
+            Apply Filters
           </button>
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
-
-      {/* Quick Filters */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <Filter className="w-4 h-4 text-slate-400" />
+      {/* Filters Summary */}
+      <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2 pr-4 border-r border-slate-100">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Filters:</span>
+        </div>
 
         <div className="flex gap-2">
-          {(["All", "B2B", "B2C"] as const).map(g => (
-            <button key={g} onClick={() => { setChannelGroup(g); setSelectedChannel("") }}
-              className={cn("px-3 py-1.5 rounded-full text-xs font-bold border transition-all",
-                channelGroup === g ? "bg-blue-600 border-blue-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
-              {g}
+          {["All", "B2B", "B2C"].map((group) => (
+            <button
+              key={group}
+              onClick={() => { setChannelGroup(group as any); setSelectedChannel("") }}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-bold transition-all border",
+                channelGroup === group
+                  ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
+                  : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
+              )}
+            >
+              {group}
             </button>
           ))}
         </div>
 
-        <select value={selectedChannel} onChange={e => setSelectedChannel(e.target.value)}
-          className="bg-slate-50 border border-slate-200 rounded-full text-xs font-medium text-slate-600 px-3 py-1.5">
-          <option value="">Tất cả kênh</option>
+        <select
+          value={selectedChannel}
+          onChange={(e) => setSelectedChannel(e.target.value)}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">All Channels</option>
           {channels.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
-        <select value={companyCode} onChange={e => setCompanyCode(e.target.value)}
-          className="bg-slate-50 border border-slate-200 rounded-full text-xs font-medium text-slate-600 px-3 py-1.5">
-          <option value="ALL">Tất cả công ty</option>
+        <select
+          value={companyCode}
+          onChange={(e) => setCompanyCode(e.target.value)}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="ALL">All Companies</option>
           <option value="VN">VN</option>
           <option value="US">US</option>
         </select>
 
-        {/* Staff multi-select */}
         <div className="relative">
-          <button onClick={() => setShowStaffDropdown(!showStaffDropdown)}
-            className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full text-xs font-medium text-slate-600 px-3 py-1.5">
-            {selectedStaff.length === 0 ? "Tất cả NV" : `${selectedStaff.length} NV đã chọn`}
+          <button
+            onClick={() => {
+              const el = document.getElementById("staff-dropdown")
+              if (el) el.classList.toggle("hidden")
+            }}
+            className="flex items-center justify-between w-48 bg-slate-50 border border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <span>
+              {selectedStaff.length === 0 ? "All Staff" :
+               selectedStaff.length === 1 ? staffList.find(s => s.code === selectedStaff[0])?.name || selectedStaff[0] :
+               `${selectedStaff.length} Staff Selected`}
+            </span>
+            <Filter className="w-3 h-3 ml-2 text-slate-400" />
           </button>
-          {showStaffDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-auto p-2">
-              <input type="text" placeholder="Tìm nhân viên..." value={staffSearch}
-                onChange={e => setStaffSearch(e.target.value)}
-                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs mb-2 focus:outline-none" />
-              <button onClick={() => setSelectedStaff([])}
-                className="text-[10px] font-bold text-blue-600 px-2 py-1 hover:bg-blue-50 rounded-md w-full text-left mb-1">
-                Xóa chọn
+
+          <div id="staff-dropdown" className="hidden absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-80 overflow-auto p-2">
+            <div className="sticky top-0 bg-white pb-2 border-b border-slate-50 mb-2 space-y-2 z-10">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search staff..."
+                  value={staffSearchTerm}
+                  onChange={(e) => setStaffSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => setSelectedStaff([])}
+                className="w-full text-left px-3 py-1.5 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                Clear Selection
               </button>
-              {filteredStaff.map(s => (
-                <label key={s.code} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer">
-                  <input type="checkbox" checked={selectedStaff.includes(s.code)}
-                    onChange={() => setSelectedStaff(prev =>
-                      prev.includes(s.code) ? prev.filter(c => c !== s.code) : [...prev, s.code]
-                    )}
-                    className="rounded border-slate-300 text-blue-600" />
-                  <div>
-                    <div className="text-xs font-medium text-slate-700">{s.name}</div>
-                    <div className="text-[9px] text-slate-400">{s.code}</div>
+            </div>
+            <div className="space-y-1">
+              {staffList
+                .filter(s =>
+                  (s.name || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase()) ||
+                  (s.code || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase())
+                )
+                .map(s => (
+                  <label key={s.code} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group">
+                  <input
+                    type="checkbox"
+                    checked={selectedStaff.includes(s.code)}
+                    onChange={() => {
+                      if (selectedStaff.includes(s.code)) {
+                        setSelectedStaff(selectedStaff.filter(code => code !== s.code))
+                      } else {
+                        setSelectedStaff([...selectedStaff, s.code])
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900">{s.name}</span>
+                    <span className="text-[9px] font-medium text-slate-400">{s.code}</span>
                   </div>
                 </label>
               ))}
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input type="text" placeholder="Tìm đơn, tên NV..." value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Order, Staff Name / Code..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-1.5 bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "Tổng đơn", value: formatNumber(totalOrders), icon: ShoppingBag, color: "blue" },
-          { label: "Số lượng", value: formatNumber(totalUnits), icon: Package, color: "emerald" },
-          { label: "Doanh thu", value: formatCurrency(totalRevenue), icon: TrendingUp, color: "amber" },
-        ].map(card => (
-          <div key={card.label} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center",
-                card.color === "blue" ? "bg-blue-50 text-blue-600" :
-                card.color === "emerald" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-                <card.icon className="w-5 h-5" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-4">
+              <ShoppingBag className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Orders</p>
+            <h3 className="text-3xl font-black text-slate-900">{totalOrders.toLocaleString()}</h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 mb-4">
+              <Package className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Units Sold</p>
+            <h3 className="text-3xl font-black text-slate-900">{totalUnits.toLocaleString()}</h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group md:col-span-2">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-50 rounded-full -mr-24 -mt-24 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 mb-4">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Revenue (VND)</p>
+            <h3 className="text-3xl lg:text-4xl font-black text-slate-900">
+              {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalRevenue)}
+            </h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Tables */}
+      <div className="grid grid-cols-1 gap-8">
+        {/* Performance Leaderboard */}
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Staff Performance Summary</h3>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Key metrics by team member</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+                {loading ? "Refreshing..." : "Live Data"}
               </div>
-              <div>
-                <p className="text-xs text-slate-500">{card.label}</p>
-                <p className="text-lg font-bold text-slate-900">{card.value}</p>
+              <button
+                onClick={handleExportSummary}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                title="Export this table to CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Rank</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff Name</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue (VND)</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Avg Order Value</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contr. %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {staffMetrics.map((staff, idx) => {
+                  const revValue = parseFloat(staff.total_revenue)
+                  const ordValue = parseInt(staff.total_orders)
+                  const contribution = (revValue / totalRevenue) * 100
+                  const aov = ordValue > 0 ? revValue / ordValue : 0
+
+                  return (
+                    <tr key={staff.staff_code} className="hover:bg-slate-50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs",
+                          idx === 0 ? "bg-amber-100 text-amber-700 shadow-sm border border-amber-200" :
+                          idx === 1 ? "bg-slate-100 text-slate-700 border border-slate-200" :
+                          idx === 2 ? "bg-orange-50 text-orange-700 border border-orange-100" :
+                          "text-slate-400"
+                        )}>
+                          {idx + 1}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-col">
+                          <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{staff.staff_name}</span>
+                          <span className="text-xs text-slate-500 font-bold">{staff.staff_code}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-bold text-slate-600">{ordValue.toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-bold text-slate-600">{parseInt(staff.total_units).toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-sm font-black text-slate-900">
+                          {new Intl.NumberFormat("vi-VN").format(revValue)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-xs font-bold text-slate-500">
+                          {new Intl.NumberFormat("vi-VN").format(Math.round(aov))}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-500 rounded-full"
+                              style={{ width: `${contribution}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-black text-blue-600 w-10 text-right">{contribution.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Transaction Detail Table */}
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-black text-slate-900">Recent Transactions</h3>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Detailed log of sales activity</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleExportTransactions}
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                title="Export detailed transactions to CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-500">Page {page}</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                    disabled={page === 1}
+                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setPage(prev => prev + 1)}
+                    disabled={orders.length < 10}
+                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Leaderboard */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900">Bảng xếp hạng nhân viên</h3>
-          <button onClick={handleExportSummary}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg">
-            <Download className="w-3.5 h-3.5" />
-            Export
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {["Rank", "Nhân viên", "Đơn", "Units", "Doanh thu", "AOV", "Đóng góp"].map(h => (
-                  <th key={h} className={cn("px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider",
-                    h !== "Rank" && h !== "Nhân viên" ? "text-right" : "")}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded" /></td>
-                    ))}
-                  </tr>
-                ))
-              ) : staffMetrics.map((staff, idx) => {
-                const rev = parseFloat(staff.total_revenue)
-                const ord = parseInt(staff.total_orders)
-                const contrib = totalRevenue > 0 ? (rev / totalRevenue) * 100 : 0
-                const aov = ord > 0 ? rev / ord : 0
-                return (
-                  <tr key={staff.staff_code} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <span className={cn("w-7 h-7 inline-flex items-center justify-center rounded-lg text-xs font-bold",
-                        idx === 0 ? "bg-amber-100 text-amber-700" :
-                        idx === 1 ? "bg-slate-100 text-slate-600" :
-                        idx === 2 ? "bg-orange-50 text-orange-700" : "text-slate-400")}>
-                        {idx + 1}
-                      </span>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Company</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order, idx) => (
+                  <tr key={`${order.order_code}-${idx}`} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
+                      {new Date(order.fulfiled_date).toLocaleDateString()}
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="font-bold text-sm text-slate-900">{staff.staff_name}</div>
-                      <div className="text-xs text-slate-400">{staff.staff_code}</div>
+                    <td className="px-6 py-4 text-sm font-black text-slate-900">
+                      {order.order_code}
                     </td>
-                    <td className="px-5 py-3 text-right text-sm text-slate-600">{formatNumber(ord)}</td>
-                    <td className="px-5 py-3 text-right text-sm text-slate-600">{formatNumber(parseInt(staff.total_units))}</td>
-                    <td className="px-5 py-3 text-right text-sm font-bold text-slate-900">{formatCurrency(rev)}</td>
-                    <td className="px-5 py-3 text-right text-xs text-slate-500">{formatCurrency(aov)}</td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contrib}%` }} />
-                        </div>
-                        <span className="text-xs font-bold text-blue-600 w-9 text-right">{contrib.toFixed(1)}%</span>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-600">
+                      {order.company_code}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-slate-600">
+                      {order.staff_name}
+                    </td>
+                    <td className="px-6 py-4 text-xs font-medium text-slate-600">
+                      {order.customer_name}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-slate-700">{order.product_name}</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{order.sku}</span>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
+                      {order.order_source}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-600">
+                      {order.fulfilled_quantity}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="text-sm font-black text-blue-600">
+                        {new Intl.NumberFormat("vi-VN").format(order.fulfilled_revenue_amount_vnd)}
+                      </span>
+                    </td>
                   </tr>
-                )
-              })}
-              {!loading && staffMetrics.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">
-                    Không có dữ liệu cho khoảng thời gian này
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Recent Transactions */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900">Giao dịch gần đây</h3>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-400">Trang {page}</span>
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setPage(p => p + 1)} disabled={orders.length < 10}
-              className="p-1 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {["Ngày", "Đơn", "Nhân viên", "Khách", "SKU", "Units", "Doanh thu"].map(h => (
-                  <th key={h} className={cn("px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider",
-                    h === "Units" || h === "Doanh thu" ? "text-right" : "")}>
-                    {h}
-                  </th>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orders.map((o, idx) => (
-                <tr key={`${o.order_code}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-xs text-slate-500">
-                    {o.fulfiled_date ? new Date(o.fulfiled_date).toLocaleDateString("vi-VN") : "—"}
-                  </td>
-                  <td className="px-5 py-3 text-sm font-bold text-slate-900">{o.order_code}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{o.staff_name}</td>
-                  <td className="px-5 py-3 text-xs text-slate-500">{o.customer_name}</td>
-                  <td className="px-5 py-3">
-                    <div className="text-sm text-slate-700">{o.product_name || "—"}</div>
-                    <div className="font-mono text-[10px] text-slate-400">{o.sku}</div>
-                  </td>
-                  <td className="px-5 py-3 text-right text-sm text-slate-600">{o.fulfilled_quantity}</td>
-                  <td className="px-5 py-3 text-right text-sm font-bold text-blue-600">
-                    {formatCurrency(o.fulfilled_revenue_amount_vnd)}
-                  </td>
-                </tr>
-              ))}
-              {orders.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-400">
-                    Không có giao dịch
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

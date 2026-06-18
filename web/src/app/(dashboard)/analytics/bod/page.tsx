@@ -122,7 +122,7 @@ export default function BODReportPage() {
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">BOD Report</h1>
+          <h1 className="text-xl font-bold text-slate-800">Board of Directors Report</h1>
           <p className="text-sm text-slate-500">Doanh thu, Lợi nhuận, Kênh — {startDate} đến {endDate}</p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">

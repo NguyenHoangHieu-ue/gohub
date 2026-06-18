@@ -13,6 +13,30 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp 3 (2026-06-18) — Port analytics khớp Y ĐÚC gohub-intel
+
+User yêu cầu: các tab merge từ gohub-intel phải giống y đúc format bản gốc; chỉ giữ thay đổi tốc độ/query.
+
+### Audit: đa số tab đã trung thực (dashboard/b2c/channels/fulfillment/products/all-time khớp)
+Lệch rõ (bị dịch VN + đổi style lúc port): orders, staff, customers. Lệch nhẹ tiêu đề: bod, b2b.
+
+### Đã port lại JSX nguyên văn từ intel (giữ data/API + tốc độ)
+- customers/page.tsx ← CustomerPerformance.tsx (header font-black uppercase italic, KPI 5 cột, ComposedChart,
+  Top Products, Customer Orders, Partner Tiers, All Customers Breakdown). API y hệt (/api/analytics/customer/report).
+- staff/page.tsx ← StaffPerformance.tsx (header w-16 rotate-3, KPI 4 card bo tròn, leaderboard rank vàng/bạc/đồng
+  + thanh contribution, Recent Transactions + export). API y hệt.
+- orders/page.tsx ← OrderManagement.tsx (header "O", 3 overview cards, filter panel 8-col, bảng 9 cột, pagination số trang).
+- bod: "BOD Report" → "Board of Directors Report"; b2b: "B2B Performance" → "B2B Performance Summary"
+
+### Khác biệt có chủ đích (giữ nguyên)
+- motion/react KHÔNG cài → motion.div thay bằng div (mất animation entrance, layout tĩnh y hệt)
+- API/fetch giữ của GoHub PM (cùng endpoint, có cache header — phần tốc độ user muốn giữ)
+- Error: intel im lặng (console) → match; bỏ banner "Hiếu đang fix" ở các trang này (theo yêu cầu y đúc)
+
+Typecheck tsc --noEmit: PASS.
+
+---
+
 ## Session 63 — tiếp 2 (2026-06-18) — Rename app "Gohub Intel" + format tab admin
 
 ### Đổi tên web → "Gohub Intel"
