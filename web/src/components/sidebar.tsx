@@ -11,24 +11,24 @@ import { NotificationBell }   from "./notification-bell"
 // Tabs luôn hiển thị ở trên
 const NAV_MAIN = [
   { href: "/chatbot",    label: "GoHub AI",    icon: Sparkles, key: "chatbot"    },
-  { href: "/promotions", label: "Khuyến Mãi",  icon: Gift,     key: "promotions" },
-  { href: "/kb",         label: "Kiến Thức",   icon: BookOpen, key: "kb"         },
+  { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
+  { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"      },
 ]
 
-// Tabs nhóm Sản Phẩm (collapsible)
+// Tabs nhóm Products (collapsible)
 const NAV_PRODUCTS = [
-  { href: "/skus",      label: "SP Hệ Thống", icon: Package, key: "skus"      },
-  { href: "/ncc",       label: "SP Vendor",    icon: Truck,   key: "ncc"       },
-  { href: "/countries", label: "Thông tin",    icon: Globe,   key: "countries" },
+  { href: "/skus",      label: "System SKUs",  icon: Package, key: "skus"      },
+  { href: "/ncc",       label: "NCC Catalog",  icon: Truck,   key: "ncc"       },
+  { href: "/countries", label: "Reference",    icon: Globe,   key: "countries" },
 ]
 
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
 const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
-// Analytics section — chỉ admin / manager / bod / staff — phân nhóm theo gohub-intel
+// Analytics section — admin / manager / bod / staff — grouped per gohub-intel
 const ANALYTICS_GROUPS = [
   {
-    label: "Tổng Quan",
+    label: "Overview",
     items: [
       { href: "/analytics",          label: "Dashboard",       icon: LayoutDashboard },
       { href: "/analytics/bod",      label: "BOD Report",      icon: PieChart        },
@@ -36,30 +36,30 @@ const ANALYTICS_GROUPS = [
     ],
   },
   {
-    label: "Hiệu Suất Bán Hàng",
+    label: "Sales Performance",
     items: [
-      { href: "/analytics/channels",  label: "Kênh bán",    icon: Globe2     },
-      { href: "/analytics/b2b",       label: "B2B",          icon: Building2  },
-      { href: "/analytics/b2c",       label: "B2C",          icon: ShoppingBag },
-      { href: "/analytics/staff",     label: "Nhân viên",    icon: Users      },
-      { href: "/analytics/customers", label: "Khách hàng",   icon: Users      },
-      { href: "/analytics/vendors",   label: "Vendors",      icon: TrendingUp },
+      { href: "/analytics/channels",  label: "Channels",   icon: Globe2     },
+      { href: "/analytics/b2b",       label: "B2B",        icon: Building2  },
+      { href: "/analytics/b2c",       label: "B2C",        icon: ShoppingBag },
+      { href: "/analytics/staff",     label: "Staff",      icon: Users      },
+      { href: "/analytics/customers", label: "Customers",  icon: Users      },
+      { href: "/analytics/vendors",   label: "Vendors",    icon: TrendingUp },
     ],
   },
   {
-    label: "Vận Hành & Hỗ Trợ",
+    label: "Operations & Support",
     items: [
-      { href: "/analytics/orders",          label: "Đơn hàng",       icon: ClipboardList },
-      { href: "/analytics/fulfillment",     label: "Fulfillment",    icon: Zap           },
-      { href: "/analytics/3hk-usage",       label: "3HK Data Usage", icon: Activity      },
-      { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot",icon: HeartPulse    },
-      { href: "/analytics/feedback",        label: "Feedback",       icon: MessageSquare },
+      { href: "/analytics/orders",          label: "Orders",          icon: ClipboardList },
+      { href: "/analytics/fulfillment",     label: "Fulfillment",     icon: Zap           },
+      { href: "/analytics/3hk-usage",       label: "3HK Data Usage",  icon: Activity      },
+      { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse    },
+      { href: "/analytics/feedback",        label: "Feedback",        icon: MessageSquare },
     ],
   },
   {
-    label: "Phân Tích & Lập Kế Hoạch",
+    label: "Analytics & Planning",
     items: [
-      { href: "/analytics/products", label: "Sản phẩm (BI)", icon: BarChart3 },
+      { href: "/analytics/products", label: "Products (BI)", icon: BarChart3 },
       { href: "/analytics/targets",  label: "KPI / Target",  icon: Target    },
       { href: "/analytics/sql",      label: "SQL Explorer",  icon: Terminal  },
     ],
@@ -209,7 +209,7 @@ export function Sidebar() {
         {navItems.length > 0 && (
           <>
             {!collapsed && navItems.length > 1 && (
-              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Quản Lý</p>
+              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Management</p>
             )}
             {navItems.filter(n => NAV_MAIN.some(m => m.key === n.key) || n.key === "chatbot" || n.key === "admin").map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(href + "/")
@@ -246,14 +246,14 @@ export function Sidebar() {
                   >
                     <div className="flex items-center gap-3">
                       <Package size={16} className="text-gray-400 flex-shrink-0" />
-                      <span>Sản Phẩm</span>
+                      <span>Products</span>
                     </div>
                     {productOpen ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
                   </button>
                 ) : (
                   <button
                     onClick={() => setProductOpen(o => !o)}
-                    title="Sản Phẩm"
+                    title="Products"
                     className={`w-full flex justify-center items-center py-2.5 rounded-lg transition-colors ${
                       NAV_PRODUCTS.some(p => pathname.startsWith(p.href))
                         ? "bg-brand-50 text-brand-700 border border-brand-100"
@@ -304,7 +304,7 @@ export function Sidebar() {
                 onClick={() => setAnalyticsOpen(o => !o)}
                 className="w-full flex items-center justify-between px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
               >
-                <span>Báo Cáo &amp; BI</span>
+                <span>Reports &amp; BI</span>
                 {analyticsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </button>
             )}
@@ -357,7 +357,7 @@ export function Sidebar() {
       {/* Toggle tab — dán vào cạnh phải sidebar */}
       <button
         onClick={toggle}
-        title={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className="absolute -right-3 top-1/2 -translate-y-1/2 z-50
           w-6 h-12 bg-white border border-gray-200 rounded-r-lg shadow-sm
           flex items-center justify-center
@@ -396,12 +396,12 @@ export function Sidebar() {
 
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          title={collapsed ? "Đăng xuất" : undefined}
+          title={collapsed ? "Sign Out" : undefined}
           className={`w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors
             ${collapsed ? "justify-center" : ""}`}
         >
           <LogOut size={15} />
-          {!collapsed && <span>Đăng xuất</span>}
+          {!collapsed && <span>Sign Out</span>}
         </button>
       </div>
     </aside>
