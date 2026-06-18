@@ -13,6 +13,28 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 64 — tiếp 3 (2026-06-18) — Phân tích intel + thêm SKU Destination UI + Partner Tiers UI
+
+User yêu cầu phân tích lại gohub-intel xem còn setting/tab nào chưa khớp, rồi làm #1 + #3.
+
+### Phân tích (settings còn thiếu/khác so với intel)
+- ⚠️ SKU Destination rule UI: web chỉ có GET, không sửa được → ĐÃ LÀM (#1).
+- ⚠️ Partner Tiers UI: web là JSON textarea, intel có UI chip → ĐÃ LÀM (#3).
+- ⚠️ Role data filters (role_filters) cho BI analyst: intel chèn SQL filter theo role; web bi-analyst CHƯA có (gap bảo mật, chưa làm).
+- Env-based (chủ đích, không làm UI): Gemini key, PostgreSQL DB config, GA4 (defer). Schema Config/Turso/cache-sync: N/A.
+- Report tabs: khớp gần hết; B2C khác chủ đích (spec), Website Analytics defer GA4. Clerk admin tools không áp dụng (NextAuth).
+
+### #1 — SKU Destination rule UI (Settings → Cài đặt)
+- POST mới /api/config/sku-destination-rule (admin/manager) → upsert app_settings key sku_destination_rule (shape WEB: {prefix, codeLength, offset}, KHÁC intel startsWith/...).
+- SkuDestinationSection: 3 input (prefix/offset/codeLength) + giải thích quy tắc + Lưu. Khớp getDestinationSQL hiện có.
+
+### #3 — Partner Tiers UI dạng chip (thay JSON textarea)
+- PartnerTiersSection viết lại: thêm nhóm tier mới, mỗi nhóm = card (tên + đếm + xóa), partner dạng chip có nút xóa, input thêm partner (datalist gợi ý tên kênh từ /api/channels), nút Lưu (POST cả object). Giữ endpoint partner-tiers cũ.
+
+Typecheck + next build PASS.
+
+---
+
 ## Session 64 — tiếp 2 (2026-06-18) — Test tab gộp + dropdown tên + fix semantics quyền
 
 User đã chạy v17, yêu cầu test tiếp + dropdown chỉ hiện tên.

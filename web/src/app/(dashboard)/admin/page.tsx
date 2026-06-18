@@ -658,56 +658,216 @@ function SettingsTab({ onNotify }: {
 
       {/* Partner Tiers */}
       <PartnerTiersSection onNotify={onNotify} />
+
+      {/* SKU Destination rule */}
+      <SkuDestinationSection onNotify={onNotify} />
+    </div>
+  )
+}
+
+// Quy tắc trích mã vùng (region) từ SKU — dùng trong các report (Products, BOD...)
+function SkuDestinationSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  const [rule, setRule]   = useState<{ prefix: string; codeLength: number; offset: number }>({ prefix: "E", codeLength: 3, offset: 3 })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/sku-destination-rule")
+      .then(r => r.json())
+      .then(d => { setRule({ prefix: d.prefix ?? "E", codeLength: d.codeLength ?? 3, offset: d.offset ?? 3 }); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    const res = await fetch("/api/config/sku-destination-rule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rule),
+    })
+    setSaving(false)
+    onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu quy tắc mã vùng SKU" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Quy tắc trích mã vùng SKU</h3>
+        <p className="text-xs text-gray-400 mt-0.5">Cách lấy mã quốc gia/vùng từ SKU để gom doanh thu theo điểm đến trong các báo cáo.</p>
+      </div>
+      {loading ? <div className="h-20 bg-gray-50 rounded-lg animate-pulse" /> : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ký tự đầu (prefix)</label>
+              <input
+                value={rule.prefix}
+                maxLength={1}
+                onChange={e => setRule(r => ({ ...r, prefix: e.target.value.toUpperCase() }))}
+                className="mt-1.5 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 uppercase focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vị trí bắt đầu (offset)</label>
+              <input
+                type="number" min={0} max={10}
+                value={rule.offset}
+                onChange={e => setRule(r => ({ ...r, offset: parseInt(e.target.value) || 0 }))}
+                className="mt-1.5 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Số ký tự mã vùng</label>
+              <input
+                type="number" min={1} max={5}
+                value={rule.codeLength}
+                onChange={e => setRule(r => ({ ...r, codeLength: parseInt(e.target.value) || 1 }))}
+                className="mt-1.5 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            Quy tắc: SKU bắt đầu <b>1–6</b> (Gohub VN) hoặc <b>A–E</b> (Gohub Inc) → lấy 3 ký tự từ vị trí 4.
+            Nếu bắt đầu bằng <b>{rule.prefix || "E"}</b> → lấy <b>{rule.codeLength}</b> ký tự từ vị trí <b>{rule.offset + 1}</b>.
+            Còn lại → lấy 3 ký tự đầu.
+          </p>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu quy tắc"}
+          </button>
+        </>
+      )}
     </div>
   )
 }
 
 function PartnerTiersSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
-  const [tiersJson, setTiersJson] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [tiers, setTiers]       = useState<Record<string, string[]>>({})
+  const [channels, setChannels] = useState<string[]>([])
+  const [newTier, setNewTier]   = useState("")
+  const [addInputs, setAddInputs] = useState<Record<string, string>>({})
+  const [saving, setSaving]     = useState(false)
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     fetch("/api/config/partner-tiers")
       .then(r => r.json())
-      .then(d => { setTiersJson(JSON.stringify(d, null, 2)); setLoading(false) })
-      .catch(() => { setTiersJson('{\n  "Strategic": []\n}'); setLoading(false) })
+      .then(d => { setTiers(d && typeof d === "object" ? d : { Strategic: [] }); setLoading(false) })
+      .catch(() => { setTiers({ Strategic: [] }); setLoading(false) })
+    // gợi ý tên kênh khi thêm partner (datalist)
+    fetch("/api/channels")
+      .then(r => r.ok ? r.json() : [])
+      .then((d: any) => {
+        const list = Array.isArray(d) ? d : (d?.channels ?? [])
+        const names = list.map((c: any) => typeof c === "string" ? c : (c.channel_name ?? c.channel ?? c.name)).filter(Boolean)
+        setChannels(Array.from(new Set(names)) as string[])
+      })
+      .catch(() => {})
   }, [])
 
+  const addTier = () => {
+    const name = newTier.trim()
+    if (!name) return
+    if (tiers[name]) { onNotify("error", `Nhóm "${name}" đã tồn tại`); return }
+    setTiers(prev => ({ ...prev, [name]: [] }))
+    setNewTier("")
+  }
+  const deleteTier = (tier: string) =>
+    setTiers(prev => { const n = { ...prev }; delete n[tier]; return n })
+  const addPartner = (tier: string) => {
+    const name = (addInputs[tier] || "").trim()
+    if (!name) return
+    setTiers(prev => prev[tier]?.includes(name) ? prev : { ...prev, [tier]: [...(prev[tier] || []), name] })
+    setAddInputs(prev => ({ ...prev, [tier]: "" }))
+  }
+  const removePartner = (tier: string, name: string) =>
+    setTiers(prev => ({ ...prev, [tier]: (prev[tier] || []).filter(p => p !== name) }))
+
   const save = async () => {
-    try {
-      JSON.parse(tiersJson) // validate
-    } catch {
-      onNotify("error", "JSON không hợp lệ"); return
-    }
     setSaving(true)
     const res = await fetch("/api/config/partner-tiers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(JSON.parse(tiersJson)),
+      body: JSON.stringify(tiers),
     })
     setSaving(false)
     onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu Partner Tiers" : "Hiếu đang fix, vui lòng đợi")
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-      <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Partner Tiers (B2B Strategic)</h3>
-      <p className="text-xs text-gray-400">Danh sách kênh B2B Strategic — dùng trong Analytics để phân tích riêng. Mỗi key là một tier, value là mảng tên kênh.</p>
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Channel &amp; Customer Tiers</h3>
+        <p className="text-xs text-gray-400 mt-0.5">Phân loại đối tác chiến lược (Strategic Partners). Mỗi nhóm hiển thị riêng trong báo cáo B2B.</p>
+      </div>
+
+      <datalist id="channel-suggestions">
+        {channels.map(c => <option key={c} value={c} />)}
+      </datalist>
+
       {loading ? <div className="h-32 bg-gray-50 rounded-lg animate-pulse" /> : (
-        <textarea
-          value={tiersJson}
-          onChange={e => setTiersJson(e.target.value)}
-          rows={8}
-          spellCheck={false}
-          className="w-full font-mono text-xs p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y bg-slate-50"
-        />
+        <>
+          {/* Thêm nhóm mới */}
+          <div className="flex items-end gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+            <div className="flex-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên nhóm mới</label>
+              <input
+                value={newTier}
+                onChange={e => setNewTier(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && addTier()}
+                placeholder="VD: Strategic, Preferred..."
+                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+            <button onClick={addTier} className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg">
+              <Plus size={14} /> Thêm nhóm
+            </button>
+          </div>
+
+          {/* Các nhóm tier */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.keys(tiers).sort().map(tier => (
+              <div key={tier} className="flex flex-col bg-slate-50 rounded-xl border border-slate-100">
+                <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">{tier}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500">{(tiers[tier] || []).length} đối tác</span>
+                    <button onClick={() => deleteTier(tier)} title="Xóa nhóm" className="text-slate-300 hover:text-rose-500"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+                <div className="p-3 flex-1 space-y-1.5 max-h-56 overflow-y-auto">
+                  {(tiers[tier] || []).length === 0 ? (
+                    <p className="text-[11px] text-slate-400 text-center py-4">Chưa có đối tác nào</p>
+                  ) : (tiers[tier] || []).map(p => (
+                    <div key={p} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-slate-100">
+                      <span className="text-xs text-slate-600 truncate">{p}</span>
+                      <button onClick={() => removePartner(tier, p)} className="text-slate-300 hover:text-rose-500 shrink-0"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="p-3 border-t border-slate-100 flex items-center gap-2">
+                  <input
+                    list="channel-suggestions"
+                    value={addInputs[tier] || ""}
+                    onChange={e => setAddInputs(prev => ({ ...prev, [tier]: e.target.value }))}
+                    onKeyDown={e => e.key === "Enter" && addPartner(tier)}
+                    placeholder="Thêm đối tác (gõ hoặc chọn kênh)..."
+                    className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <button onClick={() => addPartner(tier)} className="px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg shrink-0"><Plus size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu Partner Tiers"}
+          </button>
+        </>
       )}
-      <button onClick={save} disabled={saving}
-        className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
-        <Save size={14} />
-        {saving ? "Đang lưu..." : "Lưu Partner Tiers"}
-      </button>
     </div>
   )
 }

@@ -1,3 +1,8 @@
+*18/6/2026 — Session 64 tiếp 3 — Phân tích intel + SKU Destination UI + Partner Tiers UI*
+66. ✅ DONE: Phân tích gohub-intel vs web. Gap settings: SKU Destination UI (#1 làm), Partner Tiers UI (#3 làm), Role data filters cho BI (chưa). Còn lại env-based/defer GA4. Report tabs khớp (B2C khác chủ đích).
+67. ✅ DONE (#1): SKU Destination rule UI — POST /api/config/sku-destination-rule + SkuDestinationSection (prefix/offset/codeLength) trong Cài đặt.
+68. ✅ DONE (#3): Partner Tiers UI dạng chip thay JSON textarea — thêm/xóa nhóm, chip partner có xóa, input thêm + datalist /api/channels. Giữ endpoint cũ.
+
 *18/6/2026 — Session 64 tiếp — Pagination 20 + B2C font + B2B header + Gộp tab Phân quyền*
 62. ✅ DONE: Phân trang 20 hàng/bảng danh sách. Component chung pager.tsx. Áp: products SKU, customers all-breakdown, staff leaderboard, cs-troubleshoot (perf + invalid). Đổi vendors 15→20, 3hk 50→20.
 63. ✅ DONE: B2C font đậm dễ nhìn (giá trị bảng slate-800 semibold, KPI text-2xl, sub slate-500).
