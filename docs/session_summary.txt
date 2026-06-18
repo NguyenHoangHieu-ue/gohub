@@ -13,6 +13,22 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp 6 (2026-06-18) — UserList gán role+trang giống intel (bảng + search)
+
+User làm rõ "phân quyền" = gán ROLE + TRANG analytics cho từng user (UserList) — hiện rất khó dùng.
+Intel (UserManagement.tsx): bảng gọn User | Role | Allowed Reports (nút dropdown) | Actions + search bar.
+
+### Thay đổi (admin/page.tsx UserList) — giữ handler + endpoint
+- Card-per-user (nhồi 2 select + nút) → BẢNG: User | Role | Phòng ban | Trang Analytics | Thao tác
+- Thêm search bar (lọc username/name/email) + đếm "X/Y user"
+- Analytics access: staff/bod = nút "X/N trang" + dropdown checkbox (style intel, bg-blue khi chọn);
+  admin/manager = badge "Toàn quyền" (emerald); standard = "— Không có Analytics"
+- Giữ logic allowed_analytics (null=tất cả), endpoint /api/admin/users/[username] PATCH
+- Import thêm ChevronDown
+Typecheck PASS.
+
+---
+
 ## Session 63 — tiếp 5 (2026-06-18) — Format tab Phân quyền giống bố trí intel
 
 User: format lại tab Phân quyền (admin) giống cách bố trí bên gohub-intel.

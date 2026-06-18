@@ -1,3 +1,6 @@
+*18/6/2026 — Session 63 — tiếp 6 — UserList gán role+trang giống intel*
+53. ✅ DONE: UserList (gán role + trang analytics per user) khó dùng → đổi card→BẢNG kiểu intel (User|Role|Phòng ban|Analytics|Thao tác) + search bar + đếm user. Analytics: dropdown checkbox cho staff/bod, badge Toàn quyền cho admin/manager. Giữ endpoint + logic allowed_analytics
+
 *18/6/2026 — Session 63 — tiếp 5 — Format tab Phân quyền giống intel*
 52. ✅ DONE: PermissionsTab + DeptTabMatrix đổi từ toggle pill → ma trận ô CheckSquare/Square style intel (header role viết hoa, icon box per feature). Giữ data model + endpoint /api/permissions + /api/admin/settings
 

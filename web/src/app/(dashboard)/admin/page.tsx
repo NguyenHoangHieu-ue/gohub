@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
+import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, ChevronDown, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
 import { ConfirmModal } from "@/components/confirm-modal"
 
 interface User {
@@ -166,6 +166,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   const [saving,              setSaving]              = useState<string | null>(null)
   const [deleting,            setDeleting]            = useState(false)
   const [activeAnalyticsUser, setActiveAnalyticsUser] = useState<string | null>(null)
+  const [search,              setSearch]              = useState("")
 
   const changeRole = async (username: string, role: string) => {
     setSaving(username)
@@ -210,8 +211,12 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
 
   if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
 
+  const filtered = users.filter(u =>
+    [u.username, u.name, u.email].some(v => (v || "").toLowerCase().includes(search.toLowerCase()))
+  )
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <ConfirmModal
         open={!!confirmDel}
         loading={deleting}
@@ -221,133 +226,177 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
         onConfirm={() => confirmDel && deleteUser(confirmDel)}
         onCancel={() => setConfirmDel(null)}
       />
-      {users.map(u => (
-        <div key={u.username} className="bg-white border border-gray-200 rounded-xl px-5 py-4">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-gray-900">{u.username}</span>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${roleBadgeClass(u.role)}`}>
-                  {u.role === "standard" ? "Standard" : u.role}
-                </span>
-                {/* Auth provider badge */}
-                {u.lark_open_id ? (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">
-                    Lark
-                  </span>
-                ) : (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">
-                    PW
-                  </span>
-                )}
-              </div>
-              <div className="text-sm text-gray-500 mt-0.5">{u.name} {u.email ? `· ${u.email}` : ""}</div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <select
-                defaultValue={u.role}
-                onChange={e => changeRole(u.username, e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-              >
-                <option value="standard">Standard</option>
-                <option value="bod">BOD</option>
-                <option value="staff">Staff</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-              </select>
-              <select
-                defaultValue={u.department ?? "none"}
-                onChange={e => changeDept(u.username, e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                title="Phòng ban"
-              >
-                <option value="none">Không phòng ban</option>
-                <option value="sales">Sales</option>
-                <option value="product">Product</option>
-                <option value="tech">Tech</option>
-                <option value="finance">Finance</option>
-              </select>
-
-              {/* Analytics Access — chỉ hiện cho staff/bod */}
-              {(u.role === "staff" || u.role === "bod") && (
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveAnalyticsUser(activeAnalyticsUser === u.username ? null : u.username)}
-                    title="Cấu hình trang Analytics được phép"
-                    className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
-                      u.allowed_analytics
-                        ? "bg-blue-50 border-blue-200 text-blue-700"
-                        : "bg-gray-50 border-gray-200 text-gray-500"
-                    }`}
-                  >
-                    <Lock size={11} />
-                    {u.allowed_analytics
-                      ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
-                      : "Analytics: tất cả"}
-                  </button>
-
-                  {activeAnalyticsUser === u.username && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setActiveAnalyticsUser(null)} />
-                      <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-56">
-                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                          <span className="text-[11px] font-bold text-gray-600 uppercase">Analytics Access</span>
-                          <button
-                            onClick={() => { changeAnalytics(u.username, null); setActiveAnalyticsUser(null) }}
-                            className="text-[10px] text-blue-600 hover:underline"
-                          >
-                            Tất cả
-                          </button>
-                        </div>
-                        <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                          {ANALYTICS_REPORTS.map(r => {
-                            const current = u.allowed_analytics
-                              ? u.allowed_analytics.split(",").filter(Boolean)
-                              : ANALYTICS_REPORTS.map(x => x.id)
-                            const checked = current.includes(r.id)
-                            return (
-                              <label key={r.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={e => {
-                                    const next = e.target.checked
-                                      ? [...current, r.id]
-                                      : current.filter(x => x !== r.id)
-                                    const val = next.length === ANALYTICS_REPORTS.length ? null : (next.length > 0 ? next.join(",") : "")
-                                    changeAnalytics(u.username, val || null)
-                                  }}
-                                  className="rounded text-blue-600 w-3.5 h-3.5"
-                                />
-                                <span className="text-xs text-gray-700">{r.label}</span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {saving === u.username && (
-                <span className="text-xs text-gray-400">Đang lưu...</span>
-              )}
-
-              {u.username !== currentUser && (
-                <button
-                  onClick={() => setConfirmDel(u.username)}
-                  title="Xóa user"
-                  className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
-          </div>
+      {/* Search + count */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-lg w-72 focus-within:ring-2 focus-within:ring-brand-500 transition-all">
+          <Search className="w-4 h-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm theo tên, username, email…"
+            className="bg-transparent text-sm focus:outline-none w-full"
+          />
+          {search && <button onClick={() => setSearch("")}><X className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" /></button>}
         </div>
-      ))}
+        <span className="text-xs text-slate-400">{filtered.length}/{users.length} user</span>
+      </div>
+
+      {/* User table — bố trí giống gohub-intel */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[760px]">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="px-5 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">User</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Role</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Phòng ban</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Trang Analytics được xem</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center text-sm text-slate-400">Không tìm thấy user nào.</td>
+                </tr>
+              ) : filtered.map(u => (
+                <tr key={u.username} className="hover:bg-slate-50/50 transition-colors">
+                  {/* User */}
+                  <td className="px-5 py-4">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800">{u.username}</span>
+                        {u.lark_open_id
+                          ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">Lark</span>
+                          : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">PW</span>}
+                      </div>
+                      <span className="text-xs text-slate-500 mt-0.5">{u.name}{u.email ? ` · ${u.email}` : ""}</span>
+                    </div>
+                  </td>
+
+                  {/* Role */}
+                  <td className="px-4 py-4">
+                    <select
+                      defaultValue={u.role}
+                      onChange={e => changeRole(u.username, e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="bod">BOD</option>
+                      <option value="staff">Staff</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+
+                  {/* Department */}
+                  <td className="px-4 py-4">
+                    <select
+                      defaultValue={u.department ?? "none"}
+                      onChange={e => changeDept(u.username, e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      <option value="none">Không phòng ban</option>
+                      <option value="sales">Sales</option>
+                      <option value="product">Product</option>
+                      <option value="tech">Tech</option>
+                      <option value="finance">Finance</option>
+                    </select>
+                  </td>
+
+                  {/* Analytics access */}
+                  <td className="px-4 py-4">
+                    {(u.role === "staff" || u.role === "bod") ? (
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveAnalyticsUser(activeAnalyticsUser === u.username ? null : u.username)}
+                          title="Cấu hình trang Analytics được phép"
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
+                            u.allowed_analytics
+                              ? "bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          <Lock size={12} />
+                          {u.allowed_analytics
+                            ? `${u.allowed_analytics.split(",").filter(Boolean).length}/${ANALYTICS_REPORTS.length} trang`
+                            : "Tất cả trang"}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activeAnalyticsUser === u.username ? "rotate-180" : ""}`} />
+                        </button>
+
+                        {activeAnalyticsUser === u.username && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setActiveAnalyticsUser(null)} />
+                            <div className="absolute left-0 top-full mt-2 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl p-3 w-60">
+                              <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Cấu hình truy cập</span>
+                                <button
+                                  onClick={() => { changeAnalytics(u.username, null); setActiveAnalyticsUser(null) }}
+                                  className="text-[10px] text-blue-600 hover:underline font-semibold"
+                                >
+                                  Cho tất cả
+                                </button>
+                              </div>
+                              <div className="space-y-0.5 max-h-64 overflow-y-auto pr-1">
+                                {ANALYTICS_REPORTS.map(r => {
+                                  const current = u.allowed_analytics
+                                    ? u.allowed_analytics.split(",").filter(Boolean)
+                                    : ANALYTICS_REPORTS.map(x => x.id)
+                                  const checked = current.includes(r.id)
+                                  return (
+                                    <label key={r.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-blue-50" : "hover:bg-slate-50"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={e => {
+                                          const next = e.target.checked
+                                            ? [...current, r.id]
+                                            : current.filter(x => x !== r.id)
+                                          const val = next.length === ANALYTICS_REPORTS.length ? null : (next.length > 0 ? next.join(",") : "")
+                                          changeAnalytics(u.username, val || null)
+                                        }}
+                                        className="rounded text-blue-600 w-4 h-4 border-slate-300 focus:ring-blue-500"
+                                      />
+                                      <span className={`text-xs ${checked ? "text-blue-900 font-medium" : "text-slate-700"}`}>{r.label}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : u.role === "admin" || u.role === "manager" ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100 text-xs font-bold uppercase tracking-wider">
+                        <Shield className="w-3.5 h-3.5" /> Toàn quyền
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">— Không có Analytics</span>
+                    )}
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-4 py-4 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      {saving === u.username && <span className="text-xs text-slate-400">Đang lưu…</span>}
+                      {u.username !== currentUser && (
+                        <button
+                          onClick={() => setConfirmDel(u.username)}
+                          title="Xóa user"
+                          className="p-2 rounded-lg transition-colors text-slate-400 hover:text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
