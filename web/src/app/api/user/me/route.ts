@@ -9,11 +9,12 @@ export async function GET() {
 
   const { data } = await supabaseAdmin
     .from("users")
-    .select("department, allowed_analytics")
+    .select("role, department, allowed_analytics")
     .eq("username", session.user.username)
     .single()
 
   return NextResponse.json({
+    role:              data?.role              ?? session.user.role,
     department:        data?.department        ?? "none",
     allowed_analytics: data?.allowed_analytics ?? null,
   })

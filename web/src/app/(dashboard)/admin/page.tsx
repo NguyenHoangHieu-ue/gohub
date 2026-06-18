@@ -17,7 +17,7 @@ interface User {
   lark_open_id?:      string
 }
 
-// Analytics pages có thể giới hạn per-user (staff/bod)
+// Analytics pages có thể giới hạn per-user (staff/bod) — thứ tự theo sidebar groups
 const ANALYTICS_REPORTS = [
   { id: "dashboard",       label: "Dashboard" },
   { id: "bod",             label: "BOD Report" },
@@ -25,15 +25,16 @@ const ANALYTICS_REPORTS = [
   { id: "channels",        label: "Kênh bán" },
   { id: "b2b",             label: "B2B" },
   { id: "b2c",             label: "B2C" },
+  { id: "staff",           label: "Nhân viên" },
+  { id: "customers",       label: "Khách hàng" },
   { id: "vendors",         label: "Vendors" },
   { id: "orders",          label: "Đơn hàng" },
-  { id: "staff",           label: "Nhân viên" },
   { id: "fulfillment",     label: "Fulfillment" },
+  { id: "3hk-usage",       label: "3HK Data Usage" },
   { id: "cs-troubleshoot", label: "CS Troubleshoot" },
+  { id: "feedback",        label: "Feedback" },
   { id: "products",        label: "Sản phẩm (BI)" },
   { id: "targets",         label: "KPI / Target" },
-  { id: "customers",       label: "Khách hàng" },
-  { id: "3hk-usage",       label: "3HK Data Usage" },
 ] as const
 
 type Tab = "list" | "add" | "password" | "settings" | "permissions" | "template" | "promotions" | "scheduled"

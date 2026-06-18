@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
@@ -25,7 +25,7 @@ const NAV_PRODUCTS = [
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
 const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
-// Analytics section — chỉ admin / manager / bod / staff — phân nhóm theo chức năng
+// Analytics section — chỉ admin / manager / bod / staff — phân nhóm theo gohub-intel
 const ANALYTICS_GROUPS = [
   {
     label: "Tổng Quan",
@@ -36,31 +36,32 @@ const ANALYTICS_GROUPS = [
     ],
   },
   {
-    label: "Doanh Thu",
+    label: "Hiệu Suất Bán Hàng",
     items: [
-      { href: "/analytics/channels", label: "Kênh bán",  icon: Globe2     },
-      { href: "/analytics/b2b",      label: "B2B",        icon: Building2  },
-      { href: "/analytics/b2c",      label: "B2C",        icon: ShoppingBag },
-      { href: "/analytics/vendors",  label: "Vendors",    icon: TrendingUp },
+      { href: "/analytics/channels",  label: "Kênh bán",    icon: Globe2     },
+      { href: "/analytics/b2b",       label: "B2B",          icon: Building2  },
+      { href: "/analytics/b2c",       label: "B2C",          icon: ShoppingBag },
+      { href: "/analytics/staff",     label: "Nhân viên",    icon: Users      },
+      { href: "/analytics/customers", label: "Khách hàng",   icon: Users      },
+      { href: "/analytics/vendors",   label: "Vendors",      icon: TrendingUp },
     ],
   },
   {
-    label: "Vận Hành",
+    label: "Vận Hành & Hỗ Trợ",
     items: [
       { href: "/analytics/orders",          label: "Đơn hàng",       icon: ClipboardList },
-      { href: "/analytics/staff",           label: "Nhân viên",      icon: Users         },
       { href: "/analytics/fulfillment",     label: "Fulfillment",    icon: Zap           },
+      { href: "/analytics/3hk-usage",       label: "3HK Data Usage", icon: Activity      },
       { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot",icon: HeartPulse    },
+      { href: "/analytics/feedback",        label: "Feedback",       icon: MessageSquare },
     ],
   },
   {
-    label: "Phân Tích",
+    label: "Phân Tích & Lập Kế Hoạch",
     items: [
-      { href: "/analytics/products",  label: "Sản phẩm (BI)", icon: BarChart3 },
-      { href: "/analytics/targets",   label: "KPI / Target",   icon: Target    },
-      { href: "/analytics/customers", label: "Khách hàng",     icon: Users     },
-      { href: "/analytics/3hk-usage", label: "3HK Data Usage", icon: Activity  },
-      { href: "/analytics/sql",       label: "SQL Explorer",   icon: Terminal  },
+      { href: "/analytics/products", label: "Sản phẩm (BI)", icon: BarChart3 },
+      { href: "/analytics/targets",  label: "KPI / Target",  icon: Target    },
+      { href: "/analytics/sql",      label: "SQL Explorer",  icon: Terminal  },
     ],
   },
 ]
@@ -77,13 +78,15 @@ const SPECIFIC_DEPTS = ["sales", "product", "tech", "finance"]
 
 // Fetch profile từ DB mỗi lần load → không cần re-login khi admin đổi dept/quyền
 function useMyProfile(username: string) {
-  const [dept, setDept] = useState<string | null>(null)
+  const [dbRole,          setDbRole]          = useState<string | null>(null)
+  const [dept,            setDept]            = useState<string | null>(null)
   const [allowedAnalytics, setAllowedAnalytics] = useState<string[] | null>(null)
   useEffect(() => {
     if (!username) return
     fetch("/api/user/me", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
+        if (d?.role)       setDbRole(d.role)
         if (d?.department) setDept(d.department)
         setAllowedAnalytics(
           d?.allowed_analytics
@@ -93,7 +96,7 @@ function useMyProfile(username: string) {
       })
       .catch(() => {})
   }, [username])
-  return { dept, allowedAnalytics }
+  return { dbRole, dept, allowedAnalytics }
 }
 
 function useDeptTabs(role: string, department: string) {
@@ -142,14 +145,16 @@ export function Sidebar() {
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const { dept: dbDept, allowedAnalytics } = useMyProfile(username)
+  const { dbRole, dept: dbDept, allowedAnalytics } = useMyProfile(username)
   const department = dbDept ?? "none"
+  // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
+  const effectiveRole = dbRole ?? role
 
-  const extraTabs = useDeptTabs(role, department)
+  const extraTabs = useDeptTabs(effectiveRole, department)
 
   // Filter analytics groups theo allowed_analytics (chỉ áp dụng cho staff/bod khi có restriction)
   const analyticsGroups = (() => {
-    if (!allowedAnalytics || role === "admin" || role === "manager") return ANALYTICS_GROUPS
+    if (!allowedAnalytics || effectiveRole === "admin" || effectiveRole === "manager") return ANALYTICS_GROUPS
     return ANALYTICS_GROUPS
       .map(group => ({
         ...group,
@@ -161,16 +166,14 @@ export function Sidebar() {
       .filter(group => group.items.length > 0)
   })()
 
-  const showAnalytics = ANALYTICS_ROLES.has(role)
+  const showAnalytics = ANALYTICS_ROLES.has(effectiveRole)
 
   const navItems = (() => {
-    if (role === "bod" || role === "staff") {
-      // BOD/Staff: chỉ thấy chatbot + analytics (không thấy PM tabs)
+    if (effectiveRole === "bod" || effectiveRole === "staff") {
       return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }]
     }
-    if (role === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
-    if (role === "manager") return NAV_ALL
-    // standard: lọc tabs theo phòng ban
+    if (effectiveRole === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
+    if (effectiveRole === "manager") return NAV_ALL
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...extraTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
@@ -383,8 +386,8 @@ export function Sidebar() {
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
               <div className="mt-0.5">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
-                  {roleLabel(role)}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(effectiveRole)}`}>
+                  {roleLabel(effectiveRole)}
                 </span>
               </div>
             </div>
