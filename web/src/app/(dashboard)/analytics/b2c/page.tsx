@@ -45,7 +45,7 @@ export default function B2CPerformancePage() {
         fj(`/api/analytics/b2c/performance${q}`),
       ])
       setTrend(t); setPerf(p)
-    } catch (err: any) { setError(err.message); setLoading(false) }
+    } catch (err: any) { console.error(err); setError("Hiếu đang fix, vui lòng đợi"); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn, groupBy, period])
@@ -115,7 +115,7 @@ export default function B2CPerformancePage() {
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">Lỗi: {error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

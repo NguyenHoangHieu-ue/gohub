@@ -44,9 +44,10 @@ export default function StaffPage() {
   const [page, setPage] = useState(1)
   const [showStaffDropdown, setShowStaffDropdown] = useState(false)
   const [staffSearch, setStaffSearch] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
-    setLoading(true)
+    setLoading(true); setError(null)
     try {
       const baseParams = new URLSearchParams({
         startDate, endDate,
@@ -62,10 +63,14 @@ export default function StaffPage() {
       ])
 
       if (perfRes.ok) setStaffMetrics(await perfRes.json())
+      else setError("Hiếu đang fix, vui lòng đợi")
       if (ordersRes.ok) {
         const d = await ordersRes.json()
         setOrders(d.orders || [])
       }
+    } catch (err) {
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }
@@ -149,6 +154,8 @@ export default function StaffPage() {
           </button>
         </div>
       </div>
+
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
 
       {/* Quick Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">

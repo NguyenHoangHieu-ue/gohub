@@ -154,7 +154,8 @@ export default function ThreeHKUsagePage() {
       setRecords(d.records)
       setHasMore(d.hasMore)
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }

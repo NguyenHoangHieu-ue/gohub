@@ -201,7 +201,8 @@ export default function CSTroubleshootPage() {
         setSyncMsg({ ok: false, text: d.error || "Sync thất bại" })
       }
     } catch (err: any) {
-      setSyncMsg({ ok: false, text: err.message })
+      console.error(err)
+      setSyncMsg({ ok: false, text: "Hiếu đang fix, vui lòng đợi" })
     } finally {
       setSyncing(false)
       setTimeout(() => setSyncMsg(null), 5000)
@@ -221,7 +222,8 @@ export default function CSTroubleshootPage() {
         setSyncMsg({ ok: false, text: d.error || "Migrate thất bại" })
       }
     } catch (err: any) {
-      setSyncMsg({ ok: false, text: err.message })
+      console.error(err)
+      setSyncMsg({ ok: false, text: "Hiếu đang fix, vui lòng đợi" })
     } finally {
       setSyncing(false)
       setTimeout(() => setSyncMsg(null), 8000)
@@ -236,7 +238,8 @@ export default function CSTroubleshootPage() {
       if (!res.ok) throw new Error((await res.json()).error || "Lỗi tải dữ liệu")
       setData(await res.json())
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }

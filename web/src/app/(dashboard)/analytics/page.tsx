@@ -137,7 +137,8 @@ export default function DashboardPage() {
         if (r.ok) setPrevMonthKpis(await r.json())
       } catch {}
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
       setIsLoading(false)
     }
   }
@@ -283,7 +284,7 @@ export default function DashboardPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-          Lỗi tải dữ liệu: {error}. Kiểm tra Vercel env ANALYTICS_DB_* và thử lại.
+          {error}
         </div>
       )}
 

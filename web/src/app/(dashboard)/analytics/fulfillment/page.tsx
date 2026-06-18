@@ -58,9 +58,10 @@ export default function FulfillmentPage() {
     try {
       const res = await fetch(`/api/analytics/fulfillment-report?startDate=${startDate}&endDate=${endDate}`)
       if (res.ok) setData(await res.json())
-      else { const e = await res.json(); setError(e.message || "Lỗi khi tải dữ liệu") }
+      else { setError("Hiếu đang fix, vui lòng đợi") }
     } catch (err: any) {
-      setError(err.message || "Không thể kết nối")
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }

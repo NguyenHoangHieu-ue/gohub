@@ -173,7 +173,8 @@ export default function TargetsPage() {
       })
       setTargets(t); setTargets3hk(t3); setTargetsUnit(tu)
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Không thể tải dữ liệu" })
+      console.error(err)
+      setMessage({ type: "error", text: "Hiếu đang fix, vui lòng đợi" })
     } finally {
       setLoading(false)
     }
@@ -210,7 +211,8 @@ export default function TargetsPage() {
         throw new Error((await res.json()).error || "Lưu thất bại")
       }
     } catch (err: any) {
-      setMessage({ type: "error", text: err.message })
+      console.error(err)
+      setMessage({ type: "error", text: "Hiếu đang fix, vui lòng đợi" })
     } finally {
       setSaving(false)
     }

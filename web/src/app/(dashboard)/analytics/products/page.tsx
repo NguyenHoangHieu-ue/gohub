@@ -104,7 +104,8 @@ export default function ProductsPage() {
       ;(d.skus || []).forEach((s: any) => { if (s.region) cm[s.region] = s.region_name || s.region })
       setCountryMap(cm)
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }

@@ -42,7 +42,7 @@ export default function B2BPerformancePage() {
         fj(`/api/analytics/b2b/strategic-performance${q}`).catch(() => []),
       ])
       setTrend(t); setPerf(p); setStrategic(s)
-    } catch (err: any) { setError(err.message); setLoading(false) }
+    } catch (err: any) { console.error(err); setError("Hiếu đang fix, vui lòng đợi"); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn, granularity, groupBy, comparisonType])
@@ -126,7 +126,7 @@ export default function B2BPerformancePage() {
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">Lỗi: {error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

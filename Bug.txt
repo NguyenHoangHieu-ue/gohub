@@ -1,3 +1,8 @@
+*18/6/2026 — Session 63 — QA/hardening analytics error messages*
+41. ✅ FIXED: 13 trang analytics hiện lỗi thô (err.message/status code) → chuẩn hóa "Hiếu đang fix, vui lòng đợi" + console.error giữ debug. Dashboard bỏ dòng lộ "Kiểm tra Vercel env ANALYTICS_DB_*"
+42. ✅ FIXED: orders/page.tsx + staff/page.tsx — silent failure: fetch lỗi không hiện gì (bảng rỗng). Thêm error state + catch + banner đỏ "Hiếu đang fix, vui lòng đợi"
+    - Giữ nguyên có chủ đích: sql (admin SQL Explorer hiện lỗi SQL thật), cs-troubleshoot nút Sync/Migrate (feedback vận hành admin)
+
 *18/6/2026 — Session 61 — Tester report (commit f5a2a4d)*
 33. ✅ FIXED: Xóa folder analytics$dir/ rác (ký tự $ không hợp lệ, placeholder cũ)
 34. ✅ FIXED: admin/page.tsx — roleBadgeClass thiếu bod (blue) và staff (teal) roles

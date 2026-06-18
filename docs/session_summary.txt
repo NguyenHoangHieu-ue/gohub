@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-18 (session 62)
+Cập nhật lần cuối: 2026-06-18 (session 63)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅  MERGE gohub-intel vào GoHub PM — HOÀN THÀNH
@@ -12,6 +12,33 @@ Cập nhật lần cuối: 2026-06-18 (session 62)
     - All-Time Report, GA4 (cần Google service account)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session 63 (2026-06-18) — QA/hardening analytics: chuẩn hóa error message
+
+User xác nhận: đã chạy v16, đã set Vercel env ANALYTICS_DB_* (LARK_BASE_ID/TABLE_ID để sau).
+Kết luận merge gohub-intel: HOÀN THÀNH 100% — typecheck sạch, không stub. OnDemand/Wholesale
+Performance là code chết trong intel (không có trong AVAILABLE_REPORTS) → không port.
+Còn defer: Website Analytics GA4 (cần Google service account), Channel Costs (cần migrate Turso).
+
+### QA pass — error message nhất quán theo rule "Hiếu đang fix, vui lòng đợi" (15 file)
+Trước: các trang analytics hiện lỗi thô (err.message, status code), riêng dashboard còn lộ
+infra "Kiểm tra Vercel env ANALYTICS_DB_*". Vi phạm rule mọi lỗi UI = "Hiếu đang fix, vui lòng đợi".
+
+Fix mỗi catch: `console.error(err)` (giữ debug) + set message chuẩn cho UI:
+- analytics/page.tsx (bỏ luôn dòng lộ Vercel env), bod, b2b, b2c, channels (bỏ prefix "Lỗi:")
+- customers, vendors, all-time, 3hk-usage, fulfillment, products, targets (toast), cs-troubleshoot
+
+### Vá silent-failure: orders + staff
+2 trang này KHÔNG có error state/catch — fetch lỗi thì im lặng (bảng rỗng, không báo gì).
+Thêm: `error` state + `catch`/`else` set "Hiếu đang fix, vui lòng đợi" + banner đỏ (khớp các trang khác).
+
+### Giữ nguyên (có chủ đích)
+- sql/page.tsx (SQL Explorer, admin-only): hiển thị lỗi SQL thật vì đó là mục đích công cụ
+- cs-troubleshoot nút Sync/Migrate: fallback "Sync/Migrate thất bại" là feedback vận hành admin
+
+Typecheck `tsc --noEmit`: PASS (exit 0)
+
+---
 
 ## Session 62 (2026-06-18) — Sidebar full English (commit fcef01c)
 

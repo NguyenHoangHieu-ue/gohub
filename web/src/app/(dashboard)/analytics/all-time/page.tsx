@@ -53,7 +53,8 @@ export default function AllTimePage() {
       if (!res.ok) throw new Error((await res.json()).error || "Lỗi tải dữ liệu")
       setData(await res.json())
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }

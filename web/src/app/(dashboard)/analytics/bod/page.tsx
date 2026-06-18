@@ -81,7 +81,7 @@ export default function BODReportPage() {
         fj(`/api/analytics/bod-channel-performance${q}`),
       ])
       setData(rep); setGroupMargins(grp); setChannelPerf(ch)
-    } catch (err: any) { setError(err.message); setLoading(false) }
+    } catch (err: any) { console.error(err); setError("Hiếu đang fix, vui lòng đợi"); setLoading(false) }
   }
 
   useEffect(() => { fetchData() }, [dateColumn])
@@ -167,7 +167,7 @@ export default function BODReportPage() {
         </div>
       )}
 
-      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">Lỗi: {error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -104,7 +104,7 @@ export default function VendorsPage() {
       setTrend(d.trend || [])
       setProducts(d.products || [])
       setChDist(d.channels || [])
-    } catch (err: any) { setError(err.message) }
+    } catch (err: any) { console.error(err); setError("Hiếu đang fix, vui lòng đợi") }
     finally { setLoading(false) }
   }, [startDate, endDate, dateColumn, selectedVendors, channelGroup, channel, comparisonType])
 

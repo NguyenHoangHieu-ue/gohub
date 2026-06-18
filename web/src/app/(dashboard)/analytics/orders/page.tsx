@@ -43,6 +43,7 @@ export default function OrdersPage() {
   const [orderSources, setOrderSources] = useState<{ code: string; name: string }[]>([])
   const [selectedOrderSource, setSelectedOrderSource] = useState("")
   const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
+  const [error, setError] = useState<string | null>(null)
 
   const fetchChannels = useCallback(async (group = selectedChannelGroup, tier = selectedCustomerTier) => {
     const p = new URLSearchParams()
@@ -69,7 +70,7 @@ export default function OrdersPage() {
   }, [selectedChannel, selectedChannelGroup])
 
   const fetchOrders = useCallback(async () => {
-    setIsLoading(true)
+    setIsLoading(true); setError(null)
     try {
       const p = new URLSearchParams({
         startDate, endDate, page: page.toString(), pageSize: PAGE_SIZE.toString(),
@@ -84,7 +85,12 @@ export default function OrdersPage() {
         setOrders(data.orders)
         setTotal(data.total)
         setSummary(data.summary || { totalRevenue: 0, totalQuantity: 0 })
+      } else {
+        setError("Hiếu đang fix, vui lòng đợi")
       }
+    } catch (err) {
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setIsLoading(false)
     }
@@ -214,6 +220,8 @@ export default function OrdersPage() {
           </div>
         ))}
       </div>
+
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>}
 
       {/* Filters Panel */}
       {showFilters && (

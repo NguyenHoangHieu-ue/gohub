@@ -91,7 +91,8 @@ export default function CustomersPage() {
       setProductData(d.products || [])
       setOrderData(d.orders || [])
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }
