@@ -13,6 +13,26 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 63 — tiếp 2 (2026-06-18) — Rename app "Gohub Intel" + format tab admin
+
+### Đổi tên web → "Gohub Intel"
+- layout.tsx: title "GoHub PM" → "Gohub Intel", description cập nhật
+- sidebar.tsx: brand "Gohub Telco" → "Gohub Intel", subtitle "Product Manager" → "Intelligence Hub"
+- login/page.tsx: "GoHub PM" → "Gohub Intel", subtitle → "Intelligence Hub"
+- (giữ package.json name "gohub-pm" — internal build, không phải tên hiển thị)
+
+### Format tab admin (đẹp/gọn/dễ thao tác)
+- Header: icon chip brand + "Quản Trị Hệ Thống" + subtitle = tên tab đang mở
+- Tab bar: 8 tab phẳng → 3 CỤM segmented control (Người dùng / Hệ thống / Công cụ)
+  - Người dùng: Danh sách, Thêm user, Đổi password
+  - Hệ thống: Cài đặt, Phân quyền
+  - Công cụ: Tạo template, Khuyến mãi, Lịch Lark
+- Mỗi tab vẫn 1-click (không bury dropdown); responsive: icon-only trên mobile (<md), full label md+
+- TABS array → TAB_META (record) + TAB_GROUPS
+Typecheck PASS.
+
+---
+
 ## Session 63 — tiếp (2026-06-18) — Nâng cấp chatbot: phân biệt nguồn + bước hỏi lại
 
 User báo chatbot: đôi lúc không đọc được data hệ thống, chưa đọc được NCC catalog,

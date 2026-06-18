@@ -81,22 +81,33 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
     setTimeout(() => setMessage(null), 3000)
   }
 
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "list",       label: "Danh sách",    icon: <Users           size={15} /> },
-    { id: "add",        label: "Thêm user",    icon: <Plus            size={15} /> },
-    { id: "password",   label: "Đổi password", icon: <Key             size={15} /> },
-    { id: "settings",     label: "Cài đặt",      icon: <Settings        size={15} /> },
-    { id: "permissions",  label: "Phân quyền",   icon: <Lock            size={15} /> },
-    { id: "template",     label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
-    { id: "promotions", label: "Khuyến mãi",   icon: <Gift            size={15} /> },
-    { id: "scheduled",  label: "Lịch Lark",    icon: <Clock           size={15} /> },
+  const TAB_META: Record<Tab, { label: string; icon: React.ReactNode }> = {
+    list:        { label: "Danh sách",    icon: <Users           size={15} /> },
+    add:         { label: "Thêm user",    icon: <Plus            size={15} /> },
+    password:    { label: "Đổi password", icon: <Key             size={15} /> },
+    settings:    { label: "Cài đặt",      icon: <Settings        size={15} /> },
+    permissions: { label: "Phân quyền",   icon: <Lock            size={15} /> },
+    template:    { label: "Tạo template", icon: <FileSpreadsheet size={15} /> },
+    promotions:  { label: "Khuyến mãi",   icon: <Gift            size={15} /> },
+    scheduled:   { label: "Lịch Lark",    icon: <Clock           size={15} /> },
+  }
+  // Nhóm 3 cụm — mỗi tab vẫn 1-click, gọn + responsive (icon-only trên mobile)
+  const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
+    { label: "Người dùng", tabs: ["list", "add", "password"] },
+    { label: "Hệ thống",   tabs: ["settings", "permissions"] },
+    { label: "Công cụ",    tabs: ["template", "promotions", "scheduled"] },
   ]
 
   return (
     <div className="p-6 space-y-5">
-      <div className="flex items-baseline gap-2">
-        <Shield size={20} className="text-brand-600 mt-0.5" />
-        <h1 className="text-xl font-bold text-gray-900">Quản lý Users</h1>
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+          <Shield size={18} className="text-brand-600" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 leading-tight">Quản Trị Hệ Thống</h1>
+          <p className="text-xs text-gray-500 leading-tight">{TAB_META[tab].label}</p>
+        </div>
       </div>
 
       {message && (
@@ -109,20 +120,26 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
         </div>
       )}
 
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              tab === t.id
-                ? "bg-white text-brand-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
+      {/* Tab bar — 3 cụm segmented, mỗi tab 1-click; icon-only trên mobile */}
+      <div className="flex flex-wrap items-center gap-2">
+        {TAB_GROUPS.map(group => (
+          <div key={group.label} className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+            {group.tabs.map(id => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                title={TAB_META[id].label}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  tab === id
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {TAB_META[id].icon}
+                <span className="hidden md:inline">{TAB_META[id].label}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 

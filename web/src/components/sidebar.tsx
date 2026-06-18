@@ -195,8 +195,8 @@ export function Sidebar() {
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <div className="text-white font-semibold text-sm leading-tight tracking-tight whitespace-nowrap">Gohub Telco</div>
-              <div className="text-brand-300/80 text-[11px] whitespace-nowrap tracking-wide uppercase">Product Manager</div>
+              <div className="text-white font-semibold text-sm leading-tight tracking-tight whitespace-nowrap">Gohub Intel</div>
+              <div className="text-brand-300/80 text-[11px] whitespace-nowrap tracking-wide uppercase">Intelligence Hub</div>
             </div>
           )}
         </div>

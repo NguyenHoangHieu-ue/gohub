@@ -52,8 +52,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 bg-brand-500/40 rounded-xl mb-4 border border-brand-400/30">
             <Radio size={22} className="text-white" strokeWidth={2} />
           </div>
-          <h1 className="text-2xl font-semibold text-white tracking-tight">GoHub PM</h1>
-          <p className="text-brand-300/80 text-sm mt-1 tracking-wide uppercase text-[11px]">Product Manager Dashboard</p>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Gohub Intel</h1>
+          <p className="text-brand-300/80 text-sm mt-1 tracking-wide uppercase text-[11px]">Intelligence Hub</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl shadow-black/30 p-7">

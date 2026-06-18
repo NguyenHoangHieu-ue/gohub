@@ -1,3 +1,7 @@
+*18/6/2026 — Session 63 — tiếp 2 — Rename "Gohub Intel" + format tab admin*
+47. ✅ DONE: Đổi tên web "GoHub PM"/"Gohub Telco" → "Gohub Intel" (layout title, sidebar brand, login). Subtitle → "Intelligence Hub"
+48. ✅ DONE: Format tab admin — 8 tab phẳng → 3 cụm segmented (Người dùng/Hệ thống/Công cụ), header có icon chip + tên tab hiện tại, responsive icon-only mobile, mỗi tab vẫn 1-click
+
 *18/6/2026 — Session 63 — tiếp — Nâng cấp chatbot (phân biệt nguồn + hỏi lại)*
 43. ✅ FIXED: classifier thiếu intent bi_analytics/template_create → route sai. Bổ sung đủ 9 intent (thêm ncc_catalog, unclear)
 44. ✅ FIXED: chatbot không phân biệt GoHub vs NCC catalog → thêm data_source (gohub_system/ncc_catalog/both) data-driven + header context tách bạch + directive [NGUỒN HỎI]

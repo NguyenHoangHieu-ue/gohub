@@ -6,8 +6,8 @@ import { SessionProvider } from "./session-provider"
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" })
 
 export const metadata: Metadata = {
-  title: "GoHub PM",
-  description: "GoHub Product Manager Dashboard",
+  title: "Gohub Intel",
+  description: "Gohub Intel — Business Intelligence & Product Hub",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
