@@ -20,7 +20,7 @@ GoHub PM là nền tảng nội bộ hợp nhất **2 hệ thống**:
 | Deploy | Vercel (auto-deploy từ `main` branch) |
 | Auth | NextAuth.js v4 + bcrypt + Lark OAuth |
 | Product DB | Supabase (PostgreSQL + pgvector) |
-| Analytics DB | PostgreSQL `gohub_dw` (host: 34.61.204.98) |
+| Analytics DB | PostgreSQL `gohub_dw` (internal — liên hệ team lead) |
 | AI | Google Gemini (gemini-3.5-flash + gemini-embedding-001) |
 | Bot | Lark Bot (p2p + group + thread) |
 | Sync | GitHub Actions cron (daily 01:00 UTC) |
@@ -125,38 +125,7 @@ npm run dev  # → http://localhost:3000
 
 ### Env vars cần thiết (web/.env.local)
 
-```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
-
-# Auth
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=http://localhost:3000
-
-# AI
-GEMINI_KEY=
-
-# Lark Bot
-LARK_APP_ID=
-LARK_APP_SECRET=
-LARK_BOT_NAME=Bé Gấu Thông Thái
-
-# Analytics DB (gohub_dw)
-ANALYTICS_DB_HOST=34.61.204.98
-ANALYTICS_DB_PORT=5432
-ANALYTICS_DB_NAME=gohub_dw
-ANALYTICS_DB_USER=gohub_dw_user
-ANALYTICS_DB_PASSWORD=
-
-# Turso (optional — cho CS ticket migration)
-TURSO_URL=
-TURSO_AUTH_TOKEN=
-
-# MCP Server
-MCP_SECRET=
-```
+Liên hệ team lead để lấy file `.env.local`. Không commit file này lên GitHub.
 
 ---
 

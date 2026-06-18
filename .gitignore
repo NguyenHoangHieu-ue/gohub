@@ -32,6 +32,9 @@ TaiLieuCongTy_Chung/
 local.db
 turso.db
 
+# ─── Script variants with hardcoded values (dùng .py thay thế) ─────────────
+scripts/*.mjs
+
 # ─── Streamlit (rác cũ) ──────────────────────────────────────────────────────
 .streamlit/
 
@@ -47,3 +50,11 @@ desktop.ini
 # ncc/ subfolders NOT tracked (sensitive pricing)
 Data/ncc/
 Data/*.md
+
+# ─── Internal docs (không public) ───────────────────────────────────────────
+Bug.txt
+WORK.md
+_Skills_AI/
+database/
+docs/session_summary.txt
+docs/MERGE_PLAN.md
