@@ -13,6 +13,25 @@ Cập nhật lần cuối: 2026-06-18 (session 63)
     - Channel Costs UI (cần migrate từ Turso)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+## Session 64 — tiếp 2 (2026-06-18) — Test tab gộp + dropdown tên + fix semantics quyền
+
+User đã chạy v17, yêu cầu test tiếp + dropdown chỉ hiện tên.
+
+### Sửa
+- Dropdown chọn account (admin/page.tsx): bỏ "(username/lark_ou_...)" → chỉ hiện `u.name || u.username` (+ "· bạn").
+- FIX semantics quyền: trạng thái "chặn hết" ("") bị parse `?` hiểu nhầm thành null=tất cả.
+  → đổi sang `!= null` ở: sidebar.tsx useMyProfile (allowedAnalytics + allowedTabs) và prefill editor (admin/page.tsx).
+  Quy tắc rõ: null = không giới hạn / theo phòng ban; "" = chặn hết; list = subset.
+
+### Verify (không E2E được vì NextAuth + DB thật)
+- tsc --noEmit PASS, next build PASS.
+- Test logic vòng đời quyền (node mô phỏng editor→DB→sidebar): 6/6 PASS
+  (analytics: all/subset/none; pm tabs: all=theo dept non-destructive / subset=ghi đè / none=chặn).
+- Manual UI để user tự test: chọn account→đổi role/dept/tích trang→Cập nhật; login user xem sidebar; mục nâng cao; phân trang 20.
+- Commit: dd94133 (dropdown + semantics), trước đó 5f77677 (gộp tab + pagination + B2C/B2B).
+
+---
+
 ## Session 64 — tiếp (2026-06-18) — Pagination 20 + B2C font + B2B header + Gộp tab Phân quyền
 
 User giao 4 việc tiếp. Xong cả 4 (typecheck + next build PASS).
