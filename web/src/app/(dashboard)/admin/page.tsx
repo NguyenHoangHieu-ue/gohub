@@ -664,6 +664,79 @@ function SettingsTab({ onNotify }: {
 
       {/* SKU Destination rule */}
       <SkuDestinationSection onNotify={onNotify} />
+
+      {/* Role data filters cho BI Analyst */}
+      <RoleFiltersSection onNotify={onNotify} />
+    </div>
+  )
+}
+
+// Giới hạn dữ liệu theo vai trò cho BI Analyst — inject "DATA ACCESS RESTRICTION" vào prompt.
+// admin = toàn quyền (không cần nhập). Để trống = không giới hạn role đó.
+function RoleFiltersSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  const ROLES: { key: string; label: string }[] = [
+    { key: "manager",  label: "Manager" },
+    { key: "bod",      label: "BOD" },
+    { key: "staff",    label: "Staff" },
+    { key: "standard", label: "Standard" },
+  ]
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/role-filters")
+      .then(r => r.json())
+      .then(d => { setFilters(d || {}); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    const res = await fetch("/api/config/role-filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filters),
+    })
+    setSaving(false)
+    onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu giới hạn dữ liệu theo vai trò" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Giới hạn dữ liệu BI theo vai trò</h3>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Điều kiện lọc (SQL hoặc mô tả) áp cho chatbot BI Analyst với từng role. Admin luôn toàn quyền. Để trống = không giới hạn.
+        </p>
+      </div>
+      {loading ? <div className="h-32 bg-gray-50 rounded-lg animate-pulse" /> : (
+        <>
+          <div className="space-y-3">
+            {ROLES.map(({ key, label }) => (
+              <div key={key}>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+                <textarea
+                  rows={2}
+                  value={filters[key] ?? ""}
+                  onChange={e => setFilters(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={`VD: chỉ kênh B2C — UPPER(s.group_name)='B2C'  ·  hoặc mô tả: chỉ xem doanh thu kênh mình phụ trách`}
+                  className="mt-1.5 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            Điều kiện được chèn vào prompt BI dưới dạng "DATA ACCESS RESTRICTION" — AI bắt buộc thêm vào WHERE mọi câu SQL.
+            Đây là lớp hướng dẫn ở prompt (mềm), nên viết điều kiện rõ ràng, dùng đúng cột schema gohub_dw.
+          </p>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu giới hạn"}
+          </button>
+        </>
+      )}
     </div>
   )
 }

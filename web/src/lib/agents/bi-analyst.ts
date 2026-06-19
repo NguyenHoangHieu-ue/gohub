@@ -1,5 +1,19 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
+import { supabaseAdmin }                   from "@/lib/supabase"
+
+// Role data filter: admin không giới hạn; role khác lấy directive từ app_settings.role_filters
+export async function getRoleDataFilter(role?: string): Promise<string> {
+  if (!role || role === "admin") return ""
+  try {
+    const { data } = await supabaseAdmin
+      .from("app_settings").select("value").eq("key", "role_filters").maybeSingle()
+    const filters = data?.value ? JSON.parse(data.value) : {}
+    return (filters[role] as string) || ""
+  } catch {
+    return ""
+  }
+}
 
 // ─── BI Analyst: Gemini function calling với gohub_dw ────────────────────────
 // Dùng chung cho cả web chatbot (/api/chat) và Lark bot (/api/lark/events).
@@ -22,12 +36,19 @@ const executeSQLDecl = {
 export async function runBIAnalyst(
   systemInstruction: string,
   geminiHistory: any[],
-  lastMsg: string
+  lastMsg: string,
+  role?: string
 ): Promise<string> {
+  // Role data filter (non-admin): chèn directive giới hạn dữ liệu vào prompt
+  const dataFilter = await getRoleDataFilter(role)
+  const finalInstruction = dataFilter
+    ? `${systemInstruction}\n\n━━━ GIỚI HẠN TRUY CẬP DỮ LIỆU (DATA ACCESS RESTRICTION) ━━━\nVai trò "${role}" CHỈ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm điều kiện này vào MỌI câu SQL (WHERE), không được bỏ qua:\n${dataFilter}`
+    : systemInstruction
+
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
-    systemInstruction,
+    systemInstruction: finalInstruction,
     tools: [{ functionDeclarations: [executeSQLDecl] }],
   })
 

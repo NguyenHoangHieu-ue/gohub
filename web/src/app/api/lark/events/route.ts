@@ -323,7 +323,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     // bi-analyst: dùng function calling (executeSQL trên gohub_dw) — giống web chatbot
     let response: string
     if (agentId === "bi-analyst") {
-      response = await runBIAnalyst(systemInstruction, geminiHistory, userText)
+      response = await runBIAnalyst(systemInstruction, geminiHistory, userText, role)
     } else {
       // Call Gemini (non-streaming for Lark)
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)

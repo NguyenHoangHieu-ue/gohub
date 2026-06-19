@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
         async start(controller) {
           try {
             controller.enqueue(encoder.encode(`__AGENT__:${agentId}:${agentName}\n`))
-            const text = await runBIAnalyst(systemInstruction, geminiHistory, lastMsg)
+            const text = await runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
             controller.enqueue(encoder.encode(text))
             controller.close()
           } catch (err: any) {
