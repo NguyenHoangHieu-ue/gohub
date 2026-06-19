@@ -51,6 +51,100 @@ export const REGION_DISPLAY: Record<string, string> = {
   oceania:        "Châu Đại Dương",
 }
 
+// ─── NCC country ↔ region matcher ─────────────────────────────────────────────
+// ncc_worldmove.region chỉ có ~40 nhãn thô ("Europe", "USA", "Korea", "Southeast Asia"...).
+// Match thuần region.includes(country) HỎNG cho phần lớn nước (Germany→"Europe" miss,
+// United States→"USA" miss, South Korea→"Korea" miss). Bộ matcher dưới đây chấm điểm:
+//   3 = nước xuất hiện trực tiếp trong region/product_name (chính xác nhất)
+//   2 = gói khu vực rộng có chứa nước (Europe→các nước EU, Southeast Asia→...)
+//   1 = gói toàn cầu (Worldwide/Global)
+//   0 = không liên quan
+
+// Members (lowercase) cho từng region rộng — match nước thành viên với gói khu vực
+const NCC_REGION_MEMBERS: Record<string, string[]> = {
+  asia: [
+    "japan","south korea","korea","taiwan","hong kong","singapore","thailand",
+    "malaysia","philippines","indonesia","india","china","macao","macau","mongolia",
+    "vietnam","sri lanka","bangladesh","cambodia","laos","myanmar","maldives","nepal","brunei",
+  ],
+  southeast_asia: [
+    "thailand","malaysia","philippines","indonesia","singapore","vietnam",
+    "myanmar","cambodia","laos","brunei",
+  ],
+  europe: [
+    "united kingdom","france","germany","italy","spain","netherlands","switzerland",
+    "sweden","norway","denmark","finland","poland","austria","belgium","portugal",
+    "greece","czech republic","czechia","turkey","hungary","romania","croatia","serbia",
+    "ukraine","ireland","russia","iceland","luxembourg","slovakia","slovenia","bulgaria",
+    "estonia","latvia","lithuania","malta","cyprus",
+  ],
+  north_america: ["united states","usa","canada","mexico"],
+  americas: [
+    "united states","usa","canada","mexico","brazil","argentina","chile",
+    "colombia","peru","ecuador","uruguay","bolivia","paraguay",
+  ],
+  middle_east: [
+    "united arab emirates","uae","saudi arabia","qatar","kuwait","bahrain",
+    "jordan","israel","oman","turkey",
+  ],
+  africa: [
+    "south africa","nigeria","kenya","ghana","egypt","morocco","tanzania",
+    "ethiopia","uganda","tunisia",
+  ],
+  oceania: ["australia","new zealand"],
+}
+
+// Nhãn region thô của WM → region id rộng (lowercase region → region id, hoặc "WORLD")
+const NCC_BROAD_REGION_LABEL: Record<string, string> = {
+  "europe":          "europe",
+  "asia":            "asia",
+  "southeast asia":  "southeast_asia",
+  "north america":   "north_america",
+  "south america":   "americas",
+  "persian gulf":    "middle_east",
+  "africa":          "africa",
+  "worldwide":       "WORLD",
+  "global":          "WORLD",
+  "any":             "WORLD",
+}
+
+// Alias tên nước → các token có thể xuất hiện trong region/product_name
+const NCC_COUNTRY_ALIASES: Record<string, string[]> = {
+  "united states":        ["united states","usa","u.s","america"],
+  "south korea":          ["south korea","korea"],
+  "united kingdom":       ["united kingdom","uk","britain","england"],
+  "united arab emirates": ["united arab emirates","uae"],
+  "hong kong":            ["hong kong","hongkong"],
+  "macao":                ["macao","macau"],
+  "china":                ["china","mainland china"],
+  "czech republic":       ["czech republic","czechia"],
+}
+
+function nccCountryTokens(country: string): string[] {
+  const c = country.toLowerCase().trim()
+  return NCC_COUNTRY_ALIASES[c] ?? [c]
+}
+
+// Chấm điểm 1 sản phẩm NCC (theo region + product_name) so với 1 nước. 0 = không match.
+export function nccCountryScore(region: string | null, productName: string | null, country: string): number {
+  const r = (region ?? "").toLowerCase()
+  const pn = (productName ?? "").toLowerCase()
+  const tokens = nccCountryTokens(country)
+
+  // 3 — nước xuất hiện trực tiếp (region hoặc product_name)
+  for (const t of tokens) {
+    if (r.includes(t) || pn.includes(t)) return 3
+  }
+  // 2/1 — region rộng có chứa nước
+  const rid = NCC_BROAD_REGION_LABEL[r.trim()]
+  if (rid) {
+    if (rid === "WORLD") return 1
+    const members = NCC_REGION_MEMBERS[rid] ?? []
+    if (tokens.some(t => members.includes(t))) return 2
+  }
+  return 0
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function getCountryCodes(countryEn: string, ref: RefCache) {
@@ -233,7 +327,7 @@ export async function searchSkus(params: {
     }
   }
 
-  return { skus: result.slice(0, 15), note }
+  return { skus: result.slice(0, 40), note }
 }
 
 // ─── Tool: search_skus_for_region ────────────────────────────────────────────
@@ -448,7 +542,7 @@ export async function searchSkusByGroupCode(
     if (exact.length) result = exact
   }
 
-  const rows = result.slice(0, 20).map((s: any) => {
+  const rows = result.slice(0, 50).map((s: any) => {
     const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
       : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
     let cogsVnd: string | null = null, cogsUsd: string | null = null
@@ -785,35 +879,34 @@ export function searchNccWm(params: {
   country?: string
   days?: number
   sim_type?: string
+  limit?: number
 }, ref: RefCache): any[] {
-  let r = ref.nccWm
+  let scored: { p: any; score: number }[]
+
   if (params.country) {
-    const s = params.country.toLowerCase()
-    // Phase 1: exact region match (ví dụ: "Japan", "Taiwan")
-    let matched = r.filter((p: any) => (p.region ?? "").toLowerCase().includes(s))
-    // Phase 2: nếu không có, tìm theo ISO code hoặc group code liên quan
-    if (!matched.length) {
-      const { isoUpper, all } = getCountryCodes(params.country, ref)
-      if (all.length || isoUpper) {
-        // Lấy tên các groups liên quan để match với WM region
-        const groupNames = all
-          .map(code => (ref.groupMap[code] ?? code).toLowerCase())
-          .filter(Boolean)
-        matched = r.filter((p: any) => {
-          const region = (p.region ?? "").toLowerCase()
-          return groupNames.some(g => region.includes(g) || g.includes(region))
-        })
-      }
-    }
-    r = matched
+    // Chấm điểm từng sản phẩm theo độ liên quan với nước (3=trực tiếp, 2=khu vực, 1=toàn cầu)
+    scored = ref.nccWm
+      .map((p: any) => ({ p, score: nccCountryScore(p.region, p.product_name, params.country!) }))
+      .filter(x => x.score > 0)
+  } else {
+    scored = ref.nccWm.map((p: any) => ({ p, score: 0 }))
   }
-  if (params.days) r = r.filter((p: any) => p.days === params.days)
+
+  if (params.days)     scored = scored.filter(x => x.p.days === params.days)
   if (params.sim_type) {
     const s = params.sim_type.toLowerCase()
-    r = r.filter((p: any) => (p.sim_type ?? "").toLowerCase().includes(s))
+    scored = scored.filter(x => (x.p.sim_type ?? "").toLowerCase().includes(s))
   }
-  return r.slice(0, 20).map((p: any) => ({
-    ...p, in_system: ref.nccWmInSystem.has(p.vendor_product_id),
+
+  // Sort: ưu tiên match trực tiếp (score cao) trước, rồi đã-tạo-GoHub, rồi ít ngày
+  scored.sort((a, b) =>
+    b.score - a.score ||
+    (ref.nccWmInSystem.has(b.p.vendor_product_id) ? 1 : 0) - (ref.nccWmInSystem.has(a.p.vendor_product_id) ? 1 : 0) ||
+    (a.p.days ?? 99) - (b.p.days ?? 99)
+  )
+
+  return scored.slice(0, params.limit ?? 40).map(x => ({
+    ...x.p, in_system: ref.nccWmInSystem.has(x.p.vendor_product_id), _score: x.score,
   }))
 }
 
@@ -836,7 +929,7 @@ export function findGaps(params: {
 
   if (vendor === "wm" || vendor === "all") {
     const filtered = params.country
-      ? ref.nccWm.filter((p: any) => (p.region ?? "").toLowerCase().includes(params.country!.toLowerCase()))
+      ? ref.nccWm.filter((p: any) => nccCountryScore(p.region, p.product_name, params.country!) > 0)
       : ref.nccWm
     const notIn = filtered.filter((p: any) => !ref.nccWmInSystem.has(p.vendor_product_id))
     result.worldmove = {
@@ -889,7 +982,7 @@ export async function searchKnowledgeBase(query: string, department?: string): P
     const res = await fetch(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/api/kb/search`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ query, department: department || null, limit: 5 }),
+      body:    JSON.stringify({ query, department: department || null, limit: 8 }),
     })
     if (!res.ok) return ""
     const data = await res.json()

@@ -7,6 +7,7 @@ import { AGENTS }                    from "@/lib/agents/agents"
 import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import { buildToolContext }          from "@/lib/agents/context"
+import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
@@ -314,17 +315,22 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       _tempRule,
     ].join("")
 
-    // Call Gemini (non-streaming for Lark)
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
-
     const geminiHistory = history.map(m => ({
       role:  m.role === "user" ? "user" as const : "model" as const,
       parts: [{ text: m.content }],
     }))
 
-    const result   = await model.startChat({ history: geminiHistory }).sendMessage(userText)
-    const response = result.response.text()
+    // bi-analyst: dùng function calling (executeSQL trên gohub_dw) — giống web chatbot
+    let response: string
+    if (agentId === "bi-analyst") {
+      response = await runBIAnalyst(systemInstruction, geminiHistory, userText)
+    } else {
+      // Call Gemini (non-streaming for Lark)
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+      const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
+      const result = await model.startChat({ history: geminiHistory }).sendMessage(userText)
+      response = result.response.text()
+    }
 
     // Nếu response có bảng → gửi card + xlsx, còn lại strip markdown
     const split = splitTextAndTable(response)

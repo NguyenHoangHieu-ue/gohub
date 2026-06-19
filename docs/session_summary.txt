@@ -1,5 +1,50 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-18 (session 63)
+Cập nhật lần cuối: 2026-06-19 (session 65)
+
+## Session 65 (2026-06-19) — Đại tu chatbot: đọc ĐỦ dữ liệu + tái cấu trúc agent (bỏ overlap)
+
+User báo chatbot thiếu dữ liệu ở nhiều chỗ: lúc không biết NCC catalog, lúc thiếu SP hệ thống,
+lúc không đọc được doanh thu/đơn. Yêu cầu: format lại để đọc/nhận biết HẾT dữ liệu, sửa agent
+(không overlap, không 1 con ôm quá nhiều, không con nào thiếu info), đọc docs/wiki, fix workflow.
+
+### Điều tra (query DB thật + đọc wiki)
+- Supabase 37 bảng, gohub_dw 12 bảng. Xác nhận cache LOAD ĐỦ (WM 8921 unique, sku_catalog 8073 Active).
+- ROOT CAUSE "không biết NCC catalog": searchNccWm match theo region text thô (~40 nhãn).
+  Germany/France/Italy/Spain/UK (region="Europe") → 0 kết quả; United States (region="USA") → 0;
+  South Korea (region="Korea") → 0; Thailand chỉ 21/~1737. → fix bằng matcher country→region có scoring.
+- ROOT CAUSE "không đọc doanh thu/đơn": (1) BI schema trong agents.ts SAI/THIẾU (thiếu 7 bảng, tham
+  chiếu bảng target_planning KHÔNG tồn tại trong gohub_dw). (2) Lark route KHÔNG xử lý bi-analyst
+  (gọi Gemini thường, không có tool executeSQL) → user Lark hỏi doanh thu không query được.
+- OVERLAP: ncc_catalog intent route về tu-van → tu-van ôm cả GoHub + NCC; giai-dap cũng list SKU group.
+- Bảng chưa dùng: ncc_products_unified (country_iso_codes NULL toàn bộ → vô dụng), ncc_datapool (rỗng).
+  → Giữ ncc_worldmove (giàu field: apn/coverage/exist) + fix matcher thay vì chuyển bảng.
+
+### Fix (8 file)
+1. tools.ts: thêm nccCountryScore() (3=trực tiếp, 2=khu vực rộng, 1=worldwide, 0=không) + maps
+   NCC_REGION_MEMBERS / NCC_BROAD_REGION_LABEL / NCC_COUNTRY_ALIASES. Rewrite searchNccWm (score+sort+cap 40),
+   fix findGaps dùng matcher. Nâng caps: searchSkus 15→40, searchSkusByGroupCode 20→50, KB 5→8.
+   Verify trên DB thật: 7 nước trước trả 0 (toàn EU + Mỹ + Hàn + UAE) → nay đều có; Thái 21→1737.
+2. context.ts: tu-van CHỈ còn GoHub (bỏ khối NCC, thêm 1 dòng "[THAM KHẢO NCC]" trỏ sang Gap).
+   gap-analysis thành CHỦ SỞ HỮU NCC: inject catalog chi tiết WM (50) + 3HK zones (browse + gap).
+3. classifier.ts: ncc_catalog intent → gap-analysis (gộp NCC về 1 chủ sở hữu, bỏ overlap với tu-van).
+4. router.ts: rule fallback dataSource=ncc_catalog → gap-analysis; đổi tên hiển thị "NCC & Gap".
+5. agents.ts: BI schema viết lại CHÍNH XÁC (12 bảng gohub_dw, cột thật, bỏ target_planning ảo).
+   tu-van prompt: phạm vi chỉ GoHub. gap-analysis prompt: chủ NCC (browse mode A + gap mode B).
+6. bi-analyst.ts (MỚI): tách runBIAnalyst + executeSQLDecl ra module chung.
+7. chat/route.ts: import runBIAnalyst từ module chung (bỏ code trùng).
+8. lark/events/route.ts: THÊM nhánh bi-analyst (function calling) — BI giờ chạy cả trên Lark.
+
+### Test
+- tsc --noEmit PASS, next build PASS.
+- Harness .cjs chạy logic matcher đã ship trên DB thật: Germany→Europe(s2), Japan→trực tiếp(s3),
+  Hàn 7 ngày lọc đúng, Thái 40 gói. 3 query BI mẫu (B2B/B2C revenue, top SKU, top staff) chạy ra số thật.
+
+### Còn lại / lưu ý
+- Gói "Worldwide" match mọi nước (kể cả tên vô nghĩa) — router chỉ truyền nước hợp lệ nên OK thực tế.
+- Chưa E2E qua web UI (cần NextAuth + Gemini live) — đã test logic + DB + build thay thế.
+
+---
+
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅  MERGE gohub-intel vào GoHub PM — HOÀN THÀNH

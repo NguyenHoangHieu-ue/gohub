@@ -385,7 +385,7 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "tu-van":        "Tư Vấn",
   "tra-cuu":       "Tra Cứu",
   "giai-dap":      "Giải Đáp",
-  "gap-analysis":  "Gap Analysis",
+  "gap-analysis":  "NCC & Gap",
   "tao-template":  "Tạo Template",
   "bi-analyst":    "BI Analyst",
 }
@@ -401,6 +401,9 @@ function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): Ag
   if (params.skuCodes?.length || params.productCodes?.length) return "tra-cuu"
 
   if (BI_RE.test(norm) || BI_RE.test(m)) return "bi-analyst"
+
+  // NCC catalog (nhắc vendor WM/3HK/NCC) → gap-analysis là chủ sở hữu NCC (browse + gap)
+  if (params.dataSource === "ncc_catalog") return "gap-analysis"
 
   if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
 

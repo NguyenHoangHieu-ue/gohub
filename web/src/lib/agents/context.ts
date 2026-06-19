@@ -6,7 +6,7 @@ import {
   REGION_DISPLAY,
   getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
-  getFxRates, findGaps,
+  getFxRates,
   getItems, searchListings, identifyCode,
   searchKnowledgeBase,
   searchNccWm, searchNcc3hk,
@@ -103,14 +103,8 @@ export async function buildToolContext(
       }
     }
 
-    // ── Case 3: Single-country query ──────────────────────────────────────────
+    // ── Case 3: Single-country query (CHỈ sản phẩm GoHub — NCC do agent Gap Analysis phụ trách) ──
     else if (params.country) {
-      // Directive theo nguồn dữ liệu user muốn (data-driven, không chỉ dựa prompt)
-      if (params.dataSource === "ncc_catalog") {
-        sections.push(`[NGUỒN HỎI = CATALOG NCC: User hỏi về danh mục nhà cung cấp (WM/3HK). Trình bày dữ liệu NCC TRƯỚC, kèm trạng thái "đã tạo / CHƯA tạo trong GoHub". Nêu rõ đây là hàng của nhà cung cấp, KHÔNG phải sản phẩm GoHub đang bán.]`)
-      } else {
-        sections.push(`[NGUỒN HỎI = HỆ THỐNG GOHUB: Ưu tiên trình bày sản phẩm GoHub đang bán. Dữ liệu NCC (nếu có) chỉ là tham khảo, phải nói rõ là nguồn nhà cung cấp.]`)
-      }
       const { skus, note } = await searchSkus({
         country:      params.country,
         days:         params.days,
@@ -153,50 +147,16 @@ export async function buildToolContext(
         ...rows
       )
 
-      // ── CATALOG NCC (nhà cung cấp) — phân biệt RÕ với sản phẩm GoHub ─────────
+      // Con trỏ sang Gap Analysis: cho biết NCC còn nguồn (không inject chi tiết — tránh overlap)
       {
-        const wantNccDetail = params.dataSource === "ncc_catalog"
-        const wmProducts = searchNccWm({ country: params.country, sim_type: params.simType, days: params.days }, ref)
-        const wmTotal    = wmProducts.length
-        const wmInSys    = wmProducts.filter((p: any) => p.in_system).length
-        const wmNotYet   = wmTotal - wmInSys
-
-        if (wmTotal > 0 && wantNccDetail) {
-          // User hỏi rõ về catalog NCC → inject danh sách chi tiết
-          const wmRows = wmProducts.slice(0, 20).map((p: any) => {
-            const data = p.is_unlimited ? "Unlimited" : (p.data_gb != null ? `${p.data_gb}GB${p.is_daily ? "/ngày" : ""}` : "?")
-            return [
-              p.vendor_product_id, p.product_name ?? "", p.sim_type ?? "", `${p.days ?? "?"}d`, data,
-              p.throttle_kbps ? `throttle:${p.throttle_kbps}kbps` : null,
-              p.apn ? `apn:${p.apn}` : null,
-              p.in_system ? "GoHub:đã tạo" : "GoHub:CHƯA tạo",
-            ].filter(Boolean).join("|")
-          })
+        const wmProducts = searchNccWm({ country: params.country, sim_type: params.simType }, ref)
+        if (wmProducts.length > 0) {
+          const wmNotYet = wmProducts.filter((p: any) => !p.in_system).length
           sections.push(
-            `=== CATALOG NCC — WorldMove cho ${params.country} (${wmTotal} SP của nhà cung cấp — KHÔNG phải sản phẩm GoHub đang bán) ===`,
-            `Đã tạo SKU GoHub: ${wmInSys} · Chưa tạo: ${wmNotYet}`,
-            `vendor_id|tên SP|sim|ngày|data|throttle|apn|trạng thái GoHub`,
-            ...wmRows
+            `[THAM KHẢO NCC] Nhà cung cấp (WorldMove) có ${wmProducts.length} gói liên quan ${params.country}` +
+            (wmNotYet > 0 ? `, trong đó ${wmNotYet} gói GoHub CHƯA tạo SKU.` : ` (GoHub đã tạo phần lớn).`) +
+            ` Để xem chi tiết catalog NCC, user hỏi: "WM có gói gì cho ${params.country}". KHÔNG tự liệt kê hàng NCC như sản phẩm GoHub đang bán.`
           )
-        } else if (wmTotal > 0) {
-          sections.push(
-            `=== CATALOG NCC — WorldMove cho ${params.country} (tham khảo nguồn nhà cung cấp, không phải SP GoHub đang bán) ===`,
-            `Tổng WM: ${wmTotal} SP · GoHub đã tạo: ${wmInSys} · chưa tạo: ${wmNotYet}`,
-            wmNotYet > 0 ? `Top chưa tạo: ${wmProducts.filter((p: any) => !p.in_system).slice(0, 5).map((p: any) => p.product_name ?? p.vendor_product_id).join(" | ")}` : ""
-          )
-        } else {
-          sections.push(`=== CATALOG NCC — WorldMove: không có sản phẩm cho ${params.country} ===`)
-        }
-
-        const hkZones = searchNcc3hk(params.country, ref)
-        if (hkZones.length > 0 && wantNccDetail) {
-          sections.push(
-            `=== CATALOG NCC — 3HK cho ${params.country} (nhà cung cấp) ===`,
-            ...hkZones.slice(0, 8).map((z: any) => `Zone ${z.zone} | ${z.network ?? ""} | ${z.price_per_gb_hkd ?? "?"} HKD/GB | KYC:${z.is_kyc ?? "?"}`)
-          )
-        } else if (hkZones.length > 0) {
-          const zoneInfo = hkZones.slice(0, 3).map((z: any) => `Zone ${z.zone} (${z.price_per_gb_hkd ?? "?"} HKD/GB)`).join(" | ")
-          sections.push(`=== CATALOG NCC — 3HK cho ${params.country}: ${zoneInfo} ===`)
         }
       }
 
@@ -463,11 +423,49 @@ export async function buildToolContext(
   }
 
   if (agentId === "gap-analysis") {
-    const gaps = findGaps({ country: params.country, vendor: params.nccVendor }, ref)
-    sections.push(
-      `=== GAP ANALYSIS${params.country ? ` — ${params.country}` : ""} ===`,
-      JSON.stringify(gaps, null, 2)
-    )
+    // Agent này SỞ HỮU toàn bộ catalog NCC: vừa "browse" (xem NCC có gì) vừa "gap" (NCC có mà GoHub chưa tạo).
+    const vendor = params.nccVendor ?? "all"
+
+    if (vendor === "wm" || vendor === "all") {
+      const wm = searchNccWm({ country: params.country, sim_type: params.simType, days: params.days, limit: 50 }, ref)
+      const total   = wm.length
+      const inSys    = wm.filter((p: any) => p.in_system).length
+      const notYet   = total - inSys
+      if (total > 0) {
+        const wmRows = wm.map((p: any) => {
+          const data = p.is_unlimited ? "Unlimited" : (p.data_gb != null ? `${p.data_gb}GB${p.is_daily ? "/ngày" : ""}` : "?")
+          return [
+            p.vendor_product_id, p.product_name ?? "", p.region ?? "", p.sim_type ?? "", `${p.days ?? "?"}d`, data,
+            p.throttle_kbps ? `throttle:${p.throttle_kbps}kbps` : null,
+            p.apn ? `apn:${p.apn}` : null,
+            p.in_system ? "GoHub:đã tạo" : "GoHub:CHƯA tạo",
+          ].filter(Boolean).join("|")
+        })
+        sections.push(
+          `=== CATALOG NCC — WorldMove${params.country ? ` cho ${params.country}` : ""} (${total} gói nhà cung cấp — KHÔNG phải SP GoHub đang bán) ===`,
+          `Đã tạo SKU GoHub: ${inSys} · Chưa tạo: ${notYet}`,
+          `vendor_id|tên SP|vùng phủ|sim|ngày|data|throttle|apn|trạng thái GoHub`,
+          ...wmRows
+        )
+      } else {
+        sections.push(`=== CATALOG NCC — WorldMove${params.country ? ` cho ${params.country}` : ""}: không tìm thấy gói nào ===`)
+      }
+    }
+
+    if (vendor === "3hk" || vendor === "all") {
+      const hkZones = searchNcc3hk(params.country, ref)
+      if (hkZones.length > 0) {
+        sections.push(
+          `=== CATALOG NCC — 3HK${params.country ? ` cho ${params.country}` : ""} (${hkZones.length} zone — báo giá theo GB, chưa phải SP hoàn chỉnh) ===`,
+          `zone|nước|network|giá HKD/GB|KYC`,
+          ...hkZones.slice(0, 20).map((z: any) => `${z.zone}|${z.country ?? ""}|${z.network ?? ""}|${z.price_per_gb_hkd ?? "?"}|${z.is_kyc ?? "?"}`)
+        )
+      }
+    }
+
+    if (!params.country) {
+      sections.push(`[LƯU Ý] User chưa nêu nước cụ thể. Nếu câu hỏi cần nước/khu vực để trả lời → hỏi lại 1 lần ngắn gọn.`)
+    }
   }
 
   if (agentId === "tao-template") {

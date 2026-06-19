@@ -1,3 +1,10 @@
+*19/6/2026 — Session 65 — Đại tu chatbot: đọc đủ dữ liệu + tái cấu trúc agent*
+69. ✅ FIXED: Chatbot "không biết NCC catalog" — searchNccWm match region text thô → 0 kết quả cho EU/Mỹ/Hàn/UAE, sót cho Thái. Thêm nccCountryScore() matcher (trực tiếp/khu vực/worldwide) → verify DB: 7 nước từ 0 → có; Thái 21→1737.
+70. ✅ FIXED: Chatbot "không đọc doanh thu/đơn" — BI schema (agents.ts) sai/thiếu 7 bảng + tham chiếu bảng target_planning KHÔNG tồn tại. Viết lại schema chính xác 12 bảng gohub_dw. Test 3 query mẫu ra số thật.
+71. ✅ FIXED: Lark bot KHÔNG xử lý bi-analyst (gọi Gemini thường, không có executeSQL) → BI không chạy trên Lark. Tách runBIAnalyst ra module chung (bi-analyst.ts), thêm nhánh BI vào lark/events.
+72. ✅ FIXED: Overlap agent — ncc_catalog intent route về tu-van (tu-van ôm GoHub+NCC). Gộp NCC (browse+gap) về 1 chủ sở hữu gap-analysis ("NCC & Gap"); tu-van chỉ còn GoHub + 1 dòng trỏ NCC.
+73. ✅ DONE: Nâng caps đọc dữ liệu vào context — searchSkus 15→40, searchSkusByGroupCode 20→50, NCC WM 20→40/50, KB 5→8.
+
 *18/6/2026 — Session 64 tiếp 3 — Phân tích intel + SKU Destination UI + Partner Tiers UI*
 66. ✅ DONE: Phân tích gohub-intel vs web. Gap settings: SKU Destination UI (#1 làm), Partner Tiers UI (#3 làm), Role data filters cho BI (chưa). Còn lại env-based/defer GA4. Report tabs khớp (B2C khác chủ đích).
 67. ✅ DONE (#1): SKU Destination rule UI — POST /api/config/sku-destination-rule + SkuDestinationSection (prefix/offset/codeLength) trong Cài đặt.

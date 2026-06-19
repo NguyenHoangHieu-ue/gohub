@@ -31,7 +31,7 @@ const INTENT_TO_AGENT: Record<IntentType, AgentId> = {
   system_explain:  "giai-dap",
   price_cogs:      "tra-cuu",
   gap_analysis:    "gap-analysis",
-  ncc_catalog:     "tu-van",       // browse catalog NCC → tu-van, context inject full NCC theo data_source
+  ncc_catalog:     "gap-analysis",  // NCC (browse + gap) gộp về 1 chủ sở hữu để tránh overlap với tu-van
   template_create: "tao-template",
   bi_analytics:    "bi-analyst",
   unclear:         "giai-dap",     // chỉ dùng nếu không short-circuit hỏi lại
