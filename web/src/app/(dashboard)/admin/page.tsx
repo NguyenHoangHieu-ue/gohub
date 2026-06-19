@@ -120,10 +120,12 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
         </div>
       )}
 
-      {/* Tab bar — 3 cụm segmented, mỗi tab 1-click; icon-only trên mobile */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Tab bar — 3 cụm segmented có nhãn (chunking), mỗi tab 1-click; icon-only trên mobile */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {TAB_GROUPS.map(group => (
-          <div key={group.label} className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+          <div key={group.label} className="flex items-center gap-1.5">
+            <span className="hidden lg:inline text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{group.label}</span>
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
             {group.tabs.map(id => (
               <button
                 key={id}
@@ -139,6 +141,7 @@ function AdminPanel({ currentUser }: { currentUser: string }) {
                 <span className="hidden md:inline">{TAB_META[id].label}</span>
               </button>
             ))}
+            </div>
           </div>
         ))}
       </div>

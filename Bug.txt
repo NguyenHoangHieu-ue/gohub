@@ -1,3 +1,9 @@
+*19/6/2026 — Session 65 tiếp — UX/UI cognitive load reduction (4 surface, mức an toàn)*
+74. ✅ DONE: Sidebar — nhãn nhóm Analytics gray-300 (vô hình) → gray-400 10px; auto-mở nhóm Products khi đang ở trang SP (trước giấu mục active).
+75. ✅ DONE: Chatbot — quick prompts gom 4 năng lực có nhãn (chunking); empty-state desc + placeholder phản ánh đủ năng lực (NCC catalog + doanh thu/đơn).
+76. ✅ DONE: Analytics dashboard — KPI "Last period" số VND đầy đủ → rút gọn (glanceable), contrast tốt hơn, Việt hóa "Kỳ trước".
+77. ✅ DONE: Admin — tab bar 3 cụm segmented thêm NHÃN cụm (Người dùng/Hệ thống/Công cụ) — trước không render dù có data.
+
 *19/6/2026 — Session 65 — Đại tu chatbot: đọc đủ dữ liệu + tái cấu trúc agent*
 69. ✅ FIXED: Chatbot "không biết NCC catalog" — searchNccWm match region text thô → 0 kết quả cho EU/Mỹ/Hàn/UAE, sót cho Thái. Thêm nccCountryScore() matcher (trực tiếp/khu vực/worldwide) → verify DB: 7 nước từ 0 → có; Thái 21→1737.
 70. ✅ FIXED: Chatbot "không đọc doanh thu/đơn" — BI schema (agents.ts) sai/thiếu 7 bảng + tham chiếu bảng target_planning KHÔNG tồn tại. Viết lại schema chính xác 12 bảng gohub_dw. Test 3 query mẫu ra số thật.

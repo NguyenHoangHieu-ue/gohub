@@ -157,13 +157,23 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
   )
 }
 
-const QUICK = [
-  "Tìm gói eSIM đi Nhật 7 ngày",
-  "Có gói unlimited đi Thái Lan không?",
-  "Doanh thu tháng này bao nhiêu?",
-  "Top 5 kênh bán doanh thu cao nhất tháng này",
-  "WM có sản phẩm nào chưa có trong hệ thống?",
-  "Giải thích cấu trúc mã SKU",
+// Nhóm theo năng lực (chunking — giúp user hiểu bot làm được những nhóm việc gì)
+const QUICK_GROUPS = [
+  { label: "Tìm sản phẩm GoHub", prompts: [
+    "Tìm gói eSIM đi Nhật 7 ngày",
+    "Có gói unlimited đi Thái Lan không?",
+  ]},
+  { label: "Catalog nhà cung cấp (NCC)", prompts: [
+    "WM có gói gì cho Hàn Quốc?",
+    "WM có sản phẩm nào chưa tạo trong hệ thống?",
+  ]},
+  { label: "Doanh thu & đơn hàng", prompts: [
+    "Doanh thu tháng này bao nhiêu?",
+    "Top 5 kênh bán doanh thu cao nhất tháng này",
+  ]},
+  { label: "Giải đáp hệ thống", prompts: [
+    "Giải thích cấu trúc mã SKU",
+  ]},
 ]
 
 function groupConversations(convs: Conversation[]) {
@@ -604,15 +614,22 @@ export default function ChatbotPage() {
                   <Sparkles size={22} className="text-white" />
                 </div>
                 <p className="font-semibold text-gray-900 text-base mb-1">GoHub AI Agent</p>
-                <p className="text-sm text-gray-400 mb-8 max-w-xs leading-relaxed">
-                  Tư vấn sản phẩm, tra cứu SKU, phân tích giá và so sánh gap NCC.
+                <p className="text-sm text-gray-500 mb-7 max-w-sm leading-relaxed">
+                  Tìm sản phẩm, tra cứu SKU & giá, xem catalog NCC, và phân tích doanh thu/đơn hàng.
                 </p>
-                <div className="grid grid-cols-2 gap-2 w-full max-w-lg">
-                  {QUICK.map(q => (
-                    <button key={q} onClick={() => send(q)}
-                      className="text-left px-4 py-3 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50/50 transition-all shadow-sm">
-                      {q}
-                    </button>
+                <div className="w-full max-w-lg space-y-3 text-left">
+                  {QUICK_GROUPS.map(group => (
+                    <div key={group.label}>
+                      <p className="px-1 pb-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{group.label}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {group.prompts.map(q => (
+                          <button key={q} onClick={() => send(q)}
+                            className="text-left px-3.5 py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50/50 transition-all shadow-sm">
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -724,7 +741,7 @@ export default function ChatbotPage() {
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
-                placeholder="Hỏi về sản phẩm, SKU, giá, phân tích gap NCC..."
+                placeholder="Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."
                 disabled={busy}
                 className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white disabled:opacity-60 transition"
               />

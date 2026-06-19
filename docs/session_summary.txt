@@ -1,5 +1,32 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-19 (session 65)
+Cập nhật lần cuối: 2026-06-19 (session 65 tiếp — UX/UI cognitive load)
+
+## Session 65 — tiếp (2026-06-19) — UX/UI: giảm tải nhận thức (cognitive load reduction)
+
+User định hướng UI theo cognitive load reduction. Chọn: làm cả 4 bề mặt (sidebar/analytics/chatbot/admin)
+ở mức TINH CHỈNH AN TOÀN (giữ layout, cải thiện hierarchy/spacing/grouping/contrast/empty-state).
+
+### Sidebar (đòn bẩy toàn cục)
+- Nhãn nhóm Analytics text-gray-300 (contrast ~1.5:1, gần như vô hình → mất chunking) → gray-400, 9px→10px.
+- Auto-mở nhóm "Products" khi đang ở trang sản phẩm (trước: mặc định đóng → GIẤU mục đang active).
+
+### Chatbot
+- Quick prompts: gom theo 4 NĂNG LỰC có nhãn (Tìm SP / Catalog NCC / Doanh thu&đơn / Giải đáp) — chunking,
+  giúp user hiểu bot làm được gì. Thêm prompt NCC mới ("WM có gói gì cho Hàn Quốc?").
+- Empty-state desc + placeholder cập nhật phản ánh đủ năng lực (thêm catalog NCC + doanh thu/đơn).
+
+### Analytics (dashboard hub)
+- KPI card: dòng "Last period" số VND đầy đủ (5,880,698,560) → số rút gọn formatCompactNumber (glanceable),
+  contrast slate-400→slate-500/700, Việt hóa "Kỳ trước". Giảm nhiễu khi liếc.
+
+### Admin
+- Tab bar 3 cụm segmented (Người dùng/Hệ thống/Công cụ) trước KHÔNG hiện nhãn cụm (group.label có data nhưng
+  không render) → thêm nhãn cụm (hiện trên lg+) để user hiểu nhóm — tăng chunking.
+
+Nguyên tắc áp dụng: chunking (gom + nhãn), contrast tối thiểu đọc được, progressive disclosure (auto-mở mục
+đang xem), glanceable numbers. tsc + build PASS. Layout giữ nguyên (rủi ro thấp).
+
+---
 
 ## Session 65 (2026-06-19) — Đại tu chatbot: đọc ĐỦ dữ liệu + tái cấu trúc agent (bỏ overlap)
 

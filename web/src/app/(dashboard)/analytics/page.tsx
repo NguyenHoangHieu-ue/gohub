@@ -302,9 +302,9 @@ export default function DashboardPage() {
               {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
             </h2>
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-              <div className="text-[10px] text-slate-400">
-                Last period: <span className="font-medium text-slate-600">
-                  {kpi.isCurrency ? formatCurrency(kpi.lastPeriod) : formatNumber(kpi.lastPeriod)}
+              <div className="text-[11px] text-slate-500">
+                Kỳ trước: <span className="font-medium text-slate-700">
+                  {kpi.isCurrency ? formatCompactNumber(kpi.lastPeriod) : formatNumber(kpi.lastPeriod)}
                 </span>
               </div>
               <div className={cn("flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full",

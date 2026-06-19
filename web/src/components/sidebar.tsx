@@ -146,6 +146,14 @@ export function Sidebar() {
   const [analyticsOpen, setAnalyticsOpen] = useState(true)
   const [productOpen,   setProductOpen]   = useState(false)
 
+  // Auto-mở nhóm Products khi đang ở 1 trang sản phẩm — tránh giấu mục đang active
+  // (giảm tải nhận thức: user luôn thấy mình đang ở đâu, không phải tự mở để định vị)
+  useEffect(() => {
+    if (NAV_PRODUCTS.some(p => pathname === p.href || pathname.startsWith(p.href + "/"))) {
+      setProductOpen(true)
+    }
+  }, [pathname])
+
   const role       = session?.user?.role     || "standard"
   const username   = session?.user?.username || ""
   const name       = session?.user?.name     || ""
@@ -334,7 +342,7 @@ export function Sidebar() {
             {/* Expanded mode: grouped */}
             {!collapsed && analyticsOpen && analyticsGroups.map(group => (
               <div key={group.label} className="mt-1">
-                <p className="px-3 pt-1.5 pb-0.5 text-[9px] font-bold text-gray-300 uppercase tracking-widest">{group.label}</p>
+                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
                 {group.items.map(({ href, label, icon: Icon }) => {
                   const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
                               || (href === "/analytics" && pathname === "/analytics")
