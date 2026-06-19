@@ -1,5 +1,5 @@
 *19/6/2026 — Session 65 tiếp 3 — Rollout dashboard-kit toàn analytics*
-80. ✅ DONE: Áp SourceBadge (admin) vào header 15 trang analytics (Dashboard/BOD/all-time/channels/b2b/orders/staff/customers/vendors/products/fulfillment/3hk-usage/cs-troubleshoot/targets) + Dashboard thêm LogicNote MoM/dự phóng. Bỏ qua feedback (form) + sql (tool). tsc + build PASS.
+80. ✅ DONE: Áp SourceBadge vào header 15 trang analytics (Dashboard+LogicNote MoM/dự phóng, BOD, all-time, channels, b2b, orders, staff, customers, vendors, products, fulfillment, 3hk-usage, cs-troubleshoot, targets). Bỏ qua feedback (form) + sql (tool). Nhãn nguồn admin đổi "Admin GoHub"→"GoHub" (tránh nhầm role). tsc + build PASS.
 
 *19/6/2026 — Session 65 tiếp 2 — Design system từ mockup B2C*
 78. ✅ DONE: Tạo dashboard-kit.tsx (SourceBadge/LogicNote/DeltaPill/ValueStack/SnapshotMetric/Panel/DataReadiness) codify design language mockup — dùng chung toàn app.
@@ -148,3 +148,6 @@
 
 *18/6/2026 — Session 62 (2026-06-18)*
 40. ✅ FIXED: sidebar.tsx — đổi tất cả text tiếng Việt sang tiếng Anh: "Quản Lý"→"Management", "Sản Phẩm"→"Products", "Báo Cáo & BI"→"Reports & BI", "Mở rộng/Thu gọn sidebar"→"Expand/Collapse sidebar", "Đăng xuất"→"Sign Out" (commit fcef01c)
+- Leads thì nó là cái db gohub omni trong turso á, Nó là cái db cua omni.gohub.cloud
+- Spent và budget là cái mn input lưu trong turso db trong folder gohub-intel
+-

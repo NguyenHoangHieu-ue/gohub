@@ -60,7 +60,7 @@ const SOURCE_CLS: Record<SourceKind, string> = {
 }
 
 const SOURCE_LABEL: Record<SourceKind, string> = {
-  ga4: "GA4", admin: "Admin GoHub", chat: "Data chat", neutral: "—",
+  ga4: "GA4", admin: "GoHub", chat: "Data chat", neutral: "—",
 }
 
 export function SourceBadge({ source, label, className }: {
