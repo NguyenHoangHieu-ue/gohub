@@ -1,5 +1,33 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-19 (session 65 tiếp — UX/UI cognitive load)
+Cập nhật lần cuối: 2026-06-19 (session 65 tiếp 2 — design system từ mockup B2C)
+
+## Session 65 — tiếp 2 (2026-06-19) — Design system từ mockup B2C, áp định hướng toàn app
+
+User đưa file gohub_dashboard_mockup.html (B2C executive dashboard Apple-style, 9 section). Render screenshot
+xem trực quan. Chọn: ÁP ĐỊNH HƯỚNG mockup cho TOÀN BỘ app (không chỉ build B2C).
+
+### Cách làm: codify design language → component kit dùng chung → áp flagship → lan ra
+- TẠO web/src/components/dashboard-kit.tsx — codify pattern cognitive-load của mockup, tokens khớp mockup
+  (blue #0071e3, teal #00a6a6, green #2f9d55, red #d93025, amber #b7791f):
+  · SourceBadge (GA4/Admin/Chat — cho biết số liệu từ nguồn nào → tăng độ tin)
+  · LogicNote (hộp ⓘ giải thích công thức mỗi bảng → user không phải đoán)
+  · DeltaPill + autoDeltaKind (pill up/down/flat/warn — tín hiệu 1 nhìn-là-hiểu)
+  · ValueStack (số chính + delta nhỏ — glanceable)
+  · SnapshotMetric (KPI nhỏ dải snapshot), Panel (section chuẩn), DataReadiness (chấm trạng thái nguồn)
+- ÁP lên trang /analytics/b2c (flagship, sát mockup): mở rộng Section nhận source + note; gán nguồn +
+  công thức cho 5 section (admin/admin/chat/ga4/chat); thêm panel Data Readiness cuối trang.
+
+### Test
+- tsc PASS, next build PASS (/analytics/b2c 6.85 kB).
+- Chưa E2E visual (cần auth) — verify qua build.
+
+### Rollout còn lại (đề xuất)
+- Lan kit ra Dashboard + các tab analytics khác (orders/staff/customers/products...) dùng SourceBadge +
+  LogicNote + ValueStack/DeltaPill cho nhất quán. Mockup HTML giữ làm reference (chưa commit).
+
+---
+
+## Session 65 — tiếp (2026-06-19) — UX/UI: giảm tải nhận thức (cognitive load reduction)
 
 ## Session 65 — tiếp (2026-06-19) — UX/UI: giảm tải nhận thức (cognitive load reduction)
 

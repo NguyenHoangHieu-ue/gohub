@@ -1,3 +1,7 @@
+*19/6/2026 — Session 65 tiếp 2 — Design system từ mockup B2C*
+78. ✅ DONE: Tạo dashboard-kit.tsx (SourceBadge/LogicNote/DeltaPill/ValueStack/SnapshotMetric/Panel/DataReadiness) codify design language mockup — dùng chung toàn app.
+79. ✅ DONE: Áp kit lên /analytics/b2c (flagship): Section thêm source badge + logic-note (công thức MTD/prorata/MoM, New vs Returning) + panel Data Readiness. tsc + build PASS.
+
 *19/6/2026 — Session 65 tiếp — UX/UI cognitive load reduction (4 surface, mức an toàn)*
 74. ✅ DONE: Sidebar — nhãn nhóm Analytics gray-300 (vô hình) → gray-400 10px; auto-mở nhóm Products khi đang ở trang SP (trước giấu mục active).
 75. ✅ DONE: Chatbot — quick prompts gom 4 năng lực có nhãn (chunking); empty-state desc + placeholder phản ánh đủ năng lực (NCC catalog + doanh thu/đơn).

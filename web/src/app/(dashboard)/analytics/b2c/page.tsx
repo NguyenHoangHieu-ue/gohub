@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
+import { SourceBadge, LogicNote, DataReadiness, type SourceKind } from "@/components/dashboard-kit"
 
 // ── types ───────────────────────────────────────────────────────────────────
 interface MarketCell { vn: number; us: number; total: number }
@@ -43,8 +44,9 @@ const Delta = ({ v }: { v: number | null }) => {
 }
 
 // Section shell — card đồng bộ với các tab analytics khác
-const Section = ({ icon, title, desc, children, action, accent = "blue" }: {
-  icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode; accent?: "blue" | "indigo" | "slate"
+const Section = ({ icon, title, desc, children, action, accent = "blue", source, note }: {
+  icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
+  accent?: "blue" | "indigo" | "slate"; source?: SourceKind; note?: React.ReactNode
 }) => {
   const chip = accent === "indigo" ? "bg-indigo-600" : accent === "slate" ? "bg-slate-700" : "bg-blue-600"
   return (
@@ -57,8 +59,12 @@ const Section = ({ icon, title, desc, children, action, accent = "blue" }: {
             {desc && <p className="text-xs font-medium text-slate-500 mt-0.5">{desc}</p>}
           </div>
         </div>
-        {action}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {action}
+          {source && <SourceBadge source={source} />}
+        </div>
       </div>
+      {note && <div className="px-6 pt-4"><LogicNote>{note}</LogicNote></div>}
       {children}
     </section>
   )
@@ -292,6 +298,8 @@ export default function B2CDashboardPage() {
               icon={<DollarSign className="w-5 h-5" />}
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
+              source="admin"
+              note={<><strong>MTD</strong> = doanh thu từ đầu tháng đến hiện tại · <strong>Prorata</strong> = MTD ÷ số ngày đã qua × số ngày trong tháng (run-rate) · <strong>MoM</strong> so với cùng kỳ tháng trước.</>}
               action={
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
                   {(["revenue", "kpi"] as const).map(t => (
@@ -315,7 +323,9 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách">
+            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách"
+              source="admin"
+              note={<><strong>Khách mới</strong> = tháng có đơn B2C ĐẦU TIÊN của khách · <strong>Quay lại</strong> = đã từng mua trước đó. Mỗi ô: doanh thu + số khách bên dưới.</>}>
               <RollingTable rows={[
                 { label: "New",       get: m => data.customers[m]?.new.revenue ?? 0,       sub: m => `${formatNumber(data.customers[m]?.new.count ?? 0)} khách` },
                 { label: "Returning", get: m => data.customers[m]?.returning.revenue ?? 0, sub: m => `${formatNumber(data.customers[m]?.returning.count ?? 0)} khách` },
@@ -324,18 +334,29 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 3 — CAC, Users, Leads */}
-            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US">
+            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US" source="chat">
               <AwaitingData note="Cần nguồn: Marketing spend (CAC), GA4 (user count New/Returning theo VN/US), và Leads (Website chat / Zalo / WhatsApp / Messenger — dedup theo identity)." />
             </Section>
 
             {/* Section 4 — GA4 Conversion Rate Charts */}
-            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)">
+            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)" source="ga4">
               <AwaitingData note="Cần kết nối GA4 (Google service account + GA_PROPERTY_ID). Sau khi có, hiển thị 3 combo chart: % CR Gohub App, % CR Gohub .com, % CR Gohub .vn." />
             </Section>
 
             {/* Section 5 — Budget Management */}
-            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="slate" title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS">
+            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="slate" title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS" source="chat">
               <AwaitingData note="Cần bảng marketing: monthly_budget, spend_mtd, attributed_revenue (theo VN/US/Total + refresh_timestamp). Công thức: Spend pace = Spend MTD / Budget · ROAS = Attributed revenue / Spend." />
+            </Section>
+
+            {/* Data readiness — cho biết độ tin của số liệu (theo mockup) */}
+            <Section icon={<Globe className="w-5 h-5" />} accent="slate" title="Data Readiness" desc="Độ sẵn sàng của từng nguồn dữ liệu">
+              <div className="px-6 pb-6 pt-1">
+                <DataReadiness items={[
+                  { label: "Admin GoHub — doanh thu & khách (Section 1, 2)", status: "ready" },
+                  { label: "GA4 — traffic & conversion (Section 4)",        status: "pending" },
+                  { label: "Data chat — CAC, leads, budget (Section 3, 5)", status: "pending" },
+                ]} />
+              </div>
             </Section>
           </>
         )}
