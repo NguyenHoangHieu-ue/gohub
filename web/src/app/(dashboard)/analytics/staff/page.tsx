@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface StaffMetric {
@@ -229,7 +230,10 @@ export default function StaffPerformancePage() {
           </div>
           <div>
             <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
-            <p className="text-sm lg:text-lg text-slate-500 font-medium italic">Ranking and tracking our sales team's execution</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm lg:text-lg text-slate-500 font-medium italic">Ranking and tracking our sales team's execution</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
         </div>
 

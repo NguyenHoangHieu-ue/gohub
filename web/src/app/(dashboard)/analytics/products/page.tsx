@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange, formatTruncatedString } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface Metrics {
@@ -168,7 +169,10 @@ export default function ProductsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900">Product Performance</h1>
-            <p className="text-slate-500 text-sm">Phân tích theo SKU, kênh và địa điểm</p>
+            <div className="flex items-center gap-2">
+              <p className="text-slate-500 text-sm">Phân tích theo SKU, kênh và địa điểm</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
 import { ArrowUpRight, ArrowDownRight, Filter, Calendar, TrendingUp, Target, ChevronDown, Shield, Building2, RefreshCw } from "lucide-react"
 import { formatCurrency, formatNumber, formatCompactNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
+import { SourceBadge, LogicNote } from "@/components/dashboard-kit"
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -219,7 +220,10 @@ export default function DashboardPage() {
           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">G</div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Monthly Performance</h1>
-            <p className="text-sm text-slate-500">Gohub Business Intelligence</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-slate-500">Gohub Business Intelligence</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
@@ -286,6 +290,12 @@ export default function DashboardPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {!isLoading && !error && (
+        <LogicNote>
+          <strong>So sánh (MoM)</strong> theo cùng khoảng ngày tháng trước · <strong>Dự phóng</strong> = doanh thu hiện tại ÷ số ngày đã qua × số ngày trong tháng (chỉ áp dụng tháng hiện tại).
+        </LogicNote>
       )}
 
       {/* KPI Cards */}

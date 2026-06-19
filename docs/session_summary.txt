@@ -1,5 +1,24 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-19 (session 65 tiếp 2 — design system từ mockup B2C)
+Cập nhật lần cuối: 2026-06-19 (session 65 tiếp 3 — rollout design-kit toàn analytics)
+
+## Session 65 — tiếp 3 (2026-06-19) — Rollout dashboard-kit ra TẤT CẢ trang analytics
+
+Áp định hướng mockup (kit dashboard-kit.tsx) lần lượt cho toàn bộ trang analytics.
+
+### Đã áp SourceBadge (admin = nguồn gohub_dw) vào header 15 trang
+- Overview: analytics (Dashboard) + LogicNote công thức MoM/dự phóng, bod, all-time
+- Sales: channels, b2b, b2c (đã có từ flagship)
+- Operations: orders, staff, customers, vendors, products, fulfillment, 3hk-usage, cs-troubleshoot, targets
+- BỎ QUA: feedback (form nhập, không phải dashboard), sql (công cụ admin hiện lỗi SQL thật)
+
+### Nguyên tắc
+- SourceBadge cho biết số liệu từ nguồn nào (giảm tải nhận thức, tăng độ tin) — đồng bộ toàn app.
+- Dashboard thêm LogicNote giải thích MoM + dự phóng (prorata).
+- Giữ nguyên layout từng trang (mức an toàn). tsc + next build PASS.
+
+---
+
+## Session 65 — tiếp 2 (2026-06-19) — Design system từ mockup B2C, áp định hướng toàn app
 
 ## Session 65 — tiếp 2 (2026-06-19) — Design system từ mockup B2C, áp định hướng toàn app
 

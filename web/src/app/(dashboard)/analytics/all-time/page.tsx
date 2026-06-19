@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 interface PerformanceData {
   period: string; group_name: string
@@ -105,7 +106,10 @@ export default function AllTimePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">All-Time Performance Report</h1>
-          <p className="text-slate-500 text-sm">Phân tích lịch sử doanh thu theo tháng và quý</p>
+          <div className="flex items-center gap-2">
+            <p className="text-slate-500 text-sm">Phân tích lịch sử doanh thu theo tháng và quý</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Monthly / Quarterly toggle */}

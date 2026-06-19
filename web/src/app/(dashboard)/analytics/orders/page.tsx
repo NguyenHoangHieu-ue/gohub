@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar, ShoppingBag, Globe, Package, RefreshCw, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 interface Order {
   order_code: string
@@ -235,7 +236,10 @@ export default function OrderManagementPage() {
           <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl lg:text-2xl shrink-0">O</div>
           <div>
             <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Order Management</h1>
-            <p className="text-xs lg:text-sm text-slate-500">View and manage all {viewMode === "fulfilled" ? "fulfillment" : "sales"} orders</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs lg:text-sm text-slate-500">View and manage all {viewMode === "fulfilled" ? "fulfillment" : "sales"} orders</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">

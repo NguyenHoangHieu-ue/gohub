@@ -9,6 +9,7 @@ import {
   Check, ShoppingBag, UserPlus, RefreshCw, Activity, Sparkles, Search, Filter, Calendar, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
@@ -169,7 +170,10 @@ export default function CustomerPerformancePage() {
               <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Customer Performance</h1>
               {loading && <div className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />}
             </div>
-            <p className="text-slate-500 font-medium italic text-sm mt-1">Deep dive into B2B customer behavior and acquisition.</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-slate-500 font-medium italic text-sm">Deep dive into B2B customer behavior and acquisition.</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">

@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { useSession } from "next-auth/react"
 
 interface PlanningData {
@@ -229,7 +230,10 @@ export default function TargetsPage() {
             <Target className="w-5 h-5 text-blue-600" />
             Target Planning
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Đặt target doanh thu theo quý theo nhóm kênh</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-slate-500 text-sm">Đặt target doanh thu theo quý theo nhóm kênh</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

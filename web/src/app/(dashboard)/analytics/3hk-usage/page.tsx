@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber, formatDate, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 interface DataUsageRecord {
   order_code: string; iccid: string; sku: string; sku_type: string
@@ -191,7 +192,10 @@ export default function ThreeHKUsagePage() {
             <Activity className="w-6 h-6 text-blue-600" />
             3HK Data Usage
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Phân tích hành vi & hiệu suất data theo kỳ cước</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-slate-500 text-sm">Phân tích hành vi & hiệu suất data theo kỳ cước</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

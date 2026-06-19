@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 interface Metrics {
   revenue: number; revenueChange: number; orders: number; ordersChange: number
@@ -167,7 +168,10 @@ export default function VendorsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900">Vendor Performance</h1>
-            <p className="text-slate-500 text-sm">Phân tích doanh thu theo vendor NCC</p>
+            <div className="flex items-center gap-2">
+              <p className="text-slate-500 text-sm">Phân tích doanh thu theo vendor NCC</p>
+              <SourceBadge source="admin" />
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

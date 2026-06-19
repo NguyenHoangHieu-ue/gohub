@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { CostManagementModal } from "@/components/CostManagementModal"
 
 interface KPI {
@@ -311,7 +312,10 @@ export default function B2BPerformancePage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900 font-sans tracking-tight leading-tight">B2B Performance Summary</h1>
-              <p className="text-sm text-slate-500 font-medium tracking-tight mt-0.5">Báo cáo tổng hợp B2B · hiệu suất theo tier &amp; strategic partners</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-sm text-slate-500 font-medium tracking-tight">Báo cáo tổng hợp B2B · hiệu suất theo tier &amp; strategic partners</p>
+                <SourceBadge source="admin" />
+              </div>
             </div>
           </div>
 

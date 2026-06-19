@@ -1,3 +1,6 @@
+*19/6/2026 — Session 65 tiếp 3 — Rollout dashboard-kit toàn analytics*
+80. ✅ DONE: Áp SourceBadge (admin) vào header 15 trang analytics (Dashboard/BOD/all-time/channels/b2b/orders/staff/customers/vendors/products/fulfillment/3hk-usage/cs-troubleshoot/targets) + Dashboard thêm LogicNote MoM/dự phóng. Bỏ qua feedback (form) + sql (tool). tsc + build PASS.
+
 *19/6/2026 — Session 65 tiếp 2 — Design system từ mockup B2C*
 78. ✅ DONE: Tạo dashboard-kit.tsx (SourceBadge/LogicNote/DeltaPill/ValueStack/SnapshotMetric/Panel/DataReadiness) codify design language mockup — dùng chung toàn app.
 79. ✅ DONE: Áp kit lên /analytics/b2c (flagship): Section thêm source badge + logic-note (công thức MTD/prorata/MoM, New vs Returning) + panel Data Readiness. tsc + build PASS.

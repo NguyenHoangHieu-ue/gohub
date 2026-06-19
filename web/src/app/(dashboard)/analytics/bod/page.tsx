@@ -7,6 +7,7 @@ import {
 } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, TrendingUp, Download, RefreshCw, ChevronDown } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -123,7 +124,10 @@ export default function BODReportPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Board of Directors Report</h1>
-          <p className="text-sm text-slate-500">Doanh thu, Lợi nhuận, Kênh — {startDate} đến {endDate}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-slate-500">Doanh thu, Lợi nhuận, Kênh — {startDate} đến {endDate}</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm h-[38px] items-center">

@@ -10,6 +10,7 @@ import {
   ArrowUpDown, ChevronUp, ChevronDown, Info,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SourceBadge } from "@/components/dashboard-kit"
 import { formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
@@ -276,7 +277,10 @@ export default function CSTroubleshootPage() {
                 <h1 className="text-lg font-black text-slate-900 tracking-tight">
                   CS TROUBLESHOOTING <span className="text-blue-600">HUB</span>
                 </h1>
-                <p className="text-slate-400 text-[10px] font-medium">Lark Base & PostgreSQL Integration</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-slate-400 text-[10px] font-medium">Lark Base & PostgreSQL Integration</p>
+                  <SourceBadge source="admin" />
+                </div>
               </div>
             </div>
 

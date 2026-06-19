@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, Download, RefreshCw } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 function getDefaultDateRange() {
   const today = new Date(); const d = today.getDate()
@@ -82,7 +83,10 @@ export default function ChannelPerformancePage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Channel Performance</h1>
-          <p className="text-sm text-slate-500">Hiệu suất từng kênh bán — B2B, B2C, Wholesale</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-slate-500">Hiệu suất từng kênh bán — B2B, B2C, Wholesale</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm h-[38px] items-center">

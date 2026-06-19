@@ -8,6 +8,7 @@ import {
 import { Truck, Package, Filter, Calendar, Download, AlertCircle, CheckCircle2, RotateCcw, MapPin, Tablet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import { SourceBadge } from "@/components/dashboard-kit"
 
 interface MonthData {
   month: string
@@ -90,7 +91,10 @@ export default function FulfillmentPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Fulfillment Report</h1>
-          <p className="text-slate-500 text-sm">Theo dõi đơn giao, hiệu suất kho và phân loại sản phẩm</p>
+          <div className="flex items-center gap-2">
+            <p className="text-slate-500 text-sm">Theo dõi đơn giao, hiệu suất kho và phân loại sản phẩm</p>
+            <SourceBadge source="admin" />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-white px-3 py-2 border border-slate-200 rounded-xl shadow-sm text-sm">
