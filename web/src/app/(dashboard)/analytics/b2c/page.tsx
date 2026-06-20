@@ -29,6 +29,7 @@ interface MonthlyData {
   spend:        Record<string, number>
   budget:       Record<string, number>
   leads:        Record<string, number>
+  leadsByChannel: { label: string; byMonth: Record<string, number> }[]
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -306,7 +307,7 @@ export default function B2CDashboardPage() {
 
   // Bảng rolling gọn — value tự định dạng theo từng dòng, KHÔNG prorata (tránh chiếu sai tỷ số như CAC/ROAS).
   const SimpleRollTable = ({ rows }: {
-    rows: { label: string; highlight?: boolean; delta?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
+    rows: { label: string; highlight?: boolean; breakdown?: boolean; delta?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
   }) => (
     <div className="overflow-x-auto px-0 pb-2">
       <table className="w-full text-sm">
@@ -323,7 +324,9 @@ export default function B2CDashboardPage() {
         <tbody className="divide-y divide-slate-50">
           {rows.map(row => (
             <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-              <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{row.label}</td>
+              <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
+                {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+              </td>
               {completed.map((m, i) => {
                 const v = row.get(m)
                 const prev = i > 0 ? row.get(completed[i - 1]) : null
@@ -502,7 +505,13 @@ export default function B2CDashboardPage() {
               {hasSpend || hasLeads ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
-                  ...(hasLeads ? [{ label: "Leads", fmt: formatNumber, get: leadsOf }] : []),
+                  ...(hasLeads ? [
+                    { label: "Leads", fmt: formatNumber, get: leadsOf },
+                    ...(data.leadsByChannel ?? []).map(ch => ({
+                      label: ch.label, breakdown: true, delta: false, fmt: formatNumber,
+                      get: (m: string) => ch.byMonth[m] ?? 0,
+                    })),
+                  ] : []),
                   { label: "Khách mới",   fmt: formatNumber,        get: newOf },
                   { label: "CAC / khách", fmt: (n: number) => n > 0 ? formatCurrency(n) : "—", delta: false, highlight: true,
                     get: m => { const nc = newOf(m); return nc > 0 ? spendOf(m) / nc : 0 } },

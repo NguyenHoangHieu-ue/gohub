@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { tursoQuery, tursoConfigured } from "@/lib/turso"
-import { chatwootLeadsByMonth, chatwootConfigured } from "@/lib/chatwoot"
+import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 
 // Rolling-month B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả 6 tháng gần nhất (5 hoàn thành + tháng hiện tại MTD):
@@ -169,16 +169,20 @@ export async function GET(req: NextRequest) {
       } catch (e) { console.error("[b2c/monthly] spend (turso)", (e as Error).message) }
     }
 
-    // Leads marketing (Chatwoot conversations) theo tháng. Lỗi/chưa cấu hình → leads rỗng.
+    // Leads marketing (Chatwoot conversations) theo tháng + breakdown kênh. Lỗi/chưa cấu hình → rỗng.
     let leads: Record<string, number> = {}
+    let leadsByChannel: { label: string; byMonth: Record<string, number> }[] = []
     for (const m of months) leads[m] = 0
     if (chatwootConfigured()) {
-      try { leads = await chatwootLeadsByMonth(months) }
-      catch (e) { console.error("[b2c/monthly] leads (chatwoot)", (e as Error).message) }
+      try {
+        const lb = await cachedQuery(`b2c-leads:${windowStart}`, () => chatwootLeadsBreakdown(months))
+        leads = lb.total
+        leadsByChannel = lb.channels
+      } catch (e) { console.error("[b2c/monthly] leads (chatwoot)", (e as Error).message) }
     }
 
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, targets, budget, spend, leads, ...data },
+      { months, currentMonth, elapsedDays, totalDays, targets, budget, spend, leads, leadsByChannel, ...data },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {

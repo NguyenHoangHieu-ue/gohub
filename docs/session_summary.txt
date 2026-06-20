@@ -1,6 +1,16 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
 
+## Session 70 — tiếp (2026-06-20) — Breakdown leads theo kênh (Section 3)
+
+- chatwoot.ts: thay chatwootLeadsByMonth → chatwootLeadsBreakdown (GET inboxes + report per inbox song song, gộp theo channel_type → nhãn Web/WhatsApp/Facebook/Instagram/Tiktok). Cache 5' trong route.
+- b2c/monthly: trả thêm leadsByChannel (array {label, byMonth}).
+- Section 3: SimpleRollTable thêm flag breakdown (indent + ›); render sub-row mỗi kênh dưới Leads.
+- Verify data thật (T6): Facebook 411, WhatsApp 227, Web 109, Tiktok 77, Instagram 13 = 837 (khớp tổng).
+- tsc + build PASS. (Không cần env mới; CHATWOOT_* như cũ.)
+
+---
+
 ## Session 70 (2026-06-20) — Leads từ Chatwoot (lựa chọn A) → B2C Section 3 đầy đủ
 
 ### Điều tra nguồn leads

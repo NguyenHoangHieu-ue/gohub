@@ -1,3 +1,6 @@
+*20/6/2026 — Session 70 tiếp — Breakdown leads theo kênh*
+98. ✅ DONE: Section 3 leads breakdown theo kênh — chatwootLeadsBreakdown (report per inbox, gộp Web/WhatsApp/Facebook/Instagram/Tiktok) + sub-row trong SimpleRollTable (flag breakdown). Verify T6: FB 411, WA 227, Web 109, TT 77, IG 13 = 837.
+
 *20/6/2026 — Session 70 — Leads từ Chatwoot → B2C Section 3 đầy đủ*
 95. ✅ DONE: Leads B2C — nguồn THẬT là Chatwoot (omni chỉ nhận webhook). Token user gửi hóa ra là Chatwoot api_access_token (account 87064 "Gohub CS", 1417 conversations). lib/chatwoot.ts (reports v2 conversations_count group_by month) → b2c/monthly trả leads.
 96. ✅ DONE: Section 3 "CAC · Leads · Khách mới" — thêm Leads + Chi phí/Lead + Tỷ lệ chốt (khách mới/leads). Verify T5=580, T6=837. Bỏ placeholder. #86/#90/#94 (leads pending) GIỜ XONG.
