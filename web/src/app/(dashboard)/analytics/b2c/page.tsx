@@ -307,7 +307,7 @@ export default function B2CDashboardPage() {
 
   // Bảng rolling gọn — value tự định dạng theo từng dòng, KHÔNG prorata (tránh chiếu sai tỷ số như CAC/ROAS).
   const SimpleRollTable = ({ rows }: {
-    rows: { label: string; highlight?: boolean; breakdown?: boolean; delta?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
+    rows: { label: string; highlight?: boolean; breakdown?: boolean; delta?: boolean; mom?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
   }) => (
     <div className="overflow-x-auto px-0 pb-2">
       <table className="w-full text-sm">
@@ -341,6 +341,12 @@ export default function B2CDashboardPage() {
               <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
                 <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
                 <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
+                {row.mom && completed.length > 0 && (
+                  <div className="mt-0.5 flex items-center justify-end gap-1">
+                    <Delta v={pct(proj(row.get(current)), row.get(completed[completed.length - 1]))} />
+                    <span className="text-[9px] text-slate-400 uppercase">MoM</span>
+                  </div>
+                )}
                 {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
               </td>
             </tr>
@@ -501,14 +507,14 @@ export default function B2CDashboardPage() {
             {/* Section 3 — CAC, Users, Leads */}
             <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Leads · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng"
               source="admin"
-              note={<><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. Chi phí từ Turso, khách mới từ gohub_dw.</>}>
+              note={<><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. <strong>MoM</strong> ở cột MTD tính theo run-rate (dự phóng cả tháng so tháng trước). Chi phí từ Turso, khách mới từ gohub_dw.</>}>
               {hasSpend || hasLeads ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
                   ...(hasLeads ? [
-                    { label: "Leads", fmt: formatNumber, get: leadsOf },
+                    { label: "Leads", fmt: formatNumber, mom: true, get: leadsOf },
                     ...(data.leadsByChannel ?? []).map(ch => ({
-                      label: ch.label, breakdown: true, delta: false, fmt: formatNumber,
+                      label: ch.label, breakdown: true, mom: true, fmt: formatNumber,
                       get: (m: string) => ch.byMonth[m] ?? 0,
                     })),
                   ] : []),

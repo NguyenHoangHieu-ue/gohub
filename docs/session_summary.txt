@@ -1,6 +1,14 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
 
+## Session 70 — tiếp 2 (2026-06-20) — MoM cho leads (Section 3)
+
+- SimpleRollTable thêm flag `mom`: cột MTD hiện Delta MoM theo run-rate = pct(proj(leadsMTD), tháng hoàn thành gần nhất) — fair với tháng đang dở.
+- Leads + sub-row kênh: bật `mom` (cột MTD) + bỏ delta:false ở kênh (các cột tháng hoàn thành hiện MoM thật giữa các tháng).
+- Note Section 3 ghi rõ MoM cột MTD theo run-rate. tsc + build PASS.
+
+---
+
 ## Session 70 — tiếp (2026-06-20) — Breakdown leads theo kênh (Section 3)
 
 - chatwoot.ts: thay chatwootLeadsByMonth → chatwootLeadsBreakdown (GET inboxes + report per inbox song song, gộp theo channel_type → nhãn Web/WhatsApp/Facebook/Instagram/Tiktok). Cache 5' trong route.

@@ -1,3 +1,6 @@
+*20/6/2026 — Session 70 tiếp 2 — MoM cho leads*
+99. ✅ DONE: MoM cho leads Section 3 — SimpleRollTable flag `mom` (cột MTD run-rate vs tháng trước) + bật delta MoM cho sub-row kênh. Note ghi rõ run-rate.
+
 *20/6/2026 — Session 70 tiếp — Breakdown leads theo kênh*
 98. ✅ DONE: Section 3 leads breakdown theo kênh — chatwootLeadsBreakdown (report per inbox, gộp Web/WhatsApp/Facebook/Instagram/Tiktok) + sub-row trong SimpleRollTable (flag breakdown). Verify T6: FB 411, WA 227, Web 109, TT 77, IG 13 = 837.
 
