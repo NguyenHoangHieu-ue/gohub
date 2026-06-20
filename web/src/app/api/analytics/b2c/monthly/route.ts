@@ -140,12 +140,16 @@ export async function GET(req: NextRequest) {
       return { markets, customers, channels }
     })
 
-    // KPI targets (theo tháng × VN/US/Total) — lưu ở Supabase app_settings, đọc riêng (không cache)
+    // KPI targets + budget (Supabase app_settings) — đọc riêng (không cache)
     let targets: Record<string, { vn: number; us: number; total: number }> = {}
+    let budget: Record<string, number> = {}
     try {
-      const { data: t } = await supabaseAdmin
-        .from("app_settings").select("value").eq("key", "b2c_kpi_targets").maybeSingle()
-      if (t?.value) targets = JSON.parse(t.value)
+      const { data: rows } = await supabaseAdmin
+        .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
+      for (const r of rows ?? []) {
+        if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
+        if (r.key === "b2c_budget" && r.value) budget = JSON.parse(r.value)
+      }
     } catch {}
 
     // Chi phí marketing B2C theo tháng (Turso channel_group_costs, nhập tay). Lỗi/không cấu hình → bỏ qua (spend rỗng).
@@ -165,7 +169,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, targets, spend, ...data },
+      { months, currentMonth, elapsedDays, totalDays, targets, budget, spend, ...data },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {

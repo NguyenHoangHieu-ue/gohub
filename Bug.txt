@@ -1,3 +1,9 @@
+*20/6/2026 — Session 69 — GSC + GA4 MoM + B2C budget/spend pace*
+91. ✅ DONE (a): Search Console (GSC) trên trang Website — runGSC (siteUrl fallback + ngày YYYY-MM-DD, GSC trễ 2 ngày) + section 4 KPI (clicks/impr/CTR/vị trí) + combo + top truy vấn. Verify: gohub.com 1035 clicks, gohub.vn 1538 clicks.
+92. ✅ DONE (b): GA4 so sánh kỳ trước (MoM) — ga4WebsiteSummary(days, compare) tính kỳ trước GA4+GSC, KPI card thêm Delta pill (bounce/vị trí invert).
+93. ✅ DONE (c): Ngân sách B2C → spend pace — /api/config/b2c-budget + B2CBudgetSection (Settings) + Section 5 thêm row Ngân sách + Spend pace (=chi phí/ngân sách).
+94. ⏳ PENDING: Leads — đã có OMNI_API_TOKEN (lưu .env.local) nhưng THIẾU endpoint API omni (URL+shape). Webhook secret ≠ key gọi leads.
+
 *20/6/2026 — Session 68 — GA4 Website Analytics + B2C Section 4 live*
 87. ✅ DONE: Build GA4 Website Analytics — lib/ga4.ts (googleapis, đọc ga4_configs từ Supabase) + /api/config/ga4 + /api/analytics/website + trang /analytics/website (KPIs, combo Sessions×CR, area users, top countries/sources, selector 2 site + range). Verify creds thật: gohub.com 2827 users, gohub.vn 8972 users (7 ngày).
 88. ✅ DONE: B2C Section 4 — thay placeholder bằng combo chart CR per site (GA4, lazy load, graceful). Sidebar thêm "Website (GA4)".

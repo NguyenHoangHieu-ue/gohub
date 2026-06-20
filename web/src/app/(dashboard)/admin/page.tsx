@@ -670,6 +670,74 @@ function SettingsTab({ onNotify }: {
 
       {/* KPI Target B2C (theo tháng × VN/US/Total) */}
       <B2CKpiSection onNotify={onNotify} />
+
+      {/* Ngân sách Marketing B2C (theo tháng) — tính spend pace */}
+      <B2CBudgetSection onNotify={onNotify} />
+    </div>
+  )
+}
+
+// Ngân sách marketing B2C kế hoạch theo tháng (VND) — Section 5 dùng tính spend pace = spend / budget.
+function B2CBudgetSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  const [budget, setBudget] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+
+  const now = new Date()
+  const months: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  const monthLabel = (m: string) => { const [y, mo] = m.split("-"); return `Thg ${parseInt(mo)}/${y}` }
+
+  useEffect(() => {
+    fetch("/api/config/b2c-budget")
+      .then(r => r.json())
+      .then(d => { setBudget(d || {}); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    const cleaned: Record<string, number> = {}
+    for (const [m, v] of Object.entries(budget)) if (v > 0) cleaned[m] = v
+    const res = await fetch("/api/config/b2c-budget", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned),
+    })
+    setSaving(false)
+    onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu ngân sách B2C" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Ngân sách Marketing B2C</h3>
+        <p className="text-xs text-gray-400 mt-0.5">Ngân sách kế hoạch theo tháng (VND). Hiển thị ở Section 5 /analytics/b2c — tính spend pace = chi phí thực tế ÷ ngân sách.</p>
+      </div>
+      {loading ? <div className="h-28 bg-gray-50 rounded-lg animate-pulse" /> : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {months.map(m => (
+              <div key={m} className="flex items-center gap-2">
+                <label className="text-xs font-medium text-slate-600 w-24">{monthLabel(m)}</label>
+                <input
+                  type="number" min={0} step="any"
+                  value={budget[m] || ""}
+                  onChange={e => setBudget(b => ({ ...b, [m]: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0"
+                  className="flex-1 px-3 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            ))}
+          </div>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu ngân sách"}
+          </button>
+        </>
+      )}
     </div>
   )
 }

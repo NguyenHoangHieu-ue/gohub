@@ -66,55 +66,115 @@ export async function runGA4Report(opts: RunOpts): Promise<GA4Report> {
   return resp.data as GA4Report
 }
 
-// Tổng + chuỗi ngày cho 1 site (dùng cho trang Website + B2C Section 4).
-export async function ga4WebsiteSummary(siteId: string | undefined, startDate: string, endDate: string) {
-  const M = ["activeUsers", "sessions", "screenPageViews", "conversions", "bounceRate", "purchaseRevenue", "ecommercePurchases"]
-  const [daily, countries, sources] = await Promise.all([
-    runGA4Report({ siteId, startDate, endDate, dimensions: ["date"], metrics: M }),
-    runGA4Report({ siteId, startDate, endDate, dimensions: ["country"], metrics: ["sessions", "conversions"], limit: 8 }),
-    runGA4Report({ siteId, startDate, endDate, dimensions: ["sessionSourceMedium"], metrics: ["sessions", "conversions"], limit: 8 }),
-  ])
+const num = (v?: { value: string }) => parseFloat(v?.value || "0")
+const SUMMARY_METRICS = ["activeUsers", "sessions", "screenPageViews", "conversions", "bounceRate", "purchaseRevenue", "ecommercePurchases"]
 
-  const num = (v?: { value: string }) => parseFloat(v?.value || "0")
-  const totals = { activeUsers: 0, sessions: 0, screenPageViews: 0, conversions: 0, bounceRateSum: 0, purchaseRevenue: 0, ecommercePurchases: 0, days: 0 }
+// GA4 totals + chuỗi ngày cho 1 khoảng (relative date OK).
+async function ga4Period(siteId: string | undefined, startDate: string, endDate: string) {
+  const daily = await runGA4Report({ siteId, startDate, endDate, dimensions: ["date"], metrics: SUMMARY_METRICS })
+  const t = { users: 0, sessions: 0, pageviews: 0, conversions: 0, bounceSum: 0, revenue: 0, purchases: 0, days: 0 }
   const series = (daily.rows || []).map(r => {
     const m = r.metricValues
-    totals.activeUsers += num(m[0]); totals.sessions += num(m[1]); totals.screenPageViews += num(m[2])
-    totals.conversions += num(m[3]); totals.bounceRateSum += num(m[4]); totals.purchaseRevenue += num(m[5]); totals.ecommercePurchases += num(m[6])
-    totals.days++
+    t.users += num(m[0]); t.sessions += num(m[1]); t.pageviews += num(m[2]); t.conversions += num(m[3])
+    t.bounceSum += num(m[4]); t.revenue += num(m[5]); t.purchases += num(m[6]); t.days++
     const d = r.dimensionValues[0].value // YYYYMMDD
     const sess = num(m[1]), purch = num(m[6])
-    return {
-      date: `${d.slice(4, 6)}/${d.slice(6, 8)}`,
-      users: num(m[0]), sessions: sess, pageviews: num(m[2]), conversions: num(m[3]),
-      purchases: purch,
-      // CR = tỷ lệ MUA HÀNG (ecommercePurchases/sessions) — bị chặn hợp lý, đúng spec B2C.
-      cr: sess > 0 ? (purch / sess) * 100 : 0,
-      revenue: num(m[5]),
-    }
+    return { date: `${d.slice(4, 6)}/${d.slice(6, 8)}`, users: num(m[0]), sessions: sess, pageviews: num(m[2]), conversions: num(m[3]), purchases: purch, cr: sess > 0 ? (purch / sess) * 100 : 0, revenue: num(m[5]) }
   })
+  const kpis = {
+    activeUsers: t.users, sessions: t.sessions, pageviews: t.pageviews, conversions: t.conversions,
+    bounceRate: t.days > 0 ? t.bounceSum / t.days : 0, revenue: t.revenue, purchases: t.purchases,
+    cr: t.sessions > 0 ? (t.purchases / t.sessions) * 100 : 0, // CR = tỷ lệ mua hàng (chặn hợp lý)
+  }
+  return { kpis, series }
+}
 
-  const mapRows = (rep: GA4Report) => (rep.rows || []).map(r => ({
-    name: r.dimensionValues[0].value,
-    sessions: num(r.metricValues[0]),
-    conversions: num(r.metricValues[1]),
-    cr: num(r.metricValues[0]) > 0 ? (num(r.metricValues[1]) / num(r.metricValues[0])) * 100 : 0,
+// ── Search Console (GSC) ──────────────────────────────────────────────────────
+interface GscRow { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }
+const ymd = (d: Date) => d.toISOString().slice(0, 10)
+// GSC dữ liệu trễ ~2 ngày. period=0 hiện tại, 1 = kỳ trước liền kề.
+function gscRange(days: number, period = 0) {
+  const end = new Date(Date.now() - (2 + period * days) * 864e5)
+  const start = new Date(end.getTime() - (days - 1) * 864e5)
+  return { start: ymd(start), end: ymd(end) }
+}
+function gscVariants(siteUrl: string, name: string): string[] {
+  const url = siteUrl || name
+  const domain = url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+  return [url, `sc-domain:${domain}`, `https://${domain}/`]
+}
+
+export async function runGSC(siteId: string | undefined, startDate: string, endDate: string, dimensions: string[], rowLimit = 1000): Promise<GscRow[]> {
+  const configs = await loadConfigs()
+  const cfg = configs.find(c => c.id === siteId) || (siteId ? null : configs[0])
+  if (!cfg) throw new Error("GA4 site not found")
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(cfg.credentials),
+    scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+  })
+  const authClient = await auth.getClient()
+  const sc = google.searchconsole("v1")
+  let lastErr: unknown
+  for (const sv of gscVariants(cfg.siteUrl || "", cfg.name)) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = await sc.searchanalytics.query({ siteUrl: sv, auth: authClient as any, requestBody: { startDate, endDate, dimensions, rowLimit } })
+      return (r.data.rows || []) as GscRow[]
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr
+}
+
+async function gscPeriod(siteId: string | undefined, days: number, period = 0) {
+  const { start, end } = gscRange(days, period)
+  const [daily, queries] = await Promise.all([
+    runGSC(siteId, start, end, ["date"]),
+    runGSC(siteId, start, end, ["query"]),
+  ])
+  let clicks = 0, impressions = 0, posSum = 0
+  const series = daily.map(r => {
+    clicks += r.clicks || 0; impressions += r.impressions || 0; posSum += (r.position || 0) * (r.impressions || 0)
+    const d = r.keys?.[0] || "" // YYYY-MM-DD
+    return { date: `${d.slice(5, 7)}/${d.slice(8, 10)}`, clicks: r.clicks || 0, impressions: r.impressions || 0 }
+  })
+  const kpis = { clicks, impressions, ctr: impressions > 0 ? (clicks / impressions) * 100 : 0, position: impressions > 0 ? posSum / impressions : 0 }
+  const topQueries = queries.slice(0, 10).map(r => ({
+    query: r.keys?.[0] || "", clicks: r.clicks || 0, impressions: r.impressions || 0,
+    ctr: (r.impressions || 0) > 0 ? ((r.clicks || 0) / (r.impressions || 0)) * 100 : 0, position: r.position || 0,
   }))
+  return { kpis, series, queries: topQueries }
+}
+
+const mapBreakdown = (rep: GA4Report) => (rep.rows || []).map(r => ({
+  name: r.dimensionValues[0].value,
+  sessions: num(r.metricValues[0]),
+  conversions: num(r.metricValues[1]),
+  cr: num(r.metricValues[0]) > 0 ? (num(r.metricValues[1]) / num(r.metricValues[0])) * 100 : 0,
+}))
+
+// Tổng hợp đầy đủ 1 site: GA4 (KPIs + series + breakdown) + GSC + so sánh kỳ trước (compare).
+export async function ga4WebsiteSummary(siteId: string | undefined, days: number, withCompare: boolean) {
+  const rel = `${days}daysAgo`
+  const [cur, countries, sources, gsc] = await Promise.all([
+    ga4Period(siteId, rel, "today"),
+    runGA4Report({ siteId, startDate: rel, endDate: "today", dimensions: ["country"], metrics: ["sessions", "conversions"], limit: 8 }),
+    runGA4Report({ siteId, startDate: rel, endDate: "today", dimensions: ["sessionSourceMedium"], metrics: ["sessions", "conversions"], limit: 8 }),
+    gscPeriod(siteId, days).catch(() => null),
+  ])
+
+  let prevKpis = null, prevGsc = null
+  if (withCompare) {
+    const [pg, pgsc] = await Promise.all([
+      ga4Period(siteId, `${2 * days}daysAgo`, `${days + 1}daysAgo`),
+      gscPeriod(siteId, days, 1).catch(() => null),
+    ])
+    prevKpis = pg.kpis
+    prevGsc = pgsc?.kpis ?? null
+  }
 
   return {
-    kpis: {
-      activeUsers: totals.activeUsers,
-      sessions: totals.sessions,
-      pageviews: totals.screenPageViews,
-      conversions: totals.conversions,
-      bounceRate: totals.days > 0 ? totals.bounceRateSum / totals.days : 0,
-      revenue: totals.purchaseRevenue,
-      purchases: totals.ecommercePurchases,
-      // CR = tỷ lệ mua hàng (purchases/sessions); conversions giữ riêng làm số đếm.
-      cr: totals.sessions > 0 ? (totals.ecommercePurchases / totals.sessions) * 100 : 0,
-    },
-    series,
-    countries: mapRows(countries),
-    sources: mapRows(sources),
+    kpis: cur.kpis, prevKpis, series: cur.series,
+    countries: mapBreakdown(countries), sources: mapBreakdown(sources),
+    gsc, prevGsc,
   }
 }

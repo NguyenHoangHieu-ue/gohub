@@ -11,15 +11,15 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams
   const siteId = sp.get("siteId") || undefined
-  const startDate = sp.get("startDate") || "28daysAgo"
-  const endDate = sp.get("endDate") || "today"
+  const days = Math.min(Math.max(parseInt(sp.get("days") || "28") || 28, 1), 365)
+  const compare = sp.get("compare") === "1"
 
   try {
     if (!(await ga4Configured())) {
       return NextResponse.json({ error: "GA4 chưa cấu hình" }, { status: 400 })
     }
-    const data = await cachedQuery(`ga4-website:${siteId}:${startDate}:${endDate}`, () =>
-      ga4WebsiteSummary(siteId, startDate, endDate)
+    const data = await cachedQuery(`ga4-website:${siteId}:${days}:${compare}`, () =>
+      ga4WebsiteSummary(siteId, days, compare)
     )
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err) {

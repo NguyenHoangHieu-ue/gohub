@@ -27,6 +27,7 @@ interface MonthlyData {
   channels:     Record<string, ChannelCell>
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
+  budget:       Record<string, number>
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -135,7 +136,7 @@ export default function B2CDashboardPage() {
         if (!sites.length) { setGa4([]); return }
         const out: { name: string; cr: number; series: { date: string; sessions: number; cr: number }[] }[] = []
         for (const s of sites) {
-          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&startDate=28daysAgo&endDate=today`)
+          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=28`)
           if (!r.ok) continue
           const d = await r.json()
           out.push({ name: s.name, cr: d.kpis?.cr ?? 0, series: d.series ?? [] })
@@ -346,12 +347,14 @@ export default function B2CDashboardPage() {
   )
 
   // helpers cho Section 3 & 5
-  const spendOf = (m: string) => data?.spend?.[m] ?? 0
-  const revOf   = (m: string) => data?.markets[m]?.total ?? 0
-  const newOf   = (m: string) => data?.customers[m]?.new.count ?? 0
-  const fmtX    = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
-  const fmtPctV = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
+  const spendOf  = (m: string) => data?.spend?.[m] ?? 0
+  const budgetOf = (m: string) => data?.budget?.[m] ?? 0
+  const revOf    = (m: string) => data?.markets[m]?.total ?? 0
+  const newOf    = (m: string) => data?.customers[m]?.new.count ?? 0
+  const fmtX     = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
+  const fmtPctV  = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
   const hasSpend = data ? data.months.some(m => spendOf(m) > 0) : false
+  const hasBudget = data ? data.months.some(m => budgetOf(m) > 0) : false
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
@@ -547,12 +550,17 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 5 — Spend & ROAS */}
-            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="indigo" title="Chi phí Marketing & ROAS" desc="Spend · Doanh thu · ROAS · rolling 6 tháng"
+            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="indigo" title="Chi phí Marketing & ROAS" desc="Budget · Spend · ROAS · rolling 6 tháng"
               source="admin"
-              note={<><strong>ROAS</strong> = doanh thu B2C ÷ chi phí marketing · <strong>% Chi phí/DT</strong> = chi phí ÷ doanh thu. Chi phí từ bảng nhập tay (Turso). Ngân sách kế hoạch (budget/pace) chưa có nguồn nhập.</>}>
+              note={<><strong>ROAS</strong> = doanh thu B2C ÷ chi phí marketing · <strong>Spend pace</strong> = chi phí ÷ ngân sách · <strong>% Chi phí/DT</strong> = chi phí ÷ doanh thu. Chi phí từ Turso (nhập tay), ngân sách nhập ở Settings → Ngân sách Marketing B2C.</>}>
               {hasSpend ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT",  fmt: formatCompactNumber, get: spendOf },
+                  ...(hasBudget ? [
+                    { label: "Ngân sách",  fmt: formatCompactNumber, delta: false, get: budgetOf },
+                    { label: "Spend pace", fmt: fmtPctV, delta: false,
+                      get: (m: string) => { const b = budgetOf(m); return b > 0 ? spendOf(m) / b * 100 : 0 } },
+                  ] : []),
                   { label: "Doanh thu B2C", fmt: formatCompactNumber, get: revOf },
                   { label: "ROAS",          fmt: fmtX, delta: false, highlight: true,
                     get: m => { const s = spendOf(m); return s > 0 ? revOf(m) / s : 0 } },

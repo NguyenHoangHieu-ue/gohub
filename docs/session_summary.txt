@@ -1,5 +1,38 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-20 (session 68 — GA4 Website Analytics + B2C Section 4 live)
+Cập nhật lần cuối: 2026-06-20 (session 69 — GSC + GA4 MoM + B2C budget/spend pace)
+
+## Session 69 (2026-06-20) — Search Console (GSC) + GA4 so sánh kỳ trước + Ngân sách B2C
+
+User giao 3 việc (a/b/c) + gửi omni token (nhưng thiếu endpoint).
+
+### Leads (omni) — lưu token, vẫn chờ endpoint
+- User gửi OMNI_API_TOKEN=dxPu... + OMNI_WEBHOOK_SECRET=qz7f... → lưu vào web/.env.local (gitignored).
+- VẪN THIẾU: endpoint API omni trả leads (URL path + shape). Webhook secret chỉ để verify Clerk webhook TỚI omni, không phải để gọi lấy leads. → chưa build được Section 3 leads.
+
+### (a) Search Console (GSC) — de-risk rồi build
+- Test service account: GSC sites nhìn thấy (siteFullUser cho sc-domain:gohub.com, https://gohub.vn/). Query GA4-style "28daysAgo" FAIL → GSC bắt buộc ngày YYYY-MM-DD. Test lại ngày thật: gohub.com 1035 clicks/270K impr, gohub.vn 1538 clicks/78K impr ✓.
+- lib/ga4.ts: thêm runGSC (siteUrl fallback: configured → sc-domain:domain → https://domain/) + gscPeriod (clicks/impressions/ctr/position + top queries, ngày tuyệt đối, trễ 2 ngày). Scope webmasters.readonly.
+- Trang website: section Search Console (4 KPI + combo Clicks/Impressions + bảng top truy vấn). Graceful nếu GSC lỗi (gsc=null).
+
+### (b) GA4 so sánh kỳ trước (MoM)
+- ga4WebsiteSummary đổi signature (siteId, days, withCompare). Kỳ trước GA4 = relative `${2*days}daysAgo`..`${days+1}daysAgo`; GSC prev = gscRange period=1.
+- Route website nhận days + compare=1. Trang website: KPI card thêm Delta pill (bounce/position invert — giảm là tốt). GSC KPI cũng có delta.
+
+### (c) Ngân sách B2C → spend pace (Section 5)
+- /api/config/b2c-budget GET/POST (app_settings key b2c_budget = {month: VND}).
+- Admin Settings: B2CBudgetSection (6 tháng × input VND).
+- b2c/monthly route: đọc thêm b2c_budget (gộp .in(['b2c_kpi_targets','b2c_budget'])) → trả `budget`.
+- Section 5: khi có budget thêm row Ngân sách + Spend pace (=chi phí/ngân sách %). Không có budget → giữ như cũ.
+
+### Test
+- tsc PASS, next build PASS. GA4 + GSC verify trên data thật (script đã xóa).
+
+### Còn lại
+- Leads (Section 3) — chờ endpoint API omni (đã có token).
+
+---
+
+## Session 68 (2026-06-20) — GA4 Website Analytics (trang /analytics/website) + B2C Section 4 live
 
 ## Session 68 (2026-06-20) — GA4 Website Analytics (trang /analytics/website) + B2C Section 4 live
 
