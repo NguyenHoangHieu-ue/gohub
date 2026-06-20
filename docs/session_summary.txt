@@ -1,5 +1,35 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-20 (session 69 — GSC + GA4 MoM + B2C budget/spend pace)
+Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
+
+## Session 70 (2026-06-20) — Leads từ Chatwoot (lựa chọn A) → B2C Section 3 đầy đủ
+
+### Điều tra nguồn leads
+- User đưa /webhook/chatwoot → đó là endpoint NHẬN webhook (Chatwoot đẩy VÀO omni), KHÔNG phải API lấy leads.
+- Dò omni API: /api/conversations tồn tại nhưng 401 (Clerk auth, token user không vào được). → chọn lấy thẳng Chatwoot.
+- User cho: Chatwoot https://app.chatwoot.com, account 87064. Token dxPu... HÓA RA chính là api_access_token Chatwoot hợp lệ (agent "Gohub CS"). Test: 1417 conversations, /profile OK.
+
+### Chatwoot data
+- Inboxes: Web (gohub.com/gohub.vn WebWidget), WhatsApp×2, Facebook×2, Instagram×2, Tiktok×2 (KHÔNG có Zalo).
+- Reports API v2 (rẻ): conversations_count group_by month → T5/2026=580, T6=837 (account mới có data từ T5).
+
+### Đã làm
+1. web/src/lib/chatwoot.ts (MỚI): chatwootConfigured + chatwootLeadsByMonth (reports v2, map timestamp+15 ngày → đúng YYYY-MM dù lệch TZ). Header api_access_token.
+2. b2c/monthly route: thêm `leads` (Chatwoot) theo tháng, graceful nếu lỗi/chưa cấu hình.
+3. b2c/page.tsx Section 3 "CAC · Leads · Khách mới": thêm row Leads + Chi phí/Lead + Tỷ lệ chốt (khách mới/leads). Bỏ placeholder leads. DataReadiness "Chatwoot — leads" ready.
+4. .env.local: thêm CHATWOOT_BASE_URL/ACCOUNT_ID/API_TOKEN (token = OMNI token cũ, hóa ra là Chatwoot). Giữ OMNI_WEBHOOK_SECRET.
+
+### Test
+- tsc PASS, next build PASS. Verify leads-by-month trên data thật (T5=580, T6=837). Script test đã xóa.
+
+### LƯU Ý DEPLOY
+- Cần set CHATWOOT_BASE_URL + CHATWOOT_ACCOUNT_ID + CHATWOOT_API_TOKEN trong Vercel env để leads hiện trên production.
+
+### Còn lại (tùy chọn)
+- Breakdown leads theo kênh (Web/WhatsApp/FB/IG/Tiktok) — hiện chỉ tổng. User count GA4 theo VN/US.
+
+---
+
+## Session 69 (2026-06-20) — Search Console (GSC) + GA4 so sánh kỳ trước + Ngân sách B2C
 
 ## Session 69 (2026-06-20) — Search Console (GSC) + GA4 so sánh kỳ trước + Ngân sách B2C
 

@@ -1,3 +1,8 @@
+*20/6/2026 — Session 70 — Leads từ Chatwoot → B2C Section 3 đầy đủ*
+95. ✅ DONE: Leads B2C — nguồn THẬT là Chatwoot (omni chỉ nhận webhook). Token user gửi hóa ra là Chatwoot api_access_token (account 87064 "Gohub CS", 1417 conversations). lib/chatwoot.ts (reports v2 conversations_count group_by month) → b2c/monthly trả leads.
+96. ✅ DONE: Section 3 "CAC · Leads · Khách mới" — thêm Leads + Chi phí/Lead + Tỷ lệ chốt (khách mới/leads). Verify T5=580, T6=837. Bỏ placeholder. #86/#90/#94 (leads pending) GIỜ XONG.
+97. ⚠️ DEPLOY: set CHATWOOT_BASE_URL + CHATWOOT_ACCOUNT_ID + CHATWOOT_API_TOKEN trong Vercel env (leads production).
+
 *20/6/2026 — Session 69 — GSC + GA4 MoM + B2C budget/spend pace*
 91. ✅ DONE (a): Search Console (GSC) trên trang Website — runGSC (siteUrl fallback + ngày YYYY-MM-DD, GSC trễ 2 ngày) + section 4 KPI (clicks/impr/CTR/vị trí) + combo + top truy vấn. Verify: gohub.com 1035 clicks, gohub.vn 1538 clicks.
 92. ✅ DONE (b): GA4 so sánh kỳ trước (MoM) — ga4WebsiteSummary(days, compare) tính kỳ trước GA4+GSC, KPI card thêm Delta pill (bounce/vị trí invert).

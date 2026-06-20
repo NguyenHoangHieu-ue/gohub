@@ -28,6 +28,7 @@ interface MonthlyData {
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
   budget:       Record<string, number>
+  leads:        Record<string, number>
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -349,12 +350,14 @@ export default function B2CDashboardPage() {
   // helpers cho Section 3 & 5
   const spendOf  = (m: string) => data?.spend?.[m] ?? 0
   const budgetOf = (m: string) => data?.budget?.[m] ?? 0
+  const leadsOf  = (m: string) => data?.leads?.[m] ?? 0
   const revOf    = (m: string) => data?.markets[m]?.total ?? 0
   const newOf    = (m: string) => data?.customers[m]?.new.count ?? 0
   const fmtX     = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
   const fmtPctV  = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
   const hasSpend = data ? data.months.some(m => spendOf(m) > 0) : false
   const hasBudget = data ? data.months.some(m => budgetOf(m) > 0) : false
+  const hasLeads = data ? data.months.some(m => leadsOf(m) > 0) : false
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
@@ -493,23 +496,25 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 3 — CAC, Users, Leads */}
-            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Khách mới · Leads" desc="Hiệu quả acquisition · rolling 6 tháng"
+            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Leads · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng"
               source="admin"
-              note={<><strong>CAC</strong> = chi phí marketing B2C ÷ số khách mới trong tháng. Chi phí lấy từ bảng nhập tay (Turso), khách mới từ gohub_dw. <strong>Leads</strong> (chat/Zalo/WhatsApp) chờ kết nối nguồn omni.</>}>
-              {hasSpend ? (
-                <>
-                  <SimpleRollTable rows={[
-                    { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
-                    { label: "Khách mới",   fmt: formatNumber,        get: newOf },
-                    { label: "CAC / khách", fmt: n => n > 0 ? formatCurrency(n) : "—", delta: false, highlight: true,
-                      get: m => { const nc = newOf(m); return nc > 0 ? spendOf(m) / nc : 0 } },
-                  ]} />
-                  <div className="px-6 pb-6 pt-2">
-                    <AwaitingData note="Leads (Website chat / Zalo / WhatsApp / Messenger) + User count theo VN/US chờ kết nối nguồn omni.gohub.cloud và GA4." />
-                  </div>
-                </>
+              note={<><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. Chi phí từ Turso, khách mới từ gohub_dw.</>}>
+              {hasSpend || hasLeads ? (
+                <SimpleRollTable rows={[
+                  { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
+                  ...(hasLeads ? [{ label: "Leads", fmt: formatNumber, get: leadsOf }] : []),
+                  { label: "Khách mới",   fmt: formatNumber,        get: newOf },
+                  { label: "CAC / khách", fmt: (n: number) => n > 0 ? formatCurrency(n) : "—", delta: false, highlight: true,
+                    get: m => { const nc = newOf(m); return nc > 0 ? spendOf(m) / nc : 0 } },
+                  ...(hasLeads ? [
+                    { label: "Chi phí / Lead", fmt: (n: number) => n > 0 ? formatCurrency(n) : "—", delta: false,
+                      get: (m: string) => { const l = leadsOf(m); return l > 0 ? spendOf(m) / l : 0 } },
+                    { label: "Tỷ lệ chốt", fmt: fmtPctV, delta: false,
+                      get: (m: string) => { const l = leadsOf(m); return l > 0 ? newOf(m) / l * 100 : 0 } },
+                  ] : []),
+                ]} />
               ) : (
-                <AwaitingData note="Chưa có dữ liệu chi phí marketing (Turso channel_group_costs). Kiểm tra TURSO_URL/TURSO_AUTH_TOKEN. Leads (chat/Zalo/WhatsApp) chờ nguồn omni." />
+                <AwaitingData note="Chưa có dữ liệu chi phí marketing (Turso) lẫn leads (Chatwoot). Kiểm tra TURSO_* và CHATWOOT_* trong env." />
               )}
             </Section>
 
@@ -578,7 +583,7 @@ export default function B2CDashboardPage() {
                 <DataReadiness items={[
                   { label: "Admin GoHub — doanh thu & khách (Section 1, 2)",   status: "ready" },
                   { label: "Turso — chi phí MKT, CAC, ROAS (Section 3, 5)",     status: hasSpend ? "ready" : "pending" },
-                  { label: "Omni — leads chat/Zalo/WhatsApp (Section 3)",       status: "pending" },
+                  { label: "Chatwoot — leads (Section 3)",                     status: hasLeads ? "ready" : "pending" },
                   { label: "GA4 — traffic & conversion (Section 4)",           status: ga4 && ga4.length > 0 ? "ready" : "pending" },
                 ]} />
               </div>
