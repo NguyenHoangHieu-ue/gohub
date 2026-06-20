@@ -7,9 +7,10 @@ import {
 import {
   ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
 } from "lucide-react"
+import { useSession } from "next-auth/react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
-import { SourceBadge, LogicNote, DataReadiness, type SourceKind } from "@/components/dashboard-kit"
+import { SourceBadge, LogicNote, type SourceKind } from "@/components/dashboard-kit"
 
 // ── types ───────────────────────────────────────────────────────────────────
 interface MarketCell { vn: number; us: number; total: number }
@@ -107,6 +108,8 @@ const AwaitingData = ({ note }: { note: string }) => (
 )
 
 export default function B2CDashboardPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // note công thức chỉ admin thấy
   const [data, setData]       = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
@@ -465,9 +468,9 @@ export default function B2CDashboardPage() {
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               source="admin"
-              note={tab === "revenue"
+              note={isAdmin && (tab === "revenue"
                 ? <><strong>MTD</strong> = doanh thu từ đầu tháng đến hiện tại · <strong>Prorata</strong> = MTD ÷ số ngày đã qua × số ngày trong tháng (run-rate) · <strong>MoM</strong> so với cùng kỳ tháng trước. Sub-row <strong>Web / App / Khác</strong> chia theo kênh bán (sub_group_name): Websites, Mobile-App, còn lại.</>
-                : <><strong>% đạt KPI</strong> = doanh thu thực tế ÷ target. Tháng đang chạy so target theo <strong>Prorata</strong> (run-rate). Target nhập ở Settings → KPI Target B2C. <span className="text-emerald-600 font-semibold">≥100%</span> · <span className="text-amber-600 font-semibold">≥80%</span> · <span className="text-rose-500 font-semibold">&lt;80%</span>.</>}
+                : <><strong>% đạt KPI</strong> = doanh thu thực tế ÷ target. Tháng đang chạy so target theo <strong>Prorata</strong> (run-rate). Target nhập ở Settings → KPI Target B2C. <span className="text-emerald-600 font-semibold">≥100%</span> · <span className="text-amber-600 font-semibold">≥80%</span> · <span className="text-rose-500 font-semibold">&lt;80%</span>.</>)}
               action={
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
                   {(["revenue", "kpi"] as const).map(t => (
@@ -496,7 +499,7 @@ export default function B2CDashboardPage() {
             {/* Section 2 — Revenue by Customers */}
             <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách"
               source="admin"
-              note={<><strong>Khách mới</strong> = tháng có đơn B2C ĐẦU TIÊN của khách · <strong>Quay lại</strong> = đã từng mua trước đó. Mỗi ô: doanh thu + số khách bên dưới.</>}>
+              note={isAdmin && <><strong>Khách mới</strong> = tháng có đơn B2C ĐẦU TIÊN của khách · <strong>Quay lại</strong> = đã từng mua trước đó. Mỗi ô: doanh thu + số khách bên dưới.</>}>
               <RollingTable rows={[
                 { label: "New",       get: m => data.customers[m]?.new.revenue ?? 0,       sub: m => `${formatNumber(data.customers[m]?.new.count ?? 0)} khách` },
                 { label: "Returning", get: m => data.customers[m]?.returning.revenue ?? 0, sub: m => `${formatNumber(data.customers[m]?.returning.count ?? 0)} khách` },
@@ -507,7 +510,7 @@ export default function B2CDashboardPage() {
             {/* Section 3 — CAC, Users, Leads */}
             <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Leads · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng"
               source="admin"
-              note={<><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. <strong>MoM</strong> ở cột MTD tính theo run-rate (dự phóng cả tháng so tháng trước). Chi phí từ Turso, khách mới từ gohub_dw.</>}>
+              note={isAdmin && <><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. <strong>MoM</strong> ở cột MTD tính theo run-rate (dự phóng cả tháng so tháng trước). Chi phí từ Turso, khách mới từ gohub_dw.</>}>
               {hasSpend || hasLeads ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
@@ -535,7 +538,7 @@ export default function B2CDashboardPage() {
 
             {/* Section 4 — GA4 Conversion Rate Charts */}
             <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Sessions vs CR% theo site · 28 ngày" source="ga4"
-              note={<><strong>CR%</strong> = conversions ÷ sessions (GA4). Cột = sessions, đường = CR%. Chi tiết hơn ở trang <strong>Website (GA4)</strong>.</>}
+              note={isAdmin && <><strong>CR%</strong> = conversions ÷ sessions (GA4). Cột = sessions, đường = CR%. Chi tiết hơn ở trang <strong>Website (GA4)</strong>.</>}
               action={<a href="/analytics/website" className="text-xs font-semibold text-blue-600 hover:underline">Xem chi tiết →</a>}>
               {ga4 === null ? (
                 <div className="px-6 pb-6 pt-3 text-sm text-slate-400">Đang tải GA4…</div>
@@ -572,7 +575,7 @@ export default function B2CDashboardPage() {
             {/* Section 5 — Spend & ROAS */}
             <Section icon={<PieChartIcon className="w-5 h-5" />} accent="indigo" title="Chi phí Marketing & ROAS" desc="Budget · Spend · ROAS · rolling 6 tháng"
               source="admin"
-              note={<><strong>ROAS</strong> = doanh thu B2C ÷ chi phí marketing · <strong>Spend pace</strong> = chi phí ÷ ngân sách · <strong>% Chi phí/DT</strong> = chi phí ÷ doanh thu. Chi phí từ Turso (nhập tay), ngân sách nhập ở Settings → Ngân sách Marketing B2C.</>}>
+              note={isAdmin && <><strong>ROAS</strong> = doanh thu B2C ÷ chi phí marketing · <strong>Spend pace</strong> = chi phí ÷ ngân sách · <strong>% Chi phí/DT</strong> = chi phí ÷ doanh thu. Chi phí từ Turso (nhập tay), ngân sách nhập ở Settings → Ngân sách Marketing B2C.</>}>
               {hasSpend ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT",  fmt: formatCompactNumber, get: spendOf },
@@ -590,18 +593,6 @@ export default function B2CDashboardPage() {
               ) : (
                 <AwaitingData note="Chưa có dữ liệu chi phí marketing trong Turso (channel_group_costs, group_name='B2C'). Kiểm tra TURSO_URL / TURSO_AUTH_TOKEN trong env." />
               )}
-            </Section>
-
-            {/* Data readiness — cho biết độ tin của số liệu (theo mockup) */}
-            <Section icon={<Globe className="w-5 h-5" />} accent="slate" title="Data Readiness" desc="Độ sẵn sàng của từng nguồn dữ liệu">
-              <div className="px-6 pb-6 pt-1">
-                <DataReadiness items={[
-                  { label: "Admin GoHub — doanh thu & khách (Section 1, 2)",   status: "ready" },
-                  { label: "Turso — chi phí MKT, CAC, ROAS (Section 3, 5)",     status: hasSpend ? "ready" : "pending" },
-                  { label: "Chatwoot — leads (Section 3)",                     status: hasLeads ? "ready" : "pending" },
-                  { label: "GA4 — traffic & conversion (Section 4)",           status: ga4 && ga4.length > 0 ? "ready" : "pending" },
-                ]} />
-              </div>
             </Section>
           </>
         )}
