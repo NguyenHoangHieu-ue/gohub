@@ -6,6 +6,7 @@ import {
   BarChart, Bar, Cell
 } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, Calendar, TrendingUp, Target, ChevronDown, Shield, Building2, RefreshCw } from "lucide-react"
+import { useSession } from "next-auth/react"
 import { formatCurrency, formatNumber, formatCompactNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 import { SourceBadge, LogicNote } from "@/components/dashboard-kit"
@@ -25,6 +26,8 @@ interface RecentOrder { id: string; region: string; amount: number; created_at: 
 // ─── main component ─────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // note công thức chỉ admin thấy
   const [kpis, setKpis]                       = useState<KPI[]>([])
   const [prevMonthKpis, setPrevMonthKpis]     = useState<KPI[]>([])
   const [revenueData, setRevenueData]         = useState<any[]>([])
@@ -292,7 +295,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!isLoading && !error && (
+      {!isLoading && !error && isAdmin && (
         <LogicNote>
           <strong>So sánh (MoM)</strong> theo cùng khoảng ngày tháng trước · <strong>Dự phóng</strong> = doanh thu hiện tại ÷ số ngày đã qua × số ngày trong tháng (chỉ áp dụng tháng hiện tại).
         </LogicNote>

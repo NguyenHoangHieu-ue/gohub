@@ -1,3 +1,6 @@
+*20/6/2026 — Session 70 tiếp 4 — Note công thức admin-only cho Dashboard*
+101. ✅ DONE: Áp gating note admin-only cho các tab analytics khác. Rà toàn bộ: chỉ Dashboard (analytics/page.tsx) còn dùng LogicNote (ngoài B2C). Gate isAdmin. 5 trang khác (bod/orders/vendors/cs/sql) match GPM2/projection/prorata chỉ là tên biến/cột, KHÔNG phải note công thức → không cần gate.
+
 *20/6/2026 — Session 70 tiếp 3 — Ẩn note + bỏ Data Readiness (B2C)*
 100. ✅ DONE: Tab B2C — xóa section Data Readiness; LogicNote (note công thức) chỉ admin thấy (useSession, isAdmin=role==='admin'), role khác không thấy. User đã set CHATWOOT_* trên Vercel + redeploy → leads chạy production.
 
