@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts"
 import {
   ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
@@ -108,6 +108,8 @@ export default function B2CDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
   const [tab, setTab]         = useState<"revenue" | "kpi">("revenue")
+  // GA4 conversion per site (Section 4) — load lazy, graceful nếu chưa cấu hình
+  const [ga4, setGa4] = useState<{ name: string; cr: number; series: { date: string; sessions: number; cr: number }[] }[] | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -121,6 +123,25 @@ export default function B2CDashboardPage() {
       } finally {
         setLoading(false)
       }
+    })()
+  }, [])
+
+  // GA4 (Section 4) — riêng, không chặn main load
+  useEffect(() => {
+    (async () => {
+      try {
+        const sd = await (await fetch("/api/config/ga4")).json()
+        const sites: { id: string; name: string }[] = sd.sites ?? []
+        if (!sites.length) { setGa4([]); return }
+        const out: { name: string; cr: number; series: { date: string; sessions: number; cr: number }[] }[] = []
+        for (const s of sites) {
+          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&startDate=28daysAgo&endDate=today`)
+          if (!r.ok) continue
+          const d = await r.json()
+          out.push({ name: s.name, cr: d.kpis?.cr ?? 0, series: d.series ?? [] })
+        }
+        setGa4(out)
+      } catch { setGa4([]) }
     })()
   }, [])
 
@@ -490,8 +511,39 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 4 — GA4 Conversion Rate Charts */}
-            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Combo chart App / .com / .vn (Purchase · Revenue · %CR · Traffic)" source="ga4">
-              <AwaitingData note="Cần kết nối GA4 (Google service account + GA_PROPERTY_ID). Sau khi có, hiển thị 3 combo chart: % CR Gohub App, % CR Gohub .com, % CR Gohub .vn." />
+            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Sessions vs CR% theo site · 28 ngày" source="ga4"
+              note={<><strong>CR%</strong> = conversions ÷ sessions (GA4). Cột = sessions, đường = CR%. Chi tiết hơn ở trang <strong>Website (GA4)</strong>.</>}
+              action={<a href="/analytics/website" className="text-xs font-semibold text-blue-600 hover:underline">Xem chi tiết →</a>}>
+              {ga4 === null ? (
+                <div className="px-6 pb-6 pt-3 text-sm text-slate-400">Đang tải GA4…</div>
+              ) : ga4.length === 0 ? (
+                <AwaitingData note="GA4 chưa cấu hình hoặc không có dữ liệu. Vào Admin → Cài đặt để kết nối GA4." />
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 pb-6 pt-3">
+                  {ga4.map(s => (
+                    <div key={s.name}>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-bold text-slate-700">{s.name}</h4>
+                        <span className="text-xs font-semibold text-emerald-600">CR {s.cr.toFixed(2)}%</span>
+                      </div>
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={s.series}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
+                            <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} />
+                            <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={v => `${v}%`} />
+                            <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
+                              formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : formatNumber(v)} />
+                            <Bar yAxisId="l" dataKey="sessions" name="Sessions" fill="#2563eb" radius={[3, 3, 0, 0]} barSize={10} />
+                            <Line yAxisId="r" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2} dot={false} />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Section>
 
             {/* Section 5 — Spend & ROAS */}
@@ -519,7 +571,7 @@ export default function B2CDashboardPage() {
                   { label: "Admin GoHub — doanh thu & khách (Section 1, 2)",   status: "ready" },
                   { label: "Turso — chi phí MKT, CAC, ROAS (Section 3, 5)",     status: hasSpend ? "ready" : "pending" },
                   { label: "Omni — leads chat/Zalo/WhatsApp (Section 3)",       status: "pending" },
-                  { label: "GA4 — traffic & conversion (Section 4)",           status: "pending" },
+                  { label: "GA4 — traffic & conversion (Section 4)",           status: ga4 && ga4.length > 0 ? "ready" : "pending" },
                 ]} />
               </div>
             </Section>

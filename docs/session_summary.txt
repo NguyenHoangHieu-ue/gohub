@@ -1,5 +1,43 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-20 (session 67 — B2C Section 3+5 từ Turso + GA4 config phát hiện trong Turso)
+Cập nhật lần cuối: 2026-06-20 (session 68 — GA4 Website Analytics + B2C Section 4 live)
+
+## Session 68 (2026-06-20) — GA4 Website Analytics (trang /analytics/website) + B2C Section 4 live
+
+User yêu cầu build GA4 Website Analytics. (Leads vẫn chờ creds omni — sess_... user gửi chỉ là Clerk
+session ID, không phải DB credential → chưa đủ truy cập leads.)
+
+### De-risk: VERIFY creds GA4 thật trước khi build
+- Cài googleapis. Test trực tiếp 2 property bằng service account (đọc từ Supabase ga4_configs):
+  · gohub.com (506829852): 7 ngày = 2827 users / 3150 sessions ✓
+  · gohub.vn (509612068): 7 ngày = 8972 users / 11016 sessions ✓
+- Creds HỢP LỆ → build tự tin (không build mù).
+
+### Đã làm
+1. web/src/lib/ga4.ts (MỚI): loadConfigs (Supabase) + ga4Sites + runGA4Report (googleapis analyticsdata v1beta)
+   + ga4WebsiteSummary (KPIs + chuỗi ngày + top countries/sources). Service account scope analytics.readonly.
+2. /api/config/ga4 GET (list site, không trả credentials) + /api/analytics/website GET (summary 1 site, cache 5'').
+3. Trang /analytics/website (MỚI): selector site (gohub.com/.vn) + range 7/28/90 ngày, 6 KPI card,
+   combo Sessions×CR%, area users, top countries + top sources. Sidebar thêm "Website (GA4)" (nhóm Sales).
+4. B2C Section 4: thay placeholder bằng combo chart CR per site (load lazy /api/config/ga4 + website, graceful).
+   DataReadiness GA4 → ready khi có data.
+
+### LƯU Ý quan trọng — định nghĩa CR
+- GA4 "conversions" = mọi key-event (gohub.com test: 17346 conv > 13056 sessions → CR 132%, gây hiểu nhầm).
+- → CR (KPI + Section 4 + trang website) đổi tính theo **ecommercePurchases/sessions** (tỷ lệ MUA HÀNG, đúng spec
+  B2C "Purchase·Revenue·%CR·Traffic", bị chặn hợp lý). conversions giữ làm số đếm "key events".
+- Bảng top countries/sources vẫn dùng conversions/sessions (breakdown phụ).
+
+### Test
+- tsc PASS, next build PASS (route .next/server/app verified: website page + 2 api route). Verify summary shape
+  trên data thật (countries China/VN/US, sources direct/google). Script test đã xóa (chứa creds).
+
+### Còn lại
+- Leads (Section 3) — chờ creds DB omni (Turso URL+token hoặc API endpoint+key, KHÔNG phải Clerk session).
+- Search Console (GSC) — chưa port (chỉ làm GA4). Budget kế hoạch (spend pace) — chưa có nguồn nhập.
+
+---
+
+## Session 67 (2026-06-20) — B2C Section 3 (CAC) + Section 5 (Spend/ROAS) từ Turso + GA4 config
 
 ## Session 67 (2026-06-20) — B2C Section 3 (CAC) + Section 5 (Spend/ROAS) từ Turso + GA4 config
 

@@ -1,3 +1,9 @@
+*20/6/2026 — Session 68 — GA4 Website Analytics + B2C Section 4 live*
+87. ✅ DONE: Build GA4 Website Analytics — lib/ga4.ts (googleapis, đọc ga4_configs từ Supabase) + /api/config/ga4 + /api/analytics/website + trang /analytics/website (KPIs, combo Sessions×CR, area users, top countries/sources, selector 2 site + range). Verify creds thật: gohub.com 2827 users, gohub.vn 8972 users (7 ngày).
+88. ✅ DONE: B2C Section 4 — thay placeholder bằng combo chart CR per site (GA4, lazy load, graceful). Sidebar thêm "Website (GA4)".
+89. ✅ FIXED: GA4 "conversions" đếm mọi key-event → CR >100% (gây mất tin). CR đổi tính theo ecommercePurchases/sessions (tỷ lệ mua hàng, đúng spec B2C). conversions giữ làm số đếm.
+90. ⏳ PENDING: Leads (Section 3) — sess_... user gửi là Clerk session ID, KHÔNG phải DB credential. Cần Turso URL+token hoặc API endpoint+key của omni. GSC chưa port.
+
 *20/6/2026 — Session 67 — B2C Section 3+5 từ Turso + phát hiện GA4 config trong Turso*
 83. ✅ DONE: B2C Section 5 "Chi phí Marketing & ROAS" — đọc Turso channel_group_costs (spend B2C nhập tay) + doanh thu gohub_dw. Bảng Chi phí/DT/ROAS/%Chi phí. lib/turso.ts dùng chung.
 84. ✅ DONE: B2C Section 3 "CAC · Khách mới · Leads" — CAC = chi phí MKT ÷ khách mới (data đã có). Leads/User chờ omni/GA4.

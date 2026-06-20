@@ -41,6 +41,7 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/channels",  label: "Channels",   icon: Globe2     },
       { href: "/analytics/b2b",       label: "B2B",        icon: Building2  },
       { href: "/analytics/b2c",       label: "B2C",        icon: ShoppingBag },
+      { href: "/analytics/website",   label: "Website (GA4)", icon: Globe   },
       { href: "/analytics/staff",     label: "Staff",      icon: Users      },
       { href: "/analytics/customers", label: "Customers",  icon: Users      },
       { href: "/analytics/vendors",   label: "Vendors",    icon: TrendingUp },
