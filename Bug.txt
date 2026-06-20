@@ -1,3 +1,9 @@
+*20/6/2026 — Session 67 — B2C Section 3+5 từ Turso + phát hiện GA4 config trong Turso*
+83. ✅ DONE: B2C Section 5 "Chi phí Marketing & ROAS" — đọc Turso channel_group_costs (spend B2C nhập tay) + doanh thu gohub_dw. Bảng Chi phí/DT/ROAS/%Chi phí. lib/turso.ts dùng chung.
+84. ✅ DONE: B2C Section 3 "CAC · Khách mới · Leads" — CAC = chi phí MKT ÷ khách mới (data đã có). Leads/User chờ omni/GA4.
+85. ✅ DONE: GA4 config phát hiện trong Turso app_config['ga4_configs'] (2 property: gohub.com 506829852, gohub.vn 509612068 + service account). Copy sang Supabase app_settings(key=ga4_configs). Sẵn sàng cho Website Analytics.
+86. ⏳ PENDING: Leads (Section 3) chờ user gửi creds DB omni.gohub.cloud. GA4 Website Analytics (Section 4) chờ build (config đã sẵn).
+
 *20/6/2026 — Session 66 — Hoàn thành nốt frontend B2C (#2.2 + #2.3 còn dở từ tmp.txt)*
 81. ✅ DONE (#2.2): B2C Section 1 sub-row Web/App/Khác — RollingTable thêm flag breakdown, render 3 sub-row theo sub_group_name (Websites→Web, Mobile-App→App, còn lại→Khác). API channels đã có sẵn.
 82. ✅ DONE (#2.3): B2C tab KPI dùng target thật — KpiTable (VN/US/Total × tháng, actual vs KPI, % đạt màu xanh/amber/đỏ, tháng chạy so prorata). UI Settings B2CKpiSection nhập target theo tháng × VN/US/Total (POST /api/config/b2c-kpi-targets). tsc + build PASS.

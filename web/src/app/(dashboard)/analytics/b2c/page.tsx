@@ -26,6 +26,7 @@ interface MonthlyData {
   customers:    Record<string, CustRow>
   channels:     Record<string, ChannelCell>
   targets:      Record<string, KpiTarget>
+  spend:        Record<string, number>
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -280,6 +281,57 @@ export default function B2CDashboardPage() {
     )
   }
 
+  // Bảng rolling gọn — value tự định dạng theo từng dòng, KHÔNG prorata (tránh chiếu sai tỷ số như CAC/ROAS).
+  const SimpleRollTable = ({ rows }: {
+    rows: { label: string; highlight?: boolean; delta?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
+  }) => (
+    <div className="overflow-x-auto px-0 pb-2">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+            <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Chỉ số</th>
+            {completed.map(m => {
+              const l = monthLabel(m)
+              return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+            })}
+            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {rows.map(row => (
+            <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+              <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{row.label}</td>
+              {completed.map((m, i) => {
+                const v = row.get(m)
+                const prev = i > 0 ? row.get(completed[i - 1]) : null
+                return (
+                  <td key={m} className="px-4 py-4 text-right tabular-nums">
+                    <div className="text-slate-800 font-semibold">{row.fmt(v)}</div>
+                    {row.delta !== false && <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>}
+                    {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
+                  </td>
+                )
+              })}
+              <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+                <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
+                <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
+                {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  // helpers cho Section 3 & 5
+  const spendOf = (m: string) => data?.spend?.[m] ?? 0
+  const revOf   = (m: string) => data?.markets[m]?.total ?? 0
+  const newOf   = (m: string) => data?.customers[m]?.new.count ?? 0
+  const fmtX    = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
+  const fmtPctV = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
+  const hasSpend = data ? data.months.some(m => spendOf(m) > 0) : false
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -417,8 +469,24 @@ export default function B2CDashboardPage() {
             </Section>
 
             {/* Section 3 — CAC, Users, Leads */}
-            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · User Count · Leads" desc="Hiệu quả acquisition theo VN/US" source="chat">
-              <AwaitingData note="Cần nguồn: Marketing spend (CAC), GA4 (user count New/Returning theo VN/US), và Leads (Website chat / Zalo / WhatsApp / Messenger — dedup theo identity)." />
+            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Khách mới · Leads" desc="Hiệu quả acquisition · rolling 6 tháng"
+              source="admin"
+              note={<><strong>CAC</strong> = chi phí marketing B2C ÷ số khách mới trong tháng. Chi phí lấy từ bảng nhập tay (Turso), khách mới từ gohub_dw. <strong>Leads</strong> (chat/Zalo/WhatsApp) chờ kết nối nguồn omni.</>}>
+              {hasSpend ? (
+                <>
+                  <SimpleRollTable rows={[
+                    { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
+                    { label: "Khách mới",   fmt: formatNumber,        get: newOf },
+                    { label: "CAC / khách", fmt: n => n > 0 ? formatCurrency(n) : "—", delta: false, highlight: true,
+                      get: m => { const nc = newOf(m); return nc > 0 ? spendOf(m) / nc : 0 } },
+                  ]} />
+                  <div className="px-6 pb-6 pt-2">
+                    <AwaitingData note="Leads (Website chat / Zalo / WhatsApp / Messenger) + User count theo VN/US chờ kết nối nguồn omni.gohub.cloud và GA4." />
+                  </div>
+                </>
+              ) : (
+                <AwaitingData note="Chưa có dữ liệu chi phí marketing (Turso channel_group_costs). Kiểm tra TURSO_URL/TURSO_AUTH_TOKEN. Leads (chat/Zalo/WhatsApp) chờ nguồn omni." />
+              )}
             </Section>
 
             {/* Section 4 — GA4 Conversion Rate Charts */}
@@ -426,18 +494,32 @@ export default function B2CDashboardPage() {
               <AwaitingData note="Cần kết nối GA4 (Google service account + GA_PROPERTY_ID). Sau khi có, hiển thị 3 combo chart: % CR Gohub App, % CR Gohub .com, % CR Gohub .vn." />
             </Section>
 
-            {/* Section 5 — Budget Management */}
-            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="slate" title="Budget Management" desc="Budget · Spend MTD · Spend pace · ROAS" source="chat">
-              <AwaitingData note="Cần bảng marketing: monthly_budget, spend_mtd, attributed_revenue (theo VN/US/Total + refresh_timestamp). Công thức: Spend pace = Spend MTD / Budget · ROAS = Attributed revenue / Spend." />
+            {/* Section 5 — Spend & ROAS */}
+            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="indigo" title="Chi phí Marketing & ROAS" desc="Spend · Doanh thu · ROAS · rolling 6 tháng"
+              source="admin"
+              note={<><strong>ROAS</strong> = doanh thu B2C ÷ chi phí marketing · <strong>% Chi phí/DT</strong> = chi phí ÷ doanh thu. Chi phí từ bảng nhập tay (Turso). Ngân sách kế hoạch (budget/pace) chưa có nguồn nhập.</>}>
+              {hasSpend ? (
+                <SimpleRollTable rows={[
+                  { label: "Chi phí MKT",  fmt: formatCompactNumber, get: spendOf },
+                  { label: "Doanh thu B2C", fmt: formatCompactNumber, get: revOf },
+                  { label: "ROAS",          fmt: fmtX, delta: false, highlight: true,
+                    get: m => { const s = spendOf(m); return s > 0 ? revOf(m) / s : 0 } },
+                  { label: "% Chi phí/DT",  fmt: fmtPctV, delta: false,
+                    get: m => { const r = revOf(m); return r > 0 ? spendOf(m) / r * 100 : 0 } },
+                ]} />
+              ) : (
+                <AwaitingData note="Chưa có dữ liệu chi phí marketing trong Turso (channel_group_costs, group_name='B2C'). Kiểm tra TURSO_URL / TURSO_AUTH_TOKEN trong env." />
+              )}
             </Section>
 
             {/* Data readiness — cho biết độ tin của số liệu (theo mockup) */}
             <Section icon={<Globe className="w-5 h-5" />} accent="slate" title="Data Readiness" desc="Độ sẵn sàng của từng nguồn dữ liệu">
               <div className="px-6 pb-6 pt-1">
                 <DataReadiness items={[
-                  { label: "Admin GoHub — doanh thu & khách (Section 1, 2)", status: "ready" },
-                  { label: "GA4 — traffic & conversion (Section 4)",        status: "pending" },
-                  { label: "Data chat — CAC, leads, budget (Section 3, 5)", status: "pending" },
+                  { label: "Admin GoHub — doanh thu & khách (Section 1, 2)",   status: "ready" },
+                  { label: "Turso — chi phí MKT, CAC, ROAS (Section 3, 5)",     status: hasSpend ? "ready" : "pending" },
+                  { label: "Omni — leads chat/Zalo/WhatsApp (Section 3)",       status: "pending" },
+                  { label: "GA4 — traffic & conversion (Section 4)",           status: "pending" },
                 ]} />
               </div>
             </Section>
