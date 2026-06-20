@@ -8,6 +8,7 @@ import {
 import { ArrowUpRight, ArrowDownRight, Filter, TrendingUp, Download, RefreshCw, ChevronDown } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
+import { useSession } from "next-auth/react"
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -33,6 +34,8 @@ interface GroupMargin { group: string; revenue: number; cogs: number; margin: nu
 interface ChannelPerf { group: string; channel: string; revenue: number; cogs: number; margin: number; units: number; orders: number; margin_percent: number; gpm2: number; gpm2_percent: number }
 
 export default function BODReportPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // chú thích methodology chỉ admin thấy
   const [summary, setSummary]               = useState<BODSummary | null>(null)
   const [data, setData]                     = useState<BODDataPoint[]>([])
   const [groupMargins, setGroupMargins]     = useState<GroupMargin[]>([])
@@ -216,7 +219,7 @@ export default function BODReportPage() {
       {projection && !loading && (
         <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-5">
           <h3 className="font-bold text-blue-900 flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5" /> Month-End Projection (×{projection.factor.toFixed(2)})
+            <TrendingUp className="w-5 h-5" /> Month-End Projection {isAdmin && <span>(×{projection.factor.toFixed(2)})</span>}
           </h3>
           <div className="grid grid-cols-3 gap-4">
             {[{ label: "Revenue", val: projection.revenue }, { label: "Margin", val: projection.margin }, { label: "GPM2", val: projection.gpm2 }].map(({ label, val }) => (

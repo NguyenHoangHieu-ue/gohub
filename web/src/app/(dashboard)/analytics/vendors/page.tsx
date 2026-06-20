@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
+import { useSession } from "next-auth/react"
 
 interface Metrics {
   revenue: number; revenueChange: number; orders: number; ordersChange: number
@@ -39,6 +40,8 @@ function Skeleton({ className }: { className?: string }) {
 const PAGE_SIZE = 20
 
 export default function VendorsPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // chú thích methodology chỉ admin thấy
   const [allVendors, setAllVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [showVendorDrop, setShowVendorDrop] = useState(false)
@@ -319,7 +322,7 @@ export default function VendorsPage() {
       {projection && !loading && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs font-bold text-blue-600 uppercase mb-1">Dự báo cuối tháng ({projection.elapsed}/{projection.total} ngày)</p>
+            <p className="text-xs font-bold text-blue-600 uppercase mb-1">Dự báo cuối tháng {isAdmin && <>({projection.elapsed}/{projection.total} ngày)</>}</p>
             <p className="text-xl font-bold text-blue-800">{formatCurrency(projection.revenue)}</p>
           </div>
           <div>

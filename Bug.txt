@@ -1,3 +1,11 @@
+*20/6/2026 — Session 70 tiếp 5 — Ẩn chú thích methodology admin-only (BOD/B2B/Products/Vendors/Dashboard)*
+102. ✅ DONE: User chọn "ẩn chú thích methodology hiện có" (không ẩn số liệu Dự phóng). Gate admin-only các chú thích cách tính:
+    - Dashboard: "Based on X days → projected for Y days" + badge "×factor factor"
+    - BOD: "(×factor)" ở header Month-End Projection
+    - B2B: "Historical data up to {endDate}" + "Projection Factor: X.XXx"
+    - Products: "Dựa trên X/Y ngày thực tế" · Vendors: "(X/Y ngày)"
+    Giữ nguyên cột/số liệu Dự phóng & GPM2 cho mọi role. tsc + build PASS.
+
 *20/6/2026 — Session 70 tiếp 4 — Note công thức admin-only cho Dashboard*
 101. ✅ DONE: Áp gating note admin-only cho các tab analytics khác. Rà toàn bộ: chỉ Dashboard (analytics/page.tsx) còn dùng LogicNote (ngoài B2C). Gate isAdmin. 5 trang khác (bod/orders/vendors/cs/sql) match GPM2/projection/prorata chỉ là tên biến/cột, KHÔNG phải note công thức → không cần gate.
 

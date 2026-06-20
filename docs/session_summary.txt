@@ -1,6 +1,18 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
 
+## Session 70 — tiếp 5 (2026-06-20) — Ẩn chú thích methodology admin-only (nhiều tab)
+
+User chọn "ẩn chú thích methodology hiện có" (KHÔNG ẩn số liệu Dự phóng/GPM2). Gate admin-only
+các nhãn tiết lộ cách tính (mỗi trang thêm useSession + isAdmin):
+- Dashboard: "Based on X days → projected for Y days" + badge "×factor"
+- BOD: "(×factor)" header Month-End Projection
+- B2B: "Historical data up to {endDate}" + "Projection Factor: X.XXx"
+- Products: "Dựa trên X/Y ngày thực tế"; Vendors: "(X/Y ngày)"
+Số liệu Dự phóng/GPM2 vẫn hiển thị cho mọi role. tsc + build PASS.
+
+---
+
 ## Session 70 — tiếp 4 (2026-06-20) — Note công thức admin-only cho Dashboard (nhân rộng)
 
 - Rà tất cả trang analytics: chỉ Dashboard (analytics/page.tsx) còn dùng LogicNote (ngoài B2C đã gate).

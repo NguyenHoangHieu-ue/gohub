@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber, formatNumber, getDefaultDateRange, formatTruncatedString } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
+import { useSession } from "next-auth/react"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface Metrics {
@@ -41,6 +42,8 @@ function ChangeTag({ change, visible }: { change: number; visible: boolean }) {
 }
 
 export default function ProductsPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // chú thích methodology chỉ admin thấy
   const [loading, setLoading] = useState(false)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [trend, setTrend] = useState<any[]>([])
@@ -269,7 +272,7 @@ export default function ProductsPage() {
             </div>
             <div>
               <h3 className="font-bold text-blue-900 text-sm">Dự báo cuối tháng</h3>
-              <p className="text-xs text-blue-600">Dựa trên {proj.elapsed}/{proj.total} ngày thực tế</p>
+              {isAdmin && <p className="text-xs text-blue-600">Dựa trên {proj.elapsed}/{proj.total} ngày thực tế</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

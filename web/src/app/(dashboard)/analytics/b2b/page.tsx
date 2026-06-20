@@ -12,6 +12,7 @@ import {
   ArrowUpDown, ShoppingBag, Settings, Check, Zap, Building2, Shield, FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSession } from "next-auth/react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { CostManagementModal } from "@/components/CostManagementModal"
@@ -42,6 +43,8 @@ interface PerformanceData {
 }
 
 export default function B2BPerformancePage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "admin"  // chú thích methodology chỉ admin thấy
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
 
@@ -369,7 +372,7 @@ export default function B2BPerformancePage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   MTD Performance (Actual)
                 </h3>
-                {projectionFactor > 1 && <span className="text-[10px] font-bold text-slate-400 italic">Historical data up to {endDate}</span>}
+                {projectionFactor > 1 && isAdmin && <span className="text-[10px] font-bold text-slate-400 italic">Historical data up to {endDate}</span>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {combinedKpis.map((kpi, idx) => (
@@ -397,7 +400,7 @@ export default function B2BPerformancePage() {
                       <Zap className="w-3.5 h-3.5 fill-blue-500 text-blue-500" />
                       Full Period Forecast (Projected)
                     </h3>
-                    <span className="text-[10px] font-bold text-blue-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>
+                    {isAdmin && <span className="text-[10px] font-bold text-blue-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     {combinedKpis.map((kpi, idx) => (
