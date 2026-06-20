@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { supabaseAdmin } from "@/lib/supabase"
 
 // Rolling-month B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả 6 tháng gần nhất (5 hoàn thành + tháng hiện tại MTD):
@@ -13,6 +14,7 @@ import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
 interface MarketCell { vn: number; us: number; total: number }
 interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
+interface ChannelCell { web: number; app: number; other: number }
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -32,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await cachedQuery(`b2c-monthly:${windowStart}`, async () => {
-      const [marketRows, custRows] = await Promise.all([
+      const [marketRows, custRows, channelRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')           AS market,
@@ -73,6 +75,20 @@ export async function GET(req: NextRequest) {
            GROUP BY 1, 2`,
           [windowStart]
         ),
+        // Channel-type breakdown: Web (Websites) / App (Mobile-App) / Khác (còn lại)
+        queryAnalytics<{ month: string; ctype: string; revenue: string }>(
+          `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                  CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
+                       WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                       ELSE 'other' END                     AS ctype,
+                  SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.fulfiled_date::date >= $1
+           GROUP BY 1, 2`,
+          [windowStart]
+        ),
       ])
 
       // ── Market: VN / US / Total per month ──
@@ -108,11 +124,31 @@ export async function GET(req: NextRequest) {
         row.total.count += cnt
       }
 
-      return { markets, customers }
+      // ── Channels: Web / App / Khác per month ──
+      const channels: Record<string, ChannelCell> = {}
+      for (const m of months) channels[m] = { web: 0, app: 0, other: 0 }
+      for (const r of channelRows) {
+        const cell = channels[r.month]
+        if (!cell) continue
+        const rev = parseFloat(r.revenue || "0")
+        if (r.ctype === "web") cell.web += rev
+        else if (r.ctype === "app") cell.app += rev
+        else cell.other += rev
+      }
+
+      return { markets, customers, channels }
     })
 
+    // KPI targets (theo tháng × VN/US/Total) — lưu ở Supabase app_settings, đọc riêng (không cache)
+    let targets: Record<string, { vn: number; us: number; total: number }> = {}
+    try {
+      const { data: t } = await supabaseAdmin
+        .from("app_settings").select("value").eq("key", "b2c_kpi_targets").maybeSingle()
+      if (t?.value) targets = JSON.parse(t.value)
+    } catch {}
+
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, ...data },
+      { months, currentMonth, elapsedDays, totalDays, targets, ...data },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {

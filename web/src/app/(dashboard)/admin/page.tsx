@@ -667,6 +667,105 @@ function SettingsTab({ onNotify }: {
 
       {/* Role data filters cho BI Analyst */}
       <RoleFiltersSection onNotify={onNotify} />
+
+      {/* KPI Target B2C (theo tháng × VN/US/Total) */}
+      <B2CKpiSection onNotify={onNotify} />
+    </div>
+  )
+}
+
+// KPI target doanh thu B2C theo tháng × thị trường (VN / US / Total) — bind tab KPI ở /analytics/b2c.
+// Lưu app_settings key b2c_kpi_targets = { "YYYY-MM": { vn, us, total } }.
+function B2CKpiSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  type Cell = { vn: number; us: number; total: number }
+  const [targets, setTargets] = useState<Record<string, Cell>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+
+  // Cùng cửa sổ 6 tháng với dashboard B2C (5 tháng trước + tháng hiện tại) để admin nhập đúng tháng hiển thị.
+  const now = new Date()
+  const months: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+  const monthLabel = (m: string) => { const [y, mo] = m.split("-"); return `Thg ${parseInt(mo)}/${y}` }
+
+  useEffect(() => {
+    fetch("/api/config/b2c-kpi-targets")
+      .then(r => r.json())
+      .then(d => { setTargets(d || {}); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const cell = (m: string): Cell => targets[m] ?? { vn: 0, us: 0, total: 0 }
+  const setField = (m: string, k: keyof Cell, v: number) =>
+    setTargets(t => ({ ...t, [m]: { ...cell(m), [k]: v } }))
+
+  const save = async () => {
+    setSaving(true)
+    // Bỏ tháng toàn 0 cho gọn payload
+    const cleaned: Record<string, Cell> = {}
+    for (const [m, c] of Object.entries(targets)) {
+      if ((c?.vn || 0) + (c?.us || 0) + (c?.total || 0) > 0) cleaned[m] = c
+    }
+    const res = await fetch("/api/config/b2c-kpi-targets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cleaned),
+    })
+    setSaving(false)
+    onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu KPI target B2C" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">KPI Target B2C</h3>
+        <p className="text-xs text-gray-400 mt-0.5">Target doanh thu B2C theo tháng × thị trường (VND). Hiển thị ở tab KPI của /analytics/b2c — so MTD/Prorata vs target.</p>
+      </div>
+      {loading ? <div className="h-32 bg-gray-50 rounded-lg animate-pulse" /> : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-left font-semibold px-2 py-2 text-xs uppercase tracking-wider">Tháng</th>
+                  <th className="text-right font-semibold px-2 py-2 text-xs">VN</th>
+                  <th className="text-right font-semibold px-2 py-2 text-xs">US</th>
+                  <th className="text-right font-semibold px-2 py-2 text-xs">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {months.map(m => {
+                  const c = cell(m)
+                  return (
+                    <tr key={m}>
+                      <td className="px-2 py-2 font-medium text-slate-700">{monthLabel(m)}</td>
+                      {(["vn", "us", "total"] as const).map(k => (
+                        <td key={k} className="px-2 py-2 text-right">
+                          <input
+                            type="number" min={0} step="any"
+                            value={c[k] || ""}
+                            onChange={e => setField(m, k, parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-32 px-2 py-1.5 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu KPI target"}
+          </button>
+        </>
+      )}
     </div>
   )
 }

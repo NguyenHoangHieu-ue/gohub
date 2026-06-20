@@ -1,3 +1,7 @@
+*20/6/2026 — Session 66 — Hoàn thành nốt frontend B2C (#2.2 + #2.3 còn dở từ tmp.txt)*
+81. ✅ DONE (#2.2): B2C Section 1 sub-row Web/App/Khác — RollingTable thêm flag breakdown, render 3 sub-row theo sub_group_name (Websites→Web, Mobile-App→App, còn lại→Khác). API channels đã có sẵn.
+82. ✅ DONE (#2.3): B2C tab KPI dùng target thật — KpiTable (VN/US/Total × tháng, actual vs KPI, % đạt màu xanh/amber/đỏ, tháng chạy so prorata). UI Settings B2CKpiSection nhập target theo tháng × VN/US/Total (POST /api/config/b2c-kpi-targets). tsc + build PASS.
+
 *19/6/2026 — Session 65 tiếp 3 — Rollout dashboard-kit toàn analytics*
 80. ✅ DONE: Áp SourceBadge vào header 15 trang analytics (Dashboard+LogicNote MoM/dự phóng, BOD, all-time, channels, b2b, orders, staff, customers, vendors, products, fulfillment, 3hk-usage, cs-troubleshoot, targets). Bỏ qua feedback (form) + sql (tool). Nhãn nguồn admin đổi "Admin GoHub"→"GoHub" (tránh nhầm role). tsc + build PASS.
 

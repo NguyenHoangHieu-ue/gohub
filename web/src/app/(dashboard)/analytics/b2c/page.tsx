@@ -15,6 +15,8 @@ import { SourceBadge, LogicNote, DataReadiness, type SourceKind } from "@/compon
 interface MarketCell { vn: number; us: number; total: number }
 interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
+interface ChannelCell { web: number; app: number; other: number }
+interface KpiTarget { vn: number; us: number; total: number }
 interface MonthlyData {
   months:       string[]
   currentMonth: string
@@ -22,6 +24,8 @@ interface MonthlyData {
   totalDays:    number
   markets:      Record<string, MarketCell>
   customers:    Record<string, CustRow>
+  channels:     Record<string, ChannelCell>
+  targets:      Record<string, KpiTarget>
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -147,7 +151,7 @@ export default function B2CDashboardPage() {
 
   // generic rolling-table renderer
   const RollingTable = ({ rows }: {
-    rows: { label: string; highlight?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
+    rows: { label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
   }) => (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -171,7 +175,9 @@ export default function B2CDashboardPage() {
             const prorata  = proj(mtd)
             return (
               <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{row.label}</td>
+                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
+                  {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+                </td>
                 {completed.map((m, i) => {
                   const v = row.get(m)
                   const prev = i > 0 ? row.get(completed[i - 1]) : null
@@ -201,6 +207,78 @@ export default function B2CDashboardPage() {
       </table>
     </div>
   )
+
+  // KPI tab — actual vs target (theo tháng × VN/US/Total). Target nhập ở Settings → b2c_kpi_targets.
+  const KpiTable = () => {
+    if (!data) return null
+    const targets = data.targets ?? {}
+    const hasTarget = Object.values(targets).some(t => (t?.vn || 0) + (t?.us || 0) + (t?.total || 0) > 0)
+    if (!hasTarget)
+      return <AwaitingData note="Chưa có KPI target. Admin vào Settings → 'KPI Target B2C' để nhập target doanh thu theo tháng × thị trường (VN / US / Total). Sau khi lưu, tab này hiển thị MTD vs target, prorata vs KPI và % đạt." />
+
+    const lines: { key: keyof KpiTarget; label: string; highlight?: boolean }[] = [
+      { key: "vn",    label: "VN B2C" },
+      { key: "us",    label: "US B2C" },
+      { key: "total", label: "Total B2C", highlight: true },
+    ]
+    const Attain = ({ actual, target }: { actual: number; target: number }) => {
+      if (!target) return <span className="text-slate-300 text-[11px]">—</span>
+      const p = (actual / target) * 100
+      const c = p >= 100 ? "text-emerald-600" : p >= 80 ? "text-amber-600" : "text-rose-500"
+      return <span className={`text-[11px] font-semibold ${c}`}>{p.toFixed(0)}%</span>
+    }
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+              <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Line</th>
+              {completed.map(m => {
+                const l = monthLabel(m)
+                return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+              })}
+              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
+              <th className="text-right font-semibold px-4 py-3 text-xs">Prorata</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs">% đạt KPI</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {lines.map(line => {
+              const mtd      = data.markets[current]?.[line.key] ?? 0
+              const prorata  = proj(mtd)
+              const tgtCur   = targets[current]?.[line.key] ?? 0
+              return (
+                <tr key={line.key} className={line.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+                  <td className={`px-6 py-4 text-left ${line.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{line.label}</td>
+                  {completed.map(m => {
+                    const v   = data.markets[m]?.[line.key] ?? 0
+                    const tgt = targets[m]?.[line.key] ?? 0
+                    return (
+                      <td key={m} className="px-4 py-4 text-right tabular-nums">
+                        <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgt ? formatCompactNumber(tgt) : "—"}</div>
+                        <div className="mt-0.5"><Attain actual={v} target={tgt} /></div>
+                      </td>
+                    )
+                  })}
+                  <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+                    <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgtCur ? formatCompactNumber(tgtCur) : "—"}</div>
+                    <div className="mt-0.5"><Attain actual={mtd} target={tgtCur} /></div>
+                  </td>
+                  <td className="px-4 py-4 text-right tabular-nums">
+                    <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
+                  </td>
+                  <td className="px-4 py-4 text-right"><Attain actual={prorata} target={tgtCur} /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
@@ -299,7 +377,9 @@ export default function B2CDashboardPage() {
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               source="admin"
-              note={<><strong>MTD</strong> = doanh thu từ đầu tháng đến hiện tại · <strong>Prorata</strong> = MTD ÷ số ngày đã qua × số ngày trong tháng (run-rate) · <strong>MoM</strong> so với cùng kỳ tháng trước.</>}
+              note={tab === "revenue"
+                ? <><strong>MTD</strong> = doanh thu từ đầu tháng đến hiện tại · <strong>Prorata</strong> = MTD ÷ số ngày đã qua × số ngày trong tháng (run-rate) · <strong>MoM</strong> so với cùng kỳ tháng trước. Sub-row <strong>Web / App / Khác</strong> chia theo kênh bán (sub_group_name): Websites, Mobile-App, còn lại.</>
+                : <><strong>% đạt KPI</strong> = doanh thu thực tế ÷ target. Tháng đang chạy so target theo <strong>Prorata</strong> (run-rate). Target nhập ở Settings → KPI Target B2C. <span className="text-emerald-600 font-semibold">≥100%</span> · <span className="text-amber-600 font-semibold">≥80%</span> · <span className="text-rose-500 font-semibold">&lt;80%</span>.</>}
               action={
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
                   {(["revenue", "kpi"] as const).map(t => (
@@ -316,9 +396,12 @@ export default function B2CDashboardPage() {
                   { label: "VN B2C",    get: m => data.markets[m]?.vn ?? 0 },
                   { label: "US B2C",    get: m => data.markets[m]?.us ?? 0 },
                   { label: "Total B2C", get: m => data.markets[m]?.total ?? 0, highlight: true },
+                  { label: "Web",       get: m => data.channels[m]?.web ?? 0,   breakdown: true },
+                  { label: "App",       get: m => data.channels[m]?.app ?? 0,   breakdown: true },
+                  { label: "Khác",      get: m => data.channels[m]?.other ?? 0, breakdown: true },
                 ]} />
               ) : (
-                <AwaitingData note="KPI target được nhập/import trong Settings (theo tháng, theo line item). Sau khi lưu, tab KPI sẽ hiển thị % đạt KPI, MTD vs target, prorata vs KPI." />
+                <KpiTable />
               )}
             </Section>
 

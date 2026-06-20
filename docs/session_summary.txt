@@ -1,5 +1,33 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-19 (session 65 tiếp 3 — rollout design-kit toàn analytics)
+Cập nhật lần cuối: 2026-06-20 (session 66 — hoàn thành frontend B2C #2.2 + #2.3 còn dở)
+
+## Session 66 (2026-06-20) — Hoàn thành nốt B2C dashboard (#2.2 sub-row Web/App/Khác + #2.3 KPI persist)
+
+Tiếp tục việc dở từ session trước (bị ngắt do hết session limit, ghi trong tmp.txt). API đã viết xong
+từ trước, lần này hoàn thành phần FRONTEND còn thiếu + UI Settings.
+
+### Bối cảnh (đã có sẵn, uncommitted từ session trước)
+- API b2c/monthly đã thêm query `channels` (Web/App/Khác theo sub_group_name) + trả `targets` (đọc app_settings b2c_kpi_targets).
+- Route /api/config/b2c-kpi-targets (GET/POST, admin/manager) đã tạo. Pattern y hệt role-filters (đã chạy được) → schema app_settings hỗ trợ.
+
+### #2.2 — Section 1 sub-row Web/App/Khác (b2c/page.tsx)
+- Interface MonthlyData thêm `channels` + `targets`. RollingTable thêm flag `breakdown` (sub-row indent + dấu ›, màu nhạt).
+- Section 1 tab Revenue: thêm 3 sub-row Web / App / Khác (theo sub_group_name: Websites→web, Mobile-App→app, còn lại→other).
+- LogicNote cập nhật giải thích breakdown theo kênh.
+
+### #2.3 — Tab KPI dùng target thật (b2c/page.tsx)
+- Thay placeholder AwaitingData bằng component KpiTable: VN/US/Total × tháng, mỗi ô = actual + "KPI x" + % đạt (màu: ≥100 xanh, ≥80 amber, <80 đỏ).
+- Tháng đang chạy so target theo Prorata (run-rate). Chưa có target nào → vẫn hiện AwaitingData trỏ sang Settings.
+- LogicNote đổi theo tab (revenue vs kpi).
+
+### UI Settings nhập KPI (admin/page.tsx)
+- Thêm B2CKpiSection vào SettingsTab: bảng 6 tháng (cùng cửa sổ dashboard) × VN/US/Total input số VND, nút Lưu (POST b2c-kpi-targets, bỏ tháng toàn 0).
+
+### Test
+- tsc --noEmit PASS, next build PASS. /analytics/b2c 6.85→7.58 kB.
+- Chưa E2E (cần auth + gohub_dw) — verify qua build như mọi lần.
+
+---
 
 ## Session 65 — tiếp 3 (2026-06-19) — Rollout dashboard-kit ra TẤT CẢ trang analytics
 
