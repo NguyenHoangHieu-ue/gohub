@@ -1,6 +1,15 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
 
+## Session 70 — tiếp 3 (2026-06-20) — Ẩn note công thức + bỏ Data Readiness (B2C)
+
+- User đã set CHATWOOT_* trên Vercel + redeploy → leads chạy production.
+- Tab B2C: xóa section Data Readiness. LogicNote (note giải thích công thức) chỉ hiện khi role=admin
+  (useSession + isAdmin); bọc 5 note bằng `isAdmin && (...)`. Role khác không thấy công thức.
+- tsc + build PASS.
+
+---
+
 ## Session 70 — tiếp 2 (2026-06-20) — MoM cho leads (Section 3)
 
 - SimpleRollTable thêm flag `mom`: cột MTD hiện Delta MoM theo run-rate = pct(proj(leadsMTD), tháng hoàn thành gần nhất) — fair với tháng đang dở.

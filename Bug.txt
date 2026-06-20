@@ -1,3 +1,6 @@
+*20/6/2026 — Session 70 tiếp 3 — Ẩn note + bỏ Data Readiness (B2C)*
+100. ✅ DONE: Tab B2C — xóa section Data Readiness; LogicNote (note công thức) chỉ admin thấy (useSession, isAdmin=role==='admin'), role khác không thấy. User đã set CHATWOOT_* trên Vercel + redeploy → leads chạy production.
+
 *20/6/2026 — Session 70 tiếp 2 — MoM cho leads*
 99. ✅ DONE: MoM cho leads Section 3 — SimpleRollTable flag `mom` (cột MTD run-rate vs tháng trước) + bật delta MoM cho sub-row kênh. Note ghi rõ run-rate.
 
