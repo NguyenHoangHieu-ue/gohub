@@ -1,5 +1,16 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-20 (session 70 — Leads từ Chatwoot → B2C Section 3 hoàn chỉnh)
+Cập nhật lần cuối: 2026-06-20 (session 70 tiếp 5 — gating chú thích methodology admin-only)
+
+## NGÀY 2026-06-20 — TỔNG QUAN (session 66 → 70)
+Hoàn thiện B2C dashboard đủ 5 section data thật + GA4/GSC + phân quyền hiển thị:
+- S66-67: B2C Section 1 (Web/App/Khác) + KPI persist + Section 3 (CAC) + Section 5 (Spend/ROAS) từ Turso.
+- S67: Phát hiện GA4 config nằm trong Turso app_config['ga4_configs'] (2 property) → copy sang Supabase.
+- S68: Build GA4 Website Analytics (trang /analytics/website) + B2C Section 4 (CR theo lượt mua).
+- S69: GSC (Search Console) + GA4 so kỳ trước (MoM) + ngân sách B2C (spend pace).
+- S70: Leads từ Chatwoot (account 87064) → Section 3 + breakdown 5 kênh + MoM leads.
+- S70 tiếp 3-5: bỏ Data Readiness; note công thức + chú thích methodology chỉ admin thấy (B2C/Dashboard/BOD/B2B/Products/Vendors).
+- Env production cần set trên Vercel: CHATWOOT_BASE_URL/ACCOUNT_ID/API_TOKEN (đã set), TURSO_* (đã có), GA4 đọc từ Supabase.
+- CÒN LẠI: GSC/budget tùy nhu cầu; user count GA4 theo VN/US (chưa làm).
 
 ## Session 70 — tiếp 5 (2026-06-20) — Ẩn chú thích methodology admin-only (nhiều tab)
 
