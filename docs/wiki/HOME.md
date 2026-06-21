@@ -5,7 +5,7 @@ department: all
 tags: [index, moc, home]
 aliases: ["Wiki Home", "Index"]
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-06-21
 status: active
 ---
 
@@ -56,7 +56,8 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 
 ## Kiến Trúc & Diagram
 
-- [[system/Second-Brain-Architecture|Second Brain — Flow Diagrams]] — 6 Mermaid diagrams: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 4 Agents · 7 Phases Roadmap
+- [[system/Second-Brain-Architecture|Second Brain — Flow Diagrams]] — 6 Mermaid diagrams: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 6 Agents + Guardian · 7 Phases Roadmap
+- [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]] — 6 agent (tư vấn/tra cứu/giải đáp/NCC&gap/template/BI) + cổng kiểm soát quyền hạn câu hỏi
 
 ---
 

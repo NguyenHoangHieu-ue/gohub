@@ -5,7 +5,7 @@ department: tech
 tags: [architecture, diagram, second-brain, flow, mermaid]
 aliases: ["Second Brain Architecture", "System Diagram", "Flow Diagram"]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-21
 status: active
 ---
 
@@ -48,11 +48,14 @@ flowchart TB
     subgraph AI ["AI LAYER  (Gemini gemini-3.5-flash)"]
         direction TB
         D_CACHE[("Reference Cache\n30 min TTL\nnccWm 8921 · countries\nvendors · groupMap")]
+        DG["Guardian Gate\nguardCheck() pre-flight\nchan cau hoi vuot quyen\n(role + dept + category)"]
         D0["Router Agent\nRule-based fast path\n+ Gemini classifier fallback"]
         D1["Tu Van\nGoHub SKUs\n4-step country fallback"]
         D2["Tra Cuu\nLookup ma\nCOGS + FX rates"]
         D3["Giai Dap\nKB + Wiki search\nThuat ngu · quy trinh"]
-        D4["Gap Analysis\nNCC catalog\nWM exist Yes/No"]
+        D4["Gap Analysis (NCC & Gap)\nNCC catalog\nWM exist Yes/No"]
+        D5["Tao Template\nXuat Excel template SP\ntu catalog WM/3HK"]
+        D6["BI Analyst (Be Gau Bi-Ai)\nfunction-calling SQL\ngohub_dw + role_filters"]
     end
 
     subgraph MCP ["MCP SERVER\n(Done)"]
@@ -64,7 +67,7 @@ flowchart TB
         F1["Web Chatbot\ngohub-murex.vercel.app\n/chatbot"]
         F2["Lark Bot\nBe Gau Thong Thai\np2p · group · thread"]
         F3["Claude Code\n← MCP Server\ngohub tool calls"]
-        F4["Web UI Tabs\n/ncc · /kb · /kb#wiki\n/admin · /skus"]
+        F4["Web UI Tabs\n/ncc (SP Vendor) · /kb · /kb#wiki\n/admin · /skus (SP He Thong:\nSan Pham gop+Listing+Item)"]
     end
 
     A1 -->|"batch 500/run"| B1 --> C1
@@ -227,37 +230,50 @@ flowchart TB
 
 ---
 
-## Diagram 5 — 4 Agents & Routing Logic
+## Diagram 5 — 6 Agents + Guardian & Routing Logic
 
 ```mermaid
 flowchart LR
-    MSG["User Message"] --> ROUTER["Router\nextractParams()"]
+    MSG["User Message"] --> GUARD{"Guardian Gate\nguardCheck()\nrole + dept + category"}
+    GUARD -->|"vuot quyen / khac phong ban"| DENY["Tu choi lich su\n(badge Han che quyen)\nKHONG goi agent"]
+    GUARD -->|"hop le (fail-open)"| ROUTER["Router\nextractParams() + Gemini classifier\n+ override xac dinh (BI/template/explain)"]
 
     ROUTER -->|"co country / tu khoa goi/eSIM"| TU_VAN
     ROUTER -->|"co ma SKU/Product/Item\nhoac COGS/ty gia"| TRA_CUU
     ROUTER -->|"tu khoa nghia/giai thich\ncau truc/thuat ngu"| GIAI_DAP
     ROUTER -->|"tu khoa NCC/gap/chua co\nphan tich/so sanh ncc"| GAP
+    ROUTER -->|"tao/xuat template WM/3HK"| TEMPLATE
+    ROUTER -->|"doanh thu/don hang/nhan vien\ntop ban chay/B2B-B2C"| BI
 
     subgraph TU_VAN ["Tu Van"]
-        T1["searchSkus()\n4-step country fallback:\n1. Single country group\n2. Multi country group\n3. DB ilike query\n4. World/Global/Regional"]
+        T1["searchSkus()\n4-step country fallback"]
     end
-
     subgraph TRA_CUU ["Tra Cuu"]
-        T2["identifyCode()\ngetProductDetail()\ngetItems()\nconvertCogs()\ngetFxRates()"]
+        T2["identifyCode()\ngetProductDetail()\nconvertCogs() · getFxRates()"]
     end
-
     subgraph GIAI_DAP ["Giai Dap"]
-        T3["searchKB()\nsearchWiki()\ngetVendorInfo()\ndecodeSkuCode()"]
+        T3["searchKB() · searchWiki()\ngetVendorInfo() · decodeSkuCode()"]
+    end
+    subgraph GAP ["NCC & Gap"]
+        T4["findGaps()\nsearchNccWm() · searchNcc3hk()\nnccWmInSystem (exist=Yes)"]
+    end
+    subgraph TEMPLATE ["Tao Template"]
+        T5["catalog WM/3HK theo nuoc\n→ Excel GoHub Standard"]
+    end
+    subgraph BI ["BI Analyst (Be Gau Bi-Ai)"]
+        T6["runBIAnalyst()\nGemini function-calling\nexecuteSQL gohub_dw + role_filters"]
     end
 
-    subgraph GAP ["Gap Analysis"]
-        T4["findGaps()\nsearchNccWm()\nsearchNcc3hk()\nnccWmInSystem (exist=Yes)"]
-    end
-
-    TU_VAN & TRA_CUU & GIAI_DAP & GAP --> CTX["Context String\nbuildToolContext()"]
+    TU_VAN & TRA_CUU & GIAI_DAP & GAP & TEMPLATE & BI --> CTX["Context String\nbuildToolContext()"]
     CTX --> GEM["Gemini Stream\nsystemPrompt + context\n+ userMessage"]
     GEM --> RESP["Response\nStreaming text\n+ agent badge"]
 ```
+
+> **Guardian** (`web/src/lib/agents/guardian.ts`): cong pre-flight phan loai 8 category
+> (product_catalog · revenue_bi · margin_cogs · staff_hr · customer_pii · internal_kb_other_dept ·
+> system_internal · general) → policy theo role × department (`app_settings.access_policy`).
+> admin/manager bo qua; FAIL-OPEN khi khong chac. Lark group: chi chan `system_internal`.
+> Xem [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]].
 
 ---
 
@@ -295,17 +311,17 @@ timeline
                            : KB/Wiki auto-trigger notify
                            : (Done)
 
+        Phase 7 RBAC : Department + role_permissions (Role x Report)
+                     : KB/Wiki/Analytics filter theo quyen
+                     : Guardian gate chatbot (role+dept+category)
+                     : (Done)
+
     section Chua lam
         Phase 3 MRP : Upload → AI extract entities
                     : Generate plan (wiki pages to create/update)
                     : Human review → Approve/Reject
                     : Auto-create wiki pages
                     : (Chua lam)
-
-        Phase 7 RBAC : Department column cho users
-                     : KB/Wiki filter theo department
-                     : Global scope cho all
-                     : (Chua lam)
 ```
 
 ---

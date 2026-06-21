@@ -1,5 +1,31 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 — TỔNG QUAN: Guardian + gộp tab SP + polish NCC)
+Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 4 — Update wiki: kiến trúc 6 agent + Guardian, sync lên web)
+
+## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
+
+User: "update các file wiki và trên web luôn". Scope chốt: sửa kiến trúc lỗi thời + thêm trang Guardian mới.
+
+### Đã làm
+- system/Second-Brain-Architecture.md: Diagram 1 (AI layer) + Diagram 5 đổi "4 Agents" → 6 agent
+  (tu-van/tra-cuu/giai-dap/gap-analysis/tao-template/bi-analyst) + Guardian gate; Phase 7 RBAC → Done;
+  F4 web tabs ghi /skus = SP Hệ Thống gộp. updated 2026-06-21.
+- HOME.md: link "6 Agents + Guardian" + thêm link trang mới. updated 2026-06-21.
+- MỚI system/Chatbot-Agents-Guardian.md: 6 agent (bảng) + Guardian (8 category, policy role×dept,
+  Lark chỉ chặn system_internal, gotcha thinkingBudget=0).
+- Sync lên web: script tạm upsert theo title vào Supabase kb_wiki_pages (gemini-embedding-001), lưu version
+  history. SCOPED 3 file (HOME v2, Second-Brain v2, Guardian created). kb_wiki_pages: 13 → 14 trang. Script đã xóa.
+
+### ⚠️ LƯU Ý (divergence file ↔ web — chưa reconcile)
+- 3 file ĐÃ ĐỔI TITLE trong .md nhưng DB còn title cũ → nếu sync theo title sẽ tạo BẢN TRÙNG, nên đã BỎ QUA:
+  · Import-NCC: ".md = ...Upload → Kiểm tra → Xác nhận" vs DB "...Diff → Confirm"
+  · 3HK-COGS: ".md = Công Thức Tính Giá Nhập — 3HK" vs DB "...COGS — 3HK"
+  · Item-Code: ".md = ...(18–20 ký tự)" vs DB "...(18 ký tự)"
+- 3HK-Custom-Package-Pricing.md ("Định Giá Gói FUP Tùy Chỉnh 3HK") CHƯA có trên web.
+- Muốn full sync: cần đối chiếu title thủ công (rename DB hoặc đổi .md title về khớp) rồi mở rộng ONLY-set trong script.
+
+---
+
+## NGÀY 2026-06-21 — SESSION 72 TỔNG QUAN (4 commit)
 
 ## NGÀY 2026-06-21 — SESSION 72 TỔNG QUAN (4 commit)
 1. 1e5cc22 — Guardian Agent (web): cổng pre-flight kiểm soát quyền hạn câu hỏi chatbot theo role+dept+ý định.
