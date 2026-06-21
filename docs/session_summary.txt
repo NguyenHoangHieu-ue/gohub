@@ -1,5 +1,24 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 3 — Polish NCC catalog đồng bộ với SP Hệ Thống)
+Cập nhật lần cuối: 2026-06-21 (session 72 — TỔNG QUAN: Guardian + gộp tab SP + polish NCC)
+
+## NGÀY 2026-06-21 — SESSION 72 TỔNG QUAN (4 commit)
+1. 1e5cc22 — Guardian Agent (web): cổng pre-flight kiểm soát quyền hạn câu hỏi chatbot theo role+dept+ý định.
+   guardian.ts (8 category, policy app_settings.access_policy, admin/manager skip, FAIL-OPEN) + API
+   /api/config/access-policy + admin AccessPolicySection (ma trận category×role). ⚠️ Fix gemini-3.5-flash
+   thinking model: thinkingBudget=0 mới ra JSON ổn định. E2E 17/17.
+2. f2c6ce3 — Guardian cho Lark group: GuardOptions {onlyCategories, ignoreRole}; Lark chỉ chặn
+   system_internal (bot hoạt động sao/workflow/code) → "hỏi Hiếu", nghiệp vụ vẫn trả lời. E2E 12/12.
+3. 0f7d60e — SP Hệ Thống: gộp tab Products+SKU → 1 tab "Sản Phẩm" (list 4 cột Status·SKU·Product·COGS,
+   chi tiết 2 section SKU+Product cha qua prod_* enrich); Listing thêm cột category_code render gọn.
+4. 8aa4305 — Polish NCC (SP Vendor) đồng bộ: trim bảng WM 12→8-9 cột, Days/Throttle/KYC/APN vào Chi tiết;
+   style tab/header khớp SP Hệ Thống; giữ gap/import/expand/3HK.
+- Xuyên suốt: tsc + next build PASS (NODE_OPTIONS=--max-old-space-size=6144).
+- CÒN LẠI (tùy chọn): bật Guardian role-matrix trên Lark khi map lark_open_id; tách component dùng chung
+  (DetailModal/FilterBar/badge) ra table-kit cho SP Hệ Thống + NCC.
+
+---
+
+## Session 72 tiếp 3 (2026-06-21) — Polish NCC catalog đồng bộ với SP Hệ Thống
 
 ## Session 72 tiếp 3 (2026-06-21) — Polish NCC catalog (SP Vendor) đồng bộ
 
