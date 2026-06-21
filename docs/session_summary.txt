@@ -1,5 +1,28 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-20 (session 70 tiếp 5 — gating chú thích methodology admin-only)
+Cập nhật lần cuối: 2026-06-21 (session 71 — phân quyền analytics "bê y hệt gohub-intel": ma trận Role×Report)
+
+## Session 71 (2026-06-21) — Phân quyền Analytics theo mô hình gohub-intel (Role×Report matrix)
+
+### Bối cảnh (đối chiếu intel vs web)
+- Verify copy gohub-intel → web: HOÀN TOÀN ở mức trang (22/23 AVAILABLE_REPORTS port; SchemaConfig bỏ có chủ đích — thay bằng env; OnDemand/Wholesale là dead code). role-filters (BI SQL filter) cũng đã port.
+- Khác biệt phân quyền: intel có ma trận Role×Report toàn cục (rolePermissions, app_config) + per-user allowedReports (GRANT cộng dồn, deny-by-default). Web TRƯỚC chỉ có per-user allowed_analytics (RESTRICTION, allow-by-default) + department cho PM tabs, THIẾU ma trận Role×Report.
+- User chọn: "bê y hệt intel".
+
+### Đã làm (3 file + 1 API mới, không cần migration — dùng app_settings)
+1. API mới /api/config/role-permissions (GET/POST): app_settings key `role_permissions` = Record<role, analyticsId[]>. Default bod=tất cả, staff=[dashboard,feedback,products]. POST admin/manager.
+2. admin/page.tsx: thêm component RolePermissionsMatrix (Role bod/staff × 18 báo cáo, CheckSquare/Square) trong PermissionsTab (mục nâng cao). Bổ sung website+sql vào ANALYTICS_REPORTS (16→18). Đổi per-user allowed_analytics sang GRANT cộng dồn: default rỗng (null=không cấp thêm), lưu csv hoặc null nếu rỗng (trước: all→null restriction). Relabel "Trang cấp thêm cho user".
+3. sidebar.tsx: thêm useRolePermissions() + helper analyticsId(); rewrite analyticsGroups theo intel: admin/manager=toàn quyền; còn lại = quyền nền theo role (role_permissions, fallback bod→all/staff→defaults) ∪ per-user allowed_analytics.
+
+### Semantics mới (y hệt intel)
+- admin/manager: toàn quyền analytics.
+- bod/staff: thấy trang nếu role_permissions[role] cấp HOẶC per-user allowed_analytics cấp thêm (OR/cộng dồn). Deny-by-default.
+- ⚠️ Đổi hành vi: user cũ có allowed_analytics=null TRƯỚC thấy hết → NAY chỉ thấy theo quyền nền role (bod vẫn all, staff=defaults). Admin chỉnh qua ma trận mới.
+- Layout guard giữ role-level (giống intel, không server-guard từng report).
+
+### Test
+- tsc --noEmit PASS. next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 vì OOM heap mặc định). Route role-permissions verified trong .next/server.
+
+---
 
 ## NGÀY 2026-06-20 — TỔNG QUAN (session 66 → 70)
 Hoàn thiện B2C dashboard đủ 5 section data thật + GA4/GSC + phân quyền hiển thị:

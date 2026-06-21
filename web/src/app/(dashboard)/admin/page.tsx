@@ -26,6 +26,7 @@ const ANALYTICS_REPORTS = [
   { id: "channels",        label: "Kênh bán" },
   { id: "b2b",             label: "B2B" },
   { id: "b2c",             label: "B2C" },
+  { id: "website",         label: "Website (GA4)" },
   { id: "staff",           label: "Nhân viên" },
   { id: "customers",       label: "Khách hàng" },
   { id: "vendors",         label: "Vendors" },
@@ -36,6 +37,7 @@ const ANALYTICS_REPORTS = [
   { id: "feedback",        label: "Feedback" },
   { id: "products",        label: "Sản phẩm (BI)" },
   { id: "targets",         label: "KPI / Target" },
+  { id: "sql",             label: "SQL Explorer" },
 ] as const
 
 type Tab = "list" | "add" | "password" | "settings" | "template" | "promotions" | "scheduled"
@@ -189,9 +191,10 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     if (!user) return
     setRole(user.role)
     setDepartment(user.department ?? "none")
-    setAnalytics(new Set(user.allowed_analytics != null
+    // allowed_analytics = trang cấp THÊM cho riêng user (cộng dồn ngoài quyền theo Role). null = không cấp thêm.
+    setAnalytics(new Set(user.allowed_analytics
       ? user.allowed_analytics.split(",").filter(Boolean)
-      : ANALYTICS_REPORTS.map(x => x.id)))
+      : []))
     setTabs(new Set(user.allowed_tabs != null
       ? user.allowed_tabs.split(",").filter(Boolean)
       : PM_TABS.map(t => t.key)))
@@ -206,7 +209,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     if (!user) return
     setSaving(true)
     const aIds = ANALYTICS_REPORTS.filter(r => analytics.has(r.id)).map(r => r.id)
-    const allowed_analytics = aIds.length === ANALYTICS_REPORTS.length ? null : aIds.join(",")
+    const allowed_analytics = aIds.length ? aIds.join(",") : null
     const tIds = PM_TABS.filter(t => tabs.has(t.key)).map(t => t.key)
     const allowed_tabs = tIds.length === PM_TABS.length ? null : tIds.join(",")
     const res = await fetch(`/api/admin/users/${user.username}`, {
@@ -309,8 +312,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div>
-                  <p className="text-sm font-bold text-slate-700">Trang Analytics được xem</p>
-                  <p className="text-xs text-slate-400">Áp dụng cho Staff/BOD · Admin/Manager luôn toàn quyền</p>
+                  <p className="text-sm font-bold text-slate-700">Trang Analytics cấp thêm cho user</p>
+                  <p className="text-xs text-slate-400">Cộng dồn NGOÀI quyền nền theo Role (ma trận Role × Báo cáo, mục nâng cao) · Admin/Manager luôn toàn quyền</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-500">{analytics.size}/{ANALYTICS_REPORTS.length}</span>
@@ -323,7 +326,9 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                   <ToggleCell key={r.id} on={analytics.has(r.id)} label={r.label} onClick={() => toggleAnalytics(r.id)} />
                 ))}
               </div>
-              {isFullAnalytics && <p className="text-[11px] text-emerald-600 mt-1.5">Chọn tất cả = toàn quyền Analytics (không giới hạn).</p>}
+              {analytics.size === 0
+                ? <p className="text-[11px] text-slate-400 mt-1.5">Không cấp thêm → user chỉ thấy theo quyền nền của Role.</p>
+                : isFullAnalytics && <p className="text-[11px] text-emerald-600 mt-1.5">Cấp tất cả → user thấy toàn bộ Analytics.</p>}
             </div>
 
             {/* Tab quản lý (PM) */}
@@ -2533,8 +2538,104 @@ function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:
         <Save size={14}/>{saving ? "Đang lưu..." : "Lưu thay đổi"}
       </button>
 
+      {/* ─── Role × Báo cáo Analytics (quyền nền theo role — y hệt gohub-intel) ─── */}
+      <RolePermissionsMatrix onNotify={onNotify} />
+
       {/* ─── Dept × Tab matrix ─── */}
       <DeptTabMatrix onNotify={onNotify} />
+    </div>
+  )
+}
+
+// Quyền nền Analytics theo role (Role × Báo cáo). admin/manager luôn toàn quyền nên không liệt kê.
+const ROLE_PERM_ROLES = ["bod", "staff"] as const
+
+function RolePermissionsMatrix({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  const [matrix,  setMatrix]  = useState<Record<string, Set<string>>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/role-permissions")
+      .then(r => r.ok ? r.json() : {})
+      .then((d: Record<string, string[]>) => {
+        const m: Record<string, Set<string>> = {}
+        for (const role of ROLE_PERM_ROLES) m[role] = new Set(d[role] ?? [])
+        setMatrix(m); setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const toggle = (role: string, id: string) =>
+    setMatrix(prev => {
+      const n = { ...prev, [role]: new Set(prev[role]) }
+      n[role].has(id) ? n[role].delete(id) : n[role].add(id)
+      return n
+    })
+
+  const save = async () => {
+    setSaving(true)
+    const body: Record<string, string[]> = {}
+    for (const role of ROLE_PERM_ROLES) body[role] = Array.from(matrix[role] ?? [])
+    const res = await fetch("/api/config/role-permissions", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(body),
+    })
+    setSaving(false)
+    if (res.ok) onNotify("success", "Đã lưu quyền nền theo Role")
+    else onNotify("error", "Hiếu đang fix, vui lòng đợi")
+  }
+
+  if (loading) return null
+
+  return (
+    <div className="space-y-3 pt-2 border-t border-gray-100">
+      <div>
+        <h4 className="text-sm font-semibold text-gray-700">Quyền nền Analytics theo Role</h4>
+        <p className="text-xs text-gray-400 mt-0.5">Trang nào mỗi Role mặc định được xem. Admin/Manager luôn toàn quyền · cấp thêm per-user ở phần trên (cộng dồn).</p>
+      </div>
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Báo cáo</th>
+                {ROLE_PERM_ROLES.map(role => (
+                  <th key={role} className="text-center py-4 px-4 text-xs font-bold text-slate-400 uppercase tracking-wider">{role}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {ANALYTICS_REPORTS.map(r => (
+                <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-3 px-4 text-sm font-medium text-slate-700">{r.label}</td>
+                  {ROLE_PERM_ROLES.map(role => (
+                    <td key={`${role}-${r.id}`} className="py-3 px-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggle(role, r.id)}
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+                          matrix[role]?.has(r.id) ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-300 hover:text-slate-400"
+                        }`}
+                      >
+                        {matrix[role]?.has(r.id) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                      </button>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <button
+        onClick={save}
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
+      >
+        <Save size={14}/>{saving ? "Đang lưu..." : "Lưu quyền Role"}
+      </button>
     </div>
   )
 }

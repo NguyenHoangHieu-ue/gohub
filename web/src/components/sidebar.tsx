@@ -77,6 +77,29 @@ const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
 
 const SPECIFIC_DEPTS = ["sales", "product", "tech", "finance"]
 
+// id trang analytics (khớp ANALYTICS_REPORTS ở admin + key trong role_permissions)
+function analyticsId(item: { href: string }) {
+  return item.href === "/analytics" ? "dashboard" : item.href.replace("/analytics/", "")
+}
+
+// Fallback quyền nền theo role khi chưa tải được /api/config/role-permissions (khớp default API)
+const ANALYTICS_DEFAULTS: Record<string, string[]> = {
+  bod:   ANALYTICS_NAV_FLAT.map(analyticsId),
+  staff: ["dashboard", "feedback", "products"],
+}
+
+// Ma trận Role × Báo cáo (y hệt gohub-intel) — quyền nền analytics theo role
+function useRolePermissions() {
+  const [perms, setPerms] = useState<Record<string, string[]> | null>(null)
+  useEffect(() => {
+    fetch("/api/config/role-permissions", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setPerms(d) })
+      .catch(() => {})
+  }, [])
+  return perms
+}
+
 // Fetch profile từ DB mỗi lần load → không cần re-login khi admin đổi dept/quyền
 function useMyProfile(username: string) {
   const [dbRole,          setDbRole]          = useState<string | null>(null)
@@ -166,17 +189,19 @@ export function Sidebar() {
   const effectiveRole = dbRole ?? role
 
   const extraTabs = useDeptTabs(effectiveRole, department)
+  const rolePerms = useRolePermissions()
 
-  // Filter analytics groups theo allowed_analytics (chỉ áp dụng cho staff/bod khi có restriction)
+  // Mô hình phân quyền analytics y hệt gohub-intel:
+  //  - admin/manager: toàn quyền
+  //  - còn lại: quyền NỀN theo role (ma trận role_permissions) ∪ trang cấp THÊM per-user (allowed_analytics)
   const analyticsGroups = (() => {
-    if (!allowedAnalytics || effectiveRole === "admin" || effectiveRole === "manager") return ANALYTICS_GROUPS
+    if (effectiveRole === "admin" || effectiveRole === "manager") return ANALYTICS_GROUPS
+    const baseline = rolePerms?.[effectiveRole] ?? ANALYTICS_DEFAULTS[effectiveRole] ?? []
+    const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
     return ANALYTICS_GROUPS
       .map(group => ({
         ...group,
-        items: group.items.filter(item => {
-          const id = item.href === "/analytics" ? "dashboard" : item.href.replace("/analytics/", "")
-          return allowedAnalytics.includes(id)
-        }),
+        items: group.items.filter(item => granted.has(analyticsId(item))),
       }))
       .filter(group => group.items.length > 0)
   })()
