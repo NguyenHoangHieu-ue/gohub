@@ -1,3 +1,6 @@
+*21/6/2026 — Session 71 tiếp 8 — Fix tên "NaN" trong B2B/Staff*
+123. ✅ FIXED: "NaN" KHÔNG phải tên người — là staff_code='NaN' (chuỗi literal) trong fact_fulfillment_revenue (58,579 đơn, ~11.77 tỷ VND, không khớp dim_staff) = đơn CHƯA GÁN nhân viên. customer_code='NaN' chỉ 13 đơn. Sửa COALESCE ở staff-performance + staff-list + b2b/performance + customer/report: lọc 'NaN' → hiển thị "Chưa gán NV" / "Chưa xác định". tsc + build PASS.
+
 *21/6/2026 — Session 71 tiếp 7 — GA4 user count theo quốc gia (cột Users)*
 122. ✅ DONE: GA4 user count VN/US — thêm metric activeUsers vào query countries + cột "Users" trong bảng Top quốc gia (trang Website). Verify thật: Vietnam 747, US 1131, China 4680 users (28 ngày). mapBreakdown đọc metricValues[2] (sources=0). tsc + build PASS.
 

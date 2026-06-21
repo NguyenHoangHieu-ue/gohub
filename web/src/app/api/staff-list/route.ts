@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     }
 
     const sql = `SELECT DISTINCT TRIM(f.staff_code) as code,
-                        COALESCE(st.name, TRIM(f.staff_code)) as name
+                        COALESCE(st.name, NULLIF(TRIM(f.staff_code), 'NaN'), 'Chưa gán NV') as name
                  FROM ${mainTable} f
                  LEFT JOIN dim_order_source s ON f.order_source_code = s.code
                  LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)

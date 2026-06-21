@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     const sql = `
       SELECT
-        COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unknown') as staff_name,
+        COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') as staff_name,
         TRIM(f.staff_code) as staff_code,
         COUNT(DISTINCT f.order_code) as total_orders,
         SUM(f.${quantityCol}) as total_units,
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
       LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
       ${where}
-      GROUP BY COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unknown'), TRIM(f.staff_code)
+      GROUP BY COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV'), TRIM(f.staff_code)
       ORDER BY total_revenue DESC
     `
 

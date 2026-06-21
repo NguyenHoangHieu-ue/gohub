@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       const isPrev = rowDate >= prevStart && rowDate <= prevEnd
       if (!isCurrent && !isPrev) return
 
-      const customerName = codeToName.get(row.code) || row.code
+      const customerName = codeToName.get(row.code) || (row.code === "NaN" || !row.code ? "Chưa xác định" : row.code)
       const rev = parseFloat(row.revenue || "0")
       const mar = parseFloat(row.margin || "0")
       const qty = parseFloat(row.quantity || "0")
