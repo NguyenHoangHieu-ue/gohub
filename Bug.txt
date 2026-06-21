@@ -1,3 +1,8 @@
+*21/6/2026 — Session 71 tiếp 3 — E2E test nhánh BI chatbot (Gemini + gohub_dw thật)*
+115. ✅ FIXED (CAO, homograph): "bán chạy NHẤT"/"nhiều nhất" sau bỏ dấu = "nhat" = "Nhật" (Japan) → country sai → route nhầm tu-van. Phân biệt qua dấu thanh NFD (nhất ◌́ vs Nhật ◌̣): stripSuperlativeNhat() bỏ "nhất" trước khi dò nước. (router.ts)
+114. ✅ FIXED (routing BI): câu "Top 5 SKU bán chạy nhất", "Nhân viên nào bán nhiều nhất" bị classifier đẩy nhầm sang tu-van. Thêm override BI xác định (DEFINITE_BI luôn ép; RANK_BI ép khi không có nước) + blocklist groupCode (SKU/B2B/KYC...). Routing 10/10 sau fix.
+113. ✅ VERIFIED (E2E BI): exec 5/5 sạch lỗi — BI agent sinh SQL đúng schema, chạy thật gohub_dw, ra số thật, function-calling + security OK. tsc + build PASS.
+
 *21/6/2026 — Session 71 tiếp 2 — Deep-dive 3 mục analytics (kết luận đúng + 3 cải thiện nhỏ)*
 112. ✅ DONE: Audit b2c CAC/ROAS/leads MoM + dedup Strategic + projection factor → đều ĐÚNG & khớp intel, KHÔNG bug nghiêm trọng. Dedup không double-count (getGroupCaseSQL + getFilteredOtherTiers). Projection chỉ áp tháng hiện tại.
 111. ✅ DONE (3 cải thiện nhỏ): (1) b2c note "Leads mọi kênh CS → Tỷ lệ chốt tham khảo". (2) Cảnh báo ⚠️ projection khi range không bắt đầu đầu tháng (dashboard + b2b). (3) getFilteredOtherTiers đổi substring→so khớp tên chính xác (giảm over-exclude). tsc + build PASS.

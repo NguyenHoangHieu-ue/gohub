@@ -264,6 +264,13 @@ function wordMatch(haystack: string, key: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(haystack)
 }
 
+// "nhất" (siêu cấp: tốt nhất, bán chạy nhất) bị trùng "Nhật" (Japan) sau khi bỏ dấu.
+// Phân biệt qua dấu thanh ở NFD: nhất = a+◌̂(U+0302)+◌́(U+0301)+t · Nhật = a+◌̂+◌̣(U+0323)+t.
+// Bỏ "nhất" TRƯỚC khi dò nước để tránh false-positive Japan.
+function stripSuperlativeNhat(s: string): string {
+  return s.normalize("NFD").replace(/nhất/gi, " ").normalize("NFC")
+}
+
 export function extractParams(message: string): ExtractedParams {
   const msg     = message.toLowerCase()
   const msgNorm = normalizeText(message)   // bỏ dấu + lowercase + chuẩn space
@@ -283,6 +290,8 @@ export function extractParams(message: string): ExtractedParams {
     const GROUP_CODE_RE = /^[A-Z0-9]{3,4}$/
     // Known multi-country category codes (from ref_categories multi)
     const MULTI_CAT_CODES = new Set(["CHM","ASI","EUR","STA","SAM","APA","AFA","MDE","ATA","OCN","NAM","SMI","SMT","JKR","GLO"])
+    // Từ khóa domain viết hoa KHÔNG phải mã nhóm nước (tránh "SKU","B2B"... thành groupCode)
+    const NON_GROUP_CODES = new Set(["SKU","SIM","ESIM","APN","KYC","COGS","VND","USD","B2B","B2C","KPI","ROAS","CAC","FAQ","OTP","API","URL","GA4","GSC","CS","BI","GP","GPM","ARPU","AOV","NCC"])
     for (let i = 0; i < words.length; i++) {
       const w = words[i]
       const orig = originalWords[i] ?? ""
@@ -294,6 +303,8 @@ export function extractParams(message: string): ExtractedParams {
         // Mã nhóm GoHub luôn VIẾT HOA (AP2, EU1, CHM). Bỏ qua từ có chữ thường
         // (tên riêng "Loan", "Hong", "Anh" hay mixed "eSIM") → tránh false-positive groupCode
         if (orig !== orig.toUpperCase()) continue
+        // Bỏ qua từ khóa domain (SKU, B2B, KYC...) — không phải mã nhóm nước
+        if (NON_GROUP_CODES.has(w)) continue
         params.groupCode = w
         // Map multi-country category codes → region
         if (MULTI_CAT_CODES.has(w)) {
@@ -340,21 +351,23 @@ export function extractParams(message: string): ExtractedParams {
 
   // Country — chỉ chạy khi không phải regional query
   if (!params.region) {
+    // Bỏ "nhất" (siêu cấp) trước khi dò nước để tránh trùng "Nhật" (Japan)
+    const msgNormC = normalizeText(stripSuperlativeNhat(message))
     // Bước 1: VN/EN name lookup (dài → ngắn để tránh "nhat" match trước "nhat ban")
     const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
     for (const [key, en] of sortedNorm) {
-      if (wordMatch(msgNorm, key)) { params.country = en; break }
+      if (wordMatch(msgNormC, key)) { params.country = en; break }
     }
     // Bước 2: City lookup
     if (!params.country) {
       const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
       for (const [key, country] of sortedCity) {
-        if (wordMatch(msgNorm, key)) { params.country = country; break }
+        if (wordMatch(msgNormC, key)) { params.country = country; break }
       }
     }
     // Bước 3: ISO code / abbreviation — word-exact match
     if (!params.country) {
-      const words = msgNorm.split(/[\s,.\-\/]+/).filter(Boolean)
+      const words = msgNormC.split(/[\s,.\-\/]+/).filter(Boolean)
       for (const w of words) {
         if (ISO_TO_EN[w]) { params.country = ISO_TO_EN[w]; break }
       }
@@ -402,6 +415,12 @@ const AGENT_NAMES: Record<AgentId, string> = {
 
 // BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
 const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng/
+
+// Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước): nhân viên/doanh thu/đơn hàng...
+const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b/
+// Tín hiệu BI dạng XẾP HẠNG — chỉ ép bi-analyst khi KHÔNG có mục tiêu sản phẩm (nước/khu vực/mã nhóm),
+// tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
+const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
 
 function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
   const m    = msg.toLowerCase()
@@ -462,9 +481,19 @@ export async function route(message: string, history: Message[], role: UserRole)
   const classified = await classify(message)
 
   // Dùng AI intent nếu confidence đủ cao, ngược lại fallback regex
-  const agentId: AgentId = classified.confidence >= 0.6
+  let agentId: AgentId = classified.confidence >= 0.6
     ? intentToAgentId(classified.intent)
     : classifyAgent(message, params, role)
+
+  // Override BI xác định: câu hỏi doanh số/nhân viên/top bán chạy hay bị classifier nhầm sang
+  // product_search (tu-van). Nếu KHÔNG phải tra cứu mã cụ thể → ép về bi-analyst.
+  if (agentId !== "bi-analyst" && !params.skuCodes?.length && !params.productCodes?.length) {
+    const n = normalizeText(message)
+    const hasProductTarget = !!(params.country || params.region || params.groupCode)
+    if (DEFINITE_BI_RE.test(n) || (RANK_BI_RE.test(n) && !hasProductTarget)) {
+      agentId = "bi-analyst"
+    }
+  }
 
   // AI country ghi đè regex nếu confidence cao VÀ regex không tìm được
   if (classified.confidence >= 0.7 && classified.country && !params.country) {

@@ -1,5 +1,27 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 2 — deep-dive 3 mục analytics: kết luận đúng + 3 cải thiện nhỏ)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 3 — E2E test nhánh BI chatbot: fix routing + homograph "nhất")
+
+## Session 71 tiếp 3 (2026-06-21) — E2E test nhánh BI chatbot (Gemini + gohub_dw THẬT)
+
+### Cách test
+- Harness tsx tự load .env.local → gọi route() (Gemini classifier THẬT) + replicate runBIAnalyst (Gemini function calling + pg pool gohub_dw THẬT). 5 câu BI mẫu.
+
+### Kết quả lần 1: exec 5/5 sạch lỗi, routing 3/5
+- BI agent sinh SQL đúng schema, chạy thật ra số (8.2 tỷ VND, NV Thu Trần 1 tỷ...), function-calling loop + security OK.
+- 2 câu misroute sang tu-van: "Top 5 SKU bán chạy nhất", "Nhân viên nào bán nhiều nhất".
+
+### Fix (router.ts) — 3 bug
+1. Override BI xác định: DEFINITE_BI_RE (nhân viên/doanh thu/đơn hàng...) luôn ép bi-analyst; RANK_BI_RE (top/bán chạy nhất) ép khi KHÔNG có nước/khu vực. Thắng classifier (như ncc_catalog).
+2. groupCode blocklist: "SKU","B2B","KYC","SIM"... không còn bị nhận nhầm là mã nhóm nước.
+3. ⭐ Homograph "nhất": "bán chạy NHẤT" sau bỏ dấu = "nhat" = "Nhật" (Japan) → country sai! Phân biệt qua dấu thanh NFD (nhất=◌́ U+301 vs Nhật=◌̣ U+323): stripSuperlativeNhat() bỏ "nhất" trước khi dò nước. Ảnh hưởng rộng (nhiều/tốt/cao nhất...).
+
+### Kết quả sau fix: routing 10/10 (5 BI + 5 negative product/lookup/giai-dap), exec 5/5
+- "đi Nhật có gói bán chạy" vẫn đúng tu-van (Nhật giữ); "gói tốt nhất"/"doanh thu cao nhất" không còn false Japan.
+- tsc + build PASS.
+
+---
+
+## Session 71 tiếp 2 (2026-06-21) — Deep-dive 3 mục analytics: kết luận đúng + 3 cải thiện nhỏ
 
 ## Session 71 tiếp 2 (2026-06-21) — Deep-dive 3 mục analytics còn lại
 
