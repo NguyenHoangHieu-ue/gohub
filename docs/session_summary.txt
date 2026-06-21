@@ -1,5 +1,36 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 tiếp — Guardian gắn vào Lark group: chỉ chặn system_internal)
+Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 2 — Gộp tab Products+SKU + rút gọn cột Listing category)
+
+## Session 72 tiếp 2 (2026-06-21) — SP Hệ Thống: gộp Products+SKU, rút gọn Listing category_code
+
+User muốn hoàn thiện tab SP Hệ Thống (skus/page.tsx). Plan duyệt → làm.
+
+### Đã làm (2 file)
+1. /api/skus/route.ts: productMap (enrich product cha) mở rộng select thêm product_type/vendor_code/
+   operator_code/type_of_sim/purchase_type/network_type/apn/apn_original/local_phone_number/hotspot/
+   activation_time. Merge vào mỗi SKU row dạng prod_* (tránh đụng tên field SKU). List shape vẫn nhẹ.
+2. skus/page.tsx:
+   - GỘP tab Products+SKU → 1 tab "Sản Phẩm" (4 tab → 3: Sản Phẩm/Listing/Item). Xóa ProductsTable +
+     ProductCell + PRODUCT_TABLE_COLS + PRODUCT_MODAL_FIELDS. Tab gộp dùng SkusTable (/api/skus).
+   - List gọn còn 4 cột: Status · SKU Code · Product Code · Giá vốn (COGS, chỉ admin/manager). Mọi field
+     khác dồn vào Chi tiết.
+   - DetailModal nâng cấp: hỗ trợ sections (mảng {title, fields}). Tab gộp hiện 2 mục: "Thông tin SKU" +
+     "Sản phẩm (cha)" (đọc prod_* + PRODUCT_PARENT_MODAL_FIELDS). Listing/Item vẫn dùng fields phẳng (tương thích).
+   - Listing: thêm cột category_code render GỌN (2 mã + "+N", tooltip full); full trong Chi tiết.
+     ⚠️ Xác minh data thật: category_code = list mã nước (vd "CN,HK,MO,JP,PH,KR,TW,TH,SG,ID,MY" 11 mã) → đúng
+     là cột user thấy quá dài.
+
+### Quyết định user (AskUserQuestion)
+- List phẳng theo SKU (không nhóm xổ ra). Cột Giá = COGS (latest_cogs, admin only). Cột Listing dài = category_code.
+  Phạm vi: chỉ SP Hệ Thống (chưa đụng NCC).
+
+### Test
+- Xác minh data thật (supabase): category_code dài đúng dự đoán; mọi SKU có product cha (prod_* khả dụng).
+- tsc PASS, next build PASS (/skus 7.9 kB).
+
+---
+
+## Session 72 tiếp (2026-06-21) — Guardian gắn vào Lark group: chỉ chặn system_internal
 
 ## Session 72 tiếp (2026-06-21) — Guardian cho Lark group (chỉ chặn câu hỏi nội bộ hệ thống)
 

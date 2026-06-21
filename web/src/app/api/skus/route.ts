@@ -60,28 +60,24 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Enrich with product data (note, kyc, supported_countries)
+  // Enrich with product (cha) data: note/kyc/countries (cho list) + field chi tiết (cho modal Chi tiết)
   const productCodes = [...new Set((rows ?? []).map((r: any) => r.product_code).filter(Boolean))]
-  let productMap: Record<string, { note: string | null; kyc_needed: string | null; supported_countries: string | null }> = {}
+  let productMap: Record<string, any> = {}
   if (productCodes.length > 0) {
     const { data: products } = await supabaseAdmin
       .from("products")
-      .select("product_code, note, kyc_needed, supported_countries")
+      .select("product_code, note, kyc_needed, supported_countries, product_type, vendor_code, operator_code, type_of_sim, purchase_type, network_type, apn, apn_original, local_phone_number, hotspot, activation_time")
       .in("product_code", productCodes as string[])
     productMap = Object.fromEntries(
-      (products ?? []).map((p: any) => [p.product_code, {
-        note: p.note ?? null,
-        kyc_needed: p.kyc_needed ?? null,
-        supported_countries: p.supported_countries ?? null,
-      }])
+      (products ?? []).map((p: any) => [p.product_code, p])
     )
   }
 
   // Build country name lookup from ref_countries
   const allCountryCodes = new Set<string>()
-  for (const p of Object.values(productMap)) {
+  for (const p of Object.values(productMap) as any[]) {
     if (p.supported_countries) {
-      p.supported_countries.split(/[,\s]+/).forEach(c => { if (c) allCountryCodes.add(c.trim()) })
+      (p.supported_countries as string).split(/[,\s]+/).forEach((c: string) => { if (c) allCountryCodes.add(c.trim()) })
     }
   }
   let countryNameMap: Record<string, string> = {}
@@ -105,6 +101,18 @@ export async function GET(req: NextRequest) {
       kyc_needed:          prod.kyc_needed ?? null,
       supported_countries: codes || null,
       country_names:       names || null,
+      // Field Product cha (tiền tố prod_*) — dùng cho modal Chi tiết tab gộp
+      prod_product_type:       prod.product_type ?? null,
+      prod_vendor_code:        prod.vendor_code ?? null,
+      prod_operator_code:      prod.operator_code ?? null,
+      prod_type_of_sim:        prod.type_of_sim ?? null,
+      prod_purchase_type:      prod.purchase_type ?? null,
+      prod_network_type:       prod.network_type ?? null,
+      prod_apn:                prod.apn ?? null,
+      prod_apn_original:       prod.apn_original ?? null,
+      prod_local_phone_number: prod.local_phone_number ?? null,
+      prod_hotspot:            prod.hotspot ?? null,
+      prod_activation_time:    prod.activation_time ?? null,
     }
   })
 

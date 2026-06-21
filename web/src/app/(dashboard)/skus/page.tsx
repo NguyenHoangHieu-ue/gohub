@@ -9,50 +9,34 @@ const PAGE_SIZE = 20
 
 // ─── Tab defs ─────────────────────────────────────────────────────────────────
 
-type TabId = "products" | "skus" | "listings" | "items"
+type TabId = "products" | "listings" | "items"
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "products", label: "Sản Phẩm" },
-  { id: "skus",     label: "SKU"      },
   { id: "listings", label: "Listing"  },
   { id: "items",    label: "Item"     },
 ]
 
 // ─── Column defs ─────────────────────────────────────────────────────────────
 
-const PRODUCT_TABLE_COLS = [
-  { key: "status",              label: "Status"       },
-  { key: "tenant",              label: "Tenant"       },
-  { key: "product_code",        label: "Product Code" },
-  { key: "product_type",        label: "Type"         },
-  { key: "type_of_sim",         label: "SIM/eSIM"     },
-  { key: "vendor_code",         label: "Vendor"       },
-  { key: "operator_code",       label: "Operator"     },
-  { key: "kyc_needed",          label: "KYC"          },
-  { key: "supported_countries", label: "Countries"    },
-  { key: "note",                label: "Note"         },
-  { key: "_detail",             label: ""             },
-]
-
-const PRODUCT_MODAL_FIELDS = [
-  { key: "product_code",        label: "Product Code"    },
-  { key: "tenant",              label: "Tenant"          },
-  { key: "status",              label: "Status"          },
-  { key: "product_type",        label: "Type"            },
-  { key: "type_of_sim",         label: "SIM/eSIM"        },
-  { key: "vendor_code",         label: "Vendor"          },
-  { key: "operator_code",       label: "Operator"        },
-  { key: "purchase_type",       label: "Purchase Type"   },
-  { key: "network_type",        label: "Network"         },
-  { key: "kyc_needed",          label: "KYC"             },
-  { key: "apn",                 label: "APN"             },
-  { key: "apn_original",        label: "APN Original"    },
-  { key: "local_phone_number",  label: "Local Phone"     },
-  { key: "hotspot",             label: "Hotspot"         },
-  { key: "activation_time",     label: "Activation Time" },
-  { key: "data_plan_type",      label: "Data Plan"       },
-  { key: "supported_countries", label: "Countries"       },
-  { key: "note",                label: "Note"            },
+// Field Product cha (đọc từ prod_* do /api/skus enrich) — dùng trong section "Sản phẩm (cha)" của modal tab gộp
+const PRODUCT_PARENT_MODAL_FIELDS = [
+  { key: "product_code",            label: "Product Code" },
+  { key: "prod_product_type",       label: "Product Type" },
+  { key: "prod_type_of_sim",        label: "SIM/eSIM"     },
+  { key: "prod_purchase_type",      label: "Purchase Type"},
+  { key: "prod_vendor_code",        label: "Vendor"       },
+  { key: "prod_operator_code",      label: "Operator"     },
+  { key: "prod_network_type",       label: "Network"      },
+  { key: "kyc_needed",              label: "KYC"          },
+  { key: "prod_apn",                label: "APN"          },
+  { key: "prod_apn_original",       label: "APN Original" },
+  { key: "prod_local_phone_number", label: "Local Phone"  },
+  { key: "prod_hotspot",            label: "Hotspot"      },
+  { key: "prod_activation_time",    label: "Activation"   },
+  { key: "supported_countries",     label: "Countries"    },
+  { key: "country_names",           label: "Country Names"},
+  { key: "note",                    label: "Note"         },
 ]
 
 const SKU_COLS_BASE = [
@@ -109,6 +93,7 @@ const LISTING_TABLE_COLS = [
   { key: "listing_code",           label: "Listing Code" },
   { key: "reference_product_code", label: "Product Code" },
   { key: "listing_type",           label: "Type"         },
+  { key: "category_code",          label: "Category"     },
   { key: "listing_name_vn",        label: "Tên VN"       },
   { key: "type_of_sim",            label: "SIM/eSIM"     },
   { key: "network_operator",       label: "Operator"     },
@@ -230,11 +215,31 @@ function Pagination({ page, totalPages, total, onPrev, onNext }: {
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
-function DetailModal({ row, onClose, title, fields }: {
+type ModalField = { key: string; label: string }
+
+function FieldGrid({ row, fields }: { row: any; fields: ModalField[] }) {
+  return (
+    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+      {fields.map(f => {
+        const v = row[f.key]
+        if (!v && v !== 0) return null
+        return (
+          <div key={f.key} className="flex flex-col gap-0.5">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{f.label}</dt>
+            <dd className="text-xs text-gray-800 leading-relaxed break-words">{String(v)}</dd>
+          </div>
+        )
+      })}
+    </dl>
+  )
+}
+
+function DetailModal({ row, onClose, title, fields, sections }: {
   row: any
   onClose: () => void
   title: string
-  fields: { key: string; label: string }[]
+  fields?: ModalField[]
+  sections?: { title: string; fields: ModalField[] }[]
 }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -254,19 +259,20 @@ function DetailModal({ row, onClose, title, fields }: {
             <X size={15} />
           </button>
         </div>
-        <div className="overflow-y-auto p-5">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-            {fields.map(f => {
-              const v = row[f.key]
-              if (!v && v !== 0) return null
-              return (
-                <div key={f.key} className="flex flex-col gap-0.5">
-                  <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{f.label}</dt>
-                  <dd className="text-xs text-gray-800 leading-relaxed break-words">{String(v)}</dd>
-                </div>
-              )
-            })}
-          </dl>
+        <div className="overflow-y-auto p-5 space-y-5">
+          {sections
+            ? sections.map(sec => {
+                const has = sec.fields.some(f => { const v = row[f.key]; return v || v === 0 })
+                if (!has) return null
+                return (
+                  <div key={sec.title}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-brand-600 mb-2.5">{sec.title}</p>
+                    <FieldGrid row={row} fields={sec.fields} />
+                  </div>
+                )
+              })
+            : <FieldGrid row={row} fields={fields ?? []} />
+          }
         </div>
       </div>
     </div>
@@ -535,171 +541,7 @@ function TableShell({ cols, rows, loading, renderRow }: {
   )
 }
 
-// ─── Products table ───────────────────────────────────────────────────────────
-
-function ProductsTable({ canSeeCost }: { canSeeCost: boolean }) {
-  const [pPt,       setPPt]       = useState("")
-  const [pPtype,    setPPtype]    = useState("")
-  const [pCountry,  setPCountry]  = useState("")
-  const [pVendor,   setPVendor]   = useState("")
-  const [pDtype,    setPDtype]    = useState("")
-  const [pVendorF,  setPVendorF]  = useState("")
-  const [pOperator, setPOperator] = useState("")
-  const [detailRow, setDetailRow] = useState<any>(null)
-  const [exporting, setExporting] = useState(false)
-
-  const opts = useFilterOpts("/api/products/filters")
-  const d = useTabData("/api/products")
-
-  const clearFilters = () => {
-    setPPt(""); setPPtype(""); setPCountry(""); setPVendor("")
-    setPDtype(""); setPVendorF(""); setPOperator("")
-  }
-  const hasFilter = !!(pPt || pPtype || pCountry || pVendor || pDtype || pVendorF || pOperator)
-
-  const { setExtraQuery: setProductExtraQuery } = d
-  useEffect(() => {
-    const p = new URLSearchParams()
-    if (pPt)       p.set("pt",       pPt)
-    if (pPtype)    p.set("ptype",    pPtype)
-    if (pCountry)  p.set("country",  pCountry)
-    if (pVendor)   p.set("vendor",   pVendor)
-    if (pDtype)    p.set("dtype",    pDtype)
-    if (pVendorF)  p.set("vendor_f", pVendorF)
-    if (pOperator) p.set("operator", pOperator)
-    const t = setTimeout(() => setProductExtraQuery(p.toString()), 300)
-    return () => clearTimeout(t)
-  }, [pPt, pPtype, pCountry, pVendor, pDtype, pVendorF, pOperator, setProductExtraQuery])
-
-  const handleExport = async () => {
-    setExporting(true)
-    try {
-      const p = new URLSearchParams({ search: d.search })
-      if (d.tenant)  p.set("tenant",   d.tenant)
-      if (d.status)  p.set("status",   d.status)
-      if (pPt)       p.set("pt",       pPt)
-      if (pPtype)    p.set("ptype",    pPtype)
-      if (pCountry)  p.set("country",  pCountry)
-      if (pVendor)   p.set("vendor",   pVendor)
-      if (pDtype)    p.set("dtype",    pDtype)
-      if (pVendorF)  p.set("vendor_f", pVendorF)
-      if (pOperator) p.set("operator", pOperator)
-      const data = await fetchAllPages("/api/products", p)
-      const cols = PRODUCT_TABLE_COLS.filter(c => c.key !== "_detail")
-      downloadXlsx(data, cols, `products_${new Date().toISOString().slice(0,10)}.xlsx`)
-    } finally { setExporting(false) }
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex-1">
-          <FilterBar
-            search={d.search} onSearch={d.setSearch}
-            tenant={d.tenant} onTenant={d.setTenant}
-            status={d.status} onStatus={d.setStatus}
-            hasExtra={hasFilter} onReset={clearFilters}
-          />
-        </div>
-        <ExportBtn onClick={handleExport} loading={exporting} />
-      </div>
-
-      {/* Product code + extra filters */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
-          Bộ lọc — <span className="font-normal normal-case text-gray-400">
-            Product Code: [PurchaseType · ProductType · Country(3) · Vendor(2) · DataType] &nbsp;|&nbsp; Lọc thêm: Vendor Code · Operator
-          </span>
-        </p>
-        <div className="flex gap-3 flex-wrap items-end">
-          {([
-            { label: "Purchase Type", pos: "pos 1",   val: pPt,      set: setPPt,      optKey: "purchaseTypes", w: "w-24" },
-            { label: "Product Type",  pos: "pos 2",   val: pPtype,   set: setPPtype,   optKey: "productTypes",  w: "w-24" },
-            { label: "Country",       pos: "pos 3–5", val: pCountry, set: setPCountry, optKey: "countries",     w: "w-24" },
-            { label: "Vendor",        pos: "pos 6–7", val: pVendor,  set: setPVendor,  optKey: "vendors",       w: "w-24" },
-            { label: "Data Policy",   pos: "pos 8",   val: pDtype,   set: setPDtype,   optKey: "dataTypes",     w: "w-24" },
-          ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold text-gray-500 px-0.5">
-                {f.label} <span className="text-[10px] text-gray-300 font-normal">{f.pos}</span>
-              </span>
-              <ComboFilter label="" value={f.val} onChange={f.set}
-                width={f.w} options={opts[f.optKey] ?? []} small />
-            </div>
-          ))}
-
-          <div className="w-px h-7 bg-gray-200 self-end mb-5 hidden sm:block" />
-
-          {([
-            { label: "Vendor Code", val: pVendorF,  set: setPVendorF,  optKey: "vendorCodes",   w: "w-28" },
-            { label: "Operator",    val: pOperator, set: setPOperator, optKey: "operatorCodes", w: "w-28" },
-          ] as const).map(f => (
-            <div key={f.label} className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold text-gray-500 px-0.5">{f.label}</span>
-              <ComboFilter label="" value={f.val} onChange={f.set}
-                width={f.w} options={opts[f.optKey] ?? []} small />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <TableShell
-        cols={PRODUCT_TABLE_COLS}
-        rows={d.rows}
-        loading={d.loading}
-        renderRow={(row, cols) => (
-          <tr key={row.product_code} className="hover:bg-gray-50 transition-colors">
-            {cols.map(col => col.key === "_detail"
-              ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
-                  <button onClick={() => setDetailRow(row)}
-                    className="px-2.5 py-1 text-[11px] font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
-                    Chi tiết
-                  </button>
-                </td>
-              : <ProductCell key={col.key} col={col.key} row={row} />
-            )}
-          </tr>
-        )}
-      />
-      <Pagination page={d.page} totalPages={d.totalPages} total={d.total} onPrev={d.prevPage} onNext={d.nextPage} />
-
-      {detailRow && (
-        <DetailModal
-          row={detailRow}
-          onClose={() => setDetailRow(null)}
-          title={`Product: ${detailRow.product_code}`}
-          fields={PRODUCT_MODAL_FIELDS}
-        />
-      )}
-    </div>
-  )
-}
-
-function ProductCell({ col, row }: { col: string; row: any }) {
-  const v = row[col]
-  if (col === "status")       return <td className="px-3 py-2 whitespace-nowrap"><StatusBadge value={v} /></td>
-  if (col === "tenant")       return <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">{v || "—"}</td>
-  if (col === "product_code") return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700">{v}</td>
-  if (col === "kyc_needed")   return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
-  if (col === "note") {
-    if (!v) return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">—</td>
-    const short = v.length > 55 ? v.slice(0, 55) + "…" : v
-    return <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px]" title={v}>{short}</td>
-  }
-  if (col === "supported_countries") {
-    if (!v) return <td className="px-3 py-2 text-xs text-gray-400">—</td>
-    const codes = (v as string).split(/[,\s]+/).filter(Boolean)
-    return (
-      <td className="px-3 py-2 text-xs font-mono text-gray-500 whitespace-nowrap" title={v}>
-        {codes.slice(0, 3).join(", ")}
-        {codes.length > 3 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 3}</span>}
-      </td>
-    )
-  }
-  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
-}
-
-// ─── SKUs table ───────────────────────────────────────────────────────────────
+// ─── SKU / Sản phẩm table (gộp Products + SKU) ──────────────────────────────────
 
 function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
   const [pPt, setPPt]           = useState("")
@@ -753,19 +595,26 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
     } finally { setExporting(false) }
   }
 
-  const skuModalFields = [
+  // Modal Chi tiết: section SKU + section Product cha
+  const skuSectionFields = [
     ...SKU_MODAL_FIELDS_BASE,
     ...(canSeeCost ? [
       { key: "latest_cogs",          label: "COGS"          },
       { key: "latest_cogs_currency", label: "COGS Currency" },
     ] : []),
   ]
+  const detailSections = [
+    { title: "Thông tin SKU",    fields: skuSectionFields },
+    { title: "Sản phẩm (cha)",   fields: PRODUCT_PARENT_MODAL_FIELDS },
+  ]
 
+  // List gọn: chỉ Status · SKU Code · Product Code · Giá vốn (COGS, admin) — còn lại trong Chi tiết
   const cols = [
-    ...(canSeeCost
-      ? [...SKU_COLS_BASE.slice(0, 13), ...SKU_COGS_COLS, ...SKU_COLS_BASE.slice(13)]
-      : SKU_COLS_BASE),
-    { key: "_detail", label: "" },
+    { key: "status",       label: "Status"       },
+    { key: "sku_code",     label: "SKU Code"     },
+    { key: "product_code", label: "Product Code" },
+    ...(canSeeCost ? [{ key: "latest_cogs", label: "Giá vốn (COGS)" }] : []),
+    { key: "_detail",      label: "" },
   ]
 
   return (
@@ -821,7 +670,7 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
           row={detailRow}
           onClose={() => setDetailRow(null)}
           title={`SKU: ${detailRow.sku_code}`}
-          fields={skuModalFields}
+          sections={detailSections}
         />
       )}
     </div>
@@ -955,6 +804,17 @@ function ListingCell({ col, row }: { col: string; row: any }) {
   if (col === "listing_code")     return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700">{v}</td>
   if (col === "reference_product_code") return <td className="px-3 py-2 whitespace-nowrap text-xs font-mono">{v || "—"}</td>
   if (col === "kyc_needed_en")    return <td className="px-3 py-2 whitespace-nowrap"><KycBadge value={v} /></td>
+  if (col === "category_code") {
+    // category_code có thể là 1 mã ngắn hoặc list nước dài → hiển thị gọn 1–2 mã + "+N", full trong Chi tiết
+    if (!v) return <td className="px-3 py-2 text-xs text-gray-300">—</td>
+    const codes = (v as string).split(/[,\s]+/).filter(Boolean)
+    return (
+      <td className="px-3 py-2 text-xs font-mono text-gray-500 whitespace-nowrap" title={v}>
+        {codes.slice(0, 2).join(", ")}
+        {codes.length > 2 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{codes.length - 2}</span>}
+      </td>
+    )
+  }
   if (col === "listing_name_vn") {
     if (!v) return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">—</td>
     const short = (v as string).length > 48 ? (v as string).slice(0, 48) + "…" : v
@@ -1096,8 +956,7 @@ export default function SkusPage() {
         ))}
       </div>
 
-      {activeTab === "products" && <ProductsTable canSeeCost={canSeeCost} />}
-      {activeTab === "skus"     && <SkusTable     canSeeCost={canSeeCost} />}
+      {activeTab === "products" && <SkusTable     canSeeCost={canSeeCost} />}
       {activeTab === "listings" && <ListingsTable canSeeCost={canSeeCost} />}
       {activeTab === "items"    && <ItemsTable    canSeeCost={canSeeCost} />}
     </div>
