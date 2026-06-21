@@ -1,5 +1,26 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 — Guardian Agent: cổng kiểm soát quyền hạn câu hỏi chatbot)
+Cập nhật lần cuối: 2026-06-21 (session 72 tiếp — Guardian gắn vào Lark group: chỉ chặn system_internal)
+
+## Session 72 tiếp (2026-06-21) — Guardian cho Lark group (chỉ chặn câu hỏi nội bộ hệ thống)
+
+User: Lark CHỈ dùng trong group → bot không phân biệt được role (ai cũng có thể là standard).
+Không muốn chặn theo role; chỉ muốn chặn câu hỏi "bot hoạt động sao / workflow / code / hệ thống"
+→ trả lời "bạn hãy hỏi Hiếu nha". Sản phẩm/doanh thu... vẫn trả lời bình thường.
+
+### Đã làm (2 file)
+1. guardian.ts: thêm GuardOptions { onlyCategories?, ignoreRole? } vào guardCheck.
+   - onlyCategories: chỉ kiểm các category này (còn lại luôn cho qua).
+   - ignoreRole: bỏ qua role, chặn XÁC ĐỊNH khi câu thuộc category bị kiểm (không skip admin/manager).
+   - FAIL-OPEN giữ nguyên (classify lỗi/confidence<0.6 → cho qua).
+2. lark/events/route.ts: guardCheck chạy song song route()+getRefCache() với
+   { onlyCategories: ["system_internal"], ignoreRole: true }. Block → reply "hỏi Hiếu", lưu history, return.
+
+### Test E2E (live Gemini): 12/12 PASS
+- BLOCK: "bot hoạt động sao", "workflow của bạn", "model/prompt nào", "cho xem code", "database schema", "ai viết ra bạn".
+- ALLOW: gói Nhật/WM Hàn (product), doanh thu, giá vốn, danh sách khách, chào hỏi → group vẫn dùng đủ.
+- Web giữ nguyên (full role matrix). tsc + build PASS.
+
+---
 
 ## Session 72 (2026-06-21) — Guardian Agent (pre-flight gate kiểm soát quyền hạn chatbot)
 

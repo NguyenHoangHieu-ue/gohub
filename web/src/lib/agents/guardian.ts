@@ -173,15 +173,27 @@ function normDept(s: string): string {
 }
 
 // ─── Main gate ──────────────────────────────────────────────────────────────────
+export interface GuardOptions {
+  // Chỉ kiểm những category này (còn lại luôn cho qua). VD Lark group: ["system_internal"].
+  onlyCategories?: GuardCategory[]
+  // Bỏ qua role: chặn XÁC ĐỊNH mọi vai trò khi câu thuộc category bị kiểm.
+  // Dùng cho Lark group — nơi không phân biệt được role (ai cũng có thể là standard).
+  ignoreRole?: boolean
+}
+
 export async function guardCheck(
   message: string,
   role: string,
   department?: string,
+  opts?: GuardOptions,
 ): Promise<GuardResult> {
   const r = (role || "standard").toLowerCase()
+  const restrict   = opts?.onlyCategories
+  const ignoreRole = opts?.ignoreRole ?? false
 
-  // admin / manager: toàn quyền → bỏ qua hẳn (tiết kiệm 1 call Gemini)
-  if (r === "admin" || r === "manager") {
+  // admin / manager: toàn quyền → bỏ qua hẳn (tiết kiệm 1 call Gemini).
+  // KHÔNG áp khi ignoreRole (Lark group: không tin role nên vẫn phải kiểm).
+  if (!ignoreRole && (r === "admin" || r === "manager")) {
     return { allowed: true, reason: "", category: "general" }
   }
 
@@ -196,6 +208,17 @@ export async function guardCheck(
   }
 
   const { category, target_department } = classified
+
+  // Giới hạn phạm vi kiểm (Lark chỉ chặn system_internal) — category khác luôn cho qua.
+  if (restrict && !restrict.includes(category)) {
+    return { allowed: true, reason: "", category }
+  }
+
+  // ignoreRole: chặn xác định bất kể vai trò khi câu thuộc category bị kiểm.
+  if (ignoreRole) {
+    return { allowed: false, reason: DENY_REASONS[category], category }
+  }
+
   const decision: Decision = policy[category]?.[r] ?? DEFAULT_POLICY[category]?.[r] ?? "allow"
 
   if (decision === "allow") {
