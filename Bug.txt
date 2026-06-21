@@ -1,3 +1,6 @@
+*21/6/2026 — Session 71 tiếp 4 — E2E test 3 agent tu-van/tra-cuu/gap-analysis*
+116. ✅ VERIFIED (E2E 3 agent): routing 7/7 · context có data 7/7 · trả lời 7/7 (Supabase + Gemini thật). tu-van (SKU theo nước/unlimited), tra-cuu (mã SKU thật + tỷ giá), gap-analysis (catalog WM + gap). Tất cả PASS, không cần fix. Quan sát nhỏ vô hại: listingCode bắt "UNLIMITED" (không ảnh hưởng routing/context).
+
 *21/6/2026 — Session 71 tiếp 3 — E2E test nhánh BI chatbot (Gemini + gohub_dw thật)*
 115. ✅ FIXED (CAO, homograph): "bán chạy NHẤT"/"nhiều nhất" sau bỏ dấu = "nhat" = "Nhật" (Japan) → country sai → route nhầm tu-van. Phân biệt qua dấu thanh NFD (nhất ◌́ vs Nhật ◌̣): stripSuperlativeNhat() bỏ "nhất" trước khi dò nước. (router.ts)
 114. ✅ FIXED (routing BI): câu "Top 5 SKU bán chạy nhất", "Nhân viên nào bán nhiều nhất" bị classifier đẩy nhầm sang tu-van. Thêm override BI xác định (DEFINITE_BI luôn ép; RANK_BI ép khi không có nước) + blocklist groupCode (SKU/B2B/KYC...). Routing 10/10 sau fix.

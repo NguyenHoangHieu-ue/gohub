@@ -1,5 +1,24 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 3 — E2E test nhánh BI chatbot: fix routing + homograph "nhất")
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 4 — E2E test 3 agent tu-van/tra-cuu/gap-analysis: PASS 7/7)
+
+## Session 71 tiếp 4 (2026-06-21) — E2E test 3 agent còn lại (Supabase + Gemini thật)
+
+### Cách test
+- Harness tsx: nạp .env.local TRƯỚC dynamic-import (vì supabase.ts tạo client lúc module-load). route() + buildToolContext() (query Supabase thật) + Gemini generateContent. Lấy 1 mã SKU thật (DCUSASSLUNL27) để test tra-cuu.
+
+### Kết quả: routing 7/7 · context có data 7/7 · trả lời 7/7 — TẤT CẢ PASS
+- tu-van (3): "đi Nhật 7 ngày eSIM" (40 SKU, ưu tiên KDDI), "unlimited Hàn" (40 SKU + note WM còn 40 gói chưa tạo), "Thái rẻ" (liệt kê gói rẻ). Context 5.7–6.2k ký tự data thật.
+- tra-cuu (2): mã SKU thật DCUSASSLUNL27 (nhận dạng + chi tiết đầy đủ), "tỷ giá USD/VND" (26,394 + bảng FX).
+- gap-analysis (2): "WM Đài Loan" (50 gói, 34 đã tạo/16 chưa), "NCC Hàn chưa tạo" (50 gói, gắn nhãn rõ NCC ≠ GoHub).
+
+### Quan sát (không phải bug)
+- listingCode regex bắt "UNLIMITED" làm listingCode (false-positive) nhưng VÔ HẠI (tu-van không route theo listingCode, context dùng country+isUnlimited).
+- WM Hàn Quốc "đã tạo 0/50" trong khi GoHub có 40 SKU Hàn từ nguồn khác — nuance dữ liệu exist flag, không phải lỗi code.
+- KHÔNG cần fix gì — 3 agent đều khỏe.
+
+---
+
+## Session 71 tiếp 3 (2026-06-21) — E2E test nhánh BI chatbot: fix routing + homograph "nhất"
 
 ## Session 71 tiếp 3 (2026-06-21) — E2E test nhánh BI chatbot (Gemini + gohub_dw THẬT)
 
