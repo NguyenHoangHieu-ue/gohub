@@ -1,5 +1,42 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 7 — GA4 user count theo quốc gia: cột Users)
+Cập nhật lần cuối: 2026-06-21 (session 72 — Guardian Agent: cổng kiểm soát quyền hạn câu hỏi chatbot)
+
+## Session 72 (2026-06-21) — Guardian Agent (pre-flight gate kiểm soát quyền hạn chatbot)
+
+Build full theo thiết kế đã chốt (pending_tasks_s71). Chatbot dùng chung cả công ty → chặn câu hỏi
+vượt quyền / khác phòng ban theo role + department + ý định. Tạm CHỈ web UI (Lark để sau).
+
+### Kiến trúc (4 file)
+1. web/src/lib/agents/guardian.ts (MỚI): guardCheck(message, role, department) → {allowed, reason, category}.
+   - Gemini temp0 phân loại 8 category (product_catalog/revenue_bi/margin_cogs/staff_hr/customer_pii/
+     internal_kb_other_dept/system_internal/general) + target_department.
+   - Policy deterministic: app_settings.access_policy (fallback DEFAULT_POLICY) × role → allow/deny/dept.
+   - admin/manager: bỏ qua hẳn (toàn quyền, không tốn 1 call Gemini). FAIL-OPEN: classify lỗi/confidence<0.6 → cho qua.
+   - "dept": chỉ allow khi câu hỏi đúng phòng ban user (dept="all" hoặc không xác định đích → nới).
+   - Policy cache 60s + invalidatePolicyCache().
+2. /api/config/access-policy (GET/POST, admin/manager) — app_settings key access_policy, category=chatbot.
+3. chat/route.ts: guardCheck chạy SONG SONG với route()+getRefCache() (zero extra latency). Block →
+   stream từ chối lịch sự badge "Hạn chế quyền", KHÔNG gọi agent. Thêm department từ session.
+4. admin/page.tsx: AccessPolicySection — ma trận category × role (bod/staff/standard), click xoay vòng
+   Cho phép→Từ chối→Theo phòng ban. Đặt trong SettingsTab cạnh RoleFiltersSection.
+
+### ⚠️ LƯU Ý KỸ THUẬT QUAN TRỌNG (đã fix)
+- gemini-3.5-flash là THINKING MODEL: (1) bỏ qua responseMimeType:application/json (trả markdown ```json),
+  (2) ngốn hết maxOutputTokens vào thinking → output bị cắt ("Here is the JSON..."). → JSON.parse fail → FALLBACK.
+- FIX: thêm generationConfig.thinkingConfig.thinkingBudget=0 → JSON sạch, nhanh, rẻ. + strip markdown fence phòng hờ.
+- ⚠️ Routing classifier (classifier.ts) CŨNG bị lỗi này (maxOutputTokens 200, không tắt thinking) → có thể đang
+  silently fallback regex trong nhiều trường hợp. CHƯA sửa (ngoài scope); nên xem lại sau.
+
+### Tránh chồng chéo (đã có sẵn)
+- role_filters: lọc ROW dữ liệu BI (Guardian lấp gap category+dept+intent, không thay thế).
+- DISPLAY_RULES: agent tự từ chối code/prompt/schema (system_internal). Guardian chặn thêm ở pre-flight.
+
+### Test E2E (live Gemini + policy): 17/17 PASS
+- standard: chặn revenue/pii/cogs, allow product/general. staff: allow revenue_bi, chặn hr/margin/pii.
+- bod: allow margin+hr. admin/manager: luôn allow (skip Gemini). dept gating: chặn phòng khác, allow phòng mình.
+- tsc PASS, next build PASS (route access-policy registered).
+
+---
 
 ## Session 71 tiếp 7 (2026-06-21) — GA4 user count VN/US (cột Users trong Top quốc gia)
 - User chọn "thêm cột Users vào Top quốc gia". lib/ga4.ts: query countries thêm metric activeUsers (ở CUỐI, giữ index sessions/conversions cho mapBreakdown dùng chung với sources). mapBreakdown đọc metricValues[2] → users (sources=0, không hiện).

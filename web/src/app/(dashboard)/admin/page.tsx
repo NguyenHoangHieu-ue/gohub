@@ -673,6 +673,9 @@ function SettingsTab({ onNotify }: {
       {/* Role data filters cho BI Analyst */}
       <RoleFiltersSection onNotify={onNotify} />
 
+      {/* Guardian — kiểm soát quyền hạn câu hỏi chatbot theo role × loại thông tin */}
+      <AccessPolicySection onNotify={onNotify} />
+
       {/* KPI Target B2C (theo tháng × VN/US/Total) */}
       <B2CKpiSection onNotify={onNotify} />
 
@@ -906,6 +909,141 @@ function RoleFiltersSection({ onNotify }: { onNotify: (type: "success" | "error"
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
             <Save size={14} />
             {saving ? "Đang lưu..." : "Lưu giới hạn"}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Guardian — ma trận quyền hạn câu hỏi chatbot (role × loại thông tin).
+// Click ô để xoay vòng trạng thái: Cho phép → Từ chối → Theo phòng ban → ...
+// admin/manager luôn toàn quyền (không cấu hình ở đây).
+function AccessPolicySection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
+  type Decision = "allow" | "deny" | "dept"
+  const CATEGORIES: { key: string; label: string }[] = [
+    { key: "product_catalog",        label: "Sản phẩm / Catalog NCC" },
+    { key: "revenue_bi",             label: "Doanh thu / Đơn hàng (BI)" },
+    { key: "margin_cogs",            label: "Giá vốn / Lợi nhuận" },
+    { key: "staff_hr",               label: "Nhân sự / Hiệu suất NV" },
+    { key: "customer_pii",           label: "Thông tin khách hàng (PII)" },
+    { key: "internal_kb_other_dept", label: "Tài liệu phòng ban" },
+    { key: "system_internal",        label: "Nội bộ hệ thống" },
+    { key: "general",                label: "Chung / Chào hỏi" },
+  ]
+  const ROLES: { key: string; label: string }[] = [
+    { key: "bod",      label: "BOD" },
+    { key: "staff",    label: "Staff" },
+    { key: "standard", label: "Standard" },
+  ]
+  // Khớp DEFAULT_POLICY trong guardian.ts (để admin thấy mặc định khi chưa cấu hình)
+  const DEFAULTS: Record<string, Record<string, Decision>> = {
+    product_catalog:        { bod: "allow", staff: "allow", standard: "allow" },
+    revenue_bi:             { bod: "allow", staff: "allow", standard: "deny"  },
+    margin_cogs:            { bod: "allow", staff: "deny",  standard: "deny"  },
+    staff_hr:               { bod: "allow", staff: "deny",  standard: "deny"  },
+    customer_pii:           { bod: "allow", staff: "deny",  standard: "deny"  },
+    internal_kb_other_dept: { bod: "allow", staff: "dept",  standard: "dept"  },
+    system_internal:        { bod: "deny",  staff: "deny",  standard: "deny"  },
+    general:                { bod: "allow", staff: "allow", standard: "allow" },
+  }
+
+  const [policy, setPolicy] = useState<Record<string, Record<string, Decision>>>(DEFAULTS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/access-policy")
+      .then(r => r.json())
+      .then(d => {
+        // Merge cấu hình đã lưu lên trên mặc định
+        const merged: Record<string, Record<string, Decision>> = {}
+        for (const { key } of CATEGORIES) merged[key] = { ...DEFAULTS[key], ...(d?.[key] ?? {}) }
+        setPolicy(merged); setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const cycle = (cat: string, role: string) => {
+    setPolicy(p => {
+      const cur = p[cat]?.[role] ?? "allow"
+      const next: Decision = cur === "allow" ? "deny" : cur === "deny" ? "dept" : "allow"
+      return { ...p, [cat]: { ...p[cat], [role]: next } }
+    })
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const res = await fetch("/api/config/access-policy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(policy),
+    })
+    setSaving(false)
+    onNotify(res.ok ? "success" : "error", res.ok ? "Đã lưu chính sách quyền hạn chatbot" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  const cellStyle = (d: Decision) =>
+    d === "allow" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+    : d === "deny" ? "bg-red-100 text-red-700 border-red-200"
+    : "bg-blue-100 text-blue-700 border-blue-200"
+  const cellLabel = (d: Decision) => d === "allow" ? "Cho phép" : d === "deny" ? "Từ chối" : "Theo phòng ban"
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="flex items-start gap-2">
+        <Shield size={16} className="text-brand-600 mt-0.5 shrink-0" />
+        <div>
+          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Quyền hạn câu hỏi Chatbot (Guardian)</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Chặn câu hỏi vượt quyền / khác phòng ban theo vai trò. Bấm ô để đổi trạng thái. Admin & Manager luôn toàn quyền.
+          </p>
+        </div>
+      </div>
+      {loading ? <div className="h-48 bg-gray-50 rounded-lg animate-pulse" /> : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr>
+                  <th className="text-left py-2 px-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Loại thông tin</th>
+                  {ROLES.map(r => (
+                    <th key={r.key} className="text-center py-2 px-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">{r.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIES.map(c => (
+                  <tr key={c.key} className="border-t border-slate-100">
+                    <td className="py-2 px-2 text-slate-700 font-medium">{c.label}</td>
+                    {ROLES.map(r => {
+                      const d = policy[c.key]?.[r.key] ?? "allow"
+                      return (
+                        <td key={r.key} className="py-1.5 px-2 text-center">
+                          <button
+                            onClick={() => cycle(c.key, r.key)}
+                            className={`min-w-[96px] px-2 py-1 rounded-lg border text-xs font-semibold transition-colors ${cellStyle(d)}`}
+                          >
+                            {cellLabel(d)}
+                          </button>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            <b>Cho phép</b>: trả lời bình thường · <b>Từ chối</b>: chặn lịch sự, không gọi agent ·
+            <b> Theo phòng ban</b>: chỉ cho phép khi câu hỏi thuộc đúng phòng ban của user (dept "all" = xem tất cả).
+            Câu hỏi không nhạy cảm hoặc không phân loại chắc chắn sẽ luôn được cho qua (nới, tránh chặn nhầm).
+          </p>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+            <Save size={14} />
+            {saving ? "Đang lưu..." : "Lưu chính sách"}
           </button>
         </>
       )}

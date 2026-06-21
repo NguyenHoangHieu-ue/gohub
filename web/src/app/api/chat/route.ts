@@ -7,6 +7,7 @@ import { AGENTS }                              from "@/lib/agents/agents"
 import { route }                               from "@/lib/agents/router"
 import { buildToolContext }                    from "@/lib/agents/context"
 import { runBIAnalyst }                        from "@/lib/agents/bi-analyst"
+import { guardCheck }                          from "@/lib/agents/guardian"
 import type { Message, UserRole }              from "@/lib/agents/types"
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -16,21 +17,36 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { messages, userName } = await req.json()
-  const role    = (session.user.role || "standard") as UserRole
+  const role       = (session.user.role || "standard") as UserRole
+  const department = (session.user as any).department || "all"
   const name    = userName || session.user.name || "bạn"
   const history = (messages as Message[]).slice(0, -1)
   const lastMsg = (messages as Message[]).at(-1)?.content ?? ""
   const isCost  = true
 
   try {
-    const [refCache, routed] = await Promise.all([
+    const [refCache, routed, guard] = await Promise.all([
       getRefCache(),
       route(lastMsg, history, role),
+      guardCheck(lastMsg, role, department),
     ])
     const { agentId, agentName, params, needsClarification, clarificationQuestion } = routed
     const agent = AGENTS[agentId]
 
     const encoderEarly = new TextEncoder()
+
+    // ── Guardian (kiểm soát quyền hạn) ──────────────────────────────────────────
+    // Câu hỏi vượt quyền / khác phòng ban → từ chối lịch sự, KHÔNG gọi agent.
+    if (!guard.allowed) {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoderEarly.encode(`__AGENT__:guardian:Hạn chế quyền\n`))
+          controller.enqueue(encoderEarly.encode(guard.reason))
+          controller.close()
+        },
+      })
+      return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+    }
 
     // ── Bước HỎI LẠI (deterministic) ──────────────────────────────────────────
     // Câu hỏi quá mơ hồ (không có nước/khu vực/mã) → hỏi lại ngay, KHÔNG gọi Gemini.
