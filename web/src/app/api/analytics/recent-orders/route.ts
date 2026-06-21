@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, safeCompanyCode } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const companyCode   = req.nextUrl.searchParams.get("companyCode") || "ALL"
-  const companyFilter = companyCode !== "ALL" && companyCode !== "undefined"
+  const companyCode   = safeCompanyCode(req.nextUrl.searchParams.get("companyCode"))
+  const companyFilter = companyCode !== "ALL"
     ? `WHERE company_code = '${companyCode}'` : ""
   const cacheKey = `recent-orders:${companyCode}`
 

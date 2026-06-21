@@ -1,5 +1,28 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 — phân quyền analytics "bê y hệt gohub-intel": ma trận Role×Report)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp — QA tester: verify sidebar + fix bug analytics (A/B/C) + fix bug chatbot country detection)
+
+## Session 71 tiếp (2026-06-21) — QA chuyên sâu: verify sidebar + fix công thức analytics + chatbot
+
+### #1 Verify sidebar staff/bod (qua trace + build)
+- bod/staff: PM nav chỉ GoHub AI; analytics = quyền nền role_permissions[role] (fallback bod→all, staff→defaults) ∪ per-user allowed_analytics. Lọc đúng, ẩn group rỗng, collapsed-mode dùng cùng list. KHÔNG lỗi.
+
+### #2 Audit công thức analytics — user duyệt fix A+B+C (giữ D&E y hệt intel)
+- A (CAO) FIX: getTargetSummary query sai tên bảng `target_planning` → đúng là `analytics_target_planning` (migration v13). Trước đó Dashboard Target/Pro-rata LUÔN = 0 (lỗi nuốt im lặng). web/src/lib/analytics-helpers.ts.
+- B (TB) FIX: b2b/kpis "Margin %" & "GPM2 %" hard-code isPositive:true → mũi tên delta luôn xanh kể cả khi giảm. Sửa isPositive = current% ≥ prev%.
+- C (TB) FIX: SQL injection — thêm safeDate()/safeCompanyCode() trong analytics-helpers; sanitize trong getDateFilter + getPrevDateFilter (bao mọi route dùng helper) + 4 route nội suy trực tiếp (all-time, 3hk-usage, recent-orders, vendors/report) + escape channelGroup.
+- D (MoM trailing-window) & E (B2C Total = toàn bộ B2C ≠ VN+US): user chọn GIỮ Y HỆT INTEL, không sửa.
+
+### #3 Chatbot — test extractParams (harness tsx, 20 case) → fix bug country detection (mức CAO)
+- BUG: country lookup dùng so khớp CHUỖI CON → key ngắn match nhầm trong từ tiếng Việt:
+  "đi Mỹ 10 ngày"→Russia ("nga" trong "ngay"); "đi tokyo"→Italy ("y"=Ý trong "tokyo");
+  "đi UK 5 ngày"→Russia; "doanh thu tháng này"→spurious South Korea.
+- FIX: thêm wordMatch() so khớp theo RANH GIỚI TỪ (regex (^|[^a-z0-9])key([^a-z0-9]|$)) cho region + country + city. Siết groupCode: bỏ cỡ dữ liệu (3GB) + yêu cầu VIẾT HOA (bỏ tên riêng "Loan/Hong/eSIM"). Sau fix: 19/20 pass (case còn lại là test-string sai 14 ký tự).
+- FIX nhỏ: ví dụ SKU trong prompt classifier "1CJPNWM1010014" (14 ký tự) → "1CJPNWM101001" (13, đúng định dạng identifyCode len===13).
+
+### Test
+- tsc PASS. next build PASS (NODE_OPTIONS=--max-old-space-size=6144). Router test 19/20 (1 fail = test-data sai, không phải code).
+
+---
 
 ## Session 71 (2026-06-21) — Phân quyền Analytics theo mô hình gohub-intel (Role×Report matrix)
 

@@ -25,6 +25,18 @@ export const CACHE_HEADERS = {
   "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
 } as const
 
+// ── Input sanitization (chống SQL injection cho filter nội suy chuỗi) ─────────
+// Date phải đúng YYYY-MM-DD; companyCode chỉ chữ/số/_/- . Sai → bỏ qua (an toàn).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+export function safeDate(s: string | null | undefined): string | null {
+  return s && DATE_RE.test(s) ? s : null
+}
+
+export function safeCompanyCode(s: string | null | undefined): string {
+  return s && /^[A-Za-z0-9_-]+$/.test(s) ? s : "ALL"
+}
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 export function getDateFilter(
@@ -34,11 +46,14 @@ export function getDateFilter(
   defaultInterval = "30 days",
   companyCode?: string
 ): string {
-  let filter = startDate && endDate
-    ? `f.${dateColumn}::date BETWEEN '${startDate}' AND '${endDate}'`
+  const sd = safeDate(startDate)
+  const ed = safeDate(endDate)
+  let filter = sd && ed
+    ? `f.${dateColumn}::date BETWEEN '${sd}' AND '${ed}'`
     : `f.${dateColumn}::date >= NOW()::date - INTERVAL '${defaultInterval}'`
-  if (companyCode && companyCode !== "ALL" && companyCode !== "undefined") {
-    filter += ` AND f.company_code = '${companyCode}'`
+  const cc = safeCompanyCode(companyCode)
+  if (cc !== "ALL") {
+    filter += ` AND f.company_code = '${cc}'`
   }
   return filter
 }
@@ -52,22 +67,25 @@ export function getPrevDateFilter(
   companyCode?:   string
 ): string {
   let filter = ""
-  if (startDate && endDate) {
+  const sd = safeDate(startDate)
+  const ed = safeDate(endDate)
+  if (sd && ed) {
     if (comparisonType === "previous_year") {
-      const s = new Date(startDate)
-      const e = new Date(endDate)
+      const s = new Date(sd)
+      const e = new Date(ed)
       const ps = new Date(s.setFullYear(s.getFullYear() - 1)).toISOString().split("T")[0]
       const pe = new Date(e.setFullYear(e.getFullYear() - 1)).toISOString().split("T")[0]
       filter = `f.${dateColumn}::date BETWEEN '${ps}' AND '${pe}'`
     } else {
-      filter = `f.${dateColumn}::date >= '${startDate}'::date - (('${endDate}'::date - '${startDate}'::date) + 1) AND f.${dateColumn}::date < '${startDate}'::date`
+      filter = `f.${dateColumn}::date >= '${sd}'::date - (('${ed}'::date - '${sd}'::date) + 1) AND f.${dateColumn}::date < '${sd}'::date`
     }
   } else {
     const days = parseInt(defaultInterval)
     filter = `f.${dateColumn}::date >= NOW()::date - INTERVAL '${days * 2} days' AND f.${dateColumn}::date < NOW()::date - INTERVAL '${days} days'`
   }
-  if (companyCode && companyCode !== "ALL" && companyCode !== "undefined") {
-    filter += ` AND f.company_code = '${companyCode}'`
+  const cc = safeCompanyCode(companyCode)
+  if (cc !== "ALL") {
+    filter += ` AND f.company_code = '${cc}'`
   }
   return filter
 }
@@ -270,7 +288,7 @@ export async function getTargetSummary(startDate: string, endDate: string) {
   try {
     const monthStrings = months.map(m => m.month)
     const { data } = await supabaseAdmin
-      .from("target_planning")
+      .from("analytics_target_planning")
       .select("month, target_revenue, channel")
       .in("month", monthStrings)
     if (data) {

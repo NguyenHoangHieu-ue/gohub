@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const p = req.nextUrl.searchParams
-  const startDate    = p.get("startDate") || "2025-01-01"
-  const endDate      = p.get("endDate")   || new Date().toISOString().split("T")[0]
+  const startDate    = safeDate(p.get("startDate")) || "2025-01-01"
+  const endDate      = safeDate(p.get("endDate"))   || new Date().toISOString().split("T")[0]
   const channelGroup = p.get("channelGroup") || ""
   const customerTier = p.get("customerTier") || ""
   const channel      = p.get("channel")      || ""
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       let whereClause = `WHERE f.fulfiled_date >= '${startDate}' AND f.fulfiled_date <= '${endDate}'`
 
       if (channelGroup) {
-        const grp = channelGroup.toUpperCase()
+        const grp = channelGroup.toUpperCase().replace(/'/g, "''")
         whereClause += ` AND UPPER(COALESCE(s.group_name, 'Other')) = '${grp}'`
         if (grp === "B2B" && customerTier) {
           const tier = customerTier.toLowerCase()

@@ -114,10 +114,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json([
       { label: "Total Revenue",  value: cRev, lastPeriod: pRev, change: pct(cRev, pRev), isPositive: cRev >= pRev, isCurrency: true  },
       { label: "Gross Profit",   value: cMar, lastPeriod: pMar, change: pct(cMar, pMar), isPositive: cMar >= pMar, isCurrency: true  },
-      { label: "Margin %",       value: cRev > 0 ? (cMar/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pMar/pRev)*100 : 0, change: (cRev > 0 ? (cMar/cRev)*100 : 0) - (pRev > 0 ? (pMar/pRev)*100 : 0), isPositive: true, isCurrency: false },
+      { label: "Margin %",       value: cRev > 0 ? (cMar/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pMar/pRev)*100 : 0, change: (cRev > 0 ? (cMar/cRev)*100 : 0) - (pRev > 0 ? (pMar/pRev)*100 : 0), isPositive: (cRev > 0 ? (cMar/cRev)*100 : 0) >= (pRev > 0 ? (pMar/pRev)*100 : 0), isCurrency: false },
       { label: "Total Orders",   value: cOrd, lastPeriod: pOrd, change: pct(cOrd, pOrd), isPositive: cOrd >= pOrd, isCurrency: false },
       { label: "GPM2",           value: cGpm2, lastPeriod: pGpm2, change: pct(cGpm2, pGpm2), isPositive: cGpm2 >= pGpm2, isCurrency: true  },
-      { label: "GPM2 %",         value: cRev > 0 ? (cGpm2/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pGpm2/pRev)*100 : 0, change: (cRev > 0 ? (cGpm2/cRev)*100 : 0) - (pRev > 0 ? (pGpm2/pRev)*100 : 0), isPositive: true, isCurrency: false },
+      { label: "GPM2 %",         value: cRev > 0 ? (cGpm2/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pGpm2/pRev)*100 : 0, change: (cRev > 0 ? (cGpm2/cRev)*100 : 0) - (pRev > 0 ? (pGpm2/pRev)*100 : 0), isPositive: (cRev > 0 ? (cGpm2/cRev)*100 : 0) >= (pRev > 0 ? (pGpm2/pRev)*100 : 0), isCurrency: false },
     ], { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2b/kpis]", err.message)

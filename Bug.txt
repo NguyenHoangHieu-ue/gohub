@@ -1,3 +1,11 @@
+*21/6/2026 — Session 71 tiếp — QA tester: fix bug analytics + chatbot*
+109. ✅ FIXED (chatbot, CAO): country detection so khớp chuỗi con → match nhầm key ngắn trong từ tiếng Việt ("nga" trong "ngày"→Russia, "y"=Ý trong "tokyo"→Italy, "đi UK 5 ngày"→Russia, "doanh thu tháng này"→spurious Korea). Fix wordMatch() ranh giới từ cho region/country/city. Test 19/20 pass. (router.ts)
+108. ✅ FIXED (chatbot): groupCode false-positive (eSIM→ESIM, 3GB, Loan→LOAN, Hong→HONG). Siết: bỏ cỡ dữ liệu (3GB/MB/TB) + yêu cầu VIẾT HOA. + ví dụ SKU prompt classifier 14 ký tự → 13 (đúng identifyCode). (router.ts, classifier.ts)
+107. ✅ FIXED (analytics C, TB): SQL injection — safeDate()/safeCompanyCode() + sanitize getDateFilter/getPrevDateFilter + 4 route nội suy trực tiếp (all-time, 3hk-usage, recent-orders, vendors/report) + escape channelGroup.
+106. ✅ FIXED (analytics B, TB): b2b/kpis "Margin %"/"GPM2 %" isPositive hard-code true → mũi tên delta luôn xanh dù giảm. Sửa isPositive = current% ≥ prev%.
+105. ✅ FIXED (analytics A, CAO): getTargetSummary query sai bảng `target_planning` → `analytics_target_planning` (v13). Dashboard Target/Pro-rata trước LUÔN = 0.
+    NOTE: D (MoM trailing-window) + E (B2C Total = toàn bộ B2C) — user chọn GIỮ Y HỆT INTEL, không sửa.
+
 *21/6/2026 — Session 71 — Phân quyền Analytics "bê y hệt gohub-intel" (ma trận Role×Report)*
 103. ✅ DONE: Web thiếu ma trận Role×Report toàn cục mà intel có (rolePermissions). Thêm /api/config/role-permissions (app_settings key role_permissions) + RolePermissionsMatrix (Role bod/staff × 18 báo cáo) trong admin PermissionsTab.
 104. ✅ DONE: Đổi per-user allowed_analytics sang GRANT cộng dồn (y hệt intel allowedReports): sidebar = quyền nền role ∪ per-user grant; admin/manager toàn quyền; default bod=all, staff=[dashboard,feedback,products]. tsc + build PASS.

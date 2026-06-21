@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, getStrategicPartnersList } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, getStrategicPartnersList, safeDate } from "@/lib/analytics-helpers"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -22,18 +22,20 @@ export async function POST(req: NextRequest) {
 
   const source   = getAnalyticsSource(dateColumn)
   const vendorList = vendors.map((v: string) => `'${v.replace(/'/g, "''")}'`).join(",")
+  const sDate = safeDate(startDate) || "2025-01-01"
+  const eDate = safeDate(endDate)   || new Date().toISOString().split("T")[0]
 
   function buildWhere(sd: string, ed: string) {
     let w = `f.${source.dateCol}::date BETWEEN '${sd}' AND '${ed}'`
     w += ` AND TRIM(f.sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
     if (channel) w += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${channel.replace(/'/g, "''")}')`
-    else if (channelGroup) w += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${channelGroup.toUpperCase()}')`
+    else if (channelGroup) w += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${channelGroup.toUpperCase().replace(/'/g, "''")}')`
     return w
   }
 
   function getPrevDates() {
     if (comparisonType === "none") return null
-    const s = new Date(startDate), e = new Date(endDate)
+    const s = new Date(sDate), e = new Date(eDate)
     if (comparisonType === "previous_year") {
       return { sd: `${s.getFullYear()-1}-${String(s.getMonth()+1).padStart(2,"0")}-${String(s.getDate()).padStart(2,"0")}`,
                ed: `${e.getFullYear()-1}-${String(e.getMonth()+1).padStart(2,"0")}-${String(e.getDate()).padStart(2,"0")}` }
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
     return { sd: ps.toISOString().split("T")[0], ed: pe.toISOString().split("T")[0] }
   }
 
-  const where = buildWhere(startDate, endDate)
+  const where = buildWhere(sDate, eDate)
   const prev  = getPrevDates()
   const prevWhere = prev ? buildWhere(prev.sd, prev.ed) : "1=0"
   const cacheKey = `vendors:${JSON.stringify(body)}`
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
         // All vendors revenue (for contribution %)
         queryAnalytics<{ revenue: string }>(
           `SELECT SUM(${source.revenueCol}) as revenue FROM ${source.mainTable} f
-           WHERE f.${source.dateCol}::date BETWEEN '${startDate}' AND '${endDate}'`
+           WHERE f.${source.dateCol}::date BETWEEN '${sDate}' AND '${eDate}'`
         ),
         // Daily trend
         queryAnalytics<{ date: string; revenue: string }>(

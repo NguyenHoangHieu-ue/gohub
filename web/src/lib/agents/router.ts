@@ -256,6 +256,14 @@ const REGION_KEYWORDS_NORM: Record<string, string> = {
 // Sorted longest-first to avoid partial matches
 const REGION_SORTED = Object.entries(REGION_KEYWORDS_NORM).sort((a, b) => b[0].length - a[0].length)
 
+// So khớp key theo RANH GIỚI TỪ (không phải chuỗi con) — tránh "nga" (Russia) match trong
+// "ngay", "y" (Ý) match trong "tokyo", "bi" match trong "biet". Ranh giới = đầu/cuối chuỗi
+// hoặc ký tự không phải [a-z0-9]. Hỗ trợ key nhiều từ ("nhat ban", "hong kong").
+function wordMatch(haystack: string, key: string): boolean {
+  const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(haystack)
+}
+
 export function extractParams(message: string): ExtractedParams {
   const msg     = message.toLowerCase()
   const msgNorm = normalizeText(message)   // bỏ dấu + lowercase + chuẩn space
@@ -263,7 +271,7 @@ export function extractParams(message: string): ExtractedParams {
 
   // Region detection — TRƯỚC country lookup để tránh "châu á" → country="Asia"
   for (const [key, region] of REGION_SORTED) {
-    if (msgNorm.includes(key)) { params.region = region; break }
+    if (wordMatch(msgNorm, key)) { params.region = region; break }
   }
 
   // GoHub 3-char group/category code detection (word-exact, uppercase 2-4 chars)
@@ -281,9 +289,11 @@ export function extractParams(message: string): ExtractedParams {
       if (GROUP_CODE_RE.test(w) && w.length >= 3 && w.length <= 4) {
         // Tránh nhầm với số ngày (3, 5, 7...) hoặc GB
         if (/^\d+$/.test(w)) continue
-        // Bỏ qua các từ thuần chữ thường lowercase (ví dụ "cho", "toi", "biet", "nao")
-        // GoHub group codes phải có chữ số (AP2, EU1) hoặc đã viết hoa sẵn trong message gốc
-        if (/^[a-z]+$/.test(orig)) continue
+        // Bỏ qua cỡ dữ liệu (3GB, 500MB, 1TB) — không phải mã nhóm nước
+        if (/^\d+(GB|MB|TB)$/i.test(w)) continue
+        // Mã nhóm GoHub luôn VIẾT HOA (AP2, EU1, CHM). Bỏ qua từ có chữ thường
+        // (tên riêng "Loan", "Hong", "Anh" hay mixed "eSIM") → tránh false-positive groupCode
+        if (orig !== orig.toUpperCase()) continue
         params.groupCode = w
         // Map multi-country category codes → region
         if (MULTI_CAT_CODES.has(w)) {
@@ -333,13 +343,13 @@ export function extractParams(message: string): ExtractedParams {
     // Bước 1: VN/EN name lookup (dài → ngắn để tránh "nhat" match trước "nhat ban")
     const sortedNorm = Object.entries(VN_TO_EN_NORM).sort((a, b) => b[0].length - a[0].length)
     for (const [key, en] of sortedNorm) {
-      if (msgNorm.includes(key)) { params.country = en; break }
+      if (wordMatch(msgNorm, key)) { params.country = en; break }
     }
     // Bước 2: City lookup
     if (!params.country) {
       const sortedCity = Object.entries(CITY_TO_COUNTRY_NORM).sort((a, b) => b[0].length - a[0].length)
       for (const [key, country] of sortedCity) {
-        if (msgNorm.includes(key)) { params.country = country; break }
+        if (wordMatch(msgNorm, key)) { params.country = country; break }
       }
     }
     // Bước 3: ISO code / abbreviation — word-exact match

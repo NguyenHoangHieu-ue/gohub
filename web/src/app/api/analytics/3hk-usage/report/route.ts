@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, safeDate } from "@/lib/analytics-helpers"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,6 +18,9 @@ export async function POST(req: NextRequest) {
     page       = 1,
     pageSize   = 50,
   } = body
+
+  const sDate = safeDate(startDate) || "2025-01-01"
+  const eDate = safeDate(endDate)   || new Date().toISOString().split("T")[0]
 
   const tabValue = activeTab === "Daily" ? "Daily Data"
                  : activeTab === "Fixed" ? "Fixed Data"
@@ -44,8 +47,8 @@ export async function POST(req: NextRequest) {
     filtered_bundles AS (
       SELECT iccid, order_code, sku, sku_type, bundle_start_date, activation_date
       FROM bundle_starts
-      WHERE bundle_start_date >= '${startDate}'
-        AND bundle_start_date <= '${endDate}'
+      WHERE bundle_start_date >= '${sDate}'
+        AND bundle_start_date <= '${eDate}'
         ${tabFilter}
     )`
 
