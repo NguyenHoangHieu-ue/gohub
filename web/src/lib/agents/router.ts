@@ -339,9 +339,11 @@ export function extractParams(message: string): ExtractedParams {
     }
   }
 
-  // Tất cả Listing/Item codes (nếu chưa match SKU/Product)
+  // Tất cả Listing/Item codes (nếu chưa match SKU/Product).
+  // Yêu cầu có ≥1 chữ số (?=[A-Z0-9]*\d) để tránh bắt nhầm từ tiếng Anh viết hoa
+  // (UNLIMITED, TEMPLATE, POLICY, SINGAPORE...) — mã thật luôn có số.
   if (!skuCodes.length && !params.productCodes?.length) {
-    const listingMatches = [...message.matchAll(/\b([A-Z]{1,3}[A-Z0-9]{5,9})\b/gi)]
+    const listingMatches = [...message.matchAll(/\b(?=[A-Z0-9]*\d)([A-Z]{1,3}[A-Z0-9]{5,9})\b/gi)]
     const listingCodes = [...new Set(listingMatches.map(m => m[1].toUpperCase()))].slice(0, MAX_CODES)
     if (listingCodes.length) {
       params.listingCodes = listingCodes

@@ -1,3 +1,8 @@
+*21/6/2026 — Session 71 tiếp 6 — Verify phân quyền production + WORK.md + dọn listingCode*
+121. ✅ VERIFIED (phân quyền production AN TOÀN): role_permissions chưa có row→default (bod=all). User: admin 4 (all), bod 3 (baseline all∪grant→all), standard 2 (no analytics), staff 0. KHÔNG ai mất quyền. Lưu ý: 3 bod giờ thấy tất cả (đúng intel).
+120. ✅ DONE: cập nhật WORK.md (5→6 agent, GA4/GSC/Channel Costs/Feedback từ defer→done, phân quyền Role×Report, migrations v17).
+119. ✅ FIXED (dọn): listingCode regex bắt nhầm từ tiếng Anh (UNLIMITED/TEMPLATE/POLICY/SINGAPORE). Thêm lookahead (?=[A-Z0-9]*\d) yêu cầu ≥1 chữ số. Mã thật (ABC12345) vẫn nhận.
+
 *21/6/2026 — Session 71 tiếp 5 — E2E giai-dap + tao-template (fix 2 bug routing)*
 118. ✅ FIXED (CAO): tao-template KHÔNG trigger được — "tạo template WM/3HK" nhắc vendor → dataSource=ncc_catalog → route nhầm gap-analysis. Thêm TEMPLATE_RE override ép tao-template (thắng ncc_catalog). E2E 2/2.
 117. ✅ FIXED: giai-dap "AP2 gồm nước nào" → tu-van (groupCode = product_search). Thêm EXPLAIN_GROUP_RE override (groupCode + "là gì/gồm nước"). Regression 13/13 (không hijack "gói AP2"→tu-van, "WM có gì"→gap-analysis).

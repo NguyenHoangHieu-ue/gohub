@@ -1,5 +1,26 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 5 — E2E giai-dap + tao-template: fix 2 bug routing)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 6 — verify phân quyền production + WORK.md + dọn listingCode)
+
+## Session 71 tiếp 6 (2026-06-21) — Verify phân quyền production + housekeeping
+
+### (1) Verify phân quyền production — AN TOÀN, không cần thao tác gấp
+- Query Supabase: role_permissions CHƯA có row → dùng default (bod=all, staff=[dashboard,feedback,products]).
+- Phân bố user: admin 4 (null, luôn all), bod 3 (đều có grant → baseline all ∪ grant = all), standard 2 (no analytics), staff 0.
+- → KHÔNG user nào mất quyền. Lưu ý: 3 bod trước có thể bị restrict subset (model cũ), giờ thấy tất cả (đúng intel "bod thấy hết") — admin xác nhận OK.
+
+### (2) Cập nhật WORK.md — phản ánh thực tế
+- 5→6 agent (thêm tao-template). GA4/GSC/Channel Costs/Feedback/B2C leads: defer→DONE. Phân quyền Role×Report + role-filters. Migrations v17.
+
+### (3) Dọn listingCode regex
+- Thêm lookahead (?=[A-Z0-9]*\d) yêu cầu ≥1 chữ số → hết false-positive (UNLIMITED/TEMPLATE/POLICY/SINGAPORE). Mã thật vẫn nhận.
+
+### Còn lại (đã chọn làm tiếp)
+- GA4 user count VN/US (feature, cần query GA4 — sẽ làm session riêng). Verify Lark E2E (cần tin nhắn thật; code đã dùng chung router nên fix tự áp).
+- tsc + build PASS.
+
+---
+
+## Session 71 tiếp 5 (2026-06-21) — E2E giai-dap + tao-template: fix 2 bug routing
 
 ## Session 71 tiếp 5 (2026-06-21) — E2E giai-dap + tao-template (Supabase + Gemini thật)
 
