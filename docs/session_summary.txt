@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 4 — Update wiki: kiến trúc 6 agent + Guardian, sync lên web)
+Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 4 — Update wiki + full-sync 15 trang lên web kb_wiki_pages)
 
 ## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
 
@@ -15,13 +15,13 @@ User: "update các file wiki và trên web luôn". Scope chốt: sửa kiến tr
 - Sync lên web: script tạm upsert theo title vào Supabase kb_wiki_pages (gemini-embedding-001), lưu version
   history. SCOPED 3 file (HOME v2, Second-Brain v2, Guardian created). kb_wiki_pages: 13 → 14 trang. Script đã xóa.
 
-### ⚠️ LƯU Ý (divergence file ↔ web — chưa reconcile)
-- 3 file ĐÃ ĐỔI TITLE trong .md nhưng DB còn title cũ → nếu sync theo title sẽ tạo BẢN TRÙNG, nên đã BỎ QUA:
-  · Import-NCC: ".md = ...Upload → Kiểm tra → Xác nhận" vs DB "...Diff → Confirm"
-  · 3HK-COGS: ".md = Công Thức Tính Giá Nhập — 3HK" vs DB "...COGS — 3HK"
-  · Item-Code: ".md = ...(18–20 ký tự)" vs DB "...(18 ký tự)"
-- 3HK-Custom-Package-Pricing.md ("Định Giá Gói FUP Tùy Chỉnh 3HK") CHƯA có trên web.
-- Muốn full sync: cần đối chiếu title thủ công (rename DB hoặc đổi .md title về khớp) rồi mở rộng ONLY-set trong script.
+### Full-sync 4 file còn lệch — ĐÃ XONG (cùng session)
+- 3 file đổi title: match row cũ qua OLD title → RENAME in-place (giữ id + lưu version history) + update content/embedding → v2:
+  · Import-NCC: "...Diff → Confirm" → "...Kiểm tra → Xác nhận"
+  · 3HK-COGS: "...COGS — 3HK" → "Công Thức Tính Giá Nhập — 3HK"
+  · Item-Code: "...(18 ký tự)" → "...(18–20 ký tự)"
+- 3HK-Custom-Package-Pricing ("Định Giá Gói FUP Tùy Chỉnh 3HK"): INSERT mới.
+- → kb_wiki_pages: 14 → 15 trang = KHỚP đúng 15 file .md (hết lệch, không bản trùng). Script tạm đã xóa.
 
 ---
 
