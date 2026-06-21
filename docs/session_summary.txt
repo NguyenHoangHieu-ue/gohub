@@ -1,5 +1,28 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 — TỔNG QUAN ngày: phân quyền + QA analytics + E2E chatbot)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 5 — E2E giai-dap + tao-template: fix 2 bug routing)
+
+## Session 71 tiếp 5 (2026-06-21) — E2E giai-dap + tao-template (Supabase + Gemini thật)
+
+### Phát hiện 2 bug routing (mức CAO) qua E2E
+1. tao-template 0/2: "tạo template WM cho Nhật", "xuất template 3HK Hàn" → route nhầm gap-analysis.
+   Nguyên nhân: nhắc WM/3HK → dataSource=ncc_catalog → rule gap-analysis (classifyAgent) chạy TRƯỚC rule template.
+   Mà template request hầu như LUÔN nhắc vendor → tao-template gần như không bao giờ trigger được!
+2. giai-dap "AP2 gồm nước nào" → tu-van (groupCode khiến thành product_search).
+
+### Fix (router.ts) — deterministic override (như BI)
+- TEMPLATE_RE: "(tạo|xuất|tải|generate) ... template" hoặc "template (wm|3hk)" → ép tao-template (thắng dataSource=ncc_catalog).
+- EXPLAIN_GROUP_RE: groupCode + ("X là gì|nghĩa là|giải thích|gồm nước/quốc gia") → ép giai-dap.
+- Thứ tự override: template → explain-group → BI.
+
+### Kết quả sau fix
+- E2E giai-dap + tao-template: routing 6/6 · context 6/6 · trả lời 6/6.
+- Regression 13/13 toàn 6 agent: "gói AP2"→tu-van, "WM có gì"→gap-analysis KHÔNG bị hijack; template/explain đúng.
+- giai-dap inject 16.8k ký tự (vendor + category + 100+ mã nhóm nước + KB). tao-template inject WM catalog cho nước.
+- tsc + build PASS.
+
+---
+
+## NGÀY 2026-06-21 — TỔNG QUAN (session 71, 6 commit)
 
 ## NGÀY 2026-06-21 — TỔNG QUAN (session 71, 6 commit)
 Chuỗi QA chuyên sâu sau khi user yêu cầu: (1) bê y hệt phân quyền intel, (2) tester audit analytics, (3) E2E chatbot.

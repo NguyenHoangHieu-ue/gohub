@@ -422,6 +422,11 @@ const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b
 // tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
 const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
 
+// Tạo/xuất template — action mạnh, ép tao-template (hay bị nhắc WM/3HK → route nhầm gap-analysis).
+const TEMPLATE_RE = /\b(tao|xuat|tai|lam|generate)\b[^.!?]*template|template[^.!?]*\b(wm|3hk|wordmove|worldmove)\b|tao file excel|xuat file excel/
+// Giải thích mã nhóm: "AP2 gồm nước nào / AP2 là gì" → giai-dap (không phải product_search).
+const EXPLAIN_GROUP_RE = /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/
+
 function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
   const m    = msg.toLowerCase()
   const norm = normalizeText(msg)
@@ -485,12 +490,18 @@ export async function route(message: string, history: Message[], role: UserRole)
     ? intentToAgentId(classified.intent)
     : classifyAgent(message, params, role)
 
-  // Override BI xác định: câu hỏi doanh số/nhân viên/top bán chạy hay bị classifier nhầm sang
-  // product_search (tu-van). Nếu KHÔNG phải tra cứu mã cụ thể → ép về bi-analyst.
-  if (agentId !== "bi-analyst" && !params.skuCodes?.length && !params.productCodes?.length) {
-    const n = normalizeText(message)
+  // ── Override xác định (thắng classifier khi nó hay nhầm) ──
+  const nrm = normalizeText(message)
+  if (TEMPLATE_RE.test(nrm)) {
+    // Tạo/xuất template (kể cả khi nhắc WM/3HK → trước đây bị route nhầm gap-analysis)
+    agentId = "tao-template"
+  } else if (params.groupCode && EXPLAIN_GROUP_RE.test(nrm)) {
+    // "AP2 gồm nước nào / AP2 là gì" → giải thích, không phải tìm sản phẩm
+    agentId = "giai-dap"
+  } else if (agentId !== "bi-analyst" && !params.skuCodes?.length && !params.productCodes?.length) {
+    // Override BI: câu doanh số/nhân viên/top bán chạy hay bị nhầm sang product_search
     const hasProductTarget = !!(params.country || params.region || params.groupCode)
-    if (DEFINITE_BI_RE.test(n) || (RANK_BI_RE.test(n) && !hasProductTarget)) {
+    if (DEFINITE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget)) {
       agentId = "bi-analyst"
     }
   }

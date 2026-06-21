@@ -1,3 +1,7 @@
+*21/6/2026 — Session 71 tiếp 5 — E2E giai-dap + tao-template (fix 2 bug routing)*
+118. ✅ FIXED (CAO): tao-template KHÔNG trigger được — "tạo template WM/3HK" nhắc vendor → dataSource=ncc_catalog → route nhầm gap-analysis. Thêm TEMPLATE_RE override ép tao-template (thắng ncc_catalog). E2E 2/2.
+117. ✅ FIXED: giai-dap "AP2 gồm nước nào" → tu-van (groupCode = product_search). Thêm EXPLAIN_GROUP_RE override (groupCode + "là gì/gồm nước"). Regression 13/13 (không hijack "gói AP2"→tu-van, "WM có gì"→gap-analysis).
+
 *21/6/2026 — Session 71 tiếp 4 — E2E test 3 agent tu-van/tra-cuu/gap-analysis*
 116. ✅ VERIFIED (E2E 3 agent): routing 7/7 · context có data 7/7 · trả lời 7/7 (Supabase + Gemini thật). tu-van (SKU theo nước/unlimited), tra-cuu (mã SKU thật + tỷ giá), gap-analysis (catalog WM + gap). Tất cả PASS, không cần fix. Quan sát nhỏ vô hại: listingCode bắt "UNLIMITED" (không ảnh hưởng routing/context).
 
