@@ -1,5 +1,22 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp — QA tester: verify sidebar + fix bug analytics (A/B/C) + fix bug chatbot country detection)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 2 — deep-dive 3 mục analytics: kết luận đúng + 3 cải thiện nhỏ)
+
+## Session 71 tiếp 2 (2026-06-21) — Deep-dive 3 mục analytics còn lại
+
+### Kết luận audit (KHÔNG có bug nghiêm trọng — đều đúng & khớp intel)
+- MỤC 1 b2c CAC/ROAS/leads MoM: công thức ĐÚNG (CAC=spend/khách mới, ROAS=rev/spend, bảng rolling không prorata ratio). Lưu ý: leads Chatwoot là MỌI kênh CS → "Tỷ lệ chốt" lệch.
+- MỤC 2 dedup Strategic vs Channel: KHÔNG double-count. performance-channel dùng getGroupCaseSQL (loại trừ lẫn nhau); B2B page getFilteredOtherTiers lọc strategic khỏi Other Tiers.
+- MỤC 3 projection factor: ĐÚNG, chỉ áp tháng hiện tại (isCurrentMonth theo end date), factor=totalDays/daysElapsed. Yếu biên: range không bắt đầu từ đầu tháng → factor chiếu hơi cao (kế thừa intel).
+
+### 3 cải thiện nhỏ (user duyệt làm)
+1. b2c Section 3: thêm chú thích admin "Leads gồm mọi kênh CS → Tỷ lệ chốt chỉ tham khảo".
+2. Cảnh báo projection: dashboard (projection.partialStart) + b2b (projectionPartialStart) hiện ⚠️ khi range không bắt đầu từ ngày 1.
+3. getFilteredOtherTiers (b2b): đổi match strategic từ substring → SO KHỚP TÊN CHÍNH XÁC (giảm over-exclude khách có tên chứa tên partner). Cả customer-level + sub-channel.
+- tsc + build PASS.
+
+---
+
+## Session 71 tiếp (2026-06-21) — QA tester: verify sidebar + fix bug analytics (A/B/C) + fix bug chatbot country detection
 
 ## Session 71 tiếp (2026-06-21) — QA chuyên sâu: verify sidebar + fix công thức analytics + chatbot
 

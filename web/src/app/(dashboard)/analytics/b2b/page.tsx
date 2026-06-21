@@ -90,6 +90,8 @@ export default function B2BPerformancePage() {
 
   const projectionFactor = getProjectionFactor()
   const isProjectable = projectionFactor > 1
+  // Range không bắt đầu từ ngày 1 → factor có thể chiếu chưa chính xác
+  const projectionPartialStart = isProjectable && !!startDate && new Date(startDate).getDate() !== 1
 
   const fetchCosts = async (month: string) => {
     try {
@@ -237,12 +239,9 @@ export default function B2BPerformancePage() {
     const nonStrategicRaw = combined.map(p => {
       const subChannels = p.sub_channels || []
       const filteredSubs = subChannels.filter(sub => {
-        const subName = sub.name.toLowerCase()
-        return !uniqueStrategicFilters.some(t => {
-          if (subName.includes(t)) return true
-          if (t.includes(subName) && subName.length > 3) return true
-          return false
-        })
+        const subName = sub.name.trim().toLowerCase()
+        // So khớp TÊN CHÍNH XÁC (trước đây substring → over-exclude khách có tên chứa tên partner)
+        return !uniqueStrategicFilters.some(t => subName === t)
       })
       if (filteredSubs.length < subChannels.length) {
         const rev = filteredSubs.reduce((a, b) => a + b.revenue, 0)
@@ -256,11 +255,8 @@ export default function B2BPerformancePage() {
       if (!p || p.revenue <= 0) return false
       const pName = (p.name || p.channel || "").trim().toLowerCase()
       const pChannel = (p.channel || "").trim().toLowerCase()
-      const isStrategic = uniqueStrategicFilters.some(t => {
-        if (pName.includes(t)) return true
-        if (pChannel.includes(t)) return true
-        return false
-      })
+      // So khớp TÊN CHÍNH XÁC (trước đây substring → over-exclude khách có tên chứa tên partner)
+      const isStrategic = uniqueStrategicFilters.some(t => pName === t || pChannel === t)
       return !isStrategic
     }) as PerformanceData[]
 
@@ -400,7 +396,12 @@ export default function B2BPerformancePage() {
                       <Zap className="w-3.5 h-3.5 fill-blue-500 text-blue-500" />
                       Full Period Forecast (Projected)
                     </h3>
-                    {isAdmin && <span className="text-[10px] font-bold text-blue-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>}
+                    {isAdmin && (
+                      <span className="text-[10px] font-bold text-blue-500/60 italic">
+                        Projection Factor: {projectionFactor.toFixed(2)}x
+                        {projectionPartialStart && <span className="text-amber-600 not-italic"> ⚠️ range không từ đầu tháng</span>}
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     {combinedKpis.map((kpi, idx) => (

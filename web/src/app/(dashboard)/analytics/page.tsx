@@ -80,6 +80,8 @@ export default function DashboardPage() {
 
     return {
       factor, daysElapsed, totalDays: targetDays,
+      // Range không bắt đầu từ ngày 1 → factor (= totalDays/daysElapsed) có thể chiếu chưa chính xác
+      partialStart: isCurrentMonth && start.getDate() !== 1,
       revenue: pRev, orders: pOrd, units: pUni, aov: pAOV,
       revenueChange: pct(pRev, revL),
       ordersChange:  pct(pOrd, ordL),
@@ -383,6 +385,9 @@ export default function DashboardPage() {
                 <p className="text-sm text-blue-600">
                   Based on <strong>{projection.daysElapsed} days</strong> → projected for <strong>{projection.totalDays} days</strong>
                 </p>
+              )}
+              {isAdmin && projection.partialStart && (
+                <p className="text-[11px] text-amber-600 mt-0.5 italic">⚠️ Khoảng ngày không bắt đầu từ đầu tháng — hệ số dự phóng có thể chưa chính xác.</p>
               )}
             </div>
             {isAdmin && (

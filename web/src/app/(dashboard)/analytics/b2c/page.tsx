@@ -510,7 +510,7 @@ export default function B2CDashboardPage() {
             {/* Section 3 — CAC, Users, Leads */}
             <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Leads · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng"
               source="admin"
-              note={isAdmin && <><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. <strong>MoM</strong> ở cột MTD tính theo run-rate (dự phóng cả tháng so tháng trước). Chi phí từ Turso, khách mới từ gohub_dw.</>}>
+              note={isAdmin && <><strong>Leads</strong> = hội thoại mới trên Chatwoot (Web/WhatsApp/Facebook/Instagram/Tiktok). <strong>CAC</strong> = chi phí ÷ khách mới · <strong>Chi phí/Lead</strong> = chi phí ÷ leads · <strong>Tỷ lệ chốt</strong> = khách mới ÷ leads. <strong>MoM</strong> ở cột MTD tính theo run-rate (dự phóng cả tháng so tháng trước). Chi phí từ Turso, khách mới từ gohub_dw. <span className="text-amber-600">⚠️ Leads gồm MỌI kênh CS (không chỉ B2C) → "Tỷ lệ chốt" chỉ mang tính tham khảo.</span></>}>
               {hasSpend || hasLeads ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },

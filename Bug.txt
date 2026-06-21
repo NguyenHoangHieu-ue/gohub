@@ -1,3 +1,7 @@
+*21/6/2026 — Session 71 tiếp 2 — Deep-dive 3 mục analytics (kết luận đúng + 3 cải thiện nhỏ)*
+112. ✅ DONE: Audit b2c CAC/ROAS/leads MoM + dedup Strategic + projection factor → đều ĐÚNG & khớp intel, KHÔNG bug nghiêm trọng. Dedup không double-count (getGroupCaseSQL + getFilteredOtherTiers). Projection chỉ áp tháng hiện tại.
+111. ✅ DONE (3 cải thiện nhỏ): (1) b2c note "Leads mọi kênh CS → Tỷ lệ chốt tham khảo". (2) Cảnh báo ⚠️ projection khi range không bắt đầu đầu tháng (dashboard + b2b). (3) getFilteredOtherTiers đổi substring→so khớp tên chính xác (giảm over-exclude). tsc + build PASS.
+
 *21/6/2026 — Session 71 tiếp — QA tester: fix bug analytics + chatbot*
 109. ✅ FIXED (chatbot, CAO): country detection so khớp chuỗi con → match nhầm key ngắn trong từ tiếng Việt ("nga" trong "ngày"→Russia, "y"=Ý trong "tokyo"→Italy, "đi UK 5 ngày"→Russia, "doanh thu tháng này"→spurious Korea). Fix wordMatch() ranh giới từ cho region/country/city. Test 19/20 pass. (router.ts)
 108. ✅ FIXED (chatbot): groupCode false-positive (eSIM→ESIM, 3GB, Loan→LOAN, Hong→HONG). Siết: bỏ cỡ dữ liệu (3GB/MB/TB) + yêu cầu VIẾT HOA. + ví dụ SKU prompt classifier 14 ký tự → 13 (đúng identifyCode). (router.ts, classifier.ts)
