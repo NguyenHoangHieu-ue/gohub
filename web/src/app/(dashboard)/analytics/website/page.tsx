@@ -15,7 +15,7 @@ interface Kpis {
   bounceRate: number; revenue: number; purchases: number; cr: number
 }
 interface SeriesPt { date: string; users: number; sessions: number; pageviews: number; conversions: number; cr: number; revenue: number }
-interface Row { name: string; sessions: number; conversions: number; cr: number }
+interface Row { name: string; sessions: number; conversions: number; cr: number; users?: number }
 interface GscKpis { clicks: number; impressions: number; ctr: number; position: number }
 interface GscQuery { query: string; clicks: number; impressions: number; ctr: number; position: number }
 interface Gsc { kpis: GscKpis; series: { date: string; clicks: number; impressions: number }[]; queries: GscQuery[] }
@@ -57,7 +57,7 @@ const KpiCard = ({ icon, label, value, sub, accent, delta }: {
   </div>
 )
 
-const RankTable = ({ title, rows }: { title: string; rows: Row[] }) => (
+const RankTable = ({ title, rows, showUsers = false }: { title: string; rows: Row[]; showUsers?: boolean }) => (
   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
     <div className="px-6 py-4 border-b border-slate-100"><h3 className="text-sm font-bold text-slate-800">{title}</h3></div>
     <div className="overflow-x-auto">
@@ -65,6 +65,7 @@ const RankTable = ({ title, rows }: { title: string; rows: Row[] }) => (
         <thead>
           <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
             <th className="text-left font-semibold px-6 py-2.5 text-xs uppercase tracking-wider">Tên</th>
+            {showUsers && <th className="text-right font-semibold px-4 py-2.5 text-xs">Users</th>}
             <th className="text-right font-semibold px-4 py-2.5 text-xs">Sessions</th>
             <th className="text-right font-semibold px-4 py-2.5 text-xs">Conv.</th>
             <th className="text-right font-semibold px-6 py-2.5 text-xs">CR%</th>
@@ -74,12 +75,13 @@ const RankTable = ({ title, rows }: { title: string; rows: Row[] }) => (
           {rows.map(r => (
             <tr key={r.name} className="hover:bg-slate-50/40">
               <td className="px-6 py-3 font-medium text-slate-700 truncate max-w-[220px]">{r.name}</td>
+              {showUsers && <td className="px-4 py-3 text-right tabular-nums text-indigo-700 font-semibold">{formatNumber(r.users ?? 0)}</td>}
               <td className="px-4 py-3 text-right tabular-nums text-slate-800 font-semibold">{formatNumber(r.sessions)}</td>
               <td className="px-4 py-3 text-right tabular-nums text-slate-600">{formatNumber(r.conversions)}</td>
               <td className="px-6 py-3 text-right tabular-nums text-slate-600">{r.cr.toFixed(1)}%</td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={4} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={showUsers ? 5 : 4} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu</td></tr>}
         </tbody>
       </table>
     </div>
@@ -234,7 +236,7 @@ export default function WebsiteAnalyticsPage() {
 
             {/* Top countries + sources */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <RankTable title="Top quốc gia" rows={data.countries} />
+              <RankTable title="Top quốc gia" rows={data.countries} showUsers />
               <RankTable title="Top nguồn (source / medium)" rows={data.sources} />
             </div>
 

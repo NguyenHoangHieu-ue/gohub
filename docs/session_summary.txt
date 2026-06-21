@@ -1,5 +1,15 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 6 — verify phân quyền production + WORK.md + dọn listingCode)
+Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 7 — GA4 user count theo quốc gia: cột Users)
+
+## Session 71 tiếp 7 (2026-06-21) — GA4 user count VN/US (cột Users trong Top quốc gia)
+- User chọn "thêm cột Users vào Top quốc gia". lib/ga4.ts: query countries thêm metric activeUsers (ở CUỐI, giữ index sessions/conversions cho mapBreakdown dùng chung với sources). mapBreakdown đọc metricValues[2] → users (sources=0, không hiện).
+- website/page.tsx: Row thêm users?; RankTable thêm prop showUsers + cột Users (chỉ countries). colSpan động.
+- Verify GA4 thật (28 ngày): Vietnam 747 · United States 1131 · China 4680 users. tsc + build PASS.
+- → Hoàn tất 4/4 mục plan đã chọn (verify phân quyền, WORK.md, tính năng treo [listingCode + GA4], Lark chỉ chờ test tin nhắn thật).
+
+---
+
+## Session 71 tiếp 6 (2026-06-21) — Verify phân quyền production + WORK.md + dọn listingCode
 
 ## Session 71 tiếp 6 (2026-06-21) — Verify phân quyền production + housekeeping
 

@@ -1,3 +1,6 @@
+*21/6/2026 — Session 71 tiếp 7 — GA4 user count theo quốc gia (cột Users)*
+122. ✅ DONE: GA4 user count VN/US — thêm metric activeUsers vào query countries + cột "Users" trong bảng Top quốc gia (trang Website). Verify thật: Vietnam 747, US 1131, China 4680 users (28 ngày). mapBreakdown đọc metricValues[2] (sources=0). tsc + build PASS.
+
 *21/6/2026 — Session 71 tiếp 6 — Verify phân quyền production + WORK.md + dọn listingCode*
 121. ✅ VERIFIED (phân quyền production AN TOÀN): role_permissions chưa có row→default (bod=all). User: admin 4 (all), bod 3 (baseline all∪grant→all), standard 2 (no analytics), staff 0. KHÔNG ai mất quyền. Lưu ý: 3 bod giờ thấy tất cả (đúng intel).
 120. ✅ DONE: cập nhật WORK.md (5→6 agent, GA4/GSC/Channel Costs/Feedback từ defer→done, phân quyền Role×Report, migrations v17).

@@ -150,6 +150,7 @@ const mapBreakdown = (rep: GA4Report) => (rep.rows || []).map(r => ({
   sessions: num(r.metricValues[0]),
   conversions: num(r.metricValues[1]),
   cr: num(r.metricValues[0]) > 0 ? (num(r.metricValues[1]) / num(r.metricValues[0])) * 100 : 0,
+  users: num(r.metricValues[2]), // chỉ countries có metric activeUsers (index 2); sources = 0
 }))
 
 // Tổng hợp đầy đủ 1 site: GA4 (KPIs + series + breakdown) + GSC + so sánh kỳ trước (compare).
@@ -157,7 +158,7 @@ export async function ga4WebsiteSummary(siteId: string | undefined, days: number
   const rel = `${days}daysAgo`
   const [cur, countries, sources, gsc] = await Promise.all([
     ga4Period(siteId, rel, "today"),
-    runGA4Report({ siteId, startDate: rel, endDate: "today", dimensions: ["country"], metrics: ["sessions", "conversions"], limit: 8 }),
+    runGA4Report({ siteId, startDate: rel, endDate: "today", dimensions: ["country"], metrics: ["sessions", "conversions", "activeUsers"], limit: 8 }),
     runGA4Report({ siteId, startDate: rel, endDate: "today", dimensions: ["sessionSourceMedium"], metrics: ["sessions", "conversions"], limit: 8 }),
     gscPeriod(siteId, days).catch(() => null),
   ])
