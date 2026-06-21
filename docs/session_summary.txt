@@ -1,5 +1,17 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 71 tiếp 4 — E2E test 3 agent tu-van/tra-cuu/gap-analysis: PASS 7/7)
+Cập nhật lần cuối: 2026-06-21 (session 71 — TỔNG QUAN ngày: phân quyền + QA analytics + E2E chatbot)
+
+## NGÀY 2026-06-21 — TỔNG QUAN (session 71, 6 commit)
+Chuỗi QA chuyên sâu sau khi user yêu cầu: (1) bê y hệt phân quyền intel, (2) tester audit analytics, (3) E2E chatbot.
+- 2211f28 — Phân quyền Analytics Role×Report "bê y hệt gohub-intel": API /api/config/role-permissions + ma trận admin (bod/staff × 18 báo cáo) + sidebar lọc theo quyền nền role ∪ per-user grant (deny-by-default). Dùng app_settings, không cần migration.
+- 7f00522 — Fix analytics A/B/C: (A) getTargetSummary sai bảng target_planning→analytics_target_planning (Dashboard target trước luôn 0); (B) b2b Margin%/GPM2% mũi tên đúng chiều; (C) safeDate/safeCompanyCode chống SQL injection. + chatbot country detection so khớp ranh giới từ (wordMatch).
+- b7c142e — Deep-dive 3 mục analytics (CAC/ROAS, dedup Strategic, projection): KẾT LUẬN ĐÚNG & khớp intel; thêm 3 cải thiện nhỏ (note Tỷ lệ chốt, cảnh báo projection range, siết dedup match chính xác).
+- dd88bdd — E2E nhánh BI (Gemini + gohub_dw thật): exec 5/5; fix routing (override BI xác định + blocklist groupCode) + ⭐ homograph "nhất"→"Nhật"(Japan) qua dấu thanh NFD. Routing 10/10.
+- cc802ad — E2E 3 agent tu-van/tra-cuu/gap-analysis (Supabase + Gemini thật): 7/7 PASS, không bug.
+- Verify xuyên suốt: tsc + next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 do OOM heap mặc định).
+- CÒN LẠI (tùy chọn): E2E agent giai-dap + tao-template; tighten listingCode regex (vô hại).
+
+---
 
 ## Session 71 tiếp 4 (2026-06-21) — E2E test 3 agent còn lại (Supabase + Gemini thật)
 
