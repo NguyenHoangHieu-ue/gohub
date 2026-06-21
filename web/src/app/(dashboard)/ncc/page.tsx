@@ -364,60 +364,7 @@ function fmtData(p: WMProduct) {
   return p.is_daily ? `${gb}/ngày` : gb
 }
 
-function fmtThrottle(kbps: number | null) {
-  if (!kbps) return "No limit"
-  if (kbps >= 1000) return `${kbps / 1000} Mbps`
-  return `${kbps} kbps`
-}
-
-function apnNote(p: WMProduct): string {
-  // Format providers per line (Country (Network) format)
-  const providerLines = (p.providers ?? "").split("\n")
-    .map(s => s.trim())
-    .filter(Boolean)
-
-  // If providers are in format "Country Network", keep them as-is (multi-line)
-  if (providerLines.length > 1) {
-    return providerLines.join(" | ")  // Join with separator for compact view
-  }
-
-  // Single line: region + network
-  const carriersRaw = [
-    p.onsite_carrier,
-    ...providerLines,
-  ].filter(Boolean)
-  const carriers = [...new Set(carriersRaw)]
-
-  const region = p.region ?? ""
-  if (!region && !carriers.length) return p.apn ?? ""
-  if (carriers.length) return `${region} (${carriers.join(", ")})`
-  return region
-}
-
-function apnTooltip(p: WMProduct): string {
-  // Full detail tooltip with providers per line
-  const details: string[] = []
-
-  if (p.apn) details.push(`APN: ${p.apn}`)
-  if (p.network_type) details.push(`Network: ${p.network_type}`)
-
-  // Show providers per line (Country + Network format)
-  if (p.providers) {
-    const providerLines = p.providers.split("\n")
-      .map(s => s.trim())
-      .filter(Boolean)
-    if (providerLines.length > 0) {
-      details.push("Providers:")
-      details.push(...providerLines.map(line => `  • ${line}`))
-    }
-  }
-
-  if (p.region) details.push(`Region: ${p.region}`)
-  if (p.coverage) details.push(`Coverage: ${p.coverage}`)
-  if (p.notification) details.push(`Note: ${p.notification}`)
-
-  return details.join("\n")
-}
+// (Throttle/APN/providers chi tiết đã chuyển hết vào DetailModal — bảng chỉ giữ cột tối thiểu)
 
 // ─── APN Modal ──────────────────────────────────────────────────────────────
 
@@ -852,13 +799,9 @@ function WMTab({ role }: { role?: string }) {
               <th className="text-left px-4 py-2.5">Vendor ID</th>
               <th className="text-left px-4 py-2.5">Tên</th>
               <th className="text-left px-4 py-2.5">Vùng</th>
-              <th className="text-left px-4 py-2.5">Type</th>
-              <th className="text-left px-4 py-2.5">Days</th>
+              <th className="text-left px-4 py-2.5">SIM</th>
               <th className="text-left px-4 py-2.5">Data</th>
-              <th className="text-left px-4 py-2.5">Throttle</th>
               {showCost && <th className="text-left px-4 py-2.5">COGS</th>}
-              <th className="text-left px-4 py-2.5">KYC</th>
-              <th className="text-left px-4 py-2.5">APN</th>
               <th className="text-left px-4 py-2.5">Trong HT</th>
               <th className="text-left px-4 py-2.5">SKU HT</th>
               <th className="px-4 py-2.5"></th>
@@ -868,7 +811,7 @@ function WMTab({ role }: { role?: string }) {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-b border-gray-50">
-                  {Array.from({ length: showCost ? 13 : 12 }).map((_, j) => (
+                  {Array.from({ length: showCost ? 9 : 8 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-3 bg-gray-100 rounded animate-pulse" style={{ width: `${40 + Math.random() * 40}%` }} />
                     </td>
@@ -876,7 +819,7 @@ function WMTab({ role }: { role?: string }) {
                 </tr>
               ))
             ) : products.length === 0 ? (
-              <tr><td colSpan={showCost ? 13 : 12} className="text-center py-12 text-gray-400">Không có dữ liệu</td></tr>
+              <tr><td colSpan={showCost ? 9 : 8} className="text-center py-12 text-gray-400">Không có dữ liệu</td></tr>
             ) : products.map(p => (
               <>
                 <tr key={p.vendor_product_id}
@@ -886,38 +829,19 @@ function WMTab({ role }: { role?: string }) {
                   } ${expanded === p.vendor_product_id ? "bg-blue-50/30" : ""}`}
                 >
                   <td className="px-4 py-2.5 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{p.vendor_product_id}</td>
-                  <td className="px-4 py-2.5 text-gray-700 text-xs max-w-[200px] truncate" title={p.product_name ?? ""}>{p.product_name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-gray-700 text-xs max-w-[220px] truncate" title={p.product_name ?? ""}>{p.product_name ?? "—"}</td>
                   <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{p.region ?? "—"}</td>
                   <td className="px-4 py-2.5 text-xs">
                     <span className={`px-1.5 py-0.5 rounded font-medium ${
                       p.sim_type === "eSIM" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"
                     }`}>{p.sim_type ?? "—"}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-700 text-xs">{p.days ?? "—"}</td>
                   <td className="px-4 py-2.5 text-gray-700 text-xs whitespace-nowrap">{fmtData(p)}</td>
-                  <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{fmtThrottle(p.throttle_kbps)}</td>
                   {showCost && (
                     <td className="px-4 py-2.5 text-gray-700 text-xs whitespace-nowrap">
                       {p.cogs ? `${p.cogs} ${p.cogs_currency ?? ""}` : "—"}
                     </td>
                   )}
-                  <td className="px-4 py-2.5 text-xs">
-                    {p.is_kyc
-                      ? <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium text-[10px]">KYC</span>
-                      : <span className="text-gray-300">No</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500 max-w-[200px]">
-                    {apnNote(p) ? (
-                      <div className="flex items-center gap-1.5 cursor-pointer hover:text-brand-600" title={apnTooltip(p)}>
-                        <span className="truncate">{apnNote(p)}</span>
-                        {(p.providers?.split("\n").filter(s => s.trim()).length ?? 0) > 1 && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-semibold text-[9px] whitespace-nowrap flex-shrink-0">
-                            {p.providers!.split("\n").filter(s => s.trim()).length}CN
-                          </span>
-                        )}
-                      </div>
-                    ) : <span className="text-gray-300">—</span>}
-                  </td>
                   <td className="px-4 py-2.5 text-xs">
                     {p.in_system
                       ? <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium text-[10px]">✓ Có</span>
@@ -943,7 +867,7 @@ function WMTab({ role }: { role?: string }) {
                 </tr>
                 {expanded === p.vendor_product_id && (
                   <tr key={`${p.vendor_product_id}-expand`}>
-                    <td colSpan={showCost ? 13 : 12} className="p-0">
+                    <td colSpan={showCost ? 9 : 8} className="p-0">
                       <SkuSubTable skus={p.system_skus} showCost={showCost} />
                     </td>
                   </tr>
@@ -1070,18 +994,18 @@ export default function NccPage() {
   const [vendor, setVendor] = useState<VendorTab>("wm")
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="p-6 space-y-5">
+      <div className="flex items-center gap-2.5">
         <Truck size={20} className="text-brand-600" />
-        <h1 className="text-xl font-bold text-gray-900">SP Vendor</h1>
+        <h1 className="text-xl font-semibold text-gray-900">SP Vendor</h1>
       </div>
 
       {/* Vendor tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         {([["wm", "WORLDMOVE"], ["3hk", "3HK"]] as [VendorTab, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setVendor(key)}
-            className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-              vendor === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            className={`px-5 py-1.5 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              vendor === key ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}>
             <Globe size={13} />
             {label}

@@ -1,5 +1,25 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 2 — Gộp tab Products+SKU + rút gọn cột Listing category)
+Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 3 — Polish NCC catalog đồng bộ với SP Hệ Thống)
+
+## Session 72 tiếp 3 (2026-06-21) — Polish NCC catalog (SP Vendor) đồng bộ
+
+User: "polish lại NCC catalog cho đồng bộ" (với SP Hệ Thống vừa làm). Pattern đồng bộ: list gọn cột +
+dồn chi tiết vào nút Chi tiết + style nhất quán; GIỮ tính năng riêng NCC (gap filter, import, expand SKU).
+
+### Đã làm (ncc/page.tsx, 1 file)
+- Bảng WM trim cột: 12-13 → 8-9 cột. Giữ: Vendor ID · Tên · Vùng · SIM · Data · COGS(admin) · Trong HT ·
+  SKU HT(expand) · Chi tiết. BỎ khỏi bảng (đã có trong DetailModal): Days, Throttle, KYC, APN.
+- Xóa helper apnNote/apnTooltip/fmtThrottle (chỉ dùng cho cột APN/Throttle đã bỏ). Cập nhật colSpan 13/12 → 9/8.
+- DetailModal WM giữ nguyên (đã đầy đủ: Số ngày/Throttle/KYC + section APN & Mạng + Providers + SKU HT).
+- Tab switcher + header style khớp SP Hệ Thống: rounded-xl, px-5, active text-brand-700, font-semibold, space-y-5.
+- 3HK tab giữ nguyên (đã đơn giản/nhất quán).
+
+### Test
+- tsc PASS, next build PASS (/ncc 8.84 kB).
+
+---
+
+## Session 72 tiếp 2 (2026-06-21) — SP Hệ Thống: gộp Products+SKU, rút gọn Listing category_code
 
 ## Session 72 tiếp 2 (2026-06-21) — SP Hệ Thống: gộp Products+SKU, rút gọn Listing category_code
 
