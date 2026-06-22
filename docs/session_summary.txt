@@ -129,7 +129,15 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   /api/analytics/b2b/strategic-performance. Adapt: import web, inline getDefaultDateRange/formatDateToISO.
   build PASS (12.9 kB). ⚠️ /api/analytics/vendors/{list,report} cũ không còn dùng; để lại.
 
-### CÒN LẠI (#2 — sau Vendors): 3HK → Products → B2C → rà các trang ~parity.
+### 3HK — XONG full parity
+- ✅ REPLACE analytics/3hk-usage/page.tsx bằng port intel ThreeHKDataUsage (~991 dòng). Tab Daily/Fixed/
+  Unlimited + search debounce + date range. 4 KPI (Total Usage/Capacity/Avg %/Active SIMs). 3 bảng sortable:
+  Avg Usage by SKU Type, Avg Usage by SKU (pagination 10), Records (pagination server-side 50, bundle-based
+  CTE bundle_starts/filtered_bundles/per_bundle_usage trên fact_data_usage WHERE vendor=3HKDATAPOOL). Data qua
+  /api/analytics/query (4 query). motion KHÔNG dùng → bỏ; inline getDefaultDateRange/formatDate; formatNumber web.
+  build PASS (7.23 kB). ⚠️ /api/analytics/3hk-usage/report cũ không còn dùng.
+
+### CÒN LẠI (#2 — sau 3HK): Products → B2C → rà các trang ~parity.
 
 ---
 
