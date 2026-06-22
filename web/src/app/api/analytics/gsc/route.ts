@@ -6,7 +6,7 @@ import { runGSC } from "@/lib/ga4"
 // Generic Search Console endpoint (port "y hệt" gohub-intel /api/analytics/gsc).
 // Params: siteId, startDate, endDate (YYYY-MM-DD bắt buộc), dimensions (csv, mặc định date).
 // Trả mảng rows GSC ({ keys, clicks, impressions, ctr, position }) — khớp cách intel component đọc.
-const ANALYTICS_ROLES = new Set(["admin", "manager", "bod", "staff"])
+const ANALYTICS_ROLES = new Set(["admin", "bod", "staff"])
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)

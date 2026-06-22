@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
-const canSeeCost = (role?: string) => role === "admin" || role === "manager"
+const canSeeCost = (role?: string) => role === "admin"
 
 export async function GET() {
   const session = await getServerSession(authOptions)

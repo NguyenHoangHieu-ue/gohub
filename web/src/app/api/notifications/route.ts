@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(limit)
 
-  // Standard users: only see 'all' visibility (no price changes)
-  if (role === "standard") query = query.eq("visibility", "all")
+  // Staff (PM users): chỉ thấy visibility 'all' (không thấy thay đổi giá)
+  if (role === "staff") query = query.eq("visibility", "all")
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

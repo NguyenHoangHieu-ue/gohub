@@ -3,7 +3,7 @@ import { getServerSession }  from "next-auth"
 import { authOptions }       from "@/lib/auth"
 import { queryAnalyticsOne } from "@/lib/analytics-db"
 
-const ANALYTICS_ROLES = new Set(["admin", "manager", "bod", "staff"])
+const ANALYTICS_ROLES = new Set(["admin", "bod", "staff"])
 
 export async function GET() {
   const session = await getServerSession(authOptions)

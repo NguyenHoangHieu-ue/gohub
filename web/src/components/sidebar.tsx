@@ -149,7 +149,7 @@ function useMyProfile(username: string) {
 function useDeptTabs(role: string, department: string) {
   const [extraTabs, setExtraTabs] = useState<Set<string>>(new Set())
   useEffect(() => {
-    if (role === "admin" || role === "manager") return
+    if (role === "admin") return
     if (!SPECIFIC_DEPTS.includes(department)) return
     fetch("/api/permissions", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)

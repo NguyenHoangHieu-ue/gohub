@@ -6,7 +6,7 @@ import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown
 import * as XLSX from "xlsx"
 import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
 
-const canSeeCost = (role?: string) => role === "admin" || role === "manager"
+const canSeeCost = (role?: string) => role === "admin"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

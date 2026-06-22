@@ -147,7 +147,7 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
 
 export default function TargetsPage() {
   const { data: session } = useSession()
-  const canEdit = session?.user?.role === "admin" || session?.user?.role === "manager"
+  const canEdit = session?.user?.role === "admin"
 
   const [quarter, setQuarter] = useState(getDefaultQuarter)
   const [loading, setLoading] = useState(false)

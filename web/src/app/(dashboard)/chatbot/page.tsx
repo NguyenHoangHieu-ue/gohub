@@ -203,7 +203,7 @@ function groupConversations(convs: Conversation[]) {
 export default function ChatbotPage() {
   const { data: session } = useSession()
   const userName = session?.user?.name || ""
-  const userRole = (session?.user as any)?.role || "standard"
+  const userRole = (session?.user as any)?.role || "staff"
 
   const [conversations,  setConversations] = useState<Conversation[]>([])
   const [activeConvId,   setActiveConvId]  = useState<string | null>(null)

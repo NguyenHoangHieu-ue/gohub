@@ -36,14 +36,14 @@ export interface GuardResult {
 // ─── Policy mặc định (role × category) ──────────────────────────────────────────
 // "dept" = chỉ cho phép khi câu hỏi thuộc đúng phòng ban của user (hoặc dept="all").
 const DEFAULT_POLICY: Record<GuardCategory, Record<string, Decision>> = {
-  product_catalog:        { admin: "allow", manager: "allow", bod: "allow", staff: "allow", standard: "allow" },
-  revenue_bi:             { admin: "allow", manager: "allow", bod: "allow", staff: "allow", standard: "deny"  },
-  margin_cogs:            { admin: "allow", manager: "allow", bod: "allow", staff: "deny",  standard: "deny"  },
-  staff_hr:               { admin: "allow", manager: "allow", bod: "allow", staff: "deny",  standard: "deny"  },
-  customer_pii:           { admin: "allow", manager: "allow", bod: "allow", staff: "deny",  standard: "deny"  },
-  internal_kb_other_dept: { admin: "allow", manager: "allow", bod: "allow", staff: "dept",  standard: "dept"  },
-  system_internal:        { admin: "allow", manager: "deny",  bod: "deny",  staff: "deny",  standard: "deny"  },
-  general:                { admin: "allow", manager: "allow", bod: "allow", staff: "allow", standard: "allow" },
+  product_catalog:        { admin: "allow", bod: "allow", staff: "allow" },
+  revenue_bi:             { admin: "allow", bod: "allow", staff: "allow" },
+  margin_cogs:            { admin: "allow", bod: "allow", staff: "deny"  },
+  staff_hr:               { admin: "allow", bod: "allow", staff: "deny"  },
+  customer_pii:           { admin: "allow", bod: "allow", staff: "deny"  },
+  internal_kb_other_dept: { admin: "allow", bod: "allow", staff: "dept"  },
+  system_internal:        { admin: "allow", bod: "deny",  staff: "deny"  },
+  general:                { admin: "allow", bod: "allow", staff: "allow" },
 }
 
 export const GUARD_CATEGORIES: GuardCategory[] = [
@@ -187,13 +187,13 @@ export async function guardCheck(
   department?: string,
   opts?: GuardOptions,
 ): Promise<GuardResult> {
-  const r = (role || "standard").toLowerCase()
+  const r = (role || "staff").toLowerCase()
   const restrict   = opts?.onlyCategories
   const ignoreRole = opts?.ignoreRole ?? false
 
   // admin / manager: toàn quyền → bỏ qua hẳn (tiết kiệm 1 call Gemini).
   // KHÔNG áp khi ignoreRole (Lark group: không tin role nên vẫn phải kiểm).
-  if (!ignoreRole && (r === "admin" || r === "manager")) {
+  if (!ignoreRole && r === "admin") {
     return { allowed: true, reason: "", category: "general" }
   }
 

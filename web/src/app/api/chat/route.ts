@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { messages, userName } = await req.json()
-  const role       = (session.user.role || "standard") as UserRole
+  const role       = (session.user.role || "staff") as UserRole
   const department = (session.user as any).department || "all"
   const name    = userName || session.user.name || "bạn"
   const history = (messages as Message[]).slice(0, -1)

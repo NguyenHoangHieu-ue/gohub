@@ -1,5 +1,5 @@
 export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gap-analysis' | 'tao-template' | 'bi-analyst'
-export type UserRole = 'admin' | 'manager' | 'standard'
+export type UserRole = 'admin' | 'bod' | 'staff'
 
 export interface Message {
   role: 'user' | 'assistant'

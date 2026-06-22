@@ -147,7 +147,7 @@ Nghĩa: Product support country đó nhưng chưa có SKU active khớp combo ch
 export const AGENTS: Record<AgentId, AgentDef> = {
   "tu-van": {
     id: "tu-van", name: "Tư Vấn", icon: "🔍",
-    allowedRoles: ["admin", "manager", "standard"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Agent Tư Vấn — tìm sản phẩm SIM/eSIM GoHub theo nước, khu vực, số ngày, dung lượng.
 
 Dữ liệu đã được inject bên dưới. Đọc phần "=== DỮ LIỆU TỪ HỆ THỐNG ===" để biết cần làm gì.
@@ -208,7 +208,7 @@ ${DISPLAY_RULES}`,
 
   "tra-cuu": {
     id: "tra-cuu", name: "Tra Cứu", icon: "📋",
-    allowedRoles: ["admin", "manager", "standard"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Agent Tra Cứu — tra cứu chi tiết SKU / Product / Listing / Item và giá vốn (COGS) / tỷ giá.
 
 QUY TẮC TRA CỨU:
@@ -233,7 +233,7 @@ ${DISPLAY_RULES}`,
 
   "giai-dap": {
     id: "giai-dap", name: "Giải Đáp", icon: "💡",
-    allowedRoles: ["admin", "manager", "standard"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Agent Giải Đáp — giải thích thuật ngữ, cấu trúc mã, chính sách và hệ thống GoHub.
 
 Chỉ trả lời trong phạm vi: thuật ngữ sản phẩm, cấu trúc mã SKU/Product/Item, vendor, nhóm nước, data policy.
@@ -270,7 +270,7 @@ ${DISPLAY_RULES}`,
 
   "gap-analysis": {
     id: "gap-analysis", name: "NCC & Gap", icon: "🔄",
-    allowedRoles: ["admin", "manager", "standard"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Agent NCC & Gap — CHỦ SỞ HỮU toàn bộ catalog nhà cung cấp (NCC): WorldMove (WM) và 3HK.
 Xử lý 2 kiểu câu hỏi trên cùng nguồn dữ liệu NCC:
   (A) BROWSE — "WM có gói gì cho nước X", "nhà cung cấp có gì cho Hàn" → liệt kê catalog NCC.
@@ -303,7 +303,7 @@ ${DISPLAY_RULES}`,
 
   "bi-analyst": {
     id: "bi-analyst", name: "BI Analyst", icon: "📊",
-    allowedRoles: ["admin", "manager", "standard"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Gấu Bi-Ai — chuyên gia phân tích dữ liệu kinh doanh của GoHub.
 Nhiệm vụ: dùng tool executeSQL để truy vấn database gohub_dw, phân tích và trả lời câu hỏi về doanh thu, đơn hàng, kênh bán, nhân viên, sản phẩm, target, fulfillment.
 
@@ -382,7 +382,7 @@ Kèm theo giải thích ngắn sau khối chart.
 
   "tao-template": {
     id: "tao-template", name: "Tạo Template", icon: "📄",
-    allowedRoles: ["admin", "manager"],
+    allowedRoles: ["admin", "bod", "staff"],
     systemPrompt: `Bạn là Agent Tạo Template — giúp tạo file Excel template sản phẩm GoHub từ catalog NCC (WM hoặc 3HK).
 
 MỤC TIÊU: Hỏi đủ thông tin → Khi đủ rồi → xuất JSON action block để hệ thống tạo file.

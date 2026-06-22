@@ -67,7 +67,7 @@ async function getUserRole(openId: string): Promise<{ role: UserRole; name: stri
     .eq("lark_open_id", openId)
     .maybeSingle()
   return {
-    role: (data?.role as UserRole) ?? "standard",
+    role: (data?.role as UserRole) ?? "staff",
     name: data?.name ?? "",
   }
 }
@@ -369,7 +369,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     // Chỉ gửi error message nếu response chưa gửi được
     if (!responseSent) {
       // Lấy role để quyết định hiển thị lỗi chi tiết hay không
-      let errRole = "standard"
+      let errRole = "staff"
       try {
         const { role } = await getUserRole(openId)
         errRole = role

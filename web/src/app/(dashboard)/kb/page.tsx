@@ -110,7 +110,7 @@ function usePermissions(role: string) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function KBPage() {
   const { data: session } = useSession()
-  const role     = (session?.user as any)?.role ?? "standard"
+  const role     = (session?.user as any)?.role ?? "staff"
   const username = session?.user?.name ?? ""
   const [tab, setTab] = useState<"docs" | "wiki" | "search">("docs")
   const can = usePermissions(role)
@@ -164,7 +164,7 @@ type MrpState = {
 }
 
 function DocsTab({ role, username, canUpload }: { role: string; username: string; canUpload: boolean }) {
-  const canDelete = (uploadedBy: string) => role === "admin" || role === "manager" || uploadedBy === username
+  const canDelete = (uploadedBy: string) => role === "admin" || uploadedBy === username
   const [docs,          setDocs]          = useState<KBDoc[]>([])
   const [loading,       setLoading]       = useState(true)
   const [deptFilter,    setDeptFilter]    = useState<Department | "">("")

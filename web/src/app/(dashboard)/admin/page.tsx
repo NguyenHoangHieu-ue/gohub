@@ -175,7 +175,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   onNotify:    (type: "success" | "error", text: string) => void
 }) {
   const [selected,     setSelected]     = useState<string>("")
-  const [role,         setRole]         = useState<string>("standard")
+  const [role,         setRole]         = useState<string>("staff")
   const [department,   setDepartment]   = useState<string>("none")
   const [analytics,    setAnalytics]    = useState<Set<string>>(new Set())
   const [tabs,         setTabs]         = useState<Set<string>>(new Set())
@@ -291,10 +291,8 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               <div>
                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vai trò (Role)</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={`mt-1.5 ${selectCls}`}>
-                  <option value="standard">Standard</option>
                   <option value="bod">BOD</option>
                   <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
@@ -398,7 +396,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
   onNotify:  (type: "success" | "error", text: string) => void
   setTab:    (t: Tab) => void
 }) {
-  const [form, setForm]   = useState({ username: "", name: "", email: "", role: "standard", password: "", confirm: "" })
+  const [form, setForm]   = useState({ username: "", name: "", email: "", role: "staff", password: "", confirm: "" })
   const [loading, setLoading] = useState(false)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -416,7 +414,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
     if (res.ok) {
       onRefresh()
       onNotify("success", `Đã thêm user ${form.username}`)
-      setForm({ username: "", name: "", email: "", role: "standard", password: "", confirm: "" })
+      setForm({ username: "", name: "", email: "", role: "staff", password: "", confirm: "" })
       setTab("list")
     } else {
       const { error } = await res.json()
@@ -437,10 +435,8 @@ function AddUser({ onRefresh, onNotify, setTab }: {
             onChange={e => set("role", e.target.value)}
             className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            <option value="standard">Standard</option>
             <option value="bod">BOD</option>
             <option value="staff">Staff</option>
-            <option value="manager">Manager</option>
             <option value="admin">Admin</option>
           </select>
         </div>
@@ -854,10 +850,8 @@ function B2CKpiSection({ onNotify }: { onNotify: (type: "success" | "error", tex
 // admin = toàn quyền (không cần nhập). Để trống = không giới hạn role đó.
 function RoleFiltersSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
   const ROLES: { key: string; label: string }[] = [
-    { key: "manager",  label: "Manager" },
     { key: "bod",      label: "BOD" },
     { key: "staff",    label: "Staff" },
-    { key: "standard", label: "Standard" },
   ]
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -938,18 +932,17 @@ function AccessPolicySection({ onNotify }: { onNotify: (type: "success" | "error
   const ROLES: { key: string; label: string }[] = [
     { key: "bod",      label: "BOD" },
     { key: "staff",    label: "Staff" },
-    { key: "standard", label: "Standard" },
   ]
   // Khớp DEFAULT_POLICY trong guardian.ts (để admin thấy mặc định khi chưa cấu hình)
   const DEFAULTS: Record<string, Record<string, Decision>> = {
-    product_catalog:        { bod: "allow", staff: "allow", standard: "allow" },
-    revenue_bi:             { bod: "allow", staff: "allow", standard: "deny"  },
-    margin_cogs:            { bod: "allow", staff: "deny",  standard: "deny"  },
-    staff_hr:               { bod: "allow", staff: "deny",  standard: "deny"  },
-    customer_pii:           { bod: "allow", staff: "deny",  standard: "deny"  },
-    internal_kb_other_dept: { bod: "allow", staff: "dept",  standard: "dept"  },
-    system_internal:        { bod: "deny",  staff: "deny",  standard: "deny"  },
-    general:                { bod: "allow", staff: "allow", standard: "allow" },
+    product_catalog:        { bod: "allow", staff: "allow" },
+    revenue_bi:             { bod: "allow", staff: "allow" },
+    margin_cogs:            { bod: "allow", staff: "deny"  },
+    staff_hr:               { bod: "allow", staff: "deny"  },
+    customer_pii:           { bod: "allow", staff: "deny"  },
+    internal_kb_other_dept: { bod: "allow", staff: "dept"  },
+    system_internal:        { bod: "deny",  staff: "deny"  },
+    general:                { bod: "allow", staff: "allow" },
   }
 
   const [policy, setPolicy] = useState<Record<string, Record<string, Decision>>>(DEFAULTS)
@@ -2558,13 +2551,13 @@ const PERM_FEATURES = [
   { key: "perm_ncc_import",   icon: BookOpen,        label: "NCC — Import dữ liệu",   desc: "Ai có thể upload file NCC để cập nhật giá" },
 ] as const
 
-const PERM_ROLES = ["manager", "standard"] as const
+const PERM_ROLES = ["staff"] as const
 
 const PERM_DEFAULTS: Record<string, string[]> = {
-  perm_kb_upload:    ["manager"],
-  perm_kb_wiki_view: ["manager"],
-  perm_kb_wiki_edit: ["manager"],
-  perm_ncc_import:   ["manager"],
+  perm_kb_upload:    [],
+  perm_kb_wiki_view: ["staff"],
+  perm_kb_wiki_edit: [],
+  perm_ncc_import:   [],
 }
 
 function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:string) => void }) {
