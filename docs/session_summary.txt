@@ -156,9 +156,12 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
 - ✅ B2C-1 (XONG): bảo toàn dashboard hiện tại → copy sang web/src/components/b2c-advanced-dashboard.tsx
   (export B2CAdvancedDashboard). page.tsx tạm = wrapper render <B2CAdvancedDashboard/> (HÀNH VI KHÔNG ĐỔI).
   tsc + build PASS.
-- 🔜 B2C-2: port intel B2CPerformance (~1482 dòng) thành view chính (/api/analytics/b2c/{kpis,trend,performance}
-  ĐÃ có; cần TẠO /api/analytics/b2c/loss-skus). page.tsx wrapper: main=intel + useSession isAdmin → nút
-  "Advanced" dưới cùng → toggle hiện B2CAdvancedDashboard. ⚠️ check shape b2c endpoints intel vs web.
+- ✅ B2C-2a (XONG): TẠO /api/analytics/b2c/loss-skus (top 10 SKU B2C lỗ margin<0; getBODFilters cho advanced).
+  build PASS. (b2c/kpis/trend/performance ĐÃ có sẵn.)
+- 🔜 B2C-2b: port intel B2CPerformance (~1482 dòng) thành view chính + page wrapper (main=intel, isAdmin→nút
+  Advanced→toggle B2CAdvancedDashboard). ⚠️ SHAPE: web b2c/kpis trả MẢNG {label,value,lastPeriod,change,
+  isPositive,isCurrency} — phải đối chiếu intel component mong gì (setKpis), điều chỉnh endpoint HOẶC component.
+  intel gọi: kpis, trend?period=, performance?groupBy=, loss-skus + prevMonth kpis. Bỏ motion.
 
 ### CÒN LẠI (#2 — sau B2C): rà các trang ~parity (Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment/Dashboard).
 
