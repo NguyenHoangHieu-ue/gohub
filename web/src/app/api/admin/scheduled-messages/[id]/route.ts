@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { runScheduledMessage } from "@/lib/scheduled-runner"
 
 function adminOnly(session: any) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -66,51 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error || !msg) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   try {
-    // Generate message with Gemini
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "")
-    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" })
-    const result = await model.generateContent(msg.prompt)
-    const text = result.response.text()
-
-    const finalText = msg.lark_keyword ? `${msg.lark_keyword} ${text}` : text
-
-    // Send to Lark
-    let larkUrl = msg.lark_webhook_url
-    if (!larkUrl) {
-      // Fallback: get lark_notify_chat_id from app_settings
-      const { data: setting } = await supabaseAdmin
-        .from("app_settings")
-        .select("value")
-        .eq("key", "lark_notify_chat_id")
-        .single()
-      if (!setting?.value) return NextResponse.json({ error: "Không tìm thấy Lark webhook / chat_id" }, { status: 400 })
-      // Use Lark message API via POST /api/notify/lark instead
-      const res = await fetch(`${process.env.NEXTAUTH_URL}/api/notify/lark`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.MCP_SECRET}`,
-        },
-        body: JSON.stringify({ text: finalText }),
-      })
-      if (!res.ok) throw new Error("Lark notify failed")
-      await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: new Date().toISOString() }).eq("id", params.id)
-      return NextResponse.json({ ok: true, preview: finalText.slice(0, 200) })
-    }
-
-    const res = await fetch(larkUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ msg_type: "text", content: { text: finalText } }),
-    })
-    if (!res.ok) throw new Error(`Lark webhook returned ${res.status}`)
-
-    await supabaseAdmin
-      .from("lark_scheduled_messages")
-      .update({ last_run_at: new Date().toISOString() })
-      .eq("id", params.id)
-
-    return NextResponse.json({ ok: true, preview: finalText.slice(0, 200) })
+    const finalText = await runScheduledMessage(msg)
+    return NextResponse.json({ ok: true, message: "Đã gửi", preview: finalText.slice(0, 200) })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

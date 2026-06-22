@@ -6,6 +6,15 @@
     },
     "src/app/api/chat/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/scheduled-messages/route.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/scheduled-messages",
+      "schedule": "* * * * *"
+    }
+  ]
 }
