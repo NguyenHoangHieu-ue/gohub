@@ -137,7 +137,14 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   /api/analytics/query (4 query). motion KHÔNG dùng → bỏ; inline getDefaultDateRange/formatDate; formatNumber web.
   build PASS (7.23 kB). ⚠️ /api/analytics/3hk-usage/report cũ không còn dùng.
 
-### CÒN LẠI (#2 — sau 3HK): Products → B2C → rà các trang ~parity.
+### Products port — P1→P2 (intel dùng /api/query + PDF export jspdf/modern-screenshot [web ĐÃ có] + 2 endpoint)
+- ✅ P1 (XONG): TẠO /api/config/country-codes (reuse getCountryMappings → [{code,country}], cho hiển thị region).
+  MỞ RỘNG /api/orders/export sẵn có thêm filter Products (skus/category/vendor/destination + rule) — additive,
+  chỉ áp khi có param. (orders/export + jspdf + modern-screenshot + formatTruncatedString web ĐÃ có sẵn). build PASS.
+- 🔜 P2: port ProductPerformance UI (~1226 dòng): filter SKU/category/vendor/channel/destination + comparison +
+  charts (trend/channel/region/pie) + SKU table + drill-down + export CSV (orders/export) + export PDF (jspdf).
+
+### CÒN LẠI (#2 — sau Products): B2C → rà các trang ~parity.
 
 ---
 

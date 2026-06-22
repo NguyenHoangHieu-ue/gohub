@@ -66,6 +66,42 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Product Performance filters (skus/category/vendor/destination) — chỉ áp khi có param
+    const skus = p.get("skus") || ""
+    const category = p.get("category") || ""
+    const vendor = p.get("vendor") || ""
+    const destination = p.get("destination") || ""
+    if (skus && skus !== "all" && skus !== "All") {
+      const list = skus.split(",").filter(Boolean)
+      if (list.length) {
+        const pls = list.map((_, i) => `$${params.length + i + 1}`).join(",")
+        where += ` AND f.sku IN (${pls})`; params.push(...list)
+      }
+    }
+    if (category && category !== "all" && category !== "All") {
+      params.push(category); where += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE category_name = $${params.length})`
+    }
+    if (vendor && vendor !== "all" && vendor !== "All") {
+      const list = vendor.split(",").filter(Boolean)
+      if (list.length) {
+        const pls = list.map((_, i) => `$${params.length + i + 1}`).join(",")
+        where += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE vendor IN (${pls}))`; params.push(...list)
+      }
+    }
+    if (destination && destination !== "all" && destination !== "All") {
+      const sw = String(p.get("startsWith") || "E")
+      const cl = parseInt(p.get("codeLength") || "3")
+      const gv = p.get("useGohubVietnamRule") === "true"
+      const gi = p.get("useGohubIncRule") === "true"
+      const regionExpr = `CASE
+        ${gv ? "WHEN LEFT(f.sku, 1) BETWEEN '1' AND '6' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
+        ${gi ? "WHEN LEFT(f.sku, 1) BETWEEN 'A' AND 'E' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
+        WHEN f.sku LIKE '${sw.replace(/'/g, "''")}%' THEN SUBSTRING(f.sku FROM ${sw.length + 1} FOR ${cl})
+        ELSE SUBSTRING(f.sku FROM 1 FOR ${cl})
+      END`
+      where += ` AND ${regionExpr} = $${params.length + 1}`; params.push(destination)
+    }
+
     where += ` AND COALESCE(st.name, TRIM(f.staff_code)) != 'Auto ESIM' AND f.sku != 'SHIPPINGFEE0'`
 
     const locationJoin = isSales ? "" : "LEFT JOIN dim_location l ON f.location_id = l.location_id"
