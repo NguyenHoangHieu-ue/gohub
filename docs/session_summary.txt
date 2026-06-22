@@ -77,7 +77,9 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   hợp đồng CostManagementModal. → Quyết định "lưu app_settings" thành thừa. Chỉ thiếu 1 endpoint:
   TẠO MỚI /api/config/subchannels?channel=X (generic, parameterized $1). build PASS.
   · Web còn sẵn /api/analytics/performance-channel, channels-with-platform-fee, bod-channel-performance.
-- 🔜 C2: port CostManagementModal (web) dùng endpoint sẵn có.
+- ✅ C2 (XONG): port CostManagementModal → web/src/components/cost-management-modal.tsx. Thay motion/react
+  bằng CSS animation có sẵn (animate-overlay-in/animate-modal-in), cn từ @/lib/utils, bỏ icon thừa
+  (Filter/AlertCircle). Dùng endpoint cost sẵn có + /api/config/subchannels. Chưa import (C3 sẽ dùng). build PASS.
 - 🔜 C3: port ChannelPerformance UI (KPI/filter/trend/projection/breakdown) qua /api/analytics/query.
 - 🔜 C4: wiring cost vào KPI (GP2) + verify số liệu thật gohub_dw.
 
