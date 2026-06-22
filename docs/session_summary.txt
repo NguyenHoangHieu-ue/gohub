@@ -148,7 +148,19 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   Data qua /api/analytics/query. Map web rule prefix→startsWith. build PASS (147 kB do jspdf bundle).
   ⚠️ /api/analytics/products/report cũ không còn dùng.
 
-### CÒN LẠI (#2 — sau Products): B2C (trang cuối theo độ lệch) → rà các trang ~parity.
+### B2C — HYBRID (user chốt): replace bằng intel + nút "Advanced" (admin) bật tab phụ = dashboard tùy biến
+- Bối cảnh: web /analytics/b2c là dashboard tùy biến (Section 1-5: DT VN/US, khách mới/quay lại, CAC/Users/
+  Leads, GA4 CR, Spend&ROAS — session 66-70). Intel B2CPerformance KHÁC (Revenue&GP Trend/Channel Contribution/
+  Performance Breakdown/loss-skus). User: REPLACE view chính bằng intel + nút Advanced (chỉ admin) → tab phụ
+  hiện dashboard hiện tại.
+- ✅ B2C-1 (XONG): bảo toàn dashboard hiện tại → copy sang web/src/components/b2c-advanced-dashboard.tsx
+  (export B2CAdvancedDashboard). page.tsx tạm = wrapper render <B2CAdvancedDashboard/> (HÀNH VI KHÔNG ĐỔI).
+  tsc + build PASS.
+- 🔜 B2C-2: port intel B2CPerformance (~1482 dòng) thành view chính (/api/analytics/b2c/{kpis,trend,performance}
+  ĐÃ có; cần TẠO /api/analytics/b2c/loss-skus). page.tsx wrapper: main=intel + useSession isAdmin → nút
+  "Advanced" dưới cùng → toggle hiện B2CAdvancedDashboard. ⚠️ check shape b2c endpoints intel vs web.
+
+### CÒN LẠI (#2 — sau B2C): rà các trang ~parity (Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment/Dashboard).
 
 ---
 
