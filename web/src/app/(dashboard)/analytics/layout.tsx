@@ -30,8 +30,8 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   const role     = (session.user as any).role     as string
   const username = (session.user as any).username as string
 
-  // admin/manager: toàn quyền — không cần truy DB
-  if (role === "admin" || role === "manager") return <>{children}</>
+  // admin: toàn quyền — không cần truy DB
+  if (role === "admin") return <>{children}</>
 
   // Lấy hồ sơ mới nhất từ DB (role + trang cấp thêm) — không phụ thuộc session cũ
   const { data: profile } = await supabaseAdmin
@@ -40,7 +40,7 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
     .eq("username", username)
     .maybeSingle()
   const dbRole = profile?.role ?? role
-  if (dbRole === "admin" || dbRole === "manager") return <>{children}</>
+  if (dbRole === "admin") return <>{children}</>
 
   // Quyền nền theo role (ma trận role_permissions) ∪ trang cấp thêm per-user (allowed_analytics)
   const { data: rp } = await supabaseAdmin

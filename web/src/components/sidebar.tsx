@@ -251,7 +251,7 @@ export function Sidebar() {
     }
   }, [pathname])
 
-  const role       = session?.user?.role     || "standard"
+  const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
@@ -268,7 +268,7 @@ export function Sidebar() {
   //  - admin/manager: toàn quyền
   //  - còn lại: quyền NỀN theo role (ma trận role_permissions) ∪ trang cấp THÊM per-user (allowed_analytics)
   const analyticsGroups = (() => {
-    if (effectiveRole === "admin" || effectiveRole === "manager") return ANALYTICS_GROUPS
+    if (effectiveRole === "admin") return ANALYTICS_GROUPS
     const baseline = rolePerms?.[effectiveRole] ?? ANALYTICS_DEFAULTS[effectiveRole] ?? []
     const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
     return ANALYTICS_GROUPS
@@ -281,15 +281,15 @@ export function Sidebar() {
 
   // Hiện mục Analytics cho admin/manager, hoặc bất kỳ role nào (gồm standard) có ít nhất 1 trang được cấp.
   // Enforce truy cập thật ở server (analytics/layout.tsx); đây chỉ là hiển thị link.
-  const showAnalytics = effectiveRole === "admin" || effectiveRole === "manager" || analyticsGroups.length > 0
+  const showAnalytics = effectiveRole === "admin" || analyticsGroups.length > 0
 
   const navItems = (() => {
-    if (effectiveRole === "bod" || effectiveRole === "staff") {
+    // bod: chỉ chatbot (thuần analytics). admin: full + Admin.
+    if (effectiveRole === "bod") {
       return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }]
     }
     if (effectiveRole === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
-    if (effectiveRole === "manager") return NAV_ALL
-    // per-user allowed_tabs (nếu set) override dept matrix
+    // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)
     const pmTabs = allowedTabs ?? Array.from(extraTabs)
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...pmTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
