@@ -15,9 +15,10 @@ interface PlanningData {
   group: string
   prevQuarterActuals: Record<string, number>
   prevQuarter3hkActuals: Record<string, number>
+  prevQuarterGpm2Actuals: Record<string, number>
   monthlyTargets: Record<string, number>
   monthly3hkTargets: Record<string, number>
-  monthlyUnitTargets: Record<string, number>
+  monthlyGpm2Targets: Record<string, number>
 }
 
 interface PlanningResponse {
@@ -154,7 +155,7 @@ export default function TargetsPage() {
   const [data, setData] = useState<PlanningResponse | null>(null)
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [targets3hk, setTargets3hk] = useState<Record<string, number>>({})
-  const [targetsUnit, setTargetsUnit] = useState<Record<string, number>>({})
+  const [targetsGpm2, setTargetsGpm2] = useState<Record<string, number>>({})
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const fetchData = useCallback(async () => {
@@ -166,13 +167,13 @@ export default function TargetsPage() {
       if (json.error) throw new Error(json.error)
       setData(json)
 
-      const t: Record<string, number> = {}, t3: Record<string, number> = {}, tu: Record<string, number> = {}
+      const t: Record<string, number> = {}, t3: Record<string, number> = {}, tg: Record<string, number> = {}
       ;(json.data || []).forEach((item: PlanningData) => {
         Object.entries(item.monthlyTargets).forEach(([m, v]) => { t[`${item.channel}_${m}`] = v as number })
         Object.entries(item.monthly3hkTargets).forEach(([m, v]) => { t3[`${item.channel}_${m}`] = v as number })
-        Object.entries(item.monthlyUnitTargets || {}).forEach(([m, v]) => { tu[`${item.channel}_${m}`] = v as number })
+        Object.entries(item.monthlyGpm2Targets || {}).forEach(([m, v]) => { tg[`${item.channel}_${m}`] = v as number })
       })
-      setTargets(t); setTargets3hk(t3); setTargetsUnit(tu)
+      setTargets(t); setTargets3hk(t3); setTargetsGpm2(tg)
     } catch (err: any) {
       console.error(err)
       setMessage({ type: "error", text: "Hiếu đang fix, vui lòng đợi" })
@@ -187,7 +188,7 @@ export default function TargetsPage() {
     if (!canEdit) return
     setSaving(true); setMessage(null)
     try {
-      const allKeys = Array.from(new Set([...Object.keys(targets), ...Object.keys(targets3hk), ...Object.keys(targetsUnit)]))
+      const allKeys = Array.from(new Set([...Object.keys(targets), ...Object.keys(targets3hk), ...Object.keys(targetsGpm2)]))
       const targetsArray = allKeys.map(key => {
         const li = key.lastIndexOf("_")
         return {
@@ -195,7 +196,7 @@ export default function TargetsPage() {
           month: key.substring(li + 1),
           target_revenue: targets[key] || 0,
           target_3hk_contribution: targets3hk[key] || 0,
-          target_unit: targetsUnit[key] || 0,
+          target_gpm2: targetsGpm2[key] || 0,
         }
       })
 
@@ -296,11 +297,11 @@ export default function TargetsPage() {
       />
 
       <PlanningTable
-        title="Target Units"
-        metricType="currency"
-        targets={targetsUnit}
-        prevActuals={() => ({})}
-        onChange={(key, val) => setTargetsUnit(prev => ({ ...prev, [key]: val }))}
+        title="GPM2 % Target Planning"
+        metricType="percent"
+        targets={targetsGpm2}
+        prevActuals={d => d.prevQuarterGpm2Actuals}
+        onChange={(key, val) => setTargetsGpm2(prev => ({ ...prev, [key]: val }))}
         data={data} loading={loading} canEdit={canEdit}
       />
 

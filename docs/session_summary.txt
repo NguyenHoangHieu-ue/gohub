@@ -193,10 +193,17 @@ Xếp theo độ lệch dòng (web/intel): Fulfillment 0.51 · AllTime 0.61 · D
 - ✅ SQL (230 vs 279): PARITY+ (web thêm admin-gate, Ctrl+Enter chạy, double-click cột append). KHÔNG sửa.
 - ✅ Feedback (259 vs 296): PARITY (submit/filter/list/admin fix-reject-revert+reason); web thêm refresh + nhãn VN. KHÔNG sửa.
 - ✅ Staff/Customers/Orders (~1.0): grep feature-marker (table/chart/export/pagination) KHỚP intel. Full port sẵn. KHÔNG sửa.
-- ⚠️ Targets (327 vs 398): KHÁC BIỆT CHỦ ĐÍCH (không phải thiếu): bảng thứ 3 intel = "GPM2 % Target Planning"
-  (post target_gpm2), web = "Target Units" (monthlyUnitTargets/post target_unit, khác data-model + backend).
-  KHÔNG tự đổi (revert sang GPM2 cần sửa backend, có thể sai ý web). → ĐỂ USER QUYẾT.
-- Verify: tsc + next build PASS (NODE_OPTIONS=--max-old-space-size=6144).
+- ✅ Targets (327 vs 398): USER CHỐT đổi bảng 3 "Target Units" → "GPM2 % Target Planning" như intel.
+  · FE targets/page.tsx: state targetsUnit→targetsGpm2; interface monthlyUnitTargets→monthlyGpm2Targets +
+    prevQuarterGpm2Actuals; bảng 3 metricType percent, prevActuals=prevQuarterGpm2Actuals; POST target_gpm2.
+  · BE /api/planning/targets GET: actuals query gộp theo KÊNH (thêm gross_profit_vnd) + fetch analytics_channel_costs
+    (prevMonths) → gpm2/kênh/tháng = margin − op-cost (ads/platform_fee/sponsor_products/media, full-month không prorate
+    giống intel server.ts), aggregate theo grp → prevQuarterGpm2Actuals=Σgpm2/Σrev×100. POST ghi target_gpm2.
+    Bỏ getStrategicPartnersList (không dùng). Select target_gpm2 DEFENSIVE (try/catch fallback nếu chưa có cột).
+  · ⚠️ MIGRATION v18 (database/migrations/v18_target_gpm2.sql): ALTER TABLE analytics_target_planning ADD COLUMN
+    target_gpm2 NUMERIC. Supabase chỉ có REST (không DDL từ code) → **USER PHẢI CHẠY trong Supabase SQL editor**.
+    Trước khi chạy: trang vẫn render (GET fallback), nhưng LƯU target sẽ lỗi. target_unit cũ giữ nguyên, không mất data.
+- Verify: tsc + next build PASS (NODE_OPTIONS=--max-old-space-size=6144). /analytics/targets 5.67 kB.
 
 ---
 
