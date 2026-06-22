@@ -80,8 +80,15 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
 - ✅ C2 (XONG): port CostManagementModal → web/src/components/cost-management-modal.tsx. Thay motion/react
   bằng CSS animation có sẵn (animate-overlay-in/animate-modal-in), cn từ @/lib/utils, bỏ icon thừa
   (Filter/AlertCircle). Dùng endpoint cost sẵn có + /api/config/subchannels. Chưa import (C3 sẽ dùng). build PASS.
-- 🔜 C3: port ChannelPerformance UI (KPI/filter/trend/projection/breakdown) qua /api/analytics/query.
-- 🔜 C4: wiring cost vào KPI (GP2) + verify số liệu thật gohub_dw.
+- ✅ C3+C4 (XONG, gộp): REPLACE analytics/channels/page.tsx (overview rút gọn → deep-dive 1 kênh y hệt intel,
+  1959 dòng → web). KPI 6 ô (Rev/GP1/GP2/Orders/Units/AOV), filter Vendor/SubChannel/ProductType (multi-select),
+  so sánh Prev Period/Year, projection pro-rata, breakdown sub-channel (Dự phóng Rev/GP1/GP2 + GPM2% + contribution),
+  daily details, top products (sortable), nút Manage Costs → CostManagementModal. Cost→GP2 tính client từ
+  /api/channel-costs (nằm trong component nên C4 gộp luôn). Data qua helper runQuery → /api/analytics/query.
+  Adapt: bỏ motion (tr thường), import web, inline getDefaultDateRange. /analytics/channels 4.9→15.2 kB. build PASS.
+  · ⚠️ API cũ /api/analytics/channels/{kpis,trend,performance} giờ KHÔNG còn dùng bởi page (page query trực tiếp);
+    để lại, chưa xóa (tránh rủi ro chỗ khác dùng).
+  · ⚠️ Verify số liệu thật cần chạy app live (auth + gohub_dw); mới build-verified như các session trước.
 
 ### CÒN LẠI (#2 — sau Channels): BOD → Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
 
