@@ -168,9 +168,16 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   customer), gpm2 = margin − op-cost (chỉ channel, analytics_channel_costs prorate), projected_* (tháng hiện tại),
   prev_revenue (comparisonType). getBODFilters cho advanced. build PASS. → 3 endpoint b2c (kpis/trend/performance)
   + loss-skus giờ khớp intel.
-- 🔜 B2C-2b-iii: port intel B2CPerformance (~1482 dòng) làm view chính + page wrapper (main=intel; isAdmin→nút
-  Advanced→toggle B2CAdvancedDashboard). Dùng CostManagementModal (đã port). Bỏ motion; /api/query→/api/analytics/query.
-  Reconcile: kpis là MẢNG 7 phần tử (component đọc kpis[i].value/label/change/isPositive/isCurrency).
+- ✅ B2C-2b-iii (XONG): port intel B2CPerformance (~1482 dòng) → web/src/components/b2c-performance.tsx (export
+  B2CPerformance). 7 KPI grid (xl:7 cột) + filter Vendor/SubChannel/ProductType/Comparison/DateType + projection
+  pro-rata 5-card (Rev/Units/Margin/GPM2/GPM2% + MoM vs prevMonthKpis) + Trend (ComposedChart Bar rev/margin +
+  Line gpm2) + Channel Contribution (Pie) + Performance Breakdown (6 groupBy sortable, expand cost breakdown/row
+  + TOTAL row + group costs) + Top Loss-making SKUs + Export CSV + Manage Costs (CostManagementModal đã port).
+  Adapt: "use client"; bỏ motion/react (motion.div→div); dropdown bỏ animate-in (như port khác); fetch filter
+  options /api/query→/api/analytics/query (runQuery); inline getDefaultDateRange/formatDateToISO; reset filter
+  dùng getDefaultDateRange (thay hard-code 2026-03). Costs qua /api/channel-costs + /api/channel-group-costs sẵn có.
+  page.tsx = wrapper "use client" useSession: non-admin → <B2CPerformance/>; admin → thanh toggle Performance/
+  Advanced (Advanced = B2CAdvancedDashboard cũ). tsc + next build PASS (/analytics/b2c 15.8 kB). → B2C HYBRID XONG.
 
 ### CÒN LẠI (#2 — sau B2C): rà các trang ~parity (Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment/Dashboard).
 
