@@ -106,7 +106,16 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   /api/analytics/query; fetchData gửi 4 param. tsc + build PASS (/analytics/bod 7.53 kB).
 - 🔜 CÒN (phụ): MoM projection pills (cần fetch prevMonthSummary) — ưu tiên thấp, bỏ qua tạm.
 
-### CÒN LẠI (#2 — sau BOD): Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
+### Website port — W1→W2 (intel dùng generic /api/analytics/ga4 + /api/analytics/gsc; web chỉ có /website gộp)
+- ✅ W1 (XONG): tạo 2 endpoint generic, tái dùng lib/ga4.ts (runGA4Report + runGSC):
+  · /api/analytics/ga4?siteId&startDate&endDate&dimensions=...&metrics=... → raw GA4 report (rows/dimensionValues/metricValues).
+  · /api/analytics/gsc?siteId&startDate&endDate&dimensions=date|query → mảng GSC rows.
+  · Gate role analytics. build PASS.
+- 🔜 W2: port WebsiteAnalytics UI (8 section: Traffic Overview, Search Trends, Revenue Breakdown, Top Selling
+  Items, Top Countries, Traffic Sources, Top Search Queries, Top eSIM Products) + compare kỳ trước. Thay
+  /analytics/website page hiện tại (bản GA4/GSC gộp) bằng deep-dive intel.
+
+### CÒN LẠI (#2 — sau Website): Vendors → 3HK → Products → B2C → rà các trang ~parity.
 
 ---
 
