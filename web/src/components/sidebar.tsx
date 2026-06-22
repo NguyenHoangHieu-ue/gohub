@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -84,8 +84,10 @@ const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
 const MANAGEMENT_GROUP = {
   label: "Management",
   items: [
+    { href: "/admin",                label: "Users",              icon: Users },
     { href: "/analytics/schema",    label: "Schema Config",      icon: Database },
     { href: "/analytics/scheduled", label: "Scheduled Messages", icon: Clock },
+    { href: "/admin?tab=settings",  label: "Settings",           icon: Settings },
   ],
 }
 
@@ -347,9 +349,6 @@ export function Sidebar() {
             {isAdminUser && MANAGEMENT_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
             ))}
-            {isAdminUser && (
-              <NavRow href="/admin" label="Admin" Icon={Users} active={isActive("/admin")} collapsed accent="brand" />
-            )}
           </>
         ) : (
           /* Chế độ mở rộng: 3 nhóm lớn */
@@ -397,12 +396,6 @@ export function Sidebar() {
               </div>
             )}
 
-            {/* Admin (đứng riêng) */}
-            {isAdminUser && (
-              <div className="mt-1 pt-1 border-t border-gray-100">
-                <NavRow href="/admin" label="Admin" Icon={Users} active={isActive("/admin")} collapsed={false} accent="brand" />
-              </div>
-            )}
           </>
         )}
 

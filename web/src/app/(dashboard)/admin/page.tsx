@@ -63,8 +63,15 @@ function roleBadgeClass(role: string): string {
   return "bg-green-100 text-green-700"
 }
 
+const VALID_TABS: Tab[] = ["list", "add", "password", "settings", "template", "promotions", "scheduled"]
+
 function AdminPanel({ currentUser }: { currentUser: string }) {
   const [tab, setTab]       = useState<Tab>("list")
+  // Cho phép deep-link tab qua URL (?tab=settings) — Users/Settings là tab riêng ở sidebar.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab")
+    if (t && VALID_TABS.includes(t as Tab)) setTab(t as Tab)
+  }, [])
   const [users, setUsers]   = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
