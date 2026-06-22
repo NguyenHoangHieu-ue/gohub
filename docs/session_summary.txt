@@ -44,6 +44,40 @@ review code → tìm root cause + defect phân trang, chốt chính sách với 
 
 ---
 
+## Session 73 tiếp (2026-06-22) — UI 3 nhóm sidebar + giảm font + nền port "y hệt" gohub-intel
+
+User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ-sung gohub-intel, (3) gom tab thành 3 nhóm.
+
+### (1)+(3) ĐÃ XONG (commit d8047ec)
+- globals.css: html 16px→15px (giảm chữ toàn app, scale theo rem).
+- sidebar.tsx: 3 nhóm collapsible — Chat & Knowledge (GoHub AI/KB/Promotions) mở · Product (SKUs/NCC/
+  Reference) THU GỌN mặc định · Analyst (Analytics) mở. Admin đứng riêng. NavRow/GroupToggle dùng chung.
+  Giữ nguyên logic phân quyền navItems/analyticsGroups. Collapsed = icon rail phẳng.
+
+### (2) Đối chiếu gohub-intel vs web — GAP REPORT + chốt cách làm
+- gohub-intel-main = Vite SPA (KHÁC stack web Next.js), đã merge trước đó. Mức TRANG: web đủ 18/18
+  (intel dư OnDemand/Wholesale = dead code). Mức CHI TIẾT: web là bản port RÚT GỌN.
+- Bằng chứng Channels (web 226 vs intel 1959 dòng): intel có 6 KPI (web 4), filter Vendor/SubChannel/
+  ProductType, so sánh prev period/year, projection, CostManagementModal, breakdown sub-channel — web thiếu hết.
+- Xếp hạng độ lệch (web/intel): Channels 0.12 (thiếu nhất) → BOD/Website/Vendors 0.25 → 3HK/Products/B2C
+  0.37-0.41 → CS/B2B 0.53-0.71 → Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment ~parity.
+- User chốt (AskUserQuestion): FULL PARITY y hệt · thứ tự THEO ĐỘ LỆCH (Channels trước) · cách lấy data =
+  ENDPOINT QUERY CHUNG.
+- ⚠️ Kiến trúc: intel chạy SQL thô từ frontend qua /api/query (web đã bỏ vì bảo mật). User chọn tạo lại
+  endpoint chung cho role analytics → port component gần nguyên văn.
+
+### Đã làm (nền)
+- web/src/app/api/analytics/query/route.ts (MỚI): POST SELECT/WITH/EXPLAIN-only, gate role analytics
+  (admin/manager/bod/staff), chặn multi-statement, trả MẢNG rows trực tiếp (khớp intel data.map). tsc PASS.
+- ⚠️ role-filters KHÔNG auto-áp được cho SQL tùy ý (giới hạn như intel); quyền trang đã enforce ở layout.
+
+### CÒN LẠI (#2 — chương trình nhiều bước, làm tuần tự commit từng trang)
+- Channels (đang tới): port ChannelPerformance.tsx (single-channel deep-dive) + CostManagementModal +
+  endpoint /api/channel-costs + /api/channel-cost-settings (cần chốt data store cost).
+- Rồi BOD → Website → Vendors → 3HK → Products → B2C → các trang ~parity rà lại.
+
+---
+
 ## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
 
 User: "update các file wiki và trên web luôn". Scope chốt: sửa kiến trúc lỗi thời + thêm trang Guardian mới.
