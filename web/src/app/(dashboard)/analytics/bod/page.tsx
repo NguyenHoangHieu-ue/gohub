@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from "recharts"
 import { ArrowUpRight, ArrowDownRight, Filter, TrendingUp, Download, RefreshCw, ChevronDown } from "lucide-react"
@@ -29,7 +29,7 @@ interface BODSummary {
   avg_margin_percent: number; avg_gpm2_percent: number
   previous_period?: BODSummary; previous_year?: BODSummary
 }
-interface BODDataPoint { date: string; revenue: number; margin: number; margin_percent: number; gpm2: number; prev_revenue?: number }
+interface BODDataPoint { date: string; revenue: number; cogs?: number; margin: number; margin_percent: number; gpm2: number; gpm2_percent?: number; prev_revenue?: number }
 interface GroupMargin { group: string; revenue: number; cogs: number; margin: number; units: number; orders: number; margin_percent: number; gpm2: number; gpm2_percent: number; prev_revenue?: number }
 interface ChannelPerf { group: string; channel: string; revenue: number; cogs: number; margin: number; units: number; orders: number; margin_percent: number; gpm2: number; gpm2_percent: number }
 
@@ -60,7 +60,13 @@ export default function BODReportPage() {
     const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
     const factor = targetDays / daysElapsed
     if (factor <= 1) return null
-    return { factor, daysElapsed, totalDays: targetDays, revenue: summary.total_revenue * factor, margin: summary.total_margin * factor, gpm2: summary.total_gpm2 * factor }
+    return {
+      factor, daysElapsed, totalDays: targetDays,
+      revenue: summary.total_revenue * factor,
+      margin:  summary.total_margin  * factor,
+      gpm2:    summary.total_gpm2    * factor,
+      gpm2Percent: summary.total_revenue > 0 ? (summary.total_gpm2 / summary.total_revenue) * 100 : 0,
+    }
   }
   const projection = getProjectionFactor()
 
@@ -221,11 +227,16 @@ export default function BODReportPage() {
           <h3 className="font-bold text-blue-900 flex items-center gap-2 mb-4">
             <TrendingUp className="w-5 h-5" /> Month-End Projection {isAdmin && <span>(×{projection.factor.toFixed(2)})</span>}
           </h3>
-          <div className="grid grid-cols-3 gap-4">
-            {[{ label: "Revenue", val: projection.revenue }, { label: "Margin", val: projection.margin }, { label: "GPM2", val: projection.gpm2 }].map(({ label, val }) => (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "Revenue", val: formatCurrency(projection.revenue) },
+              { label: "Margin",  val: formatCurrency(projection.margin)  },
+              { label: "GPM2",    val: formatCurrency(projection.gpm2)    },
+              { label: "GPM2 %",  val: `${projection.gpm2Percent.toFixed(2)}%` },
+            ].map(({ label, val }) => (
               <div key={label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Projected {label}</p>
-                <p className="text-lg font-bold text-blue-600">{formatCurrency(val)}</p>
+                <p className="text-lg font-bold text-blue-600">{val}</p>
               </div>
             ))}
           </div>
@@ -251,6 +262,27 @@ export default function BODReportPage() {
                 {data.some(d => d.prev_revenue) && (
                   <Line yAxisId="left" dataKey="prev_revenue" name="Prev Revenue" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
                 )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Revenue vs COGS */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h3 className="font-bold text-slate-800 mb-6">Revenue vs COGS</h3>
+        <div className="h-[280px]">
+          {loading ? <Skeleton className="w-full h-full" /> : (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={(val: string) => val.split("-").slice(1).join("/")} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} />
+                <Tooltip contentStyle={{ borderRadius: "12px", border: "none" }} formatter={(v: number) => [formatCurrency(v), ""]} />
+                <Legend iconType="circle" />
+                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
+                <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
+                <Line type="monotone" dataKey="gpm2" name="GPM2" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -342,6 +374,50 @@ export default function BODReportPage() {
                   ))}
                 </React.Fragment>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Daily Financial Breakdown */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800">Daily Financial Breakdown</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-500 font-medium">
+              <tr>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3 text-right">Revenue</th>
+                <th className="px-4 py-3 text-right">COGS</th>
+                <th className="px-4 py-3 text-right">Gross Margin</th>
+                <th className="px-4 py-3 text-right">Margin %</th>
+                <th className="px-4 py-3 text-right">GPM2</th>
+                <th className="px-4 py-3 text-right">GPM2 %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? Array(5).fill(0).map((_, i) => (
+                <tr key={i}>{Array(7).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20 ml-auto" /></td>)}</tr>
+              )) : data.slice().reverse().map(row => (
+                <tr key={row.date} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-slate-700">{row.date}</td>
+                  <td className="px-4 py-3 text-right font-mono text-slate-600">{formatCurrency(row.revenue)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-slate-600">{formatCurrency(row.cogs || 0)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-emerald-600">{formatCurrency(row.margin)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={cn("px-2 py-0.5 rounded-full text-xs font-bold", row.margin_percent > 20 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600")}>{(row.margin_percent || 0).toFixed(2)}%</span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-indigo-600">{formatCurrency(row.gpm2)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={cn("px-2 py-0.5 rounded-full text-xs font-bold", (row.gpm2_percent || 0) > 15 ? "bg-indigo-50 text-indigo-600" : "bg-pink-50 text-pink-600")}>{(row.gpm2_percent || 0).toFixed(2)}%</span>
+                  </td>
+                </tr>
+              ))}
+              {data.length === 0 && !loading && (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 italic">No data available</td></tr>
+              )}
             </tbody>
           </table>
         </div>

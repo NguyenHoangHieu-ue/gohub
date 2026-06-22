@@ -90,7 +90,19 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
     để lại, chưa xóa (tránh rủi ro chỗ khác dùng).
   · ⚠️ Verify số liệu thật cần chạy app live (auth + gohub_dw); mới build-verified như các session trước.
 
-### CÒN LẠI (#2 — sau Channels): BOD → Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
+### BOD (đang làm) — augment an toàn (data sẵn có), filter để B-step backend
+- Web BOD vốn đã có core (summary/target/projection/trend/group/channel) qua dedicated endpoints
+  (/api/analytics/bod-summary|report|group-margin|channel-performance). Intel BOD hơn: 4 filter
+  (Vendor/SubChannel/ChannelGroup/ProductType), projection 5-metric + MoM pills, chart Revenue vs COGS,
+  Daily Financial Breakdown, strategic section.
+- ✅ Đã augment (surgical, dùng data sẵn có, KHÔNG sửa endpoint → an toàn): thêm chart Revenue vs COGS
+  (Area rev + Line cogs + Line gpm2), bảng Daily Financial Breakdown (date/rev/cogs/margin/margin%/gpm2/gpm2%),
+  projection thêm card GPM2%. tsc + build PASS (/analytics/bod 6.55 kB).
+- 🔜 BOD-filters (B-step): 4 filter cần thêm WHERE vào 4 endpoint (vendors→TRIM(f.sku) IN dim_sku; subchannel→
+  dim_order_source; productType→category_name; channelGroup→group). RỦI RO (sửa 4 endpoint khác cấu trúc JOIN) →
+  làm cẩn thận lượt riêng. MoM projection pills cần fetch prevMonthSummary.
+
+### CÒN LẠI (#2 — sau BOD): Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
 
 ---
 
