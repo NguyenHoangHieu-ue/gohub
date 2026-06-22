@@ -179,7 +179,24 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   page.tsx = wrapper "use client" useSession: non-admin → <B2CPerformance/>; admin → thanh toggle Performance/
   Advanced (Advanced = B2CAdvancedDashboard cũ). tsc + next build PASS (/analytics/b2c 15.8 kB). → B2C HYBRID XONG.
 
-### CÒN LẠI (#2 — sau B2C): rà các trang ~parity (Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment/Dashboard).
+### Rà 9 trang ~parity còn lại (#2 — sau B2C): gap-diff từng trang, chỉ bù chênh THẬT (additive/surgical), không rewrite mù
+Xếp theo độ lệch dòng (web/intel): Fulfillment 0.51 · AllTime 0.61 · Dashboard 0.66 · SQL/Targets 0.82 · Feedback 0.88 · Staff/Customers/Orders ~1.0.
+- ✅ Fulfillment (web 311 vs intel 615): thiếu HẲN bảng pivot "Detail Fulfillment Analysis" (tháng làm cột + MoM% +
+  breakdown theo kho + theo category-theo-location) → PORT thêm (additive, giữ style web VN). + thêm allLocationNames,
+  helper momPct/revMonths, nút Export CSV (functional, bảng theo tháng). React.Fragment → thêm `import React`. /fulfillment 7.07 kB.
+- ✅ AllTime (web 345 vs intel 564): SỬA CORRECTNESS — buildChart cộng dồn % GPM/GPM2 các phân khúc (SAI) → đổi sang
+  TRUNG BÌNH CÓ TRỌNG SỐ theo doanh thu (port intel processChartData: total% = Σval/Σrev×100). Card "Avg GPM/GPM2 %"
+  giờ đúng. Phần còn lại web đã đủ (toggle/filter/metric cards/area chart/data table). /all-time 6.15 kB.
+- ✅ Dashboard (analytics/page 612 vs DashboardHome 928): ĐÃ PARITY — đủ KPI/target progress/projection/2 chart/2 bảng
+  nhóm + dedup strategic + sub-rows; web còn hơn (phased loading, LogicNote admin, partialStart warn, SourceBadge).
+  Chênh dòng = verbosity intel. Session 71 đã audit projection/dedup đúng. KHÔNG sửa.
+- ✅ SQL (230 vs 279): PARITY+ (web thêm admin-gate, Ctrl+Enter chạy, double-click cột append). KHÔNG sửa.
+- ✅ Feedback (259 vs 296): PARITY (submit/filter/list/admin fix-reject-revert+reason); web thêm refresh + nhãn VN. KHÔNG sửa.
+- ✅ Staff/Customers/Orders (~1.0): grep feature-marker (table/chart/export/pagination) KHỚP intel. Full port sẵn. KHÔNG sửa.
+- ⚠️ Targets (327 vs 398): KHÁC BIỆT CHỦ ĐÍCH (không phải thiếu): bảng thứ 3 intel = "GPM2 % Target Planning"
+  (post target_gpm2), web = "Target Units" (monthlyUnitTargets/post target_unit, khác data-model + backend).
+  KHÔNG tự đổi (revert sang GPM2 cần sửa backend, có thể sai ý web). → ĐỂ USER QUYẾT.
+- Verify: tsc + next build PASS (NODE_OPTIONS=--max-old-space-size=6144).
 
 ---
 

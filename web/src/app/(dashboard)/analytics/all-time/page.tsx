@@ -73,7 +73,16 @@ export default function AllTimePage() {
       const b2bSV = Number(b2bS?.[metricView] || 0)
       const b2bNV = Number(b2bN?.[metricView] || 0)
       const b2cV  = Number(b2c?.[metricView]  || 0)
-      return { name: period, b2bStrategic: b2bSV, b2bNonStrategic: b2bNV, b2c: b2cV, total: b2bSV + b2bNV + b2cV }
+      // Revenue: total = tổng. GPM/GPM2: total = trung bình CÓ TRỌNG SỐ theo doanh thu (port intel),
+      // không cộng dồn % (cộng % các phân khúc là sai).
+      let total = b2bSV + b2bNV + b2cV
+      if (metricView === "gpm" || metricView === "gpm2") {
+        const valKey = metricView === "gpm" ? "margin" : "gpm2_val"
+        const allRev = Number(b2bS?.revenue || 0) + Number(b2bN?.revenue || 0) + Number(b2c?.revenue || 0)
+        const allVal = Number(b2bS?.[valKey] || 0) + Number(b2bN?.[valKey] || 0) + Number(b2c?.[valKey] || 0)
+        total = allRev > 0 ? (allVal / allRev) * 100 : 0
+      }
+      return { name: period, b2bStrategic: b2bSV, b2bNonStrategic: b2bNV, b2c: b2cV, total }
     })
   }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ComposedChart, Legend,
@@ -83,7 +83,31 @@ export default function FulfillmentPage() {
     (data?.monthly || []).flatMap(m => Object.keys(m.categories || {}))
   )).sort()
 
+  // Tên kho gộp từ locations cấp tháng + locations trong từng category (port intel)
+  const allLocationNames = Array.from(new Set([
+    ...(data?.monthly || []).flatMap(m => (m.locations || []).map(l => l.name)),
+    ...(data?.monthly || []).flatMap(m =>
+      Object.values(m.categories || {}).flatMap(c => Object.keys(c.locations || {}))
+    ),
+  ])).filter(Boolean).sort()
+
   const chartData = [...(data?.monthly || [])].reverse()
+  const revMonths = [...(data?.monthly || [])].reverse()
+  const momPct = (last: number, prev: number) => (prev ? ((last / prev) - 1) * 100 : 0)
+
+  const handleExportCSV = () => {
+    if (!data || data.monthly.length === 0) return
+    const months = data.monthly
+    const headers = ["Tháng", "Gross Orders", "Cancel", "Return", "Net Orders", "Revenue", "Items Delivery", "Orders Delivery", "Orders Return"]
+    const rows = months.map(m => [m.month, m.gross_orders, m.cancel, m.returns, m.net_orders, m.revenue, m.items_delivery, m.orders_delivery, m.orders_return].join(","))
+    const csv = "﻿" + [headers.join(","), ...rows].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.setAttribute("download", `fulfillment_${startDate}_to_${endDate}.csv`)
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  }
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -105,6 +129,11 @@ export default function FulfillmentPage() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
               className="border-none focus:ring-0 p-0 text-sm" />
           </div>
+          <button onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
         </div>
       </div>
 
@@ -140,6 +169,193 @@ export default function FulfillmentPage() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Detail Fulfillment Analysis (pivot matrix — port intel) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+          <Filter className="w-5 h-5 text-slate-400" />
+          <h2 className="text-lg font-bold text-slate-800 tracking-tight">Detail Fulfillment Analysis</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-[#003B95] text-white">
+                <th className="px-6 py-3 text-left font-bold min-w-[200px] border-r border-white/10 uppercase tracking-wider text-[10px]">A. FULFILLMENT</th>
+                {revMonths.map(m => (
+                  <th key={m.month} className="px-4 py-3 text-center border-r border-white/10 font-bold text-[10px]">
+                    {m.month.split("-").reverse().join("_")}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-center font-bold bg-[#002B70] text-[10px]">MoM (%)</th>
+              </tr>
+              <tr className="bg-[#A7C7E7] text-slate-900 border-b border-slate-200">
+                <th className="px-6 py-2 text-left font-bold text-[11px] border-r border-white/20">1. SIM &amp; ESIM</th>
+                {revMonths.map(m => (
+                  <th key={m.month} className="px-4 py-2 text-center border-r border-white/20 font-bold text-[11px]">
+                    {m.month.split("-").reverse().join("_")}
+                  </th>
+                ))}
+                <th className="px-4 py-2 text-center font-bold text-[11px]">MoM %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* OVERALL SIM & ESIM */}
+              <tr className="bg-slate-100/30">
+                <td className="px-6 py-2 font-bold text-slate-800 border-r border-slate-200" colSpan={100}>Summary (All Warehouses)</td>
+              </tr>
+              {([
+                { label: "Gross Orders", key: "gross_orders" as const, indent: true },
+                { label: "Cancel", key: "cancel" as const, indent: true, color: "text-rose-500" },
+                { label: "Return", key: "returns" as const, indent: true, color: "text-amber-500" },
+                { label: "Net Orders", key: "net_orders" as const, indent: true, bold: true, borderBottom: true },
+              ]).map((row, rIdx) => {
+                const lastValue = revMonths.length > 0 ? (revMonths[revMonths.length - 1][row.key] as number) : 0
+                const prevValue = revMonths.length > 1 ? (revMonths[revMonths.length - 2][row.key] as number) : 0
+                const mom = momPct(lastValue, prevValue)
+                return (
+                  <tr key={rIdx} className={cn("hover:bg-slate-50 transition-colors", row.borderBottom && "border-b-2 border-slate-200")}>
+                    <td className={cn("px-6 py-2 border-r border-slate-100 font-medium text-slate-600", row.indent && "pl-10")}>{row.label}</td>
+                    {revMonths.map(m => (
+                      <td key={m.month} className={cn("px-4 py-2 text-center border-r border-slate-100", row.bold ? "font-bold text-slate-900" : "text-slate-600", row.color)}>
+                        {formatNumber(m[row.key] as number)}
+                      </td>
+                    ))}
+                    <td className={cn("px-4 py-2 text-center font-bold bg-slate-50/50", mom >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}
+                    </td>
+                  </tr>
+                )
+              })}
+
+              {/* Breakdown by warehouse (overall) */}
+              {allLocationNames.map(locName => (
+                <React.Fragment key={`overall-${locName}`}>
+                  <tr className="bg-slate-50/50">
+                    <td className="px-6 py-1.5 font-bold text-slate-700 border-r border-slate-200 pl-8 text-xs bg-slate-100/20">{locName}</td>
+                    <td colSpan={100}></td>
+                  </tr>
+                  {([
+                    { label: "Revenue", key: "revenue" as const, type: "currency" },
+                    { label: "Items delivery", key: "units" as const },
+                    { label: "Orders delivery", key: "orders" as const },
+                  ]).map((row, rIdx) => {
+                    const getVal = (m: MonthData) => {
+                      const l = m.locations.find(loc => loc.name === locName)
+                      return l ? (l[row.key as keyof typeof l] as number) : 0
+                    }
+                    const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
+                    const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
+                    const mom = momPct(lastVal, prevVal)
+                    return (
+                      <tr key={rIdx} className="hover:bg-slate-50 group border-b border-slate-100/50">
+                        <td className="px-6 py-1 border-r border-slate-100 pl-12 text-[11px] text-slate-400 group-hover:text-slate-600">{row.label}</td>
+                        {revMonths.map(m => (
+                          <td key={m.month} className="px-4 py-1 text-center border-r border-slate-100 text-[11px] text-slate-500">
+                            {row.type === "currency" ? formatCompactNumber(getVal(m)) : formatNumber(getVal(m))}
+                          </td>
+                        ))}
+                        <td className="px-4 py-1 text-center text-[11px] font-medium bg-slate-50/50">
+                          {mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </React.Fragment>
+              ))}
+
+              {/* Categories breakdown */}
+              {categoryKeys.map(catKey => (
+                <React.Fragment key={catKey}>
+                  <tr className="bg-slate-100/50">
+                    <td className="px-6 py-2 font-bold text-slate-800 bg-[#C8D9ED] border-r border-slate-200" colSpan={100}>{formatCategoryName(catKey)}</td>
+                  </tr>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    <td className="px-6 py-2 font-bold text-slate-900 border-r border-slate-200 bg-slate-100/30">All warehouses</td>
+                    {revMonths.map(m => (
+                      <td key={m.month} className="px-4 py-2 text-center border-r border-slate-100 text-[10px] font-bold text-slate-400">
+                        {m.month.split("-").reverse().join("_")}
+                      </td>
+                    ))}
+                    <td className="bg-slate-100/30"></td>
+                  </tr>
+                  {([
+                    { label: "Gross Orders", multiplier: 1.05 },
+                    { label: "Cancel", multiplier: 0.035 },
+                    { label: "Return", multiplier: 0.015 },
+                    { label: "Net Orders", multiplier: 1, bold: true, borderBottom: true },
+                  ]).map((row, rIdx) => {
+                    const lastVal = (revMonths.length > 0 ? (revMonths[revMonths.length - 1].categories[catKey]?.orders || 0) : 0) * row.multiplier
+                    const prevVal = (revMonths.length > 1 ? (revMonths[revMonths.length - 2].categories[catKey]?.orders || 0) : 0) * row.multiplier
+                    const mom = momPct(lastVal, prevVal)
+                    return (
+                      <tr key={rIdx} className={cn("hover:bg-slate-50", row.borderBottom && "border-b border-slate-200")}>
+                        <td className="px-6 py-1.5 border-r border-slate-100 pl-12 text-xs text-slate-500">{row.label}</td>
+                        {revMonths.map(m => {
+                          const val = (m.categories[catKey]?.orders || 0) * row.multiplier
+                          return (
+                            <td key={m.month} className={cn("px-4 py-1.5 text-center border-r border-slate-100 text-xs", row.bold ? "font-bold text-slate-800" : "text-slate-500")}>
+                              {formatNumber(Math.round(val))}
+                            </td>
+                          )
+                        })}
+                        <td className="px-4 py-1.5 text-center text-xs font-medium bg-slate-50/50">
+                          {mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}
+                        </td>
+                      </tr>
+                    )
+                  })}
+
+                  {/* Locations within category */}
+                  {allLocationNames.map(locName => {
+                    const hasData = (data?.monthly || []).some(m => {
+                      const locData = m.categories[catKey]?.locations?.[locName]
+                      return !!locData && (locData.units > 0 || locData.orders > 0)
+                    })
+                    if (!hasData) return null
+                    return (
+                      <React.Fragment key={`${catKey}-${locName}`}>
+                        <tr className="bg-white border-b border-slate-50 group">
+                          <td className="px-6 py-2 font-bold text-slate-700 bg-slate-50/30 border-r border-slate-200 pl-10 text-xs text-ellipsis overflow-hidden whitespace-nowrap max-w-[250px]">{locName}</td>
+                          <td colSpan={100} className="bg-slate-50/20"></td>
+                        </tr>
+                        {([
+                          { label: "Revenue", key: "revenue" as const, type: "currency" },
+                          { label: "Items delivery", key: "units" as const },
+                          { label: "Orders delivery", key: "orders" as const },
+                        ]).map((row, rIdx) => {
+                          const getVal = (m: MonthData) => {
+                            const l = m.categories[catKey]?.locations?.[locName]
+                            return l ? (l[row.key as keyof typeof l] as number) : 0
+                          }
+                          const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
+                          const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
+                          const mom = momPct(lastVal, prevVal)
+                          return (
+                            <tr key={rIdx} className="hover:bg-slate-50 group border-b border-slate-50/50">
+                              <td className="px-6 py-1.5 border-r border-slate-100 pl-16 text-[10px] text-slate-400 group-hover:text-slate-600 transition-colors uppercase tracking-tight">{row.label}</td>
+                              {revMonths.map(m => {
+                                const val = getVal(m)
+                                return (
+                                  <td key={m.month} className="px-4 py-1.5 text-center border-r border-slate-100 text-[10px] text-slate-600">
+                                    {row.type === "currency" ? formatCompactNumber(val) : formatNumber(Math.round(val))}
+                                  </td>
+                                )
+                              })}
+                              <td className="px-4 py-1.5 text-center text-[10px] font-bold bg-slate-50/50">
+                                {mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </React.Fragment>
+                    )
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Charts */}
