@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -78,6 +78,15 @@ const ANALYTICS_GROUPS = [
 
 // Flat list for collapsed mode
 const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
+
+// Nhóm Management — CHỈ admin (port intel: users/schema/scheduled/settings là admin-only).
+// KHÔNG đưa vào role matrix / ANALYTICS_DEFAULTS (bod/staff không thấy). Layout vẫn cho admin bypass.
+const MANAGEMENT_GROUP = {
+  label: "Management",
+  items: [
+    { href: "/analytics/schema", label: "Schema Config", icon: Database },
+  ],
+}
 
 // Tab mặc định standard user không cần department
 const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
@@ -334,6 +343,9 @@ export function Sidebar() {
             {showAnalytics && analyticsGroups.flatMap(g => g.items).map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
             ))}
+            {isAdminUser && MANAGEMENT_GROUP.items.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
+            ))}
             {isAdminUser && (
               <NavRow href="/admin" label="Admin" Icon={Users} active={isActive("/admin")} collapsed accent="brand" />
             )}
@@ -373,6 +385,14 @@ export function Sidebar() {
                     ))}
                   </div>
                 ))}
+                {analystOpen && isAdminUser && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{MANAGEMENT_GROUP.label}</p>
+                    {MANAGEMENT_GROUP.items.map(it => (
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
