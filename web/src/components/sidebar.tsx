@@ -5,6 +5,7 @@ import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 
@@ -24,6 +25,14 @@ const NAV_PRODUCTS = [
 
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
 const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
+
+// 3 nhóm lớn của sidebar (keys khớp NAV_ALL để dùng chung logic phân quyền navItems)
+const NAV_CHAT_KB = [
+  { href: "/chatbot",    label: "GoHub AI",       icon: Sparkles, key: "chatbot"    },
+  { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"         },
+  { href: "/promotions", label: "Promotions",     icon: Gift,     key: "promotions" },
+]
+const NAV_PRODUCT = NAV_PRODUCTS
 
 // Analytics section — admin / manager / bod / staff — grouped per gohub-intel
 const ANALYTICS_GROUPS = [
@@ -161,12 +170,68 @@ function roleLabel(role: string) {
   return "Standard"
 }
 
+// Một hàng link trong sidebar (dùng chung cho cả 3 nhóm). accent: brand (PM) / blue (Analyst).
+function NavRow({ href, label, Icon, active, collapsed, indent = false, accent = "brand" }: {
+  href:      string
+  label:     string
+  Icon:      LucideIcon
+  active:    boolean
+  collapsed: boolean
+  indent?:   boolean
+  accent?:   "brand" | "blue"
+}) {
+  const activeCls     = accent === "blue"
+    ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
+    : "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
+  const iconActiveCls = accent === "blue" ? "text-blue-500" : "text-brand-500"
+  const dotCls        = accent === "blue" ? "bg-blue-400" : "bg-brand-400"
+  return (
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      className={`flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
+        ${collapsed ? "justify-center px-0 py-2.5" : `gap-3 px-3 py-2 ${indent ? "pl-8" : ""}`}
+        ${active ? activeCls : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
+    >
+      <Icon size={15} className={`flex-shrink-0 ${active ? iconActiveCls : "text-gray-400"}`} />
+      {!collapsed && (
+        <>
+          <span className="flex-1 whitespace-nowrap">{label}</span>
+          {active && <span className={`w-1 h-1 rounded-full ${dotCls} flex-shrink-0`} />}
+        </>
+      )}
+    </Link>
+  )
+}
+
+// Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
+function GroupToggle({ label, Icon, open, onToggle }: {
+  label:    string
+  Icon:     LucideIcon
+  open:     boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+    >
+      <div className="flex items-center gap-2">
+        <Icon size={14} className="text-gray-400" />
+        <span>{label}</span>
+      </div>
+      {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+    </button>
+  )
+}
+
 export function Sidebar() {
   const pathname  = usePathname()
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
-  const [analyticsOpen, setAnalyticsOpen] = useState(true)
-  const [productOpen,   setProductOpen]   = useState(false)
+  const [chatKbOpen,  setChatKbOpen]  = useState(true)
+  const [productOpen, setProductOpen] = useState(false)
+  const [analystOpen, setAnalystOpen] = useState(true)
 
   // Auto-mở nhóm Products khi đang ở 1 trang sản phẩm — tránh giấu mục đang active
   // (giảm tải nhận thức: user luôn thấy mình đang ở đâu, không phải tự mở để định vị)
@@ -220,6 +285,16 @@ export function Sidebar() {
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
 
+  // Phân các tab được phép vào 3 nhóm lớn
+  const allowedKeys  = new Set(navItems.map(n => n.key))
+  const chatKbItems  = NAV_CHAT_KB.filter(n => allowedKeys.has(n.key))
+  const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key))
+  const isAdminUser  = effectiveRole === "admin"
+  const isActive = (href: string) =>
+    href === "/analytics"
+      ? pathname === "/analytics"
+      : pathname === href || pathname.startsWith(href + "/")
+
   return (
     <aside className={`
       fixed left-0 top-0 h-full bg-white border-r border-gray-200
@@ -247,148 +322,67 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? "px-1.5" : "px-2.5"}`}>
 
-        {/* PM tabs */}
-        {navItems.length > 0 && (
+        {collapsed ? (
+          /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
-            {!collapsed && navItems.length > 1 && (
-              <p className="px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Management</p>
+            {chatKbItems.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+            ))}
+            {productItems.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+            ))}
+            {showAnalytics && analyticsGroups.flatMap(g => g.items).map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
+            ))}
+            {isAdminUser && (
+              <NavRow href="/admin" label="Admin" Icon={Users} active={isActive("/admin")} collapsed accent="brand" />
             )}
-            {navItems.filter(n => NAV_MAIN.some(m => m.key === n.key) || n.key === "chatbot" || n.key === "admin").map(({ href, label, icon: Icon }) => {
-              const active = pathname === href || pathname.startsWith(href + "/")
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  title={collapsed ? label : undefined}
-                  className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
-                    ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}
-                    ${active
-                      ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                    }`}
-                >
-                  <Icon size={16} className={`flex-shrink-0 transition-colors ${active ? "text-brand-500" : "text-gray-400"}`} />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 whitespace-nowrap">{label}</span>
-                      {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
-                    </>
-                  )}
-                </Link>
-              )
-            })}
+          </>
+        ) : (
+          /* Chế độ mở rộng: 3 nhóm lớn */
+          <>
+            {/* 1 ─ Chat & Knowledge */}
+            {chatKbItems.length > 0 && (
+              <div>
+                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} />
+                {chatKbOpen && chatKbItems.map(it => (
+                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                ))}
+              </div>
+            )}
 
-            {/* ── Nhóm Sản Phẩm (collapsible) ── */}
-            {navItems.some(n => NAV_PRODUCTS.some(p => p.key === n.key)) && (
-              <div className="mt-0.5">
-                {!collapsed ? (
-                  <button
-                    onClick={() => setProductOpen(o => !o)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Package size={16} className="text-gray-400 flex-shrink-0" />
-                      <span>Products</span>
-                    </div>
-                    {productOpen ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setProductOpen(o => !o)}
-                    title="Products"
-                    className={`w-full flex justify-center items-center py-2.5 rounded-lg transition-colors ${
-                      NAV_PRODUCTS.some(p => pathname.startsWith(p.href))
-                        ? "bg-brand-50 text-brand-700 border border-brand-100"
-                        : "text-gray-400 hover:bg-gray-50 hover:text-gray-800"
-                    }`}
-                  >
-                    <Package size={16} />
-                  </button>
-                )}
+            {/* 2 ─ Product (mặc định thu gọn) */}
+            {productItems.length > 0 && (
+              <div className="mt-1">
+                <GroupToggle label="Product" Icon={Package} open={productOpen} onToggle={() => setProductOpen(o => !o)} />
+                {productOpen && productItems.map(it => (
+                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                ))}
+              </div>
+            )}
 
-                {productOpen && navItems
-                  .filter(n => NAV_PRODUCTS.some(p => p.key === n.key))
-                  .map(({ href, label, icon: Icon }) => {
-                    const active = pathname === href || pathname.startsWith(href + "/")
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        title={collapsed ? label : undefined}
-                        className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150
-                          ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2 pl-8"}
-                          ${active
-                            ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
-                            : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                          }`}
-                      >
-                        <Icon size={15} className={`flex-shrink-0 ${active ? "text-brand-500" : "text-gray-400"}`} />
-                        {!collapsed && (
-                          <>
-                            <span className="flex-1 whitespace-nowrap">{label}</span>
-                            {active && <span className="w-1 h-1 rounded-full bg-brand-400 flex-shrink-0" />}
-                          </>
-                        )}
-                      </Link>
-                    )
-                  })
-                }
+            {/* 3 ─ Analyst */}
+            {showAnalytics && (
+              <div className="mt-1 pt-1 border-t border-gray-100">
+                <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} />
+                {analystOpen && analyticsGroups.map(group => (
+                  <div key={group.label} className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
+                    {group.items.map(it => (
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Admin (đứng riêng) */}
+            {isAdminUser && (
+              <div className="mt-1 pt-1 border-t border-gray-100">
+                <NavRow href="/admin" label="Admin" Icon={Users} active={isActive("/admin")} collapsed={false} accent="brand" />
               </div>
             )}
           </>
-        )}
-
-        {/* Analytics section — admin / manager / bod / staff */}
-        {showAnalytics && (
-          <div className={`${navItems.length > 1 ? "pt-2 mt-1 border-t border-gray-100" : ""}`}>
-            {!collapsed && (
-              <button
-                onClick={() => setAnalyticsOpen(o => !o)}
-                className="w-full flex items-center justify-between px-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
-              >
-                <span>Reports &amp; BI</span>
-                {analyticsOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-              </button>
-            )}
-
-            {/* Collapsed mode: flat icon list */}
-            {collapsed && analyticsGroups.flatMap(g => g.items).map(({ href, label, icon: Icon }) => {
-              const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
-                          || (href === "/analytics" && pathname === "/analytics")
-              return (
-                <Link key={href} href={href} title={label}
-                  className={`flex justify-center items-center py-2.5 rounded-lg transition-all duration-150
-                    ${active ? "bg-blue-50 text-blue-700 border border-blue-100 shadow-sm" : "text-gray-400 hover:bg-gray-50 hover:text-gray-800"}`}
-                >
-                  <Icon size={16} className={`flex-shrink-0 ${active ? "text-blue-500" : "text-gray-400"}`} />
-                </Link>
-              )
-            })}
-
-            {/* Expanded mode: grouped */}
-            {!collapsed && analyticsOpen && analyticsGroups.map(group => (
-              <div key={group.label} className="mt-1">
-                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
-                {group.items.map(({ href, label, icon: Icon }) => {
-                  const active = pathname === href || (href !== "/analytics" && pathname.startsWith(href + "/"))
-                              || (href === "/analytics" && pathname === "/analytics")
-                  return (
-                    <Link key={href} href={href}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150
-                        ${active
-                          ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
-                          : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-                        }`}
-                    >
-                      <Icon size={15} className={`flex-shrink-0 ${active ? "text-blue-500" : "text-gray-400"}`} />
-                      <span className="flex-1 whitespace-nowrap">{label}</span>
-                      {active && <span className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0" />}
-                    </Link>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
         )}
 
         <div className={`pt-1 border-t border-gray-100 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
