@@ -605,7 +605,12 @@ function WMTab({ role }: { role?: string }) {
 
   const PAGE_SIZE = 50
 
+  const abortRef = useRef<AbortController>()
+
   const fetchData = useCallback(async (pg: number, currentGap: GapFilter) => {
+    abortRef.current?.abort()       // huỷ request cũ → tránh response lệch thứ tự (race)
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
     setLoading(true)
     const params = new URLSearchParams({
       page: String(pg), gap: currentGap,
@@ -618,18 +623,26 @@ function WMTab({ role }: { role?: string }) {
       ...(dataMax  && { data_max:  dataMax  }),
     })
     try {
-      const res = await fetch(`/api/ncc/worldmove?${params}`)
+      const res = await fetch(`/api/ncc/worldmove?${params}`, { signal: ctrl.signal })
       const j   = await res.json()
       setProducts(j.data ?? [])
       setTotal(j.total ?? 0)
+    } catch (e) {
+      if ((e as any)?.name === "AbortError") return  // bị thay bởi request mới — bỏ qua
+      // lỗi khác: giữ nguyên dữ liệu hiện có
     } finally {
-      setLoading(false)
+      if (abortRef.current === ctrl) setLoading(false)
     }
   }, [simType, region, dataType, days, dataMin, dataMax])
 
   useEffect(() => { fetchData(page, gap) }, [fetchData, page, gap])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // Clamp khi filter làm tổng số trang giảm dưới trang hiện tại → tránh bảng trắng
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [totalPages, page])
 
   function applySearch() {
     setPage(1)

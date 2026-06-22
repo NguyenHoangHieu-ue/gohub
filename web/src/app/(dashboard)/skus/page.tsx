@@ -458,20 +458,27 @@ function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
   const [extraQuery, setExtraQuery] = useState("")
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const abortRef    = useRef<AbortController>()
 
   const fetchData = useCallback(async () => {
+    abortRef.current?.abort()       // huỷ request cũ → tránh response lệch thứ tự (race)
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
     setLoading(true)
     try {
       const p = new URLSearchParams({ page: String(page), search: query })
       if (tenant) p.set("tenant", tenant)
       if (status) p.set("status", status)
       if (extraQuery) new URLSearchParams(extraQuery).forEach((v, k) => p.set(k, v))
-      const res  = await fetch(`${apiPath}?${p}`)
+      const res  = await fetch(`${apiPath}?${p}`, { signal: ctrl.signal })
       const json = await res.json()
       setRows(json.data  ?? [])
       setTotal(json.total ?? 0)
-    } catch { /* ignore */ } finally {
-      setLoading(false)
+    } catch (e) {
+      if ((e as any)?.name === "AbortError") return  // bị thay bởi request mới — bỏ qua
+      // lỗi khác: giữ nguyên dữ liệu hiện có
+    } finally {
+      if (abortRef.current === ctrl) setLoading(false)
     }
   }, [apiPath, page, query, tenant, status, extraQuery])
 
@@ -483,7 +490,19 @@ function useTabData(apiPath: string, opts?: { defaultStatus?: string }) {
     return () => clearTimeout(debounceRef.current)
   }, [search])
 
+  // Đổi bộ lọc nâng cao (Listing/Item) → về trang 1 (bỏ qua lần mount đầu)
+  const firstExtra = useRef(true)
+  useEffect(() => {
+    if (firstExtra.current) { firstExtra.current = false; return }
+    setPage(1)
+  }, [extraQuery])
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // Clamp khi tổng số trang giảm dưới trang hiện tại → tránh range() trả rỗng (bảng trắng)
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [totalPages, page])
 
   return {
     rows, total, page, loading, search, tenant, status, totalPages,

@@ -1,5 +1,48 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-21 (session 72 tiếp 4 — Update wiki + full-sync 15 trang lên web kb_wiki_pages)
+Cập nhật lần cuối: 2026-06-22 (session 73 — Fix phân quyền analytics server-side + phân trang)
+
+## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang
+
+User báo: "đã giới hạn vài trang analytics cho 1 số account nhưng account đó VẪN VÀO ĐƯỢC". Vai tester:
+review code → tìm root cause + defect phân trang, chốt chính sách với user (AskUserQuestion) rồi fix.
+
+### Root cause (P5)
+- analytics/layout.tsx CHỈ chặn theo ROLE (ANALYTICS_ROLES.has(role)), KHÔNG kiểm tra từng report.
+  → bod/staff bị siết subset vẫn mở được mọi URL /analytics/* (sidebar chỉ ẩn link, không chặn thật).
+- Middleware cũng chưa cover /analytics.
+
+### Đã fix (5 file)
+1. middleware.ts: wrap withAuth(fn) set header `x-pathname` (NextResponse.next({request:{headers}}))
+   + thêm "/analytics/:path*" vào matcher.
+2. analytics/layout.tsx: REWRITE — enforce per-report SERVER-SIDE. admin/manager return sớm. Còn lại đọc DB:
+   users(role, allowed_analytics) + app_settings.role_permissions → granted = baseline(role) ∪ per-user.
+   granted rỗng → /chatbot; id (từ x-pathname) ∉ granted → /chatbot. Fail-closed (đọc DB trực tiếp).
+3. sidebar.tsx (P1): bỏ const ANALYTICS_ROLES; showAnalytics = admin/manager || analyticsGroups.length>0
+   → standard ĐƯỢC CẤP analytics giờ thấy link (trước bị gate role loại standard).
+4. admin/page.tsx (P2/P3): save allowed_tabs = tIds.join(",") tường minh (bỏ bẫy "đủ 3 = null = theo
+   phòng ban" làm user mất sạch tab). "" = không cấp tab nào; "kb,skus,ncc" = đủ 3. + sửa hint/label.
+5. Phân trang:
+   - skus/useTabData (G1/G2/G4): reset page=1 khi đổi extraQuery (effect, skip mount đầu) + clamp
+     page>totalPages + AbortController chống race (response lệch thứ tự → bảng trắng/sai trang).
+   - ncc/WMTab (G2/G4): AbortController + clamp page>totalPages.
+
+### Quyết định user (AskUserQuestion)
+- Triệu chứng: account bị giới hạn vẫn vào được trang analytics (→ P5 là chính).
+- standard + analytics: "Cho phép nếu được cấp" (fix P1).
+- tab PM tích đủ: "Tích đủ = cấp đủ 3 tab" (fix P2/P3, bỏ null trap).
+
+### Test
+- tsc --noEmit PASS. next build PASS (NODE_OPTIONS=--max-old-space-size=6144). Middleware build OK.
+- Trace 7 kịch bản phân quyền PASS (bod siết, standard cấp/không cấp, admin full, sidebar hiện link đúng).
+- E2E live (auth+server) chưa chạy — verify qua build + trace logic như các session trước.
+
+### Lưu ý
+- Enforce thật ở server (layout). Sidebar chỉ là hiển thị link (P4 nháy quyền khi rolePerms đang load
+  chỉ còn là cosmetic, không phải lỗ hổng).
+- ⚠️ x-pathname rỗng → pathToAnalyticsId trả "dashboard" (fail-open hẹp); middleware đã set header cho
+  /analytics nên thực tế luôn có path.
+
+---
 
 ## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
 

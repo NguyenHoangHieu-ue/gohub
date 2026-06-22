@@ -70,8 +70,6 @@ const ANALYTICS_GROUPS = [
 // Flat list for collapsed mode
 const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
 
-const ANALYTICS_ROLES = new Set(["admin", "manager", "bod", "staff"])
-
 // Tab mặc định standard user không cần department
 const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])
 
@@ -206,7 +204,9 @@ export function Sidebar() {
       .filter(group => group.items.length > 0)
   })()
 
-  const showAnalytics = ANALYTICS_ROLES.has(effectiveRole)
+  // Hiện mục Analytics cho admin/manager, hoặc bất kỳ role nào (gồm standard) có ít nhất 1 trang được cấp.
+  // Enforce truy cập thật ở server (analytics/layout.tsx); đây chỉ là hiển thị link.
+  const showAnalytics = effectiveRole === "admin" || effectiveRole === "manager" || analyticsGroups.length > 0
 
   const navItems = (() => {
     if (effectiveRole === "bod" || effectiveRole === "staff") {

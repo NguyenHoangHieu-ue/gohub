@@ -211,7 +211,9 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     const aIds = ANALYTICS_REPORTS.filter(r => analytics.has(r.id)).map(r => r.id)
     const allowed_analytics = aIds.length ? aIds.join(",") : null
     const tIds = PM_TABS.filter(t => tabs.has(t.key)).map(t => t.key)
-    const allowed_tabs = tIds.length === PM_TABS.length ? null : tIds.join(",")
+    // Lưu tường minh danh sách tab đã tích (kể cả đủ 3) — bỏ bẫy "đủ = null = theo phòng ban".
+    // "" = không cấp tab quản lý nào; "kb,skus,ncc" = cấp đủ 3.
+    const allowed_tabs = tIds.join(",")
     const res = await fetch(`/api/admin/users/${user.username}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -336,7 +338,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div>
                   <p className="text-sm font-bold text-slate-700">Tab quản lý (PM)</p>
-                  <p className="text-xs text-slate-400">Áp dụng cho Standard · để mặc định theo phòng ban nếu chọn tất cả</p>
+                  <p className="text-xs text-slate-400">Áp dụng cho Standard · tích tab nào thì user thấy đúng tab đó</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-500">{tabs.size}/{PM_TABS.length}</span>
@@ -349,7 +351,9 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
                   <ToggleCell key={t.key} on={tabs.has(t.key)} label={t.label} onClick={() => toggleTab(t.key)} />
                 ))}
               </div>
-              {isFullTabs && <p className="text-[11px] text-slate-400 mt-1.5">Chọn tất cả = theo mặc định phòng ban (không ghi đè per-user).</p>}
+              {isFullTabs
+                ? <p className="text-[11px] text-emerald-600 mt-1.5">Cấp đủ 3 tab quản lý cho user này.</p>
+                : tabs.size === 0 && <p className="text-[11px] text-slate-400 mt-1.5">Không cấp tab quản lý nào (chỉ giữ các tab mặc định: GoHub AI, Promotions, Reference).</p>}
             </div>
 
             {/* Actions */}
