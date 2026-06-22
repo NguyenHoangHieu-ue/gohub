@@ -205,6 +205,19 @@ Xếp theo độ lệch dòng (web/intel): Fulfillment 0.51 · AllTime 0.61 · D
     Trước khi chạy: trang vẫn render (GET fallback), nhưng LƯU target sẽ lỗi. target_unit cũ giữ nguyên, không mất data.
 - Verify: tsc + next build PASS (NODE_OPTIONS=--max-old-space-size=6144). /analytics/targets 5.67 kB.
 
+### Chương trình #3 (2026-06-22) — ĐƯA TOÀN BỘ gohub-intel + role giống intel (user: ưu tiên intel, chấp nhận ảnh hưởng tab cũ)
+Đối chiếu: intel 25 tab nhưng chỉ 23 wired (Wholesales/OnDemand là DEAD CODE trong chính intel). Tab analytics web đã đủ+giống.
+Thực sự thiếu/khác: Schema Config (chưa có UI), Scheduled Messages (đang ẩn trong Admin), Users/Settings (gộp Admin). Roles: web admin/manager/bod/standard vs intel admin/bod/staff (auth Clerk vs NextAuth — model role→report matrix ĐÃ giống từ s71).
+- ✅ Schema Config (commit b0c85c7): /analytics/schema admin-only (port intel SchemaConfig: Sync Schema + AI Suggest + lưu) + BE /api/config/schema (GET/POST app_settings 'schema_config') + /ai-suggest (Gemini server). Sidebar thêm nhóm Management admin-only (KHÔNG vào role matrix → bod/staff không thấy; admin bypass layout).
+- ✅ Scheduled Messages (commit 3f18842): tách tab /analytics/scheduled (port intel ScheduledMessages: cron builder daily/weekly/monthly/custom, test, toggle). lib/scheduled-runner.ts (runScheduledMessage + isCronDue, giờ VN UTC+7). /api/cron/scheduled-messages + vercel.json crons "* * * * *". Reuse BE /api/admin/scheduled-messages; [id] POST test dùng chung helper. ⚠️ cron fire thật phụ thuộc Vercel plan (cần plan hỗ trợ cron phút).
+- ✅ ROLES admin/bod/staff (user chốt option an toàn: commit 4245309 + c207674): role distribution thật admin4/bod3/standard2/manager0/staff0 → migrate standard→staff (DB PATCH). staff = GIỮ PM nav (như standard cũ: chatbot/promotions/countries + dept tabs) + analytics defaults intel; bod chỉ chatbot; admin absorb manager.
+  · auth.ts Lark default staff; sidebar navItems staff→PM branch, bỏ manager; layout admin-only bypass.
+  · permissions/route DEFAULTS standard→staff (ncc/promotions/skus/kb_wiki view = admin,staff); notifications staff-only 'all'; agents/types UserRole=admin|bod|staff; guardian DEFAULT_POLICY 3 role + admin-only skip.
+  · admin UI: dropdown role chỉ admin/bod/staff; PERM_ROLES=[staff]; AccessPolicy/role-filters bỏ manager/standard cols.
+  · Sweep python: bỏ '&& role!==manager' / '|| role===manager' ở 23 file (admin-only). app_settings perm_kb_*/ncc_import migrate standard→staff/admin.
+  · tsc + next build PASS (134 trang). ⚠️ Chưa E2E live (auth) — verify qua build + DB migration như mọi khi.
+- 🔜 CÒN (#3): Wholesales+OnDemand port → gộp nhóm B2B (cần tạo backend, intel để dead-code) · tách Users+Settings ra 2 tab sidebar.
+
 ---
 
 ## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
