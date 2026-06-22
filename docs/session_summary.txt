@@ -111,9 +111,14 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   · /api/analytics/ga4?siteId&startDate&endDate&dimensions=...&metrics=... → raw GA4 report (rows/dimensionValues/metricValues).
   · /api/analytics/gsc?siteId&startDate&endDate&dimensions=date|query → mảng GSC rows.
   · Gate role analytics. build PASS.
-- 🔜 W2: port WebsiteAnalytics UI (8 section: Traffic Overview, Search Trends, Revenue Breakdown, Top Selling
-  Items, Top Countries, Traffic Sources, Top Search Queries, Top eSIM Products) + compare kỳ trước. Thay
-  /analytics/website page hiện tại (bản GA4/GSC gộp) bằng deep-dive intel.
+- ✅ W2 (XONG): REPLACE analytics/website/page.tsx bằng port intel WebsiteAnalytics (~1295 dòng). 5 KPI
+  (Sessions/Purchases/Search Clicks/Avg CTR/Revenue) + toggle Compare (so kỳ trước, chọn range). 8 section:
+  Traffic Overview (Area), Search Trends (GSC Line clicks/impressions), Revenue Breakdown (Bar), Top Selling
+  Items, Top Countries, Traffic Sources, Top Search Queries (bảng), eSIM Destinations (CR, expand items) +
+  Top eSIM Products. Data qua /api/analytics/ga4 (6 query: date/itemName/country/sessionSourceMedium/
+  itemCategory+itemName) + /api/analytics/gsc (date|query). Logic eSIM grouping/normalize VN→EN bê verbatim.
+  Adapt: bỏ date-fns/Pie/icon thừa, inline getDefaultDateRange, nav '#settings'→/admin. build PASS (9.32 kB).
+  · ⚠️ /api/analytics/website cũ giờ không dùng bởi page; để lại chưa xóa.
 
 ### CÒN LẠI (#2 — sau Website): Vendors → 3HK → Products → B2C → rà các trang ~parity.
 
