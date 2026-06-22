@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getBODFilters , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
-async function fetchGroupMargin(startDate: string, endDate: string, dateColumn = "fulfiled_date") {
+async function fetchGroupMargin(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
   const source        = getAnalyticsSource(dateColumn)
   const filter        = getDateFilter(startDate, endDate, source.dateCol)
   const strategicList = await getStrategicPartnersList()
@@ -19,7 +19,7 @@ async function fetchGroupMargin(startDate: string, endDate: string, dateColumn =
             COUNT(DISTINCT f.order_code) as orders
      FROM ${source.mainTable} f
      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     WHERE ${filter}
+     WHERE ${filter} ${extraFilters}
      GROUP BY "group"
      ORDER BY revenue DESC`
   )
@@ -50,13 +50,14 @@ export async function GET(req: NextRequest) {
   const endDate        = searchParams.get("endDate")
   const dateColumn     = searchParams.get("dateColumn")     || "fulfiled_date"
   const comparisonType = searchParams.get("comparisonType") || "none"
+  const extraFilters   = getBODFilters(searchParams)
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const current = await fetchGroupMargin(startDate, endDate, dateColumn)
+    const current = await fetchGroupMargin(startDate, endDate, dateColumn, extraFilters)
 
     if (comparisonType !== "none") {
       const s = new Date(startDate)
@@ -75,7 +76,8 @@ export async function GET(req: NextRequest) {
       const previous = await fetchGroupMargin(
         prevStart.toISOString().split("T")[0],
         prevEnd.toISOString().split("T")[0],
-        dateColumn
+        dateColumn,
+        extraFilters
       )
 
       return NextResponse.json(current.map(curr => {

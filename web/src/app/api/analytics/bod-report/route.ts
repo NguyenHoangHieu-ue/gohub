@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getDateFilter , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getDateFilter, getBODFilters , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
-async function fetchBODReport(startDate: string, endDate: string) {
+async function fetchBODReport(startDate: string, endDate: string, extraFilters = "") {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")
   const rows = await queryAnalytics<Record<string, string>>(
     `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date,
@@ -15,7 +15,7 @@ async function fetchBODReport(startDate: string, endDate: string) {
                  THEN (SUM(gross_profit_vnd) / SUM(fulfilled_revenue_amount_vnd)) * 100
                  ELSE 0 END as margin_percent
      FROM fact_fulfillment_revenue f
-     WHERE ${filter}
+     WHERE ${filter} ${extraFilters}
      GROUP BY date
      ORDER BY date ASC`
   )
@@ -38,13 +38,14 @@ export async function GET(req: NextRequest) {
   const startDate     = searchParams.get("startDate")
   const endDate       = searchParams.get("endDate")
   const comparisonType = searchParams.get("comparisonType") || "none"
+  const extraFilters   = getBODFilters(searchParams)
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const current = await fetchBODReport(startDate, endDate)
+    const current = await fetchBODReport(startDate, endDate, extraFilters)
 
     if (comparisonType !== "none") {
       const s    = new Date(startDate)
@@ -62,7 +63,8 @@ export async function GET(req: NextRequest) {
 
       const previous = await fetchBODReport(
         prevStart.toISOString().split("T")[0],
-        prevEnd.toISOString().split("T")[0]
+        prevEnd.toISOString().split("T")[0],
+        extraFilters
       )
 
       return NextResponse.json(current.map((curr, i) => {

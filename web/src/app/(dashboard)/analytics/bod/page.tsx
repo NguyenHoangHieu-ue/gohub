@@ -5,7 +5,7 @@ import {
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend
 } from "recharts"
-import { ArrowUpRight, ArrowDownRight, Filter, TrendingUp, Download, RefreshCw, ChevronDown } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, Filter, TrendingUp, Download, RefreshCw, ChevronDown, Check } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useSession } from "next-auth/react"
@@ -22,6 +22,37 @@ function getDefaultDateRange() {
 
 function cn(...c: (string | boolean | undefined)[]) { return c.filter(Boolean).join(" ") }
 const Skeleton = ({ className }: { className?: string }) => <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
+
+// Multi-select dropdown cho filter BOD (vendors/subchannels/groups/product types)
+function MultiSelect({ label, options, selected, onToggle, onClear, open, setOpen }: {
+  label: string; options: string[]; selected: string[]
+  onToggle: (v: string) => void; onClear: () => void; open: boolean; setOpen: () => void
+}) {
+  return (
+    <div className="space-y-1 relative">
+      <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+      <div onClick={setOpen} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100">
+        <span className="truncate max-w-[120px]">{selected.length === 0 ? `All ${label}` : selected.length === 1 ? selected[0] : `${selected.length} selected`}</span>
+        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", open && "rotate-180")} />
+      </div>
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto p-2">
+          <div className="flex items-center justify-between p-1 mb-1 border-b border-slate-100">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">{label}</span>
+            <button onClick={(e) => { e.stopPropagation(); onClear() }} className="text-[10px] text-blue-600 font-bold hover:underline">Clear</button>
+          </div>
+          {options.map(o => (
+            <div key={o} onClick={(e) => { e.stopPropagation(); onToggle(o) }}
+              className={cn("flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer text-sm", selected.includes(o) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600")}>
+              <span className="truncate">{o}</span>
+              {selected.includes(o) && <Check className="w-4 h-4 shrink-0" />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface BODSummary {
   total_revenue: number; total_cogs: number; total_margin: number
@@ -48,6 +79,35 @@ export default function BODReportPage() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [showFilters, setShowFilters]       = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<string[]>([])
+
+  // Filters nâng cao (port từ intel BODReport)
+  const [vendors, setVendors]                         = useState<string[]>([])
+  const [selectedVendors, setSelectedVendors]         = useState<string[]>([])
+  const [subChannels, setSubChannels]                 = useState<string[]>([])
+  const [selectedSubChannels, setSelectedSubChannels] = useState<string[]>([])
+  const [productTypes, setProductTypes]               = useState<string[]>([])
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([])
+  const [selectedChannelGroups, setSelectedChannelGroups] = useState<string[]>([])
+  const [openDd, setOpenDd]                           = useState<string | null>(null)
+
+  const toggleVal = (v: string, list: string[], set: (x: string[]) => void) =>
+    set(list.includes(v) ? list.filter(x => x !== v) : [...list, v])
+
+  // Nạp options filter (vendors/subchannels/product types) từ gohub_dw qua endpoint query chung
+  useEffect(() => {
+    const rq = (sql: string) => fetch("/api/analytics/query", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }),
+    }).then(r => r.ok ? r.json() : []).catch(() => [])
+    Promise.all([
+      rq("SELECT DISTINCT vendor FROM dim_sku WHERE vendor IS NOT NULL AND vendor != '' ORDER BY 1"),
+      rq("SELECT DISTINCT sapo_name FROM dim_order_source WHERE sapo_name IS NOT NULL AND sapo_name != '' ORDER BY 1"),
+      rq("SELECT DISTINCT category_name FROM dim_sku WHERE category_name IS NOT NULL AND category_name != '' ORDER BY 1"),
+    ]).then(([v, sc, pt]) => {
+      setVendors(v.map((r: any) => r.vendor))
+      setSubChannels(sc.map((r: any) => r.sapo_name))
+      setProductTypes(pt.map((r: any) => r.category_name))
+    })
+  }, [])
 
   const toggleGroup = (g: string) => setExpandedGroups(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])
 
@@ -79,6 +139,10 @@ export default function BODReportPage() {
   const fetchData = async () => {
     setLoading(true); setError(null)
     const q  = `?startDate=${startDate}&endDate=${endDate}&comparisonType=${comparisonType}&dateColumn=${dateColumn}`
+      + `&vendors=${encodeURIComponent(selectedVendors.join(","))}`
+      + `&subChannels=${encodeURIComponent(selectedSubChannels.join(","))}`
+      + `&channelGroups=${encodeURIComponent(selectedChannelGroups.join(","))}`
+      + `&productTypes=${encodeURIComponent(selectedProductTypes.join(","))}`
     const fj = async (url: string) => { const r = await fetch(url); if (!r.ok) throw new Error(`${r.status}`); return r.json() }
     try {
       // Phase 1: summary (KPI cards visible immediately)
@@ -165,15 +229,21 @@ export default function BODReportPage() {
       </div>
 
       {showFilters && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
-          {[{ label: "Start Date", val: startDate, set: setStartDate }, { label: "End Date", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
-            <div key={label} className="flex-1 space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
-              <input type="date" value={val} onChange={e => set(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
-            </div>
-          ))}
-          <div className="flex gap-2">
-            <button onClick={() => { const r = getDefaultDateRange(); setStartDate(r.startDate); setEndDate(r.endDate) }} className="px-4 py-2 text-sm text-slate-500">Reset</button>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-start">
+            {[{ label: "Start Date", val: startDate, set: setStartDate }, { label: "End Date", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
+              <div key={label} className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+                <input type="date" value={val} onChange={e => set(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+            ))}
+            <MultiSelect label="Vendors"      options={vendors}            selected={selectedVendors}        onToggle={v => toggleVal(v, selectedVendors, setSelectedVendors)}             onClear={() => setSelectedVendors([])}        open={openDd === "v"}  setOpen={() => setOpenDd(openDd === "v"  ? null : "v")} />
+            <MultiSelect label="Sub Channels" options={subChannels}        selected={selectedSubChannels}    onToggle={v => toggleVal(v, selectedSubChannels, setSelectedSubChannels)}     onClear={() => setSelectedSubChannels([])}    open={openDd === "sc"} setOpen={() => setOpenDd(openDd === "sc" ? null : "sc")} />
+            <MultiSelect label="Groups"       options={["B2B", "B2C"]}     selected={selectedChannelGroups}  onToggle={v => toggleVal(v, selectedChannelGroups, setSelectedChannelGroups)} onClear={() => setSelectedChannelGroups([])}  open={openDd === "cg"} setOpen={() => setOpenDd(openDd === "cg" ? null : "cg")} />
+            <MultiSelect label="Product Type" options={productTypes}        selected={selectedProductTypes}   onToggle={v => toggleVal(v, selectedProductTypes, setSelectedProductTypes)}   onClear={() => setSelectedProductTypes([])}   open={openDd === "pt"} setOpen={() => setOpenDd(openDd === "pt" ? null : "pt")} />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { const r = getDefaultDateRange(); setStartDate(r.startDate); setEndDate(r.endDate); setSelectedVendors([]); setSelectedSubChannels([]); setSelectedChannelGroups([]); setSelectedProductTypes([]) }} className="px-4 py-2 text-sm text-slate-500">Reset</button>
             <button onClick={() => { fetchData(); setShowFilters(false) }} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Apply</button>
             {loading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin self-center" />}
           </div>

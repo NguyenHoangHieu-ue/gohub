@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getBODFilters , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const startDate  = searchParams.get("startDate")
   const endDate    = searchParams.get("endDate")
   const dateColumn = searchParams.get("dateColumn") || "fulfiled_date"
+  const extraFilters = getBODFilters(searchParams)
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
               COUNT(DISTINCT f.order_code) as orders
        FROM ${source.mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE ${filter}
+       WHERE ${filter} ${extraFilters}
        GROUP BY "group", channel
        ORDER BY "group", revenue DESC`
     )

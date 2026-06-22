@@ -135,6 +135,43 @@ export function getGroupCaseSQL(strategicList: string): string {
   END`
 }
 
+// Bộ lọc thực thể cho BOD (port từ gohub-intel getBODFilters): vendors / subChannels / channelGroups /
+// productTypes. Trả chuỗi AND clauses (rỗng nếu không filter → giữ nguyên hành vi cũ). Dùng alias f cho
+// fact table. Append sau date filter trong WHERE. SELECT-only (chạy qua queryAnalytics).
+export function getBODFilters(searchParams: URLSearchParams): string {
+  const esc = (v: string) => v.replace(/'/g, "''")
+  let filter = ""
+
+  const vendors = searchParams.get("vendors")
+  if (vendors) {
+    const list = vendors.split(",").filter(Boolean).map(v => `'${esc(v)}'`).join(",")
+    if (list) filter += ` AND TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${list}))`
+  }
+
+  const subChannels = searchParams.get("subChannels")
+  if (subChannels) {
+    const list = subChannels.split(",").filter(Boolean).map(s => `'${esc(s)}'`).join(",")
+    if (list) filter += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE TRIM(sapo_name) IN (${list}))`
+  }
+
+  const channelGroups = searchParams.get("channelGroups")
+  if (channelGroups) {
+    const conditions = channelGroups.split(",").filter(Boolean).map(g => {
+      const dbGroup = (g === "Wholesales" || g === "WS" || g === "OD" || g === "On-Demand") ? "B2B" : g
+      return `f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(TRIM(group_name)) = '${esc(dbGroup.toUpperCase())}')`
+    })
+    if (conditions.length > 0) filter += ` AND (${conditions.join(" OR ")})`
+  }
+
+  const productTypes = searchParams.get("productTypes")
+  if (productTypes) {
+    const list = productTypes.split(",").filter(Boolean).map(p => `'${esc(p)}'`).join(",")
+    if (list) filter += ` AND TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(category_name) IN (${list}))`
+  }
+
+  return filter
+}
+
 // ── SKU destination (for region chart) ───────────────────────────────────────
 
 type DestRule = { prefix: string; codeLength: number; offset: number }

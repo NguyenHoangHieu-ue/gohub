@@ -98,9 +98,13 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
 - ✅ Đã augment (surgical, dùng data sẵn có, KHÔNG sửa endpoint → an toàn): thêm chart Revenue vs COGS
   (Area rev + Line cogs + Line gpm2), bảng Daily Financial Breakdown (date/rev/cogs/margin/margin%/gpm2/gpm2%),
   projection thêm card GPM2%. tsc + build PASS (/analytics/bod 6.55 kB).
-- 🔜 BOD-filters (B-step): 4 filter cần thêm WHERE vào 4 endpoint (vendors→TRIM(f.sku) IN dim_sku; subchannel→
-  dim_order_source; productType→category_name; channelGroup→group). RỦI RO (sửa 4 endpoint khác cấu trúc JOIN) →
-  làm cẩn thận lượt riêng. MoM projection pills cần fetch prevMonthSummary.
+- ✅ BOD-filters (XONG): thêm helper getBODFilters(searchParams) vào analytics-helpers (port y hệt intel:
+  vendors→TRIM(f.sku) IN dim_sku; subChannels→f.order_source_code IN dim_order_source; channelGroups→group_name;
+  productTypes→category_name). Append `${extraFilters}` sau date filter trong 4 endpoint (bod-summary/report/
+  group-margin/channel-performance) — rỗng nếu không filter → GIỮ NGUYÊN hành vi cũ (an toàn). UI: thêm component
+  MultiSelect + 4 dropdown (Vendors/SubChannels/Groups/ProductType) trong panel Filters; options nạp qua
+  /api/analytics/query; fetchData gửi 4 param. tsc + build PASS (/analytics/bod 7.53 kB).
+- 🔜 CÒN (phụ): MoM projection pills (cần fetch prevMonthSummary) — ưu tiên thấp, bỏ qua tạm.
 
 ### CÒN LẠI (#2 — sau BOD): Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
 

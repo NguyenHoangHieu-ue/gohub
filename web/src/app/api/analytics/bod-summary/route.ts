@@ -4,10 +4,10 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
-  getStrategicPartnersList, getGroupCaseSQL, getTargetSummary
+  getStrategicPartnersList, getGroupCaseSQL, getTargetSummary, getBODFilters
 , CACHE_HEADERS } from "@/lib/analytics-helpers"
 
-async function fetchBODSummaryData(startDate: string, endDate: string, dateColumn = "fulfiled_date") {
+async function fetchBODSummaryData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
   const source        = getAnalyticsSource(dateColumn)
   const filter        = getDateFilter(startDate, endDate, source.dateCol)
   const strategicList = await getStrategicPartnersList()
@@ -19,7 +19,7 @@ async function fetchBODSummaryData(startDate: string, endDate: string, dateColum
               SUM(f.${source.cogsCol})    as total_cogs,
               SUM(f.${source.marginCol})  as total_margin,
               SUM(f.${source.quantityCol}) as total_units
-       FROM ${source.mainTable} f WHERE ${filter}`
+       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters}`
     ),
     queryAnalytics<Record<string, string>>(
       `SELECT ${groupCaseSQL} as "group",
@@ -29,7 +29,7 @@ async function fetchBODSummaryData(startDate: string, endDate: string, dateColum
               COUNT(DISTINCT f.order_code) as orders
        FROM ${source.mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE ${filter}
+       WHERE ${filter} ${extraFilters}
        GROUP BY "group"`
     ),
   ])
@@ -66,13 +66,14 @@ export async function GET(req: NextRequest) {
   const startDate  = searchParams.get("startDate")
   const endDate    = searchParams.get("endDate")
   const dateColumn = searchParams.get("dateColumn") || "fulfiled_date"
+  const extraFilters = getBODFilters(searchParams)
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const current = await fetchBODSummaryData(startDate, endDate, dateColumn)
+    const current = await fetchBODSummaryData(startDate, endDate, dateColumn, extraFilters)
 
     // previous period
     const s    = new Date(startDate)
@@ -83,7 +84,8 @@ export async function GET(req: NextRequest) {
     const previous  = await fetchBODSummaryData(
       prevStart.toISOString().split("T")[0],
       prevEnd.toISOString().split("T")[0],
-      dateColumn
+      dateColumn,
+      extraFilters
     )
 
     // previous year
@@ -92,7 +94,8 @@ export async function GET(req: NextRequest) {
     const prevYear = await fetchBODSummaryData(
       lyStart.toISOString().split("T")[0],
       lyEnd.toISOString().split("T")[0],
-      dateColumn
+      dateColumn,
+      extraFilters
     )
 
     // target revenue
