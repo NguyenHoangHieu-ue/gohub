@@ -71,10 +71,17 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   (admin/manager/bod/staff), chặn multi-statement, trả MẢNG rows trực tiếp (khớp intel data.map). tsc PASS.
 - ⚠️ role-filters KHÔNG auto-áp được cho SQL tùy ý (giới hạn như intel); quyền trang đã enforce ở layout.
 
-### CÒN LẠI (#2 — chương trình nhiều bước, làm tuần tự commit từng trang)
-- Channels (đang tới): port ChannelPerformance.tsx (single-channel deep-dive) + CostManagementModal +
-  endpoint /api/channel-costs + /api/channel-cost-settings (cần chốt data store cost).
-- Rồi BOD → Website → Vendors → 3HK → Products → B2C → các trang ~parity rà lại.
+### Channels port — chuỗi sub-step C1→C4 (user chốt làm tuần tự từng lượt)
+- ✅ C1 (XONG): backend cost của web HÓA RA ĐÃ CÓ SẴN từ merge trước — bảng Supabase riêng
+  analytics_channel_costs / analytics_channel_group_costs / analytics_cost_input_settings, khớp đúng
+  hợp đồng CostManagementModal. → Quyết định "lưu app_settings" thành thừa. Chỉ thiếu 1 endpoint:
+  TẠO MỚI /api/config/subchannels?channel=X (generic, parameterized $1). build PASS.
+  · Web còn sẵn /api/analytics/performance-channel, channels-with-platform-fee, bod-channel-performance.
+- 🔜 C2: port CostManagementModal (web) dùng endpoint sẵn có.
+- 🔜 C3: port ChannelPerformance UI (KPI/filter/trend/projection/breakdown) qua /api/analytics/query.
+- 🔜 C4: wiring cost vào KPI (GP2) + verify số liệu thật gohub_dw.
+
+### CÒN LẠI (#2 — sau Channels): BOD → Website → Vendors → 3HK → Products → B2C → rà các trang ~parity.
 
 ---
 
