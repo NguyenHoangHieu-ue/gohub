@@ -216,7 +216,9 @@ Thực sự thiếu/khác: Schema Config (chưa có UI), Scheduled Messages (đa
   · admin UI: dropdown role chỉ admin/bod/staff; PERM_ROLES=[staff]; AccessPolicy/role-filters bỏ manager/standard cols.
   · Sweep python: bỏ '&& role!==manager' / '|| role===manager' ở 23 file (admin-only). app_settings perm_kb_*/ncc_import migrate standard→staff/admin.
   · tsc + next build PASS (134 trang). ⚠️ Chưa E2E live (auth) — verify qua build + DB migration như mọi khi.
-- 🔜 CÒN (#3): Wholesales+OnDemand port → gộp nhóm B2B (cần tạo backend, intel để dead-code) · tách Users+Settings ra 2 tab sidebar.
+- ✅ Wholesales+OnDemand (điều tra): cả 2 endpoint intel (server.ts) đều filter B2B_FILTER (group_name='B2B') = TRÙNG HOÀN TOÀN B2B; warehouse dim_order_source chỉ có B2B/B2C/Internal-Transaction (KHÔNG có group WS/OD). → user chốt BỎ QUA (B2B đã bao gồm WS+OD), không build duplicate.
+- ✅ Users+Settings tách tab (commit d9433ec): admin/page deep-link ?tab= (đọc URL on mount); sidebar Management group (admin-only) = Users(/admin) · Schema Config · Scheduled Messages · Settings(/admin?tab=settings); bỏ link "Admin" đứng riêng.
+→ CHƯƠNG TRÌNH #3 XONG. Toàn bộ tab intel đã có trên web; roles = admin/bod/staff; Management group admin-only giống intel.
 
 ---
 
