@@ -158,10 +158,16 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   tsc + build PASS.
 - ✅ B2C-2a (XONG): TẠO /api/analytics/b2c/loss-skus (top 10 SKU B2C lỗ margin<0; getBODFilters cho advanced).
   build PASS. (b2c/kpis/trend/performance ĐÃ có sẵn.)
-- 🔜 B2C-2b: port intel B2CPerformance (~1482 dòng) thành view chính + page wrapper (main=intel, isAdmin→nút
-  Advanced→toggle B2CAdvancedDashboard). ⚠️ SHAPE: web b2c/kpis trả MẢNG {label,value,lastPeriod,change,
-  isPositive,isCurrency} — phải đối chiếu intel component mong gì (setKpis), điều chỉnh endpoint HOẶC component.
-  intel gọi: kpis, trend?period=, performance?groupBy=, loss-skus + prevMonth kpis. Bỏ motion.
+### B2C-2b — rewrite endpoints theo shape intel (web b2c/kpis|trend|performance KHÔNG page nào dùng → rewrite tự do)
+- ⚠️ Intel cần 7 KPI [Revenue/Units/GrossProfit/Margin%/Orders/GPM2/GPM2%]; web cũ chỉ 5, khác thứ tự, không GPM2.
+- ✅ B2C-2b-i (XONG): REWRITE /api/analytics/b2c/kpis theo intel — 7 KPI, GPM2 = margin − op-cost (analytics_channel_costs
+  ads/platform_fee/sponsor_products/media + analytics_channel_group_costs B2C, prorate ngày). getBODFilters cho advanced.
+  Inline getDaysInRange/getDaysInMonth/monthsBetween. build PASS.
+- 🔜 B2C-2b-ii: rewrite b2c/trend (→{name,revenue,margin,margin_percent}) + b2c/performance (→{name,revenue,margin,
+  margin_percent,units,gpm2,prev_revenue,...} theo groupBy channel/sku/vendor/destination/staff/customer). Đọc intel
+  server.ts ~6965(trend)/7066(performance).
+- 🔜 B2C-2b-iii: port intel B2CPerformance (~1482 dòng) làm view chính + page wrapper (main=intel; isAdmin→nút
+  Advanced→toggle B2CAdvancedDashboard). Dùng CostManagementModal (đã port). Bỏ motion; /api/query→/api/analytics/query.
 
 ### CÒN LẠI (#2 — sau B2C): rà các trang ~parity (Staff/Customers/Orders/Targets/Feedback/SQL/AllTime/Fulfillment/Dashboard).
 
