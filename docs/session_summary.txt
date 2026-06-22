@@ -120,7 +120,16 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
   Adapt: bỏ date-fns/Pie/icon thừa, inline getDefaultDateRange, nav '#settings'→/admin. build PASS (9.32 kB).
   · ⚠️ /api/analytics/website cũ giờ không dùng bởi page; để lại chưa xóa.
 
-### CÒN LẠI (#2 — sau Website): Vendors → 3HK → Products → B2C → rà các trang ~parity.
+### Vendors — XONG full parity
+- ✅ REPLACE analytics/vendors/page.tsx bằng port intel VendorPerformance (~1778 dòng, lớn nhất). Multi-select
+  vendor + filter Channel/Group + comparison + projection pro-rata (4 metric). Revenue Trend (Area). Channel
+  Distribution (bảng nhóm B2B-Strategic/Non-Strategic/B2C với logic residual "Other <channel>" trừ phần
+  strategic đã claim, Total từng nhóm + Total B2B Combined + GRAND TOTAL, %Contrib vs all-vendors). Product
+  Performance (search SKU + sort + pagination 15). Data qua /api/analytics/query + /api/config/partner-tiers +
+  /api/analytics/b2b/strategic-performance. Adapt: import web, inline getDefaultDateRange/formatDateToISO.
+  build PASS (12.9 kB). ⚠️ /api/analytics/vendors/{list,report} cũ không còn dùng; để lại.
+
+### CÒN LẠI (#2 — sau Vendors): 3HK → Products → B2C → rà các trang ~parity.
 
 ---
 
