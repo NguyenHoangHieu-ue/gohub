@@ -141,10 +141,14 @@ User giao 3 việc: (1) giảm cỡ chữ, (2) bê y nguyên/đối chiếu-bổ
 - ✅ P1 (XONG): TẠO /api/config/country-codes (reuse getCountryMappings → [{code,country}], cho hiển thị region).
   MỞ RỘNG /api/orders/export sẵn có thêm filter Products (skus/category/vendor/destination + rule) — additive,
   chỉ áp khi có param. (orders/export + jspdf + modern-screenshot + formatTruncatedString web ĐÃ có sẵn). build PASS.
-- 🔜 P2: port ProductPerformance UI (~1226 dòng): filter SKU/category/vendor/channel/destination + comparison +
-  charts (trend/channel/region/pie) + SKU table + drill-down + export CSV (orders/export) + export PDF (jspdf).
+- ✅ P2 (XONG): REPLACE analytics/products/page.tsx bằng port ProductPerformance (~1226 dòng). 5 KPI + filter
+  SKU(multi-search)/Category/Vendor/Channel/ChannelGroup/Destination + Comparison + projection. Charts: Sales&Units
+  Trend (Area+Line), Top Regions (horizontal Bar). Channel Performance 3 nhóm (B2C/B2B-Strategic/Non-Strategic,
+  trừ strategic contributions) + SKU Breakdown (top 50). Export CSV (orders/export) + Export PDF (domToCanvas+jsPDF).
+  Data qua /api/analytics/query. Map web rule prefix→startsWith. build PASS (147 kB do jspdf bundle).
+  ⚠️ /api/analytics/products/report cũ không còn dùng.
 
-### CÒN LẠI (#2 — sau Products): B2C → rà các trang ~parity.
+### CÒN LẠI (#2 — sau Products): B2C (trang cuối theo độ lệch) → rà các trang ~parity.
 
 ---
 
