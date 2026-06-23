@@ -84,7 +84,7 @@ const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
 const MANAGEMENT_GROUP = {
   label: "Management",
   items: [
-    { href: "/admin",                label: "Users",              icon: Users },
+    { href: "/analytics/users",     label: "Users",              icon: Users },
     { href: "/analytics/schema",    label: "Schema Config",      icon: Database },
     { href: "/analytics/scheduled", label: "Scheduled Messages", icon: Clock },
     { href: "/admin?tab=settings",  label: "Settings",           icon: Settings },
