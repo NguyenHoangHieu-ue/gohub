@@ -297,7 +297,7 @@ export default function TargetsPage() {
       />
 
       <PlanningTable
-        title="GPM2 % Target Planning"
+        title="CM1 % Target Planning"
         metricType="percent"
         targets={targetsGpm2}
         prevActuals={d => d.prevQuarterGpm2Actuals}

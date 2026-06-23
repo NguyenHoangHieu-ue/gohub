@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
     const prevMonths    = getQuarterMonths(prevQuarter)
     const currentMonths = getQuarterMonths(quarter)
 
-    // Actuals từ gohub_dw cho prev quarter — gộp theo KÊNH (để GPM2 trừ op-cost theo kênh giống intel),
-    // kèm gross_profit_vnd (margin) cho GPM2. grp = B2C/B2B để aggregate sau.
+    // Actuals từ gohub_dw cho prev quarter — gộp theo KÊNH (để CM1 trừ op-cost theo kênh giống intel),
+    // kèm gross_profit_vnd (margin) cho CM1. grp = B2C/B2B để aggregate sau.
     const actualsRows = await queryAnalytics<{
       channel: string; grp: string; month: string; revenue: string; margin: string; revenue_3hk: string
     }>(

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { getBODFilters } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
-// Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + GPM2 (margin − op-cost).
+// Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

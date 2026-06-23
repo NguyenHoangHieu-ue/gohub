@@ -5,8 +5,8 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters } from "@/lib/analytics-helpers"
 
-// Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, GPM2, GPM2 %].
-// GPM2 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
+// Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
+// CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
 // Cost lấy từ Supabase analytics_channel_costs / analytics_channel_group_costs (đã có từ Channels).
 
 const B2C_FILTER = "UPPER(s.group_name) = 'B2C'"
@@ -152,8 +152,8 @@ export async function GET(req: NextRequest) {
       { label: "Gross Profit", value: current_margin, lastPeriod: prev_margin, change: chg(current_margin, prev_margin), isPositive: current_margin >= prev_margin, isCurrency: true },
       { label: "Margin %", value: currentMarginPercent, lastPeriod: prevMarginPercent, change: currentMarginPercent - prevMarginPercent, isPositive: currentMarginPercent >= prevMarginPercent, isCurrency: false },
       { label: "Total Orders", value: parseInt(d.current_orders || "0"), lastPeriod: parseInt(d.prev_orders || "0"), change: chg(parseInt(d.current_orders || "0"), parseInt(d.prev_orders || "0")), isPositive: parseInt(d.current_orders || "0") >= parseInt(d.prev_orders || "0"), isCurrency: false },
-      { label: "GPM2", value: current_gpm2, lastPeriod: prev_gpm2, change: chg(current_gpm2, prev_gpm2), isPositive: current_gpm2 >= prev_gpm2, isCurrency: true },
-      { label: "GPM2 %", value: current_gpm2_percent, lastPeriod: prev_gpm2_percent, change: current_gpm2_percent - prev_gpm2_percent, isPositive: current_gpm2_percent >= prev_gpm2_percent, isCurrency: false },
+      { label: "CM1", value: current_gpm2, lastPeriod: prev_gpm2, change: chg(current_gpm2, prev_gpm2), isPositive: current_gpm2 >= prev_gpm2, isCurrency: true },
+      { label: "CM1 %", value: current_gpm2_percent, lastPeriod: prev_gpm2_percent, change: current_gpm2_percent - prev_gpm2_percent, isPositive: current_gpm2_percent >= prev_gpm2_percent, isCurrency: false },
     ])
   } catch (err: any) {
     console.error("[analytics/b2c/kpis]", err.message)

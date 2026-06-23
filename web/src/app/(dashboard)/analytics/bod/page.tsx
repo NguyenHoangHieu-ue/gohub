@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 
 // Port "y hệt" gohub-intel BODReport. Backend: bod-summary/bod-report/bod-group-margin/bod-channel-performance
-// (GPM2 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
+// (CM1 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
 // Adapt: "use client"; /api/query→/api/analytics/query; cn @/lib/utils; inline getDefaultDateRange/formatDateToISO.
 
 function getDefaultDateRange() {
@@ -149,7 +149,7 @@ export default function BODReport() {
 
   const exportChannelPerformanceCSV = () => {
     if (!channelPerformance.length) return
-    const headers = ["Group", "Channel", "Units", "Revenue", "COGS", "Margin", "Margin %", "GPM2", "GPM2 %"]
+    const headers = ["Group", "Channel", "Units", "Revenue", "COGS", "Margin", "Margin %", "CM1", "CM1 %"]
     if (projection) headers.splice(4, 0, "Projected Revenue")
     const rows = channelPerformance.map(row => {
       const d = [
@@ -449,8 +449,8 @@ export default function BODReport() {
             <SummaryCard title="Total COGS" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} />
             <SummaryCard title="Gross Margin" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} />
             <SummaryCard title="Margin %" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
-            <SummaryCard title="Total GPM2" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
-            <SummaryCard title="GPM2 %" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
+            <SummaryCard title="Total CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
+            <SummaryCard title="CM1 %" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
           </>
         )}
       </div>
@@ -470,7 +470,7 @@ export default function BODReport() {
               { label: "Projected Revenue", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
               { label: "Projected Units", val: formatCompactNumber(projection.units), chg: projection.unitsChange },
               { label: "Projected Margin", val: formatCompactNumber(projection.margin), chg: projection.marginChange },
-              { label: "Projected GPM2", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
+              { label: "Projected CM1", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
             ]).map(c => (
               <div key={c.label} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
@@ -484,7 +484,7 @@ export default function BODReport() {
               </div>
             ))}
             <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected GPM2 %</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
               <p className="text-lg font-bold text-indigo-600">{projection.gpm2Percent.toFixed(2)}%</p>
               <p className="text-[9px] text-slate-400 mt-1">Full Month Estimate</p>
             </div>
@@ -510,7 +510,7 @@ export default function BODReport() {
                   <Legend iconType="circle" />
                   <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
                   <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
-                  <Line type="monotone" dataKey="gpm2" name="GPM2" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
+                  <Line type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -539,8 +539,8 @@ export default function BODReport() {
                 <th className="px-6 py-4 text-right font-semibold">Revenue</th>
                 <th className="px-6 py-4 text-right font-semibold">Gross Margin</th>
                 <th className="px-6 py-4 text-right font-semibold">Margin %</th>
-                <th className="px-6 py-4 text-right font-semibold">GPM2</th>
-                <th className="px-6 py-4 text-right font-semibold">GPM2 %</th>
+                <th className="px-6 py-4 text-right font-semibold">CM1</th>
+                <th className="px-6 py-4 text-right font-semibold">CM1 %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -617,7 +617,7 @@ export default function BODReport() {
                   <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [`${(val || 0).toFixed(2)}%`, "Margin %"]} />
                   <Legend iconType="circle" />
                   <Line type="monotone" dataKey="margin_percent" name="Margin %" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="gpm2_percent" name="GPM2 %" stroke="#ec4899" strokeWidth={3} dot={{ r: 4, fill: "#ec4899", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="gpm2_percent" name="CM1 %" stroke="#ec4899" strokeWidth={3} dot={{ r: 4, fill: "#ec4899", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -637,8 +637,8 @@ export default function BODReport() {
                 <th className="px-4 py-3 text-right">COGS</th>
                 <th className="px-4 py-3 text-right">Gross Margin</th>
                 <th className="px-4 py-3 text-right">Margin %</th>
-                <th className="px-4 py-3 text-right">GPM2</th>
-                <th className="px-4 py-3 text-right">GPM2 %</th>
+                <th className="px-4 py-3 text-right">CM1</th>
+                <th className="px-4 py-3 text-right">CM1 %</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -693,10 +693,10 @@ export default function BODReport() {
                 <th className="px-4 py-3 text-right font-semibold">COGS</th>
                 <th className="px-4 py-3 text-right font-semibold">Gross Margin</th>
                 <th className="px-4 py-3 text-right font-semibold">Margin %</th>
-                <th className="px-4 py-3 text-right font-semibold">GPM2</th>
-                {projection && <th className="px-4 py-3 text-right font-semibold">GPM2 dự phóng</th>}
-                <th className="px-4 py-3 text-right font-semibold">GPM2 %</th>
-                {projection && <th className="px-4 py-3 text-right font-semibold">GPM2 % dự phóng</th>}
+                <th className="px-4 py-3 text-right font-semibold">CM1</th>
+                {projection && <th className="px-4 py-3 text-right font-semibold">CM1 dự phóng</th>}
+                <th className="px-4 py-3 text-right font-semibold">CM1 %</th>
+                {projection && <th className="px-4 py-3 text-right font-semibold">CM1 % dự phóng</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

@@ -199,7 +199,7 @@ export function B2CPerformance() {
 
     const factor = lastDayOfMonth / daysElapsed
 
-    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: GPM2
+    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1
     const revenue = kpis[0]?.value || 0
     const units = kpis[1]?.value || 0
     const margin = kpis[2]?.value || 0
@@ -450,7 +450,7 @@ export function B2CPerformance() {
     ]
 
     if (groupBy === "channel") {
-      headers.push("GPM2", "GPM2 %")
+      headers.push("CM1", "CM1 %")
     }
 
     // Prepare rows
@@ -912,7 +912,7 @@ export function B2CPerformance() {
                 <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected GPM2</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{formatCompact(projection.gpm2)}</p>
                   <div className={cn(
@@ -926,7 +926,7 @@ export function B2CPerformance() {
                 <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected GPM2 %</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
                 <p className="text-lg font-bold text-blue-600">{projection.gpm2Percent.toFixed(2)}%</p>
                 <p className="text-[9px] text-slate-400 mt-1">Full Month Estimate</p>
               </div>
@@ -970,7 +970,7 @@ export function B2CPerformance() {
                   <Legend />
                   <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="left" dataKey="margin" name="Gross Profit" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="left" type="monotone" dataKey="gpm2" name="GPM2" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
+                  <Line yAxisId="left" type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -1112,7 +1112,7 @@ export function B2CPerformance() {
                       onClick={() => handleSort("gpm2" as any)}
                     >
                       <div className="flex items-center justify-end">
-                        GPM2
+                        CM1
                         <SortIcon column={"gpm2" as any} />
                       </div>
                     </th>
@@ -1207,7 +1207,7 @@ export function B2CPerformance() {
                               </span>
                               <span className="text-[10px] text-slate-400">{(item.gpm2_percent || 0).toFixed(1)}%</span>
                               {item.projected_gpm2 !== undefined && item.projected_gpm2 !== item.gpm2 && (
-                                <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month GPM2">
+                                <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
                                   DP: {formatCurrency(item.projected_gpm2)}
                                 </div>
                               )}
@@ -1332,7 +1332,7 @@ export function B2CPerformance() {
                             </span>
                             <span className="text-[10px] text-slate-500">{totalGpm2Percent.toFixed(1)}%</span>
                             {totals.projected_gpm2 !== undefined && totals.projected_gpm2 !== totals.gpm2 && (
-                              <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month GPM2">
+                              <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
                                 DP: {formatCurrency(totals.projected_gpm2)}
                               </div>
                             )}

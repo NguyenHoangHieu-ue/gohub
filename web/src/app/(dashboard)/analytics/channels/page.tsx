@@ -1183,7 +1183,7 @@ export default function ChannelPerformancePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <MetricCard title="Total Revenue" value={formatCurrency(metrics?.revenue || 0)} change={metrics?.revenueChange || 0} icon={DollarSign} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Gross Profit 1" value={formatCurrency(metrics?.margin || 0)} change={metrics?.marginChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
-        <MetricCard title="Gross Profit 2" value={formatCurrency(metrics?.gpm2 || 0)} change={metrics?.gpm2Change || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
+        <MetricCard title="Contribution Margin 1" value={formatCurrency(metrics?.gpm2 || 0)} change={metrics?.gpm2Change || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Total Orders" value={formatNumber(metrics?.orders || 0)} change={metrics?.ordersChange || 0} icon={ShoppingBag} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Units Sold" value={formatNumber(metrics?.units || 0)} change={metrics?.unitsChange || 0} icon={Package} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Average Order Value" value={formatCurrency(metrics?.aov || 0)} change={metrics?.aovChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
@@ -1264,8 +1264,8 @@ export default function ChannelPerformancePage() {
                 <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit 1</th>
                 <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit 2</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng GP2</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contribution Margin 1</th>
+                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GPM 2 %</th>
                 {comparisonType !== "none" && (
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">

@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL } from "@/lib/analytics-helpers"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
-// GPM2 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
+// CM1 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
 // analytics_channel_costs / analytics_channel_group_costs (intel dùng Turso channel_costs; group_name web = 'B2B'/'B2C').
 
 export function getDaysInMonth(month: string) {
@@ -180,7 +180,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
   })
 }
 
-// Port intel fetchBODReportData: breakdown theo NGÀY, GPM2 = dayMargin − op-cost rải đều theo ngày
+// Port intel fetchBODReportData: breakdown theo NGÀY, CM1 = dayMargin − op-cost rải đều theo ngày
 // (amount: value/sốNgàyTháng; percent: dcRevenue*value/100) + group-cost/sốNgàyTháng.
 export async function fetchBODReportData(startDate: string, endDate: string, extraFilters = "") {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")

@@ -1,5 +1,39 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-22 (session 73 — Fix phân quyền analytics server-side + phân trang)
+Cập nhật lần cuối: 2026-06-23 (session 74 — Đổi term GP2/GPM2 → CM1 theo new_info.txt)
+
+⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
+   — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
+   + đánh dấu ✅ HOÀN THÀNH ngay trong file đó.
+
+## Session 74 (2026-06-23) — Đổi term GP2/GPM2 → CM1 (new_info.txt) + quy tắc check new_info
+
+Tiếp việc dở session trước (tmp.txt: #1 push OK, #2 áp new_info.txt, #3 auto date filter). Session này làm #2.
+
+### new_info.txt (23/06): đổi cách gọi để đồng nhất Management Report
+- Gross Profit 2 (GP2) / Gross Profit Margin 2 (GPM2) → Contribution Margin 1 (CM1) / % CM1 (CM1%).
+- Term GIỮ NGUYÊN: Revenue, Gross Profit (=Rev−COGS), Gross Profit Margin (GPM%). CM1 = GP − Operation Cost.
+- 2 key metric mới của team Business: CM1 và 3HK Contribution Revenue % (= Rev 3HK / Total Rev).
+
+### Đã làm (rename label hiển thị, GIỮ data key)
+- Đổi LABEL uppercase GPM2→CM1, GPM2 %/GPM2%→CM1 %/CM1%, "Gross Profit 2"→"Contribution Margin 1", "Dự phóng GP2"→"Dự phóng CM1".
+- 13 file: FE channels/bod/b2b/b2c-performance/all-time/targets + API b2b·b2c kpis (label đồng bộ với findKPI) +
+  comment all-time-performance/planning-targets/bod-channel-performance/bod-group-margin/lib bod-data.
+- GIỮ NGUYÊN: data key/SQL alias lowercase gpm2/gpm2_percent/projected_gpm2/dataKey="gpm2" (196 chỗ) → không vỡ shape.
+  "GPM"/"GPM%" (Gross Profit Margin) KHÔNG đụng (new_info giữ term này).
+- Cách làm: PowerShell -creplace 'GPM2'→'CM1' (case-sensitive, không chạm lowercase) + sửa tay channels GP2/full-name.
+
+### Test
+- grep xác nhận 0 label GPM2/GP2/"Gross Profit 2" còn sót. tsc --noEmit PASS. next build PASS (EXIT 0).
+- ⚠️ Verify hiển thị thật nên mở app xem KPI card/bảng để chắc label CM1 đúng vị trí (build-verified như mọi khi).
+
+### CÒN (chưa làm trong new_info / tmp.txt)
+- Metric "3HK Contribution Revenue %" chưa có trên web (mới định nghĩa, chưa build).
+- Sync term CM1 sang wiki (docs/wiki + kb_wiki_pages) — cần script upsert theo title như session 72.
+- tmp.txt #2 phụ (B2B strategic/other split — kiểm lại đã đủ chưa) + #3 auto date filter theo ngày/tuần/quý/năm — CHƯA làm.
+
+---
+
+## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang
 
 ## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang
 

@@ -10,7 +10,7 @@ import {
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 
-// Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (GPM2 = margin − op-cost,
+// Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
 // đã align) + /api/channels. Adapt: "use client"; bỏ motion; inline getDefaultDateRange.
 
 function getDefaultDateRange() {
@@ -121,9 +121,9 @@ export default function AllTimeReport() {
     if (!data) return
     const periods = Array.from(new Set(data[activeView].map(d => d.period))).sort()
     const headers = [
-      "Period", "B2B Strategic Revenue", "B2B Strategic GPM%", "B2B Strategic GPM2%",
-      "B2B Non-Strategic Revenue", "B2B Non-Strategic GPM%", "B2B Non-Strategic GPM2%",
-      "B2C Revenue", "B2C GPM%", "B2C GPM2%", "Total Revenue",
+      "Period", "B2B Strategic Revenue", "B2B Strategic GPM%", "B2B Strategic CM1%",
+      "B2B Non-Strategic Revenue", "B2B Non-Strategic GPM%", "B2B Non-Strategic CM1%",
+      "B2C Revenue", "B2C GPM%", "B2C CM1%", "Total Revenue",
     ]
     const csvRows = [headers.join(","), ...periods.map(period => {
       const b2bS = data[activeView].find(d => d.period === period && d.group_name === "B2B-Strategic")
@@ -276,7 +276,7 @@ export default function AllTimeReport() {
           <div className="flex items-center justify-between mb-2">
             <div className={cn("p-2 rounded-xl", metricView === "gpm2" ? "bg-emerald-500" : "bg-emerald-50")}><TrendingUp className={cn("w-5 h-5", metricView === "gpm2" ? "text-white" : "text-emerald-600")} /></div>
           </div>
-          <p className={cn("text-sm font-medium", metricView === "gpm2" ? "text-emerald-100" : "text-slate-500")}>Avg. GPM2 %</p>
+          <p className={cn("text-sm font-medium", metricView === "gpm2" ? "text-emerald-100" : "text-slate-500")}>Avg. CM1 %</p>
           <p className="text-xl font-bold">{avgSum.toFixed(2)}%</p>
         </button>
       </div>
@@ -334,7 +334,7 @@ export default function AllTimeReport() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right" rowSpan={2}>Total Revenue</th>
               </tr>
               <tr className="bg-slate-50/30">
-                {["bg-blue-50/30", "bg-sky-50/30", "bg-indigo-50/30"].flatMap(bg => ["Rev", "GPM", "GPM2"].map((h, i) => (
+                {["bg-blue-50/30", "bg-sky-50/30", "bg-indigo-50/30"].flatMap(bg => ["Rev", "GPM", "CM1"].map((h, i) => (
                   <th key={`${bg}-${i}`} className={cn("px-2 py-2 text-[10px] font-bold text-slate-400 uppercase text-right border-b border-slate-100", bg)}>{h}</th>
                 )))}
               </tr>

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { getBODFilters } from "@/lib/analytics-helpers"
 import { fetchBODChannelPerformanceData } from "@/lib/bod-data"
 
-// Port intel bod-channel-performance: từng kênh + GPM2 (margin − op-cost theo kênh/tháng prorate).
+// Port intel bod-channel-performance: từng kênh + CM1 (margin − op-cost theo kênh/tháng prorate).
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

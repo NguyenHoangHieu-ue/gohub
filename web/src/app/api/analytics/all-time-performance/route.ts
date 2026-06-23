@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
          ORDER BY 1 ASC`
       )
 
-      // Op-cost (GPM2) — port intel: channel_costs full-month + group_costs theo nhóm (KHÔNG prorate; period là tháng đủ).
+      // Op-cost (CM1) — port intel: channel_costs full-month + group_costs theo nhóm (KHÔNG prorate; period là tháng đủ).
       const months = Array.from(new Set(rows.map(r => r.period)))
       let channelCosts: any[] = []
       let groupCosts: any[] = []

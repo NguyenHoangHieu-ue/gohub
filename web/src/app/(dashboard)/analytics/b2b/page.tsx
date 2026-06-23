@@ -15,7 +15,7 @@ import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { CostManagementModal } from "@/components/cost-management-modal"
 
-// Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost GPM2): b2b/kpis|trend|performance|
+// Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
 // Adapt: "use client"; bỏ motion (motion.div→div); cn @/lib/utils; inline getDefaultDateRange/formatDateToISO.
 
@@ -159,8 +159,8 @@ export default function B2BPerformance() {
       const b2bPrevRev = findKPI(safeB2BKpis, "Total Revenue")?.lastPeriod || 0
       const b2bGP = findKPI(safeB2BKpis, "Gross Profit")?.value || 0
       const b2bPrevGP = findKPI(safeB2BKpis, "Gross Profit")?.lastPeriod || 0
-      const b2bGpm2 = findKPI(safeB2BKpis, "GPM2")?.value || 0
-      const b2bPrevGpm2 = findKPI(safeB2BKpis, "GPM2")?.lastPeriod || 0
+      const b2bGpm2 = findKPI(safeB2BKpis, "CM1")?.value || 0
+      const b2bPrevGpm2 = findKPI(safeB2BKpis, "CM1")?.lastPeriod || 0
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
@@ -177,9 +177,9 @@ export default function B2BPerformance() {
       const kpis: any[] = [
         { label: "B2B Revenue", value: totalRevProjected, actualValue: totalRevActual, lastPeriod: prevTotalRev, change: calculateChange(totalRevProjected, prevTotalRev), isPositive: totalRevProjected >= prevTotalRev, isCurrency: true, icon: <Globe className="w-5 h-5" /> },
         { label: "Gross Profit", value: totalGPProjected, actualValue: totalGPActual, lastPeriod: prevTotalGP, change: calculateChange(totalGPProjected, prevTotalGP), isPositive: totalGPProjected >= prevTotalGP, isCurrency: true, icon: <TrendingUp className="w-5 h-5" /> },
-        { label: "GPM2", value: totalGpm2Projected, actualValue: totalGpm2Actual, lastPeriod: prevTotalGpm2, change: calculateChange(totalGpm2Projected, prevTotalGpm2), isPositive: totalGpm2Projected >= prevTotalGpm2, isCurrency: true, icon: <DollarSign className="w-5 h-5" /> },
+        { label: "CM1", value: totalGpm2Projected, actualValue: totalGpm2Actual, lastPeriod: prevTotalGpm2, change: calculateChange(totalGpm2Projected, prevTotalGpm2), isPositive: totalGpm2Projected >= prevTotalGpm2, isCurrency: true, icon: <DollarSign className="w-5 h-5" /> },
         { label: "B2B Margin %", value: totalRevProjected > 0 ? (totalGPProjected / totalRevProjected) * 100 : 0, actualValue: totalRevActual > 0 ? (totalGPActual / totalRevActual) * 100 : 0, lastPeriod: prevTotalRev > 0 ? (prevTotalGP / prevTotalRev) * 100 : 0, change: (totalRevProjected > 0 ? (totalGPProjected / totalRevProjected) * 100 : 0) - (prevTotalRev > 0 ? (prevTotalGP / prevTotalRev) * 100 : 0), isPositive: (totalRevProjected > 0 ? (totalGPProjected / totalRevProjected) * 100 : 0) >= (prevTotalRev > 0 ? (prevTotalGP / prevTotalRev) * 100 : 0), isCurrency: false, icon: <ShoppingBag className="w-5 h-5" /> },
-        { label: "B2B GPM2 %", value: totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0, actualValue: totalRevActual > 0 ? (totalGpm2Actual / totalRevActual) * 100 : 0, lastPeriod: prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0, change: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) - (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isPositive: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) >= (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isCurrency: false, icon: <PieChartIcon className="w-5 h-5" /> },
+        { label: "B2B CM1 %", value: totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0, actualValue: totalRevActual > 0 ? (totalGpm2Actual / totalRevActual) * 100 : 0, lastPeriod: prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0, change: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) - (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isPositive: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) >= (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isCurrency: false, icon: <PieChartIcon className="w-5 h-5" /> },
       ]
       setCombinedKpis(kpis)
     } catch (err: any) {
@@ -390,7 +390,7 @@ export default function B2BPerformance() {
               <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 tracking-tight">Revenue & GPM2 Trend</h3>
+                    <h3 className="text-lg font-bold text-slate-900 tracking-tight">Revenue & CM1 Trend</h3>
                     <p className="text-xs text-slate-500 font-medium tracking-tight">Performance tracking across B2B channels</p>
                     <div className="flex items-center gap-1 mt-4 p-1 bg-slate-100 rounded-xl w-fit">
                       {(["day", "week", "month"] as const).map(g => (
@@ -400,7 +400,7 @@ export default function B2BPerformance() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2"><div className="w-3 h-1.5 rounded-full bg-blue-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Revenue (Bar)</span></div>
-                    <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-indigo-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">GPM2 (Line)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-indigo-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">CM1 (Line)</span></div>
                   </div>
                 </div>
                 <div className="h-[300px]">
@@ -411,7 +411,7 @@ export default function B2BPerformance() {
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
                       <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "16px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", padding: "12px" }} formatter={(value: any) => [formatCurrency(value).replace("₫", "VND"), ""]} />
                       <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" barSize={trendData.length > 20 ? 12 : 24} opacity={0.8} />
-                      <Line type="monotone" dataKey="gpm2" stroke="#4f46e5" strokeWidth={3} dot={{ fill: "#4f46e5", r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="GPM2" />
+                      <Line type="monotone" dataKey="gpm2" stroke="#4f46e5" strokeWidth={3} dot={{ fill: "#4f46e5", r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="CM1" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -432,8 +432,8 @@ export default function B2BPerformance() {
                   <div className="flex items-center gap-3">
                     <button onClick={() => {
                       const columns: { label: string; key: string }[] = [{ label: "Partner", key: "name" }, { label: "Tier", key: "tier" }, { label: "Revenue", key: "revenue" }]
-                      if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected GPM2", key: "projected_gpm2" }) }
-                      columns.push({ label: "Units", key: "units" }, { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "GPM2", key: "gpm2" }, { label: "GPM2 %", key: "gpm2_percent" })
+                      if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
+                      columns.push({ label: "Units", key: "units" }, { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
                       const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
                       exportToCSV(exportData, "Strategic_Partners_Performance", columns)
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all font-bold text-[10px]">
@@ -451,8 +451,8 @@ export default function B2BPerformance() {
                         <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">Units</th>
                         <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">GP</th>
                         <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">Margin %</th>
-                        <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">GPM2</th>
-                        <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">GPM2 %</th>
+                        <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">CM1</th>
+                        <th className="px-8 py-4 text-[10px] font-bold text-indigo-600 uppercase tracking-widest text-right">CM1 %</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-indigo-50">
@@ -518,8 +518,8 @@ export default function B2BPerformance() {
                                                           <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">Units</th>
                                                           <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">GP</th>
                                                           <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">Margin%</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">GPM2</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">GPM2%</th>
+                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">CM1</th>
+                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">CM1%</th>
                                                         </tr>
                                                       </thead>
                                                       <tbody className="divide-y divide-indigo-50/30">
@@ -616,8 +616,8 @@ export default function B2BPerformance() {
                   <button onClick={() => {
                     const nonStrategic = getFilteredOtherTiers()
                     const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
-                    if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected GPM2", key: "projected_gpm2" }) }
-                    columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "GPM2", key: "gpm2" }, { label: "GPM2 %", key: "gpm2_percent" })
+                    if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
+                    columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
                     const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
                     exportToCSV(exportData, "Other_Tiers_Customers", columns)
                   }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
@@ -628,7 +628,7 @@ export default function B2BPerformance() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50">
-                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["gpm2", "GPM2"], ["gpm2_percent", "GPM2 %"]] as [keyof PerformanceData, string][]).map(([key, label], i) => (
+                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [keyof PerformanceData, string][]).map(([key, label], i) => (
                           <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => setWholesaleSort({ key, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
                             <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}<SortIcon sort={wholesaleSort} column={key} /></div>
                           </th>
@@ -692,8 +692,8 @@ export default function B2BPerformance() {
                                                     <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
                                                     <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">GP</th>
                                                     <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">Margin%</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">GPM2</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">GPM2%</th>
+                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">CM1</th>
+                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">CM1%</th>
                                                   </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
