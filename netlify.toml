@@ -1,0 +1,12 @@
+# Netlify config — app Next.js nằm trong thư mục web/
+[build]
+  base = "web"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
+# Runtime chính thức cho Next.js (App Router, SSR, API routes, middleware)
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
