@@ -1,34 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { queryAnalytics } from "@/lib/analytics-db"
-import { getDateFilter, getBODFilters , CACHE_HEADERS } from "@/lib/analytics-helpers"
-
-async function fetchBODReport(startDate: string, endDate: string, extraFilters = "") {
-  const filter = getDateFilter(startDate, endDate, "fulfiled_date")
-  const rows = await queryAnalytics<Record<string, string>>(
-    `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date,
-            SUM(fulfilled_revenue_amount_vnd) as revenue,
-            SUM(cogs_amount_vnd) as cogs,
-            SUM(gross_profit_vnd) as margin,
-            CASE WHEN SUM(fulfilled_revenue_amount_vnd) > 0
-                 THEN (SUM(gross_profit_vnd) / SUM(fulfilled_revenue_amount_vnd)) * 100
-                 ELSE 0 END as margin_percent
-     FROM fact_fulfillment_revenue f
-     WHERE ${filter} ${extraFilters}
-     GROUP BY date
-     ORDER BY date ASC`
-  )
-  return rows.map(r => ({
-    date:           r.date,
-    revenue:        parseFloat(r.revenue        || "0"),
-    cogs:           parseFloat(r.cogs           || "0"),
-    margin:         parseFloat(r.margin         || "0"),
-    margin_percent: parseFloat(r.margin_percent || "0"),
-    gpm2:           parseFloat(r.margin         || "0"), // no op costs for now
-    gpm2_percent:   parseFloat(r.margin_percent || "0"),
-  }))
-}
+import { getBODFilters } from "@/lib/analytics-helpers"
+import { fetchBODReportData as fetchBODReport } from "@/lib/bod-data"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
