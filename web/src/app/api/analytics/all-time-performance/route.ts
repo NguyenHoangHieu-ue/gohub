@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { supabaseAdmin } from "@/lib/supabase"
 import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate } from "@/lib/analytics-helpers"
+
+const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
+const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -62,9 +66,25 @@ export async function GET(req: NextRequest) {
          ORDER BY 1 ASC`
       )
 
+      // Op-cost (GPM2) — port intel: channel_costs full-month + group_costs theo nhóm (KHÔNG prorate; period là tháng đủ).
+      const months = Array.from(new Set(rows.map(r => r.period)))
+      let channelCosts: any[] = []
+      let groupCosts: any[] = []
+      if (months.length > 0) {
+        const [{ data: ccData }, { data: gcData }] = await Promise.all([
+          supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
+          supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
+        ])
+        channelCosts = (ccData || []).map((r: any) => ({
+          channel: r.channel, month: String(r.month),
+          ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
+        }))
+        groupCosts = (gcData || []).map((r: any) => ({ group_name: r.group_name, month: String(r.month), amount: parseFloat(r.amount || "0") }))
+      }
+
       // Group by period+derived_group (monthly and quarterly)
       function processRows(isQuarterly: boolean) {
-        const grouped = new Map<string, { period: string; group_name: string; revenue: number; margin: number }>()
+        const grouped = new Map<string, { period: string; group_name: string; revenue: number; margin: number; op_costs: number }>()
 
         rows.forEach(row => {
           const [yr, mo] = row.period.split("-")
@@ -72,22 +92,46 @@ export async function GET(req: NextRequest) {
           const key = `${period}_${row.derived_group}`
 
           if (!grouped.has(key)) {
-            grouped.set(key, { period, group_name: row.derived_group, revenue: 0, margin: 0 })
+            grouped.set(key, { period, group_name: row.derived_group, revenue: 0, margin: 0, op_costs: 0 })
           }
           const item = grouped.get(key)!
-          item.revenue += parseFloat(row.revenue || "0")
+          const rowRev = parseFloat(row.revenue || "0")
+          item.revenue += rowRev
           item.margin  += parseFloat(row.margin  || "0")
+
+          channelCosts.filter(c => c.channel === row.channel_name && c.month === row.period).forEach(c => {
+            COST_KEYS.forEach(k => {
+              const v = c[k]
+              if (v) item.op_costs += v.type === "amount" ? (v.value || 0) : (rowRev * (v.value || 0)) / 100
+            })
+          })
         })
 
-        return Array.from(grouped.values()).map(item => ({
-          period:     item.period,
-          group_name: item.group_name,
-          revenue:    item.revenue,
-          margin:     item.margin,
-          gpm:        item.revenue > 0 ? (item.margin / item.revenue) * 100 : 0,
-          gpm2_val:   item.margin,  // no channel costs data — GPM2 = GPM
-          gpm2:       item.revenue > 0 ? (item.margin / item.revenue) * 100 : 0,
-        }))
+        // group costs: 1 lần/nhóm/tháng (web group_name 'B2B' cho B2B*, 'B2C', 'Other')
+        months.forEach(m => {
+          ["B2C", "B2B-Strategic", "B2B-Non-Strategic", "Other"].forEach(dg => {
+            const [yr, mo] = m.split("-")
+            const period = isQuarterly ? `${yr}-Q${Math.ceil(parseInt(mo) / 3)}` : m
+            const item = grouped.get(`${period}_${dg}`)
+            if (item) {
+              const costGroupName = dg === "B2C" ? "B2C" : (dg.startsWith("B2B") ? "B2B" : "Other")
+              item.op_costs += groupCosts.filter(c => c.group_name === costGroupName && c.month === m).reduce((s, c) => s + c.amount, 0)
+            }
+          })
+        })
+
+        return Array.from(grouped.values()).map(item => {
+          const gpm2_val = item.margin - item.op_costs
+          return {
+            period:     item.period,
+            group_name: item.group_name,
+            revenue:    item.revenue,
+            margin:     item.margin,
+            gpm:        item.revenue > 0 ? (item.margin / item.revenue) * 100 : 0,
+            gpm2_val,
+            gpm2:       item.revenue > 0 ? (gpm2_val / item.revenue) * 100 : 0,
+          }
+        })
       }
 
       return { monthly: processRows(false), quarterly: processRows(true) }
