@@ -6,7 +6,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NODE_OPTIONS = "--max-old-space-size=4096"
+  NODE_OPTIONS = "--max-old-space-size=6144"
   # URL công khai của site — NextAuth dùng để dựng callback/redirect. Đặt cố định ở đây cho chắc.
   NEXTAUTH_URL = "https://gohub-intel.netlify.app"
   # Tat secret scanner: NEXT_PUBLIC_* bi nhung vao client bundle theo thiet ke (anon key la public);

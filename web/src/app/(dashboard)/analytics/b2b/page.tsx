@@ -297,7 +297,7 @@ export default function B2BPerformance() {
               <span className="text-slate-300">|</span>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer" />
             </div>
-            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="px-2" />
+            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} variant="dropdown" />
             <div className="h-4 w-px bg-slate-200 mx-2"></div>
             <div className="flex bg-slate-100 p-1 rounded-lg">
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>

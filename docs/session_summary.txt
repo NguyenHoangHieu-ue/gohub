@@ -155,6 +155,25 @@ User chốt (AskUserQuestion): ngữ nghĩa preset = "KỲ HIỆN TẠI → HÔM
   b2b/customers/staff/vendors/website/analytics) → nút ngay cạnh ô date. KHÔNG đụng targets (dùng selector năm/quý, không có start/end).
 - Verify: tsc --noEmit PASS. next build PASS (exit 0, 135 trang). (Preset Quý/Tuần/Năm trong tmp.txt cũ = XONG.)
 
+### Session 74 tiếp 5 (2026-06-23) — Fix build Netlify (OOM) + b2b preset dropdown + settings strategic dropdown
+
+User cập nhật: LARK_ENCRYPT_KEY đã set (CRON_SECRET/MCP_SECRET CHƯA), v18 đã chạy, Lark Event URL đã set lại.
+Nhưng providers VẪN placeholder dù auto-deploy GitHub + đã thêm env → kết luận: BUILD NETLIFY ĐANG FAIL nên không
+commit nào (gồm fix NEXTAUTH_URL ff35827) lên được live.
+
+**Nghi vấn chính = OOM:** netlify.toml để NODE_OPTIONS=--max-old-space-size=4096, nhưng build local LUÔN cần 6144
+(app phình sau các port intel + jspdf). → BUMP netlify.toml NODE_OPTIONS 4096 → 6144 để build Netlify khỏi hết RAM.
+⚠️ Nếu vẫn fail: user mở Netlify > Deploys xem log (cần Netlify login — chưa có từ CLI).
+
+**#4 b2b preset gọn:** thêm prop variant="buttons"|"dropdown" cho DatePresets. b2b header (chật) → variant="dropdown"
+(1 select "Nhanh…" Tuần/Tháng/Quý/Năm). Các trang khác giữ hàng nút.
+
+**#5 settings strategic dropdown:** analytics/settings/page.tsx — section Partner Tiers: thay input GÕ TAY tên đối tác
+bằng <select> chọn từ danh sách partner B2B thật (fetch /api/channels?channelGroup=B2B, lọc bỏ tên đã thêm).
+Bỏ state newPartner + import Plus (orphan). addPartner(tier,v) nhận value trực tiếp. removePartner giữ nguyên.
+
+- Verify: tsc PASS + next build PASS (exit 0). ⚠️ Số/hiển thị verify khi deploy live.
+
 ---
 
 ## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang

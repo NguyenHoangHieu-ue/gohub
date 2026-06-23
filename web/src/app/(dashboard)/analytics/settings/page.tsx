@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, X, Filter, Sliders } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
@@ -49,21 +49,23 @@ function AnalyticsSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [newPartner, setNewPartner] = useState<Record<string, string>>({})
+  const [availablePartners, setAvailablePartners] = useState<string[]>([])
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [t, p, f] = await Promise.all([
+      const [t, p, f, ch] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
+        fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
       ])
       setTiers(t && Object.keys(t).length ? t : { Strategic: [] })
       setPolicy(p || {})
       setFilters(f || {})
+      setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
     } finally {
       setLoading(false)
     }
@@ -82,11 +84,10 @@ function AnalyticsSettings() {
     }
   }
 
-  const addPartner = (tier: string) => {
-    const v = (newPartner[tier] || "").trim()
-    if (!v) return
-    setTiers(prev => ({ ...prev, [tier]: Array.from(new Set([...(prev[tier] || []), v])) }))
-    setNewPartner(prev => ({ ...prev, [tier]: "" }))
+  const addPartner = (tier: string, v: string) => {
+    const val = v.trim()
+    if (!val) return
+    setTiers(prev => ({ ...prev, [tier]: Array.from(new Set([...(prev[tier] || []), val])) }))
   }
   const removePartner = (tier: string, name: string) => setTiers(prev => ({ ...prev, [tier]: (prev[tier] || []).filter(p => p !== name) }))
 
@@ -136,8 +137,16 @@ function AnalyticsSettings() {
                 {(tiers[tier] || []).length === 0 && <span className="text-sm text-slate-400 italic">Chưa có đối tác</span>}
               </div>
               <div className="flex gap-2">
-                <input value={newPartner[tier] || ""} onChange={e => setNewPartner(prev => ({ ...prev, [tier]: e.target.value }))} onKeyDown={e => e.key === "Enter" && addPartner(tier)} placeholder="Tên đối tác (vd Traveloka)" className="flex-1 max-w-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                <button onClick={() => addPartner(tier)} className="flex items-center gap-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200"><Plus className="w-4 h-4" />Thêm</button>
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) addPartner(tier, e.target.value) }}
+                  className="flex-1 max-w-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                >
+                  <option value="">+ Chọn đối tác để thêm…</option>
+                  {availablePartners
+                    .filter(p => !(tiers[tier] || []).includes(p))
+                    .map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
             </div>
           ))}
