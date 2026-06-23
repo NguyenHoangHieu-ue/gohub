@@ -34,6 +34,17 @@ export async function GET(req: NextRequest) {
     current.total_cogs  = parseFloat(rawRows[0]?.total_cogs || "0")
     current.total_units = parseFloat(rawRows[0]?.total_units || "0")
 
+    // 3HK Contribution Revenue % = doanh thu SP 3HKDATAPOOL / total revenue (key metric team Business, new_info 23/06)
+    const fetch3hkRev = async (sd: string, ed: string) => {
+      const rows = await queryAnalytics<{ r: string }>(
+        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) ILIKE '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
+         FROM ${source.mainTable} f WHERE ${getDateFilter(sd, ed, source.dateCol)} ${extraFilters}`
+      )
+      return parseFloat(rows[0]?.r || "0")
+    }
+    current.total_3hk_revenue = await fetch3hkRev(startDate, endDate)
+    current.total_3hk_contribution = current.total_revenue > 0 ? (current.total_3hk_revenue / current.total_revenue) * 100 : 0
+
     // target prorate
     const targetData = await getTargetSummary(startDate, endDate)
     current.total_target_revenue = targetData.proRataTarget
@@ -46,10 +57,14 @@ export async function GET(req: NextRequest) {
     const lyStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
     const lyEnd   = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
 
-    const [prev, prevYear] = await Promise.all([
+    const [prev, prevYear, prev3hk, ly3hk] = await Promise.all([
       fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters),
       fetchBODGroupMarginData(lyStart.toISOString().split("T")[0], lyEnd.toISOString().split("T")[0], dateColumn, extraFilters),
+      fetch3hkRev(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0]),
+      fetch3hkRev(lyStart.toISOString().split("T")[0], lyEnd.toISOString().split("T")[0]),
     ])
+    ;(prev.summary as any).total_3hk_contribution = prev.summary.total_revenue > 0 ? (prev3hk / prev.summary.total_revenue) * 100 : 0
+    ;(prevYear.summary as any).total_3hk_contribution = prevYear.summary.total_revenue > 0 ? (ly3hk / prevYear.summary.total_revenue) * 100 : 0
 
     return NextResponse.json({
       ...current,

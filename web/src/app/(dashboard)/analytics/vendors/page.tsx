@@ -16,10 +16,12 @@ import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analyti
 // /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
 
 function getDefaultDateRange() {
-  const today = new Date(); const d = today.getDate()
+  const today = new Date()
   const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  if (d <= 7) return { startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) }
-  return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)) }
+  // Mac dinh: dau thang -> hom qua (T-1, tranh sync tre). Ngay 1 -> tu lui nguyen thang truoc.
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  return { startDate: fmt(start), endDate: fmt(end) }
 }
 const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
 

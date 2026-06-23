@@ -18,16 +18,19 @@ import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 // Adapt: "use client"; /api/query→/api/analytics/query; cn @/lib/utils; inline getDefaultDateRange/formatDateToISO.
 
 function getDefaultDateRange() {
-  const today = new Date(); const d = today.getDate()
+  const today = new Date()
   const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  if (d <= 7) return { startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) }
-  return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)) }
+  // Mac dinh: dau thang -> hom qua (T-1, tranh sync tre). Ngay 1 -> tu lui nguyen thang truoc.
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  return { startDate: fmt(start), endDate: fmt(end) }
 }
 const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
 
 interface BODSummary {
   total_revenue: number; total_cogs: number; total_margin: number; total_units: number
   avg_margin_percent: number; total_gpm2: number; avg_gpm2_percent: number
+  total_3hk_revenue?: number; total_3hk_contribution?: number
   total_target_revenue?: number; previous_period?: BODSummary; previous_year?: BODSummary
 }
 interface BODDataPoint {
@@ -286,7 +289,7 @@ export default function BODReport() {
     const formattedValue = format === "currency" ? formatCurrency(value) : format === "percent" ? `${value.toFixed(2)}%` : formatCompactNumber(value)
     const colorClasses: Record<string, string> = {
       blue: "bg-blue-50 text-blue-600", emerald: "bg-emerald-50 text-emerald-600", orange: "bg-orange-50 text-orange-600",
-      purple: "bg-purple-50 text-purple-600", indigo: "bg-indigo-50 text-indigo-600", pink: "bg-pink-50 text-pink-600", slate: "bg-slate-50 text-slate-600",
+      purple: "bg-purple-50 text-purple-600", indigo: "bg-indigo-50 text-indigo-600", pink: "bg-pink-50 text-pink-600", slate: "bg-slate-50 text-slate-600", teal: "bg-teal-50 text-teal-600",
     }
     return (
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -435,7 +438,7 @@ export default function BODReport() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {loading ? (
-          Array(7).fill(0).map((_, i) => (
+          Array(8).fill(0).map((_, i) => (
             <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <Skeleton className="h-10 w-10 rounded-xl" />
               <div className="space-y-2"><Skeleton className="h-4 w-20" /><Skeleton className="h-8 w-32" /></div>
@@ -451,6 +454,7 @@ export default function BODReport() {
             <SummaryCard title="Margin %" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
             <SummaryCard title="Total CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
             <SummaryCard title="CM1 %" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
+            <SummaryCard title="3HK Contribution %" value={summary?.total_3hk_contribution || 0} icon={PieChart} color="teal" format="percent" prevPeriod={summary?.previous_period?.total_3hk_contribution} prevYear={summary?.previous_year?.total_3hk_contribution} />
           </>
         )}
       </div>

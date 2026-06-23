@@ -26,10 +26,41 @@ Tiếp việc dở session trước (tmp.txt: #1 push OK, #2 áp new_info.txt, #
 - grep xác nhận 0 label GPM2/GP2/"Gross Profit 2" còn sót. tsc --noEmit PASS. next build PASS (EXIT 0).
 - ⚠️ Verify hiển thị thật nên mở app xem KPI card/bảng để chắc label CM1 đúng vị trí (build-verified như mọi khi).
 
-### CÒN (chưa làm trong new_info / tmp.txt)
-- Metric "3HK Contribution Revenue %" chưa có trên web (mới định nghĩa, chưa build).
-- Sync term CM1 sang wiki (docs/wiki + kb_wiki_pages) — cần script upsert theo title như session 72.
-- tmp.txt #2 phụ (B2B strategic/other split — kiểm lại đã đủ chưa) + #3 auto date filter theo ngày/tuần/quý/năm — CHƯA làm.
+### Session 74 tiếp — User: "làm tuần tự cả 4" (4 mục tồn đọng) → XONG HẾT
+
+**#1 — B2B Strategic/Other split (tmp.txt #2):** KIỂM TRA → ĐÃ ĐÚNG SẴN, không cần sửa.
+- Web b2b/page.tsx đã có đủ: state expandedRow + sub_channels + cost_breakdown; bảng "Strategic Partners
+  Performance" (nhóm theo tier, expand sub-channels + cost, totals) + bảng "Other Tiers Customers" (non-strategic
+  filter/merge/sort/expand). Logic khớp y hệt intel B2BPerformance (commit 488f167 đã port verbatim). Concern
+  trong tmp.txt là từ TRƯỚC khi port.
+
+**#2 — Auto date filter (tmp.txt #3):** User chốt (AskUserQuestion): endDate=HÔM QUA (T-1, giữ vì sync trễ) ·
+  BỎ rule ≤7 (luôn đầu tháng→hôm qua) · preset Quý/Tuần/Năm ĐỂ SAU (chỉ fix default tháng).
+- Sửa getDefaultDateRange (1 shared analytics-formatters.ts + 12 inline giống hệt): logic mới
+  `end = hôm qua; start = ngày 1 của tháng-chứa-end` → mid-month = đầu tháng→hôm qua; ngày 1 tự lùi nguyên
+  tháng trước (không range âm). GIỮ nguyên hàm fmt cũ (không đụng timezone — surgical). Chạy mỗi lần load page → auto theo ngày.
+- 13 file. PowerShell .Replace block (12 inline identical) + Edit shared. tsc PASS.
+
+**#3 — Metric "3HK Contribution Revenue %":** thêm KPI lên trang BOD (management report).
+- BE /api/analytics/bod-summary: helper fetch3hkRev(sd,ed) = SUM(CASE WHEN TRIM(f.sku) IN (SELECT sku FROM dim_sku
+  WHERE vendor ILIKE '3HKDATAPOOL') THEN revenueCol) → total_3hk_revenue; total_3hk_contribution = /total_revenue×100.
+  Tính cả prev period + prev year (attach vào prev.summary). Query RIÊNG (không đụng raw cogs query — an toàn).
+- FE bod/page.tsx: thêm field type + SummaryCard thứ 8 "3HK Contribution %" (format percent, color teal mới,
+  prevPeriod/prevYear), skeleton 7→8. Grid xl:cols-4 → 8 card = 2 hàng. /analytics/bod 7.53→9.68 kB.
+- ⚠️ Nhận diện 3HK = dim_sku.vendor ILIKE '3HKDATAPOOL' (nhất quán cả 2 repo). Target 3HK% đã có sẵn ở tab Targets.
+
+**#4 — Sync term CM1 sang wiki:** wiki KHÔNG có trang nào nhắc GPM2/GP2 (không có gì để rename) → TẠO trang
+  thuật ngữ mới docs/wiki/company/Business-Metrics-Glossary.md (Revenue/GP/GPM%/CM1/CM1%/3HK Contribution % +
+  bảng đổi tên GP2→CM1) + thêm link HOME.md (bump updated). Upsert lên Supabase kb_wiki_pages bằng Node script
+  tạm (embed gemini-embedding-001, upsert theo title + version history): glossary INSERT, HOME → v3. Tổng 15→16 trang.
+  Script đã xóa. (Pattern [[wiki_web_sync]].)
+
+### Verify tổng
+- tsc --noEmit PASS. next build PASS (EXIT 0, /analytics/bod 9.68 kB).
+- ⚠️ Build/formula-verified; nên mở app live xem KPI 3HK% + default date range thật.
+
+### CÒN (để sau)
+- Preset date range Tháng/Quý/Tuần/Năm (việc lớn ~15 trang) — user chốt làm đợt riêng.
 
 ---
 

@@ -5,7 +5,7 @@ department: all
 tags: [index, moc, home]
 aliases: ["Wiki Home", "Index"]
 created: 2026-06-13
-updated: 2026-06-21
+updated: 2026-06-23
 status: active
 ---
 
@@ -20,6 +20,7 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 ## Công Ty
 
 - [[company/GoHub-Overview|GoHub Overview]] — Pháp nhân, mô hình kinh doanh, kênh bán hàng
+- [[company/Business-Metrics-Glossary|Thuật Ngữ Chỉ Số Kinh Doanh]] — Revenue/GP/GPM%/CM1/CM1%/3HK Contribution % (CM1 thay GP2/GPM2)
 
 ---
 
