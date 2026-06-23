@@ -109,6 +109,30 @@ chốt chuyển Netlify (free Starter cho phép thương mại). Tên site Netli
 ⚠️ Lưu ý deploy về sau: nên bật Ignored Build Step (git diff --quiet HEAD^ HEAD -- web/ && exit 0 || exit 1) để commit
 docs/wiki/memory KHÔNG tốn deploy. Vercel cũ vẫn connect (push vẫn cố deploy bên đó, fail vì hết quota — vô hại).
 
+### Session 74 tiếp 3 (2026-06-23) — FIX DỨT ĐIỂM NEXTAUTH_URL bằng code (bỏ phụ thuộc biến UI Netlify)
+
+Bối cảnh: phiên trước login Lark + logout 404 vì /api/auth/providers vẫn trả callbackUrl placeholder
+"https://your-site-name.netlify.app/...". Đã xác minh giá trị placeholder đến từ BIẾN UI NEXTAUTH_URL trên Netlify
+(import ban đầu), không nằm file tracked nào; netlify.toml [build.environment] chỉ áp lúc BUILD, không tới function RUNTIME.
+
+FIX (web/src/lib/auth.ts, đầu file — chạy lúc module load, trước khi NextAuth đọc env):
+```
+if (!process.env.NEXTAUTH_URL || /your-site-name/.test(process.env.NEXTAUTH_URL))
+  process.env.NEXTAUTH_URL = process.env.URL || "https://gohub-intel.netlify.app"
+```
+- Ưu tiên process.env.URL (Netlify TỰ inject = URL site thật) → fallback domain cố định nếu runtime không có URL.
+- SURGICAL: chỉ override khi NEXTAUTH_URL RỖNG hoặc chứa "your-site-name" (placeholder) → KHÔNG đụng local dev
+  (localhost), Vercel cũ, hay domain custom hợp lệ. Route [...nextauth] import auth.ts trước khi NextAuth(authOptions)
+  build handler → env đã set kịp. next-auth v4 đọc NEXTAUTH_URL per-request nên mutate process.env lúc load là đủ.
+- Lợi: không cần user sửa biến UI Netlify nữa (việc web trước đây bị kẹt). Verify: tsc + next build PASS (exit 0).
+- ⏳ Sau khi push → Netlify auto deploy → verify: curl https://gohub-intel.netlify.app/api/auth/providers phải đổi
+  callbackUrl sang gohub-intel.netlify.app (hết placeholder) → login Lark + logout hết 404.
+
+⚠️ CÒN cần USER thao tác web (không sửa được bằng code):
+- Set 3 ENV trên Netlify UI cho RUNTIME: LARK_ENCRYPT_KEY (giải mã challenge bot Event URL), CRON_SECRET, MCP_SECRET.
+- Chạy MIGRATION v18 (database/migrations/v18_target_gpm2.sql) trong Supabase SQL editor (lưu target_gpm2).
+- Set lại Lark bot Event URL sau khi deploy có LARK_ENCRYPT_KEY.
+
 ---
 
 ## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang
