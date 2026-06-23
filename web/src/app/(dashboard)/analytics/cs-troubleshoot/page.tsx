@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel CSTroubleshootReport. Backend /api/reports/cs-troubleshoot ĐÃ khớp shape.
 // Adapt (user chốt): GIỮ sync của web → nút Sync gọi POST /api/admin/sync-lark-tickets (thay intel sync-lark).
@@ -111,6 +112,7 @@ export default function CSTroubleshootReport() {
                 <span className="text-slate-300">→</span>
                 <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="bg-transparent border-none text-[10px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
               </div>
+              <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
               <div className="flex items-center gap-2 w-full md:w-auto">
                 <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[10px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500/20 flex-1 md:flex-none">
                   <option value="All">All Channels</option>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar, ShoppingBag, Globe, Package, RefreshCw, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
@@ -477,6 +478,7 @@ export default function OrderManagementPage() {
                 />
               </div>
             </div>
+            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end pb-0.5" />
           </form>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
             <button

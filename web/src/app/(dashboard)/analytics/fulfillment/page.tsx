@@ -7,6 +7,7 @@ import {
 import { Truck, Package, Filter, Calendar, Download, AlertCircle, CheckCircle2, RotateCcw, MapPin, Tablet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel FulfillmentReport. Backend /api/analytics/fulfillment-report (chung shape).
 // Adapt: "use client"; cn @/lib/utils; inline getDefaultDateRange; Export CSV wired (intel để trống).
@@ -106,6 +107,7 @@ export default function FulfillmentReport() {
             <span className="text-slate-400">-</span>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
           </div>
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
             <Download className="w-4 h-4" />Export CSV
           </button>

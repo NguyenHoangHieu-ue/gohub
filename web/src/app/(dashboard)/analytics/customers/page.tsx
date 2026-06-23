@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 
 interface KPI {
@@ -275,6 +276,8 @@ export default function CustomerPerformancePage() {
                 className="bg-transparent text-sm font-bold focus:outline-none"
               />
             </div>
+
+            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
 
             <button
               onClick={fetchData}

@@ -10,6 +10,7 @@ import {
   AreaChart, Area, BarChart, Bar,
 } from "recharts"
 import { cn } from "@/lib/utils"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel WebsiteAnalytics. Data qua /api/analytics/ga4 (generic dimensions/metrics) +
 // /api/analytics/gsc + /api/config/ga4. Bỏ date-fns (không dùng), inline getDefaultDateRange,
@@ -556,6 +557,8 @@ export default function WebsiteAnalyticsPage() {
                 <span className="text-slate-300">→</span>
                 <input type="date" value={dateRange.endDate} onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })} className="text-xs font-medium text-slate-600 outline-none" />
               </div>
+
+              <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, startDate: s, endDate: e }))} />
 
               <button onClick={fetchAnalytics} disabled={loading} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                 <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />

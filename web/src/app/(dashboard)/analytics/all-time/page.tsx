@@ -8,6 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from "recharts"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 import { cn } from "@/lib/utils"
 
 // Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
@@ -201,6 +202,7 @@ export default function AllTimeReport() {
       {/* Filters Panel */}
       {showFilters && (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>

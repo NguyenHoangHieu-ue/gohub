@@ -70,6 +70,37 @@ export function getDefaultDateRange(): { startDate: string; endDate: string } {
   }
 }
 
+export type DatePreset = "week" | "month" | "quarter" | "year"
+
+// Preset "kỳ hiện tại → hôm qua" (T-1, nhất quán getDefaultDateRange).
+// week = từ Thứ 2 của tuần chứa hôm qua; month/quarter/year = mốc đầu kỳ chứa hôm qua.
+export function getPresetRange(preset: DatePreset): { startDate: string; endDate: string } {
+  const today = new Date()
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  let start: Date
+  switch (preset) {
+    case "week": {
+      const day = end.getDay()            // 0=CN..6=T7
+      const back = day === 0 ? 6 : day - 1 // số ngày lùi về Thứ 2
+      start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - back)
+      break
+    }
+    case "quarter": {
+      const q = Math.floor(end.getMonth() / 3)
+      start = new Date(end.getFullYear(), q * 3, 1)
+      break
+    }
+    case "year":
+      start = new Date(end.getFullYear(), 0, 1)
+      break
+    case "month":
+    default:
+      start = new Date(end.getFullYear(), end.getMonth(), 1)
+      break
+  }
+  return { startDate: formatDateToISO(start), endDate: formatDateToISO(end) }
+}
+
 export function calcMoM(current: number, previous: number): number {
   if (!previous) return 0
   return Math.round(((current - previous) / previous) * 100 * 10) / 10

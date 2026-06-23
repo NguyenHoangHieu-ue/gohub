@@ -14,6 +14,7 @@ import { domToCanvas } from "modern-screenshot"
 import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { CostManagementModal } from "@/components/cost-management-modal"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -296,6 +297,7 @@ export default function B2BPerformance() {
               <span className="text-slate-300">|</span>
               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer" />
             </div>
+            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="px-2" />
             <div className="h-4 w-px bg-slate-200 mx-2"></div>
             <div className="flex bg-slate-100 p-1 rounded-lg">
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>

@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel ThreeHKDataUsage. Data qua /api/analytics/query (SELECT-only).
 // Bỏ motion/react (không dùng), inline getDefaultDateRange/formatDate.
@@ -393,6 +394,8 @@ export default function ThreeHKDataUsagePage() {
             <span className="text-slate-300 mx-1">—</span>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent text-sm font-medium focus:outline-none" />
           </div>
+
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
 
           <button onClick={() => { setPage(1); fetchTotals(); fetchSKUMetrics(); fetchSKUTypeMetrics(); fetchRecords(1, true) }}
             className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">

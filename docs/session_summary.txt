@@ -133,6 +133,28 @@ if (!process.env.NEXTAUTH_URL || /your-site-name/.test(process.env.NEXTAUTH_URL)
 - Chạy MIGRATION v18 (database/migrations/v18_target_gpm2.sql) trong Supabase SQL editor (lưu target_gpm2).
 - Set lại Lark bot Event URL sau khi deploy có LARK_ENCRYPT_KEY.
 
+### Session 74 tiếp 4 (2026-06-23) — PRESET DATE RANGE (Tuần/Tháng/Quý/Năm) toàn bộ trang analytics
+
+User chốt (AskUserQuestion): ngữ nghĩa preset = "KỲ HIỆN TẠI → HÔM QUA" (T-1, nhất quán default cũ).
+- Tuần = từ Thứ 2 của tuần chứa hôm qua → hôm qua. Tháng = ngày 1 tháng này → hôm qua. Quý = đầu quý này → hôm qua.
+  Năm = 1/1 năm nay → hôm qua. (KHÔNG chọn "N ngày gần nhất" cũng KHÔNG chọn "kỳ trước trọn vẹn".)
+
+Đã làm (tránh duplicate 15 chỗ = 1 helper + 1 component tái dùng):
+- lib/analytics-formatters.ts: thêm type DatePreset + getPresetRange(preset) → {startDate,endDate}, end=hôm qua,
+  start theo mốc đầu kỳ (week dùng getDay() lùi về T2; quarter Math.floor(month/3)*3; year tháng 0; month ngày 1).
+  GIỮ NGUYÊN getDefaultDateRange (không refactor).
+- components/date-presets.tsx (MỚI): <DatePresets onSelect={(s,e)=>...} className?> = hàng 4 nút "Tuần này/Tháng này/
+  Quý này/Năm nay", bấm → getPresetRange → onSelect. Style nhỏ gọn (bg-slate-100, hover blue), flex-wrap.
+- Chèn <DatePresets> vào 14 trang analytics + component b2c-performance (15 file), cạnh ô date sẵn có, wiring onSelect
+  theo state shape từng trang:
+  · Họ startDate/endDate (setStartDate;setEndDate): channels, products, vendors, b2b, 3hk-usage, all-time, fulfillment,
+    customers, orders, staff, analytics/page, b2c-performance.
+  · Họ dateRange.start/end (setDateRange prev): bod, cs-troubleshoot.
+  · Họ dateRange.startDate/endDate: website (chỉ range chính, KHÔNG đụng compareRange).
+- Vị trí chèn: grid filter (bod/channels/all-time/b2c) → hàng nút phía trên grid; flex pill header (cs/3hk/fulfillment/
+  b2b/customers/staff/vendors/website/analytics) → nút ngay cạnh ô date. KHÔNG đụng targets (dùng selector năm/quý, không có start/end).
+- Verify: tsc --noEmit PASS. next build PASS (exit 0, 135 trang). (Preset Quý/Tuần/Năm trong tmp.txt cũ = XONG.)
+
 ---
 
 ## Session 73 (2026-06-22) — Fix phân quyền report (bypass URL) + tab PM + phân trang

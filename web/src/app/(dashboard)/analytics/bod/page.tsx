@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel BODReport. Backend: bod-summary/bod-report/bod-group-margin/bod-channel-performance
 // (CM1 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
@@ -343,6 +344,7 @@ export default function BODReport() {
 
       {showFilters && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+          <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>

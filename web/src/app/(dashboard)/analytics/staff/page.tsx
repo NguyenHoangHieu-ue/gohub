@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
@@ -275,6 +276,7 @@ export default function StaffPerformancePage() {
               className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
             />
           </div>
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <button
             onClick={() => {
               fetchChannels()

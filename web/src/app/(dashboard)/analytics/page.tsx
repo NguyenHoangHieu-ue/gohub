@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel DashboardHome. Backend: kpis/revenue-chart/region-chart/performance-source/
 // performance-channel/recent-orders/targets-summary + b2b/strategic-performance + config/partner-tiers.
@@ -251,6 +252,7 @@ export default function DashboardHome() {
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="sm:self-end" />
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Company</label>
             <select value={companyCode} onChange={e => setCompanyCode(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">

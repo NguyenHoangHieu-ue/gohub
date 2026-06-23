@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "@/components/cost-management-modal"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
@@ -917,6 +918,7 @@ export default function ChannelPerformancePage() {
 
       {showFilters && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>

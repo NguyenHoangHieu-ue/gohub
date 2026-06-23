@@ -12,6 +12,7 @@ import {
   ArrowUpDown, ShoppingBag, Settings, Check, Sigma,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "./cost-management-modal"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
@@ -543,6 +544,7 @@ export function B2CPerformance() {
         {/* Filters Panel */}
         {showFilters && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>

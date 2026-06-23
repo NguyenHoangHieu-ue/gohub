@@ -12,6 +12,7 @@ import { domToCanvas } from "modern-screenshot"
 import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
+import { DatePresets } from "@/components/date-presets"
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -541,6 +542,7 @@ export default function ProductPerformancePage() {
                 <span className="text-slate-400">-</span>
                 <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+              <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="pt-1" />
             </div>
 
             {/* Channel Group Filter */}
