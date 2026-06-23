@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-23 (session 74 — Đổi term GP2/GPM2 → CM1 theo new_info.txt)
+Cập nhật lần cuối: 2026-06-23 (session 74 — CM1 + auto-date + 3HK metric + CHUYỂN DEPLOY NETLIFY + fix B2B Strategic/auth)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
    — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
@@ -61,6 +61,42 @@ Tiếp việc dở session trước (tmp.txt: #1 push OK, #2 áp new_info.txt, #
 
 ### CÒN (để sau)
 - Preset date range Tháng/Quý/Tuần/Năm (việc lớn ~15 trang) — user chốt làm đợt riêng.
+
+### Session 74 tiếp 2 (2026-06-23) — Chuyển deploy Vercel → Netlify + fix B2B Strategic + auth
+
+Bối cảnh: Vercel Hobby CHẠM GIỚI HẠN 100 deploy/ngày (do auto-push mỗi task). User cần gấp, KHÔNG trả tiền →
+chốt chuyển Netlify (free Starter cho phép thương mại). Tên site Netlify = "gohub-intel" → https://gohub-intel.netlify.app.
+
+**Netlify setup:**
+- netlify.toml (root): base="web", command="npm run build", publish=".next" (BẮT BUỘC, không thì publish==base → plugin chặn),
+  NODE_VERSION=20, NODE_OPTIONS=4096, plugin @netlify/plugin-nextjs, SECRETS_SCAN_ENABLED="false".
+- Lỗi build đã fix tuần tự: (1) publish trùng base → thêm publish=".next"; (2) secret scanner chặn (NEXT_PUBLIC_* nhúng
+  client bundle theo thiết kế = false-positive; đã verify git-tracked KHÔNG chứa secret thật) → tắt scanner.
+- File env import: web/.env.netlify.local (GITIGNORED qua .env*.local) — SINH BẰNG SCRIPT từ env gốc (tránh gõ tay sai).
+  Bỏ REDIS_URL (localhost). ⚠️ NEXTAUTH_URL phải = URL Netlify thật.
+- ⚠️ ENV LOCAL KHÔNG ĐỦ: code dùng 3 biến KHÔNG có trong .env.local (chỉ có trên Vercel) → user phải copy từ Vercel:
+  LARK_ENCRYPT_KEY (giải mã challenge bot — THIẾU = đổi Event URL bot báo lỗi), CRON_SECRET, MCP_SECRET.
+  (Rà bằng: grep -rhoE "process\.env\.[A-Z_]+" so với file env.)
+
+**#3 B2B Strategic — ĐÃ FIX (data, không cần redeploy):**
+- Root cause: Supabase app_settings.partner_tiers RỖNG → getPartnerTiers() trả [] → KHÔNG partner strategic nào →
+  split B2B-Strategic/Non-Strategic hỏng ở MỌI tab (B2B/Vendors/Products/BOD/All-Time qua strategic-performance).
+- Intel lưu ở Turso app_config (id='partner_tiers', cột data=JSON {Strategic:[...]}). Web đọc Supabase app_settings.
+- FIX: script tạm (turso HTTP /v2/pipeline + supabase upsert) copy 30 strategic partners Turso→Supabase
+  (Klook/Traveloka/Momo/KKday/Headout/Pelago/BIDV/Shopeepay/ZaloPay/Tiket...). Script đã xóa. Shape khớp, JSON string.
+
+**#1 logout 404 + #2 login Lark fail — ROOT CAUSE chung: NEXTAUTH_URL còn PLACEHOLDER:**
+- Verify: curl https://gohub-intel.netlify.app/api/auth/providers → callbackUrl = "https://your-site-name.netlify.app/..."
+  = placeholder chưa đổi. NextAuth dựng redirect_uri + redirect logout từ NEXTAUTH_URL → sai domain → login fail + logout 404.
+- FIX: Netlify env NEXTAUTH_URL = https://gohub-intel.netlify.app (không "/" cuối) + REDEPLOY (clear cache).
+  Lark redirect phải = .../api/auth/callback/lark (provider id "lark"). ⚠️ Tới lúc lưu session: user nói đã đổi NHƯNG
+  providers vẫn trả placeholder → CHƯA redeploy / deploy chưa xong. CẦN redeploy lại rồi verify providers.
+- Site đã sống (/login 200, / 307→/login). NextAuth route app/api/auth/[...nextauth] OK. Middleware không chặn /api/auth.
+
+**#4 Settings parity:** CHƯA làm — chờ user login được + chỉ rõ gap so intel SystemSettings.
+
+⚠️ Lưu ý deploy về sau: nên bật Ignored Build Step (git diff --quiet HEAD^ HEAD -- web/ && exit 0 || exit 1) để commit
+docs/wiki/memory KHÔNG tốn deploy. Vercel cũ vẫn connect (push vẫn cố deploy bên đó, fail vì hết quota — vô hại).
 
 ---
 
