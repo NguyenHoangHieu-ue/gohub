@@ -220,6 +220,31 @@ Thực sự thiếu/khác: Schema Config (chưa có UI), Scheduled Messages (đa
 - ✅ Users+Settings tách tab (commit d9433ec): admin/page deep-link ?tab= (đọc URL on mount); sidebar Management group (admin-only) = Users(/admin) · Schema Config · Scheduled Messages · Settings(/admin?tab=settings); bỏ link "Admin" đứng riêng.
 → CHƯƠNG TRÌNH #3 XONG. Toàn bộ tab intel đã có trên web; roles = admin/bod/staff; Management group admin-only giống intel.
 
+### Chương trình #4 (2026-06-22/23) — BUILD LẠI VERBATIM "giống hoàn toàn intel, chỉ khác ngôn ngữ code"
+User: vài tab (BOD/All-time/B2B/...) số liệu + layout + cách define chưa giống intel → port y hệt.
+NGUYÊN NHÂN SỐ LIỆU LỆCH CHUNG: web nhiều chỗ tính GPM2 = margin (KHÔNG trừ op-cost). FIX nhất quán:
+GPM2 = margin − (analytics_channel_costs prorate ngày + analytics_channel_group_costs theo nhóm); group_name web 'B2B'/'B2C' (intel Turso 'Wholesales').
+- ✅ BOD (commit 9b0be4d): lib/bod-data.ts (fetchBODGroupMarginData + fetchBODChannelPerformanceData + fetchBODReportData
+  — port y hệt intel server.ts, GPM2 op-cost) → rewrite 4 endpoint bod-summary/report/group-margin/channel-performance.
+  page.tsx port verbatim BODReport (7 KPI, projection, Revenue vs COGS, group table expand Strategic/Non, Margin Analysis,
+  Daily Breakdown, Channel Breakdown 4 nhóm). /api/query→/api/analytics/query.
+- ✅ B2B (488f167): backend b2b/kpis|trend|performance|strategic-performance ĐÃ có op-cost GPM2 sẵn → chỉ port frontend
+  verbatim B2BPerformance (5 KPI actual+projected, Revenue&GPM2 trend day/week/month, Strategic Partners tier-grouped
+  expand sub-channels+cost_breakdown, Other Tiers filter strategic+merge+sort+expand, Export CSV/PDF). Bỏ motion.
+- ✅ All-Time (146c4ca): all-time-performance thêm op-cost (channel full-month + group costs) → gpm2_val=margin−op_costs;
+  page verbatim AllTimeReport (Monthly/Quarterly, 3 metric card weighted, Historical Trend AreaChart, breakdown table).
+- ✅ Dashboard (13a6d22): endpoints revenue/order-based đã khớp → page verbatim DashboardHome (logo G, target progress,
+  projection, Revenue by Sources line, Top Destinations bar, 2 bảng nhóm + dedup strategic + Other aggregated top10).
+- ✅ CS-Troubleshoot (8c15788): report endpoint đã khớp shape → port FE intel CSTroubleshootReport (5 tab TBS/SKU/Vendor/
+  Source/Invalid, KPI, shift bar, bảng sortable expand Issue/Conclusion). USER CHỐT giữ sync web (POST /api/admin/sync-lark-tickets).
+- ✅ Fulfillment (4d881f8): endpoint chung → page verbatim layout intel (4 card, Detail pivot matrix, 2 chart, breakdown table, locations).
+- ✅ Staff/Customers/Orders: ĐÃ verbatim sẵn (h1/h2/h3 khớp y hệt intel, grep xác nhận) — KHÔNG sửa. Feedback/SQL parity. Targets đã GPM2.
+- ⏳ Task quản lý (user: admin=product-only, Users/Settings/Scheduled giống intel; BACKEND giữ web vì Clerk/Turso ≠ NextAuth/Supabase):
+  ✅ Scheduled (đã có ở #3). ✅ Users (4502927): /analytics/users admin-only intel-style = ma trận Role×Report + user list
+  (role select admin/bod/staff + per-user allowed_analytics toggles). Wire /api/admin/users + [username] PATCH + role-permissions.
+  🔜 CÒN: Settings restyle intel-style (/analytics/settings; tạm trỏ /admin?tab=settings) + tách Admin = product-only.
+- Verify: tsc + next build PASS (135 trang). ⚠️ Số liệu mới verify ở mức build+công thức khớp intel — nên mở app so vài con số GPM2 thật.
+
 ---
 
 ## Session 72 tiếp 4 (2026-06-21) — Update wiki (docs/wiki + web kb_wiki_pages)
