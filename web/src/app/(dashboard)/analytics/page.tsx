@@ -2,479 +2,406 @@
 
 import React, { useState, useEffect } from "react"
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts"
-import { ArrowUpRight, ArrowDownRight, Filter, Calendar, TrendingUp, Target, ChevronDown, Shield, Building2, RefreshCw } from "lucide-react"
-import { useSession } from "next-auth/react"
-import { formatCurrency, formatNumber, formatCompactNumber, getDefaultDateRange } from "@/lib/analytics-formatters"
+import {
+  ArrowUpRight, ArrowDownRight, Filter, Calendar, RefreshCw, TrendingUp, Target, ChevronDown, Shield, Building2,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SourceBadge, LogicNote } from "@/components/dashboard-kit"
+import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 
-// ─── helpers ───────────────────────────────────────────────────────────────
+// Port "y hệt" gohub-intel DashboardHome. Backend: kpis/revenue-chart/region-chart/performance-source/
+// performance-channel/recent-orders/targets-summary + b2b/strategic-performance + config/partner-tiers.
+// Adapt: "use client"; cn @/lib/utils; inline getDefaultDateRange/formatDateToISO.
 
-const Skeleton = ({ className }: { className?: string }) => (
-  <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
-)
-
-// ─── types ─────────────────────────────────────────────────────────────────
+function getDefaultDateRange() {
+  const today = new Date(); const d = today.getDate()
+  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
+  if (d <= 7) return { startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)) }
+  return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(new Date(today.getFullYear(), today.getMonth(), d - 1)) }
+}
+const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
 
 interface KPI { label: string; value: number; lastPeriod: number; change: number; isPositive: boolean; isCurrency?: boolean }
-interface PerformanceRow { group: string; totalOrder: number; unitSold: number; grossRevenue: number; mom: number; target?: number; business_group?: string; tier?: string }
-interface RecentOrder { id: string; region: string; amount: number; created_at: string }
+interface ChartData { name: string; b2b: number; b2c: number }
+interface RegionData { region: string; revenue: number }
+interface PerformanceRow { group: string; business_group?: string; totalOrder: number; unitSold: number; grossRevenue: number; target: number; mom: number }
+interface RecentOrder { id: string; customer_name: string; region: string; amount: number; status: string; created_at: string }
 
-// ─── main component ─────────────────────────────────────────────────────────
-
-export default function DashboardPage() {
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "admin"  // note công thức chỉ admin thấy
-  const [kpis, setKpis]                       = useState<KPI[]>([])
-  const [prevMonthKpis, setPrevMonthKpis]     = useState<KPI[]>([])
-  const [revenueData, setRevenueData]         = useState<any[]>([])
-  const [regionData, setRegionData]           = useState<any[]>([])
+export default function DashboardHome() {
+  const [kpis, setKpis] = useState<KPI[]>([])
+  const [prevMonthKpis, setPrevMonthKpis] = useState<KPI[]>([])
+  const [revenueData, setRevenueData] = useState<ChartData[]>([])
+  const [regionData, setRegionData] = useState<RegionData[]>([])
   const [performanceSource, setPerformanceSource] = useState<PerformanceRow[]>([])
   const [performanceChannel, setPerformanceChannel] = useState<PerformanceRow[]>([])
   const [strategicPerformance, setStrategicPerformance] = useState<any[]>([])
-  const [partnerTiers, setPartnerTiers]       = useState<Record<string, string[]>>({ Strategic: [] })
-  const [recentOrders, setRecentOrders]       = useState<RecentOrder[]>([])
-  const [targetProgress, setTargetProgress]   = useState<{ totalTarget: number; proRataTarget: number; totalActual: number; progress: number; proRataProgress: number } | null>(null)
-  const [isLoading, setIsLoading]             = useState(true)
-  const [error, setError]                     = useState<string | null>(null)
+  const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
+  const [targetProgress, setTargetProgress] = useState<{ totalTarget: number; proRataTarget: number; totalActual: number; progress: number; proRataProgress: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const [startDate, setStartDate]   = useState(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate]       = useState(() => getDefaultDateRange().endDate)
+  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
+  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
-  const [companyCode, setCompanyCode] = useState("ALL")
+  const [companyCode, setCompanyCode] = useState<string>("ALL")
   const [showFilters, setShowFilters] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState<string[]>([])
-
-  const toggleGroup = (g: string) =>
-    setExpandedGroups(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])
 
   const getProjectionInfo = () => {
     if (kpis.length < 4 || !startDate || !endDate) return null
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    const end   = new Date(endDate)
-    const start = new Date(startDate)
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1)
+    const start = new Date(startDate); const end = new Date(endDate)
+    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
-    const targetDays = isCurrentMonth
-      ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-      : daysElapsed
+    const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
     const factor = targetDays / daysElapsed
     if (factor <= 1) return null
 
-    const rev = kpis[0]?.value || 0
-    const ord = kpis[1]?.value || 0
-    const uni = kpis[3]?.value || 0
-    const revL = prevMonthKpis.length > 0 ? prevMonthKpis[0]?.value || 0 : kpis[0]?.lastPeriod || 0
-    const ordL = prevMonthKpis.length > 0 ? prevMonthKpis[1]?.value || 0 : kpis[1]?.lastPeriod || 0
-    const uniL = prevMonthKpis.length > 0 ? prevMonthKpis[3]?.value || 0 : kpis[3]?.lastPeriod || 0
-    const aovL = prevMonthKpis.length > 0 ? prevMonthKpis[2]?.value || 0 : kpis[2]?.lastPeriod || 0
+    const revenue = kpis[0]?.value || 0
+    const orders = kpis[1]?.value || 0
+    const units = kpis[3]?.value || 0
+    const revenueLast = prevMonthKpis.length > 0 ? (prevMonthKpis[0]?.value || 0) : (kpis[0]?.lastPeriod || 0)
+    const ordersLast = prevMonthKpis.length > 0 ? (prevMonthKpis[1]?.value || 0) : (kpis[1]?.lastPeriod || 0)
+    const aovLast = prevMonthKpis.length > 0 ? (prevMonthKpis[2]?.value || 0) : (kpis[2]?.lastPeriod || 0)
+    const unitsLast = prevMonthKpis.length > 0 ? (prevMonthKpis[3]?.value || 0) : (kpis[3]?.lastPeriod || 0)
 
-    const pRev = rev * factor
-    const pOrd = ord * factor
-    const pUni = uni * factor
-    const pAOV = pOrd === 0 ? 0 : pRev / pOrd
-    const pct  = (a: number, b: number) => b === 0 ? 0 : ((a - b) / b) * 100
+    const projectedRevenue = revenue * factor
+    const projectedOrders = orders * factor
+    const projectedUnits = units * factor
+    const projectedAOV = projectedOrders === 0 ? 0 : projectedRevenue / projectedOrders
 
-    return {
-      factor, daysElapsed, totalDays: targetDays,
-      // Range không bắt đầu từ ngày 1 → factor (= totalDays/daysElapsed) có thể chiếu chưa chính xác
-      partialStart: isCurrentMonth && start.getDate() !== 1,
-      revenue: pRev, orders: pOrd, units: pUni, aov: pAOV,
-      revenueChange: pct(pRev, revL),
-      ordersChange:  pct(pOrd, ordL),
-      aovChange:     pct(pAOV, aovL),
-      unitsChange:   pct(pUni, uniL),
-    }
+    const revenueChange = revenueLast === 0 ? 0 : ((projectedRevenue - revenueLast) / revenueLast) * 100
+    const ordersChange = ordersLast === 0 ? 0 : ((projectedOrders - ordersLast) / ordersLast) * 100
+    const aovChange = aovLast === 0 ? 0 : ((projectedAOV - aovLast) / aovLast) * 100
+    const unitsChange = unitsLast === 0 ? 0 : ((projectedUnits - unitsLast) / unitsLast) * 100
+
+    return { factor, daysElapsed, totalDays: targetDays, revenue: projectedRevenue, orders: projectedOrders, units: projectedUnits, aov: projectedAOV, revenueChange, ordersChange, aovChange, unitsChange }
   }
 
   const projection = getProjectionInfo()
 
+  useEffect(() => { fetchData() }, [startDate, endDate, dateColumn, companyCode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchData = async () => {
     setIsLoading(true); setError(null)
-
-    const q  = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&companyCode=${companyCode}`
-    const fj = async (url: string) => {
-      const r = await fetch(url, { cache: "default" })
-      if (!r.ok) throw new Error(`${r.status}`)
-      return r.json()
-    }
-
     try {
-      // ── Phase 1: KPI cards (show first, ~1s) ─────────────────────────────
-      const [kpiData, tiersData] = await Promise.all([
-        fj(`/api/analytics/kpis${q}`),
-        fj(`/api/config/partner-tiers`),
-      ])
-      setKpis(kpiData)
-      setPartnerTiers(tiersData)
-      setIsLoading(false) // show KPI cards immediately
+      const queryParams = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&companyCode=${companyCode}`
+      const fetchJson = async (url: string, name: string) => {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`${name}: ${res.status} ${res.statusText}`)
+        return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
+      }
 
-      // ── Phase 2: Charts + tables (load in background) ────────────────────
-      const [revData, regData, perfSrc, perfChan, targetData] = await Promise.all([
-        fj(`/api/analytics/revenue-chart${q}`),
-        fj(`/api/analytics/region-chart${q}`),
-        fj(`/api/analytics/performance-source${q}`),
-        fj(`/api/analytics/performance-channel${q}`),
-        fj(`/api/analytics/targets-summary?startDate=${startDate}&endDate=${endDate}`).catch(() => null),
-      ])
+      const kpiData = await fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs")
+      const revData = await fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue")
+      const regData = await fetchJson(`/api/analytics/region-chart${queryParams}`, "Region")
+      const perfSrcData = await fetchJson(`/api/analytics/performance-source${queryParams}`, "Perf Source")
+      const perfChanData = await fetchJson(`/api/analytics/performance-channel${queryParams}`, "Perf Channel")
+      const recentData = await fetchJson(`/api/analytics/recent-orders`, "Recent Orders")
+      const targetData = await fetchJson(`/api/analytics/targets-summary${queryParams}`, "Targets")
+      const tiersData = await fetchJson(`/api/config/partner-tiers`, "Tiers")
+      const strategicPerfData = await fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic")
+
+      setKpis(kpiData)
       setRevenueData(revData)
       setRegionData(regData)
-      setPerformanceSource(perfSrc)
-      setPerformanceChannel(perfChan)
-      if (targetData) setTargetProgress(targetData)
-
-      // ── Phase 3: Secondary data (non-blocking) ────────────────────────────
-      const [strategicData, recentData] = await Promise.all([
-        fj(`/api/analytics/b2b/strategic-performance${q}`).catch(() => []),
-        fj(`/api/analytics/recent-orders?companyCode=${companyCode}`).catch(() => []),
-      ])
-      setStrategicPerformance(strategicData)
+      setPerformanceSource(perfSrcData)
+      setPerformanceChannel(perfChanData)
       setRecentOrders(recentData)
+      setTargetProgress(targetData)
+      setPartnerTiers(tiersData)
+      setStrategicPerformance(strategicPerfData)
 
-      // prev month KPIs for projection (fire-and-forget)
       try {
-        const d = new Date(startDate)
-        const pm1 = new Date(d.getFullYear(), d.getMonth() - 1, 1)
-        const pm  = new Date(d.getFullYear(), d.getMonth(), 0)
-        const r = await fetch(`/api/analytics/kpis?startDate=${pm1.toISOString().split("T")[0]}&endDate=${pm.toISOString().split("T")[0]}&dateColumn=${dateColumn}`)
-        if (r.ok) setPrevMonthKpis(await r.json())
-      } catch {}
+        const date = new Date(startDate)
+        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
+        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
+        const prevMonthKpiRes = await fetch(`/api/analytics/kpis?startDate=${formatDateToISO(prevMonthFirstDay)}&endDate=${formatDateToISO(prevMonthLastDay)}&dateColumn=${dateColumn}`)
+        if (prevMonthKpiRes.ok) setPrevMonthKpis(await prevMonthKpiRes.json())
+      } catch (e) { console.error("Error fetching prev month KPIs:", e) }
     } catch (err: any) {
-      console.error(err)
-      setError("Hiếu đang fix, vui lòng đợi")
+      console.error("Error fetching dashboard data:", err)
+      setError(`Failed to fetch dashboard data: ${err.message}`)
+    } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => { fetchData() }, [dateColumn])
+  const Skeleton = ({ className }: { className?: string }) => (<div className={cn("animate-pulse bg-slate-200 rounded", className)} />)
 
-  // ── processed channel data ───────────────────────────────────────────────
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([])
+  const toggleGroup = (group: string) => setExpandedGroups(prev => prev.includes(group) ? prev.filter(g => g !== group) : [...prev, group])
 
-  const processedChannel: (PerformanceRow & { tier?: string })[] = [
-    ...strategicPerformance.map(s => ({
-      group: s.name, totalOrder: s.orders || 0, unitSold: s.units || 0,
-      grossRevenue: s.revenue, mom: s.mom || 0, target: 0,
-      business_group: "B2B-Strategic", tier: s.tier || "Strategic",
+  const getPartnerTier = (name: string) => {
+    for (const [tier, partners] of Object.entries(partnerTiers)) {
+      if (partners.some(p => name.toLowerCase().includes(p.toLowerCase()))) return tier
+    }
+    return null
+  }
+
+  const processedPerformanceChannel: (PerformanceRow & { tier?: string })[] = [
+    ...strategicPerformance.map(item => ({
+      group: item.name, totalOrder: item.orders || 0, unitSold: item.units, grossRevenue: item.revenue,
+      mom: item.mom || 0, target: 0, business_group: "B2B-Strategic", tier: item.tier || getPartnerTier(item.name) || "Strategic",
     })),
     ...performanceChannel.map(item => {
-      let adjRev = item.grossRevenue, adjUnits = item.unitSold, adjOrd = item.totalOrder
+      let adjustedRevenue = item.grossRevenue, adjustedUnits = item.unitSold, adjustedOrders = item.totalOrder
       strategicPerformance.forEach(s => {
-        if (s.channel_contributions?.[item.group]) {
-          const c = s.channel_contributions[item.group]
-          adjRev -= c.revenue || 0; adjUnits -= c.units || 0; adjOrd -= c.orders || 0
+        if (s.channel_contributions && s.channel_contributions[item.group]) {
+          const contrib = s.channel_contributions[item.group]
+          adjustedRevenue -= (contrib.revenue || 0); adjustedUnits -= (contrib.units || 0); adjustedOrders -= (contrib.orders || 0)
         }
       })
-      if (adjRev < 1000 && item.business_group?.startsWith("B2B")) return null
-      return {
-        ...item, grossRevenue: adjRev, unitSold: adjUnits, totalOrder: adjOrd,
-        business_group: item.business_group?.startsWith("B2B") ? "B2B-Non-Strategic" : item.business_group,
-      }
+      if (adjustedRevenue < 1000 && item.business_group?.startsWith("B2B")) return null
+      return { ...item, grossRevenue: adjustedRevenue, unitSold: adjustedUnits, totalOrder: adjustedOrders, business_group: item.business_group?.startsWith("B2B") ? "B2B-Non-Strategic" : item.business_group }
     }).filter(Boolean) as PerformanceRow[],
   ]
 
-  const b2bSourceOfTruth = performanceSource.filter(r => r.group?.startsWith("B2B"))
-    .reduce((acc, cur) => ({ ...acc, totalOrder: acc.totalOrder + cur.totalOrder, unitSold: acc.unitSold + cur.unitSold, grossRevenue: acc.grossRevenue + cur.grossRevenue }), { totalOrder: 0, unitSold: 0, grossRevenue: 0 })
-
-  const stratRev    = processedChannel.filter(r => r.business_group === "B2B-Strategic").reduce((s, r) => s + r.grossRevenue, 0)
-  const stratOrders = processedChannel.filter(r => r.business_group === "B2B-Strategic").reduce((s, r) => s + r.totalOrder, 0)
-  const stratUnits  = processedChannel.filter(r => r.business_group === "B2B-Strategic").reduce((s, r) => s + r.unitSold, 0)
-
-  const processedSource = [
-    {
-      group: "B2B", totalOrder: b2bSourceOfTruth.totalOrder, unitSold: b2bSourceOfTruth.unitSold,
-      grossRevenue: b2bSourceOfTruth.grossRevenue, mom: performanceSource.find(r => r.group === "B2B")?.mom || 0,
-      subRows: [
-        { group: "Strategic Partners",  totalOrder: stratOrders, unitSold: stratUnits, grossRevenue: stratRev, mom: 0 },
-        { group: "Other Partners", totalOrder: b2bSourceOfTruth.totalOrder - stratOrders, unitSold: b2bSourceOfTruth.unitSold - stratUnits, grossRevenue: Math.max(0, b2bSourceOfTruth.grossRevenue - stratRev), mom: 0 },
-      ],
-    },
-    ...(performanceSource.find(r => r.group === "B2C") ? [{ ...performanceSource.find(r => r.group === "B2C")!, subRows: [] }] : []),
-  ]
+  const b2bRows = performanceSource.filter(r => r.group?.startsWith("B2B"))
+  const b2bTotalSourceOfTruth = b2bRows.length > 0
+    ? b2bRows.reduce((acc, curr) => {
+        const nextRev = acc.grossRevenue + curr.grossRevenue
+        return { totalOrder: acc.totalOrder + curr.totalOrder, unitSold: acc.unitSold + curr.unitSold, grossRevenue: nextRev, mom: nextRev > 0 ? ((acc.mom * acc.grossRevenue) + (curr.mom * curr.grossRevenue)) / nextRev : 0 }
+      }, { totalOrder: 0, unitSold: 0, grossRevenue: 0, mom: 0 })
+    : { totalOrder: 0, unitSold: 0, grossRevenue: 0, mom: 0 }
 
   const groupOrder = ["B2B-Strategic", "B2B-Non-Strategic", "B2C"]
-  const groupedChannel = groupOrder.map(grp => {
-    let items = processedChannel.filter(r => r.business_group === grp)
-    if (grp === "B2B-Non-Strategic" && items.length > 10) {
+  const groupedPerformanceChannel = groupOrder.map(group => {
+    let items = processedPerformanceChannel.filter(item => (item.business_group || "Other") === group)
+    if (group === "B2B-Non-Strategic" && items.length > 10) {
       items.sort((a, b) => b.grossRevenue - a.grossRevenue)
+      const top10 = items.slice(0, 10)
       const other = items.slice(10)
-      items = [
-        ...items.slice(0, 10),
-        { group: `Other Partners (${other.length})`, totalOrder: other.reduce((s, r) => s + r.totalOrder, 0), unitSold: other.reduce((s, r) => s + r.unitSold, 0), grossRevenue: other.reduce((s, r) => s + r.grossRevenue, 0), mom: 0, business_group: grp },
-      ]
+      const totalOtherRevenue = other.reduce((s, i) => s + i.grossRevenue, 0)
+      const otherAggregated: PerformanceRow = {
+        group: `Other Partners (${other.length} aggregated)`, totalOrder: other.reduce((s, i) => s + i.totalOrder, 0),
+        unitSold: other.reduce((s, i) => s + i.unitSold, 0), grossRevenue: totalOtherRevenue,
+        mom: totalOtherRevenue > 0 ? other.reduce((s, i) => s + (i.mom || 0) * i.grossRevenue, 0) / totalOtherRevenue : 0,
+        target: 0, business_group: "B2B-Non-Strategic",
+      }
+      items = [...top10, otherAggregated]
     } else {
       items.sort((a, b) => b.grossRevenue - a.grossRevenue)
     }
-    return { group: grp, items }
+    return { group, items }
   }).filter(g => g.items.length > 0)
 
-  const displayGroupNames: Record<string, string> = {
-    "B2B-Strategic":     "Strategic Partners",
-    "B2B-Non-Strategic": "Other Partners (Non-Strategic)",
-    "B2C":               "B2C Channels",
-  }
+  const businessGroups = ["B2B", "B2C"]
+  const processedPerformanceSource = businessGroups.map(group => {
+    const isB2B = group === "B2B"
+    if (isB2B) {
+      const stratItems = processedPerformanceChannel.filter(item => item.business_group === "B2B-Strategic")
+      const stratRev = stratItems.reduce((sum, item) => sum + item.grossRevenue, 0)
+      const stratOrders = stratItems.reduce((sum, item) => sum + item.totalOrder, 0)
+      const stratUnits = stratItems.reduce((sum, item) => sum + item.unitSold, 0)
+      const nonStratRev = Math.max(0, b2bTotalSourceOfTruth.grossRevenue - stratRev)
+      const nonStratOrders = Math.max(0, b2bTotalSourceOfTruth.totalOrder - stratOrders)
+      const nonStratUnits = Math.max(0, b2bTotalSourceOfTruth.unitSold - stratUnits)
+      return {
+        group: "B2B", totalOrder: b2bTotalSourceOfTruth.totalOrder, unitSold: b2bTotalSourceOfTruth.unitSold,
+        grossRevenue: b2bTotalSourceOfTruth.grossRevenue, target: 0, mom: b2bTotalSourceOfTruth.mom,
+        subRows: [
+          { group: "Strategic Partners", totalOrder: stratOrders, unitSold: stratUnits, grossRevenue: stratRev, mom: 0 },
+          { group: "Other Partners", totalOrder: nonStratOrders, unitSold: nonStratUnits, grossRevenue: nonStratRev, mom: 0 },
+        ],
+      }
+    }
+    const b2cRow = performanceSource.find(r => r.group === "B2C")
+    if (!b2cRow) return null
+    return { ...b2cRow, subRows: [] }
+  }).filter(Boolean) as (PerformanceRow & { subRows: PerformanceRow[] })[]
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">G</div>
+          <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl lg:text-2xl shrink-0">G</div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">Monthly Performance</h1>
-            <div className="flex items-center gap-2">
-              <p className="text-sm text-slate-500">Gohub Business Intelligence</p>
-              <SourceBadge source="admin" />
-            </div>
+            <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Monthly Performance</h1>
+            <p className="text-xs lg:text-sm text-slate-500">Gohub Business Intelligence</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
-          {/* Date column toggle */}
-          <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm h-[42px] items-center">
-            {(["fulfiled_date", "created_date"] as const).map(col => (
-              <button key={col} onClick={() => setDateColumn(col)}
-                className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center",
-                  dateColumn === col ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                )}>
-                {col === "fulfiled_date" ? "Fulfillment" : "Created"}
-              </button>
-            ))}
+          <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm shrink-0 h-[42px] items-center">
+            <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Fulfillment</button>
+            <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Created</button>
           </div>
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm h-[42px]">
+          <div className="flex-1 sm:flex-none flex items-center gap-2 bg-white px-3 lg:px-4 py-2 rounded-lg border border-slate-200 shadow-sm h-[42px]">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-medium whitespace-nowrap">{startDate} - {endDate}</span>
+            <span className="text-xs lg:text-sm font-medium whitespace-nowrap">{startDate && endDate ? `${startDate} - ${endDate}` : "Select Date Range"}</span>
           </div>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={cn("flex items-center gap-2 px-4 py-2 rounded-lg border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-            )}>
-            <Filter className="w-4 h-4" />
-            <span className="text-sm font-medium">Filters</span>
+          <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg border shadow-sm transition-colors", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
+            <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
+            <span className="text-xs lg:text-sm font-medium">Filters</span>
           </button>
         </div>
       </div>
 
-      {/* Filter panel */}
       {showFilters && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-end">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Company</label>
-            <select value={companyCode} onChange={e => setCompanyCode(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={companyCode} onChange={e => setCompanyCode(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
               <option value="ALL">All Companies</option>
               <option value="VN">VN</option>
               <option value="US">US</option>
             </select>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { const r = getDefaultDateRange(); setStartDate(r.startDate); setEndDate(r.endDate) }}
-              className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Reset</button>
-            <button onClick={() => { fetchData(); setShowFilters(false) }}
-              className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">
-              Apply
-            </button>
-            {isLoading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
+          <div className="flex items-center justify-between sm:justify-start gap-4">
+            <button onClick={() => {
+              const today = new Date(); const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+              setStartDate(formatDateToISO(new Date(today.getFullYear(), today.getMonth(), 1))); setEndDate(formatDateToISO(yesterday))
+            }} className="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Reset</button>
+            <div className="flex items-center gap-2 text-xs text-slate-400 italic">
+              <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />{isLoading ? "Updating..." : "Updated"}
+            </div>
           </div>
         </div>
       )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {!isLoading && !error && isAdmin && (
-        <LogicNote>
-          <strong>So sánh (MoM)</strong> theo cùng khoảng ngày tháng trước · <strong>Dự phóng</strong> = doanh thu hiện tại ÷ số ngày đã qua × số ngày trong tháng (chỉ áp dụng tháng hiện tại).
-        </LogicNote>
-      )}
+      {error && (<div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>)}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {isLoading ? Array(4).fill(0).map((_, i) => (
-          <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" />
-            <div className="pt-4 border-t border-slate-100 flex justify-between"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12 rounded-full" /></div>
-          </div>
-        )) : kpis.map(kpi => (
-          <div key={kpi.label} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
-            <h2 className="text-2xl font-bold text-slate-900">
-              {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
-            </h2>
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-              <div className="text-[11px] text-slate-500">
-                Kỳ trước: <span className="font-medium text-slate-700">
-                  {kpi.isCurrency ? formatCompactNumber(kpi.lastPeriod) : formatNumber(kpi.lastPeriod)}
-                </span>
-              </div>
-              <div className={cn("flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full",
-                kpi.isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                {(kpi.change || 0).toFixed(1)}%
+        {isLoading ? (
+          Array(4).fill(0).map((_, i) => (
+            <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+              <Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" />
+              <div className="pt-4 border-t border-slate-100 flex justify-between items-center"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-12 rounded-full" /></div>
+            </div>
+          ))
+        ) : (
+          kpis.map(kpi => (
+            <div key={kpi.label} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
+              <div className="flex items-baseline gap-2"><h2 className="text-2xl font-bold text-slate-900">{kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}</h2></div>
+              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="text-[10px] text-slate-400">Last period: <span className="font-medium text-slate-600">{kpi.isCurrency ? formatCurrency(kpi.lastPeriod) : formatNumber(kpi.lastPeriod)}</span></div>
+                <div className={cn("flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full", kpi.isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
+                  {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{(kpi.change || 0).toFixed(1)}%
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
-      {/* Target Progress */}
+      {/* Target Progress Section */}
       {targetProgress && targetProgress.totalTarget > 0 && !isLoading && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Target className="w-5 h-5 text-blue-600" /> Target Progress
-              </h3>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Target className="w-5 h-5 text-blue-600" />Target Progress Tracking</h3>
+              <p className="text-sm text-slate-500">Comparing actual revenue vs. planned targets for the selected period.</p>
             </div>
             <div className="flex flex-wrap gap-8">
-              {[
-                { label: "Actual Revenue",    val: targetProgress.totalActual },
-                { label: "Total Target",      val: targetProgress.totalTarget },
-                { label: "Projected Revenue", val: projection ? projection.revenue : targetProgress.proRataTarget },
-              ].map(({ label, val }) => (
-                <div key={label} className="space-y-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                  <p className="text-xl font-bold text-slate-900">{formatCurrency(val)}</p>
-                </div>
-              ))}
+              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actual Revenue</p><p className="text-xl font-bold text-slate-900">{formatCurrency(targetProgress.totalActual)}</p></div>
+              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Target</p><p className="text-xl font-bold text-slate-700">{formatCurrency(targetProgress.totalTarget)}</p></div>
+              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Projected Revenue</p><p className="text-xl font-bold text-blue-600">{projection ? formatCurrency(projection.revenue) : formatCurrency(targetProgress.proRataTarget)}</p></div>
             </div>
           </div>
           <div className="px-6 pb-6 space-y-4">
-            {[
-              { label: "Overall Progress", pct: targetProgress.progress, color: (p: number) => p >= 100 ? "bg-emerald-500" : p >= 70 ? "bg-blue-500" : p >= 40 ? "bg-amber-500" : "bg-rose-500", bg: "bg-slate-100" },
-              { label: "Projection Progress", pct: targetProgress.proRataProgress, color: (p: number) => p >= 100 ? "bg-emerald-500" : p >= 90 ? "bg-blue-600" : p >= 75 ? "bg-amber-500" : "bg-rose-500", bg: "bg-blue-50" },
-            ].map(({ label, pct, color, bg }) => (
-              <div key={label} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-sm font-bold text-slate-700">{label}</span>
-                  <span className="text-sm font-bold text-slate-900">{pct.toFixed(1)}%</span>
-                </div>
-                <div className={cn("h-3 rounded-full overflow-hidden", bg)}>
-                  <div className={cn("h-full transition-all duration-1000", color(pct))} style={{ width: `${Math.min(100, pct)}%` }} />
-                </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-end"><span className="text-sm font-bold text-slate-700">Overall Progress</span><span className="text-sm font-bold text-slate-900">{targetProgress.progress.toFixed(1)}%</span></div>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden"><div className={cn("h-full transition-all duration-1000 ease-out", targetProgress.progress >= 100 ? "bg-emerald-500" : targetProgress.progress >= 70 ? "bg-blue-500" : targetProgress.progress >= 40 ? "bg-amber-500" : "bg-rose-500")} style={{ width: `${Math.min(100, targetProgress.progress)}%` }} /></div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-end">
+                <div className="flex items-center gap-2"><span className="text-sm font-bold text-blue-700">Projection Progress</span><span className="text-[10px] text-slate-400 font-normal">(Projected vs. Total Target)</span></div>
+                <span className="text-sm font-bold text-blue-900">{targetProgress.proRataProgress.toFixed(1)}%</span>
               </div>
-            ))}
+              <div className="h-3 bg-blue-50 rounded-full overflow-hidden"><div className={cn("h-full transition-all duration-1000 ease-out", targetProgress.proRataProgress >= 100 ? "bg-emerald-500" : targetProgress.proRataProgress >= 90 ? "bg-blue-600" : targetProgress.proRataProgress >= 75 ? "bg-amber-500" : "bg-rose-500")} style={{ width: `${Math.min(100, targetProgress.proRataProgress)}%` }} /></div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Projection */}
+      {/* Pro-rata Projection */}
       {projection && !isLoading && (
         <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" /> Month-End Projection
-              </h3>
-              {isAdmin && (
-                <p className="text-sm text-blue-600">
-                  Based on <strong>{projection.daysElapsed} days</strong> → projected for <strong>{projection.totalDays} days</strong>
-                </p>
-              )}
-              {isAdmin && projection.partialStart && (
-                <p className="text-[11px] text-amber-600 mt-0.5 italic">⚠️ Khoảng ngày không bắt đầu từ đầu tháng — hệ số dự phóng có thể chưa chính xác.</p>
-              )}
+              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Month-End Projection (Pro-rata)</h3>
+              <p className="text-sm text-blue-600">Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.</p>
             </div>
-            {isAdmin && (
-              <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">
-                ×{projection.factor.toFixed(2)} factor
-              </div>
-            )}
+            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">{((projection.factor - 1) * 100).toFixed(0)}% Growth Expected</div>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: "Projected Revenue", val: projection.revenue, chg: projection.revenueChange, fmt: formatCompactNumber },
-              { label: "Projected Orders",  val: Math.round(projection.orders), chg: projection.ordersChange, fmt: (v: number) => formatNumber(v) },
-              { label: "Projected AOV",     val: projection.aov,     chg: projection.aovChange,     fmt: formatCompactNumber },
-              { label: "Projected Units",   val: Math.round(projection.units),  chg: projection.unitsChange,  fmt: (v: number) => formatNumber(v) },
-            ].map(({ label, val, chg, fmt }) => (
-              <div key={label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {([
+              { label: "Projected Revenue", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
+              { label: "Projected Orders", val: Math.round(projection.orders).toLocaleString(), chg: projection.ordersChange },
+              { label: "Projected AOV", val: formatCurrency(projection.aov), chg: projection.aovChange },
+              { label: "Projected Units", val: Math.round(projection.units).toLocaleString(), chg: projection.unitsChange },
+            ]).map(c => (
+              <div key={c.label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
                 <div className="flex items-baseline justify-between">
-                  <p className="text-lg font-bold text-blue-600">{fmt(val)}</p>
-                  <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                    chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                    {chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
-                    {Math.abs(chg).toFixed(1)}%
+                  <p className="text-lg font-bold text-blue-600">{c.val}</p>
+                  <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full", c.chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
+                    {c.chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(c.chg).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month</p>
+                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Charts */}
+      {/* Main Charts Row */}
       <div className="flex flex-col gap-6">
-        {/* Revenue line chart */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Monthly Gross Revenue by Sources</h3>
             {!isLoading && (
-              <div className="flex gap-2 flex-wrap">
-                {[{ label: "B2B Strategic", color: "#2563eb" }, { label: "B2B Non-Strategic", color: "#93c5fd" }, { label: "B2C", color: "#312e81" }, { label: "Other", color: "#94a3b8" }].map(({ label, color }) => (
-                  <span key={label} className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} /> {label}
-                  </span>
-                ))}
+              <div className="flex gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-600"></span> B2B Strategic</span>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-300"></span> B2B Non-Strategic</span>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="w-2 h-2 rounded-full bg-indigo-800"></span> B2C</span>
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Other</span>
               </div>
             )}
           </div>
-          <div className="h-[300px]">
+          <div className="h-[350px]">
             {isLoading ? <Skeleton className="w-full h-full" /> : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={revenueData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={v => formatCompactNumber(v)} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0/0.1)" }}
-                    formatter={(v: number) => [formatCurrency(v), "Revenue"]} />
-                  {[
-                    { key: "b2b_strategic",     color: "#2563eb" },
-                    { key: "b2b_non_strategic",  color: "#93c5fd" },
-                    { key: "b2c",               color: "#312e81" },
-                    { key: "other",             color: "#94a3b8" },
-                  ].map(({ key, color }) => (
-                    <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2.5}
-                      dot={{ r: 3, fill: color, strokeWidth: 1.5, stroke: "#fff" }} activeDot={{ r: 5 }} />
-                  ))}
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 12 }} tickFormatter={(value) => formatCompactNumber(value)} />
+                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(value: number) => [formatCurrency(value), "Revenue"]} />
+                  <Line type="monotone" dataKey="b2b_strategic" name="B2B Strategic" stroke="#2563eb" strokeWidth={3} dot={{ r: 4, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="b2b_non_strategic" name="B2B Non-Strategic" stroke="#93c5fd" strokeWidth={3} dot={{ r: 4, fill: "#93c5fd", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="b2c" name="B2C" stroke="#312e81" strokeWidth={3} dot={{ r: 4, fill: "#312e81", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="other" name="Other" stroke="#94a3b8" strokeWidth={3} dot={{ r: 4, fill: "#94a3b8", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Top destinations bar chart */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-slate-800 mb-6">Top Destinations by Gross Revenue</h3>
-          <div className="h-[400px]">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <h3 className="font-bold text-slate-800 mb-6 font-sans">Top Destinations by Gross Revenue</h3>
+          <div className="h-[500px]">
             {isLoading ? <Skeleton className="w-full h-full" /> : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={regionData} layout="vertical" margin={{ left: 30, right: 40, top: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" hide />
-                  <YAxis dataKey="region" type="category" axisLine={false} tickLine={false}
-                    tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={180} interval={0} />
-                  <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "12px", border: "none" }}
-                    formatter={(v: number) => [formatCurrency(v), "Revenue"]} />
-                  <Bar dataKey="revenue" radius={[0, 4, 4, 0]} barSize={28}>
-                    {regionData.map((_, i) => <Cell key={i} fill={i === 0 ? "#3b82f6" : "#94a3b8"} />)}
+                  <YAxis dataKey="region" type="category" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={180} interval={0} tickFormatter={(value) => formatTruncatedString(value, 20)} />
+                  <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(value: number) => [formatCurrency(value), "Revenue"]} labelFormatter={(label) => <span className="font-bold text-slate-800">{label}</span>} />
+                  <Bar dataKey="revenue" radius={[0, 4, 4, 0]} barSize={32}>
+                    {regionData.map((entry, index) => (<Cell key={`cell-${index}`} fill={index === 0 ? "#3b82f6" : "#94a3b8"} />))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -483,59 +410,60 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Tables */}
+      {/* Tables Row */}
       <div className="flex flex-col gap-6">
         {/* Performance by Business Groups */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">Performance by Business Groups</h3>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">B2B / B2C</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">B2B / B2C / Other</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-500 font-medium">
                 <tr>
-                  {["Group", "Total Order", "Unit Sold", "Gross Revenue", "Doanh thu dự phóng", "%MoM"].map(h => (
-                    <th key={h} className={cn("px-4 py-3", h !== "Group" && "text-right")}>{h}</th>
-                  ))}
+                  <th className="px-4 py-3">Group</th>
+                  <th className="px-4 py-3 text-right">Total Order</th>
+                  <th className="px-4 py-3 text-right">Unit Sold</th>
+                  <th className="px-4 py-3 text-right">Gross Revenue</th>
+                  <th className="px-4 py-3 text-right">Doanh thu dự phóng</th>
+                  <th className="px-4 py-3 text-right">%MoM</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {isLoading ? Array(2).fill(0).map((_, i) => (
-                  <tr key={i}>{Array(6).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className={cn("h-4", j === 0 ? "w-20" : "w-16 ml-auto")} /></td>)}</tr>
-                )) : processedSource.map(row => (
-                  <React.Fragment key={row.group}>
-                    <tr className={cn("hover:bg-slate-50 transition-colors cursor-pointer", expandedGroups.includes(row.group) && "bg-slate-50")}
-                      onClick={() => row.group === "B2B" && toggleGroup("B2B")}>
-                      <td className="px-4 py-3 font-medium text-slate-700">
-                        <div className="flex items-center gap-2">
-                          {row.group === "B2B" && <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", expandedGroups.includes("B2B") && "rotate-180")} />}
-                          <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold",
-                            row.group === "B2B" ? "bg-blue-600 text-white" : row.group === "B2C" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>
-                            {row.group}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
-                      <td className="px-4 py-3 text-right text-blue-600 font-bold">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
-                      <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                        {row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%
-                      </td>
-                    </tr>
-                    {row.group === "B2B" && expandedGroups.includes("B2B") && (row as any).subRows?.map((sub: any) => (
-                      <tr key={sub.group} className="bg-slate-50/50 border-l-4 border-blue-200">
-                        <td className="px-4 py-3 text-xs font-bold text-slate-500 pl-10">{sub.group}</td>
-                        <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatNumber(sub.totalOrder)}</td>
-                        <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatNumber(sub.unitSold)}</td>
-                        <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatCurrency(sub.grossRevenue)}</td>
-                        <td className="px-4 py-3 text-right text-blue-400 text-xs font-bold">{projection ? formatCurrency(sub.grossRevenue * projection.factor) : "-"}</td>
-                        <td className="px-4 py-3 text-right text-slate-400 text-xs">-</td>
+                {isLoading ? (
+                  Array(3).fill(0).map((_, i) => (
+                    <tr key={i}>{Array(6).fill(0).map((_, j) => <td key={j} className="px-4 py-3 text-right"><Skeleton className={cn("h-4", j === 0 ? "w-24" : "w-16 ml-auto")} /></td>)}</tr>
+                  ))
+                ) : (
+                  processedPerformanceSource.map((row) => (
+                    <React.Fragment key={row.group}>
+                      <tr className={cn("hover:bg-slate-50 transition-colors cursor-pointer group", expandedGroups.includes(row.group) && "bg-slate-50")} onClick={() => row.group === "B2B" && toggleGroup("B2B")}>
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          <div className="flex items-center gap-2">
+                            {row.group === "B2B" && <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", expandedGroups.includes("B2B") && "rotate-180")} />}
+                            <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", row.group === "B2B" ? "bg-blue-600 text-white" : row.group === "B2C" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{row.group}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
+                        <td className="px-4 py-3 text-right text-blue-600 font-bold">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
+                        <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%</td>
                       </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
+                      {row.group === "B2B" && expandedGroups.includes("B2B") && row.subRows.map((sub) => (
+                        <tr key={sub.group} className="bg-slate-50/50 border-l-4 border-blue-200">
+                          <td className="px-4 py-3 text-xs font-bold text-slate-500 pl-10">{sub.group}</td>
+                          <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatNumber(sub.totalOrder)}</td>
+                          <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatNumber(sub.unitSold)}</td>
+                          <td className="px-4 py-3 text-right text-slate-500 text-xs">{formatCurrency(sub.grossRevenue)}</td>
+                          <td className="px-4 py-3 text-right text-blue-400 text-xs font-bold">{projection ? formatCurrency(sub.grossRevenue * projection.factor) : "-"}</td>
+                          <td className={cn("px-4 py-3 text-right font-bold text-xs", sub.mom >= 0 ? "text-emerald-500" : "text-rose-500")}>{sub.mom > 0 ? "+" : ""}{(sub.mom || 0).toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -545,63 +473,66 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">Performance by Channels</h3>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Strategic / Non-Strategic / B2C</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Direct vs Affiliate</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-500 font-medium">
                 <tr>
-                  {["Channel", "Total Order", "Unit Sold", "Gross Revenue", "Doanh thu dự phóng", "%MoM"].map(h => (
-                    <th key={h} className={cn("px-4 py-3", h !== "Channel" && "text-right")}>{h}</th>
-                  ))}
+                  <th className="px-4 py-3">Channel</th>
+                  <th className="px-4 py-3 text-right">Total Order</th>
+                  <th className="px-4 py-3 text-right">Unit Sold</th>
+                  <th className="px-4 py-3 text-right">Gross Revenue</th>
+                  <th className="px-4 py-3 text-right">Doanh thu dự phóng</th>
+                  <th className="px-4 py-3 text-right">%MoM</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {isLoading ? Array(3).fill(0).map((_, i) => (
-                  <tr key={i}>{Array(6).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className={cn("h-4", j === 0 ? "w-28" : "w-16 ml-auto")} /></td>)}</tr>
-                )) : groupedChannel.map(gd => {
-                  const gTotalRev = gd.items.reduce((s, r) => s + r.grossRevenue, 0)
-                  const gTotalOrd = gd.items.reduce((s, r) => s + r.totalOrder, 0)
-                  const gTotalUni = gd.items.reduce((s, r) => s + r.unitSold, 0)
-                  return (
-                    <React.Fragment key={gd.group}>
-                      <tr className={cn(
-                        gd.group === "B2B-Strategic" ? "bg-indigo-50/50" :
-                        gd.group === "B2B-Non-Strategic" ? "bg-slate-50" : "bg-slate-100/80"
-                      )}>
-                        <td className="px-4 py-2 font-bold text-slate-800 text-[10px] uppercase tracking-widest">
-                          <div className="flex items-center gap-2">
-                            {gd.group === "B2B-Strategic"     && <Shield className="w-3.5 h-3.5 text-indigo-600" />}
-                            {gd.group === "B2B-Non-Strategic" && <Building2 className="w-3.5 h-3.5 text-slate-500" />}
-                            {displayGroupNames[gd.group] || gd.group}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gTotalOrd)}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gTotalUni)}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(gTotalRev)}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(gTotalRev * projection.factor) : "-"}</td>
-                        <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-400">SUBTOTAL</td>
-                      </tr>
-                      {gd.items.map(row => (
-                        <tr key={`${gd.group}-${row.group}`} className="hover:bg-slate-50 transition-colors group">
-                          <td className="px-4 py-3 font-medium text-slate-700 pl-8 border-l-2 border-transparent group-hover:border-blue-400">
-                            <div className="flex flex-col">
-                              <span>{row.group}</span>
-                              {row.tier && <span className="text-[9px] font-bold text-indigo-500 uppercase">{row.tier}</span>}
+                {isLoading ? (
+                  Array(2).fill(0).map((_, i) => (
+                    <tr key={i}>{Array(6).fill(0).map((_, j) => <td key={j} className="px-4 py-3 text-right"><Skeleton className={cn("h-4", j === 0 ? "w-24" : "w-16 ml-auto")} /></td>)}</tr>
+                  ))
+                ) : (
+                  groupedPerformanceChannel.map((groupData) => {
+                    const groupTotalRev = groupData.items.reduce((sum, item) => sum + item.grossRevenue, 0)
+                    const groupTotalOrders = groupData.items.reduce((sum, item) => sum + item.totalOrder, 0)
+                    const groupTotalUnits = groupData.items.reduce((sum, item) => sum + item.unitSold, 0)
+                    const displayGroupNames: Record<string, string> = { "B2B-Strategic": "Strategic Partners", "B2B-Non-Strategic": "Other Partners (Non-Strategic)", "B2C": "B2C Channels" }
+                    return (
+                      <React.Fragment key={groupData.group}>
+                        <tr className={cn("group/header", groupData.group === "B2B-Strategic" ? "bg-indigo-50/50" : groupData.group === "B2B-Non-Strategic" ? "bg-slate-50" : "bg-slate-100/80")}>
+                          <td colSpan={1} className="px-4 py-2 font-bold text-slate-800 text-[10px] uppercase tracking-widest">
+                            <div className="flex items-center gap-2">
+                              {groupData.group === "B2B-Strategic" && <Shield className="w-3.5 h-3.5 text-indigo-600" />}
+                              {groupData.group === "B2B-Non-Strategic" && <Building2 className="w-3.5 h-3.5 text-slate-500" />}
+                              {displayGroupNames[groupData.group] || groupData.group}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
-                          <td className="px-4 py-3 text-right text-blue-600/70 font-medium">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
-                          <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                            {row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%
-                          </td>
+                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(groupTotalOrders)}</td>
+                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(groupTotalUnits)}</td>
+                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(groupTotalRev)}</td>
+                          <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(groupTotalRev * projection.factor) : "-"}</td>
+                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-400">SUBTOTAL</td>
                         </tr>
-                      ))}
-                    </React.Fragment>
-                  )
-                })}
+                        {groupData.items.map((row) => (
+                          <tr key={`${groupData.group}-${row.group}`} className="hover:bg-slate-50 transition-colors group">
+                            <td className="px-4 py-3 font-medium text-slate-700 pl-8 border-l-2 border-transparent group-hover:border-blue-400">
+                              <div className="flex flex-col">
+                                <span className="text-sm">{row.group}</span>
+                                {(row as any).tier && <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight">{(row as any).tier}</span>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
+                            <td className="px-4 py-3 text-right text-blue-600/70 font-medium">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
+                            <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>
