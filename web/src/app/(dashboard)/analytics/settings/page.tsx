@@ -1,0 +1,197 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+// Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
+// 3 mục: Partner Tiers (đối tác chiến lược) · Access Policy (Guardian) · Role Filters (lọc dòng BI theo role).
+
+const CATEGORIES: { id: string; label: string }[] = [
+  { id: "product_catalog", label: "Sản phẩm / Catalog" },
+  { id: "revenue_bi", label: "Doanh thu / BI" },
+  { id: "margin_cogs", label: "Giá vốn / Margin" },
+  { id: "staff_hr", label: "Nhân sự (HR)" },
+  { id: "customer_pii", label: "Thông tin khách hàng" },
+  { id: "internal_kb_other_dept", label: "Tài liệu phòng ban" },
+  { id: "system_internal", label: "Nội bộ hệ thống" },
+  { id: "general", label: "Chung / Chào hỏi" },
+]
+const POLICY_ROLES = ["bod", "staff"] as const
+type Decision = "allow" | "deny" | "dept"
+const NEXT_DECISION: Record<Decision, Decision> = { allow: "deny", deny: "dept", dept: "allow" }
+const DECISION_STYLE: Record<Decision, string> = {
+  allow: "bg-emerald-100 text-emerald-700", deny: "bg-rose-100 text-rose-700", dept: "bg-amber-100 text-amber-700",
+}
+const DECISION_LABEL: Record<Decision, string> = { allow: "Cho phép", deny: "Từ chối", dept: "Theo phòng ban" }
+const DEFAULT_POLICY: Record<string, Record<string, Decision>> = {
+  product_catalog: { bod: "allow", staff: "allow" }, revenue_bi: { bod: "allow", staff: "allow" },
+  margin_cogs: { bod: "allow", staff: "deny" }, staff_hr: { bod: "allow", staff: "deny" },
+  customer_pii: { bod: "allow", staff: "deny" }, internal_kb_other_dept: { bod: "allow", staff: "dept" },
+  system_internal: { bod: "deny", staff: "deny" }, general: { bod: "allow", staff: "allow" },
+}
+const FILTER_ROLES = ["bod", "staff"] as const
+
+export default function SettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  useEffect(() => { if (status === "authenticated" && session?.user?.role !== "admin") router.push("/chatbot") }, [status, session, router])
+  if (status !== "authenticated" || session?.user?.role !== "admin") return null
+  return <AnalyticsSettings />
+}
+
+function AnalyticsSettings() {
+  const [tiers, setTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  const [policy, setPolicy] = useState<Record<string, Record<string, Decision>>>({})
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [newPartner, setNewPartner] = useState<Record<string, string>>({})
+
+  const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  const fetchAll = async () => {
+    setLoading(true)
+    try {
+      const [t, p, f] = await Promise.all([
+        fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
+        fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
+        fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
+      ])
+      setTiers(t && Object.keys(t).length ? t : { Strategic: [] })
+      setPolicy(p || {})
+      setFilters(f || {})
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { fetchAll() }, [])
+
+  const getDecision = (cat: string, role: string): Decision => (policy[cat]?.[role] ?? DEFAULT_POLICY[cat]?.[role] ?? "allow") as Decision
+
+  const savePost = async (key: string, url: string, body: any) => {
+    setSaving(key)
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      notify(res.ok, res.ok ? "Đã lưu" : "Lưu thất bại")
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const addPartner = (tier: string) => {
+    const v = (newPartner[tier] || "").trim()
+    if (!v) return
+    setTiers(prev => ({ ...prev, [tier]: Array.from(new Set([...(prev[tier] || []), v])) }))
+    setNewPartner(prev => ({ ...prev, [tier]: "" }))
+  }
+  const removePartner = (tier: string, name: string) => setTiers(prev => ({ ...prev, [tier]: (prev[tier] || []).filter(p => p !== name) }))
+
+  const cyclePolicy = (cat: string, role: string) => {
+    const cur = getDecision(cat, role)
+    setPolicy(prev => ({ ...prev, [cat]: { ...(prev[cat] || {}), [role]: NEXT_DECISION[cur] } }))
+  }
+  const fullPolicy = () => {
+    const out: Record<string, Record<string, Decision>> = {}
+    CATEGORIES.forEach(c => { out[c.id] = {}; POLICY_ROLES.forEach(r => { out[c.id][r] = getDecision(c.id, r) }) })
+    return out
+  }
+
+  return (
+    <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1200px] mx-auto">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#003B95] rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 text-white" /></div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Analytics Settings</h1>
+            <p className="text-slate-500 text-sm">Đối tác chiến lược · Chính sách truy cập chatbot · Lọc dòng BI theo role</p>
+          </div>
+        </div>
+        <button onClick={fetchAll} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm"><RefreshCw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} /></button>
+      </div>
+
+      {msg && <div className={cn("px-4 py-3 rounded-xl text-sm font-medium", msg.ok ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-rose-50 border border-rose-100 text-rose-700")}>{msg.text}</div>}
+
+      {/* Partner Tiers */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Đối tác chiến lược (Partner Tiers)</h2></div>
+          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            {saving === "tiers" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+        <div className="p-6 space-y-5">
+          {Object.keys(tiers).map(tier => (
+            <div key={tier}>
+              <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-2">{tier}</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {(tiers[tier] || []).map(name => (
+                  <span key={name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium">
+                    {name}<button onClick={() => removePartner(tier, name)} className="text-indigo-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+                  </span>
+                ))}
+                {(tiers[tier] || []).length === 0 && <span className="text-sm text-slate-400 italic">Chưa có đối tác</span>}
+              </div>
+              <div className="flex gap-2">
+                <input value={newPartner[tier] || ""} onChange={e => setNewPartner(prev => ({ ...prev, [tier]: e.target.value }))} onKeyDown={e => e.key === "Enter" && addPartner(tier)} placeholder="Tên đối tác (vd Traveloka)" className="flex-1 max-w-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                <button onClick={() => addPartner(tier)} className="flex items-center gap-1 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-200"><Plus className="w-4 h-4" />Thêm</button>
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-slate-400">Danh sách này quyết định phân loại B2B-Strategic vs Non-Strategic (dùng ở BOD/B2B/Dashboard/All-Time).</p>
+        </div>
+      </div>
+
+      {/* Access Policy */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2"><Sliders className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Chính sách truy cập Chatbot (Guardian)</h2></div>
+          <button onClick={() => savePost("policy", "/api/config/access-policy", fullPolicy())} disabled={saving === "policy"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            {saving === "policy" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Loại câu hỏi</th>{POLICY_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
+            <tbody className="divide-y divide-slate-50">
+              {CATEGORIES.map(cat => (
+                <tr key={cat.id} className="hover:bg-slate-50/50">
+                  <td className="px-4 py-2.5 font-medium text-slate-700">{cat.label}</td>
+                  {POLICY_ROLES.map(role => { const dec = getDecision(cat.id, role); return (
+                    <td key={role} className="px-4 py-2.5 text-center">
+                      <button onClick={() => cyclePolicy(cat.id, role)} className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold transition-all", DECISION_STYLE[dec])}>{DECISION_LABEL[dec]}</button>
+                    </td>
+                  )})}
+                  <td className="px-4 py-2.5 text-center"><span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-700">Cho phép</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-50">Click để xoay vòng Cho phép → Từ chối → Theo phòng ban. admin/manager luôn toàn quyền (fail-open khi classify lỗi).</p>
+      </div>
+
+      {/* Role Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
+          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            {saving === "filters" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {FILTER_ROLES.map(role => (
+            <div key={role}>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {role}</label>
+              <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+            </div>
+          ))}
+          <p className="text-xs text-slate-400">Điều kiện này được AND thêm vào truy vấn BI cho role tương ứng (admin không bị lọc).</p>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -87,7 +87,8 @@ const MANAGEMENT_GROUP = {
     { href: "/analytics/users",     label: "Users",              icon: Users },
     { href: "/analytics/schema",    label: "Schema Config",      icon: Database },
     { href: "/analytics/scheduled", label: "Scheduled Messages", icon: Clock },
-    { href: "/admin?tab=settings",  label: "Settings",           icon: Settings },
+    { href: "/analytics/settings",  label: "Settings",           icon: Settings },
+    { href: "/admin",               label: "Admin (Product)",    icon: Package },
   ],
 }
 
