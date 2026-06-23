@@ -92,6 +92,17 @@ chốt chuyển Netlify (free Starter cho phép thương mại). Tên site Netli
   Lark redirect phải = .../api/auth/callback/lark (provider id "lark"). ⚠️ Tới lúc lưu session: user nói đã đổi NHƯNG
   providers vẫn trả placeholder → CHƯA redeploy / deploy chưa xong. CẦN redeploy lại rồi verify providers.
 - Site đã sống (/login 200, / 307→/login). NextAuth route app/api/auth/[...nextauth] OK. Middleware không chặn /api/auth.
+- CẬP NHẬT debug (cuối phiên): user nói ĐÃ sửa NEXTAUTH_URL + thêm LARK_ENCRYPT_KEY nhưng login/logout VẪN lỗi.
+  Curl providers 2 lần NỮA → callbackUrl VẪN "your-site-name.netlify.app" (placeholder). Rà repo: placeholder KHÔNG
+  nằm trong file tracked nào (chỉ .env.local.example=localhost) → 100% đến từ BIẾN NEXTAUTH_URL trên Netlify UI (giá
+  trị import ban đầu) + chưa có deploy mới chạy lại với giá trị đã sửa.
+  · Đã thêm NEXTAUTH_URL="https://gohub-intel.netlify.app" vào netlify.toml [build.environment] + push c842eec để ép redeploy.
+  · ⚠️ KEY INSIGHT: netlify.toml [build.environment] CHỈ có lúc BUILD, có thể KHÔNG tới function lúc RUNTIME → giá trị
+    runtime quyết định bởi BIẾN UI. Nên fix dứt điểm = sửa biến UI NEXTAUTH_URL (đúng từng ký tự, scope Production, Save,
+    không trùng dòng) → Clear cache and deploy → verify providers đổi sang gohub-intel.
+  · Phương án chắc thắng nếu vẫn fail: XÓA HẲN biến NEXTAUTH_URL để NextAuth tự suy URL từ request host của Netlify.
+  · Cách verify nhanh (không cần login): curl https://gohub-intel.netlify.app/api/auth/providers → xem callbackUrl.
+- Bot Event URL: user đã thêm LARK_ENCRYPT_KEY → cần redeploy rồi mới set lại Event URL (chưa xác nhận xong).
 
 **#4 Settings parity:** CHƯA làm — chờ user login được + chỉ rõ gap so intel SystemSettings.
 
