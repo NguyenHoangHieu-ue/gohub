@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, X, Filter, Sliders } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
@@ -50,6 +50,8 @@ function AnalyticsSettings() {
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [availablePartners, setAvailablePartners] = useState<string[]>([])
+  const [expandedTiers, setExpandedTiers] = useState<Record<string, boolean>>({})
+  const [addingTier, setAddingTier] = useState<string | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -125,31 +127,51 @@ function AnalyticsSettings() {
           </button>
         </div>
         <div className="p-6 space-y-5">
-          {Object.keys(tiers).map(tier => (
-            <div key={tier}>
-              <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-2">{tier}</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {(tiers[tier] || []).map(name => (
-                  <span key={name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium">
-                    {name}<button onClick={() => removePartner(tier, name)} className="text-indigo-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
-                  </span>
-                ))}
-                {(tiers[tier] || []).length === 0 && <span className="text-sm text-slate-400 italic">Chưa có đối tác</span>}
+          {Object.keys(tiers).map(tier => {
+            const list = tiers[tier] || []
+            const expanded = expandedTiers[tier]
+            return (
+              <div key={tier} className="border border-slate-200 rounded-xl overflow-hidden">
+                {/* Header: thả xuống danh sách + nút Thêm */}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50/70">
+                  <button onClick={() => setExpandedTiers(prev => ({ ...prev, [tier]: !prev[tier] }))} className="flex items-center gap-2 text-left">
+                    <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", !expanded && "-rotate-90")} />
+                    <span className="text-sm font-bold text-indigo-700">{tier}</span>
+                    <span className="text-xs font-medium text-slate-400">{list.length} đối tác</span>
+                  </button>
+                  <button onClick={() => setAddingTier(addingTier === tier ? null : tier)} className="flex items-center gap-1 px-3 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70]">
+                    <Plus className="w-3.5 h-3.5" />Thêm
+                  </button>
+                </div>
+
+                {/* Picker chọn đối tác (mở khi bấm Thêm) */}
+                {addingTier === tier && (
+                  <div className="px-4 py-3 border-t border-slate-100 bg-white">
+                    <select
+                      value=""
+                      onChange={e => { if (e.target.value) { addPartner(tier, e.target.value); setAddingTier(null); setExpandedTiers(prev => ({ ...prev, [tier]: true })) } }}
+                      className="w-full max-w-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                    >
+                      <option value="">+ Chọn đối tác để thêm…</option>
+                      {availablePartners.filter(p => !list.includes(p)).map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Danh sách strategic (thả xuống) */}
+                {expanded && (
+                  <div className="px-4 py-3 border-t border-slate-100 flex flex-wrap gap-2">
+                    {list.map(name => (
+                      <span key={name} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium">
+                        {name}<button onClick={() => removePartner(tier, name)} className="text-indigo-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+                      </span>
+                    ))}
+                    {list.length === 0 && <span className="text-sm text-slate-400 italic">Chưa có đối tác</span>}
+                  </div>
+                )}
               </div>
-              <div className="flex gap-2">
-                <select
-                  value=""
-                  onChange={e => { if (e.target.value) addPartner(tier, e.target.value) }}
-                  className="flex-1 max-w-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-                >
-                  <option value="">+ Chọn đối tác để thêm…</option>
-                  {availablePartners
-                    .filter(p => !(tiers[tier] || []).includes(p))
-                    .map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-          ))}
+            )
+          })}
           <p className="text-xs text-slate-400">Danh sách này quyết định phân loại B2B-Strategic vs Non-Strategic (dùng ở BOD/B2B/Dashboard/All-Time).</p>
         </div>
       </div>
