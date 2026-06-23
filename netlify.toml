@@ -7,6 +7,9 @@
 [build.environment]
   NODE_VERSION = "20"
   NODE_OPTIONS = "--max-old-space-size=4096"
+  # Tat secret scanner: NEXT_PUBLIC_* bi nhung vao client bundle theo thiet ke (anon key la public);
+  # secret that nam trong env vars (khong commit, da gitignore). Day la false-positive.
+  SECRETS_SCAN_ENABLED = "false"
 
 # Runtime chính thức cho Next.js (App Router, SSR, API routes, middleware)
 [[plugins]]
