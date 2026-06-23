@@ -1,5 +1,6 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-23 (session 74 — CM1 + auto-date + 3HK metric + CHUYỂN DEPLOY NETLIFY + fix B2B Strategic/auth)
+Cập nhật lần cuối: 2026-06-23 (session 74 tiếp 6 — preset date range 15 trang + b2b/settings dropdown + fix auth code;
+   ⚠️ DEPLOY NETLIFY VẪN KẸT: providers còn placeholder, fix chưa lên live — chờ user check Deploys/đổi NEXTAUTH_URL)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
    — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
@@ -168,11 +169,38 @@ commit nào (gồm fix NEXTAUTH_URL ff35827) lên được live.
 **#4 b2b preset gọn:** thêm prop variant="buttons"|"dropdown" cho DatePresets. b2b header (chật) → variant="dropdown"
 (1 select "Nhanh…" Tuần/Tháng/Quý/Năm). Các trang khác giữ hàng nút.
 
-**#5 settings strategic dropdown:** analytics/settings/page.tsx — section Partner Tiers: thay input GÕ TAY tên đối tác
-bằng <select> chọn từ danh sách partner B2B thật (fetch /api/channels?channelGroup=B2B, lọc bỏ tên đã thêm).
-Bỏ state newPartner + import Plus (orphan). addPartner(tier,v) nhận value trực tiếp. removePartner giữ nguyên.
+**#5 settings strategic dropdown (BẢN 1 — HIỂU SAI, đã sửa ở tiếp 6):** thay input gõ tay bằng <select> chọn từ
+/api/channels?channelGroup=B2B. addPartner(tier,v) nhận value trực tiếp; bỏ state newPartner.
 
 - Verify: tsc PASS + next build PASS (exit 0). ⚠️ Số/hiển thị verify khi deploy live.
+
+### Session 74 tiếp 6 (2026-06-23) — next.config env LÀM HỎNG BUILD (revert) + sửa lại layout settings strategic
+
+**next.config.js env — THẤT BẠI, ĐÃ REVERT (bài học):** thử bake NEXTAUTH_URL vào bundle lúc build qua
+`nextConfig.env = { NEXTAUTH_URL }` → next build FAIL: Terser "failed to parse input file / Syntax Error" trên
+nhiều API route (createClient ... process.env.SUPABASE_SERVICE_KEY). Bỏ env → build PASS lại ngay. ⚠️ KẾT LUẬN:
+KHÔNG dùng nextConfig.env để inline biến trên repo này (vỡ minify). next.config.js giữ NGUYÊN `{}`. KHÔNG commit bản lỗi.
+→ Fix auth dứt điểm vẫn chỉ là runtime override trong auth.ts (ff35827), chờ deploy.
+
+**#5 settings (BẢN 2 — ĐÚNG Ý, commit 184af2c):** user phản hồi: "thêm strategic = NÚT, danh sách strategic = THẢ XUỐNG
+(collapse) cho đỡ rối" (bản 1 làm ngược/rối vì xổ hết chip + dropdown-add). Sửa analytics/settings/page.tsx:
+- Mỗi tier = thanh thu gọn: [chevron] Tên tier + "N đối tác" (bấm để expand) · nút "Thêm" (Plus) bên phải.
+- Nút Thêm → toggle picker <select> (partner B2B chưa có); chọn xong addPartner + tự expand list.
+- Danh sách chip (có ✕ xoá) CHỈ hiện khi expand (mặc định thu gọn). State expandedTiers + addingTier.
+- Re-add import Plus, ChevronDown. tsc + next build PASS (/analytics/settings 5.03 kB).
+
+**⚠️ DEPLOY NETLIFY VẪN CHƯA THÔNG (chưa giải quyết được — chờ user):**
+- Suốt phiên: providers /api/auth/providers LUÔN trả callbackUrl placeholder "your-site-name.netlify.app" qua NHIỀU
+  commit (ff35827 auth fix, 596ab6f bump RAM 4096→6144, aa4ffb7 preset, 184af2c settings) + ~30-40 phút + user đã
+  thêm LARK_ENCRYPT_KEY/chạy v18/set Event URL. → fix KHÔNG lên production.
+- Chẩn đoán: build local LUÔN PASS (NODE_OPTIONS=6144). Nên nguyên nhân là Ở NETLIFY: (a) build FAIL (OOM đã thử bump,
+  có thể lý do khác), HOẶC (b) Netlify deploy NHÁNH KHÁC main (push không lên production), HOẶC (c) deploy locked/old.
+- KHÔNG xem được Netlify dashboard/log (CLI chưa login = web action). Đã hướng dẫn user 3 bước CHẮC THẮNG:
+  1) Site config > Environment variables: NEXTAUTH_URL = "https://gohub-intel.netlify.app" (đúng từng ký tự, không "/"
+     cuối, Production, xóa dòng trùng) → Save. 2) Deploys > Trigger deploy > Clear cache and deploy site.
+  3) Báo lại: trạng thái deploy mới nhất (Published/Failed/Building) + commit/nhánh nó build + log lỗi nếu Failed.
+- 🔜 KHI USER PHẢN HỒI deploy status: nếu Failed→đọc log fix; nếu nhánh≠main→đổi production branch sang main; nếu
+  Published mà vẫn placeholder→biến UI vẫn sai, sửa biến + clear cache deploy.
 
 ---
 
