@@ -183,6 +183,64 @@ export async function getLarkUserInfo(openId: string): Promise<{ name: string } 
   } catch { return null }
 }
 
+// Chuyển báo cáo markdown → mảng element cho Lark interactive card (text + bảng thật).
+// Tách các đoạn text và bảng markdown xen kẽ; mỗi bảng → 1 table element (hiển thị đẹp).
+export function markdownToLarkElements(md: string): any[] {
+  const lines = (md || "").split("\n")
+  const elements: any[] = []
+  let textBuf: string[] = []
+  let tableBuf: string[] = []
+  const normalize = (t: string) => t
+    .replace(/```[\s\S]*?```/g, "")            // bỏ code block (SQL/chart lỡ có)
+    .replace(/^#{1,6}\s*(.+)$/gm, "**$1**")    // heading → bold
+    .replace(/^\s*[-*]\s+/gm, "• ")            // bullet
+    .replace(/^\s*-{3,}\s*$/gm, "")            // hr
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  const flushText = () => { const t = normalize(textBuf.join("\n")); if (t) elements.push({ tag: "markdown", content: t }); textBuf = [] }
+  const flushTable = () => {
+    if (tableBuf.length >= 2) {
+      const parsed = parseMarkdownTable(tableBuf.join("\n"))
+      if (parsed?.headers.length) {
+        const columns = parsed.headers.map((h, i) => ({ name: `c${i}`, display_name: h, width: "auto" }))
+        const rows = parsed.rows.map(r => Object.fromEntries(parsed.headers.map((_, i) => [`c${i}`, r[i] ?? ""])))
+        elements.push({ tag: "table", page_size: Math.min(Math.max(rows.length, 1), 20), columns, rows })
+        tableBuf = []
+        return
+      }
+    }
+    textBuf.push(...tableBuf); tableBuf = []   // không parse được → coi như text
+  }
+  for (const line of lines) {
+    if (line.trim().startsWith("|")) { if (tableBuf.length === 0) flushText(); tableBuf.push(line) }
+    else { if (tableBuf.length) flushTable(); textBuf.push(line) }
+  }
+  flushTable(); flushText()
+  return elements
+}
+
+// Card báo cáo (schema 2.0): header màu + nội dung (text + bảng).
+export function buildReportCard(title: string, reportMarkdown: string, prefix?: string): any {
+  const elements = markdownToLarkElements(reportMarkdown)
+  if (prefix) elements.unshift({ tag: "markdown", content: prefix })
+  return {
+    schema: "2.0",
+    header: { title: { tag: "plain_text", content: title || "Báo cáo" }, template: "blue" },
+    body: { elements: elements.length ? elements : [{ tag: "markdown", content: reportMarkdown || "(trống)" }] },
+  }
+}
+
+// Gửi interactive card vào 1 chat qua bot API (dùng cho scheduled message khi không có webhook).
+export async function sendLarkCardToChat(chatId: string, card: any) {
+  const token = await getLarkToken()
+  const res = await fetch(`${LARK_API}/im/v1/messages?receive_id_type=chat_id`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+    body: JSON.stringify({ receive_id: chatId, msg_type: "interactive", content: JSON.stringify(card) }),
+  })
+  if (!res.ok) throw new Error(`Lark card send returned ${res.status}`)
+}
+
 // Strip markdown for plain text output
 export function stripMarkdown(md: string): string {
   return md
