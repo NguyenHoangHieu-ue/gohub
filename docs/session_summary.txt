@@ -1,6 +1,7 @@
 == TÓM TẮT SESSION ==
 Cập nhật lần cuối: 2026-06-24 (session 75 — fix Lark bot trễ/không trả lời [bỏ waitUntil→đồng bộ+dedup],
-   fix tab Website Analytics, date mặc định→hôm nay, roles đầy đủ 9 vai trò, nút Kiểm tra Database;
+   fix tab Website Analytics, date mặc định→hôm nay, roles đầy đủ 9 vai trò, nút Kiểm tra Database,
+   tab 3HK Unlimited tách theo throttle 5/10 mbps [high-speed để sau];
    ✅ DEPLOY NETLIFY ĐÃ THÔNG, login/logout OK)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
@@ -53,19 +54,21 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
 - Khách mới/quay lại = COUNT(DISTINCT customer_code) gohub_dw; sessions/CR từ GA4; leads Chatwoot; spend Turso.
   Mọi count đã có nguồn. Chỉ cần nếu muốn THÊM metric "tổng user đăng ký / MAU" (khác người mua).
 
-### #3HK Breakdown gói Unlimited theo nhóm (high-speed + throttle)
-- Yêu cầu: tab 3HK Data Usage đang gộp tất cả Unlimited; cần tách theo nhóm "500MB highspeed then throttle 5mbps"...
-  Giữ nguyên Daily/Fixed. Throttle 5/10 thì SKU phân biệt được nhưng LƯỢNG high-speed thì không.
-- ĐIỀU TRA: warehouse SKU (vd AS43DUNLIP103D) KHÔNG khớp sku_catalog/skus (0/182) → throttle_speed catalog vô dụng.
-  TÌM RA: **`data_usage_log.offer_name`** (gohub_dw, key=iccid) ghi đầy đủ, vd "AS4 ... 500MB Daily 24h - 03 days -
-  throttle 5 mbps" / "... Daily 24h UNLI - 03 days". Join fact_data_usage.iccid → data_usage_log.iccid.
-- CÁCH LÀM (nhanh + an toàn 10s Netlify): query gom theo SKU (sku→offer_name, ~182 dòng, ~1s, 100% coverage) chạy
-  1 lần on mount (offer là thuộc tính SP, không theo ngày) → map sku→group. Parse JS: high-speed = số + "MB|GB"
-  IN HOA (tránh khớp "mb" trong "mbps"); throttle = "N mbps"; "Unli" = high-speed không giới hạn. Gom skuMetrics
-  (đã lọc Unlimited theo kỳ) theo group CLIENT-SIDE (tránh join data_usage_log mỗi request — bản join-iccid mất 6-12s
-  > 10s Netlify). Bảng mới "Unlimited — Breakdown theo nhóm tốc độ" chỉ hiện khi tab=Unlimited.
-- Nhóm thực tế: 500MB/ngày→5mbps (10k sims), Unlimited high-speed→5/10mbps, 1GB/2GB/ngày..., "Không xác định" nếu
-  thiếu offer. User chốt high-speed là cap THEO NGÀY → nhãn "X/ngày → throttle Y mbps".
+### #3HK Breakdown gói Unlimited theo THROTTLE (5/10 mbps) — bản chốt cuối (qua nhiều vòng sửa)
+- Yêu cầu: tab 3HK Data Usage gộp tất cả Unlimited; cần tách nhóm. GIỮ NGUYÊN Daily/Fixed (chỉ làm Unlimited).
+- CHỐT CUỐI (user): **chỉ tách theo throttle 5/10 mbps trước; lượng high-speed ĐỂ SAU (đã note).**
+  · throttle theo MÃ DATATYPE: mã MỚI = ký tự thứ 8 SKU (A=5 mbps, B=10 mbps); mã CŨ (kho 3HK, vd EAS43DP1UNLI05D —
+    không có A/B ở vị trí 8) = **P1=5 mbps, P2=10 mbps** (user chốt — NGƯỢC text offer; theo user). PY/khác → bỏ.
+  · Code: `throttleGroupOf(sku)` (regex /P([12Y])/) trong 3hk-usage/page.tsx; gom skuMetrics (đã lọc Unlimited theo kỳ)
+    CLIENT-SIDE → 2 nhóm "Throttle 5 mbps"/"Throttle 10 mbps". Bảng chỉ hiện ở tab Unlimited.
+- 🔜 ĐỂ SAU — tách thêm theo LƯỢNG high-speed (500MB/1GB/2GB/Unlimited). Nguồn đã khảo sát: **`data_usage_log.offer_name`**
+  (gohub_dw, join `fact_data_usage.iccid`), vd "AS4 ... 500MB Daily 24h - 03 days - throttle 5 mbps" / "... Daily 24h UNLI ...".
+  Lấy map `sku→MAX(offer_name)` ~182 dòng ~1s (đã bỏ tạm khỏi code). Parse high-speed: số + "MB|GB" IN HOA (tránh khớp "mb"
+  trong "mbps"), "Unli"=không giới hạn. (Bản join theo iccid mất 6-12s > 10s Netlify → tránh.)
+- LỊCH SỬ SỬA (ghi lại để hiểu vì sao): (1) lần đầu lấy throttle TỪ offer → sai (P1 offer không ghi throttle → "?");
+  (2) chuyển throttle từ SKU tier P1=10/P2=5 (theo offer data); (3) user: chỉ datatype A/B; (4) user: mã cũ P1=5/P2=10
+  (ngược offer) + chỉ tách throttle, high-speed để sau = BẢN HIỆN TẠI.
+- ⚠️ Mapping P1/P2 mã cũ ngược với offer_name — khi làm high-speed cần đối chiếu lại với user cho chắc.
 
 ### Verify
 - tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
