@@ -64,31 +64,31 @@ interface SpeedGroupMetrics {
   avg_usage_pct: number
 }
 
-// Phân nhóm Unlimited = (high-speed × throttle).
-// - throttle (5/10 mbps): lấy từ MÃ DATATYPE trong SKU — P1 = 10 mbps, P2 = 5 mbps (xác minh từ data:
-//   88 gói P2 ghi "5 mbps", các gói P1 có ghi đều "10 mbps"). SKU phân biệt được throttle kể cả khi
-//   offer_name không ghi. Tier lạ (PY...) → fallback lấy "N mbps" từ offer nếu có.
+// Phân nhóm Unlimited = (high-speed × throttle). CHỈ xét gói có MÃ DATATYPE = A hoặc B.
+// - datatype = ký tự thứ 8 của SKU chuẩn (A/B). Kho dữ liệu 3HK dùng mã cũ (P1/P2/PY) nên fallback:
+//   P2 = A (5 mbps), P1 = B (10 mbps); PY / khác A,B → BỎ QUA. (Xác minh data + catalog: A→5mbps, B→10mbps.)
+// - throttle: A = 5 mbps, B = 10 mbps (suy từ datatype, không cần offer ghi).
 // - high-speed (500MB/1GB/2GB / Unlimited): KHÔNG suy được từ SKU → lấy từ cột throttle của gói (offer_name).
 //   "MB/GB" IN HOA (tránh khớp nhầm "mb" trong "mbps"); "Unli" = high-speed không giới hạn.
-function throttleFromSku(sku: string): string | null {
-  const m = sku.match(/P([12Y])/)
-  if (!m) return null
-  if (m[1] === "1") return "10"
-  if (m[1] === "2") return "5"
-  return null // PY / tier khác → không xác định từ SKU
+function datatypeOf(sku: string): "A" | "B" | null {
+  const c8 = sku[7]                               // ký tự thứ 8 (SKU chuẩn)
+  if (c8 === "A" || c8 === "B") return c8
+  const m = sku.match(/P([12Y])/)                 // mã cũ trong kho: P1=B, P2=A
+  if (m?.[1] === "2") return "A"
+  if (m?.[1] === "1") return "B"
+  return null                                     // không phải A/B → bỏ qua
 }
-function parseSpeedGroup(sku: string, offer?: string | null): string {
-  // throttle: ưu tiên mã datatype SKU; nếu tier lạ → lấy từ offer
-  let throttle = throttleFromSku(sku)
-  if (!throttle && offer) { const tm = offer.match(/(\d+)\s*mbps/i); if (tm) throttle = tm[1] }
-  const thrLabel = throttle ? `throttle ${throttle} mbps` : "throttle ?"
-  // high-speed: từ cột throttle (offer_name)
+// Trả null nếu SKU KHÔNG thuộc datatype A/B (để loại khỏi breakdown).
+function parseSpeedGroup(sku: string, offer?: string | null): string | null {
+  const dt = datatypeOf(sku)
+  if (!dt) return null
+  const throttle = dt === "A" ? "5" : "10"        // A=5mbps, B=10mbps
   const hs = offer ? offer.match(/(\d+)\s*(MB|GB)/) : null   // chỉ MB/GB IN HOA
   let highspeed: string
   if (hs) highspeed = `${hs[1]}${hs[2]}/ngày high-speed`
   else if (offer && /unli/i.test(offer)) highspeed = "Unlimited high-speed"
   else highspeed = "High-speed không rõ"
-  return `${highspeed} → ${thrLabel}`
+  return `${highspeed} → throttle ${throttle} mbps`
 }
 
 export default function ThreeHKDataUsagePage() {
@@ -225,6 +225,7 @@ export default function ThreeHKDataUsagePage() {
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
       const group = parseSpeedGroup(sm.sku, skuOfferMap[sm.sku])
+      if (!group) continue   // chỉ giữ datatype A/B
       const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0 })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
@@ -593,7 +594,7 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Unlimited — Breakdown theo nhóm tốc độ (high-speed + throttle)
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Phân nhóm theo offer (vd 500MB/ngày → throttle 5 mbps). Lượng high-speed lấy từ thông tin sản phẩm (offer_name).</p>
+            <p className="text-[11px] text-slate-400 mt-1">Chỉ gói datatype A/B (A=throttle 5 mbps, B=10 mbps theo mã SKU). Lượng high-speed lấy từ cột throttle của gói (offer).</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
