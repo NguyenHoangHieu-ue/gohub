@@ -79,6 +79,22 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
   channel_costs/app_config/lark_tickets... — KHÔNG có fact data, web KHÔNG query). Sync Turso vào schema config sẽ vô
   nghĩa (BI không query được Turso). → đã sync đúng gohub_dw. Nếu user muốn catalog Turso riêng = việc khác (cần Turso client).
 
+### #Scheduled Messages — xuất BÁO CÁO THẬT + Lark card đẹp (bảng)
+- BUG: runScheduledMessage gọi Gemini THƯỜNG (`model.generateContent(prompt)`) → trả về HƯỚNG DẪN/mẫu SQL/placeholder
+  [x] thay vì báo cáo điền số (vì không có tool executeSQL). Gửi Lark dạng text thô.
+- FIX (lib/scheduled-runner.ts): dùng **runBIAnalyst** (function calling executeSQL trên gohub_dw, role "admin") +
+  directive bắt buộc "tự chạy SQL, ĐIỀN báo cáo hoàn chỉnh, KHÔNG placeholder/SQL, số liệu để trong BẢNG markdown,
+  tiền có phân cách+VND, % 1 chữ số, gộp 1-2 query, KHÔNG chart". Inject **target tháng trước** từ Supabase
+  `analytics_target_planning` (cols month/channel/target_revenue/target_3hk_contribution/target_gpm2) vì target_planning
+  KHÔNG có trong gohub_dw → BI tính được completion.
+- Lark đẹp (lib/lark.ts MỚI): `markdownToLarkElements` tách text/bảng markdown → element; bảng → `table` element thật;
+  heading→bold, bỏ code block. `buildReportCard(title,md,prefix)` = card schema 2.0 header xanh + body. `sendLarkCardToChat`
+  (bot API). Runner: có lark_webhook_url → POST {msg_type:"interactive",card}; không → gửi card tới lark_notify_chat_id.
+  lark_keyword (bảo mật custom bot) chèn đầu card.
+- TEST THẬT (node, prompt mẫu): BI chạy 2 query → báo cáo đầy đủ T5/2026: tổng 7.55 tỷ, MoM -17.2%, B2B/B2C, GPM2 B2B
+  26.5%, 3HK contribution 53.6% — có bảng markdown (→ Lark table). Đúng yêu cầu.
+- ⚠️ BI nhiều vòng có thể >10s (Netlify Free) → nút Test/cron có thể timeout; logic ĐÚNG, nếu cần chắc → background function.
+
 ### Verify
 - tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
   Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database, tab 3HK Unlimited breakdown.
