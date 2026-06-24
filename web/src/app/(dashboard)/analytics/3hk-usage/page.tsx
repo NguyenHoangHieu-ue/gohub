@@ -64,16 +64,31 @@ interface SpeedGroupMetrics {
   avg_usage_pct: number
 }
 
-// Phân nhóm Unlimited từ offer_name. high-speed (500MB/1GB/2GB...) lấy theo "MB/GB" IN HOA
-// (tránh khớp nhầm "mb" trong "mbps"); throttle lấy theo "N mbps". "Unli" = high-speed không giới hạn.
-function parseSpeedGroup(offer?: string | null): string {
-  if (!offer) return "Không xác định"
-  const thr = offer.match(/(\d+)\s*mbps/i)
-  const hs  = offer.match(/(\d+)\s*(MB|GB)/)        // chỉ MB/GB IN HOA
-  const throttle = thr ? `throttle ${thr[1]} mbps` : "không throttle"
-  if (hs) return `${hs[1]}${hs[2]}/ngày → ${throttle}`
-  if (/unli/i.test(offer)) return `Unlimited high-speed → ${throttle}`
-  return "Khác"
+// Phân nhóm Unlimited = (high-speed × throttle).
+// - throttle (5/10 mbps): lấy từ MÃ DATATYPE trong SKU — P1 = 10 mbps, P2 = 5 mbps (xác minh từ data:
+//   88 gói P2 ghi "5 mbps", các gói P1 có ghi đều "10 mbps"). SKU phân biệt được throttle kể cả khi
+//   offer_name không ghi. Tier lạ (PY...) → fallback lấy "N mbps" từ offer nếu có.
+// - high-speed (500MB/1GB/2GB / Unlimited): KHÔNG suy được từ SKU → lấy từ cột throttle của gói (offer_name).
+//   "MB/GB" IN HOA (tránh khớp nhầm "mb" trong "mbps"); "Unli" = high-speed không giới hạn.
+function throttleFromSku(sku: string): string | null {
+  const m = sku.match(/P([12Y])/)
+  if (!m) return null
+  if (m[1] === "1") return "10"
+  if (m[1] === "2") return "5"
+  return null // PY / tier khác → không xác định từ SKU
+}
+function parseSpeedGroup(sku: string, offer?: string | null): string {
+  // throttle: ưu tiên mã datatype SKU; nếu tier lạ → lấy từ offer
+  let throttle = throttleFromSku(sku)
+  if (!throttle && offer) { const tm = offer.match(/(\d+)\s*mbps/i); if (tm) throttle = tm[1] }
+  const thrLabel = throttle ? `throttle ${throttle} mbps` : "throttle ?"
+  // high-speed: từ cột throttle (offer_name)
+  const hs = offer ? offer.match(/(\d+)\s*(MB|GB)/) : null   // chỉ MB/GB IN HOA
+  let highspeed: string
+  if (hs) highspeed = `${hs[1]}${hs[2]}/ngày high-speed`
+  else if (offer && /unli/i.test(offer)) highspeed = "Unlimited high-speed"
+  else highspeed = "High-speed không rõ"
+  return `${highspeed} → ${thrLabel}`
 }
 
 export default function ThreeHKDataUsagePage() {
@@ -209,7 +224,7 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited") return []
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
-      const group = parseSpeedGroup(skuOfferMap[sm.sku])
+      const group = parseSpeedGroup(sm.sku, skuOfferMap[sm.sku])
       const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0 })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
