@@ -202,8 +202,10 @@ export function markdownToLarkElements(md: string): any[] {
     if (tableBuf.length >= 2) {
       const parsed = parseMarkdownTable(tableBuf.join("\n"))
       if (parsed?.headers.length) {
-        const columns = parsed.headers.map((h, i) => ({ name: `c${i}`, display_name: h, width: "auto" }))
-        const rows = parsed.rows.map(r => Object.fromEntries(parsed.headers.map((_, i) => [`c${i}`, r[i] ?? ""])))
+        // Ô bảng Lark không render markdown → bỏ **đậm**, *nghiêng*, `code` để hiện số/chữ sạch
+        const cleanCell = (s: string) => (s ?? "").replace(/\*\*/g, "").replace(/`/g, "").replace(/\*/g, "").trim()
+        const columns = parsed.headers.map((h, i) => ({ name: `c${i}`, display_name: cleanCell(h), width: "auto" }))
+        const rows = parsed.rows.map(r => Object.fromEntries(parsed.headers.map((_, i) => [`c${i}`, cleanCell(r[i] ?? "")])))
         elements.push({ tag: "table", page_size: Math.min(Math.max(rows.length, 1), 20), columns, rows })
         tableBuf = []
         return

@@ -3,24 +3,33 @@ import { AGENTS } from "@/lib/agents/agents"
 import { runBIAnalyst } from "@/lib/agents/bi-analyst"
 import { buildReportCard, sendLarkCardToChat } from "@/lib/lark"
 
-// Lấy dữ liệu target tháng trước từ Supabase (target_planning KHÔNG nằm trong gohub_dw nên BI không query được)
-// → inject vào prompt để báo cáo tính được completion / target 3HK.
+// Lấy dữ liệu target 6 THÁNG gần nhất từ Supabase (target_planning KHÔNG nằm trong gohub_dw nên BI không query được)
+// → inject vào prompt để báo cáo nào cũng có target tương ứng (tránh điền thiếu/không nhất quán).
 async function fetchTargetContext(): Promise<string> {
   try {
     const now = new Date()
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const ym = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`
+    const months: string[] = []
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+    }
     const { data } = await supabaseAdmin
       .from("analytics_target_planning")
-      .select("channel,target_revenue,target_3hk_contribution,target_gpm2")
-      .eq("month", ym)
-    if (!data?.length) return `\n\n(Không có dữ liệu target cho tháng ${ym} trong hệ thống planning.)`
-    const totalRev = data.reduce((s: number, r: any) => s + Number(r.target_revenue || 0), 0)
-    const lines = data.map((r: any) =>
-      `  - ${r.channel}: target_revenue=${Number(r.target_revenue || 0)} VND, target_3hk_contribution=${r.target_3hk_contribution}%, target_gpm2=${r.target_gpm2}%`)
-    return `\n\n━━━ DỮ LIỆU TARGET tháng ${ym} (từ hệ thống planning — DÙNG cho phần target/completion) ━━━\n`
-      + `Tổng target_revenue tất cả kênh: ${totalRev} VND\nTheo kênh:\n${lines.join("\n")}\n`
-      + `(target_3hk_contribution = % đóng góp 3HK kỳ vọng trên doanh thu. Completion = actual / target * 100.)`
+      .select("month,channel,target_revenue,target_3hk_contribution,target_gpm2")
+      .in("month", months)
+    if (!data?.length) return `\n\n(Không có dữ liệu target trong 6 tháng gần nhất → mọi mục target ghi "Chưa có target".)`
+    const byMonth: Record<string, any[]> = {}
+    for (const r of data as any[]) (byMonth[r.month] = byMonth[r.month] || []).push(r)
+    const blocks = Object.keys(byMonth).sort().map(m => {
+      const rows = byMonth[m]
+      const total = rows.reduce((s: number, r: any) => s + Number(r.target_revenue || 0), 0)
+      const per = rows.map((r: any) =>
+        `${r.channel}: target_revenue=${Number(r.target_revenue || 0)} VND, target_3hk_contribution=${r.target_3hk_contribution}%, target_gpm2=${r.target_gpm2}%`).join(" · ")
+      return `  ${m}: tổng target_revenue=${total} VND | ${per}`
+    })
+    return `\n\n━━━ DỮ LIỆU TARGET (hệ thống planning — DÙNG cho mọi mục target/completion) ━━━\n${blocks.join("\n")}\n`
+      + `(target_3hk_contribution = % đóng góp 3HK kỳ vọng. Completion = actual / target * 100. `
+      + `Tháng KHÔNG có trong danh sách trên = chưa thiết lập target → ghi "Chưa có target", KHÔNG bịa số.)`
   } catch { return "" }
 }
 
@@ -35,13 +44,22 @@ export async function runScheduledMessage(msg: any): Promise<string> {
 
 ━━━ CHẾ ĐỘ BÁO CÁO TỰ ĐỘNG (BẮT BUỘC TUÂN THỦ) ━━━
 Hôm nay: ${today} (giờ VN). "Tháng trước" / [X]/[YYYY] = tháng dương lịch liền TRƯỚC tháng hiện tại.
-- PHẢI tự gọi executeSQL để lấy SỐ LIỆU THẬT từ gohub_dw rồi ĐIỀN vào một báo cáo HOÀN CHỈNH.
-- TUYỆT ĐỐI KHÔNG trả về hướng dẫn, các bước, mẫu SQL, hay placeholder dạng [x] / [curr_total_rev]. KHÔNG in câu lệnh SQL.
-- Mọi số liệu so sánh (theo kênh, MoM, B2B/B2C...) trình bày bằng BẢNG markdown chuẩn (| Cột | ... | với dòng phân cách |---|).
-- Định dạng tiền: có phân cách hàng nghìn + " VND"; phần trăm làm tròn 1 chữ số (vd 12.3%).
-- Phần target/completion: DÙNG khối "DỮ LIỆU TARGET" cung cấp bên dưới (target_planning KHÔNG có trong gohub_dw).
-- Gộp truy vấn để giảm số lần gọi executeSQL (lý tưởng 1-2 câu). KHÔNG dùng khối \`\`\`chart (Lark không render được).
-- Viết tiếng Việt, chuyên nghiệp, có nhận xét ngắn ở mỗi mục.`
+1. PHẢI tự gọi executeSQL lấy SỐ LIỆU THẬT từ gohub_dw rồi ĐIỀN vào báo cáo HOÀN CHỈNH. KHÔNG trả hướng dẫn/các bước/mẫu SQL/placeholder [x]. KHÔNG in câu lệnh SQL.
+2. ⚠️ ĐÂY LÀ BÁO CÁO TÀI CHÍNH: chỉ được dùng ĐÚNG con số do executeSQL trả về (và khối DỮ LIỆU TARGET). TUYỆT ĐỐI KHÔNG bịa, KHÔNG ước lượng, KHÔNG suy diễn hay tự thay đổi/làm tròn sai số. Nếu một số liệu KHÔNG có dữ liệu → ghi rõ, KHÔNG tự điền số.
+3. VÀO THẲNG báo cáo — KHÔNG lời chào, KHÔNG giới thiệu bản thân (cấm các câu kiểu "Chào bạn", "Gấu Bi-Ai đã hoàn thành...", "Dưới đây là..."). Bắt đầu bằng tiêu đề báo cáo.
+4. Giá trị thiếu phải NHẤT QUÁN trong toàn báo cáo: nếu thực sự bằng 0 → "0 VND"; nếu KHÔNG có dữ liệu/target → ghi "Chưa có dữ liệu" (target thì "Chưa có target"). TUYỆT ĐỐI không dùng lẫn lộn "-", "N/A", "0", "0 VND" cho cùng ý "không có".
+5. Số liệu so sánh (theo kênh, MoM, B2B/B2C...) trình bày bằng BẢNG markdown chuẩn (| Cột | ... | + dòng |---|). TRONG Ô BẢNG chỉ ghi giá trị thuần, KHÔNG bọc **đậm** hay \`code\`.
+6. Định dạng tiền: phân cách hàng nghìn + " VND"; phần trăm làm tròn 1 chữ số (vd 12,3%).
+7. Phần target/completion: DÙNG khối "DỮ LIỆU TARGET" bên dưới (target_planning KHÔNG có trong gohub_dw).
+8. Gộp truy vấn để giảm số lần gọi executeSQL (lý tưởng 1-2 câu). KHÔNG dùng khối \`\`\`chart (Lark không render được).
+9. Tiếng Việt, chuyên nghiệp, nhận xét NGẮN ở mỗi mục (1-2 câu, chỉ dựa trên số thật).
+
+━━━ ĐỊNH NGHĨA CHUẨN (BẮT BUỘC dùng đúng để số liệu nhất quán giữa các lần chạy) ━━━
+- Doanh thu = SUM(fulfilled_revenue_amount_vnd) của fact_fulfillment_revenue; lọc thời gian theo fulfiled_date::date.
+- Lợi nhuận gộp = SUM(gross_profit_vnd). GPM/GPM2 (%) = SUM(gross_profit_vnd) / SUM(fulfilled_revenue_amount_vnd) * 100.
+- Kênh: JOIN dim_order_source s ON f.order_source_code = s.code; B2B = UPPER(s.group_name)='B2B'; B2C = UPPER(s.group_name)='B2C'.
+- Vendor 3HK: JOIN dim_sku d ON f.sku = d.sku; điều kiện REPLACE(UPPER(d.vendor),' ','') = '3HKDATAPOOL'
+  (vendor trong DB có 2 cách ghi '3HKDATAPOOL' và '3HK DATAPOOL' — PHẢI bắt cả hai, nếu không sẽ thiếu phần lớn doanh thu 3HK).`
 
   const systemInstruction = AGENTS["bi-analyst"].systemPrompt + directive + targetCtx
   const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin")

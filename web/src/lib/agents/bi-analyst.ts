@@ -50,6 +50,8 @@ export async function runBIAnalyst(
     model: "gemini-3.5-flash",
     systemInstruction: finalInstruction,
     tools: [{ functionDeclarations: [executeSQLDecl] }],
+    // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
+    generationConfig: { temperature: 0 },
   })
 
   const chat = model.startChat({ history: geminiHistory })
