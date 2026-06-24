@@ -106,6 +106,15 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
   `ILIKE '3HKDATAPOOL'` (no-space) THIẾU phần lớn. Đã sửa cho scheduled (REPLACE bỏ space bắt cả 2). **CÒN BUG chưa
   fix (chờ user OK)**: bod-summary (metric 3HK Contribution / CM1) + planning/targets revenue_3hk vẫn no-space → undercount.
 
+### #3HK Unlimited breakdown — bản HOÀN CHỈNH (3 loại high-speed × throttle)
+- User chốt: 3HK unlimited chỉ có 3 loại: 500MB·5mbps, 500MB·10mbps, 1GB·10mbps.
+- throttle từ datatype SKU (user chốt qua AskUserQuestion): mã mới char8 A=5/B=10; mã cũ **P1=5, P2=10** (bỏ qua text offer
+  dù offer ghi P2='5 mbps'). high-speed từ mô tả gói (offer_name = throttle_speed): 5mbps→500MB; 10mbps→1GB nếu offer
+  ghi "1GB" else 500MB. PY/khác→bỏ.
+- Điều tra giá để đoán 500MB/1GB (user gợi ý) → GIÁ KHÔNG phân biệt được (cogs/day P2-500MB≈26k≈UNLI≈28k, plan ~1.6GB/day)
+  → không dùng giá; mặc định 500MB. "1GB·10mbps" gần như rỗng vì usage data hầu như không gói nào offer ghi "1GB".
+- Code: speedGroupOf+throttleOf; re-add sku→offer map (~1s). build PASS.
+
 ### Verify
 - tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
   Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database, tab 3HK Unlimited breakdown.
