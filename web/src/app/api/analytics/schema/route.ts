@@ -17,15 +17,12 @@ export async function GET() {
   }
 
   try {
+    // Sync TẤT CẢ bảng trong schema 'public' của kho dữ liệu (gohub_dw) — không whitelist cứng nữa
+    // (trước đây giới hạn 8 tên, target_planning không tồn tại nên chỉ ra 7 bảng).
     const rows = await queryAnalytics<{ table_name: string; column_name: string; data_type: string }>(
       `SELECT table_name, column_name, data_type
        FROM information_schema.columns
        WHERE table_schema = 'public'
-         AND table_name IN (
-           'fact_fulfillment_revenue','fact_sales_revenue',
-           'dim_order_source','dim_sku','dim_staff','dim_customer','dim_location',
-           'target_planning'
-         )
        ORDER BY table_name, ordinal_position`
     )
 
@@ -44,7 +41,11 @@ export async function GET() {
       dim_staff:                "Nhân viên sales (code, name)",
       dim_customer:             "Khách hàng (code, name)",
       dim_location:             "Vùng miền (location_id, location_name)",
-      target_planning:          "Kế hoạch target tháng (month YYYY-MM, channel, target_revenue, target_gpm2)",
+      dim_date:                 "Chiều thời gian (date dimension)",
+      fact_data_usage:          "Usage data 3HK theo bundle (iccid, sku, sku_type, total_data_gb, data_amount_gb)",
+      data_usage_log:           "Log usage thô theo ngày (iccid, offer_name, data_gb, report_date) — nguồn fact_data_usage",
+      exchange_rate:            "Tỷ giá ngoại tệ",
+      company:                  "Thông tin công ty / đối tác",
     }
 
     const tables = Object.entries(tableMap).map(([name, fields]) => ({
