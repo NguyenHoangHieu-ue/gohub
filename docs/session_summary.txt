@@ -70,6 +70,15 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
   (ngược offer) + chỉ tách throttle, high-speed để sau = BẢN HIỆN TẠI.
 - ⚠️ Mapping P1/P2 mã cũ ngược với offer_name — khi làm high-speed cần đối chiếu lại với user cho chắc.
 
+### #Schema Config — Sync lấy TẤT CẢ bảng (bỏ whitelist 7 bảng)
+- User: "sync turso thấy >7 bảng, sync hết". Thực tế: /api/analytics/schema (Sync Schema) introspect **gohub_dw**
+  (KHÔNG phải Turso) + whitelist 8 tên cứng; `target_planning` không có trong gohub_dw → chỉ ra 7 bảng.
+- FIX: bỏ `AND table_name IN (...)` → introspect cả `information_schema.columns` public = **12 bảng** (thêm company,
+  data_usage_log, dim_date, exchange_rate, fact_data_usage). Thêm description cho bảng mới; fallback = tên bảng.
+- ⚠️ LÀM RÕ: gohub_dw (12 bảng fact/dim — web BI query) ≠ Turso (13 bảng config intel: ai_conversations/users/
+  channel_costs/app_config/lark_tickets... — KHÔNG có fact data, web KHÔNG query). Sync Turso vào schema config sẽ vô
+  nghĩa (BI không query được Turso). → đã sync đúng gohub_dw. Nếu user muốn catalog Turso riêng = việc khác (cần Turso client).
+
 ### Verify
 - tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
   Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database, tab 3HK Unlimited breakdown.
