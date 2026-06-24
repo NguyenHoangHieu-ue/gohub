@@ -53,9 +53,23 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
 - Khách mới/quay lại = COUNT(DISTINCT customer_code) gohub_dw; sessions/CR từ GA4; leads Chatwoot; spend Turso.
   Mọi count đã có nguồn. Chỉ cần nếu muốn THÊM metric "tổng user đăng ký / MAU" (khác người mua).
 
+### #3HK Breakdown gói Unlimited theo nhóm (high-speed + throttle)
+- Yêu cầu: tab 3HK Data Usage đang gộp tất cả Unlimited; cần tách theo nhóm "500MB highspeed then throttle 5mbps"...
+  Giữ nguyên Daily/Fixed. Throttle 5/10 thì SKU phân biệt được nhưng LƯỢNG high-speed thì không.
+- ĐIỀU TRA: warehouse SKU (vd AS43DUNLIP103D) KHÔNG khớp sku_catalog/skus (0/182) → throttle_speed catalog vô dụng.
+  TÌM RA: **`data_usage_log.offer_name`** (gohub_dw, key=iccid) ghi đầy đủ, vd "AS4 ... 500MB Daily 24h - 03 days -
+  throttle 5 mbps" / "... Daily 24h UNLI - 03 days". Join fact_data_usage.iccid → data_usage_log.iccid.
+- CÁCH LÀM (nhanh + an toàn 10s Netlify): query gom theo SKU (sku→offer_name, ~182 dòng, ~1s, 100% coverage) chạy
+  1 lần on mount (offer là thuộc tính SP, không theo ngày) → map sku→group. Parse JS: high-speed = số + "MB|GB"
+  IN HOA (tránh khớp "mb" trong "mbps"); throttle = "N mbps"; "Unli" = high-speed không giới hạn. Gom skuMetrics
+  (đã lọc Unlimited theo kỳ) theo group CLIENT-SIDE (tránh join data_usage_log mỗi request — bản join-iccid mất 6-12s
+  > 10s Netlify). Bảng mới "Unlimited — Breakdown theo nhóm tốc độ" chỉ hiện khi tab=Unlimited.
+- Nhóm thực tế: 500MB/ngày→5mbps (10k sims), Unlimited high-speed→5/10mbps, 1GB/2GB/ngày..., "Không xác định" nếu
+  thiếu offer. User chốt high-speed là cap THEO NGÀY → nhãn "X/ngày → throttle Y mbps".
+
 ### Verify
-- tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
-  Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database.
+- tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
+  Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database, tab 3HK Unlimited breakdown.
 
 ---
 

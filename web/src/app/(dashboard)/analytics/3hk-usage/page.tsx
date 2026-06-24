@@ -55,10 +55,33 @@ interface SKUTypeMetrics {
   avg_usage_pct: number
 }
 
+// Nhóm tốc độ cho gói Unlimited (suy từ offer_name của data_usage_log: high-speed + throttle).
+interface SpeedGroupMetrics {
+  speed_group: string
+  active_sims: number
+  total_plan_gb: number
+  total_usage_gb: number
+  avg_usage_pct: number
+}
+
+// Phân nhóm Unlimited từ offer_name. high-speed (500MB/1GB/2GB...) lấy theo "MB/GB" IN HOA
+// (tránh khớp nhầm "mb" trong "mbps"); throttle lấy theo "N mbps". "Unli" = high-speed không giới hạn.
+function parseSpeedGroup(offer?: string | null): string {
+  if (!offer) return "Không xác định"
+  const thr = offer.match(/(\d+)\s*mbps/i)
+  const hs  = offer.match(/(\d+)\s*(MB|GB)/)        // chỉ MB/GB IN HOA
+  const throttle = thr ? `throttle ${thr[1]} mbps` : "không throttle"
+  if (hs) return `${hs[1]}${hs[2]}/ngày → ${throttle}`
+  if (/unli/i.test(offer)) return `Unlimited high-speed → ${throttle}`
+  return "Khác"
+}
+
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
   const [skuMetrics, setSkuMetrics] = useState<SKUMetrics[]>([])
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
+  // Map sku -> offer_name (thuộc tính sản phẩm, ổn định theo ngày) → để phân nhóm Unlimited
+  const [skuOfferMap, setSkuOfferMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
   const [loadingType, setLoadingType] = useState(false)
@@ -99,6 +122,28 @@ export default function ThreeHKDataUsagePage() {
     const timer = setTimeout(() => { setDebouncedSearch(searchTerm); setPage(1) }, 500)
     return () => clearTimeout(timer)
   }, [searchTerm])
+
+  // Map sku -> offer_name (1 lần, ~182 dòng, ~1s): offer_name của data_usage_log chứa
+  // lượng high-speed + throttle để breakdown gói Unlimited. Không phụ thuộc khoảng ngày.
+  useEffect(() => {
+    (async () => {
+      try {
+        const sql = `
+          SELECT f.sku, MAX(l.offer_name) AS offer_name
+          FROM fact_data_usage f
+          JOIN dim_sku d ON f.sku = d.sku AND d.vendor = '3HKDATAPOOL'
+          JOIN data_usage_log l ON l.iccid = f.iccid AND l.offer_name IS NOT NULL
+          WHERE f.sku_type ILIKE '%nlimited%'
+          GROUP BY f.sku
+        `
+        const rows = await runQuery(sql)
+        const map: Record<string, string> = {}
+        for (const r of rows) if (r.sku) map[r.sku] = r.offer_name
+        setSkuOfferMap(map)
+      } catch (e) { console.error("Error fetching sku->offer map:", e) }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const loadAllData = async () => {
@@ -158,6 +203,22 @@ export default function ThreeHKDataUsagePage() {
     })
     return items
   }, [skuTypeMetrics, skuTypeSort])
+
+  // Breakdown Unlimited theo nhóm tốc độ — gom skuMetrics (đã lọc Unlimited) theo offer_name.
+  const speedGroups = useMemo<SpeedGroupMetrics[]>(() => {
+    if (activeTab !== "Unlimited") return []
+    const acc: Record<string, SpeedGroupMetrics> = {}
+    for (const sm of skuMetrics) {
+      const group = parseSpeedGroup(skuOfferMap[sm.sku])
+      const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0 })
+      g.active_sims    += sm.active_sims
+      g.total_plan_gb  += sm.total_plan_gb
+      g.total_usage_gb += sm.total_usage_gb
+    }
+    const list = Object.values(acc)
+    for (const g of list) g.avg_usage_pct = g.total_plan_gb > 0 ? (g.total_usage_gb / g.total_plan_gb) * 100 : 0
+    return list.sort((a, b) => b.total_usage_gb - a.total_usage_gb)
+  }, [activeTab, skuMetrics, skuOfferMap])
 
   const searchClause = () => debouncedSearch ? `
     AND (
@@ -508,6 +569,66 @@ export default function ThreeHKDataUsagePage() {
           </table>
         </div>
       </div>
+
+      {/* Unlimited Breakdown theo nhóm tốc độ (high-speed + throttle) — chỉ tab Unlimited */}
+      {activeTab === "Unlimited" && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+              Unlimited — Breakdown theo nhóm tốc độ (high-speed + throttle)
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">Phân nhóm theo offer (vd 500MB/ngày → throttle 5 mbps). Lượng high-speed lấy từ thông tin sản phẩm (offer_name).</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nhóm tốc độ</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loadingSKU ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse"><td colSpan={6} className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-full"></div></td></tr>
+                  ))
+                ) : speedGroups.length > 0 ? (
+                  speedGroups.map((sg, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3 font-bold text-slate-900 text-sm">
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">{sg.speed_group}</span>
+                      </td>
+                      <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{sg.active_sims.toLocaleString()}</td>
+                      <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
+                      <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sg.total_usage_gb)}</td>
+                      <td className="px-6 py-3 text-right">
+                        <span className={cn("text-sm font-bold", sg.avg_usage_pct > 80 ? "text-rose-600" : sg.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
+                          {sg.avg_usage_pct.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-20 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                            <div className={cn("h-1.5 rounded-full", sg.avg_usage_pct > 80 ? "bg-rose-500" : sg.avg_usage_pct > 50 ? "bg-amber-500" : "bg-emerald-500")}
+                              style={{ width: `${Math.min(100, sg.avg_usage_pct)}%` }} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={6} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu nhóm Unlimited trong kỳ này</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* SKU Performance Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
