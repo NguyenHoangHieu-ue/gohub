@@ -2,23 +2,11 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
 // role_permissions = { [role]: analyticsPageId[] } — ma trận Role × trang Analytics (y hệt gohub-intel).
-// Là quyền NỀN theo role (deny-by-default cho staff/bod); per-user allowed_analytics cộng dồn thêm.
-// admin/manager luôn toàn quyền (không lưu ở đây).
-
-// 18 trang analytics (khớp ANALYTICS_REPORTS ở admin + ANALYTICS_GROUPS ở sidebar)
-const ALL_ANALYTICS_IDS = [
-  "dashboard", "bod", "all-time", "channels", "b2b", "b2c", "website",
-  "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
-  "cs-troubleshoot", "feedback", "products", "targets", "sql",
-]
-
-// Mặc định nếu chưa cấu hình (giống intel: bod thấy hết, staff tối thiểu)
-const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  bod:   ALL_ANALYTICS_IDS,
-  staff: ["dashboard", "feedback", "products"],
-}
+// Là quyền NỀN theo role (deny-by-default); per-user allowed_analytics cộng dồn thêm.
+// admin luôn toàn quyền (không lưu ở đây). Defaults ở @/lib/analytics-roles.
 
 export async function GET() {
   const session = await getServerSession(authOptions)

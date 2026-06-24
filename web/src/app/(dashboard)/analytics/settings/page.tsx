@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
 // 3 mục: Partner Tiers (đối tác chiến lược) · Access Policy (Guardian) · Role Filters (lọc dòng BI theo role).
@@ -19,7 +20,7 @@ const CATEGORIES: { id: string; label: string }[] = [
   { id: "system_internal", label: "Nội bộ hệ thống" },
   { id: "general", label: "Chung / Chào hỏi" },
 ]
-const POLICY_ROLES = ["bod", "staff"] as const
+const POLICY_ROLES = CONFIGURABLE_ROLES
 type Decision = "allow" | "deny" | "dept"
 const NEXT_DECISION: Record<Decision, Decision> = { allow: "deny", deny: "dept", dept: "allow" }
 const DECISION_STYLE: Record<Decision, string> = {
@@ -32,7 +33,14 @@ const DEFAULT_POLICY: Record<string, Record<string, Decision>> = {
   customer_pii: { bod: "allow", staff: "deny" }, internal_kb_other_dept: { bod: "allow", staff: "dept" },
   system_internal: { bod: "deny", staff: "deny" }, general: { bod: "allow", staff: "allow" },
 }
-const FILTER_ROLES = ["bod", "staff"] as const
+// Điền mặc định cho các role phòng/nhân viên = giống "staff" (hr ngoại lệ: staff_hr = allow). Khớp guardian.ts.
+const DEPT_ROLES = ["b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"]
+for (const cat of Object.keys(DEFAULT_POLICY)) {
+  const base = DEFAULT_POLICY[cat].staff
+  for (const r of DEPT_ROLES) DEFAULT_POLICY[cat][r] = base
+  if (cat === "staff_hr") DEFAULT_POLICY[cat].hr = "allow"
+}
+const FILTER_ROLES = CONFIGURABLE_ROLES
 
 export default function SettingsPage() {
   const { data: session, status } = useSession()
@@ -52,8 +60,19 @@ function AnalyticsSettings() {
   const [availablePartners, setAvailablePartners] = useState<string[]>([])
   const [expandedTiers, setExpandedTiers] = useState<Record<string, boolean>>({})
   const [addingTier, setAddingTier] = useState<string | null>(null)
+  const [db, setDb] = useState<any>(null)
+  const [dbLoading, setDbLoading] = useState(false)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  const checkDb = async () => {
+    setDbLoading(true)
+    try {
+      const r = await fetch("/api/analytics/db-status")
+      setDb(r.ok ? await r.json() : { error: "Không tải được tình trạng database" })
+    } catch { setDb({ error: "Lỗi kết nối" }) } finally { setDbLoading(false) }
+  }
+  const fmtTime = (s?: string | null) => s ? new Date(s).toLocaleString("vi-VN") : "—"
 
   const fetchAll = async () => {
     setLoading(true)
@@ -117,6 +136,48 @@ function AnalyticsSettings() {
       </div>
 
       {msg && <div className={cn("px-4 py-3 rounded-xl text-sm font-medium", msg.ok ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-rose-50 border border-rose-100 text-rose-700")}>{msg.text}</div>}
+
+      {/* Database Status — kiểm tra nhanh kho dữ liệu còn cập nhật không */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2"><Database className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
+          <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}Kiểm tra
+          </button>
+        </div>
+        {db && (
+          <div className="p-6 text-sm">
+            {db.error ? <p className="text-rose-600">{db.error}</p> : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400">Kiểm tra lúc {fmtTime(db.checkedAt)}</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {(db.warehouse || []).map((w: any) => (
+                    <div key={w.table} className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
+                      <p className="font-bold text-slate-700 text-xs truncate" title={w.table}>{w.table}</p>
+                      {w.error ? <p className="text-rose-500 text-xs mt-1">{w.error}</p> : (
+                        <>
+                          <p className="text-slate-500 text-xs mt-1">{w.rows.toLocaleString("vi-VN")} dòng</p>
+                          <p className="text-slate-500 text-xs">Dữ liệu mới nhất: <span className="font-medium text-slate-700">{w.latest ? w.latest.slice(0, 10) : "—"}</span></p>
+                          {w.lastLoaded && <p className="text-slate-400 text-[11px]">ETL nạp: {fmtTime(w.lastLoaded)}</p>}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {db.products && (
+                  <div className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
+                    <p className="font-bold text-slate-700 text-xs">Sản phẩm (Supabase sku_catalog)</p>
+                    {db.products.error ? <p className="text-rose-500 text-xs mt-1">{db.products.error}</p> : (
+                      <p className="text-slate-500 text-xs mt-1">{(db.products.rows || 0).toLocaleString("vi-VN")} SKU · sync cuối: <span className="font-medium text-slate-700">{fmtTime(db.products.lastSynced)}</span></p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {!db && <div className="px-6 py-4 text-xs text-slate-400">Bấm “Kiểm tra” để xem kho dữ liệu (gohub_dw) còn cập nhật không và lần sync sản phẩm gần nhất.</div>}
+      </div>
 
       {/* Partner Tiers */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -186,7 +247,7 @@ function AnalyticsSettings() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Loại câu hỏi</th>{POLICY_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
+            <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Loại câu hỏi</th>{POLICY_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{ROLE_LABELS[r] ?? r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
             <tbody className="divide-y divide-slate-50">
               {CATEGORIES.map(cat => (
                 <tr key={cat.id} className="hover:bg-slate-50/50">
@@ -216,7 +277,7 @@ function AnalyticsSettings() {
         <div className="p-6 space-y-4">
           {FILTER_ROLES.map(role => (
             <div key={role}>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {role}</label>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {ROLE_LABELS[role] ?? role}</label>
               <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
             </div>
           ))}

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, ChevronDown, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
+import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { ConfirmModal } from "@/components/confirm-modal"
 
 interface User {
@@ -298,9 +299,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               <div>
                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vai trò (Role)</label>
                 <select value={role} onChange={e => setRole(e.target.value)} className={`mt-1.5 ${selectCls}`}>
-                  <option value="bod">BOD</option>
-                  <option value="staff">Staff</option>
-                  <option value="admin">Admin</option>
+                  {ALL_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
                 </select>
               </div>
               <div>
@@ -442,9 +441,7 @@ function AddUser({ onRefresh, onNotify, setTab }: {
             onChange={e => set("role", e.target.value)}
             className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
-            <option value="bod">BOD</option>
-            <option value="staff">Staff</option>
-            <option value="admin">Admin</option>
+            {ALL_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
           </select>
         </div>
         <Field label="Password"        value={form.password}  onChange={v => set("password", v)} type="password" placeholder="••••••••" />
@@ -856,10 +853,7 @@ function B2CKpiSection({ onNotify }: { onNotify: (type: "success" | "error", tex
 // Giới hạn dữ liệu theo vai trò cho BI Analyst — inject "DATA ACCESS RESTRICTION" vào prompt.
 // admin = toàn quyền (không cần nhập). Để trống = không giới hạn role đó.
 function RoleFiltersSection({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
-  const ROLES: { key: string; label: string }[] = [
-    { key: "bod",      label: "BOD" },
-    { key: "staff",    label: "Staff" },
-  ]
+  const ROLES: { key: string; label: string }[] = CONFIGURABLE_ROLES.map(r => ({ key: r, label: ROLE_LABELS[r] ?? r }))
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
@@ -936,10 +930,7 @@ function AccessPolicySection({ onNotify }: { onNotify: (type: "success" | "error
     { key: "system_internal",        label: "Nội bộ hệ thống" },
     { key: "general",                label: "Chung / Chào hỏi" },
   ]
-  const ROLES: { key: string; label: string }[] = [
-    { key: "bod",      label: "BOD" },
-    { key: "staff",    label: "Staff" },
-  ]
+  const ROLES: { key: string; label: string }[] = CONFIGURABLE_ROLES.map(r => ({ key: r, label: ROLE_LABELS[r] ?? r }))
   // Khớp DEFAULT_POLICY trong guardian.ts (để admin thấy mặc định khi chưa cấu hình)
   const DEFAULTS: Record<string, Record<string, Decision>> = {
     product_catalog:        { bod: "allow", staff: "allow" },
@@ -950,6 +941,12 @@ function AccessPolicySection({ onNotify }: { onNotify: (type: "success" | "error
     internal_kb_other_dept: { bod: "allow", staff: "dept"  },
     system_internal:        { bod: "deny",  staff: "deny"  },
     general:                { bod: "allow", staff: "allow" },
+  }
+  // Điền mặc định role phòng/nhân viên = giống "staff" (hr ngoại lệ: staff_hr = allow). Khớp guardian.ts.
+  for (const cat of Object.keys(DEFAULTS)) {
+    const base = DEFAULTS[cat].staff
+    for (const r of ["b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"]) DEFAULTS[cat][r] = base
+    if (cat === "staff_hr") DEFAULTS[cat].hr = "allow"
   }
 
   const [policy, setPolicy] = useState<Record<string, Record<string, Decision>>>(DEFAULTS)
@@ -2558,7 +2555,7 @@ const PERM_FEATURES = [
   { key: "perm_ncc_import",   icon: BookOpen,        label: "NCC — Import dữ liệu",   desc: "Ai có thể upload file NCC để cập nhật giá" },
 ] as const
 
-const PERM_ROLES = ["staff"] as const
+const PERM_ROLES = CONFIGURABLE_ROLES
 
 const PERM_DEFAULTS: Record<string, string[]> = {
   perm_kb_upload:    [],
@@ -2690,7 +2687,7 @@ function PermissionsTab({ onNotify }: { onNotify: (type:"success"|"error", text:
 }
 
 // Quyền nền Analytics theo role (Role × Báo cáo). admin/manager luôn toàn quyền nên không liệt kê.
-const ROLE_PERM_ROLES = ["bod", "staff"] as const
+const ROLE_PERM_ROLES = CONFIGURABLE_ROLES
 
 function RolePermissionsMatrix({ onNotify }: { onNotify: (type: "success" | "error", text: string) => void }) {
   const [matrix,  setMatrix]  = useState<Record<string, Set<string>>>({})

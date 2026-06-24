@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse }  from "next/server"
-import { waitUntil }                  from "@vercel/functions"
 import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { getRefCache }               from "@/lib/agents/cache"
@@ -57,6 +56,21 @@ function saveLarkMessage(openId: string, threadId: string, role: "user" | "assis
     .insert({ lark_open_id: openId, thread_id: threadId, role, content }) as any)
     .then(() => {})
     .catch((e: any) => console.error("[Lark] saveLarkMessage failed:", e?.message))
+}
+
+// Dedup: Lark gửi lại CÙNG event (cùng event_id) khi không nhận 200 đủ nhanh. Vì giờ xử lý
+// ĐỒNG BỘ (~vài giây) nên có thể chạm ngưỡng chờ của Lark → chống xử lý 2 lần ở đây.
+// Dùng luôn bảng app_settings (key unique) để atomic, không cần migration.
+async function alreadyHandled(eventId: string): Promise<boolean> {
+  if (!eventId) return false
+  const { error } = await (supabaseAdmin
+    .from("app_settings")
+    .insert({ key: `larkevt:${eventId}`, value: "1", category: "lark_dedup" }) as any)
+  if (error) {
+    if ((error as any).code === "23505") return true   // unique_violation → đã xử lý rồi
+    console.error("[Lark] dedup insert error:", error.message)  // lỗi khác → cứ xử lý tiếp
+  }
+  return false
 }
 
 // Look up user role by lark_open_id
@@ -133,11 +147,9 @@ export async function POST(req: NextRequest) {
   // Bot được add vào group → gửi welcome để kích hoạt subscription
   if (eventType === "im.chat.member.bot.added_v1" && event?.chat_id) {
     console.log("[Lark] bot added to group:", event.chat_id)
-    waitUntil(
-      sendLarkMessage(event.chat_id, "chat_id",
-        `👋 Xin chào! Tôi là ${process.env.LARK_BOT_NAME ?? "Bot GoHub"}.\n@mention tôi trong group để đặt câu hỏi về sản phẩm SIM/eSIM.`
-      ).catch((e: any) => console.error("[Lark] welcome msg failed:", e?.message))
-    )
+    await sendLarkMessage(event.chat_id, "chat_id",
+      `👋 Xin chào! Tôi là ${process.env.LARK_BOT_NAME ?? "Bot GoHub"}.\n@mention tôi trong group để đặt câu hỏi về sản phẩm SIM/eSIM.`
+    ).catch((e: any) => console.error("[Lark] welcome msg failed:", e?.message))
     return NextResponse.json({ ok: true })
   }
 
@@ -268,8 +280,17 @@ export async function POST(req: NextRequest) {
   console.log("[Lark] processing | chatType:", chatType, "| isInThread:", isInThread,
     "| msgType:", msgType, "| text:", userText.slice(0, 60))
 
-  // Respond 200 ngay, giữ function sống để processAndReply hoàn thành
-  waitUntil(processAndReply(openId, chatId, messageId, threadId, userText))
+  // Chống xử lý trùng (Lark retry khi chờ lâu)
+  const eventId = (body.header?.event_id as string) || messageId
+  if (await alreadyHandled(eventId)) {
+    console.log("[Lark] duplicate event → skip:", eventId)
+    return NextResponse.json({ ok: true })
+  }
+
+  // ⚠️ Netlify (Free) KHÔNG hỗ trợ waitUntil/background cho App Router route handler:
+  // fire-and-forget sẽ bị đóng băng sau khi trả response → reply không bao giờ gửi (hoặc
+  // gửi rất trễ khi container thaw). Vì vậy phải xử lý ĐỒNG BỘ rồi mới trả 200.
+  await processAndReply(openId, chatId, messageId, threadId, userText)
   return NextResponse.json({ ok: true })
 }
 

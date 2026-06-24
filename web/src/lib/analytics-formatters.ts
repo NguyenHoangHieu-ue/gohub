@@ -61,9 +61,9 @@ export function formatTruncatedString(value: string | null | undefined, maxLen =
 
 export function getDefaultDateRange(): { startDate: string; endDate: string } {
   const today = new Date()
-  // Mặc định: đầu tháng -> hôm qua (T-1, tránh sync trễ). Ngày 1 -> tự lùi nguyên tháng trước.
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  // Mặc định: ngày 1 của tháng hiện tại -> hôm nay.
+  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  const end = today
   return {
     startDate: formatDateToISO(start),
     endDate:   formatDateToISO(end),

@@ -8,6 +8,8 @@ import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, Chev
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
+import { ROLE_LABELS }        from "@/lib/agents/types"
 
 // Tabs luôn hiển thị ở trên
 const NAV_MAIN = [
@@ -50,7 +52,7 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/channels",  label: "Channels",   icon: Globe2     },
       { href: "/analytics/b2b",       label: "B2B",        icon: Building2  },
       { href: "/analytics/b2c",       label: "B2C",        icon: ShoppingBag },
-      { href: "/analytics/website",   label: "Website (GA4)", icon: Globe   },
+      { href: "/analytics/website",   label: "Website Analytics", icon: Globe   },
       { href: "/analytics/staff",     label: "Staff",      icon: Users      },
       { href: "/analytics/customers", label: "Customers",  icon: Users      },
       { href: "/analytics/vendors",   label: "Vendors",    icon: TrendingUp },
@@ -76,9 +78,6 @@ const ANALYTICS_GROUPS = [
   },
 ]
 
-// Flat list for collapsed mode
-const ANALYTICS_NAV_FLAT = ANALYTICS_GROUPS.flatMap(g => g.items)
-
 // Nhóm Management — CHỈ admin (port intel: users/schema/scheduled/settings là admin-only).
 // KHÔNG đưa vào role matrix / ANALYTICS_DEFAULTS (bod/staff không thấy). Layout vẫn cho admin bypass.
 const MANAGEMENT_GROUP = {
@@ -103,10 +102,7 @@ function analyticsId(item: { href: string }) {
 }
 
 // Fallback quyền nền theo role khi chưa tải được /api/config/role-permissions (khớp default API)
-const ANALYTICS_DEFAULTS: Record<string, string[]> = {
-  bod:   ANALYTICS_NAV_FLAT.map(analyticsId),
-  staff: ["dashboard", "feedback", "products"],
-}
+const ANALYTICS_DEFAULTS = DEFAULT_ROLE_PERMISSIONS
 
 // Ma trận Role × Báo cáo (y hệt gohub-intel) — quyền nền analytics theo role
 function useRolePermissions() {
@@ -176,11 +172,7 @@ function roleBadgeClass(role: string) {
 }
 
 function roleLabel(role: string) {
-  if (role === "admin")   return "Admin"
-  if (role === "manager") return "Manager"
-  if (role === "bod")     return "BOD"
-  if (role === "staff")   return "Staff"
-  return "Standard"
+  return ROLE_LABELS[role] ?? role
 }
 
 // Một hàng link trong sidebar (dùng chung cho cả 3 nhóm). accent: brand (PM) / blue (Analyst).

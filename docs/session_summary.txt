@@ -1,10 +1,63 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-23 (session 74 tiếp 6 — preset date range 15 trang + b2b/settings dropdown + fix auth code;
-   ⚠️ DEPLOY NETLIFY VẪN KẸT: providers còn placeholder, fix chưa lên live — chờ user check Deploys/đổi NEXTAUTH_URL)
+Cập nhật lần cuối: 2026-06-24 (session 75 — fix Lark bot trễ/không trả lời [bỏ waitUntil→đồng bộ+dedup],
+   fix tab Website Analytics, date mặc định→hôm nay, roles đầy đủ 9 vai trò, nút Kiểm tra Database;
+   ✅ DEPLOY NETLIFY ĐÃ THÔNG, login/logout OK)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
    — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
    + đánh dấu ✅ HOÀN THÀNH ngay trong file đó.
+
+## Session 75 (2026-06-24) — Fix Lark bot (Netlify waitUntil), Website tab, default date, roles đầy đủ, DB status
+
+User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ THÔNG (providers hết placeholder).
+
+### #2 Lark bot trả lời rất trễ (5-10 phút) hoặc không trả lời — ROOT CAUSE + FIX
+- ROOT CAUSE: route.ts dùng `waitUntil` của `@vercel/functions` → KHÔNG hoạt động trên Netlify (App Router).
+  Netlify chỉ hỗ trợ `next/after` (Next 15) — app đang Next 14.2.35 (không có unstable_after). Free plan = hard
+  10s sync, không có waitUntil → fire-and-forget bị đóng băng sau response, reply không gửi (hoặc gửi khi thaw 5-10p).
+- FIX (web/src/app/api/lark/events/route.ts): BỎ waitUntil → xử lý ĐỒNG BỘ (await processAndReply) rồi trả 200.
+  + Chống trùng: alreadyHandled(eventId) insert app_settings key=`larkevt:<event_id>` (unique 23505=đã xử lý → bỏ
+  qua Lark retry). Welcome bot.added cũng await. → câu hỏi thường (~5s) giờ trả lời ổn định trong vài giây.
+  ⚠️ GIỚI HẠN: query BI rất lâu (>10s) có thể bị Netlify Free cắt (hiếm trong group). Muốn chắc cho BI dài → cần
+  Netlify background function (esbuild bundle, rủi ro deploy mù) hoặc plan trả phí — để sau nếu user thấy cần.
+- Multi-group: KHÔNG cần sửa code (handler stateless theo chat_id/thread_id; subscription theo app; Netlify tự scale).
+
+### #3 Tab Website lỗi khi click + đổi tên → "Website Analytics"
+- BUG: /api/config/ga4 trả `{sites:[...]}` nhưng code `setSites(data)` rồi `sites.map` → crash. FIX:
+  `list = Array.isArray(data) ? data : (data?.sites ?? [])`. + sidebar label "Website (GA4)" → "Website Analytics".
+
+### #4(date) Mặc định date range → "ngày 1 tháng này → HÔM NAY" (trước → hôm qua T-1)
+- getDefaultDateRange: shared analytics-formatters.ts + 12 bản inline (PowerShell replace) → start=ngày 1 tháng
+  hiện tại, end=today. GIỮ NGUYÊN getPresetRange (preset Tuần/Tháng/Quý/Năm).
+
+### #8/#7 ROLES đầy đủ theo intel: admin/bod/staff + b2b/b2c/saleb2c/ops-&-cs/hr/product
+- intel = dynamic role + ma trận role→reports. Web hardcode 3 role ở ~9 nơi → mở rộng:
+  · types.ts: UserRole union 9 + export ALL_ROLES/CONFIGURABLE_ROLES/ROLE_LABELS.
+  · MỚI lib/analytics-roles.ts: ALL_ANALYTICS_IDS + DEFAULT_ROLE_PERMISSIONS (defaults cho 6 role mới) — dùng chung
+    layout + /api/config/role-permissions + sidebar (hết drift).
+  · 4 API gate (ga4/gsc/query/health): Set 9 role. guardian.ts DEFAULT_POLICY: 6 role mới = giống staff (hr ngoại
+    lệ staff_hr=allow). users/settings/admin page: dropdown + ma trận + policy = ALL_ROLES/CONFIGURABLE_ROLES.
+  · admin users API không whitelist role → gán role mới được ngay.
+
+### #5 Settings: nút "Kiểm tra Database" (gọn) + MỚI /api/analytics/db-status (admin)
+- db-status: max date + row count fact_sales/fulfillment/data_usage (gohub_dw) + etl_updated_at/loaded_at +
+  sku_catalog count + synced_at (Supabase). Card gọn đầu trang Settings.
+
+### #4(điều tra sync) — KẾT LUẬN: KHÔNG cần sync Turso→Supabase
+- Web analytics đọc **gohub_dw (Postgres GCP 34.61.204.98)**, KHÔNG phải Supabase/Turso.
+- Probe gohub_dw FRESH (fulfillment tới HÔM NAY 24/6, sales 23/6) = đang nạp sống. Probe Turso: KHÔNG có bảng fact
+  (chỉ config partner_tiers/ga4). → sync Turso→Supabase cho analytics VÔ NGHĨA. Sync sản phẩm API→Supabase ĐÃ chạy
+  hàng ngày (GitHub Actions sync.yml 01:00 + data_sync 02:00 UTC). Đủ.
+
+### #6 Có cần API user-count B2C? → HIỆN TẠI KHÔNG
+- Khách mới/quay lại = COUNT(DISTINCT customer_code) gohub_dw; sessions/CR từ GA4; leads Chatwoot; spend Turso.
+  Mọi count đã có nguồn. Chỉ cần nếu muốn THÊM metric "tổng user đăng ký / MAU" (khác người mua).
+
+### Verify
+- tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
+  Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database.
+
+---
 
 ## Session 74 (2026-06-23) — Đổi term GP2/GPM2 → CM1 (new_info.txt) + quy tắc check new_info
 

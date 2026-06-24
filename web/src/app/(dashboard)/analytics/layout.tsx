@@ -3,19 +3,7 @@ import { authOptions }      from "@/lib/auth"
 import { redirect }         from "next/navigation"
 import { headers }          from "next/headers"
 import { supabaseAdmin }    from "@/lib/supabase"
-
-// 18 trang analytics (khớp role-permissions API + ANALYTICS_GROUPS ở sidebar)
-const ALL_ANALYTICS_IDS = [
-  "dashboard", "bod", "all-time", "channels", "b2b", "b2c", "website",
-  "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
-  "cs-troubleshoot", "feedback", "products", "targets", "sql",
-]
-
-// Quyền nền mặc định khi chưa cấu hình (khớp DEFAULT_ROLE_PERMISSIONS ở /api/config/role-permissions)
-const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  bod:   ALL_ANALYTICS_IDS,
-  staff: ["dashboard", "feedback", "products"],
-}
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
 // /analytics → "dashboard"; /analytics/bod → "bod"
 function pathToAnalyticsId(pathname: string): string {

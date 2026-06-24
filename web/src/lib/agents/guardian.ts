@@ -35,15 +35,21 @@ export interface GuardResult {
 
 // ─── Policy mặc định (role × category) ──────────────────────────────────────────
 // "dept" = chỉ cho phép khi câu hỏi thuộc đúng phòng ban của user (hoặc dept="all").
+// Các role cấp phòng/nhân viên (b2b/b2c/saleb2c/ops-&-cs/hr/product) mặc định = hồ sơ giống "staff".
+// Ngoại lệ: hr được phép staff_hr (đúng chức năng). admin có thể chỉnh trong Settings.
+const DEPT_DENY  = { b2b: "deny"  as Decision, b2c: "deny"  as Decision, saleb2c: "deny"  as Decision, "ops-&-cs": "deny"  as Decision, hr: "deny"  as Decision, product: "deny"  as Decision }
+const DEPT_ALLOW = { b2b: "allow" as Decision, b2c: "allow" as Decision, saleb2c: "allow" as Decision, "ops-&-cs": "allow" as Decision, hr: "allow" as Decision, product: "allow" as Decision }
+const DEPT_DEPT  = { b2b: "dept"  as Decision, b2c: "dept"  as Decision, saleb2c: "dept"  as Decision, "ops-&-cs": "dept"  as Decision, hr: "dept"  as Decision, product: "dept"  as Decision }
+
 const DEFAULT_POLICY: Record<GuardCategory, Record<string, Decision>> = {
-  product_catalog:        { admin: "allow", bod: "allow", staff: "allow" },
-  revenue_bi:             { admin: "allow", bod: "allow", staff: "allow" },
-  margin_cogs:            { admin: "allow", bod: "allow", staff: "deny"  },
-  staff_hr:               { admin: "allow", bod: "allow", staff: "deny"  },
-  customer_pii:           { admin: "allow", bod: "allow", staff: "deny"  },
-  internal_kb_other_dept: { admin: "allow", bod: "allow", staff: "dept"  },
-  system_internal:        { admin: "allow", bod: "deny",  staff: "deny"  },
-  general:                { admin: "allow", bod: "allow", staff: "allow" },
+  product_catalog:        { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  revenue_bi:             { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  margin_cogs:            { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
+  staff_hr:               { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY, hr: "allow" },
+  customer_pii:           { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
+  internal_kb_other_dept: { admin: "allow", bod: "allow", staff: "dept",  ...DEPT_DEPT  },
+  system_internal:        { admin: "allow", bod: "deny",  staff: "deny",  ...DEPT_DENY  },
+  general:                { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
 }
 
 export const GUARD_CATEGORIES: GuardCategory[] = [

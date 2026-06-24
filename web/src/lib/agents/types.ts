@@ -1,5 +1,19 @@
 export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gap-analysis' | 'tao-template' | 'bi-analyst'
-export type UserRole = 'admin' | 'bod' | 'staff'
+
+// Vai trò người dùng — đầy đủ theo gohub-intel (admin = toàn quyền; còn lại gate theo ma trận quyền).
+export type UserRole =
+  | 'admin' | 'bod' | 'staff'
+  | 'b2b' | 'b2c' | 'saleb2c' | 'ops-&-cs' | 'hr' | 'product'
+
+// Roles cấu hình được trong ma trận quyền (admin bypass nên không liệt kê)
+export const CONFIGURABLE_ROLES = ['bod', 'staff', 'b2b', 'b2c', 'saleb2c', 'ops-&-cs', 'hr', 'product'] as const
+// Tất cả role (cho dropdown chọn role + gate API)
+export const ALL_ROLES = ['admin', 'bod', 'staff', 'b2b', 'b2c', 'saleb2c', 'ops-&-cs', 'hr', 'product'] as const
+// Nhãn hiển thị
+export const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin', bod: 'BOD', staff: 'Staff',
+  b2b: 'B2B', b2c: 'B2C', saleb2c: 'Sale B2C', 'ops-&-cs': 'Ops & CS', hr: 'HR', product: 'Product',
+}
 
 export interface Message {
   role: 'user' | 'assistant'

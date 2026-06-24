@@ -19,9 +19,9 @@ import { DatePresets } from "@/components/date-presets"
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  // Mac dinh: dau thang -> hom qua (T-1, tranh sync tre). Ngay 1 -> tu lui nguyen thang truoc.
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  // Mac dinh: ngay 1 thang hien tai -> hom nay.
+  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  const end = today
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
@@ -93,12 +93,16 @@ export default function WebsiteAnalyticsPage() {
       const res = await fetch("/api/config/ga4")
       if (res.ok) {
         const data = await res.json()
-        setSites(data)
-        if (data.length > 0) {
-          setSelectedSiteId(data[0].id)
+        // /api/config/ga4 trả { sites: [...] } (không phải mảng trực tiếp) → tránh sites.map crash
+        const list = Array.isArray(data) ? data : (data?.sites ?? [])
+        setSites(list)
+        if (list.length > 0) {
+          setSelectedSiteId(list[0].id)
         } else {
           setLoading(false)
         }
+      } else {
+        setLoading(false)
       }
     } catch (err) {
       console.error("Error fetching GA sites:", err)

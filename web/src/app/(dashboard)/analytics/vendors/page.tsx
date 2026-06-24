@@ -19,9 +19,9 @@ import { DatePresets } from "@/components/date-presets"
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  // Mac dinh: dau thang -> hom qua (T-1, tranh sync tre). Ngay 1 -> tu lui nguyen thang truoc.
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  const start = new Date(end.getFullYear(), end.getMonth(), 1)
+  // Mac dinh: ngay 1 thang hien tai -> hom nay.
+  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  const end = today
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]

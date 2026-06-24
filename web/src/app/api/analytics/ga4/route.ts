@@ -6,7 +6,7 @@ import { runGA4Report } from "@/lib/ga4"
 // Generic GA4 report endpoint (port "y hệt" gohub-intel /api/analytics/ga4).
 // Params: siteId, startDate, endDate, dimensions (csv, mặc định date), metrics (csv, bắt buộc), limit.
 // Trả raw GA4 report ({ rows: [{ dimensionValues, metricValues }], rowCount }) — khớp cách intel component đọc.
-const ANALYTICS_ROLES = new Set(["admin", "bod", "staff"])
+const ANALYTICS_ROLES = new Set(["admin", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)

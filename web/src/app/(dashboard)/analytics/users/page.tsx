@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
 // Quản lý người dùng & phân quyền — UI theo gohub-intel UserManagement, backend web (Supabase users + app_settings).
 // Mô hình phân quyền y hệt intel: role baseline (ma trận role×report) ∪ per-user allowedReports (cộng dồn, deny-by-default).
@@ -17,8 +18,8 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
 ]
-const ROLES = ["admin", "bod", "staff"] as const
-const MATRIX_ROLES = ["bod", "staff"] as const
+const ROLES = ALL_ROLES
+const MATRIX_ROLES = CONFIGURABLE_ROLES
 
 interface User { username: string; name: string; email: string; role: string; department: string; allowed_analytics: string | null }
 
@@ -130,7 +131,7 @@ function UserManagement() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Report</th>{MATRIX_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
+            <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Report</th>{MATRIX_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{ROLE_LABELS[r] ?? r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
             <tbody className="divide-y divide-slate-50">
               {REPORTS.map(rep => (
                 <tr key={rep.id} className="hover:bg-slate-50/50">
@@ -170,7 +171,7 @@ function UserManagement() {
                   </div>
                   <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider", roleBadge(u.role))}>{u.role}</span>
                   <select value={u.role} onChange={e => updateUser(u.username, { role: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
                   </select>
                   {u.role !== "admin" && (
                     <button onClick={() => setExpanded(isExpanded ? null : u.username)} className="flex items-center gap-1 text-xs font-bold text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50">
