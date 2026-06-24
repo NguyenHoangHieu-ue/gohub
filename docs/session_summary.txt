@@ -95,6 +95,17 @@ User giao 9 việc (login/logout đã OK). Full autonomy. Deploy Netlify ĐÃ TH
   26.5%, 3HK contribution 53.6% — có bảng markdown (→ Lark table). Đúng yêu cầu.
 - ⚠️ BI nhiều vòng có thể >10s (Netlify Free) → nút Test/cron có thể timeout; logic ĐÚNG, nếu cần chắc → background function.
 
+### #Scheduled Messages — tinh chỉnh theo feedback (4 ý)
+1. Ô bảng Lark hiện **đậm** literal → `markdownToLarkElements` strip **/*/`code` trong cell.
+2. Điền thiếu/không nhất quán (target tháng 4 "-", T5 "0VND", T6 "N/A") → inject target 6 THÁNG (trước chỉ 1) +
+   directive: giá trị thiếu NHẤT QUÁN "Chưa có target"/"Chưa có dữ liệu", cấm lẫn -/N/A/0.
+3. Câu chào thừa ("Chào bạn", "Gấu Bi-Ai đã...") → directive cấm lời chào/giới thiệu, VÀO THẲNG báo cáo.
+4. Báo cáo TÀI CHÍNH phải bám số: **temperature=0** trong runBIAnalyst (lib/agents/bi-analyst.ts) + ĐỊNH NGHĨA CHUẨN
+   trong directive (doanh thu/GPM2/B2B-B2C/3HK). Test: 3HK May = 4.052.711.628 VND khớp tuyệt đối giá trị thật.
+- ⚠️⚠️ PHÁT HIỆN: `dim_sku.vendor` 3HK có 2 cách ghi '3HKDATAPOOL'(1675) + '3HK DATAPOOL'(4515, phần lớn). Match
+  `ILIKE '3HKDATAPOOL'` (no-space) THIẾU phần lớn. Đã sửa cho scheduled (REPLACE bỏ space bắt cả 2). **CÒN BUG chưa
+  fix (chờ user OK)**: bod-summary (metric 3HK Contribution / CM1) + planning/targets revenue_3hk vẫn no-space → undercount.
+
 ### Verify
 - tsc PASS. next build PASS (exit 0, NODE_OPTIONS=6144, 137 trang). ⚠️ Live verify sau deploy: Lark trả nhanh, Website
   Analytics mở OK, date mặc định tới hôm nay, gán role mới + matrix, nút Kiểm tra Database, tab 3HK Unlimited breakdown.
