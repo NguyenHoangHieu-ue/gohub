@@ -107,6 +107,14 @@ async function loadPolicy(): Promise<Record<string, Record<string, Decision>>> {
 // Cho phép API POST xoá cache ngay sau khi lưu policy mới
 export function invalidatePolicyCache() { policyCache = null }
 
+// Kiểm tra role có quyền xem giá vốn (margin_cogs) không — dùng để set isCost trong context builder.
+export async function canViewCogs(role: string): Promise<boolean> {
+  if (role === "admin") return true   // admin luôn full quyền
+  const policy = await loadPolicy()
+  const decision = policy.margin_cogs?.[role] ?? "deny"
+  return decision === "allow"
+}
+
 // ─── Classifier (Gemini temp0) ──────────────────────────────────────────────────
 const CLASSIFIER_PROMPT = `Bạn là bộ KIỂM SOÁT QUYỀN HẠN cho chatbot nội bộ công ty Sim/eSim GoHub (dùng chung nhiều phòng ban).
 Nhiệm vụ: phân loại MỨC NHẠY CẢM của câu hỏi để hệ thống quyết định ai được xem. Trả về JSON THUẦN (không markdown).

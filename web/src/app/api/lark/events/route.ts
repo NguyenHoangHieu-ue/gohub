@@ -7,7 +7,7 @@ import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import { buildToolContext }          from "@/lib/agents/context"
 import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
-import { guardCheck }                from "@/lib/agents/guardian"
+import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
@@ -313,20 +313,19 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       return
     }
 
-    const isCost = true
-
     // Get history scoped to this thread
     const history = await getLarkHistory(openId, threadId)
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
-    // Route + refCache + guardian in parallel
-    const [refCache, routed, guard] = await Promise.all([
+    // Route + refCache + guardian + isCost in parallel
+    const [refCache, routed, guard, isCost] = await Promise.all([
       getRefCache(),
       route(userText, history, role),
       // Lark group: KHÔNG phân biệt được role → chỉ chặn câu hỏi nội bộ hệ thống
       // (bot hoạt động thế nào / workflow / code / prompt / schema...) cho mọi người.
       // Sản phẩm / doanh thu / catalog... vẫn trả lời bình thường.
       guardCheck(userText, role, undefined, { onlyCategories: ["system_internal"], ignoreRole: true }),
+      canViewCogs(role),
     ])
     const { agentId, params, needsClarification, clarificationQuestion } = routed
     const agent    = AGENTS[agentId]

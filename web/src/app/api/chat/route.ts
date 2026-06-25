@@ -7,7 +7,7 @@ import { AGENTS }                              from "@/lib/agents/agents"
 import { route }                               from "@/lib/agents/router"
 import { buildToolContext }                    from "@/lib/agents/context"
 import { runBIAnalyst }                        from "@/lib/agents/bi-analyst"
-import { guardCheck }                          from "@/lib/agents/guardian"
+import { guardCheck, canViewCogs }             from "@/lib/agents/guardian"
 import type { Message, UserRole }              from "@/lib/agents/types"
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -22,13 +22,12 @@ export async function POST(req: NextRequest) {
   const name    = userName || session.user.name || "bạn"
   const history = (messages as Message[]).slice(0, -1)
   const lastMsg = (messages as Message[]).at(-1)?.content ?? ""
-  const isCost  = true
-
   try {
-    const [refCache, routed, guard] = await Promise.all([
+    const [refCache, routed, guard, isCost] = await Promise.all([
       getRefCache(),
       route(lastMsg, history, role),
       guardCheck(lastMsg, role, department),
+      canViewCogs(role),
     ])
     const { agentId, agentName, params, needsClarification, clarificationQuestion } = routed
     const agent = AGENTS[agentId]
