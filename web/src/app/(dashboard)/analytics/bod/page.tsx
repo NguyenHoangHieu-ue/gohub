@@ -185,15 +185,14 @@ export default function BODReport() {
         if (!res.ok) throw new Error(`Failed to fetch ${name}: ${res.statusText}`)
         return res.json()
       }
-      const summaryData = await fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary")
-      const reportData = await fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report")
-      const groupData = await fetchJson(`/api/analytics/bod-group-margin?${queryParams}`, "Group")
-      const channelData = await fetchJson(`/api/analytics/bod-channel-performance?${queryParams}`, "Channel")
-
-      let stratData = []
-      try { const r = await fetch(`/api/analytics/b2b/strategic-performance?${queryParams}`); if (r.ok) stratData = await r.json() } catch (e) { console.warn("Strategic fetch failed", e) }
-      let tiersData = { Strategic: [] }
-      try { const r = await fetch(`/api/config/partner-tiers`); if (r.ok) tiersData = await r.json() } catch (e) { console.warn("Tiers fetch failed", e) }
+      const [summaryData, reportData, groupData, channelData, stratData, tiersData] = await Promise.all([
+        fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary"),
+        fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report"),
+        fetchJson(`/api/analytics/bod-group-margin?${queryParams}`, "Group"),
+        fetchJson(`/api/analytics/bod-channel-performance?${queryParams}`, "Channel"),
+        fetch(`/api/analytics/b2b/strategic-performance?${queryParams}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: [] }).catch(() => ({ Strategic: [] })),
+      ])
 
       setSummary(summaryData)
       setData(reportData)

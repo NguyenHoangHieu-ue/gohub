@@ -96,15 +96,17 @@ export default function DashboardHome() {
         return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
       }
 
-      const kpiData = await fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs")
-      const revData = await fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue")
-      const regData = await fetchJson(`/api/analytics/region-chart${queryParams}`, "Region")
-      const perfSrcData = await fetchJson(`/api/analytics/performance-source${queryParams}`, "Perf Source")
-      const perfChanData = await fetchJson(`/api/analytics/performance-channel${queryParams}`, "Perf Channel")
-      const recentData = await fetchJson(`/api/analytics/recent-orders`, "Recent Orders")
-      const targetData = await fetchJson(`/api/analytics/targets-summary${queryParams}`, "Targets")
-      const tiersData = await fetchJson(`/api/config/partner-tiers`, "Tiers")
-      const strategicPerfData = await fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic")
+      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData] = await Promise.all([
+        fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs"),
+        fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue"),
+        fetchJson(`/api/analytics/region-chart${queryParams}`, "Region"),
+        fetchJson(`/api/analytics/performance-source${queryParams}`, "Perf Source"),
+        fetchJson(`/api/analytics/performance-channel${queryParams}`, "Perf Channel"),
+        fetchJson(`/api/analytics/recent-orders`, "Recent Orders"),
+        fetchJson(`/api/analytics/targets-summary${queryParams}`, "Targets"),
+        fetchJson(`/api/config/partner-tiers`, "Tiers"),
+        fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic"),
+      ])
 
       setKpis(kpiData)
       setRevenueData(revData)

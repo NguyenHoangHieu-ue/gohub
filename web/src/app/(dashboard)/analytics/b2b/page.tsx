@@ -129,19 +129,14 @@ export default function B2BPerformance() {
       queryParams.append("dateColumn", dateColumn)
       queryParams.append("comparisonType", "previous_period")
 
-      const b2bKpiRes = await fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`)
-      const b2bKpis = b2bKpiRes.ok ? await b2bKpiRes.json() : []
-      const b2bPerfCustomerRes = await fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`)
-      const b2bPerfCustomer = b2bPerfCustomerRes.ok ? await b2bPerfCustomerRes.json() : []
-      const strategicPerfRes = await fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`)
-      const strategicPerf = strategicPerfRes.ok ? await strategicPerfRes.json() : []
-      const trendRes = await fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}`)
-      const trend = trendRes.ok ? await trendRes.json() : []
-      const feeChannelsRes = await fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}`)
-      const feeChannels = feeChannelsRes.ok ? await feeChannelsRes.json() : []
-
-      let tiersData = { Strategic: ["Traveloka", "Momo"] }
-      try { const r = await fetch(`/api/config/partner-tiers`); if (r.ok) tiersData = await r.json() } catch (e) { console.warn("Failed to fetch partner tiers, using defaults", e) }
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData] = await Promise.all([
+        fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
+      ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
       const safeB2BPerfCustomer = Array.isArray(b2bPerfCustomer) ? b2bPerfCustomer : []

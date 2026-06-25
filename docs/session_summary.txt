@@ -11,6 +11,31 @@ Cập nhật lần cuối: 2026-06-25 (session 76 — Netlify hết account → 
    Chỉ chạy local để test. Khi nào user xác nhận local OK → user mới quyết định push lên GitHub.
    Lý do: chuyển sang Vercel mới, cần kiểm soát deploy thủ công.
 
+## Session 76 tiếp 2 (2026-06-25) — Task C+D: Settings gap, performance Promise.all, chatbot schema
+
+### Task C — Settings: SKU Destination Definition
+- API MỚI `/api/config/sku-destination-rule` (GET+POST, lưu app_settings Supabase).
+- Settings page: thêm section "SKU Destination Definition" — bảng rules (startsWith + codeLength + description),
+  bảng country codes hiển thị bên phải. fetchAll load thêm 2 API mới.
+
+### Task D — Performance: Sequential → Promise.all (4 trang)
+- **Dashboard** (`analytics/page.tsx`): 9 API calls tuần tự → `Promise.all([...9...])` — load giảm từ tổng latency → max latency.
+- **BOD** (`bod/page.tsx`): 4+2 API calls → `Promise.all([...6...])`.
+- **B2B** (`b2b/page.tsx`): 6 fetch tuần tự → `Promise.all([...6...])`.
+- **Website** (`website/page.tsx`): 8 GA4/GSC calls tuần tự → `Promise.all([...8...])` — giảm từ ~4-16s → ~0.5-2s.
+- **analytics-db.ts**: connection pool max:5 → max:2 (phù hợp serverless, tránh exhaust GCP connections).
+
+### Task D — Chatbot schema improvements (`agents.ts`)
+- Fix "Ngày hôm nay" dùng local date thay toISOString() (timezone bug).
+- Thêm `usage_class` values: Unused/Low/Medium/High/Over 100%.
+- Thêm note `dim_date`: KHÔNG JOIN qua date_code, dùng text cast.
+- Thêm `company` codes: VN/SG/HK/US.
+- Thêm mục "TOOLS SẴN CÓ": hướng dẫn chatbot dùng queryGA4/queryGSC cho website/SEO questions.
+
+### Build: tsc PASS + next build PASS.
+
+---
+
 ## Session 76 tiếp (2026-06-25) — Task A+B: Sync Turso→Supabase, GA4+GSC chatbot, fix date timezone
 
 ### Task A — Migrate Turso channel_group_costs → Supabase (xóa dependency Turso cuối)

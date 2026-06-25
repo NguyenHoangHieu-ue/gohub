@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -63,6 +63,8 @@ function AnalyticsSettings() {
   const [db, setDb] = useState<any>(null)
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [skuRules, setSkuRules] = useState<{ startsWith: string; codeLength: number; description: string }[]>([])
+  const [countryCodes, setCountryCodes] = useState<{ code: string; country: string }[]>([])
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -87,12 +89,16 @@ function AnalyticsSettings() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [t, p, f, ch] = await Promise.all([
+      const [t, p, f, ch, skuRule, cc] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
         fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
+        fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }),
+        fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
       ])
+      setSkuRules(skuRule?.rules || [])
+      setCountryCodes(Array.isArray(cc) ? cc : [])
       setTiers(t && Object.keys(t).length ? t : { Strategic: [] })
       setPolicy(p || {})
       setFilters(f || {})
@@ -298,6 +304,52 @@ function AnalyticsSettings() {
           ))}
           <p className="text-xs text-slate-400">Điều kiện này được AND thêm vào truy vấn BI cho role tương ứng (admin không bị lọc).</p>
         </div>
+      </div>
+
+      {/* SKU Destination Definition */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">SKU Destination Definition</h2></div>
+          <button onClick={() => savePost("sku-dest", "/api/config/sku-destination-rule", { rules: skuRules })} disabled={saving === "sku-dest"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            {saving === "sku-dest" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 font-medium">Quy tắc extract destination code từ SKU (áp theo thứ tự, khớp đầu tiên được dùng):</p>
+            {skuRules.map((rule, i) => (
+              <div key={i} className="border border-slate-200 rounded-xl p-4 space-y-2 bg-slate-50/40">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 w-5">{i + 1}.</span>
+                  <input value={rule.startsWith} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, startsWith: e.target.value } : r))} placeholder="SKU startsWith (vd: GH)" className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input type="number" value={rule.codeLength} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, codeLength: parseInt(e.target.value) || 0 } : r))} placeholder="Độ dài" className="w-20 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <button onClick={() => setSkuRules(prev => prev.filter((_, j) => j !== i))} className="text-rose-400 hover:text-rose-600"><X className="w-4 h-4" /></button>
+                </div>
+                <input value={rule.description} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, description: e.target.value } : r))} placeholder="Mô tả quy tắc" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+              </div>
+            ))}
+            <button onClick={() => setSkuRules(prev => [...prev, { startsWith: "", codeLength: 3, description: "" }])} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">
+              <Plus className="w-3.5 h-3.5" />Thêm quy tắc
+            </button>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-medium mb-3">Bảng Country Codes ({countryCodes.length} quốc gia):</p>
+            <div className="border border-slate-100 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0"><tr><th className="px-3 py-2 text-left font-bold text-slate-500">Code</th><th className="px-3 py-2 text-left font-bold text-slate-500">Country</th></tr></thead>
+                <tbody className="divide-y divide-slate-50">
+                  {countryCodes.slice(0, 100).map(c => (
+                    <tr key={c.code} className="hover:bg-slate-50/50">
+                      <td className="px-3 py-1.5 font-mono text-slate-600">{c.code}</td>
+                      <td className="px-3 py-1.5 text-slate-700">{c.country}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">Code extract từ vị trí trong SKU theo từng quy tắc startsWith + codeLength — dùng để map destination khi phân tích sản phẩm.</p>
       </div>
     </div>
   )

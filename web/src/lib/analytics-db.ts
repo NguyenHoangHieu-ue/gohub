@@ -12,7 +12,7 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      max:                5,
+      max:                2,
       idleTimeoutMillis:  30000,
       connectionTimeoutMillis: 5000,
     })

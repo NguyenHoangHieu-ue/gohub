@@ -118,54 +118,30 @@ export default function WebsiteAnalyticsPage() {
     try {
       const query = `siteId=${selectedSiteId}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`
 
-      // 1. General Traffic
-      const genRes = await fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`)
-      if (!genRes.ok) {
-        const err = await genRes.json()
-        throw new Error(err.error || "Failed to fetch general analytics")
-      }
-      const genData = await genRes.json()
-      setGeneralData(genData)
+      // Fetch tất cả song song
+      const [genRes, ecoRes, prodRes, countryRes, sourceRes, esimRes, gscRes, gscQueriesRes] = await Promise.all([
+        fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`),
+        fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`),
+        fetch(`/api/analytics/ga4?${query}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`),
+        fetch(`/api/analytics/ga4?${query}&dimensions=country&metrics=activeUsers,sessions,conversions`),
+        fetch(`/api/analytics/ga4?${query}&dimensions=sessionSourceMedium&metrics=activeUsers,sessions,conversions`),
+        fetch(`/api/analytics/ga4?${query}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`),
+        fetch(`/api/analytics/gsc?${query}&dimensions=date`),
+        fetch(`/api/analytics/gsc?${query}&dimensions=query`),
+      ])
 
-      // 2. Ecommerce Overview
-      const ecoRes = await fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`)
-      if (ecoRes.ok) setEcommerceData(await ecoRes.json())
-      else setEcommerceData(null)
+      if (!genRes.ok) { const err = await genRes.json(); throw new Error(err.error || "Failed to fetch general analytics") }
+      setGeneralData(await genRes.json())
+      setEcommerceData(ecoRes.ok ? await ecoRes.json() : null)
+      setTopProducts(prodRes.ok ? await prodRes.json() : null)
+      setTopCountries(countryRes.ok ? await countryRes.json() : null)
+      setTrafficSources(sourceRes.ok ? await sourceRes.json() : null)
+      setEsimPages(esimRes.ok ? await esimRes.json() : null)
 
-      // 3. Top Products
-      const prodRes = await fetch(`/api/analytics/ga4?${query}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`)
-      if (prodRes.ok) setTopProducts(await prodRes.json())
-      else setTopProducts(null)
-
-      // Top Countries
-      const countryRes = await fetch(`/api/analytics/ga4?${query}&dimensions=country&metrics=activeUsers,sessions,conversions`)
-      if (countryRes.ok) setTopCountries(await countryRes.json())
-      else setTopCountries(null)
-
-      // Traffic Sources
-      const sourceRes = await fetch(`/api/analytics/ga4?${query}&dimensions=sessionSourceMedium&metrics=activeUsers,sessions,conversions`)
-      if (sourceRes.ok) setTrafficSources(await sourceRes.json())
-      else setTrafficSources(null)
-
-      // eSIM Item Performance
-      const esimRes = await fetch(`/api/analytics/ga4?${query}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`)
-      if (esimRes.ok) setEsimPages(await esimRes.json())
-      else setEsimPages(null)
-
-      // 4. Search Console
       setGscError(null)
-      const gscRes = await fetch(`/api/analytics/gsc?${query}&dimensions=date`)
-      if (gscRes.ok) {
-        setSearchConsoleData(await gscRes.json())
-      } else {
-        const gscErr = await gscRes.json()
-        setGscError(gscErr.error || "Failed to fetch search console data")
-        setSearchConsoleData(null)
-      }
-
-      const gscQueriesRes = await fetch(`/api/analytics/gsc?${query}&dimensions=query`)
-      if (gscQueriesRes.ok) setTopSearchQueries(await gscQueriesRes.json())
-      else setTopSearchQueries(null)
+      if (gscRes.ok) { setSearchConsoleData(await gscRes.json()) }
+      else { const gscErr = await gscRes.json(); setGscError(gscErr.error || "Failed to fetch search console data"); setSearchConsoleData(null) }
+      setTopSearchQueries(gscQueriesRes.ok ? await gscQueriesRes.json() : null)
 
       if (compareEnabled) {
         const compQuery = `siteId=${selectedSiteId}&startDate=${compareRange.startDate}&endDate=${compareRange.endDate}`
