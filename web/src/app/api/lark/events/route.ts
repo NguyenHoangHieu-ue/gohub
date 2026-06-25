@@ -241,6 +241,12 @@ export async function POST(req: NextRequest) {
     userText = "xin chào"
   }
 
+  // Chỉ cho phép group — bỏ qua p2p (tin nhắn riêng)
+  if (chatType === "p2p") {
+    console.log("[Lark] skip: p2p not allowed")
+    return NextResponse.json({ ok: true })
+  }
+
   // Group chat + thread: chỉ reply khi được @mention tên bot
   if (chatType === "group") {
     const topMentions: any[] = msg?.mentions ?? []
