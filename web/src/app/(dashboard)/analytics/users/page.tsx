@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2 } from "lucide-react"
+import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -46,6 +46,8 @@ function UserManagement() {
   const [savingUser, setSavingUser] = useState<string | null>(null)
   const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [savingMatrix, setSavingMatrix] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [search, setSearch] = useState("")
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
@@ -93,6 +95,16 @@ function UserManagement() {
       return { ...prev, [role]: Array.from(cur) }
     })
   }
+  const syncTursoUsers = async () => {
+    setSyncing(true)
+    try {
+      const r = await fetch("/api/admin/sync-turso-users", { method: "POST" })
+      const d = await r.json()
+      if (d.ok) { notify(true, `Sync OK: +${d.inserted} mới, ~${d.updated} cập nhật, ${d.skipped} bỏ qua`); fetchAll() }
+      else notify(false, d.error || "Sync thất bại")
+    } catch { notify(false, "Lỗi kết nối") } finally { setSyncing(false) }
+  }
+
   const deleteUser = async (u: User) => {
     if (!confirm(`Xóa user "${u.name || u.username}"? Hành động này không thể hoàn tác.`)) return
     setDeletingUser(u.username)
@@ -167,9 +179,19 @@ function UserManagement() {
 
       {/* Users list */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2"><UserCog className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Người dùng ({users.length})</h2></div>
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 flex-1"><UserCog className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Người dùng ({users.length})</h2></div>
+          <div className="relative"><Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email / role…" className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none w-52" /></div>
+          <button onClick={syncTursoUsers} disabled={syncing} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
+            {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}Sync Turso (55)
+          </button>
+        </div>
         <div className="divide-y divide-slate-100">
-          {loading ? <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div> : users.map(u => {
+          {loading ? <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div> : users.filter(u => {
+            if (!search) return true
+            const q = search.toLowerCase()
+            return (u.name||"").toLowerCase().includes(q) || (u.email||"").toLowerCase().includes(q) || (u.role||"").toLowerCase().includes(q)
+          }).map(u => {
             const isExpanded = expanded === u.username
             const granted = new Set((u.allowed_analytics || "").split(",").map(s => s.trim()).filter(Boolean))
             return (
