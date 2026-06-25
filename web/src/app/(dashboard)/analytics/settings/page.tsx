@@ -62,8 +62,18 @@ function AnalyticsSettings() {
   const [addingTier, setAddingTier] = useState<string | null>(null)
   const [db, setDb] = useState<any>(null)
   const [dbLoading, setDbLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  const syncTursoCosts = async () => {
+    setSyncing(true)
+    try {
+      const r = await fetch("/api/admin/sync-turso-costs", { method: "POST" })
+      const d = await r.json()
+      notify(!!d.ok, d.ok ? ("Sync OK: " + d.synced + " dong (" + d.months + " thang)") : (d.error || "Sync that bai"))
+    } catch (e) { notify(false, "Loi ket noi") } finally { setSyncing(false) }
+  }
 
   const checkDb = async () => {
     setDbLoading(true)
@@ -141,9 +151,14 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Database className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
-          <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
-            {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}Kiểm tra
-          </button>
+          <span className="flex items-center gap-2">
+            <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync sang Supabase"}
+            </button>
+            <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+              {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiem tra"}
+            </button>
+          </span>
         </div>
         {db && (
           <div className="p-6 text-sm">

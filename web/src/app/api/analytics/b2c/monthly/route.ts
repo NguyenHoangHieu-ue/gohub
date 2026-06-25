@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
-import { tursoQuery, tursoConfigured } from "@/lib/turso"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 
 // Rolling-month B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
@@ -153,21 +152,19 @@ export async function GET(req: NextRequest) {
       }
     } catch {}
 
-    // Chi phí marketing B2C theo tháng (Turso channel_group_costs, nhập tay). Lỗi/không cấu hình → bỏ qua (spend rỗng).
+    // Chi phí marketing B2C theo tháng (Supabase analytics_channel_group_costs)
     const spend: Record<string, number> = {}
     for (const m of months) spend[m] = 0
-    if (tursoConfigured()) {
-      try {
-        const costRows = await tursoQuery<{ month: string; amt: number }>(
-          `SELECT month, SUM(amount) AS amt FROM channel_group_costs
-           WHERE group_name = 'B2C' AND month >= ? GROUP BY month`,
-          [months[0]]
-        )
-        for (const r of costRows) {
-          if (spend[r.month] !== undefined) spend[r.month] = Number(r.amt) || 0
-        }
-      } catch (e) { console.error("[b2c/monthly] spend (turso)", (e as Error).message) }
-    }
+    try {
+      const { data: costRows } = await supabaseAdmin
+        .from("analytics_channel_group_costs")
+        .select("month, amount")
+        .eq("group_name", "B2C")
+        .gte("month", months[0])
+      for (const r of costRows ?? []) {
+        if (spend[r.month] !== undefined) spend[r.month] += Number(r.amount) || 0
+      }
+    } catch (e) { console.error("[b2c/monthly] spend (supabase)", (e as Error).message) }
 
     // Leads marketing (Chatwoot conversations) theo tháng + breakdown kênh. Lỗi/chưa cấu hình → rỗng.
     let leads: Record<string, number> = {}

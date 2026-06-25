@@ -1,12 +1,43 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-24 (session 75 — fix Lark bot trễ/không trả lời [bỏ waitUntil→đồng bộ+dedup],
-   fix tab Website Analytics, date mặc định→hôm nay, roles đầy đủ 9 vai trò, nút Kiểm tra Database,
-   tab 3HK Unlimited tách theo throttle 5/10 mbps [high-speed để sau];
-   ✅ DEPLOY NETLIFY ĐÃ THÔNG, login/logout OK)
+Cập nhật lần cuối: 2026-06-25 (session 76 — Netlify hết account → chuyển Vercel mới "gohub-intel";
+   fix cron vercel.json * * * * * → 0 0 * * *; import env; setup Lark Event URL + OAuth redirect;
+   ✅ DEPLOY VERCEL MỚI THÔNG, login Lark + bot OK)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
    — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
    + đánh dấu ✅ HOÀN THÀNH ngay trong file đó.
+
+🚫 QUY TẮC DEPLOY (từ session 76, 2026-06-25): KHÔNG tự ý push commit lên GitHub nữa.
+   Chỉ chạy local để test. Khi nào user xác nhận local OK → user mới quyết định push lên GitHub.
+   Lý do: chuyển sang Vercel mới, cần kiểm soát deploy thủ công.
+
+## Session 76 (2026-06-25) — Chuyển deploy Netlify → Vercel mới
+
+Netlify account hết → chuyển sang Vercel account mới, project "gohub-intel".
+
+### Quy tắc mới: KHÔNG tự push GitHub
+- Từ nay KHÔNG tự ý commit/push lên GitHub. Chỉ chạy local để test.
+- Khi user xác nhận local OK → user mới quyết định push. Lý do: tránh lại vượt quota deploy.
+
+### Fix cron vercel.json
+- `vercel.json` cron `* * * * *` → `0 0 * * *` (Vercel Hobby chỉ cho 1 lần/ngày).
+- Nếu muốn chạy linh hoạt hơn: dùng cron-job.org (miễn phí) gọi `/api/cron/scheduled-messages` với header `Authorization: Bearer CRON_SECRET`.
+
+### Setup Vercel mới
+- Root Directory = `web`. Không cần Ignored Build Step (đã không tự push nữa).
+- Tạo file `web/.env.vercel.local` (gitignored) — đầy đủ tất cả env vars.
+- NEXTAUTH_URL = `https://gohub-intel.vercel.app`
+- LARK_ENCRYPT_KEY = Q0487325V0jzSe3q1PxU1d1RWghrF736
+- CRON_SECRET = gohub_cron_s3cr3t_2026 / MCP_SECRET = gohub_mcp_s3cr3t_2026
+
+### Setup Lark (sau deploy)
+- Event Subscriptions Request URL: `https://gohub-intel.vercel.app/api/lark/events`
+- OAuth Redirect URL: `https://gohub-intel.vercel.app/api/auth/callback/lark`
+
+### Kết quả
+- ✅ Deploy thành công. Login Lark OK. Bot trả lời OK.
+
+---
 
 ## Session 75 (2026-06-24) — Fix Lark bot (Netlify waitUntil), Website tab, default date, roles đầy đủ, DB status
 
