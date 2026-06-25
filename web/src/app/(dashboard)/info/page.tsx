@@ -1,0 +1,281 @@
+"use client"
+
+import React, { useState, useEffect, useRef, useCallback } from "react"
+import { useSession } from "next-auth/react"
+import { Plus, Trash2, Pin, Upload, FileText, Download, X, Save, RefreshCw, Users, ChevronRight, File, StickyNote } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface Note { id: string; username: string; title: string; content: string; is_pinned: boolean; created_at: string; updated_at: string }
+interface FileItem { name: string; path: string; size?: number; created_at?: string; url?: string }
+interface UserOverview { username: string; name: string; role: string; noteCount: number; fileCount: number; lastUpdated: string | null }
+
+function fmtSize(bytes?: number) {
+  if (!bytes) return "—"
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+function fmtDate(s?: string | null) {
+  if (!s) return "—"
+  return new Date(s).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+}
+
+export default function InfoPage() {
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role || "staff"
+  const isAdmin = role === "admin" || role === "creator"
+  const [view, setView] = useState<"mine" | "all">(isAdmin ? "mine" : "mine")
+  const [selectedUser, setSelectedUser] = useState<string | null>(null)
+
+  if (!session) return null
+  const targetUsername = view === "all" && selectedUser ? selectedUser : (session.user as any)?.username
+
+  return (
+    <div className="p-6 min-h-screen bg-slate-50 space-y-4 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+            <StickyNote className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Information</h1>
+            <p className="text-slate-500 text-sm">Notes cá nhân & lưu trữ file</p>
+          </div>
+        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+            <button onClick={() => { setView("mine"); setSelectedUser(null) }} className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all", view === "mine" ? "bg-violet-600 text-white" : "text-slate-600 hover:bg-slate-50")}>
+              Của tôi
+            </button>
+            <button onClick={() => setView("all")} className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5", view === "all" ? "bg-violet-600 text-white" : "text-slate-600 hover:bg-slate-50")}>
+              <Users className="w-3.5 h-3.5" />Tất cả
+            </button>
+          </div>
+        )}
+      </div>
+
+      {view === "all" && isAdmin ? (
+        <AdminOverview onSelectUser={(u) => { setSelectedUser(u); setView("all") }} selectedUser={selectedUser} />
+      ) : (
+        <UserWorkspace username={targetUsername} isOwn={!selectedUser || selectedUser === (session.user as any)?.username} />
+      )}
+    </div>
+  )
+}
+
+// ─── Admin overview: grid of users ──────────────────────────────────────────
+function AdminOverview({ onSelectUser, selectedUser }: { onSelectUser: (u: string) => void; selectedUser: string | null }) {
+  const [users, setUsers] = useState<UserOverview[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/info/overview").then(r => r.ok ? r.json() : []).then(setUsers).finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+
+  return (
+    <div className="space-y-4">
+      {selectedUser && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+            <button onClick={() => onSelectUser("")} className="text-slate-400 hover:text-slate-600"><ChevronRight className="w-4 h-4 rotate-180" /></button>
+            <h2 className="font-bold text-slate-800">{users.find(u => u.username === selectedUser)?.name || selectedUser}</h2>
+          </div>
+          <div className="p-6"><UserWorkspace username={selectedUser} isOwn={false} /></div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {users.filter(u => u.noteCount > 0 || u.fileCount > 0 || true).map(u => (
+          <button key={u.username} onClick={() => onSelectUser(u.username)}
+            className={cn("bg-white border rounded-2xl p-4 text-left hover:border-violet-300 hover:shadow-md transition-all group", selectedUser === u.username ? "border-violet-400 shadow-md bg-violet-50/30" : "border-slate-200 shadow-sm")}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center mb-3 font-bold text-violet-700 text-sm group-hover:from-violet-200 transition-all">
+              {(u.name || u.username).charAt(0).toUpperCase()}
+            </div>
+            <p className="font-bold text-slate-800 text-sm truncate">{u.name || u.username}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">{u.role}</p>
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-xs text-slate-500 flex items-center gap-1"><StickyNote className="w-3 h-3" />{u.noteCount}</span>
+              <span className="text-xs text-slate-500 flex items-center gap-1"><File className="w-3 h-3" />{u.fileCount}</span>
+            </div>
+            {u.lastUpdated && <p className="text-[10px] text-slate-400 mt-1.5">{fmtDate(u.lastUpdated)}</p>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── User workspace: notes + files ──────────────────────────────────────────
+function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }) {
+  const [notes, setNotes] = useState<Note[]>([])
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null)
+  const [editTitle, setEditTitle] = useState("")
+  const [editContent, setEditContent] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [loadingNotes, setLoadingNotes] = useState(true)
+  const [loadingFiles, setLoadingFiles] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const fetchNotes = useCallback(() => {
+    setLoadingNotes(true)
+    fetch(`/api/info/notes?username=${username}`).then(r => r.ok ? r.json() : []).then(setNotes).finally(() => setLoadingNotes(false))
+  }, [username])
+
+  const fetchFiles = useCallback(() => {
+    setLoadingFiles(true)
+    fetch(`/api/info/files?username=${username}`).then(r => r.ok ? r.json() : []).then(setFiles).finally(() => setLoadingFiles(false))
+  }, [username])
+
+  useEffect(() => { fetchNotes(); fetchFiles() }, [fetchNotes, fetchFiles])
+
+  const selectNote = (note: Note) => {
+    setSelectedNote(note)
+    setEditTitle(note.title)
+    setEditContent(note.content)
+  }
+
+  const newNote = async () => {
+    const r = await fetch("/api/info/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Note mới", content: "" }) })
+    if (r.ok) { const note = await r.json(); fetchNotes(); selectNote(note) }
+  }
+
+  const saveNote = async () => {
+    if (!selectedNote) return
+    setSaving(true)
+    await fetch(`/api/info/notes/${selectedNote.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: editTitle, content: editContent }) })
+    setSaving(false)
+    fetchNotes()
+    setSelectedNote(prev => prev ? { ...prev, title: editTitle, content: editContent } : null)
+  }
+
+  const deleteNote = async (id: string) => {
+    if (!confirm("Xóa note này?")) return
+    await fetch(`/api/info/notes/${id}`, { method: "DELETE" })
+    if (selectedNote?.id === id) setSelectedNote(null)
+    fetchNotes()
+  }
+
+  const togglePin = async (note: Note) => {
+    await fetch(`/api/info/notes/${note.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_pinned: !note.is_pinned }) })
+    fetchNotes()
+  }
+
+  const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const fd = new FormData(); fd.append("file", file)
+    await fetch("/api/info/files", { method: "POST", body: fd })
+    setUploading(false)
+    fetchFiles()
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const deleteFile = async (path: string) => {
+    if (!confirm("Xóa file này?")) return
+    await fetch(`/api/info/files?path=${encodeURIComponent(path)}`, { method: "DELETE" })
+    fetchFiles()
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+      {/* Notes sidebar */}
+      <div className="space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-2"><StickyNote className="w-4 h-4 text-violet-500" /><span className="font-bold text-slate-700 text-sm">Notes ({notes.length})</span></div>
+            {isOwn && <button onClick={newNote} className="w-7 h-7 bg-violet-600 text-white rounded-lg flex items-center justify-center hover:bg-violet-700"><Plus className="w-3.5 h-3.5" /></button>}
+          </div>
+          <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+            {loadingNotes ? <div className="py-8 flex justify-center"><div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+              : notes.length === 0 ? <p className="py-8 text-center text-xs text-slate-400">{isOwn ? "Chưa có note nào. Tạo mới +" : "Chưa có note"}</p>
+              : notes.map(note => (
+                <button key={note.id} onClick={() => selectNote(note)} className={cn("w-full px-4 py-3 text-left hover:bg-slate-50/80 transition-colors", selectedNote?.id === note.id && "bg-violet-50/50 border-l-2 border-violet-500")}>
+                  <div className="flex items-start justify-between gap-1">
+                    <p className="font-medium text-slate-800 text-sm truncate flex-1">{note.is_pinned && <Pin className="w-3 h-3 text-violet-400 inline mr-1 -mt-0.5" />}{note.title}</p>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{note.content || "Trống"}</p>
+                  <p className="text-[10px] text-slate-300 mt-1">{fmtDate(note.updated_at)}</p>
+                </button>
+              ))}
+          </div>
+        </div>
+
+        {/* Files */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-2"><File className="w-4 h-4 text-blue-500" /><span className="font-bold text-slate-700 text-sm">Files ({files.length})</span></div>
+            {isOwn && (
+              <>
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-50">
+                  {uploading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}Upload
+                </button>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={uploadFile} />
+              </>
+            )}
+          </div>
+          <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+            {loadingFiles ? <div className="py-6 flex justify-center"><div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
+              : files.length === 0 ? <p className="py-6 text-center text-xs text-slate-400">Chưa có file</p>
+              : files.map(f => (
+                <div key={f.path} className="px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50/60 group">
+                  <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
+                    <p className="text-[10px] text-slate-400">{fmtSize(f.size)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {f.url && <a href={f.url} download={f.name} target="_blank" rel="noreferrer" className="w-6 h-6 flex items-center justify-center text-blue-500 hover:bg-blue-50 rounded"><Download className="w-3.5 h-3.5" /></a>}
+                    {isOwn && <button onClick={() => deleteFile(f.path)} className="w-6 h-6 flex items-center justify-center text-rose-400 hover:bg-rose-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Note editor */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ minHeight: "500px" }}>
+        {selectedNote ? (
+          <>
+            <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+              <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="flex-1 font-bold text-slate-800 bg-transparent outline-none text-base" placeholder="Tiêu đề…" />
+              <div className="flex items-center gap-2">
+                {isOwn && <button onClick={() => togglePin(selectedNote)} className={cn("p-1.5 rounded-lg", selectedNote.is_pinned ? "text-violet-600 bg-violet-50" : "text-slate-400 hover:bg-slate-100")} title="Ghim"><Pin className="w-3.5 h-3.5" /></button>}
+                {isOwn && <button onClick={saveNote} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 disabled:opacity-50">
+                  {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
+                </button>}
+                {isOwn && <button onClick={() => deleteNote(selectedNote.id)} className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>}
+                <button onClick={() => setSelectedNote(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              readOnly={!isOwn}
+              placeholder="Nội dung note… (hỗ trợ markdown)"
+              className="flex-1 p-6 text-sm text-slate-700 outline-none resize-none bg-white font-mono leading-relaxed"
+              onKeyDown={e => { if (e.ctrlKey && e.key === "s") { e.preventDefault(); saveNote() } }}
+            />
+            <div className="px-6 py-2 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-300">
+              <span>Cập nhật: {fmtDate(selectedNote.updated_at)}</span>
+              {isOwn && <span>Ctrl+S để lưu nhanh</span>}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-300">
+            <StickyNote className="w-12 h-12" />
+            <p className="text-sm font-medium">Chọn note để xem hoặc chỉnh sửa</p>
+            {isOwn && <button onClick={newNote} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700">
+              <Plus className="w-3.5 h-3.5" />Tạo note mới
+            </button>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

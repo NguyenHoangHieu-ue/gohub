@@ -4,12 +4,15 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 import { ROLE_LABELS }        from "@/lib/agents/types"
+
+// Information tab — nổi bật, hiển thị cho tất cả role
+const NAV_INFO = { href: "/info", label: "Information", icon: StickyNote, key: "info" }
 
 // Tabs luôn hiển thị ở trên
 const NAV_MAIN = [
@@ -175,7 +178,7 @@ function roleLabel(role: string) {
   return ROLE_LABELS[role] ?? role
 }
 
-// Một hàng link trong sidebar (dùng chung cho cả 3 nhóm). accent: brand (PM) / blue (Analyst).
+// Một hàng link trong sidebar (dùng chung cho cả 3 nhóm). accent: brand (PM) / blue (Analyst) / violet (Info).
 function NavRow({ href, label, Icon, active, collapsed, indent = false, accent = "brand" }: {
   href:      string
   label:     string
@@ -183,13 +186,15 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
   active:    boolean
   collapsed: boolean
   indent?:   boolean
-  accent?:   "brand" | "blue"
+  accent?:   "brand" | "blue" | "violet"
 }) {
   const activeCls     = accent === "blue"
     ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
+    : accent === "violet"
+    ? "bg-violet-50 text-violet-700 shadow-sm border border-violet-100"
     : "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
-  const iconActiveCls = accent === "blue" ? "text-blue-500" : "text-brand-500"
-  const dotCls        = accent === "blue" ? "bg-blue-400" : "bg-brand-400"
+  const iconActiveCls = accent === "blue" ? "text-blue-500" : accent === "violet" ? "text-violet-500" : "text-brand-500"
+  const dotCls        = accent === "blue" ? "bg-blue-400" : accent === "violet" ? "bg-violet-400" : "bg-brand-400"
   return (
     <Link
       href={href}
@@ -330,6 +335,7 @@ export function Sidebar() {
         {collapsed ? (
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
+            <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />
             {chatKbItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
@@ -346,6 +352,11 @@ export function Sidebar() {
         ) : (
           /* Chế độ mở rộng: 3 nhóm lớn */
           <>
+            {/* Information — nổi bật, luôn hiển thị đầu sidebar */}
+            <div className="mb-1 px-2">
+              <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed={false} accent="violet" />
+            </div>
+
             {/* 1 ─ Chat & Knowledge */}
             {chatKbItems.length > 0 && (
               <div>
