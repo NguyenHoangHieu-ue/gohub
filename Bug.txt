@@ -241,3 +241,8 @@
 ✅ FIXED: Dashboard top destination hiện mã nước → map sang tên nước qua Turso country_codes (332 rows). region-chart/route.ts.
 ✅ FIXED: Web Analytics thiếu số liệu GSC (Search Trends + Top Queries rỗng) — BUG: /api/analytics/gsc trả raw array, component đọc data.rows → undefined → gscTimeSeries=[]. Fix: wrap response thành {rows, rowCount}. Thêm creator/manager vào ANALYTICS_ROLES.
 ✅ FIXED: Nút Lưu màu xám cho đến khi có thay đổi — dirty tracking (savedTiers/savedPolicy/savedFilters/savedSkuRules) trong Settings page. 4 nút save đều xám → xanh khi dirty.
+
+*25/6/2026 (session 77 tiếp)
+✅ FIXED: Các tab analytics redirect sai về chatbot — 5 page có guard `role !== "admin"` cứng: settings/users/schema (mở rộng admin+creator), sql (admin+creator+bod), scheduled (admin+creator). BOD bỏ "scheduled" khỏi defaults (tránh click → redirect).
+✅ FIXED: Admin/Analytics users UI overlap — xóa phần "Trang Analytics" khỏi /admin UserList; /analytics/users thêm department dropdown + link thêm user. Phân tách rõ 2 trang.
+✅ FIXED (security): Guardian chatbot — DENY messages thiếu "hỏi Hiếu" (5/8); classifier không bắt được injection/jailbreak/PII-aggregate. Fix: tất cả deny → "hỏi Hiếu"; classifier thêm 5 mẫu tấn công → system_internal; DISPLAY_RULES thêm section JAILBREAK + PII; creator early return.
