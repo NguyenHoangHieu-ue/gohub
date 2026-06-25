@@ -71,11 +71,10 @@ export function getPrevDateFilter(
   const ed = safeDate(endDate)
   if (sd && ed) {
     if (comparisonType === "previous_year") {
-      const s = new Date(sd)
-      const e = new Date(ed)
-      const ps = new Date(s.setFullYear(s.getFullYear() - 1)).toISOString().split("T")[0]
-      const pe = new Date(e.setFullYear(e.getFullYear() - 1)).toISOString().split("T")[0]
-      filter = `f.${dateColumn}::date BETWEEN '${ps}' AND '${pe}'`
+      const s = new Date(sd); s.setFullYear(s.getFullYear() - 1)
+      const e = new Date(ed); e.setFullYear(e.getFullYear() - 1)
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
+      filter = `f.${dateColumn}::date BETWEEN '${fmt(s)}' AND '${fmt(e)}'`
     } else {
       filter = `f.${dateColumn}::date >= '${sd}'::date - (('${ed}'::date - '${sd}'::date) + 1) AND f.${dateColumn}::date < '${sd}'::date`
     }

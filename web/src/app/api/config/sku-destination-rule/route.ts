@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
-const KEY = "sku_destination_rule"
+const KEY = "sku_destination_rules"
 
 export async function GET() {
   const session = await getServerSession(authOptions)

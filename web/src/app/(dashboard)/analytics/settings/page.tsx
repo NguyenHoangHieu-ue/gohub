@@ -94,7 +94,7 @@ function AnalyticsSettings() {
         fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
         fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
-        fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }),
+        fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
       ])
       setSkuRules(skuRule?.rules || [])

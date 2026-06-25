@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const data = await getTargetSummary(startDate, endDate)
+    const { cachedQuery } = await import("@/lib/analytics-helpers")
+    const data = await cachedQuery(`targets-summary:${startDate}:${endDate}`, () => getTargetSummary(startDate, endDate))
     return NextResponse.json(data)
   } catch (err: any) {
     console.error("[analytics/targets-summary]", err.message)

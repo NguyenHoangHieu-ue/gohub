@@ -2,12 +2,12 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getPartnerTiers } from "@/lib/analytics-helpers"
+import { getPartnerTiers, cachedQuery } from "@/lib/analytics-helpers"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const tiers = await getPartnerTiers()
+  const tiers = await cachedQuery("partner-tiers", getPartnerTiers)
   return NextResponse.json(tiers)
 }
 
