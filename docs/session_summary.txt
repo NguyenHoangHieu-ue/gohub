@@ -1,5 +1,41 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-25 (session 77 tiếp — role nav bug fix 5 pages; admin/analytics users UI consolidation; guardian hardening injection/jailbreak/PII + "hỏi Hiếu" nhất quán)
+Cập nhật lần cuối: 2026-06-25 (session 77 tiếp 2 — creator tab JWT fix; BOD scheduled+products restore; role_permissions union fix; B2B/B2C channel filter chatbot; COGS leak fix; guardian deny+hỏi Hiếu)
+## Session 77 tiếp 2 (2026-06-25) — Creator tab, BOD tabs, channel filter B2C, COGS leak
+
+### Creator tab không vô được
+- **Root cause**: `creator/page.tsx` check JWT role (stale); `analytics/layout.tsx` có `dbRole==="admin"` nhưng thiếu `dbRole==="creator"`.
+- **Fix**: layout thêm `dbRole==="creator"` early return. `creator/page.tsx` fetch `/api/user/me` để lấy fresh role, allow admin+creator.
+
+### BOD mất Scheduled + Products
+- **Scheduled**: đã chuyển vào MANAGEMENT_GROUP (admin+creator only) → BOD thấy link nhưng bị redirect. Fix: đưa về ANALYTICS_GROUPS, page guard mở cho `["admin","creator","bod"]`.
+- **Products (BI) + nhóm Product sidebar**: `role_permissions` DB có `{bod: []}` hoặc partial list → API GET fix: union(defaults, dbValue). BOD `navItems` chỉ trả `[chatbot]` → Product group ẩn. Fix: thêm `NAV_PRODUCTS` cho BOD.
+- **role_permissions API**: union DB + defaults → defaults không bao giờ bị mất do DB drift.
+
+### B2B/B2C channel filter chatbot (URGENT cho Lark ngày mai)
+- `tools.ts`: `getChannelFromRole(role)` → B2C/B2B/null. `getChannelPrices(skuCodes, channel)` → fetch `unitprice` từ `items` filtered `item_type ILIKE '%B2C%'/'%B2B%'`.
+- `context.ts`: thêm `channel` param. Case 3 (single-country): filter SKU list chỉ SKU có items trên kênh đó + inject `sell_price` vào context.
+- `chat/route.ts` + `lark/events/route.ts`: derive channel từ role, pass vào `buildToolContext`.
+
+### COGS leak khi isCost=false
+- **Root cause**: `tra-cuu` agent dùng `JSON.stringify(detail, null, 2)` → dump `latest_cogs` raw dù `isCost=false`. LLM đọc được và báo ra.
+- **Fix (context.ts)**: `delete detail.sku.latest_cogs` trước serialize khi `!isCost`. Filter `detail.items` theo channel. Product Code path cũng strip cogs.
+
+### Guardian hardening (session trước nhưng cùng commit batch)
+- DENY_REASONS: tất cả 8 category → "hỏi trực tiếp Hiếu nhé 😊"
+- CLASSIFIER_PROMPT: thêm injection/jailbreak patterns → system_internal confidence=1.0
+- DISPLAY_RULES: thêm JAILBREAK section + PII protection (customer_code thay PII)
+- Creator: early return guardian (skip Gemini call)
+
+### Commits (session này)
+- `adaaf85` creator tab + BOD scheduled + stale JWT
+- `234a82b` role_permissions empty-array fix
+- `74f6354` B2B/B2C channel filter chatbot
+- `b383a3b` COGS leak fix (tra-cuu JSON strip)
+- `62fe411` BOD scheduled+products restore + role_permissions union
+- `24e4bba` BOD Product group (NAV_PRODUCTS) sidebar
+
+---
+
 ## Session 77 tiếp (2026-06-25) — Role nav bug, UI consolidation, Guardian hardening
 
 ### #1 Role navigation bug (5 pages redirect sai)

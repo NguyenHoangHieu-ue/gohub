@@ -246,3 +246,11 @@
 ✅ FIXED: Các tab analytics redirect sai về chatbot — 5 page có guard `role !== "admin"` cứng: settings/users/schema (mở rộng admin+creator), sql (admin+creator+bod), scheduled (admin+creator). BOD bỏ "scheduled" khỏi defaults (tránh click → redirect).
 ✅ FIXED: Admin/Analytics users UI overlap — xóa phần "Trang Analytics" khỏi /admin UserList; /analytics/users thêm department dropdown + link thêm user. Phân tách rõ 2 trang.
 ✅ FIXED (security): Guardian chatbot — DENY messages thiếu "hỏi Hiếu" (5/8); classifier không bắt được injection/jailbreak/PII-aggregate. Fix: tất cả deny → "hỏi Hiếu"; classifier thêm 5 mẫu tấn công → system_internal; DISPLAY_RULES thêm section JAILBREAK + PII; creator early return.
+
+*25/6/2026 (session 77 tiếp 2)
+✅ FIXED: Creator tab JWT stale — layout thiếu `dbRole==="creator"`; creator/page.tsx dùng JWT cũ. Fix: layout thêm dbRole check; page fetch /api/user/me fresh role.
+✅ FIXED: BOD mất Scheduled tab — chuyển nhầm vào MANAGEMENT_GROUP. Fix: đưa về ANALYTICS_GROUPS, page guard mở cho bod.
+✅ FIXED: BOD mất nhóm Product sidebar — navItems BOD chỉ có [chatbot], NAV_PRODUCTS không hiện. Fix: thêm NAV_PRODUCTS cho BOD.
+✅ FIXED: role_permissions DB drift mất Products — API GET giờ union(defaults, dbValue) → defaults không bị xóa do partial DB save.
+✅ FIXED: B2C/B2B chatbot channel filter — getChannelFromRole + getChannelPrices filter items theo item_type + inject sell_price (unitprice) vào context. B2C/B2B chỉ thấy sản phẩm + giá kênh của họ.
+✅ FIXED: COGS leak khi isCost=false — tra-cuu JSON.stringify(detail) dump latest_cogs raw. Fix: delete trước serialize + filter items theo channel.
