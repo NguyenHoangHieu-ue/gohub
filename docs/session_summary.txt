@@ -1,5 +1,6 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-25 (session 76 — Deploy Vercel mới gohub-intel.vercel.app ✅;
+Cập nhật lần cuối: 2026-06-25 (session 76 tiếp — Users: sync Turso 55 users + search + delete; Guardian isCost theo role (staff không thấy COGS); Settings compact UI; font 14px; country codes từ Turso 332 rows; creator role + Information tab + online tracker (planning)
+Trước đó session 76: Deploy Vercel mới gohub-intel.vercel.app ✅;
    Task A: Sync Turso→Supabase + button; Task B: GA4/GSC tool chatbot; fix date timezone 11 file;
    Task C: Settings SKU Destination; Task D: Promise.all 4 trang + cache + chatbot schema;
    Wiki 4 trang update + sync Supabase; Lark auth check login web trước khi trả lời)
