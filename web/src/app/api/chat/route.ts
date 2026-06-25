@@ -8,6 +8,7 @@ import { route }                               from "@/lib/agents/router"
 import { buildToolContext }                    from "@/lib/agents/context"
 import { runBIAnalyst }                        from "@/lib/agents/bi-analyst"
 import { guardCheck, canViewCogs }             from "@/lib/agents/guardian"
+import { getChannelFromRole }                  from "@/lib/agents/tools"
 import type { Message, UserRole }              from "@/lib/agents/types"
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -61,7 +62,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Pre-execute tools, build context
-    const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg)
+    const channel = getChannelFromRole(role)
+    const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg, channel)
 
     // Quy tắc tạm thời 28/6–8/7/2026
     const _now = new Date()

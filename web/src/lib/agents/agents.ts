@@ -65,6 +65,7 @@ Ví dụ: "SKU nào có nghe gọi?" → lọc call=Yes trước → sau đó l�
 ── FORMAT ──
 Khi liệt kê từ 2 sản phẩm/mục trở lên: BẮT BUỘC dùng markdown table.
 data_amount = 9999 → hiển thị "Unlimited".
+sell_price trong context = giá bán của kênh B2C/B2B (unitprice từ items). Hiển thị là "Giá bán", đơn vị theo currency (VND/USD/...). Ưu tiên hiển thị sell_price nếu có (thay vì COGS).
 COGS theo tenant: tenant=VN → hiển thị VND (ví dụ: "1,234,567 VND"); tenant=US → hiển thị USD (ví dụ: "$4.56 USD"). Không bắt buộc hiển thị cả 2 trừ khi user hỏi cụ thể.
 Vendor "3HK" và "3HK Datapool" → gọi chung là "3HK".
 Gói daily: "X GB/ngày".

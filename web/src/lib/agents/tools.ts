@@ -202,6 +202,38 @@ async function enrichWithProducts(rows: any[]): Promise<any[]> {
   }))
 }
 
+// ─── Channel helper ──────────────────────────────────────────────────────────
+// Từ role → channel filter cho items (B2C / B2B / null = all)
+export function getChannelFromRole(role: string): "B2C" | "B2B" | null {
+  const r = (role || "").toLowerCase()
+  if (r === "b2c" || r === "saleb2c") return "B2C"
+  if (r === "b2b") return "B2B"
+  return null
+}
+
+// Fetch giá bán (unitprice) từ bảng items, filter theo channel + sku_code.
+// Returns map: sku_code → { unitprice, currency, item_type }
+// Nếu channel=null → trả Map rỗng (không cần filter)
+export async function getChannelPrices(
+  skuCodes: string[],
+  channel:  "B2C" | "B2B" | null
+): Promise<Map<string, { unitprice: number; currency: string; item_type: string }>> {
+  if (!channel || !skuCodes.length) return new Map()
+  const { data } = await supabaseAdmin
+    .from("items")
+    .select("sku_code, unitprice, currency, item_type")
+    .in("sku_code", skuCodes)
+    .ilike("item_type", `%${channel}%`)
+    .eq("status", "Active")
+  const map = new Map<string, { unitprice: number; currency: string; item_type: string }>()
+  for (const item of data ?? []) {
+    if (!map.has(item.sku_code) && item.unitprice != null) {
+      map.set(item.sku_code, { unitprice: item.unitprice, currency: item.currency, item_type: item.item_type })
+    }
+  }
+  return map
+}
+
 // ─── Tool: search_skus ────────────────────────────────────────────────────────
 // Query bảng sku_catalog (pre-joined, chỉ full-type C/E/1/2, có index trên country_group)
 

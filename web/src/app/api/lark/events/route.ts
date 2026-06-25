@@ -8,6 +8,7 @@ import { GoogleGenerativeAI }        from "@google/generative-ai"
 import { buildToolContext }          from "@/lib/agents/context"
 import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
+import { getChannelFromRole }        from "@/lib/agents/tools"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
@@ -348,7 +349,8 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       return
     }
 
-    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText)
+    const channel  = getChannelFromRole(role)
+    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText, channel)
 
     // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
     const _now = new Date()

@@ -10,6 +10,7 @@ import {
   getItems, searchListings, identifyCode,
   searchKnowledgeBase,
   searchNccWm, searchNcc3hk,
+  getChannelPrices,
 } from "@/lib/agents/tools"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
@@ -32,7 +33,8 @@ export async function buildToolContext(
   params:   ExtractedParams,
   ref:      Awaited<ReturnType<typeof getRefCache>>,
   isCost:   boolean,
-  userMsg?: string
+  userMsg?: string,
+  channel?: "B2C" | "B2B" | null,
 ): Promise<string> {
   const sections: string[] = []
 
@@ -105,7 +107,7 @@ export async function buildToolContext(
 
     // ── Case 3: Single-country query (CHỈ sản phẩm GoHub — NCC do agent Gap Analysis phụ trách) ──
     else if (params.country) {
-      const { skus, note } = await searchSkus({
+      const { skus: rawSkus, note } = await searchSkus({
         country:      params.country,
         days:         params.days,
         data_gb:      params.dataGB,
@@ -114,7 +116,13 @@ export async function buildToolContext(
         sim_type:     params.simType,
       }, ref)
 
-      const rows = skus.map(s => {
+      // Channel filter: B2C/B2B → chỉ hiện SKU có items của kênh đó + kèm giá bán
+      const priceMap = await getChannelPrices(rawSkus.map((s: any) => s.sku_code), channel ?? null)
+      const skus = channel
+        ? rawSkus.filter((s: any) => priceMap.has(s.sku_code))
+        : rawSkus
+
+      const rows = skus.map((s: any) => {
         const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999
           ? "Unlimited"
           : s.data_amount != null
@@ -127,6 +135,10 @@ export async function buildToolContext(
           cogsVnd = vnd.toLocaleString("en-US")
           cogsUsd = `$${usd}`
         }
+        const itemPrice = priceMap.get(s.sku_code)
+        const sellPrice = itemPrice
+          ? `sell:${itemPrice.unitprice.toLocaleString("en-US")}${itemPrice.currency}`
+          : null
         const parts = [
           s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
           s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
@@ -136,14 +148,15 @@ export async function buildToolContext(
           s.hotspot        ? `hotspot:${s.hotspot}`          : null,
           cogsVnd,
           cogsUsd,
+          sellPrice,
           s.note           ? `[note:${s.note}]`              : null,
         ]
         return parts.filter(Boolean).join("|")
       })
       sections.push(
-        `=== SẢN PHẨM GOHUB: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
+        `=== SẢN PHẨM GOHUB${channel ? ` (kênh ${channel})` : ""}: ${skus.length} SKU (nước=${params.country}${params.days ? ` ${params.days}d` : ""}${params.dataGB ? ` ${params.dataGB}GB` : ""}${params.isUnlimited ? " Unlimited" : ""}) ===`,
         note ? `Lưu ý: ${note}` : "",
-        `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}|[note nếu có]`,
+        `sku_code|tenant|sim|data|days|throttle|operator|kyc|call|hotspot${isCost ? "|cogs_vnd|cogs_usd" : ""}${channel ? "|sell_price" : ""}|[note nếu có]`,
         ...rows
       )
 
