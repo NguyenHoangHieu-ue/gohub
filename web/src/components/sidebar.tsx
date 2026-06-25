@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote } from "lucide-react"
+import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -91,6 +91,14 @@ const MANAGEMENT_GROUP = {
     { href: "/analytics/schema",    label: "Schema Config",   icon: Database },
     { href: "/analytics/settings",  label: "Settings",        icon: Settings },
     { href: "/admin",               label: "Admin (Product)", icon: Package  },
+  ],
+}
+
+// Creator-only management
+const CREATOR_GROUP = {
+  label: "Creator",
+  items: [
+    { href: "/analytics/creator", label: "Creator Settings", icon: Crown },
   ],
 }
 
@@ -267,8 +275,10 @@ export function Sidebar() {
   // Mô hình phân quyền analytics y hệt gohub-intel:
   //  - admin/manager: toàn quyền
   //  - còn lại: quyền NỀN theo role (ma trận role_permissions) ∪ trang cấp THÊM per-user (allowed_analytics)
+  const isCreatorUser = effectiveRole === "creator"
+
   const analyticsGroups = (() => {
-    if (effectiveRole === "admin") return ANALYTICS_GROUPS
+    if (effectiveRole === "admin" || effectiveRole === "creator") return ANALYTICS_GROUPS
     const baseline = rolePerms?.[effectiveRole] ?? ANALYTICS_DEFAULTS[effectiveRole] ?? []
     const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
     return ANALYTICS_GROUPS
@@ -279,9 +289,8 @@ export function Sidebar() {
       .filter(group => group.items.length > 0)
   })()
 
-  // Hiện mục Analytics cho admin/manager, hoặc bất kỳ role nào (gồm standard) có ít nhất 1 trang được cấp.
-  // Enforce truy cập thật ở server (analytics/layout.tsx); đây chỉ là hiển thị link.
-  const showAnalytics = effectiveRole === "admin" || analyticsGroups.length > 0
+  // Hiện mục Analytics cho admin/creator/manager, hoặc bất kỳ role nào có ít nhất 1 trang được cấp.
+  const showAnalytics = effectiveRole === "admin" || effectiveRole === "creator" || analyticsGroups.length > 0
 
   const navItems = (() => {
     // bod: chỉ chatbot (thuần analytics). admin: full + Admin.
@@ -345,8 +354,11 @@ export function Sidebar() {
             {showAnalytics && analyticsGroups.flatMap(g => g.items).map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
             ))}
-            {isAdminUser && MANAGEMENT_GROUP.items.map(it => (
+            {(isAdminUser || isCreatorUser) && MANAGEMENT_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
+            ))}
+            {isCreatorUser && CREATOR_GROUP.items.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
           </>
         ) : (
@@ -389,11 +401,19 @@ export function Sidebar() {
                     ))}
                   </div>
                 ))}
-                {analystOpen && isAdminUser && (
+                {analystOpen && (isAdminUser || isCreatorUser) && (
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{MANAGEMENT_GROUP.label}</p>
                     {MANAGEMENT_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
+                    ))}
+                  </div>
+                )}
+                {analystOpen && isCreatorUser && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wider">{CREATOR_GROUP.label}</p>
+                    {CREATOR_GROUP.items.map(it => (
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
                     ))}
                   </div>
                 )}

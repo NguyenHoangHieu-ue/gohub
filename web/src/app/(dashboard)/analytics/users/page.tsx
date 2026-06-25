@@ -49,6 +49,7 @@ function UserManagement() {
   const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState("")
   const [onlineUsers, setOnlineUsers] = useState<Record<string, number>>({})
+  const [creatorStatus, setCreatorStatus] = useState<{ hasCreator: boolean; canAssignCreator: boolean; creatorCount: number } | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
@@ -56,11 +57,12 @@ function UserManagement() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [uRes, mRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/config/role-permissions")])
+      const [uRes, mRes, csRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/config/role-permissions"), fetch("/api/config/creator-status")])
       const uData = await uRes.json()
       // Chỉ hiển thị user có email HOẶC lark_open_id (bỏ qua user không có cả hai)
       setUsers((uData.users || []).filter((u: any) => u.email || u.lark_open_id).map((u: any) => ({ ...u })))
       if (mRes.ok) setMatrix(await mRes.json())
+      if (csRes.ok) setCreatorStatus(await csRes.json())
     } finally {
       setLoading(false)
     }
@@ -227,7 +229,12 @@ function UserManagement() {
                   </div>
                   <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider", roleBadge(u.role))}>{u.role}</span>
                   <select value={u.role} onChange={e => updateUser(u.username, { role: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none">
-                    {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                    {ROLES.filter(r => {
+                      // Admin không thấy option creator nếu: đã có creator HOẶC đã đủ 2
+                      if (r === "creator" && creatorStatus?.hasCreator && u.role !== "creator") return false
+                      if (r === "creator" && !creatorStatus?.canAssignCreator && u.role !== "creator") return false
+                      return true
+                    }).map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
                   </select>
                   {u.role !== "admin" && (
                     <button onClick={() => setExpanded(isExpanded ? null : u.username)} className="flex items-center gap-1 text-xs font-bold text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50">
