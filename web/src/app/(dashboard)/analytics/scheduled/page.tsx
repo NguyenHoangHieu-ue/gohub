@@ -49,10 +49,10 @@ export default function ScheduledMessagesPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin") router.push("/chatbot")
+    if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot")
   }, [status, session, router])
 
-  if (status !== "authenticated" || session?.user?.role !== "admin") return null
+  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
   return <ScheduledMessages />
 }
 

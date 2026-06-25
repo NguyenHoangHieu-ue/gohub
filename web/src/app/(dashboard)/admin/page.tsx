@@ -185,7 +185,6 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   const [selected,     setSelected]     = useState<string>("")
   const [role,         setRole]         = useState<string>("staff")
   const [department,   setDepartment]   = useState<string>("none")
-  const [analytics,    setAnalytics]    = useState<Set<string>>(new Set())
   const [tabs,         setTabs]         = useState<Set<string>>(new Set())
   const [saving,       setSaving]       = useState(false)
   const [confirmDel,   setConfirmDel]   = useState(false)
@@ -215,33 +214,24 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
     if (!user) return
     setRole(user.role)
     setDepartment(user.department ?? "none")
-    // allowed_analytics = trang cấp THÊM cho riêng user (cộng dồn ngoài quyền theo Role). null = không cấp thêm.
-    setAnalytics(new Set(user.allowed_analytics
-      ? user.allowed_analytics.split(",").filter(Boolean)
-      : []))
     setTabs(new Set(user.allowed_tabs != null
       ? user.allowed_tabs.split(",").filter(Boolean)
       : PM_TABS.map(t => t.key)))
   }, [selected, users]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleAnalytics = (id: string) =>
-    setAnalytics(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const toggleTab = (key: string) =>
     setTabs(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
 
   const save = async () => {
     if (!user) return
     setSaving(true)
-    const aIds = ANALYTICS_REPORTS.filter(r => analytics.has(r.id)).map(r => r.id)
-    const allowed_analytics = aIds.length ? aIds.join(",") : null
     const tIds = PM_TABS.filter(t => tabs.has(t.key)).map(t => t.key)
-    // Lưu tường minh danh sách tab đã tích (kể cả đủ 3) — bỏ bẫy "đủ = null = theo phòng ban".
-    // "" = không cấp tab quản lý nào; "kb,skus,ncc" = cấp đủ 3.
     const allowed_tabs = tIds.join(",")
     const res = await fetch(`/api/admin/users/${user.username}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ role, department, allowed_analytics, allowed_tabs }),
+      // allowed_analytics không thay đổi từ đây — quản lý tại /analytics/users
+      body:    JSON.stringify({ role, department, allowed_analytics: user.allowed_analytics || null, allowed_tabs }),
     })
     setSaving(false)
     if (res.ok) { onRefresh(); onNotify("success", `Đã cập nhật quyền cho ${user.username}`) }
@@ -260,7 +250,6 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
 
   const selectCls = "w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-  const isFullAnalytics = analytics.size === ANALYTICS_REPORTS.length
   const isFullTabs = tabs.size === PM_TABS.length
 
   const ToggleCell = ({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) => (
@@ -336,27 +325,15 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               </div>
             </div>
 
-            {/* Trang Analytics */}
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Trang Analytics cấp thêm cho user</p>
-                  <p className="text-xs text-slate-400">Cộng dồn NGOÀI quyền nền theo Role (ma trận Role × Báo cáo, mục nâng cao) · Admin/Manager luôn toàn quyền</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">{analytics.size}/{ANALYTICS_REPORTS.length}</span>
-                  <button onClick={() => setAnalytics(new Set(ANALYTICS_REPORTS.map(x => x.id)))} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Chọn tất cả</button>
-                  <button onClick={() => setAnalytics(new Set())} className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">Bỏ chọn</button>
-                </div>
+            {/* Analytics → link sang /analytics/users */}
+            <div className="flex items-center justify-between px-4 py-3 bg-blue-50/60 border border-blue-100 rounded-xl">
+              <div>
+                <p className="text-sm font-bold text-slate-700">Phân quyền Analytics & BI</p>
+                <p className="text-xs text-slate-400">Cấp trang báo cáo + ma trận Role × Report tại trang quản lý người dùng Analytics</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {ANALYTICS_REPORTS.map(r => (
-                  <ToggleCell key={r.id} on={analytics.has(r.id)} label={r.label} onClick={() => toggleAnalytics(r.id)} />
-                ))}
-              </div>
-              {analytics.size === 0
-                ? <p className="text-[11px] text-slate-400 mt-1.5">Không cấp thêm → user chỉ thấy theo quyền nền của Role.</p>
-                : isFullAnalytics && <p className="text-[11px] text-emerald-600 mt-1.5">Cấp tất cả → user thấy toàn bộ Analytics.</p>}
+              <a href="/analytics/users" className="flex items-center gap-1.5 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] whitespace-nowrap">
+                Quản lý Analytics →
+              </a>
             </div>
 
             {/* Tab quản lý (PM) */}

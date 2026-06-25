@@ -11,7 +11,8 @@ export const ALL_ANALYTICS_IDS = [
 // Quyền NỀN mặc định theo role (admin = toàn quyền, không liệt kê). Deny-by-default;
 // per-user allowed_analytics cộng dồn thêm. Admin có thể sửa trong Users / Settings.
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  bod:        ALL_ANALYTICS_IDS,
+  // BOD xem toàn bộ analytics nhưng không cấu hình scheduled messages (Lark automation = admin/creator)
+  bod:        ALL_ANALYTICS_IDS.filter(id => !["scheduled"].includes(id)),
   staff:      ["dashboard", "feedback", "products"],
   b2b:        ["dashboard", "b2b", "vendors", "channels", "customers", "targets"],
   b2c:        ["dashboard", "b2c", "channels", "website", "products", "customers"],

@@ -28,8 +28,8 @@ interface User { username: string; name: string; email: string; role: string; de
 export default function UserManagementPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  useEffect(() => { if (status === "authenticated" && session?.user?.role !== "admin") router.push("/chatbot") }, [status, session, router])
-  if (status !== "authenticated" || session?.user?.role !== "admin") return null
+  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot") }, [status, session, router])
+  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
   return <UserManagement />
 }
 
@@ -92,7 +92,7 @@ function UserManagement() {
     try {
       const res = await fetch(`/api/admin/users/${u.username}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: u.role, allowed_analytics: u.allowed_analytics || null }),
+        body: JSON.stringify({ role: u.role, department: u.department || "none", allowed_analytics: u.allowed_analytics || null }),
       })
       notify(res.ok, res.ok ? `Đã lưu ${u.name || u.username}` : "Lưu thất bại")
     } finally {
@@ -205,6 +205,9 @@ function UserManagement() {
           <button onClick={syncTursoUsers} disabled={syncing} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
             {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}Sync Turso (55)
           </button>
+          <a href="/admin" className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800">
+            <UserCog className="w-3.5 h-3.5" />Thêm / Đổi mật khẩu →
+          </a>
         </div>
         <div className="divide-y divide-slate-100">
           {loading ? <div className="p-12 flex justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div> : users.filter(u => {
@@ -228,14 +231,20 @@ function UserManagement() {
                       <p className="text-xs text-slate-400 truncate">{u.email || u.username}</p>
                     </div>
                   </div>
-                  <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider", roleBadge(u.role))}>{u.role}</span>
-                  <select value={u.role} onChange={e => updateUser(u.username, { role: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                  <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0", roleBadge(u.role))}>{u.role}</span>
+                  <select value={u.role} onChange={e => updateUser(u.username, { role: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none" title="Role">
                     {ROLES.filter(r => {
-                      // Admin không thấy option creator nếu: đã có creator HOẶC đã đủ 2
                       if (r === "creator" && creatorStatus?.hasCreator && u.role !== "creator") return false
                       if (r === "creator" && !creatorStatus?.canAssignCreator && u.role !== "creator") return false
                       return true
                     }).map(r => <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>)}
+                  </select>
+                  <select value={u.department || "none"} onChange={e => updateUser(u.username, { department: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none" title="Phòng ban">
+                    <option value="none">Không phòng ban</option>
+                    <option value="sales">Sales</option>
+                    <option value="product">Product</option>
+                    <option value="tech">Tech</option>
+                    <option value="finance">Finance</option>
                   </select>
                   {u.role !== "admin" && (
                     <button onClick={() => setExpanded(isExpanded ? null : u.username)} className="flex items-center gap-1 text-xs font-bold text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50">
