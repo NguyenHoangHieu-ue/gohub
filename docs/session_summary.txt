@@ -1,7 +1,8 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-25 (session 76 — Netlify hết account → chuyển Vercel mới "gohub-intel";
-   fix cron vercel.json * * * * * → 0 0 * * *; import env; setup Lark Event URL + OAuth redirect;
-   ✅ DEPLOY VERCEL MỚI THÔNG, login Lark + bot OK)
+Cập nhật lần cuối: 2026-06-25 (session 76 — Deploy Vercel mới gohub-intel.vercel.app ✅;
+   Task A: Sync Turso→Supabase + button; Task B: GA4/GSC tool chatbot; fix date timezone 11 file;
+   Task C: Settings SKU Destination; Task D: Promise.all 4 trang + cache + chatbot schema;
+   Wiki 4 trang update + sync Supabase; Lark auth check login web trước khi trả lời)
 
 ⚠️ QUY TẮC THƯỜNG TRỰC: ĐẦU MỖI SESSION phải đọc D:\Kien_Thuc\Work\gohub\LamViec\HeThong\new_info.txt
    — file này chứa các thay đổi nghiệp vụ/term cần cập nhật vào hệ thống (analytics, wiki...). Làm xong → tự test
