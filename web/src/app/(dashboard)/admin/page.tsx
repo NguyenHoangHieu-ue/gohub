@@ -48,10 +48,10 @@ export default function AdminPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin") router.push("/chatbot")
+    if (status === "authenticated" && session?.user?.role !== "admin" && session?.user?.role !== "creator") router.push("/chatbot")
   }, [status, session, router])
 
-  if (status !== "authenticated" || session?.user?.role !== "admin") return null
+  if (status !== "authenticated" || (session?.user?.role !== "admin" && session?.user?.role !== "creator")) return null
 
   return <AdminPanel currentUser={session.user.username} />
 }

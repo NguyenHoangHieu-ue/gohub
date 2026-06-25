@@ -57,13 +57,22 @@ function AnalyticsSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [savedTiers,   setSavedTiers]   = useState<string>("{}")
+  const [savedPolicy,  setSavedPolicy]  = useState<string>("{}")
+  const [savedFilters, setSavedFilters] = useState<string>("{}")
+  const dirtyTiers   = JSON.stringify(tiers)   !== savedTiers
+  const dirtyPolicy  = JSON.stringify(policy)  !== savedPolicy
+  const dirtyFilters = JSON.stringify(filters) !== savedFilters
   const [availablePartners, setAvailablePartners] = useState<string[]>([])
   const [expandedTiers, setExpandedTiers] = useState<Record<string, boolean>>({})
   const [addingTier, setAddingTier] = useState<string | null>(null)
   const [db, setDb] = useState<any>(null)
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [flushing, setFlushing] = useState(false)
   const [skuRules, setSkuRules] = useState<{ startsWith: string; codeLength: number; description: string }[]>([])
+  const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
+  const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
   const [countryCodes, setCountryCodes] = useState<{ code: string; country: string }[]>([])
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
@@ -75,6 +84,15 @@ function AnalyticsSettings() {
       const d = await r.json()
       notify(!!d.ok, d.ok ? ("Sync OK: " + d.synced + " dong (" + d.months + " thang)") : (d.error || "Sync that bai"))
     } catch (e) { notify(false, "Loi ket noi") } finally { setSyncing(false) }
+  }
+
+  const flushCache = async () => {
+    setFlushing(true)
+    try {
+      const r = await fetch("/api/admin/flush-analytics-cache", { method: "POST" })
+      const d = await r.json()
+      notify(!!d.ok, d.ok ? `Đã xoá ${d.deleted} cache entries — lần tải tiếp sẽ lấy dữ liệu mới` : "Xoá cache thất bại")
+    } catch { notify(false, "Lỗi kết nối") } finally { setFlushing(false) }
   }
 
   const checkDb = async () => {
@@ -97,11 +115,19 @@ function AnalyticsSettings() {
         fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
       ])
-      setSkuRules(skuRule?.rules || [])
+      const parsedSkuRules = skuRule?.rules || []
+      setSkuRules(parsedSkuRules)
+      setSavedSkuRules(JSON.stringify(parsedSkuRules))
       setCountryCodes(Array.isArray(cc) ? cc : [])
-      setTiers(t && Object.keys(t).length ? t : { Strategic: [] })
-      setPolicy(p || {})
-      setFilters(f || {})
+      const parsedTiers = t && Object.keys(t).length ? t : { Strategic: [] }
+      const parsedPolicy = p || {}
+      const parsedFilters = f || {}
+      setTiers(parsedTiers)
+      setPolicy(parsedPolicy)
+      setFilters(parsedFilters)
+      setSavedTiers(JSON.stringify(parsedTiers))
+      setSavedPolicy(JSON.stringify(parsedPolicy))
+      setSavedFilters(JSON.stringify(parsedFilters))
       setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
     } finally {
       setLoading(false)
@@ -115,6 +141,13 @@ function AnalyticsSettings() {
     setSaving(key)
     try {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      if (res.ok) {
+        // Reset dirty state sau khi lưu
+        if (key === "tiers")    setSavedTiers(JSON.stringify(body))
+        if (key === "policy")   setSavedPolicy(JSON.stringify(body))
+        if (key === "filters")  setSavedFilters(JSON.stringify(body))
+        if (key === "sku-dest") setSavedSkuRules(JSON.stringify(body.rules ?? body))
+      }
       notify(res.ok, res.ok ? "Đã lưu" : "Lưu thất bại")
     } finally {
       setSaving(null)
@@ -158,6 +191,9 @@ function AnalyticsSettings() {
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Database className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
           <span className="flex items-center gap-2">
+            <button onClick={flushCache} disabled={flushing} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 disabled:opacity-50" title="Xoá L2 Supabase cache — lần tải tiếp lấy dữ liệu mới từ gohub_dw">
+              {flushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Xoá Cache"}
+            </button>
             <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
               {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync sang Supabase"}
             </button>
@@ -193,6 +229,15 @@ function AnalyticsSettings() {
                     )}
                   </div>
                 )}
+                {db.cache != null && (
+                  <div className="border border-amber-100 rounded-lg p-3 bg-amber-50/40">
+                    <p className="font-bold text-amber-700 text-xs">Query Cache (Supabase L2 · TTL 10 phút)</p>
+                    <p className="text-slate-500 text-xs mt-1">
+                      <span className="font-medium text-slate-700">{db.cache.entries ?? 0}</span> entries đang cache
+                      {db.cache.oldest && <> · cũ nhất: <span className="font-medium text-slate-700">{fmtTime(db.cache.oldest)}</span></>}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -204,7 +249,7 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Đối tác chiến lược (Partner Tiers)</h2></div>
-          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers" || !dirtyTiers} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyTiers ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "tiers" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -247,7 +292,7 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Sliders className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Chính sách truy cập Chatbot (Guardian)</h2></div>
-          <button onClick={() => savePost("policy", "/api/config/access-policy", fullPolicy())} disabled={saving === "policy"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+          <button onClick={() => savePost("policy", "/api/config/access-policy", fullPolicy())} disabled={saving === "policy" || !dirtyPolicy} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyPolicy ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "policy" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -276,7 +321,7 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
-          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters" || !dirtyFilters} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyFilters ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "filters" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -295,7 +340,7 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">SKU Destination Definition</h2></div>
-          <button onClick={() => savePost("sku-dest", "/api/config/sku-destination-rule", { rules: skuRules })} disabled={saving === "sku-dest"} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+          <button onClick={() => savePost("sku-dest", "/api/config/sku-destination-rule", { rules: skuRules })} disabled={saving === "sku-dest" || !dirtySkuRules} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtySkuRules ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "sku-dest" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>

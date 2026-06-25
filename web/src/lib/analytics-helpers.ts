@@ -1,23 +1,67 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 
-// ── Server-side query cache (5 phút TTL, per serverless instance) ─────────────
-// Giúp tránh query lại gohub_dw khi cùng params được gọi nhiều lần
+// ── Two-level query cache ──────────────────────────────────────────────────────
+// L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
+// L2: Supabase analytics_query_cache (shared, sống qua cold start, TTL 10 phút)
+// → Dữ liệu luôn tươi (max TTL_L2 cũ), cold start không cần re-query gohub_dw.
 
 const _cache = new Map<string, { data: unknown; exp: number }>()
-const CACHE_TTL = 5 * 60_000 // 5 minutes
+const TTL_L1 = 5  * 60_000  // 5 phút in-memory
+const TTL_L2 = 10            // 10 phút trong Supabase (minutes)
 
-export async function cachedQuery<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export async function cachedQuery<T>(
+  key: string,
+  fn:  () => Promise<T>,
+  ttlMinutes = TTL_L2,
+): Promise<T> {
+  // L1 hit
   const hit = _cache.get(key)
   if (hit && Date.now() < hit.exp) return hit.data as T
+
+  // L2 hit (Supabase shared cache)
+  try {
+    const { data: row } = await supabaseAdmin
+      .from("analytics_query_cache")
+      .select("data, cached_at")
+      .eq("cache_key", key)
+      .maybeSingle()
+    if (row?.cached_at) {
+      const ageMs = Date.now() - new Date(row.cached_at).getTime()
+      if (ageMs < ttlMinutes * 60_000) {
+        const result = row.data as T
+        _cache.set(key, { data: result, exp: Date.now() + TTL_L1 })
+        return result
+      }
+    }
+  } catch { /* Supabase unavailable → fall through to gohub_dw */ }
+
+  // Cache miss: query gohub_dw
   const data = await fn()
-  _cache.set(key, { data, exp: Date.now() + CACHE_TTL })
-  // Prevent unbounded growth
+
+  // Warm L1
+  _cache.set(key, { data, exp: Date.now() + TTL_L1 })
   if (_cache.size > 200) {
     const now = Date.now()
     for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
   }
+
+  // Warm L2 fire-and-forget (không block response)
+  void supabaseAdmin
+    .from("analytics_query_cache")
+    .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+
   return data
+}
+
+// Xoá toàn bộ L2 cache (admin — gọi từ Settings)
+export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
+  _cache.clear()
+  const { count } = await supabaseAdmin
+    .from("analytics_query_cache")
+    .delete({ count: "exact" })
+    .lt("cached_at", new Date(Date.now() + 1000).toISOString()) // xoá hết
+  return { deleted: count ?? 0 }
 }
 
 // Cache-Control header value for API responses (browser + CDN cache 5 min)

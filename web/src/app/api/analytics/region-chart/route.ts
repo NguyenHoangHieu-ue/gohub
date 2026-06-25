@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { tursoQuery } from "@/lib/turso"
 import { getDateFilter, getSkuDestinationRule, getDestinationSQL, cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
@@ -32,18 +33,14 @@ export async function GET(req: NextRequest) {
          GROUP BY 1 ORDER BY revenue DESC LIMIT 15`
       )
 
-      // Map codes to names via dim_location if available
-      const codeList = rows.map(r => `'${r.region_code}'`).join(",")
+      // Map codes to names via Turso country_codes (332 rows, accurate)
       let nameMap: Record<string, string> = {}
-      if (codeList) {
-        try {
-          const nameRows = await queryAnalytics<{ code: string; name: string }>(
-            `SELECT UPPER(iso_code_3) as code, country_name as name
-             FROM dim_location WHERE UPPER(iso_code_3) IN (${codeList}) LIMIT 50`
-          )
-          nameRows.forEach(r => { nameMap[r.code] = r.name })
-        } catch {}
-      }
+      try {
+        const countryRows = await tursoQuery<{ code: string; country: string }>(
+          "SELECT code, country FROM country_codes"
+        )
+        countryRows.forEach(r => { nameMap[String(r.code).toUpperCase()] = String(r.country) })
+      } catch {}
 
       return rows.map(r => ({
         region:  nameMap[r.region_code] || r.region_code || "Unknown",

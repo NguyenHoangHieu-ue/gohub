@@ -49,5 +49,15 @@ export async function GET() {
     products = { error: e?.message?.slice(0, 120) ?? "error" }
   }
 
-  return NextResponse.json({ checkedAt: new Date().toISOString(), warehouse, products })
+  // Query cache stats (L2 Supabase)
+  let cache: any = null
+  try {
+    const { count } = await supabaseAdmin
+      .from("analytics_query_cache").select("*", { count: "exact", head: true })
+    const { data: oldest } = await supabaseAdmin
+      .from("analytics_query_cache").select("cached_at").order("cached_at", { ascending: true }).limit(1).maybeSingle()
+    cache = { entries: count ?? 0, oldest: oldest?.cached_at ?? null }
+  } catch {}
+
+  return NextResponse.json({ checkedAt: new Date().toISOString(), warehouse, products, cache })
 }

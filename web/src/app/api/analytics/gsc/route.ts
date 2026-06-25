@@ -6,7 +6,7 @@ import { runGSC } from "@/lib/ga4"
 // Generic Search Console endpoint (port "y hệt" gohub-intel /api/analytics/gsc).
 // Params: siteId, startDate, endDate (YYYY-MM-DD bắt buộc), dimensions (csv, mặc định date).
 // Trả mảng rows GSC ({ keys, clicks, impressions, ctr, position }) — khớp cách intel component đọc.
-const ANALYTICS_ROLES = new Set(["admin", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
+const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await runGSC(siteId, startDate, endDate, dimensions)
-    return NextResponse.json(rows)
+    // Component đọc data?.rows?.map(...) — phải wrap như GA4Report format
+    return NextResponse.json({ rows, rowCount: rows.length })
   } catch (err: any) {
     console.error("[analytics/gsc]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

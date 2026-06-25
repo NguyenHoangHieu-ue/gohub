@@ -235,5 +235,9 @@
 
 *18/6/2026 — Session 62 (2026-06-18)*
 40. ✅ FIXED: sidebar.tsx — đổi tất cả text tiếng Việt sang tiếng Anh: "Quản Lý"→"Management", "Sản Phẩm"→"Products", "Báo Cáo & BI"→"Reports & BI", "Mở rộng/Thu gọn sidebar"→"Expand/Collapse sidebar", "Đăng xuất"→"Sign Out" (commit fcef01c)
-- Leads thì nó là cái db gohub omni trong turso á, Nó là cái db cua omni.gohub.cloud
-- Spent và budget là cái mn input lưu trong turso db trong folder gohub-intel
+
+*25/6/2026
+✅ FIXED: Analytics load chậm — L2 Supabase shared cache (TTL 10 phút). cachedQuery nâng cấp 2 tầng: L1 in-memory (5 phút, per-instance) + L2 Supabase analytics_query_cache (10 phút, shared across cold starts). Cold start không query gohub_dw lại; dữ liệu max 10 phút cũ. Migration v20. Nút "Xoá Cache" (vàng) trong Settings để force-refresh.
+✅ FIXED: Dashboard top destination hiện mã nước → map sang tên nước qua Turso country_codes (332 rows). region-chart/route.ts.
+✅ FIXED: Web Analytics thiếu số liệu GSC (Search Trends + Top Queries rỗng) — BUG: /api/analytics/gsc trả raw array, component đọc data.rows → undefined → gscTimeSeries=[]. Fix: wrap response thành {rows, rowCount}. Thêm creator/manager vào ANALYTICS_ROLES.
+✅ FIXED: Nút Lưu màu xám cho đến khi có thay đổi — dirty tracking (savedTiers/savedPolicy/savedFilters/savedSkuRules) trong Settings page. 4 nút save đều xám → xanh khi dirty.

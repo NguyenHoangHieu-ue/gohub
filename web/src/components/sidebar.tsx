@@ -127,6 +127,21 @@ function useRolePermissions() {
   return perms
 }
 
+// Tab visibility config từ creator — { [role]: string[] } danh sách tab bị ẩn
+function useTabVisibility(role: string) {
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!role || role === "creator") return  // creator luôn thấy tất cả
+    fetch("/api/config/tab-visibility", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : {})
+      .then((vis: Record<string, string[]>) => {
+        setHidden(new Set(vis[role] || []))
+      })
+      .catch(() => {})
+  }, [role])
+  return hidden
+}
+
 // Fetch profile từ DB mỗi lần load → không cần re-login khi admin đổi dept/quyền
 function useMyProfile(username: string) {
   const [dbRole,          setDbRole]          = useState<string | null>(null)
@@ -269,8 +284,9 @@ export function Sidebar() {
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
 
-  const extraTabs = useDeptTabs(effectiveRole, department)
-  const rolePerms = useRolePermissions()
+  const extraTabs  = useDeptTabs(effectiveRole, department)
+  const rolePerms  = useRolePermissions()
+  const hiddenTabs = useTabVisibility(effectiveRole)  // creator config: tabs bị ẩn theo role
 
   // Mô hình phân quyền analytics y hệt gohub-intel:
   //  - admin/manager: toàn quyền
@@ -278,15 +294,27 @@ export function Sidebar() {
   const isCreatorUser = effectiveRole === "creator"
 
   const analyticsGroups = (() => {
-    if (effectiveRole === "admin" || effectiveRole === "creator") return ANALYTICS_GROUPS
-    const baseline = rolePerms?.[effectiveRole] ?? ANALYTICS_DEFAULTS[effectiveRole] ?? []
-    const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
-    return ANALYTICS_GROUPS
-      .map(group => ({
-        ...group,
-        items: group.items.filter(item => granted.has(analyticsId(item))),
-      }))
-      .filter(group => group.items.length > 0)
+    let groups = ANALYTICS_GROUPS
+    if (effectiveRole !== "admin" && effectiveRole !== "creator") {
+      const baseline = rolePerms?.[effectiveRole] ?? ANALYTICS_DEFAULTS[effectiveRole] ?? []
+      const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
+      groups = ANALYTICS_GROUPS
+        .map(group => ({
+          ...group,
+          items: group.items.filter(item => granted.has(analyticsId(item))),
+        }))
+        .filter(group => group.items.length > 0)
+    }
+    // Ẩn tab theo creator config (hiddenTabs cho role này)
+    if (hiddenTabs.size > 0) {
+      groups = groups
+        .map(group => ({
+          ...group,
+          items: group.items.filter(item => !hiddenTabs.has(analyticsId(item))),
+        }))
+        .filter(group => group.items.length > 0)
+    }
+    return groups
   })()
 
   // Hiện mục Analytics cho admin/creator/manager, hoặc bất kỳ role nào có ít nhất 1 trang được cấp.
@@ -297,17 +325,18 @@ export function Sidebar() {
     if (effectiveRole === "bod") {
       return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }]
     }
-    if (effectiveRole === "admin") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
+    if (effectiveRole === "admin" || effectiveRole === "creator") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)
     const pmTabs = allowedTabs ?? Array.from(extraTabs)
     const allowed = new Set([...DEFAULT_STANDARD_TABS, ...pmTabs])
     return NAV_ALL.filter(n => allowed.has(n.key))
   })()
 
-  // Phân các tab được phép vào 3 nhóm lớn
+  // Phân các tab được phép vào 3 nhóm lớn — ẩn theo hiddenTabs (creator config)
   const allowedKeys  = new Set(navItems.map(n => n.key))
-  const chatKbItems  = NAV_CHAT_KB.filter(n => allowedKeys.has(n.key))
-  const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key))
+  const chatKbItems  = NAV_CHAT_KB.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
+  const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
+  const showInfoTab  = !hiddenTabs.has("info")   // creator có thể ẩn Information tab
   const isAdminUser  = effectiveRole === "admin"
   const isActive = (href: string) =>
     href === "/analytics"
@@ -344,7 +373,7 @@ export function Sidebar() {
         {collapsed ? (
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
-            <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />
+            {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
             {chatKbItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
@@ -364,10 +393,12 @@ export function Sidebar() {
         ) : (
           /* Chế độ mở rộng: 3 nhóm lớn */
           <>
-            {/* Information — nổi bật, luôn hiển thị đầu sidebar */}
-            <div className="mb-1 px-2">
-              <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed={false} accent="violet" />
-            </div>
+            {/* Information — nổi bật, ẩn nếu creator config ẩn cho role này */}
+            {showInfoTab && (
+              <div className="mb-1 px-2">
+                <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed={false} accent="violet" />
+              </div>
+            )}
 
             {/* 1 ─ Chat & Knowledge */}
             {chatKbItems.length > 0 && (

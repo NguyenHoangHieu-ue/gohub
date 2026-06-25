@@ -1,5 +1,21 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-25 (session 76 tiếp — Users: sync Turso 55 users + search + delete; Guardian isCost theo role (staff không thấy COGS); Settings compact UI; font 14px; country codes từ Turso 332 rows; creator role + Information tab + online tracker (planning)
+Cập nhật lần cuối: 2026-06-25 (session 77 — tiếp session cũ hết token: creator nav+admin page+tab visibility wiring XONG; Settings dirty tracking 4 nút; Dashboard country codes Turso; Web Analytics GSC bug fix + analytics indexes gohub_dw)
+## Session 77 (2026-06-25) — Tiếp session 76 hết token: creator nav, Settings dirty, Web Analytics GSC fix, analytics indexes
+
+### Hoàn tất từ session cũ (tmp.txt)
+- **Creator role**: navItems fix (creator thấy nav admin), admin/page.tsx cho creator vào, useTabVisibility hook wiring vào sidebar, hiddenTabs filter analytics + chatKbItems + productItems + showInfoTab
+- **Info tab**: thêm `info` vào ALL_ANALYTICS_IDS (analytics-roles.ts) + REPORTS (users/page.tsx) + ALL_TABS (creator/page.tsx)
+- **Dashboard country codes**: region-chart/route.ts → dùng Turso country_codes thay dim_location (fix mã nước → tên nước)
+- **Settings dirty tracking**: savedTiers/savedPolicy/savedFilters/savedSkuRules — 4 nút save màu xám → xanh khi có thay đổi; reset sau khi lưu thành công
+
+### Bug.txt 25/6 — Tất cả fix xong
+- **Analytics slow**: L2 Supabase shared cache — `cachedQuery` nâng cấp 2 tầng: L1 in-memory 5 phút (per-instance) + L2 `analytics_query_cache` Supabase 10 phút (shared, sống qua cold start). Dữ liệu luôn tươi (max TTL cũ), không đụng gohub_dw. Migration `v20_analytics_cache.sql`. Nút "Xoá Cache" (vàng) trong Settings + cache stats trong db-status. API `/api/admin/flush-analytics-cache` POST.
+- **Web Analytics thiếu GSC data**: ROOT CAUSE: `/api/analytics/gsc` trả raw `GscRow[]` trực tiếp nhưng component đọc `data?.rows?.map(...)` → `rows` = undefined → gscTimeSeries=[]/topQueries=[]. FIX: wrap response `{ rows, rowCount }`. Thêm `creator`/`manager` vào ANALYTICS_ROLES ga4+gsc routes.
+
+### tsc PASS.
+
+---
+
 Trước đó session 76: Deploy Vercel mới gohub-intel.vercel.app ✅;
    Task A: Sync Turso→Supabase + button; Task B: GA4/GSC tool chatbot; fix date timezone 11 file;
    Task C: Settings SKU Destination; Task D: Promise.all 4 trang + cache + chatbot schema;
