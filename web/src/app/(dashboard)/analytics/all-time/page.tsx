@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useState, useEffect } from "react"
 import {
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 
 function getDefaultDateRange() {
   const today = new Date()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
+  const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
   // Mac dinh: ngay 1 thang hien tai -> hom nay.
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
   const end = today

@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
+import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 
 // Role data filter: admin không giới hạn; role khác lấy directive từ app_settings.role_filters
 export async function getRoleDataFilter(role?: string): Promise<string> {
@@ -33,6 +34,39 @@ const executeSQLDecl = {
   },
 }
 
+const queryGA4Decl = {
+  name: "queryGA4",
+  description: "Query Google Analytics 4 (GA4) for website traffic data: sessions, users, pageviews, purchases, revenue, bounce rate, conversion rate. Use for questions about website performance.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      startDate: { type: SchemaType.STRING, description: "Start date in YYYY-MM-DD format or relative like '30daysAgo'" },
+      endDate:   { type: SchemaType.STRING, description: "End date in YYYY-MM-DD format or 'today'" },
+      metrics:   { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "GA4 metric names, e.g. ['sessions','activeUsers','purchaseRevenue','ecommercePurchases','conversions']" },
+      dimensions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "GA4 dimension names, e.g. ['date','country','sessionSourceMedium','itemName']" },
+      siteId:    { type: SchemaType.STRING, description: "Site ID (optional, defaults to first configured site)" },
+      limit:     { type: SchemaType.NUMBER, description: "Max rows to return (default 50)" },
+    },
+    required: ["startDate", "endDate", "metrics"],
+  },
+}
+
+const queryGSCDecl = {
+  name: "queryGSC",
+  description: "Query Google Search Console (GSC) for organic search data: clicks, impressions, CTR, average position, top keywords. Use for SEO and search performance questions.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      startDate:  { type: SchemaType.STRING, description: "Start date YYYY-MM-DD" },
+      endDate:    { type: SchemaType.STRING, description: "End date YYYY-MM-DD" },
+      dimensions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "Dimensions: ['query'], ['date'], or ['query','date']" },
+      siteId:     { type: SchemaType.STRING, description: "Site ID (optional)" },
+      rowLimit:   { type: SchemaType.NUMBER, description: "Max rows (default 20)" },
+    },
+    required: ["startDate", "endDate"],
+  },
+}
+
 export async function runBIAnalyst(
   systemInstruction: string,
   geminiHistory: any[],
@@ -45,11 +79,18 @@ export async function runBIAnalyst(
     ? `${systemInstruction}\n\n━━━ GIỚI HẠN TRUY CẬP DỮ LIỆU (DATA ACCESS RESTRICTION) ━━━\nVai trò "${role}" CHỈ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm điều kiện này vào MỌI câu SQL (WHERE), không được bỏ qua:\n${dataFilter}`
     : systemInstruction
 
+  // Load GA4 sites để inject vào system prompt
+  let ga4SiteList = ""
+  try {
+    const sites = await ga4Sites()
+    if (sites.length) ga4SiteList = "\n\nGA4 SITES: " + sites.map(s => `${s.id}="${s.name}" (${s.propertyId})`).join(", ")
+  } catch {}
+
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
-    systemInstruction: finalInstruction,
-    tools: [{ functionDeclarations: [executeSQLDecl] }],
+    systemInstruction: finalInstruction + ga4SiteList,
+    tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl] }],
     // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
     generationConfig: { temperature: 0 },
   })
@@ -65,6 +106,35 @@ export async function runBIAnalyst(
     const parts: any[] = []
 
     for (const call of calls) {
+      if (call.name === "queryGA4") {
+        try {
+          const a = call.args as any
+          const report = await runGA4Report({
+            siteId: a.siteId, startDate: a.startDate, endDate: a.endDate,
+            metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50,
+          })
+          const rows = (report.rows || []).slice(0, 50).map(r => ({
+            dimensions: r.dimensionValues?.map((d: any) => d.value),
+            metrics: r.metricValues?.map((m: any) => m.value),
+          }))
+          parts.push({ functionResponse: { name: "queryGA4", response: { rows, rowCount: report.rowCount } } })
+        } catch (e: any) {
+          parts.push({ functionResponse: { name: "queryGA4", response: { error: e.message } } })
+        }
+        continue
+      }
+
+      if (call.name === "queryGSC") {
+        try {
+          const a = call.args as any
+          const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
+          parts.push({ functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 50) } } })
+        } catch (e: any) {
+          parts.push({ functionResponse: { name: "queryGSC", response: { error: e.message } } })
+        }
+        continue
+      }
+
       if (call.name !== "executeSQL") {
         parts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
         continue

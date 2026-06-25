@@ -11,6 +11,31 @@ Cập nhật lần cuối: 2026-06-25 (session 76 — Netlify hết account → 
    Chỉ chạy local để test. Khi nào user xác nhận local OK → user mới quyết định push lên GitHub.
    Lý do: chuyển sang Vercel mới, cần kiểm soát deploy thủ công.
 
+## Session 76 tiếp (2026-06-25) — Task A+B: Sync Turso→Supabase, GA4+GSC chatbot, fix date timezone
+
+### Task A — Migrate Turso channel_group_costs → Supabase (xóa dependency Turso cuối)
+- API MỚI `/api/admin/sync-turso-costs`: GET preview count, POST sync Turso→Supabase (delete+insert theo tháng).
+- `b2c/monthly/route.ts`: bỏ tursoQuery/tursoConfigured → đọc spend B2C từ Supabase `analytics_channel_group_costs`.
+- Settings page: thêm nút "Sync sang Supabase" (xanh lá) cạnh "Kiểm tra Database". Kết quả hiện qua notify.
+- Web giờ ZERO phụ thuộc Turso cho analytics data.
+
+### Fix date range timezone bug (31/5 → 1/6)
+- ROOT CAUSE: inline `fmt = (dt) => dt.toISOString().split("T")[0]` dùng UTC → VN UTC+7 lệch 1 ngày:
+  `new Date(2026, 5, 1)` = June 1 00:00 local = May 31 17:00 UTC → cắt ra "2026-05-31".
+- FIX: thay toàn bộ `toISOString().split("T")[0]` trong `fmt` và `formatDateToISO` inline bằng
+  `getFullYear()/getMonth()/getDate()` (local time) qua PowerShell replace → **11 file** analytics.
+- Shared `formatDateToISO` trong `analytics-formatters.ts` đã đúng từ trước (dùng local methods).
+
+### Task B — GA4 + GSC tool cho BI Analyst chatbot
+- `bi-analyst.ts`: thêm 2 tool declarations `queryGA4` + `queryGSC` + handler trong function calling loop.
+- Import `runGA4Report`, `runGSC`, `ga4Sites` từ `lib/ga4.ts` (đã có sẵn).
+- GA4 sites tự load + inject vào system prompt khi start chat.
+- Chatbot giờ trả lời được: "traffic tháng này bao nhiêu?", "top keyword đang rank?", v.v.
+
+### Build: tsc PASS + next build PASS (exit 0).
+
+---
+
 ## Session 76 (2026-06-25) — Chuyển deploy Netlify → Vercel mới
 
 Netlify account hết → chuyển sang Vercel account mới, project "gohub-intel".

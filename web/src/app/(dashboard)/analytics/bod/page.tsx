@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import React, { useState, useEffect } from "react"
 import {
@@ -20,13 +20,13 @@ import { DatePresets } from "@/components/date-presets"
 
 function getDefaultDateRange() {
   const today = new Date()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
+  const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
   // Mac dinh: ngay 1 thang hien tai -> hom nay.
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
   const end = today
   return { startDate: fmt(start), endDate: fmt(end) }
 }
-const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
+const formatDateToISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
 
 interface BODSummary {
   total_revenue: number; total_cogs: number; total_margin: number; total_units: number
