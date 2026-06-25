@@ -290,36 +290,65 @@ export async function buildToolContext(
         if (id.found) {
           if (id.type === "SKU") {
             const detail = await getProductDetail(code)
-            if (isCost && detail?.sku?.latest_cogs != null) {
-              const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
-              detail.sku.cogs_usd = usd; detail.sku.cogs_vnd = vnd
+            if (detail?.sku) {
+              if (isCost && detail.sku.latest_cogs != null) {
+                const { usd, vnd } = convertCogs(detail.sku.latest_cogs, detail.sku.latest_cogs_currency, fx)
+                detail.sku.cogs_usd = usd; detail.sku.cogs_vnd = vnd
+              } else {
+                // Strip COGS hoàn toàn khỏi context khi role không được phép xem
+                delete detail.sku.latest_cogs; delete detail.sku.latest_cogs_currency
+              }
+            }
+            // Channel filter: chỉ giữ items thuộc đúng kênh B2C/B2B
+            if (channel && detail?.items) {
+              detail.items = detail.items.filter((it: any) =>
+                (it.item_type || "").toUpperCase().includes(channel)
+              )
             }
             sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
             sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
           } else if (id.type === "Product Code") {
             const detail = await getProductByCode(code)
-            if (isCost && detail?.skus) {
+            if (detail?.skus) {
               detail.skus = detail.skus.map((s: any) => {
-                if (s.latest_cogs != null) {
+                if (isCost && s.latest_cogs != null) {
                   const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
                   return { ...s, cogs_usd: usd, cogs_vnd: vnd }
                 }
-                return s
+                // Strip COGS khi không có quyền
+                const { latest_cogs: _c, latest_cogs_currency: _cc, ...rest } = s
+                return isCost ? s : rest
               })
             }
             sections.push(`=== CHI TIẾT PRODUCT CODE: ${code} ===`, JSON.stringify(detail, null, 2))
           } else if (id.type === "Alias (Item)") {
-            const [items, skuDetail] = await Promise.all([
+            const [allItems, skuDetail] = await Promise.all([
               getItems({ sku_code: id.sku_code }),
               id.sku_code ? getProductDetail(id.sku_code) : Promise.resolve(null),
             ])
+            const items = channel
+              ? allItems.filter((it: any) => (it.item_type || "").toUpperCase().includes(channel))
+              : allItems
             sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
-            if (skuDetail) sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(skuDetail, null, 2))
+            if (skuDetail) {
+              if (skuDetail?.sku && !isCost) {
+                delete skuDetail.sku.latest_cogs; delete skuDetail.sku.latest_cogs_currency
+              }
+              if (channel && skuDetail?.items) {
+                skuDetail.items = skuDetail.items.filter((it: any) =>
+                  (it.item_type || "").toUpperCase().includes(channel)
+                )
+              }
+              sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(skuDetail, null, 2))
+            }
           } else if (id.type === "Listing Code") {
-            const [listings, items] = await Promise.all([
+            const [listings, allItems] = await Promise.all([
               searchListings({ product_code: code }),
               getItems({ listing_code: code }),
             ])
+            const items = channel
+              ? allItems.filter((it: any) => (it.item_type || "").toUpperCase().includes(channel))
+              : allItems
             sections.push(`=== LISTING ===`, JSON.stringify(listings, null, 2))
             sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
           }
