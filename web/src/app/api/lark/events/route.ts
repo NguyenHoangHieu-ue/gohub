@@ -74,7 +74,8 @@ async function alreadyHandled(eventId: string): Promise<boolean> {
 }
 
 // Look up user role by lark_open_id
-async function getUserRole(openId: string): Promise<{ role: UserRole; name: string }> {
+// isRegistered=false → user chưa login web (chưa có trong DB) → cần login để phân quyền
+async function getUserRole(openId: string): Promise<{ role: UserRole; name: string; isRegistered: boolean }> {
   const { data } = await supabaseAdmin
     .from("users")
     .select("role,name")
@@ -83,6 +84,7 @@ async function getUserRole(openId: string): Promise<{ role: UserRole; name: stri
   return {
     role: (data?.role as UserRole) ?? "staff",
     name: data?.name ?? "",
+    isRegistered: !!data,
   }
 }
 
@@ -241,11 +243,8 @@ export async function POST(req: NextRequest) {
     userText = "xin chào"
   }
 
-  // Chỉ cho phép group — bỏ qua p2p (tin nhắn riêng)
-  if (chatType === "p2p") {
-    console.log("[Lark] skip: p2p not allowed")
-    return NextResponse.json({ ok: true })
-  }
+  // NOTE: p2p được mở lại (trước đây tạm block). Auth check (đã login web chưa) thực hiện
+  // bên trong processAndReply — áp dụng cả p2p lẫn group.
 
   // Group chat + thread: chỉ reply khi được @mention tên bot
   if (chatType === "group") {
@@ -300,11 +299,20 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+const WEB_URL = process.env.NEXTAUTH_URL || "https://gohub-intel.vercel.app"
+
 async function processAndReply(openId: string, chatId: string, messageId: string, threadId: string, userText: string) {
   let responseSent = false
   try {
-    // Get user info
-    const { role, name } = await getUserRole(openId)
+    // Auth check: user đã login web chưa?
+    const { role, name, isRegistered } = await getUserRole(openId)
+
+    if (!isRegistered) {
+      const loginMsg = `Bạn chưa đăng nhập vào hệ thống GoHub nên chưa được phân quyền trả lời 🔐\n\nVui lòng đăng nhập tại: ${WEB_URL}/login\n(Dùng tài khoản Lark để đăng nhập)`
+      await replyLarkMessage(messageId, loginMsg)
+      return
+    }
+
     const isCost = true
 
     // Get history scoped to this thread

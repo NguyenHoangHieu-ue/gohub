@@ -11,6 +11,23 @@ Cập nhật lần cuối: 2026-06-25 (session 76 — Netlify hết account → 
    Chỉ chạy local để test. Khi nào user xác nhận local OK → user mới quyết định push lên GitHub.
    Lý do: chuyển sang Vercel mới, cần kiểm soát deploy thủ công.
 
+## Session 76 tiếp 4 (2026-06-25) — Lark auth check (login web) + mở lại p2p
+
+### Lark bot: auth check + mở p2p
+- **Trước:** p2p bị block tạm thời (commit 3ab8d04) vì chưa có phân quyền.
+- **Giờ:** xóa p2p block → thêm auth check đầu `processAndReply` cho CẢ p2p lẫn group.
+- Logic: `getUserRole(openId)` trả thêm `isRegistered: boolean`.
+  Nếu `isRegistered=false` (chưa có trong DB `users.lark_open_id`) → reply hướng dẫn login:
+  "Bạn chưa đăng nhập... Vui lòng đăng nhập tại: {WEB_URL}/login (Dùng tài khoản Lark)"
+  Nếu đã đăng nhập → dùng role (admin/bod/staff) để phân quyền như bình thường.
+- `WEB_URL` = `process.env.NEXTAUTH_URL` hoặc fallback `https://gohub-intel.vercel.app`.
+- Hướng dẫn cho user: vào web → đăng nhập bằng Lark → hệ thống tự ghi `lark_open_id` vào `users` → lần sau chat Lark được phân quyền đúng.
+
+⚠️ LƯUÝ: Admin cần đảm bảo `users.lark_open_id` được ghi đúng khi user login web bằng Lark
+   (NextAuth Lark provider → callback → lưu vào `users.lark_open_id`). Kiểm tra qua Admin → Users.
+
+---
+
 ## Session 76 tiếp 3 (2026-06-25) — Task D tiếp: cache partner-tiers/targets-summary, fix getPrevDateFilter timezone
 
 ### Fix timezone bug còn sót trong analytics-helpers.ts
