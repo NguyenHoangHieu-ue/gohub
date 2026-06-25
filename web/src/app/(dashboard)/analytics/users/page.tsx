@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog } from "lucide-react"
+import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -17,11 +17,12 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "vendors", label: "Vendors" }, { id: "orders", label: "Orders" }, { id: "fulfillment", label: "Fulfillment" },
   { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
+  { id: "scheduled", label: "Scheduled Messages" },
 ]
 const ROLES = ALL_ROLES
 const MATRIX_ROLES = CONFIGURABLE_ROLES
 
-interface User { username: string; name: string; email: string; role: string; department: string; allowed_analytics: string | null }
+interface User { username: string; name: string; email: string; role: string; department: string; allowed_analytics: string | null; lark_open_id: string | null }
 
 export default function UserManagementPage() {
   const { data: session, status } = useSession()
@@ -43,6 +44,7 @@ function UserManagement() {
   const [matrix, setMatrix] = useState<Record<string, string[]>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [savingUser, setSavingUser] = useState<string | null>(null)
+  const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [savingMatrix, setSavingMatrix] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -53,7 +55,8 @@ function UserManagement() {
     try {
       const [uRes, mRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/config/role-permissions")])
       const uData = await uRes.json()
-      setUsers((uData.users || []).map((u: any) => ({ ...u })))
+      // Chỉ hiển thị user có email HOẶC lark_open_id (bỏ qua user không có cả hai)
+      setUsers((uData.users || []).filter((u: any) => u.email || u.lark_open_id).map((u: any) => ({ ...u })))
       if (mRes.ok) setMatrix(await mRes.json())
     } finally {
       setLoading(false)
@@ -90,6 +93,16 @@ function UserManagement() {
       return { ...prev, [role]: Array.from(cur) }
     })
   }
+  const deleteUser = async (u: User) => {
+    if (!confirm(`Xóa user "${u.name || u.username}"? Hành động này không thể hoàn tác.`)) return
+    setDeletingUser(u.username)
+    try {
+      const res = await fetch(`/api/admin/users/${u.username}`, { method: "DELETE" })
+      if (res.ok) { setUsers(prev => prev.filter(x => x.username !== u.username)); notify(true, `Đã xóa ${u.name || u.username}`) }
+      else notify(false, "Xóa thất bại")
+    } finally { setDeletingUser(null) }
+  }
+
   const saveMatrix = async () => {
     setSavingMatrix(true)
     try {
@@ -180,6 +193,9 @@ function UserManagement() {
                   )}
                   <button onClick={() => saveUser(u)} disabled={savingUser === u.username} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50">
                     {savingUser === u.username ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+                  </button>
+                  <button onClick={() => deleteUser(u)} disabled={deletingUser === u.username} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 text-white rounded-lg text-xs font-bold hover:bg-rose-600 transition-all disabled:opacity-50" title="Xóa user">
+                    {deletingUser === u.username ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   </button>
                 </div>
                 {isExpanded && u.role !== "admin" && (
