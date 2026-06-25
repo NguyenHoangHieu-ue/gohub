@@ -5,7 +5,7 @@ department: tech
 tags: [architecture, diagram, second-brain, flow, mermaid]
 aliases: ["Second Brain Architecture", "System Diagram", "Flow Diagram"]
 created: 2026-06-13
-updated: 2026-06-21
+updated: 2026-06-25
 status: active
 ---
 
@@ -55,7 +55,7 @@ flowchart TB
         D3["Giai Dap\nKB + Wiki search\nThuat ngu · quy trinh"]
         D4["Gap Analysis (NCC & Gap)\nNCC catalog\nWM exist Yes/No"]
         D5["Tao Template\nXuat Excel template SP\ntu catalog WM/3HK"]
-        D6["BI Analyst (Be Gau Bi-Ai)\nfunction-calling SQL\ngohub_dw + role_filters"]
+        D6["BI Analyst (Be Gau Bi-Ai)\nfunction-calling SQL\ngohub_dw (GCP Postgres)\n+ queryGA4 + queryGSC"]
     end
 
     subgraph MCP ["MCP SERVER\n(Done)"]
@@ -64,7 +64,7 @@ flowchart TB
 
     subgraph OUT ["TRUY CAP"]
         direction LR
-        F1["Web Chatbot\ngohub-murex.vercel.app\n/chatbot"]
+        F1["Web Chatbot\ngohub-intel.vercel.app\n/chatbot"]
         F2["Lark Bot\nBe Gau Thong Thai\np2p · group · thread"]
         F3["Claude Code\n← MCP Server\ngohub tool calls"]
         F4["Web UI Tabs\n/ncc (SP Vendor) · /kb · /kb#wiki\n/admin · /skus (SP He Thong:\nSan Pham gop+Listing+Item)"]
@@ -261,7 +261,7 @@ flowchart LR
         T5["catalog WM/3HK theo nuoc\n→ Excel GoHub Standard"]
     end
     subgraph BI ["BI Analyst (Be Gau Bi-Ai)"]
-        T6["runBIAnalyst()\nGemini function-calling\nexecuteSQL gohub_dw + role_filters"]
+        T6["runBIAnalyst()\nGemini function-calling\nexecuteSQL gohub_dw (GCP)\n+ queryGA4 + queryGSC"]
     end
 
     TU_VAN & TRA_CUU & GIAI_DAP & GAP & TEMPLATE & BI --> CTX["Context String\nbuildToolContext()"]
@@ -423,3 +423,6 @@ erDiagram
 | **Top K** | 8 chunks per search |
 | **Stream** | Gemini → ReadableStream → UI realtime |
 | **Lark table** | Markdown table detect → Interactive Card + xlsx file |
+| **Analytics DB** | `gohub_dw` — GCP Postgres LIVE (34.61.204.98), TÁCH BIỆT Supabase. BI Analyst query trực tiếp. |
+| **Turso** | Chỉ còn config intel (partner_tiers đã migrate sang Supabase). Web KHÔNG query Turso cho analytics. |
+| **Deploy** | Vercel Hobby — `gohub-intel.vercel.app`. Cron: `0 0 * * *` (Hobby limit 1/ngày). |

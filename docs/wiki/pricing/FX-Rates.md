@@ -74,7 +74,7 @@ Giá nhập (VND) = Giá nhập (USD) × 26.394
 |---|---|
 | Admin | USD và VND |
 | Manager | USD và VND |
-| Standard | Ẩn — không thấy giá vốn |
+| Staff | Ẩn — không thấy giá vốn |
 
 **Theo kênh bán:**
 - Kênh **VN** → hiển thị VND

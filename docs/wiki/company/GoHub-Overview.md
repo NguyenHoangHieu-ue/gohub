@@ -50,6 +50,7 @@ Bán trực tiếp tới người dùng cuối qua các nền tảng lớn:
 |---|---|---|---|
 | WorldMove | WM | Gói cố định | 8.921 sản phẩm, thông tin APN đầy đủ |
 | 3HK | 3H | Giá theo GB, phân theo vùng | 45 vùng, dùng công thức riêng |
+| KDDI | KD | — | Chưa import, để sau |
 | BillionConnect | BC | — | Chưa import, để sau |
 | SimStore | SS | — | Chưa import, để sau |
 | Viettel | VT | — | Chưa import, để sau |

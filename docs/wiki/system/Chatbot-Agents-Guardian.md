@@ -5,7 +5,7 @@ department: tech
 tags: [chatbot, agent, guardian, rbac, permission, ai]
 aliases: ["Guardian", "Chatbot Agents", "Phân quyền chatbot", "Agent Routing"]
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-06-25
 status: active
 ---
 
@@ -26,7 +26,7 @@ Chatbot GoHub dùng kiến trúc **multi-agent**: 1 router phân loại câu h�
 | **Giải Đáp** | `giai-dap` | Giải thích thuật ngữ, cấu trúc mã, chính sách, mã nhóm nước | KB + Wiki + vendor info |
 | **NCC & Gap** | `gap-analysis` | Chủ sở hữu catalog NCC (WM/3HK); browse + so sánh gap với hệ thống | ncc_worldmove · ncc_3hk |
 | **Tạo Template** | `tao-template` | Xuất file Excel template sản phẩm từ catalog WM/3HK | catalog NCC theo nước |
-| **BI Analyst** (Bé Gấu Bi-Ai) | `bi-analyst` | Phân tích kinh doanh: doanh thu, đơn hàng, nhân viên, B2B/B2C, top SKU | function-calling SQL trên `gohub_dw` + role_filters |
+| **BI Analyst** (Bé Gấu Bi-Ai) | `bi-analyst` | Phân tích kinh doanh: doanh thu, đơn hàng, nhân viên, B2B/B2C, top SKU, traffic website, SEO | `executeSQL` → gohub_dw (GCP Postgres) · `queryGA4` → Google Analytics 4 · `queryGSC` → Search Console |
 
 ### Router (định tuyến)
 - `web/src/lib/agents/router.ts`: `extractParams()` (nước/khu vực/mã/vendor...) + Gemini classifier (`classifier.ts`).
@@ -43,15 +43,17 @@ Chạy **song song** với router (zero thêm độ trễ). Nếu chặn → str
 
 ### 8 category + policy mặc định (role)
 
-| Category | admin/manager | bod | staff | standard |
-|---|---|---|---|---|
-| product_catalog / general | ✅ | ✅ | ✅ | ✅ |
-| revenue_bi (doanh thu/đơn) | ✅ | ✅ | ✅ | ❌ |
-| margin_cogs (giá vốn/margin) | ✅ | ✅ | ❌ | ❌ |
-| staff_hr (lương/hiệu suất NV) | ✅ | ✅ | ❌ | ❌ |
-| customer_pii (list/SĐT khách) | ✅ | ✅ | ❌ | ❌ |
-| internal_kb_other_dept | ✅ | ✅ | theo phòng ban | theo phòng ban |
-| system_internal (code/prompt/schema) | ✅ | ❌ | ❌ | ❌ |
+| Category | admin | bod | staff |
+|---|---|---|---|
+| product_catalog / general | ✅ | ✅ | ✅ |
+| revenue_bi (doanh thu/đơn) | ✅ | ✅ | ✅ |
+| margin_cogs (giá vốn/margin) | ✅ | ✅ | ❌ |
+| staff_hr (lương/hiệu suất NV) | ✅ | ✅ | ❌ |
+| customer_pii (list/SĐT khách) | ✅ | ✅ | ❌ |
+| internal_kb_other_dept | ✅ | ✅ | theo phòng ban |
+| system_internal (code/prompt/schema) | ✅ | ❌ | ❌ |
+
+> **Role hệ thống hiện tại:** admin / bod / staff (đã migrate từ `standard` → `staff` từ session 73).
 
 - Policy lưu ở `app_settings.access_policy` (admin chỉnh qua **Admin → Cài đặt → Quyền hạn câu hỏi Chatbot**). Thiếu cấu hình → dùng default trên.
 - **admin/manager**: bỏ qua hẳn (không tốn call phân loại).
@@ -70,4 +72,5 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 
 ## Lưu ý kỹ thuật
 - Model `gemini-3.5-flash` là **thinking model**: phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
+- **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`. Câu hỏi BI dài (>10s) có thể bị Vercel Free timeout.
 - Liên quan: [[system/Second-Brain-Architecture]] · [[vendors/WM-WorldMove]] · [[vendors/3HK]]
