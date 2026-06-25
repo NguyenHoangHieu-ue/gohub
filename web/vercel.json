@@ -14,7 +14,7 @@
   "crons": [
     {
       "path": "/api/cron/scheduled-messages",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
