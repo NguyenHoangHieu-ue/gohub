@@ -48,6 +48,7 @@ function UserManagement() {
   const [savingMatrix, setSavingMatrix] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState("")
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, number>>({})
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
@@ -65,6 +66,14 @@ function UserManagement() {
     }
   }
   useEffect(() => { fetchAll() }, [])
+
+  // Poll online status mỗi 30s
+  useEffect(() => {
+    const fetchOnline = () => fetch("/api/user/heartbeat").then(r => r.ok ? r.json() : null).then(d => { if (d?.online) setOnlineUsers(d.online) }).catch(() => {})
+    fetchOnline()
+    const id = setInterval(fetchOnline, 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   const updateUser = (username: string, patch: Partial<User>) =>
     setUsers(prev => prev.map(u => u.username === username ? { ...u, ...patch } : u))
@@ -180,7 +189,15 @@ function UserManagement() {
       {/* Users list */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 flex-1"><UserCog className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Người dùng ({users.length})</h2></div>
+          <div className="flex items-center gap-2 flex-1">
+            <UserCog className="w-5 h-5 text-[#003B95]" />
+            <h2 className="font-bold text-slate-800">Người dùng ({users.length})</h2>
+            {Object.keys(onlineUsers).length > 0 && (
+              <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />{Object.keys(onlineUsers).length} online
+              </span>
+            )}
+          </div>
           <div className="relative"><Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email / role…" className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none w-52" /></div>
           <button onClick={syncTursoUsers} disabled={syncing} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
             {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}Sync Turso (55)
@@ -194,11 +211,15 @@ function UserManagement() {
           }).map(u => {
             const isExpanded = expanded === u.username
             const granted = new Set((u.allowed_analytics || "").split(",").map(s => s.trim()).filter(Boolean))
+            const isOnline = !!onlineUsers[u.username]
             return (
               <div key={u.username}>
                 <div className={cn("px-6 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:bg-slate-50/50 transition-colors", isExpanded && "bg-blue-50/20")}>
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">{(u.name || u.username).charAt(0).toUpperCase()}</div>
+                    <div className="relative w-9 h-9 shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm">{(u.name || u.username).charAt(0).toUpperCase()}</div>
+                      {isOnline && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />}
+                    </div>
                     <div className="min-w-0">
                       <p className="font-bold text-slate-800 text-sm truncate">{u.name || u.username}</p>
                       <p className="text-xs text-slate-400 truncate">{u.email || u.username}</p>
