@@ -13,8 +13,13 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { data } = await supabaseAdmin
     .from("app_settings").select("value").eq("key", "role_permissions").maybeSingle()
-  let perms: Record<string, string[]> = DEFAULT_ROLE_PERMISSIONS
-  try { if (data?.value) perms = JSON.parse(data.value) } catch {}
+  let saved: Record<string, string[]> = {}
+  try { if (data?.value) saved = JSON.parse(data.value) } catch {}
+  // Merge: role có array rỗng [] → dùng DEFAULT (tránh mất quyền khi lỡ save không check gì)
+  const perms: Record<string, string[]> = { ...DEFAULT_ROLE_PERMISSIONS }
+  for (const [role, ids] of Object.entries(saved)) {
+    if (Array.isArray(ids) && ids.length > 0) perms[role] = ids
+  }
   return NextResponse.json(perms)
 }
 

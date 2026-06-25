@@ -37,7 +37,9 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   let roleMatrix: Record<string, string[]> = DEFAULT_ROLE_PERMISSIONS
   try { if (rp?.value) roleMatrix = JSON.parse(rp.value) } catch {}
 
-  const baseline = roleMatrix[dbRole] ?? DEFAULT_ROLE_PERMISSIONS[dbRole] ?? []
+  // Treat empty array [] same as "not configured" → fall back to code defaults
+  const dbPerms = roleMatrix[dbRole]
+  const baseline = (dbPerms && dbPerms.length > 0) ? dbPerms : (DEFAULT_ROLE_PERMISSIONS[dbRole] ?? [])
   const extra    = profile?.allowed_analytics
     ? profile.allowed_analytics.split(",").map((s: string) => s.trim()).filter(Boolean)
     : []
