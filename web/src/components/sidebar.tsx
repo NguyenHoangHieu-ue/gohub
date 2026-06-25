@@ -77,20 +77,19 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
       { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
       { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
-      { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     ],
   },
 ]
 
-// Nhóm Management — CHỈ admin (users/schema/settings là admin-only).
-// scheduled đã chuyển vào ANALYTICS_GROUPS để có thể phân quyền per-user.
+// Nhóm Management — CHỈ admin + creator
 const MANAGEMENT_GROUP = {
   label: "Management",
   items: [
-    { href: "/analytics/users",     label: "Users",           icon: Users    },
-    { href: "/analytics/schema",    label: "Schema Config",   icon: Database },
-    { href: "/analytics/settings",  label: "Settings",        icon: Settings },
-    { href: "/admin",               label: "Admin (Product)", icon: Package  },
+    { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
+    { href: "/analytics/users",      label: "Users",              icon: Users     },
+    { href: "/analytics/schema",     label: "Schema Config",      icon: Database  },
+    { href: "/analytics/settings",   label: "Settings",           icon: Settings  },
+    { href: "/admin",                label: "Admin (Product)",    icon: Package   },
   ],
 }
 

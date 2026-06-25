@@ -43,12 +43,21 @@ const ROLES_TO_MANAGE = ALL_ROLES.filter(r => r !== "creator") // creator không
 export default function CreatorPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const [freshRole, setFreshRole] = useState<string | null>(null)
+
+  // Fetch role mới nhất từ DB — JWT có thể cũ nếu admin vừa đổi role
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
+      setFreshRole(d?.role ?? session?.user?.role ?? "staff")
+    }).catch(() => setFreshRole(session?.user?.role ?? "staff"))
+  }, [status, session])
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "creator") router.push("/chatbot")
-  }, [status, session, router])
+    if (freshRole && !["creator", "admin"].includes(freshRole)) router.push("/chatbot")
+  }, [freshRole, router])
 
-  if (status !== "authenticated" || session?.user?.role !== "creator") return null
+  if (status !== "authenticated" || !freshRole || !["creator", "admin"].includes(freshRole)) return null
   return <CreatorSettings />
 }
 

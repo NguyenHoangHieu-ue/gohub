@@ -18,17 +18,18 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   const role     = (session.user as any).role     as string
   const username = (session.user as any).username as string
 
-  // admin/creator: toàn quyền — không cần truy DB
+  // admin/creator: toàn quyền — không cần truy DB (kiểm JWT trước cho nhanh)
   if (role === "admin" || role === "creator") return <>{children}</>
 
-  // Lấy hồ sơ mới nhất từ DB (role + trang cấp thêm) — không phụ thuộc session cũ
+  // Lấy hồ sơ mới nhất từ DB — không phụ thuộc JWT cũ (vd role vừa đổi chưa re-login)
   const { data: profile } = await supabaseAdmin
     .from("users")
     .select("role, allowed_analytics")
     .eq("username", username)
     .maybeSingle()
   const dbRole = profile?.role ?? role
-  if (dbRole === "admin") return <>{children}</>
+  // dbRole có thể khác JWT nếu admin vừa đổi role → dùng DB làm nguồn sự thật
+  if (dbRole === "admin" || dbRole === "creator") return <>{children}</>
 
   // Quyền nền theo role (ma trận role_permissions) ∪ trang cấp thêm per-user (allowed_analytics)
   const { data: rp } = await supabaseAdmin
