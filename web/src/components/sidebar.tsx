@@ -322,9 +322,9 @@ export function Sidebar() {
   const showAnalytics = effectiveRole === "admin" || effectiveRole === "creator" || analyticsGroups.length > 0
 
   const navItems = (() => {
-    // bod: chỉ chatbot (thuần analytics). admin: full + Admin.
+    // bod: chatbot + product catalog (xem được SP/NCC) + full analytics
     if (effectiveRole === "bod") {
-      return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }]
+      return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
     }
     if (effectiveRole === "admin" || effectiveRole === "creator") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)
