@@ -77,6 +77,7 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
       { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
       { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
+      { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     ],
   },
 ]
@@ -85,7 +86,6 @@ const ANALYTICS_GROUPS = [
 const MANAGEMENT_GROUP = {
   label: "Management",
   items: [
-    { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     { href: "/analytics/users",      label: "Users",              icon: Users     },
     { href: "/analytics/schema",     label: "Schema Config",      icon: Database  },
     { href: "/analytics/settings",   label: "Settings",           icon: Settings  },

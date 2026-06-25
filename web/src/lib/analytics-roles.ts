@@ -1,12 +1,11 @@
 // Nguồn chung cho ma trận quyền analytics (dùng bởi layout server, /api/config/role-permissions,
 // và sidebar). Tránh drift giữa các bản sao trước đây.
 
-// 19 trang analytics phân quyền được (khớp REPORTS ở users/admin + ANALYTICS_GROUPS ở sidebar)
-// "scheduled" là management page (admin+creator) → không nằm trong ma trận phân quyền analytics
+// 20 trang analytics phân quyền được (khớp REPORTS ở users/admin + ANALYTICS_GROUPS ở sidebar)
 export const ALL_ANALYTICS_IDS = [
   "dashboard", "bod", "all-time", "channels", "b2b", "b2c", "website",
   "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
-  "cs-troubleshoot", "feedback", "products", "targets", "sql", "info",
+  "cs-troubleshoot", "feedback", "products", "targets", "sql", "scheduled", "info",
 ]
 
 // Quyền NỀN mặc định theo role (admin = toàn quyền, không liệt kê). Deny-by-default;
