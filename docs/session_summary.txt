@@ -1,23 +1,28 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-26 (session 78 — B2B item_type prefix fix; item-channel-types config + Settings UI)
-## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config
+Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channel-types config; Vendor Performance load fix)
+## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config + Vendor Performance bug
 
-### Vấn đề
-- B2B role thấy giá B2C vì filter `item_type ILIKE '%B2B%'` trả rỗng.
-- Thực tế item_type B2B là: `VN OD *`, `VN WS *`, `VN Strategic *`, `VN TIER *`, `VN SILVER`, `VN DEAL *`, `VN B2B - Ecom`.
-- B2C: chỉ có `VN B2C Website`, `US B2C Website`.
+### #1 B2B thấy giá B2C (chatbot)
+- **Root cause**: `item_type` B2B không phải literal "B2B" mà là `VN OD *`, `VN WS *`, `VN Strategic *`, `VN TIER *`, `VN SILVER`, `VN DEAL *`.
+  Filter cũ `ilike '%B2B%'` → trả rỗng → B2B không thấy giá gì.
+- **Fix** (3 file + 1 API mới):
+  1. `api/config/item-channel-types/route.ts` (MỚI): GET+POST lưu `{B2C:[...], B2B:[...]}` vào `app_settings`.
+     Default: `B2C=["B2C","ECO"]`, `B2B=["OD","WS","Strategic","TIER","SILVER","DEAL","B2B"]`.
+  2. `tools.ts`: `getChannelTypes()` (module cache 30 phút) + `getChannelPrices()` dùng OR filter từ prefix config.
+  3. `context.ts`: `matchesChannel()` helper; 4 chỗ filter items trong tra-cuu dùng prefix thay `.includes(channel)`.
+  4. `settings/page.tsx`: section "Phân loại Item Type theo Kênh" — editable chips + bảng reference tất cả item_type tagged.
+- **Verified**: B2B OR filter trả đúng `VN Strategic`, `VN TIER VIP`, `VN DEAL` — giá VND/USD đúng.
+- Commits: `ac47b90`
 
-### Fix
-1. **API mới `/api/config/item-channel-types`** (GET+POST): lưu mapping `{B2C:[...], B2B:[...]}` vào `app_settings`.
-   Default: `B2C=["B2C","ECO"]`, `B2B=["OD","WS","Strategic","TIER","SILVER","DEAL","B2B"]`.
-2. **`tools.ts`**: `getChannelTypes()` (module cache 30 phút, đọc app_settings).
-   `getChannelPrices()`: thay `ilike '%B2B%'` → OR filter: `item_type.ilike.%OD%,item_type.ilike.%WS%,...` từ config.
-3. **`context.ts`**: thêm `matchesChannel()` helper dùng prefix config; thay `.toUpperCase().includes(channel)` bằng `matchesChannel()` ở 4 chỗ tra-cuu.
-4. **Settings page**: section mới "Phân loại Item Type theo Kênh" — editable prefix chips per channel + bảng reference tất cả item_type tagged theo kênh.
+### #2 Vendor Performance tab load mãi không hiển thị
+- **Root cause**: `loading=true` trên mount nhưng `fetchData()` chỉ trigger khi `dateColumn` đổi.
+  Khi vendors load xong và set `selectedVendors`, `dateColumn` không thay đổi → `fetchData()` không chạy → skeleton vô hạn.
+- **Fix** (`vendors/page.tsx`): thêm `useEffect` với `useRef` guard — call `fetchData()` đúng 1 lần duy nhất
+  khi `selectedVendors.length > 0` lần đầu (initial load). Các lần toggle vendor sau vẫn giữ behavior cũ (cần Apply).
+- Commits: `af0f02a`
 
-### Test
-- B2B OR filter test: trả đúng `VN Strategic Mr. Công`, `VN TIER VIP`, `VN DEAL 200` — giá VND/USD đúng.
-- tsc PASS. KHÔNG push (quy tắc session 76).
+### Build
+- tsc PASS (cả 2 fix). Đã push GitHub → Vercel deploy tự động.
 
 ---
 
