@@ -21,8 +21,16 @@ Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channe
   khi `selectedVendors.length > 0` lần đầu (initial load). Các lần toggle vendor sau vẫn giữ behavior cũ (cần Apply).
 - Commits: `af0f02a`
 
+### #3 Sidebar: parent tab mờ + 3 API calls tuần tự
+- **Parent tab mờ**: `GroupToggle` dùng `text-[11px] text-gray-400` nhỏ hơn cả child item → hierarchy ngược.
+  Fix: `text-[12px] font-bold text-gray-700` + icon `text-gray-500` → parent rõ nét hơn child.
+- **Load chậm**: sidebar gọi 3 API riêng lẻ (`/api/user/me`, `/api/config/role-permissions`, `/api/config/tab-visibility`).
+  Fix: gộp `useMyProfile` + `useRolePermissions` + `useTabVisibility` → 1 hook `useSidebarData` dùng `Promise.all`.
+  Giảm từ 3 round trips → 1 (cải thiện ~200-400ms đặc biệt trên cold start Vercel).
+- Commits: `7d0549b`
+
 ### Build
-- tsc PASS (cả 2 fix). Đã push GitHub → Vercel deploy tự động.
+- tsc PASS (tất cả). Đã push GitHub → Vercel deploy tự động.
 
 ---
 
