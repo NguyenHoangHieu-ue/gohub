@@ -17,9 +17,9 @@ import { cn } from "@/lib/utils"
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
-  // Mac dinh: ngay 1 thang hien tai -> hom nay.
+  // Mac dinh: ngay 1 thang hien tai -> hom qua (T-1).
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
-  const end = today
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
