@@ -114,60 +114,38 @@ function analyticsId(item: { href: string }) {
 // Fallback quyền nền theo role khi chưa tải được /api/config/role-permissions (khớp default API)
 const ANALYTICS_DEFAULTS = DEFAULT_ROLE_PERMISSIONS
 
-// Ma trận Role × Báo cáo (y hệt gohub-intel) — quyền nền analytics theo role
-function useRolePermissions() {
-  const [perms, setPerms] = useState<Record<string, string[]> | null>(null)
-  useEffect(() => {
-    fetch("/api/config/role-permissions", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setPerms(d) })
-      .catch(() => {})
-  }, [])
-  return perms
-}
+// Gộp 3 fetch độc lập thành 1 Promise.all để giảm 3 round trips → 1
+function useSidebarData(username: string, sessionRole: string) {
+  const [state, setState] = useState<{
+    dbRole:          string | null
+    dept:            string | null
+    allowedAnalytics: string[] | null
+    allowedTabs:     string[] | null
+    rolePerms:       Record<string, string[]> | null
+    hiddenTabs:      Set<string>
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set() })
 
-// Tab visibility config từ creator — { [role]: string[] } danh sách tab bị ẩn
-function useTabVisibility(role: string) {
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    if (!role || role === "creator") return  // creator luôn thấy tất cả
-    fetch("/api/config/tab-visibility", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : {})
-      .then((vis: Record<string, string[]>) => {
-        setHidden(new Set(vis[role] || []))
-      })
-      .catch(() => {})
-  }, [role])
-  return hidden
-}
-
-// Fetch profile từ DB mỗi lần load → không cần re-login khi admin đổi dept/quyền
-function useMyProfile(username: string) {
-  const [dbRole,          setDbRole]          = useState<string | null>(null)
-  const [dept,            setDept]            = useState<string | null>(null)
-  const [allowedAnalytics, setAllowedAnalytics] = useState<string[] | null>(null)
-  const [allowedTabs,     setAllowedTabs]     = useState<string[] | null>(null)
   useEffect(() => {
     if (!username) return
-    fetch("/api/user/me", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d?.role)       setDbRole(d.role)
-        if (d?.department) setDept(d.department)
-        setAllowedAnalytics(
-          d?.allowed_analytics != null
-            ? d.allowed_analytics.split(",").filter(Boolean)
-            : null
-        )
-        setAllowedTabs(
-          d?.allowed_tabs != null
-            ? d.allowed_tabs.split(",").filter(Boolean)
-            : null
-        )
+    const isCreator = sessionRole === "creator"
+    Promise.all([
+      fetch("/api/user/me",                  { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/config/role-permissions",  { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      isCreator ? Promise.resolve({}) : fetch("/api/config/tab-visibility", { cache: "no-store" }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([me, perms, vis]) => {
+      const role = me?.role ?? sessionRole
+      setState({
+        dbRole:           me?.role ?? null,
+        dept:             me?.department ?? null,
+        allowedAnalytics: me?.allowed_analytics != null ? (me.allowed_analytics as string).split(",").filter(Boolean) : null,
+        allowedTabs:      me?.allowed_tabs       != null ? (me.allowed_tabs       as string).split(",").filter(Boolean) : null,
+        rolePerms:        perms ?? null,
+        hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
       })
-      .catch(() => {})
-  }, [username])
-  return { dbRole, dept, allowedAnalytics, allowedTabs }
+    })
+  }, [username, sessionRole])
+
+  return state
 }
 
 function useDeptTabs(role: string, department: string) {
@@ -246,13 +224,13 @@ function GroupToggle({ label, Icon, open, onToggle }: {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+      className="w-full flex items-center justify-between px-3 py-2 text-[12px] font-bold text-gray-700 uppercase tracking-wide hover:text-gray-900 transition-colors"
     >
       <div className="flex items-center gap-2">
-        <Icon size={14} className="text-gray-400" />
+        <Icon size={14} className="text-gray-500" />
         <span>{label}</span>
       </div>
-      {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      {open ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
     </button>
   )
 }
@@ -278,14 +256,12 @@ export function Sidebar() {
   const name       = session?.user?.name     || ""
   const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs } = useMyProfile(username)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
 
   const extraTabs  = useDeptTabs(effectiveRole, department)
-  const rolePerms  = useRolePermissions()
-  const hiddenTabs = useTabVisibility(effectiveRole)  // creator config: tabs bị ẩn theo role
 
   // Mô hình phân quyền analytics y hệt gohub-intel:
   //  - admin/manager: toàn quyền
@@ -427,7 +403,7 @@ export function Sidebar() {
                 <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
+                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
                     {group.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}
