@@ -15,18 +15,12 @@ export async function GET() {
     .from("app_settings").select("value").eq("key", "role_permissions").maybeSingle()
   let saved: Record<string, string[]> = {}
   try { if (data?.value) saved = JSON.parse(data.value) } catch {}
-  // Merge: DB value UNION defaults — đảm bảo report nào trong defaults luôn có
-  // (tránh mất quyền khi DB drift hoặc lỡ save partial list)
-  // Admin vẫn có thể bỏ report bằng cách uncheck trong matrix rồi save lại
+  // DB value OVERRIDE defaults — cho phép admin thu hẹp quyền thực sự.
+  // Role không có trong DB → dùng defaults (fill gaps). Role có trong DB → dùng DB chính xác.
   const perms: Record<string, string[]> = {}
   for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
     const dbIds = saved[role]
-    if (!dbIds || dbIds.length === 0) {
-      perms[role] = defaults
-    } else {
-      // Union: DB + defaults (không để DB xóa mất permissions mặc định do DB drift)
-      perms[role] = [...new Set([...defaults, ...dbIds])]
-    }
+    perms[role] = (dbIds && dbIds.length > 0) ? dbIds : defaults
   }
   return NextResponse.json(perms)
 }
