@@ -5,7 +5,7 @@ import { authOptions }    from "@/lib/auth"
 
 const KEY = "item_channel_types"
 
-export const ITEM_CHANNEL_DEFAULTS: Record<string, string[]> = {
+const ITEM_CHANNEL_DEFAULTS: Record<string, string[]> = {
   B2C: ["B2C", "ECO"],
   B2B: ["OD", "WS", "Strategic", "TIER", "SILVER", "DEAL", "B2B"],
 }
