@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channel-types config; Vendor Performance load fix)
+Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channel-types; Vendor Performance; sidebar bold + 3→1 API; role_permissions union bug)
 ## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config + Vendor Performance bug
 
 ### #1 B2B thấy giá B2C (chatbot)
@@ -28,6 +28,17 @@ Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channe
   Fix: gộp `useMyProfile` + `useRolePermissions` + `useTabVisibility` → 1 hook `useSidebarData` dùng `Promise.all`.
   Giảm từ 3 round trips → 1 (cải thiện ~200-400ms đặc biệt trên cold start Vercel).
 - Commits: `7d0549b`
+
+### #4 Role × Report matrix không hoạt động — all roles thấy quá nhiều tab
+- **Root cause 1 (data)**: DB `app_settings.role_permissions` tích lũy quá nhiều tab do union logic.
+  Ví dụ: b2b DB có 13 tabs (default chỉ 6), b2c 13 tabs (default 6), saleb2c 9 tabs (default 4).
+- **Root cause 2 (logic)**: API dùng `[...new Set([...defaults, ...dbIds])]` (UNION) → permissions
+  chỉ tăng không giảm. Admin uncheck trong UI rồi save → DB đúng nhưng API union ngược lại.
+- **Fix**:
+  1. `role-permissions/route.ts`: đổi UNION → OVERRIDE: `perms[role] = dbIds || defaults`.
+     Role có trong DB → dùng DB chính xác; role không có → dùng defaults.
+  2. Reset DB về đúng defaults qua Node script: b2b=6, b2c=6, saleb2c=4, staff=3, hr=2, product=5, ops-&-cs=6, bod=20.
+- Commit: `3cc0490`
 
 ### Build
 - tsc PASS (tất cả). Đã push GitHub → Vercel deploy tự động.
