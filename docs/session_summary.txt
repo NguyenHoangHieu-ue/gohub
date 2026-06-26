@@ -12,7 +12,7 @@ Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channe
   3. `context.ts`: `matchesChannel()` helper; 4 chỗ filter items trong tra-cuu dùng prefix thay `.includes(channel)`.
   4. `settings/page.tsx`: section "Phân loại Item Type theo Kênh" — editable chips + bảng reference tất cả item_type tagged.
 - **Verified**: B2B OR filter trả đúng `VN Strategic`, `VN TIER VIP`, `VN DEAL` — giá VND/USD đúng.
-- Commits: `ac47b90`
+- Commits: `ac47b90`, `8cb7a68` (build fix: bỏ `export` khỏi `ITEM_CHANNEL_DEFAULTS` trong route file — Next.js chỉ cho export GET/POST/...)
 
 ### #2 Vendor Performance tab load mãi không hiển thị
 - **Root cause**: `loading=true` trên mount nhưng `fetchData()` chỉ trigger khi `dateColumn` đổi.
