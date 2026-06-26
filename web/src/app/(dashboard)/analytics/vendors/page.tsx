@@ -196,6 +196,16 @@ export default function VendorPerformancePage() {
 
   const projection = getProjectionInfo()
 
+  // Initial load: fetchData chỉ chạy 1 lần khi vendors được load lần đầu
+  const initialLoadDone = React.useRef(false)
+  useEffect(() => {
+    if (selectedVendors.length > 0 && !initialLoadDone.current) {
+      initialLoadDone.current = true
+      fetchData()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVendors])
+
   useEffect(() => {
     if (vendors.length === 0 || selectedVendors.length === 0) return
     fetchData()
