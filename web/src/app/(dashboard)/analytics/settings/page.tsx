@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -74,6 +74,11 @@ function AnalyticsSettings() {
   const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
   const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
   const [countryCodes, setCountryCodes] = useState<{ code: string; country: string }[]>([])
+  const [itemChannelTypes, setItemChannelTypes] = useState<Record<string, string[]>>({ B2C: ["B2C", "ECO"], B2B: ["OD", "WS", "Strategic", "TIER", "SILVER", "DEAL", "B2B"] })
+  const [savedItemChannelTypes, setSavedItemChannelTypes] = useState<string>("{}")
+  const [allItemTypes, setAllItemTypes] = useState<string[]>([])
+  const dirtyItemChannelTypes = JSON.stringify(itemChannelTypes) !== savedItemChannelTypes
+  const [newChannelPrefix, setNewChannelPrefix] = useState<Record<string, string>>({})
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -107,18 +112,23 @@ function AnalyticsSettings() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [t, p, f, ch, skuRule, cc] = await Promise.all([
+      const [t, p, f, ch, skuRule, cc, ict] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
         fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
         fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
+        fetch("/api/config/item-channel-types").then(r => r.ok ? r.json() : { config: {}, allTypes: [] }).catch(() => ({ config: {}, allTypes: [] })),
       ])
       const parsedSkuRules = skuRule?.rules || []
       setSkuRules(parsedSkuRules)
       setSavedSkuRules(JSON.stringify(parsedSkuRules))
       setCountryCodes(Array.isArray(cc) ? cc : [])
+      const parsedIct = ict?.config || {}
+      setItemChannelTypes(parsedIct)
+      setSavedItemChannelTypes(JSON.stringify(parsedIct))
+      setAllItemTypes(Array.isArray(ict?.allTypes) ? ict.allTypes : [])
       const parsedTiers = t && Object.keys(t).length ? t : { Strategic: [] }
       const parsedPolicy = p || {}
       const parsedFilters = f || {}
@@ -143,10 +153,11 @@ function AnalyticsSettings() {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       if (res.ok) {
         // Reset dirty state sau khi lưu
-        if (key === "tiers")    setSavedTiers(JSON.stringify(body))
-        if (key === "policy")   setSavedPolicy(JSON.stringify(body))
-        if (key === "filters")  setSavedFilters(JSON.stringify(body))
-        if (key === "sku-dest") setSavedSkuRules(JSON.stringify(body.rules ?? body))
+        if (key === "tiers")         setSavedTiers(JSON.stringify(body))
+        if (key === "policy")        setSavedPolicy(JSON.stringify(body))
+        if (key === "filters")       setSavedFilters(JSON.stringify(body))
+        if (key === "sku-dest")      setSavedSkuRules(JSON.stringify(body.rules ?? body))
+        if (key === "item-channel")  setSavedItemChannelTypes(JSON.stringify(body))
       }
       notify(res.ok, res.ok ? "Đã lưu" : "Lưu thất bại")
     } finally {
@@ -380,6 +391,113 @@ function AnalyticsSettings() {
           </div>
         </div>
         <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">Code extract từ vị trí trong SKU theo từng quy tắc startsWith + codeLength — dùng để map destination khi phân tích sản phẩm.</p>
+      </div>
+
+      {/* Item Type Classification */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Tag className="w-5 h-5 text-[#003B95]" />
+            <div>
+              <h2 className="font-bold text-slate-800">Phân loại Item Type theo Kênh</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Chatbot dùng danh sách prefix này để lọc giá bán đúng kênh B2C/B2B</p>
+            </div>
+          </div>
+          <button
+            onClick={() => savePost("item-channel", "/api/config/item-channel-types", itemChannelTypes)}
+            disabled={saving === "item-channel" || !dirtyItemChannelTypes}
+            className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50",
+              dirtyItemChannelTypes ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}
+          >
+            {saving === "item-channel" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: editable channel → prefix config */}
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500 font-medium">Item type có prefix nào thuộc về kênh nào (chatbot lọc giá theo đây):</p>
+            {Object.entries(itemChannelTypes).map(([channel, prefixes]) => (
+              <div key={channel} className="border border-slate-200 rounded-xl p-4 space-y-2 bg-slate-50/40">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={cn("px-2 py-0.5 rounded text-xs font-bold",
+                    channel === "B2C" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
+                  )}>{channel}</span>
+                  <span className="text-[11px] text-slate-400">{prefixes.length} prefix</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {prefixes.map(p => (
+                    <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-200 text-slate-700 rounded text-xs font-mono">
+                      {p}
+                      <button onClick={() => setItemChannelTypes(prev => ({ ...prev, [channel]: prev[channel].filter(x => x !== p) }))}
+                        className="text-slate-300 hover:text-rose-500"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    value={newChannelPrefix[channel] || ""}
+                    onChange={e => setNewChannelPrefix(prev => ({ ...prev, [channel]: e.target.value }))}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        const v = (newChannelPrefix[channel] || "").trim()
+                        if (v && !prefixes.includes(v)) setItemChannelTypes(prev => ({ ...prev, [channel]: [...prev[channel], v] }))
+                        setNewChannelPrefix(prev => ({ ...prev, [channel]: "" }))
+                      }
+                    }}
+                    placeholder="Thêm prefix rồi Enter…"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const v = (newChannelPrefix[channel] || "").trim()
+                      if (v && !prefixes.includes(v)) setItemChannelTypes(prev => ({ ...prev, [channel]: [...prev[channel], v] }))
+                      setNewChannelPrefix(prev => ({ ...prev, [channel]: "" }))
+                    }}
+                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200"
+                  ><Plus className="w-3 h-3" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Right: read-only reference — all distinct item_type values tagged by channel */}
+          <div>
+            <p className="text-xs text-slate-500 font-medium mb-3">Tất cả Item Type hiện có ({allItemTypes.length}) — tagged theo prefix config:</p>
+            <div className="border border-slate-100 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-bold text-slate-500">Item Type</th>
+                    <th className="px-3 py-2 text-center font-bold text-slate-500">Kênh</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {allItemTypes.map(t => {
+                    const matchedChannel = Object.entries(itemChannelTypes).find(([, prefixes]) =>
+                      prefixes.some(p => t.toLowerCase().includes(p.toLowerCase()))
+                    )?.[0] ?? null
+                    return (
+                      <tr key={t} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-1.5 text-slate-700 font-mono text-[11px]">{t}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          {matchedChannel ? (
+                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold",
+                              matchedChannel === "B2C" ? "bg-sky-50 text-sky-600" : "bg-violet-50 text-violet-600"
+                            )}>{matchedChannel}</span>
+                          ) : <span className="text-slate-300 text-[10px]">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">
+          Chatbot dùng prefix này để lọc giá bán: B2B thấy giá OD/WS/Strategic/Tier, B2C thấy giá B2C Website. COGS kiểm soát riêng qua Guardian.
+        </p>
       </div>
     </div>
   )

@@ -1,5 +1,26 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-25 (session 77 tiếp 2 — creator tab JWT fix; BOD scheduled+products restore; role_permissions union fix; B2B/B2C channel filter chatbot; COGS leak fix; guardian deny+hỏi Hiếu)
+Cập nhật lần cuối: 2026-06-26 (session 78 — B2B item_type prefix fix; item-channel-types config + Settings UI)
+## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config
+
+### Vấn đề
+- B2B role thấy giá B2C vì filter `item_type ILIKE '%B2B%'` trả rỗng.
+- Thực tế item_type B2B là: `VN OD *`, `VN WS *`, `VN Strategic *`, `VN TIER *`, `VN SILVER`, `VN DEAL *`, `VN B2B - Ecom`.
+- B2C: chỉ có `VN B2C Website`, `US B2C Website`.
+
+### Fix
+1. **API mới `/api/config/item-channel-types`** (GET+POST): lưu mapping `{B2C:[...], B2B:[...]}` vào `app_settings`.
+   Default: `B2C=["B2C","ECO"]`, `B2B=["OD","WS","Strategic","TIER","SILVER","DEAL","B2B"]`.
+2. **`tools.ts`**: `getChannelTypes()` (module cache 30 phút, đọc app_settings).
+   `getChannelPrices()`: thay `ilike '%B2B%'` → OR filter: `item_type.ilike.%OD%,item_type.ilike.%WS%,...` từ config.
+3. **`context.ts`**: thêm `matchesChannel()` helper dùng prefix config; thay `.toUpperCase().includes(channel)` bằng `matchesChannel()` ở 4 chỗ tra-cuu.
+4. **Settings page**: section mới "Phân loại Item Type theo Kênh" — editable prefix chips per channel + bảng reference tất cả item_type tagged theo kênh.
+
+### Test
+- B2B OR filter test: trả đúng `VN Strategic Mr. Công`, `VN TIER VIP`, `VN DEAL 200` — giá VND/USD đúng.
+- tsc PASS. KHÔNG push (quy tắc session 76).
+
+---
+
 ## Session 77 tiếp 2 (2026-06-25) — Creator tab, BOD tabs, channel filter B2C, COGS leak
 
 ### Creator tab không vô được

@@ -211,6 +211,26 @@ export function getChannelFromRole(role: string): "B2C" | "B2B" | null {
   return null
 }
 
+// Default prefix mapping — được ghi đè bởi app_settings key "item_channel_types"
+const CHANNEL_TYPE_DEFAULTS: Record<string, string[]> = {
+  B2C: ["B2C", "ECO"],
+  B2B: ["OD", "WS", "Strategic", "TIER", "SILVER", "DEAL", "B2B"],
+}
+let _channelTypesCache: { data: Record<string, string[]>; at: number } | null = null
+
+// Fetch (và cache 30 phút) config mapping channel → item_type prefix list.
+// Phần lớn item_type B2B không chứa "B2B" literal mà là "OD …", "WS …", "Strategic …", etc.
+export async function getChannelTypes(): Promise<Record<string, string[]>> {
+  const now = Date.now()
+  if (_channelTypesCache && now - _channelTypesCache.at < 30 * 60 * 1000) return _channelTypesCache.data
+  const { data } = await supabaseAdmin.from("app_settings")
+    .select("value").eq("key", "item_channel_types").maybeSingle()
+  let result = CHANNEL_TYPE_DEFAULTS
+  try { if (data?.value) result = JSON.parse(data.value) } catch {}
+  _channelTypesCache = { data: result, at: now }
+  return result
+}
+
 // Fetch giá bán (unitprice) từ bảng items, filter theo channel + sku_code.
 // Returns map: sku_code → { unitprice, currency, item_type }
 // Nếu channel=null → trả Map rỗng (không cần filter)
@@ -219,11 +239,17 @@ export async function getChannelPrices(
   channel:  "B2C" | "B2B" | null
 ): Promise<Map<string, { unitprice: number; currency: string; item_type: string }>> {
   if (!channel || !skuCodes.length) return new Map()
+  const channelTypes = await getChannelTypes()
+  const prefixes = channelTypes[channel] ?? []
+  if (!prefixes.length) return new Map()
+
+  // Build Supabase OR filter: item_type ILIKE '%OD%' OR ILIKE '%WS%' OR ...
+  const orFilter = prefixes.map(p => `item_type.ilike.%${p}%`).join(",")
   const { data } = await supabaseAdmin
     .from("items")
     .select("sku_code, unitprice, currency, item_type")
     .in("sku_code", skuCodes)
-    .ilike("item_type", `%${channel}%`)
+    .or(orFilter)
     .eq("status", "Active")
   const map = new Map<string, { unitprice: number; currency: string; item_type: string }>()
   for (const item of data ?? []) {

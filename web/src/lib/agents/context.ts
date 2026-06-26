@@ -10,7 +10,7 @@ import {
   getItems, searchListings, identifyCode,
   searchKnowledgeBase,
   searchNccWm, searchNcc3hk,
-  getChannelPrices,
+  getChannelPrices, getChannelTypes,
 } from "@/lib/agents/tools"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
@@ -227,6 +227,14 @@ export async function buildToolContext(
     const listingCodes = params.listingCodes ?? (params.listingCode ? [params.listingCode] : [])
     const isMulti = (productCodes.length + skuCodes.length + listingCodes.length) > 1
 
+    // Helper kiểm tra item_type có thuộc kênh hiện tại không (dùng prefix config)
+    const channelTypes = channel ? await getChannelTypes() : null
+    const matchesChannel = (itemType: string) => {
+      if (!channelTypes || !channel) return true
+      const prefixes = channelTypes[channel] ?? []
+      return prefixes.some(p => (itemType || "").toLowerCase().includes(p.toLowerCase()))
+    }
+
     if (productCodes.length) {
       const results = await Promise.all(productCodes.map(pc => getProductByCode(pc)))
       if (isMulti) {
@@ -299,11 +307,9 @@ export async function buildToolContext(
                 delete detail.sku.latest_cogs; delete detail.sku.latest_cogs_currency
               }
             }
-            // Channel filter: chỉ giữ items thuộc đúng kênh B2C/B2B
+            // Channel filter: chỉ giữ items thuộc đúng kênh B2C/B2B (prefix config)
             if (channel && detail?.items) {
-              detail.items = detail.items.filter((it: any) =>
-                (it.item_type || "").toUpperCase().includes(channel)
-              )
+              detail.items = detail.items.filter((it: any) => matchesChannel(it.item_type))
             }
             sections.push(`=== CHI TIẾT SKU ===`, JSON.stringify(detail, null, 2))
             sections.push(`=== GIẢI MÃ ===`, JSON.stringify(decodeSkuCode(code), null, 2))
@@ -327,7 +333,7 @@ export async function buildToolContext(
               id.sku_code ? getProductDetail(id.sku_code) : Promise.resolve(null),
             ])
             const items = channel
-              ? allItems.filter((it: any) => (it.item_type || "").toUpperCase().includes(channel))
+              ? allItems.filter((it: any) => matchesChannel(it.item_type))
               : allItems
             sections.push(`=== ITEM / ALIAS ===`, JSON.stringify(items, null, 2))
             if (skuDetail) {
@@ -335,9 +341,7 @@ export async function buildToolContext(
                 delete skuDetail.sku.latest_cogs; delete skuDetail.sku.latest_cogs_currency
               }
               if (channel && skuDetail?.items) {
-                skuDetail.items = skuDetail.items.filter((it: any) =>
-                  (it.item_type || "").toUpperCase().includes(channel)
-                )
+                skuDetail.items = skuDetail.items.filter((it: any) => matchesChannel(it.item_type))
               }
               sections.push(`=== SKU LIÊN KẾT ===`, JSON.stringify(skuDetail, null, 2))
             }
@@ -347,7 +351,7 @@ export async function buildToolContext(
               getItems({ listing_code: code }),
             ])
             const items = channel
-              ? allItems.filter((it: any) => (it.item_type || "").toUpperCase().includes(channel))
+              ? allItems.filter((it: any) => matchesChannel(it.item_type))
               : allItems
             sections.push(`=== LISTING ===`, JSON.stringify(listings, null, 2))
             sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
