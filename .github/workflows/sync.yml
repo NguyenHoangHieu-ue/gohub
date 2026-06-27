@@ -19,7 +19,7 @@ jobs:
         run: pip install requests supabase
 
       - name: Run sync
-        working-directory: ./sync
+        working-directory: ./backend/data_sync
         run: python sync.py
         env:
           API_KEY:              ${{ secrets.API_KEY }}

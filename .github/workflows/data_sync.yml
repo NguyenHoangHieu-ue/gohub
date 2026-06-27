@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "Data/**/*.xlsx"
+      - "resources/reference/**/*.xlsx"
 
   # Chạy định kỳ mỗi ngày 02:00 UTC (sau API sync lúc 01:00 UTC)
   schedule:
@@ -45,11 +45,11 @@ jobs:
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             ARGS="--force"
           fi
-          python sync/sync_data_files.py $ARGS
+          python backend/data_sync/sync_data_files.py $ARGS
 
       - name: Run geo hierarchy population (only on force or first run)
         if: ${{ github.event.inputs.force == 'true' }}
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python sync/populate_geo_hierarchy.py
+        run: python backend/data_sync/populate_geo_hierarchy.py

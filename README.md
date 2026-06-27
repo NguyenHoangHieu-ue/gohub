@@ -29,49 +29,9 @@ GoHub Intel (Intelligence Hub) là nền tảng quản trị nội bộ hợp nh
 
 ---
 
-## III. CẤU TRÚC THƯ MỤC HIỆN TẠI (ACTUAL DIRECTORY STRUCTURE)
+## III. CẤU TRÚC THƯ MỤC CHUẨN HÓA (RESTRUCTURED REPO LAYOUT)
 
-Cấu trúc hiện tại của dự án sau khi hoàn thành tích hợp Wiki Tab chi tiết:
-
-```
-├── web/                    # Ứng dụng Next.js (Mã nguồn chính)
-│   ├── src/
-│   │   ├── app/            # App Router pages + API routes
-│   │   │   ├── (dashboard)/  # Giao diện có bảo mật (Login required)
-│   │   │   └── api/        # Các API endpoints phục vụ Web & Bot
-│   │   ├── lib/            # Shared utilities (agents, analytics-db, supabase, lark)
-│   │   └── components/     # UI components dùng chung (sidebar, dashboard-kit)
-│   └── package.json
-├── database/               # Hạ tầng Cơ sở dữ liệu
-│   ├── migrations/         # Supabase SQL migrations (v1 – v20)
-│   ├── setup/              # Các tệp SQL khởi tạo bảng
-│   └── import/             # Kịch bản nạp dữ liệu (import_countries, import_3hk...)
-├── sync/                   # Kịch bản đồng bộ dữ liệu tự động (Python)
-│   ├── sync.py             # Đồng bộ GoHub API → Supabase (Hàng ngày)
-│   └── gohub_api_clients.py
-├── scripts/                # Tập lệnh tiện ích quản trị
-│   └── migrate_turso_tickets.py
-├── docs/                   # Tài liệu nghiệp vụ & Tri thức nội bộ
-│   ├── MoTaChiTiet.md      # Mô tả bối cảnh kinh doanh của GoHub
-│   ├── session_summary.txt # Lịch sử toàn bộ phiên làm việc của AI (Session 1 -> 78)
-│   └── wiki/               # Hệ thống Obsidian Wiki nội bộ
-│       ├── HOME.md
-│       ├── Tab/            # [MỚI] Tài liệu chi tiết kỹ thuật cho 28 Tab hệ thống
-│       └── (company, pricing, processes, products, system, vendors)
-├── Data/                   # Tệp Excel tham chiếu (Kích hoạt sync Actions)
-├── VENDOR/                 # Dữ liệu bảng giá, APN và cấu hình eSIM từ nhà mạng
-├── TaiLieuCongTy_Chung/    # Biểu mẫu tính giá, định dạng SKU và quy trình chuẩn
-├── Add_product/            # Biểu mẫu mẫu hướng dẫn thêm sản phẩm
-├── _Skills_AI/             # Tập quy tắc chỉ dẫn lập trình cho AI (RULES, CLAUDE, FESkill...)
-├── Bug.txt                 # Nhật ký phát hiện và theo dõi sửa lỗi hệ thống
-└── WORK.md                 # Roadmap phát triển và theo dõi tiến độ
-```
-
----
-
-## IV. ĐỀ XUẤT CẤU TRÚC THƯ MỤC CHUẨN HÓA & TỐI ƯU (PROPOSED OPTIMIZED STRUCTURE)
-
-Để đáp ứng nhu cầu mở rộng quy mô, an toàn bảo mật và dọn dẹp các thư mục dữ liệu nhạy cảm rải rác ở thư mục gốc (Root), đề xuất quy hoạch lại cấu trúc dự án như sau:
+Dự án đã được quy hoạch gọn gàng, bảo mật và chuẩn hóa toàn bộ cấu trúc thư mục như sau:
 
 ```
 HeThong/ (Root)
@@ -80,7 +40,7 @@ HeThong/ (Root)
 │       ├── sync.yml          # Đồng bộ catalog sản phẩm hàng ngày (01:00 UTC)
 │       ├── data_sync.yml     # Đồng bộ dữ liệu tham chiếu (02:00 UTC)
 │       └── neo4j_sync.yml    # Đồng bộ đồ thị tri thức ngữ nghĩa
-├── .ai/                      # Gom các file hướng dẫn quy tắc AI vào đây (thay thế _Skills_AI)
+├── .ai/                      # Gom các file hướng dẫn quy tắc AI vào đây (đã chuyển từ _Skills_AI)
 │   ├── RULES.md              # Quy tắc quản lý file tri thức
 │   ├── CLAUDE.md             # Quy tắc tư duy lập trình cho AI
 │   ├── FESkill.md            # Chỉ dẫn UX/UI "Anti-Slop" chất lượng cao
@@ -92,7 +52,7 @@ HeThong/ (Root)
 │   │   ├── lib/              # Core business logic, Clients (Supabase, DW, Lark), AI Engine
 │   │   └── types/            # Khai báo kiểu dữ liệu TypeScript (dừng các lỗi tsc compile)
 │   └── package.json
-├── backend/                  # Gom toàn bộ kịch bản Python & Database quản lý tập trung
+├── backend/                  # Đã quy hoạch toàn bộ kịch bản Python & Database quản lý tập trung
 │   ├── data_sync/            # Các kịch bản Python đồng bộ tự động (Gom từ sync/ và database/)
 │   │   ├── sync.py
 │   │   ├── gohub_api_clients.py
@@ -107,7 +67,7 @@ HeThong/ (Root)
 │   │   └── ...
 │   ├── session_summary.txt   # Lịch sử các session làm việc của AI
 │   └── MoTaChiTiet.md        # Bối cảnh nghiệp vụ công ty
-├── resources/                # [MỚI] Quy hoạch toàn bộ Excel/báo giá nhạy cảm để dọn rác root
+├── resources/                # Đã quy hoạch toàn bộ Excel/báo giá nhạy cảm để dọn rác root
 │   ├── reference/            # Gom từ Data/ (countries, support-countries, tỉ giá nội bộ)
 │   ├── company_templates/    # Gom từ TaiLieuCongTy_Chung/ (COGS_Template, Quy trình)
 │   ├── vendor_catalogs/      # Gom từ VENDOR/ (Báo giá 3HK, eSIM apn...)
