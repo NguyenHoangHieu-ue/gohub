@@ -3987,3 +3987,13 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Bước 3: chỉ giữ SKU có product type C (eSIM Full) hoặc E (SIM Full) — ký tự 2 của SKU code
     - Bước 4: product_code = 8 ký tự đầu của SKU code → tra context lấy thông tin chi tiết
     - Ưu tiên tenant=VN trước US trong kết quả đề xuất
+
+
+## Session 78 (2026-06-27) — Khởi tạo Wiki Tab kỹ thuật chi tiết
+1. Tạo thư mục mới `docs/wiki/Tab/` chứa tài liệu kỹ thuật chi tiết cho tất cả các tab (trang tính năng) trong hệ thống GoHub Intel.
+2. Tự động sinh 28 file `.md` tiếng Việt chi tiết chất lượng cao mô tả đầy đủ:
+   - Tổng quan & Đường dẫn vật lý (Frontend + API).
+   - Kiến trúc kỹ thuật, Schema cơ sở dữ liệu (Supabase, gohub_dw), helper functions.
+   - Công thức tính toán và quy tắc nghiệp vụ (GPM2, Projection Factor, KPI Pro-rata, CAC, ROAS, Spend Pace, Ecommerce CR...).
+   - Phân quyền truy cập theo vai trò (Role-based permissions) và Department.
+3. ⚠️ NOTE QUAN TRỌNG: Nếu có bất kỳ thay đổi, sửa chữa, thêm hoặc xóa tính năng liên quan đến bất kỳ tab nào trong hệ thống, bắt buộc phải đồng bộ và cập nhật tương tự trong các file `.md` mô tả của tab đó tại thư mục `docs/wiki/Tab/`.
