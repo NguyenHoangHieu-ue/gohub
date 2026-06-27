@@ -21,7 +21,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     .maybeSingle()
 
   if (!doc) return NextResponse.json({ error: "Không tìm thấy" }, { status: 404 })
-  if (role !== "admin" && doc.uploaded_by !== username)
+  if (role !== "admin" && role !== "creator" && doc.uploaded_by !== username)
     return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
 
   // chunks tự xóa theo CASCADE

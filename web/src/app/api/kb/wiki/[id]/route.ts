@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
   // is_hidden toggle: admin only, no version history needed
   if (is_hidden !== undefined && Object.keys(body).length === 1) {
-    if (role !== "admin") return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
+    if (role !== "admin" && role !== "creator") return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
     const { error } = await supabaseAdmin
       .from("kb_wiki_pages")
       .update({ is_hidden })
@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     .maybeSingle()
 
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (role !== "admin" && current.created_by !== username)
+  if (role !== "admin" && role !== "creator" && current.created_by !== username)
     return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
 
   // Save current version to history
@@ -122,7 +122,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     .maybeSingle()
 
   if (!page) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (role !== "admin" && page.created_by !== username)
+  if (role !== "admin" && role !== "creator" && page.created_by !== username)
     return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
 
   const { error } = await supabaseAdmin.from("kb_wiki_pages").delete().eq("id", params.id)

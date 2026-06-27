@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     .order("updated_at", { ascending: false })
 
   // Non-admin users cannot see hidden pages
-  if (role !== "admin") query = query.eq("is_hidden", false)
+  if (role !== "admin" && role !== "creator") query = query.eq("is_hidden", false)
 
   if (search) query = query.ilike("title", `%${search}%`)
   if (dept && DEPARTMENTS.includes(dept as any)) query = query.eq("department", dept)

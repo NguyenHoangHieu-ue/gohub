@@ -8,7 +8,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user?.role !== "admin") {
+  if (!session || !["admin", "creator"].includes(session.user?.role as string)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   try {

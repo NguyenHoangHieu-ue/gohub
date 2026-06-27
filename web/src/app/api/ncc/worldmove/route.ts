@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const PAGE_SIZE = 50
-const canSeeCost = (role?: string) => role === "admin"
+const canSeeCost = (role?: string) => (role === "admin" || role === "creator")
 
 function stripCost(rows: any[], role?: string) {
   if (canSeeCost(role)) return rows

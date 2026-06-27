@@ -6,7 +6,7 @@ import { runScheduledMessage } from "@/lib/scheduled-runner"
 
 function adminOnly(session: any) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (session.user?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   return null
 }
 

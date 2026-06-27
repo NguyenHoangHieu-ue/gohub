@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (session.user?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data, error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (session.user?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()
   const { name, prompt, cron_expression, lark_webhook_url, lark_keyword } = body

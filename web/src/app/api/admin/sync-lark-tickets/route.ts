@@ -32,7 +32,7 @@ export async function POST(_req: NextRequest) {
   if (!session && !isCronAuthed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  if (session && session.user?.role !== "admin") {
+  if (session && !["admin", "creator"].includes(session.user?.role as string)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

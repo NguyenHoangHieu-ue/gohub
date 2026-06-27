@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (session.user?.role !== "admin") {
+  if (!["admin", "creator"].includes(session.user?.role as string)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
