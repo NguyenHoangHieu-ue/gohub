@@ -2,178 +2,236 @@
 
 > Hệ thống quản lý sản phẩm, phân tích kinh doanh và AI chatbot tích hợp cho GoHub.
 
-## Tổng Quan
+---
 
-GoHub PM là nền tảng nội bộ hợp nhất **2 hệ thống**:
-- **GoHub PM** (trước đây): quản lý catalog SIM/eSIM, NCC, KB nội bộ
-- **gohub-intel** (đã merge vào): Business Intelligence, báo cáo doanh thu, phân tích kênh bán
+## I. TỔNG QUAN HỆ THỐNG
 
-**Production:** [gohub-murex.vercel.app](https://gohub-murex.vercel.app)
+GoHub Intel (Intelligence Hub) là nền tảng quản trị nội bộ hợp nhất toàn diện 3 mảnh ghép chính:
+1. **Product Management (GoHub PM)**: Quản lý toàn bộ vòng đời sản phẩm bao gồm Catalog SIM/eSIM hệ thống (Products, SKUs, Listings, Items), danh mục đối tác/Nhà cung cấp (WorldMove, 3HK, v.v.), nhóm địa lý và Cơ sở tri thức (Knowledge Base).
+2. **Business Intelligence (gohub-intel)**: Phân tích sâu số liệu doanh thu, chi phí, đơn hàng, khách hàng sỉ B2B, bán lẻ B2C trực tiếp từ kho dữ liệu tập trung (`gohub_dw`) với giao diện chuyên nghiệp và trực quan.
+3. **AI Chatbot (Bé Gấu Thông Thái)**: Hệ thống AI đa tác nhân (6 chuyên gia Agents) hỗ trợ tư vấn gói cước, giải đáp nghiệp vụ, phân tích Gap NCC, truy vấn SQL thực thi số liệu trực tiếp và xuất dữ liệu báo cáo sang tệp tin mẫu.
 
 ---
 
-## Stack
+## II. CÔNG NGHỆ ÁP DỤNG (STACK)
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 14 (App Router, TypeScript, Tailwind CSS) |
-| Deploy | Vercel (auto-deploy từ `main` branch) |
-| Auth | NextAuth.js v4 + bcrypt + Lark OAuth |
-| Product DB | Supabase (PostgreSQL + pgvector) |
-| Analytics DB | PostgreSQL `gohub_dw` (internal — liên hệ team lead) |
-| AI | Google Gemini (gemini-3.5-flash + gemini-embedding-001) |
-| Bot | Lark Bot (p2p + group + thread) |
-| Sync | GitHub Actions cron (daily 01:00 UTC) |
+| Layer | Công nghệ | Chi tiết sử dụng |
+|---|---|---|
+| **Frontend** | Next.js 14 (App Router, TS, Tailwind CSS) | Toàn bộ giao diện quản trị và báo cáo BI |
+| **Deploy** | Vercel (Auto-deploy từ branch `main`) | Đảm bảo tính sẵn sàng cao |
+| **Auth** | NextAuth.js v4 + Bcrypt + Lark OAuth | Bảo mật danh tính đa kênh |
+| **Product DB** | Supabase (PostgreSQL + pgvector) | Lưu trữ Catalog sản phẩm, Wiki, CS tickets |
+| **Analytics DB** | PostgreSQL `gohub_dw` | Kho dữ liệu kinh doanh tập trung (Doanh thu, lưu lượng) |
+| **Caching Layer** | L2 Shared Caching (Migration v20) | In-memory L1 (5 phút) + Supabase L2 (10 phút) |
+| **AI LLM** | Google Gemini (gemini-3.5-flash / embedding) | Xử lý Chatbot, Classifier và Vector Search |
+| **Bot Channel** | Lark Bot API (`lib/lark.ts`) | Đọc/bắn thông tin báo cáo và hội thoại đa kênh |
+| **Sync Engine** | GitHub Actions Cron | Tự động chạy tiến trình đồng bộ hàng ngày |
 
 ---
 
-## Cấu Trúc Repo
+## III. CẤU TRÚC THƯ MỤC HIỆN TẠI (ACTUAL DIRECTORY STRUCTURE)
+
+Cấu trúc hiện tại của dự án sau khi hoàn thành tích hợp Wiki Tab chi tiết:
 
 ```
-├── web/                    # Next.js application (main codebase)
+├── web/                    # Ứng dụng Next.js (Mã nguồn chính)
 │   ├── src/
 │   │   ├── app/            # App Router pages + API routes
-│   │   │   ├── (dashboard)/    # Protected pages (login required)
-│   │   │   │   ├── analytics/  # BI pages (dashboard, BOD, B2B, B2C, orders...)
-│   │   │   │   ├── admin/      # Admin panel (users, settings, template, scheduler)
-│   │   │   │   ├── chatbot/    # GoHub AI chatbot
-│   │   │   │   ├── skus/       # SP Hệ Thống (products, SKUs, listings, items)
-│   │   │   │   ├── ncc/        # SP Vendor (WM, 3HK catalog)
-│   │   │   │   ├── kb/         # Knowledge Base (docs + wiki)
-│   │   │   │   └── ...
-│   │   │   └── api/            # API routes
-│   │   ├── lib/            # Shared utilities
-│   │   │   ├── agents/     # AI agent system (5 agents)
-│   │   │   ├── analytics-db.ts   # gohub_dw PostgreSQL connection
-│   │   │   ├── analytics-helpers.ts  # SQL helpers + caching
-│   │   │   ├── supabase.ts    # Supabase client
-│   │   │   └── lark.ts        # Lark Bot API helpers
-│   │   └── components/    # Shared UI components
+│   │   │   ├── (dashboard)/  # Giao diện có bảo mật (Login required)
+│   │   │   └── api/        # Các API endpoints phục vụ Web & Bot
+│   │   ├── lib/            # Shared utilities (agents, analytics-db, supabase, lark)
+│   │   └── components/     # UI components dùng chung (sidebar, dashboard-kit)
 │   └── package.json
-├── sync/                   # GitHub Actions sync scripts (Python)
-│   ├── sync.py             # GoHub API → Supabase (daily)
+├── database/               # Hạ tầng Cơ sở dữ liệu
+│   ├── migrations/         # Supabase SQL migrations (v1 – v20)
+│   ├── setup/              # Các tệp SQL khởi tạo bảng
+│   └── import/             # Kịch bản nạp dữ liệu (import_countries, import_3hk...)
+├── sync/                   # Kịch bản đồng bộ dữ liệu tự động (Python)
+│   ├── sync.py             # Đồng bộ GoHub API → Supabase (Hàng ngày)
 │   └── gohub_api_clients.py
-├── database/
-│   ├── migrations/         # Supabase SQL migrations (v1–v15)
-│   └── import/             # One-time import scripts
-├── scripts/                # Utility scripts
-│   └── migrate_turso_tickets.py  # Turso → Supabase ticket migration
-├── docs/
-│   ├── session_summary.txt # Dev session log
-│   ├── MERGE_PLAN.md       # gohub-intel merge plan (completed)
-│   └── wiki/               # GoHub internal wiki (synced to Supabase)
-├── Data/                   # Reference xlsx files (trigger sync actions)
-└── _Skills_AI/             # AI coding guidelines
-    └── agents/AGENTS.md    # Agent system documentation
+├── scripts/                # Tập lệnh tiện ích quản trị
+│   └── migrate_turso_tickets.py
+├── docs/                   # Tài liệu nghiệp vụ & Tri thức nội bộ
+│   ├── MoTaChiTiet.md      # Mô tả bối cảnh kinh doanh của GoHub
+│   ├── session_summary.txt # Lịch sử toàn bộ phiên làm việc của AI (Session 1 -> 78)
+│   └── wiki/               # Hệ thống Obsidian Wiki nội bộ
+│       ├── HOME.md
+│       ├── Tab/            # [MỚI] Tài liệu chi tiết kỹ thuật cho 28 Tab hệ thống
+│       └── (company, pricing, processes, products, system, vendors)
+├── Data/                   # Tệp Excel tham chiếu (Kích hoạt sync Actions)
+├── VENDOR/                 # Dữ liệu bảng giá, APN và cấu hình eSIM từ nhà mạng
+├── TaiLieuCongTy_Chung/    # Biểu mẫu tính giá, định dạng SKU và quy trình chuẩn
+├── Add_product/            # Biểu mẫu mẫu hướng dẫn thêm sản phẩm
+├── _Skills_AI/             # Tập quy tắc chỉ dẫn lập trình cho AI (RULES, CLAUDE, FESkill...)
+├── Bug.txt                 # Nhật ký phát hiện và theo dõi sửa lỗi hệ thống
+└── WORK.md                 # Roadmap phát triển và theo dõi tiến độ
 ```
 
 ---
 
-## AI Agent System
+## IV. ĐỀ XUẤT CẤU TRÚC THƯ MỤC CHUẨN HÓA & TỐI ƯU (PROPOSED OPTIMIZED STRUCTURE)
 
-GoHub có **5 chuyên gia AI** xử lý các loại câu hỏi khác nhau:
+Để đáp ứng nhu cầu mở rộng quy mô, an toàn bảo mật và dọn dẹp các thư mục dữ liệu nhạy cảm rải rác ở thư mục gốc (Root), đề xuất quy hoạch lại cấu trúc dự án như sau:
 
-| Agent | Trigger | Chức năng |
-|---|---|---|
-| `tu-van` | Tìm gói đi nước X | Tư vấn SIM/eSIM từ GoHub catalog |
-| `tra-cuu` | SKU/Product code cụ thể | Tra cứu chi tiết + COGS + FX rates |
-| `giai-dap` | Nghĩa mã, quy trình | Giải thích thuật ngữ, cấu trúc mã |
-| `gap-analysis` | Gap NCC | So sánh WM/3HK vs hệ thống GoHub |
-| `bi-analyst` | Doanh thu, đơn hàng, kênh | Query gohub_dw → trả lời + vẽ biểu đồ |
-
-Model: `gemini-3.5-flash` | Lark Bot: `Bé Gấu Thông Thái`
-
----
-
-## Database
-
-### Supabase (Product & App data)
-- `products`, `skus`, `listings`, `items` — catalog sản phẩm
-- `ncc_worldmove` (8,921 rows), `ncc_3hk` — NCC catalog
-- `kb_documents`, `kb_chunks`, `kb_wiki_pages` — Knowledge Base
-- `users`, `app_settings`, `notifications` — app config
-- `lark_cs_tickets` (24,712 rows) — CS troubleshoot data
-- `lark_scheduled_messages` — scheduled Lark messages
-- `analytics_target_planning` — KPI targets
-
-### gohub_dw (Analytics PostgreSQL)
-- `fact_fulfillment_revenue`, `fact_sales_revenue` — doanh thu
-- `fact_data_usage` — 3HK data usage
-- `dim_order_source`, `dim_staff`, `dim_customer`, `dim_sku`, `dim_location`
-
-### Supabase Migrations
-Chạy theo thứ tự trong Supabase SQL Editor: `v1` → `v15`
-
----
-
-## Setup Local
-
-```bash
-# 1. Clone
-git clone https://github.com/NguyenHoangHieu-ue/gohub.git
-cd gohub
-
-# 2. Install dependencies
-cd web && npm install
-
-# 3. Environment variables
-cp .env.example web/.env.local  # Điền các giá trị từ team
-
-# 4. Run dev server
-npm run dev  # → http://localhost:3000
+```
+HeThong/ (Root)
+├── .github/                  # Cấu hình GitHub (Workflows CI/CD, Issue/PR templates)
+│   └── workflows/
+│       ├── sync.yml          # Đồng bộ catalog sản phẩm hàng ngày (01:00 UTC)
+│       ├── data_sync.yml     # Đồng bộ dữ liệu tham chiếu (02:00 UTC)
+│       └── neo4j_sync.yml    # Đồng bộ đồ thị tri thức ngữ nghĩa
+├── .ai/                      # Gom các file hướng dẫn quy tắc AI vào đây (thay thế _Skills_AI)
+│   ├── RULES.md              # Quy tắc quản lý file tri thức
+│   ├── CLAUDE.md             # Quy tắc tư duy lập trình cho AI
+│   ├── FESkill.md            # Chỉ dẫn UX/UI "Anti-Slop" chất lượng cao
+│   └── agents/AGENTS.md      # Tài liệu thiết kế 6 agents chatbot
+├── web/                      # Ứng dụng Next.js (Mã nguồn Web Frontend & Backend API)
+│   ├── src/
+│   │   ├── app/              # App Router Pages & API Routes
+│   │   ├── components/       # Các React components tái sử dụng
+│   │   ├── lib/              # Core business logic, Clients (Supabase, DW, Lark), AI Engine
+│   │   └── types/            # Khai báo kiểu dữ liệu TypeScript (dừng các lỗi tsc compile)
+│   └── package.json
+├── backend/                  # Gom toàn bộ kịch bản Python & Database quản lý tập trung
+│   ├── data_sync/            # Các kịch bản Python đồng bộ tự động (Gom từ sync/ và database/)
+│   │   ├── sync.py
+│   │   ├── gohub_api_clients.py
+│   │   └── populate_geo_hierarchy.py
+│   ├── migrations/           # PostgreSQL/Supabase Migrations v1 -> v20
+│   └── seeding/              # Các script nạp dữ liệu một lần (Gom từ database/import/)
+├── docs/                     # Toàn bộ tài liệu nghiệp vụ, tri thức nội bộ
+│   ├── wiki/                 # Obsidian Wiki nội bộ của GoHub
+│   │   ├── Tab/              # Tài liệu chi tiết kỹ thuật của 28 Tab hệ thống
+│   │   ├── company/
+│   │   ├── pricing/
+│   │   └── ...
+│   ├── session_summary.txt   # Lịch sử các session làm việc của AI
+│   └── MoTaChiTiet.md        # Bối cảnh nghiệp vụ công ty
+├── resources/                # [MỚI] Quy hoạch toàn bộ Excel/báo giá nhạy cảm để dọn rác root
+│   ├── reference/            # Gom từ Data/ (countries, support-countries, tỉ giá nội bộ)
+│   ├── company_templates/    # Gom từ TaiLieuCongTy_Chung/ (COGS_Template, Quy trình)
+│   ├── vendor_catalogs/      # Gom từ VENDOR/ (Báo giá 3HK, eSIM apn...)
+│   └── product_templates/    # Gom từ Add_product/ (WM_Taiwan_unlimited...)
+├── Bug.txt                   # Nhật ký ghi nhận và sửa đổi lỗi hệ thống
+├── WORK.md                   # Trạng thái dự án & Kế hoạch Roadmap
+└── README.md                 # Tệp giới thiệu & Hướng dẫn khởi chạy hệ thống
 ```
 
-### Env vars cần thiết (web/.env.local)
+---
 
-Liên hệ team lead để lấy file `.env.local`. Không commit file này lên GitHub.
+## V. ĐỀ XUẤT QUY TRÌNH VẬN HÀNH CHUẨN (AUTOMATION, QA & CI/CD WORKFLOW)
+
+Để hướng tới việc tự động hóa quy trình, đảm bảo an toàn bảo mật, hạn chế tối đa lỗi phát sinh sau khi deploy và tránh việc "sửa đổi thủ công từng chút", đề xuất áp dụng **Quy trình chuẩn hóa 4 lớp** dưới đây:
+
+```
+[Local Code] ─► [Pre-Commit Hooks] ─► [GitHub Pull Request (CI)] ─► [Staging Deploy & QA] ─► [Production Deploy]
+                     (Secret Scan)           (Build, Lint, Unit Test)      (Playwright, DB verify)
+```
+
+### 1. Quy trình Code & Tiêu chuẩn Bảo mật (Development & Security)
+- **Cơ chế phân nhánh (Branching Strategy)**:
+  - Tuyệt đối không code trực tiếp trên nhánh `main`.
+  - Quy hoạch 3 nhánh chính:
+    - `main`: Nhánh chạy Production ổn định nhất.
+    - `staging`: Nhánh thử nghiệm tích hợp trước khi release.
+    - `feature/*` hoặc `bugfix/*`: Nhánh phát triển của lập trình viên.
+- **Pre-commit Hooks (Kiểm tra trước khi commit)**:
+  - Cài đặt `husky` và `lint-staged` trong dự án.
+  - Sử dụng công cụ quét bí mật tự động (như `gitleaks` hoặc `secret-lint`) ở bước pre-commit để ngăn chặn việc vô tình commit nhầm API key, token Lark, hay mật khẩu Supabase lên GitHub.
+- **Biến môi trường (Environment Variables)**:
+  - Nghiêm cấm đặt credentials vào bất kỳ tệp tài liệu `.txt` hay `.md` nào.
+  - Sử dụng file `.env.local` tại máy cá nhân (đã đưa vào `.gitignore`). Cấu hình khóa trên Vercel cho từng môi trường riêng biệt (Staging vs Production).
+
+### 2. Quy trình Kiểm thử Tự động (Automated QA & Testing)
+Để loại bỏ lỗi phát sinh lúc runtime, cần xây dựng bộ test suite bao gồm:
+- **Unit Tests (Kiểm thử đơn vị)**:
+  - Sử dụng `Vitest` hoặc `Jest` để kiểm tra các hàm tiện ích nghiệp vụ lõi như: `stripSuperlativeNhat()` (xử lý đồng âm), `wordMatch()` (nhận diện quốc gia), `convertCogs()` (quy đổi giá vốn), `decodeSkuCode()`.
+- **Integration Tests (Kiểm thử tích hợp)**:
+  - Kiểm tra các đầu API (/api/chat, /api/analytics/*).
+  - Tự động hóa việc gửi yêu cầu mẫu tới AI Router tại `/api/chat` để xác nhận AI Classifier phân loại đúng Intent và phân vùng nguồn dữ liệu (`gohub_system` vs `ncc_catalog`) trước khi merge.
+- **End-to-End (E2E) Testing (Kiểm thử thực tế đầu-cuối)**:
+  - Cấu hình thư viện `Playwright` để tự động hóa kịch bản người dùng: *Đăng nhập -> Click xem biểu đồ BOD Report (xác nhận không lỗi NaN) -> Mở Chatbot hỏi đáp số liệu -> Xác nhận ChatChart render Recharts thành công*.
+- **Database Smoke Tests (Kiểm thử tính tương thích Database)**:
+  - Một script chạy ngầm tự động quét qua 18 truy vấn SQL BI để kiểm tra xem cấu trúc bảng trong kho dữ liệu `gohub_dw` có bị thay đổi (break) hay không trước khi tiến hành deploy.
+
+### 3. Quy trình Tích hợp & Triển khai liên tục (CI/CD Pipeline)
+Sử dụng GitHub Actions để tự động hóa toàn bộ quá trình:
+- **Pipeline chạy tự động khi tạo Pull Request (PR)**:
+  1. **Lint & Type-Check Stage**: Chạy lệnh `npm run lint` và `tsc --noEmit` để đảm bảo code sạch lỗi linter và khớp kiểu dữ liệu TypeScript 100%. Nếu có lỗi TypeScript, chặn không cho Merge.
+  2. **Test Stage**: Chạy các Unit test và Integration test tự động trên môi trường ảo hóa Ubuntu headless.
+- **Triển khai tự động (Continuous Deployment)**:
+  1. **Deploy Staging**: Khi PR được duyệt và merge vào nhánh `staging`, Vercel tự động triển khai bản thử nghiệm lên môi trường Staging. Đội ngũ QA/Quản trị viên thực hiện kiểm thử thực tế trên link Staging.
+  2. **Deploy Production**: Sau khi Staging hoạt động ổn định, tiến hành merge `staging` sang `main`. Vercel tự động deploy lên môi trường Production thực tế (`gohub-intel.vercel.app`).
+
+### 4. Quy trình Quản trị Database & Giám sát Đồng bộ
+- **Quản lý Schema Migrations**:
+  - Không chạy lệnh SQL can thiệp thủ công (DDL) trực tiếp trên cơ sở dữ liệu Production.
+  - Mọi thay đổi cấu trúc bảng bắt buộc phải viết thành file migration sql (ví dụ `v21_new_feature.sql`) và lưu trữ trong `database/migrations/`. File này sẽ được áp dụng tự động qua GitHub Actions CI/CD khi deploy.
+- **Hệ thống Giám sát & Cảnh báo Đồng bộ hàng ngày (Sync Monitoring)**:
+  - Các cron jobs đồng bộ dữ liệu (`sync.yml`, `data_sync.yml`) sau khi chạy thành công hoặc gặp lỗi bắt buộc phải bắn thông điệp tóm tắt chi tiết (gồm số dòng cập nhật, thời gian thực thi, lỗi phát sinh nếu có) vào nhóm chat Vận hành trên Lark Chat (`Bé Gấu Thông Thái` gửi thông báo) để đội ngũ Tech nắm bắt tức thì và khắc phục ngay trong ngày.
 
 ---
 
-## Roles & Permissions
+## VI. AI AGENT SYSTEM (6 AGENTS CHUYÊN BIỆT)
 
-| Role | Access |
-|---|---|
-| `admin` | Toàn quyền — admin panel, SQL Explorer, user management |
-| `manager` | Analytics + product management + template |
-| `bod` | Analytics (BOD Report, dashboard) |
-| `staff` | Analytics (đọc) |
-| `standard` | Chatbot + Khuyến mãi + Thông tin + KB (theo phòng ban) |
+Hệ thống Chatbot tích hợp **6 Agent chuyên gia** (đã E2E tested):
 
----
-
-## Analytics Pages
-
-| Route | Mô tả |
-|---|---|
-| `/analytics` | Dashboard tổng quan |
-| `/analytics/bod` | BOD Report |
-| `/analytics/all-time` | Historical performance |
-| `/analytics/b2b`, `/b2c`, `/channels` | Phân tích kênh bán |
-| `/analytics/orders` | Quản lý đơn hàng |
-| `/analytics/staff` | Hiệu suất nhân viên |
-| `/analytics/customers` | Phân tích khách B2B |
-| `/analytics/vendors` | Vendor performance |
-| `/analytics/products` | SKU performance |
-| `/analytics/fulfillment` | Fulfillment report |
-| `/analytics/cs-troubleshoot` | CS Troubleshoot Hub |
-| `/analytics/3hk-usage` | 3HK Data Usage |
-| `/analytics/targets` | KPI/Target planning |
-| `/analytics/sql` | SQL Explorer (admin only) |
+| Tên Agent | ID Tác nhân | Phạm vi / Chức năng | Trigger đặc trưng |
+|---|---|---|---|
+| **Tư Vấn** | `tu-van` | Tư vấn SIM/eSIM theo nước/ngày/GB từ bảng `sku_catalog` | "đi Thái 5 ngày", "gói Japan" |
+| **Tra Cứu** | `tra-cuu` | Tra cứu chi tiết thông số SKU, Product Code, giá vốn, tỷ giá | Mã SKU (13 ký tự), mã Product, COGS |
+| **Giải Đáp** | `giai-dap` | Giải thích quy trình, thuật ngữ, cấu trúc mã, tìm kiếm Wiki/KB | "KYC là gì", "nghĩa là gì" |
+| **NCC & Gap** | `gap-analysis` | Duyệt catalog đối tác WM/3HK, so sánh và phân tích Gap hệ thống | "so sánh NCC", "Gap NCC" |
+| **BI Analyst** | `bi-analyst` | Tự động sinh SQL truy vấn `gohub_dw` và vẽ biểu đồ Recharts | "doanh thu", "đơn hàng", "leaderboard" |
+| **Tạo Template** | `tao-template` | Xuất Excel template sản phẩm từ NCC cho Admin/Manager | "tạo template WM", "template 3hk" |
 
 ---
 
-## GitHub Actions
+## VII. DANH SÁCH BÁO CÁO BI (ANALYTICS) & CHẾ ĐỘ PHÂN QUYỀN
 
-| Workflow | Schedule | Mô tả |
-|---|---|---|
-| `sync.yml` | Daily 01:00 UTC | GoHub API → Supabase (products, SKUs, listings, items) |
-| `data_sync.yml` | Push Data/ + Daily 02:00 UTC | Reference data (countries, vendors, FX rates) |
-| `neo4j_sync.yml` | After sync | Neo4j graph sync (semantic search fallback) |
+Bảng phân phối 18 trang báo cáo BI được đồng bộ bảo mật thông qua ma trận **Role × Report**:
+
+| STT | Trang báo cáo | ID Báo cáo | Nguồn dữ liệu chính | Vai trò truy cập nền mặc định |
+|---|---|---|---|---|
+| 1 | **Dashboard** | `dashboard` | `gohub_dw` | Admin, Creator, Manager, BOD, Staff |
+| 2 | **BOD Report** | `bod` | `gohub_dw` (Doanh thu + COGS + Chi phí) | Admin, Creator, BOD, Manager |
+| 3 | **All-Time Report** | `all-time` | `gohub_dw` (Dữ liệu lịch sử đa năm) | Admin, Creator, Manager, BOD, Staff |
+| 4 | **Channels** | `channels` | `gohub_dw` + Cấu hình Phí sàn | Admin, Creator, Manager, BOD, Staff |
+| 5 | **B2B Performance** | `b2b` | `gohub_dw` + Partner Tiers | Admin, Creator, BOD, Manager, Staff |
+| 6 | **B2C Performance** | `b2c` | `gohub_dw` + Chatwoot + Turso Spend | Admin, Creator, Manager, BOD, Staff |
+| 7 | **Website Analytics** | `website` | Google Analytics 4 + Search Console | Admin, Creator, Manager, BOD, Staff |
+| 8 | **Staff** | `staff` | `gohub_dw` (Leaderboard, gán NaN) | Admin, Creator, Manager, BOD, Staff |
+| 9 | **Customers** | `customers` | `gohub_dw` (Phân tích khách hàng sỉ B2B) | Admin, Creator, Manager, BOD, Staff |
+| 10 | **Vendors** | `vendors` | `gohub_dw` (Hiệu suất nhà cung cấp) | Admin, Creator, Manager, BOD, Staff |
+| 11 | **Orders** | `orders` | `gohub_dw` (Quản lý và xuất đơn hàng) | Admin, Creator, Manager, BOD, Staff |
+| 12 | **Fulfillment** | `fulfillment`| `gohub_dw` (Tốc độ và chất lượng gửi sim) | Admin, Creator, Manager, BOD, Staff |
+| 13 | **3HK Data Usage** | `3hk-usage` | `gohub_dw` (fact_data_usage 3HK) | Admin, Creator, Manager, BOD, Staff |
+| 14 | **CS Troubleshoot**| `cs-troubleshoot`| Supabase `lark_cs_tickets` (24,712 rows) | Admin, Creator, Manager, BOD, Staff |
+| 15 | **Feedback** | `feedback` | Supabase `feedbacks` (Thu thập ý kiến) | Tất cả các vai trò (Gửi phản hồi) |
+| 16 | **Products (BI)** | `products` | `gohub_dw` (Doanh số bán theo SKU) | Admin, Creator, Manager, BOD, Staff |
+| 17 | **KPI / Target** | `targets` | Supabase `analytics_target_planning` | Admin, Creator, Manager, BOD, Staff |
+| 18 | **SQL Explorer** | `sql` | `gohub_dw` (Truy vấn SELECT trực tiếp) | Admin, Creator |
+| 19 | **Scheduled Msgs** | `scheduled` | Supabase `lark_scheduled_messages` | Admin, Creator |
+
+*Cơ chế phân quyền Sidebar*: Sidebar hiển thị các tab dựa trên công thức:
+$$\\text{Quyền thực tế} = \\text{Quyền nền của Role} \\cup \\text{Quyền cấp riêng cho tài khoản (allowed\\_analytics / allowed\\_tabs)}$$
 
 ---
 
-## Liên hệ
+## VIII. HƯỚNG DẪN CÀI ĐẶT LOCAL
 
-- **Owner:** Hiếu ([@NguyenHoangHieu-ue](https://github.com/NguyenHoangHieu-ue))
-- **Lark Bot:** Bé Gấu Thông Thái
-- **Production:** [gohub-murex.vercel.app](https://gohub-murex.vercel.app)
+1. **Khởi chạy ứng dụng Web (Next.js)**:
+   ```bash
+   cd web
+   npm install
+   cp .env.local.example .env.local  # Cấu hình các biến môi trường nhạy cảm
+   npm run dev
+   ```
+2. **Khởi chạy kịch bản đồng bộ dữ liệu**:
+   ```bash
+   # Tạo môi trường ảo hóa Python
+   python -m venv venv_phase1
+   venv_phase1\\Scripts\\activate   # Trên Windows
+   pip install -r requirements.txt # Cài đặt thư viện cần thiết
+   python sync/sync.py             # Kích hoạt đồng bộ sản phẩm thủ công
+   ```

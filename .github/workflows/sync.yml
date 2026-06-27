@@ -30,7 +30,7 @@ jobs:
         if: always()
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST https://gohub-murex.vercel.app/api/notify/lark \
+            -X POST https://gohub-intel.vercel.app/api/notify/lark \
             -H "Authorization: Bearer ${{ secrets.MCP_SECRET }}" \
             -H "Content-Type: application/json")
           echo "Lark notify status: $STATUS"
