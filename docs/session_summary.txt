@@ -4023,3 +4023,25 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Cấu hình Git user email local thành `hieuhc07@gmail.com` khớp 100% với tài khoản chủ sở hữu Vercel.
     - Gộp (Squash) toàn bộ các commit ngày hôm nay thành 1 commit duy nhất mang email `hieuhc07@gmail.com` để xóa bỏ hoàn toàn dấu vết email cũ, đẩy lên `staging`, sau đó Merge thành công vào `main`.
     - Hệ thống đã chính thức **LIVE** ổn định và đồng bộ hoàn hảo trên tên miền chính chủ: **`https://gohub-intel.vercel.app`**.
+
+
+## Session 79 (2026-06-28) — Fix pipeline deploy, Dashboard destinations, bỏ Turso users, RBAC creator
+
+64. Fix "Vercel Git author block" deploy staging:
+    - 1 repo private nối 2 project Vercel (gohub-intel/hieuhc07 = GIỮ, gohub-murex/hieunh862 = đã disconnect).
+    - Vercel Hobby chỉ deploy commit có author email verify trên tài khoản. Add email nhhieu1552005@ vào Vercel acc hieuhc07 + đổi git config --global user.email=hieuhc07@. staging FF lên main. HẾT BLOCK.
+    - 2 email hieuhc07@ & hieunh862@ "khóa chéo" giữa 2 tài khoản Vercel (mỗi acc chiếm 1 email → acc kia không add được).
+
+65. QA health check: Bug.txt 0 bug treo; fix vitest quét nhầm Playwright e2e (thêm exclude src/__e2e__ vào vitest.config.ts → npm test sạch); tsc + build PASS. (đã merge main)
+
+66. Fix Dashboard "Top Destinations by Gross Revenue" (Task 1): getDestinationSQL cắt mã country sai offset. Country nằm vị trí khác nhau theo họ SKU (verify trên fact_fulfillment_revenue 584k dòng):
+    - digit-prefix 2CTHACBF05010 → chars 3-5 (THA); E-prefix EJPNBCPY500M30D → chars 2-4 (JPN); 3-letter CHN3D07GBFY05D → chars 1-3 (CHN).
+    - getCountryMappings: bỏ dim_location (vốn là TÊN CHI NHÁNH "Tân Sơn Nhất - HCM", KHÔNG phải nước) → map qua Turso country_codes (332 dòng). Hiển thị tên nước. Fix lan sang B2B/B2C/Products breakdown "destination".
+
+67. Bỏ Turso khỏi tab User (Task 3): xóa nút "Sync Turso (55)" + handler ở /admin và /analytics/users, xóa route /api/admin/sync-turso-users. Tab User chỉ dùng Supabase `users`. Thêm button "Tải dữ liệu (Supabase)" + empty-state.
+
+68. Task 2 (DB không load Staging/Preview): KHÔNG phải code (local OK 584k dòng) — do env ANALYTICS_DB_* chưa tick scope Preview trên Vercel (thiếu password → query trả [] âm thầm). User set Preview env + redeploy → OK.
+
+69. RBAC creator = super-admin (cao hơn admin): nhiều API hardcode admin-only → creator bị 403 (SQL Explorer, tab User...). Sweep toàn bộ ~36 endpoint (sql-query/sql-schema, admin/users(+[username]), settings, promotions, template, channel-costs, scheduled, flush-cache, db-status, migrate, config/*, kb/*, ncc import+cost, planning/targets, feedbacks) → cho admin+creator. Chat/Lark error-verbosity giữ nguyên (không phải cổng 403). tsc+test+build PASS.
+
+    Trạng thái: Task 1+3 + RBAC + user button ở nhánh `staging`, chờ verify Preview rồi merge `main`.
