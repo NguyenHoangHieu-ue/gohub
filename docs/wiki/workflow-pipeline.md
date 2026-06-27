@@ -113,3 +113,16 @@ Mỗi khi lập trình viên tạo Pull Request (PR) từ nhánh `feature/*` và
   - Trạng thái chạy (Thành công / Thất bại).
   - Số dòng dữ liệu đã được cập nhật hoặc đồng bộ mới.
   - Chi tiết lỗi phát sinh (Traceback) để lập trình viên click xem và sửa đổi tức thì ngay trong ngày.
+
+
+---
+
+## VII. CHỈ THỊ BẮT BUỘC TỪ QUẢN TRỊ VIÊN
+
+### 1. Quy trình Phát triển Staging-first
+Mọi hoạt động phát triển tính năng, sửa đổi cấu hình hoặc vá lỗi từ nay về sau bắt buộc tuân theo luồng phân nhánh:
+`Feature Branch / Bugfix Branch` -> `staging` (Triển khai & Kiểm thử 100%) -> `main` (Production).
+*Tuyệt đối không push trực tiếp lên main!*
+
+### 2. Khóa Cứng Giao Diện Analytics (UI Lock)
+Tất cả các giao diện người dùng (UI) hiện tại của các tab báo cáo BI/Analytics phải được giữ nguyên vẹn. Mọi hoạt động nâng cấp (kiểm thử, tối ưu truy vấn, đồng bộ hóa) chỉ được can thiệp vào tầng logic backend, cơ sở dữ liệu hoặc kịch bản chạy ngầm, không được phép thay đổi giao diện frontend trừ khi có chỉ đạo trực tiếp từ anh Bảo.
