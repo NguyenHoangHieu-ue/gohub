@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { tursoQuery } from "@/lib/turso"
 
 // ── Two-level query cache ──────────────────────────────────────────────────────
 // L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
@@ -231,29 +232,32 @@ export async function getSkuDestinationRule(): Promise<DestRule> {
   return { prefix: "E", codeLength: 3, offset: 3 }
 }
 
-export function getDestinationSQL(rule: DestRule): string {
+// The destination country code is embedded in the SKU but at different positions
+// per SKU family (verified against real fact_fulfillment_revenue data):
+//   digit-prefix (old catalog)  2CTHACBF05010   → country = chars 3-5 (THA)
+//   E-prefix (eSIM/SIM)         EJPNBCPY500M30D → country = chars 2-4 (JPN)
+//   3-letter legacy (e.g. 3HK)  CHN3D07GBFY05D  → country = chars 1-3 (CHN)
+// Resulting codes are mapped to country names via getCountryMappings (Turso country_codes).
+export function getDestinationSQL(_rule?: DestRule): string {
   return `CASE
-    WHEN SUBSTRING(f.sku, 1, 1) BETWEEN '1' AND '6' THEN SUBSTRING(f.sku, 4, 3)
-    WHEN SUBSTRING(f.sku, 1, 1) BETWEEN 'A' AND 'E' THEN SUBSTRING(f.sku, 4, 3)
-    WHEN SUBSTRING(f.sku, 1, 1) = '${rule.prefix}' THEN SUBSTRING(f.sku, ${rule.offset + 1}, ${rule.codeLength})
-    ELSE SUBSTRING(f.sku, 1, 3)
+    WHEN f.sku ~ '^[1-6]'            THEN UPPER(SUBSTRING(f.sku, 3, 3))
+    WHEN f.sku ~ '^E'               THEN UPPER(SUBSTRING(f.sku, 2, 3))
+    WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN UPPER(SUBSTRING(f.sku, 1, 3))
+    ELSE UPPER(SUBSTRING(f.sku, 1, 3))
   END`
 }
 
-// ── Country code → name mapping (from gohub_dw dim_location) ─────────────────
-
+// ── Country code → name mapping (from Turso country_codes, 332 rows, accurate) ──
+// NOTE: dim_location is NOT a destination dimension — it stores branch/pickup
+// locations ("Tân Sơn Nhất - HCM", "ESIM Only"...), so destination codes parsed
+// from the SKU (getDestinationSQL) are mapped via the country_codes catalog.
 export async function getCountryMappings(): Promise<Record<string, string>> {
   try {
-    const rows = await queryAnalytics<{ code: string; name: string }>(
-      `SELECT DISTINCT SUBSTRING(sku, 4, 3) as code,
-              MAX(l.location_name) as name
-       FROM fact_fulfillment_revenue f
-       LEFT JOIN dim_location l ON f.location_id = l.location_id
-       WHERE l.location_name IS NOT NULL
-       GROUP BY 1 LIMIT 200`
+    const rows = await tursoQuery<{ code: string; country: string }>(
+      "SELECT code, country FROM country_codes"
     )
     const map: Record<string, string> = {}
-    rows.forEach(r => { if (r.code) map[r.code] = r.name })
+    rows.forEach(r => { if (r.code) map[String(r.code).toUpperCase()] = String(r.country) })
     return map
   } catch {
     return {}
