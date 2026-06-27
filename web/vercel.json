@@ -9,12 +9,19 @@
     },
     "src/app/api/cron/scheduled-messages/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/admin/sync-lark-tickets/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/cron/scheduled-messages",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/admin/sync-lark-tickets",
+      "schedule": "0 2 * * *"
     }
   ]
 }

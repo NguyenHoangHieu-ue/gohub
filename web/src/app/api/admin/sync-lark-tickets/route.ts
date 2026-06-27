@@ -26,8 +26,15 @@ function getLarkString(val: unknown): string {
 // POST /api/admin/sync-lark-tickets — trigger sync from Lark Base → Supabase
 export async function POST(_req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (session.user?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const authHeader = _req.headers.get("authorization")
+  const isCronAuthed = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
+
+  if (!session && !isCronAuthed) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  if (session && session.user?.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
 
   const appToken   = process.env.LARK_BASE_ID   || ""
   const tableId    = process.env.LARK_TABLE_ID   || ""

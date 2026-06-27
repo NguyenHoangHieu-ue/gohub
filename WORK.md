@@ -129,8 +129,8 @@ Tất cả `v1` → `v17` đã chạy. Migrations hiện tại:
 ## 🔜 Còn Lại / Defer
 
 ### TODO thực tế
-- **GA4 user count theo VN/US** — đếm user GA4 tách theo thị trường (TODO từ s70, chưa làm).
-- **CS Troubleshoot — auto-sync** — set `LARK_BASE_ID` + `LARK_TABLE_ID` trong Vercel để auto-sync từ Lark Base.
+- **GA4 user count theo VN/US** — ✅ Đã xác minh hoàn thành trong Session 71 (đọc metric activeUsers thành công).
+- **CS Troubleshoot — auto-sync** — ✅ Đã hoàn thành (cấu hình Vercel Cron @ 02:00 UTC và tích hợp token CRON_SECRET).
 - **Verify Lark bot E2E** — fix routing s71 tự áp qua router chung; cần test 1 tin nhắn BI/template thật.
 
 ### Pending user cung cấp
