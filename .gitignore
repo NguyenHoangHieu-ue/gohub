@@ -22,9 +22,9 @@ web/out/
 web/.vercel/
 
 # ─── Vendor / Nội bộ GoHub (không public) ────────────────────────────────────
-VENDOR/
-Add_product/
-TaiLieuCongTy_Chung/
+resources/vendor_catalogs/
+resources/product_templates/
+resources/company_templates/
 
 # ─── Database: local only ────────────────────────────────────────────────────
 *.db
@@ -54,7 +54,7 @@ Data/*.md
 # ─── Internal docs (không public) ───────────────────────────────────────────
 Bug.txt
 WORK.md
-_Skills_AI/
-database/
+.ai/
+backend/
 docs/session_summary.txt
 docs/MERGE_PLAN.md
