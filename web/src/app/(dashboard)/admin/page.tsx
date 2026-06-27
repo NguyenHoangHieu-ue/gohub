@@ -191,17 +191,6 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
   const [deleting,     setDeleting]     = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [search,       setSearch]       = useState("")
-  const [syncing,      setSyncing]      = useState(false)
-
-  const syncTurso = async () => {
-    setSyncing(true)
-    try {
-      const r = await fetch("/api/admin/sync-turso-users", { method: "POST" })
-      const d = await r.json()
-      if (d.ok) { onNotify("success", `Sync OK: +${d.inserted} mới, ~${d.updated} cập nhật`); onRefresh() }
-      else onNotify("error", d.error || "Sync thất bại")
-    } catch { onNotify("error", "Lỗi kết nối") } finally { setSyncing(false) }
-  }
 
   const filteredUsers = search
     ? users.filter(u => (u.name||"").toLowerCase().includes(search.toLowerCase()) || (u.email||"").toLowerCase().includes(search.toLowerCase()) || (u.role||"").toLowerCase().includes(search.toLowerCase()))
@@ -282,9 +271,6 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex-1">Chọn tài khoản ({users.length})</label>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email…" className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none w-48" />
-          <button onClick={syncTurso} disabled={syncing} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
-            {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <span>↓</span>}Sync Turso (55)
-          </button>
         </div>
         <div>
           <select value={selected} onChange={e => setSelected(e.target.value)} className={selectCls}>

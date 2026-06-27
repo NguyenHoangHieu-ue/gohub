@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Download } from "lucide-react"
+import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -47,7 +47,6 @@ function UserManagement() {
   const [savingUser, setSavingUser] = useState<string | null>(null)
   const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [savingMatrix, setSavingMatrix] = useState(false)
-  const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState("")
   const [onlineUsers, setOnlineUsers] = useState<Record<string, number>>({})
   const [creatorStatus, setCreatorStatus] = useState<{ hasCreator: boolean; canAssignCreator: boolean; creatorCount: number } | null>(null)
@@ -107,16 +106,6 @@ function UserManagement() {
       return { ...prev, [role]: Array.from(cur) }
     })
   }
-  const syncTursoUsers = async () => {
-    setSyncing(true)
-    try {
-      const r = await fetch("/api/admin/sync-turso-users", { method: "POST" })
-      const d = await r.json()
-      if (d.ok) { notify(true, `Sync OK: +${d.inserted} mới, ~${d.updated} cập nhật, ${d.skipped} bỏ qua`); fetchAll() }
-      else notify(false, d.error || "Sync thất bại")
-    } catch { notify(false, "Lỗi kết nối") } finally { setSyncing(false) }
-  }
-
   const deleteUser = async (u: User) => {
     if (!confirm(`Xóa user "${u.name || u.username}"? Hành động này không thể hoàn tác.`)) return
     setDeletingUser(u.username)
@@ -202,9 +191,6 @@ function UserManagement() {
             )}
           </div>
           <div className="relative"><Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email / role…" className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none w-52" /></div>
-          <button onClick={syncTursoUsers} disabled={syncing} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
-            {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}Sync Turso (55)
-          </button>
           <a href="/admin" className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800">
             <UserCog className="w-3.5 h-3.5" />Thêm / Đổi mật khẩu →
           </a>
