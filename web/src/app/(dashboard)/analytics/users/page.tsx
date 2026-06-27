@@ -191,6 +191,9 @@ function UserManagement() {
             )}
           </div>
           <div className="relative"><Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email / role…" className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none w-52" /></div>
+          <button onClick={fetchAll} disabled={loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải dữ liệu (Supabase)
+          </button>
           <a href="/admin" className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold hover:bg-slate-800">
             <UserCog className="w-3.5 h-3.5" />Thêm / Đổi mật khẩu →
           </a>
@@ -263,6 +266,11 @@ function UserManagement() {
               </div>
             )
           })}
+          {!loading && users.length === 0 && (
+            <div className="p-12 text-center text-sm text-slate-400">
+              Chưa có dữ liệu người dùng. Bấm <span className="font-bold text-[#003B95]">"Tải dữ liệu (Supabase)"</span> để tải từ bảng <code>users</code>.
+            </div>
+          )}
         </div>
       </div>
     </div>

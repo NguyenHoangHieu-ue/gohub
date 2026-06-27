@@ -4,9 +4,10 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 
+// creator is a super-admin role (higher than admin) — allow both.
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "admin")
+  if (!session || !["admin", "creator"].includes(session.user.role as string))
     throw new Error("Unauthorized")
   return session
 }
