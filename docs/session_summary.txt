@@ -3989,11 +3989,37 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Ưu tiên tenant=VN trước US trong kết quả đề xuất
 
 
-## Session 78 (2026-06-27) — Khởi tạo Wiki Tab kỹ thuật chi tiết
-1. Tạo thư mục mới `docs/wiki/Tab/` chứa tài liệu kỹ thuật chi tiết cho tất cả các tab (trang tính năng) trong hệ thống GoHub Intel.
-2. Tự động sinh 28 file `.md` tiếng Việt chi tiết chất lượng cao mô tả đầy đủ:
-   - Tổng quan & Đường dẫn vật lý (Frontend + API).
-   - Kiến trúc kỹ thuật, Schema cơ sở dữ liệu (Supabase, gohub_dw), helper functions.
-   - Công thức tính toán và quy tắc nghiệp vụ (GPM2, Projection Factor, KPI Pro-rata, CAC, ROAS, Spend Pace, Ecommerce CR...).
-   - Phân quyền truy cập theo vai trò (Role-based permissions) và Department.
-3. ⚠️ NOTE QUAN TRỌNG: Nếu có bất kỳ thay đổi, sửa chữa, thêm hoặc xóa tính năng liên quan đến bất kỳ tab nào trong hệ thống, bắt buộc phải đồng bộ và cập nhật tương tự trong các file `.md` mô tả của tab đó tại thư mục `docs/wiki/Tab/`.
+## Session 78 (2026-06-27) — Chuẩn hóa Cấu trúc Thư mục, Wiki 28 Tabs, Thiết lập QA Pipelines và Tự động hóa Vận hành
+
+57. Khởi tạo tài liệu kỹ thuật chi tiết cho các Tab:
+    - Tạo thư mục mới `docs/wiki/Tab/` chứa tài liệu kỹ thuật chi tiết cho tất cả các tab (trang tính năng) trong hệ thống GoHub Intel.
+    - Tự động sinh 28 file `.md` tiếng Việt chi tiết chất lượng cao mô tả đầy đủ: Đường dẫn (Frontend/API), Kiến trúc kỹ thuật, Schema DB (Supabase/gohub_dw), Công thức nghiệp vụ (GPM2, Projection Factor, KPI Pro-rata, CAC, ROAS, Spend Pace, Ecommerce CR...), Vận hành, và Phân quyền truy cập (Role×Report Matrix, allowed_analytics, allowed_tabs, department).
+    - Thêm quy tắc đồng bộ bắt buộc vào `.ai/RULES.md` và `docs/wiki/workflow-pipeline.md`: khi sửa/thêm/xóa tính năng liên quan đến tab nào, bắt buộc phải cập nhật file .md tương ứng trong `docs/wiki/Tab/`.
+
+58. Chuẩn hóa & Hợp nhất Biến Môi trường (Gom ENV):
+    - Hợp nhất toàn bộ 5 tệp cấu hình `.env` rải rác (`.env`, `.env.local`, `web/.env.local`, `web/.env.netlify.local`, `web/.env.vercel.local`) thành một tệp master duy nhất tại `web/.env.local` chứa đầy đủ 32 khóa cấu hình chuẩn hóa, xóa toàn bộ các tệp dư thừa để đảm bảo an toàn bảo mật và tránh xung đột cấu hình.
+
+59. Quy hoạch lại Cấu trúc Thư mục Toàn hệ thống (Repository Restructuring):
+    - Di chuyển toàn bộ mã nguồn Python, migrations và SQL seeding trong `database/` và `sync/` về thư mục cha quản lý tập trung **`backend/`** (`backend/migrations/`, `backend/seeding/`, `backend/data_sync/`).
+    - Di chuyển toàn bộ file excel, báo giá, biểu mẫu nhạy cảm (`Data/`, `TaiLieuCongTy_Chung/`, `VENDOR/`, `Add_product/`) về thư mục cha **`resources/`** (`resources/reference/`, `resources/company_templates/`, `resources/vendor_catalogs/`, `resources/product_templates/`) và cấu hình ẩn/ignore trong `.gitignore` để đảm bảo không rò rỉ dữ liệu lên GitHub.
+    - Di chuyển thư mục quy tắc AI `_Skills_AI/` $ightarrow$ **`.ai/`** (thư mục ẩn tiện lợi).
+    - Cấu hình lại các tệp Github Actions (`sync.yml` và `data_sync.yml`) và `README.md` tương thích 100% với cấu trúc mới.
+
+60. Thiết lập QA Pipeline và Bộ Kiểm thử Tự động (Testing Suite):
+    - **Pre-commit Security Hook:** Husky tự động gọi `node web/scripts/scan-secrets.js` trước mỗi commit để quét và chặn đứng việc push nhầm API keys/credentials thô lên Github.
+    - **Unit Tests (Vitest):** Cài đặt Vitest, cấu hình resolver alias `@/*` và viết thành công 13 unit tests phủ kín toàn bộ hàm logic xử lý AI Agent (decode SKU, convert COGS, ncc country score, get channel from role, extract params). Chạy `npm test` Passed 100%.
+    - **E2E Tests (Playwright):** Cài đặt Playwright, viết smoke test tự động hóa luồng đăng nhập và tải trang.
+    - **TypeScript Compilation:** Biên dịch Next.js thành công (`npm run build` PASS) với giới hạn bộ nhớ mở rộng `NODE_OPTIONS="--max-old-space-size=4096"`.
+
+61. Tự động hóa Đồng bộ Vé Sự cố Lark (Lark tickets auto-sync):
+    - Mở khóa xác thực API `sync-lark-tickets` hỗ trợ token `CRON_SECRET`.
+    - Thiết lập Vercel Cron Job tự động kích hoạt đồng bộ hàng ngày lúc **`02:00 UTC`** cấu hình trong `web/vercel.json` (maxDuration 60 giây).
+
+62. Áp dụng Chỉ thị Khống chế (Vận hành & Giao diện):
+    - Ghi nhận quy tắc phân nhánh **Staging-first** bắt buộc: code $ightarrow$ staging $ightarrow$ main.
+    - Ghi nhận quy tắc **UI Strict Lock**: Giữ nguyên vẹn giao diện frontend của tất cả các tab báo cáo Analytics, chỉ tối ưu logic hoặc backend ngầm cho đến khi có chỉ thị trực tiếp từ anh Bảo.
+
+63. Khắc phục Vercel Block & Deploy Production thành công (LIVE):
+    - Cấu hình Git user email local thành `hieuhc07@gmail.com` khớp 100% với tài khoản chủ sở hữu Vercel.
+    - Gộp (Squash) toàn bộ các commit ngày hôm nay thành 1 commit duy nhất mang email `hieuhc07@gmail.com` để xóa bỏ hoàn toàn dấu vết email cũ, đẩy lên `staging`, sau đó Merge thành công vào `main`.
+    - Hệ thống đã chính thức **LIVE** ổn định và đồng bộ hoàn hảo trên tên miền chính chủ: **`https://gohub-intel.vercel.app`**.
