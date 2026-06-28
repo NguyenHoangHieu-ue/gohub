@@ -65,37 +65,16 @@ interface SpeedGroupMetrics {
   avg_usage_pct: number
 }
 
-// Throttle (5/10 mbps) từ MÃ DATATYPE trong SKU:
-// - Mã MỚI: datatype = ký tự thứ 8 → A = 5 mbps, B = 10 mbps.
-// - Mã CŨ (kho 3HK, vd EAS43DP1UNLI05D): P1 = 5 mbps, P2 = 10 mbps. PY / khác → null (bỏ).
-function throttleOf(sku: string): 5 | 10 | null {
-  const c8 = sku[7]
-  if (c8 === "A") return 5
-  if (c8 === "B") return 10
-  const m = sku.match(/P([12Y])/)
-  if (m?.[1] === "1") return 5
-  if (m?.[1] === "2") return 10
-  return null
-}
-
-// Nhóm đầy đủ = high-speed + throttle. throttle từ SKU; high-speed (500MB/1GB) từ cột throttle_speed của gói
-// (trong kho = offer_name). 5mbps chỉ có 500MB. 10mbps: 1GB nếu mô tả ghi "1GB", còn lại 500MB.
-// (Giá không phân biệt được 500MB vs 1GB nên không dùng để đoán; gói thiếu mô tả mặc định 500MB.)
-function speedGroupOf(sku: string, offer?: string | null): string | null {
-  const t = throttleOf(sku)
-  if (!t) return null
-  if (t === 5) return "500MB high-speed · throttle 5 mbps"
-  const hs = offer ? offer.match(/(\d+)\s*(MB|GB)/) : null
-  const is1gb = !!hs && hs[2].toUpperCase() === "GB" && hs[1] === "1"
-  return is1gb ? "1GB high-speed · throttle 10 mbps" : "500MB high-speed · throttle 10 mbps"
-}
+// Nhóm tốc độ (high-speed × throttle) được tính SERVER-side ở /api/analytics/3hk-speed-map:
+// gộp throttle_speed product DB (chính) + offer_name + giá (cogs) + ký tự SKU (P1=10/P2=5).
+// Trang chỉ tra map[sku].group. (Trước đây suy client-side từ mã SKU; mã CŨ bị đảo 5/10mbps.)
 
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
   const [skuMetrics, setSkuMetrics] = useState<SKUMetrics[]>([])
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
-  // Map sku -> offer_name (cột throttle_speed của gói; ổn định theo ngày) → tách 500MB vs 1GB
-  const [skuOfferMap, setSkuOfferMap] = useState<Record<string, string>>({})
+  // Map sku -> nhóm tốc độ (server tính sẵn: throttle_speed + offer + giá). Tách 500MB vs 1GB × 5/10mbps.
+  const [speedMap, setSpeedMap] = useState<Record<string, { group: string | null }>>({})
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
   const [loadingType, setLoadingType] = useState(false)
@@ -137,26 +116,17 @@ export default function ThreeHKDataUsagePage() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // Map sku -> offer_name (1 lần, ~182 dòng, ~1s): offer_name (= mô tả throttle_speed) chứa lượng high-speed
-  // để tách 500MB vs 1GB cho gói Unlimited 10mbps. Không phụ thuộc khoảng ngày.
+  // Map sku -> nhóm tốc độ (1 lần): server gộp throttle_speed product DB + offer_name + giá để tách
+  // 500MB/1GB × 5/10mbps. Không phụ thuộc khoảng ngày.
   useEffect(() => {
     (async () => {
       try {
-        const sql = `
-          SELECT f.sku, MAX(l.offer_name) AS offer_name
-          FROM fact_data_usage f
-          JOIN dim_sku d ON f.sku = d.sku AND REPLACE(UPPER(d.vendor), ' ', '') = '3HKDATAPOOL'
-          JOIN data_usage_log l ON l.iccid = f.iccid AND l.offer_name IS NOT NULL
-          WHERE f.sku_type ILIKE '%nlimited%'
-          GROUP BY f.sku
-        `
-        const rows = await runQuery(sql)
-        const map: Record<string, string> = {}
-        for (const r of rows) if (r.sku) map[r.sku] = r.offer_name
-        setSkuOfferMap(map)
-      } catch (e) { console.error("Error fetching sku->offer map:", e) }
+        const res = await fetch("/api/analytics/3hk-speed-map")
+        if (!res.ok) return
+        const json = await res.json()
+        setSpeedMap(json.map || {})
+      } catch (e) { console.error("Error fetching 3hk speed map:", e) }
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -223,7 +193,7 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited") return []
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
-      const group = speedGroupOf(sm.sku, skuOfferMap[sm.sku])
+      const group = speedMap[sm.sku]?.group
       if (!group) continue   // bỏ SKU không xác định datatype
       const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0 })
       g.active_sims    += sm.active_sims
@@ -233,7 +203,7 @@ export default function ThreeHKDataUsagePage() {
     const list = Object.values(acc)
     for (const g of list) g.avg_usage_pct = g.total_plan_gb > 0 ? (g.total_usage_gb / g.total_plan_gb) * 100 : 0
     return list.sort((a, b) => a.speed_group.localeCompare(b.speed_group))
-  }, [activeTab, skuMetrics, skuOfferMap])
+  }, [activeTab, skuMetrics, speedMap])
 
   const searchClause = () => debouncedSearch ? `
     AND (
