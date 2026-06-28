@@ -4141,3 +4141,8 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Fix bug parse ngày mã không-E (AS43DUNLIP103D: bỏ "P1" trước khi lấy days=03, trước đọc nhầm 103).
     - Kết quả: 1GB·10mbps = 15 SKU (EU + USA, đúng thị trường premium); 500MB·10=76; 500MB·5=90.
     - Nút Chi tiết: cột Nguồn = price/label/default/rule-5mbps. tsc+build PASS.
+
+## Item 5 — đổi cột Chi tiết: GB/ngày/SIM (so giả định)
+82. User muốn xem mức dùng thực vs giả định: thay cột "Nguồn phân loại" trong list Chi tiết bằng
+    "GB/ngày/SIM" = Total Actual ÷ Active SIMs ÷ số ngày gói (parse từ mã). Tô ĐỎ nếu > giả định high-speed
+    (1GB·10mbps→1.0; còn lại→0.5 GB/ngày), XANH nếu trong giả định. Caption giải thích. tsc+build PASS.
