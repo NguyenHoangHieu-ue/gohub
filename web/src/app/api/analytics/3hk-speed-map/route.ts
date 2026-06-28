@@ -4,65 +4,55 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 
-// Map mã SKU 3HK (data usage, mã CŨ P1/P2/UNLI) → nhóm tốc độ Unlimited (high-speed × throttle).
-// Trang 3hk-usage là client-only (chỉ query gohub_dw), không truy được Supabase → endpoint này gộp:
-//   1. throttle_speed của product DB (Supabase skus/items, curated) — nguồn CHÍNH.
-//   2. offer_name (gohub_dw data_usage_log) — bổ sung khi product DB trống/không khớp.
-//   3. giá (latest_cogs) — đoán 500MB vs 1GB khi 2 nguồn trên thiếu high-speed (cohort theo throttle+days).
-//   4. ký tự SKU — chốt throttle khi mọi thứ khác trống. ĐÃ SỬA: P1 = 10 mbps, P2 = 5 mbps
-//      (theo offer_name + dung lượng thực trong fact, ngược định nghĩa cũ trong page).
-// Trả map { [usageSku]: { group, source } }. UI gom nhóm theo group (giữ nguyên bảng).
+// Map mã SKU 3HK (data usage, mã CŨ) → nhóm tốc độ Unlimited. CHỈ 3 loại tồn tại trong hệ thống:
+//   "500MB high-speed · throttle 5 mbps", "500MB high-speed · throttle 10 mbps", "1GB high-speed · throttle 10 mbps".
+//
+// Quy tắc (theo nghiệp vụ):
+//  • Mã CŨ: [E]<nước:3><3D><P1|P2><ngày>D. E=eSIM, không=SIM. P1 = 10 mbps, P2 = 5 mbps.
+//  • Mã MỚI (product DB): <prefix><nước:3><3D><A|B>UNL<ngày>. A = 5 mbps, B = 10 mbps. (P1↔B, P2↔A)
+//  • P2 (5 mbps) → LUÔN 500MB (chỉ có 1 loại 5 mbps).
+//  • P1 (10 mbps) → 1GB hay 500MB: map sang mã mới theo (nước, ngày, 10 mbps) — tìm cả tenant VN & US —
+//    lấy GIÁ (latest_cogs/ngày) so với ngưỡng (trung điểm median 1GB vs 500MB từ product DB) → dự đoán.
+//    Thiếu giá → dùng nhãn throttle_speed; thiếu cả → mặc định 500MB.
+// Trả map { [usageSku]: { group, source } }. Không dùng offer_name (join theo iccid dễ lẫn gói khác).
 
 const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 
-type Speed = { hs_mb: number | null; mbps: number | null }
+const G_500_5  = "500MB high-speed · throttle 5 mbps"
+const G_500_10 = "500MB high-speed · throttle 10 mbps"
+const G_1GB_10 = "1GB high-speed · throttle 10 mbps"
 
-// Bóc "500 MB / 1GB / 2GB high-speed" + "5 / 10 / 50 mbps" từ chuỗi mô tả (throttle_speed hoặc offer_name).
-function parseSpeed(s?: string | null): Speed {
-  if (!s) return { hs_mb: null, mbps: null }
-  const t = s.toLowerCase().replace(/mpbs/g, "mbps") // sửa typo "10mpbs"
-  let hs_mb: number | null = null
-  const g = t.match(/(\d+(?:\.\d+)?)\s*gb/)
-  if (g) hs_mb = Math.round(parseFloat(g[1]) * 1000)
-  else { const m = t.match(/(\d+)\s*mb(?!ps)/); if (m) hs_mb = parseInt(m[1]) }
-  let mbps: number | null = null
-  const p = t.match(/(\d+)\s*mbps/)
-  if (p) mbps = parseInt(p[1])
-  return { hs_mb, mbps }
+// Parse mã CŨ usage: [E]<CTRY:3><3D>...P1|P2...<days>D
+function oldParse(sku: string): { country: string; esim: boolean; mbps: number | null; days: number | null } | null {
+  const i = sku.indexOf("3D"); if (i < 3) return null
+  const country = sku.slice(0, i).slice(-3)
+  const esim = sku[0] === "E"
+  const pm = sku.match(/P([12])/)
+  const mbps = pm ? (pm[1] === "1" ? 10 : 5) : null
+  const dm = sku.replace(/P[12]/, "").match(/(\d+)D$/)   // bỏ token P1/P2 trước khi lấy ngày
+  const days = dm ? parseInt(dm[1]) : null
+  return { country, esim, mbps, days }
 }
 
-// offer_name join theo iccid (MAX) → 1 SIM dùng nhiều gói có thể vớ phải offer của gói KHÁC (vd "Fixed 3GB").
-// Chỉ tin offer khi là gói unlimited/daily/throttle; gói Fixed hoặc không có dấu hiệu unlimited → bỏ high-speed.
-function offerSpeed(offer?: string | null): Speed {
-  if (!offer) return { hs_mb: null, mbps: null }
-  const t = offer.toLowerCase()
-  if (/\bfixed\b/.test(t)) return { hs_mb: null, mbps: null }   // offer nhiễm từ gói Fixed
-  const s = parseSpeed(offer)
-  if (!/(unli|unlimited|daily|high.?speed|throttle|mbps|drop to)/.test(t)) s.hs_mb = null
-  return s
+// Parse mã MỚI product DB: <prefix><CTRY:3><3D><A|B>UNL<days>
+function newParse(code: string): { country: string; mbps: number | null; days: number | null } | null {
+  const i = code.indexOf("3D"); if (i < 3) return null
+  const after = code.slice(i + 2); if (!/UNL/.test(after)) return null
+  const country = code.slice(0, i).slice(-3)
+  const lm = after.match(/^([AB])/)
+  const mbps = lm ? (lm[1] === "A" ? 5 : 10) : null
+  const dm = after.match(/UNL[I]?(\d+)/) || after.match(/(\d+)$/)
+  const days = dm ? parseInt(dm[1]) : null
+  return { country, mbps, days }
 }
 
-// Throttle từ ký tự SKU — CHỐT cuối. P1 = 10 mbps, P2 = 5 mbps (đã sửa đảo). PY/khác → null.
-function throttleFromCode(sku: string): number | null {
-  const m = sku.match(/P([12Y])/)
-  if (m?.[1] === "1") return 10
-  if (m?.[1] === "2") return 5
+function hsOf(thr?: string | null): "1GB" | "500MB" | null {
+  if (!thr) return null
+  if (/1\s*gb/i.test(thr)) return "1GB"
+  if (/500/i.test(thr)) return "500MB"
   return null
 }
-
-const daysOf = (sku: string): number | null => {
-  const m = sku.match(/(\d+)D$/); return m ? parseInt(m[1]) : null
-}
-
-function label(hs_mb: number | null, mbps: number | null): string | null {
-  if (hs_mb == null && mbps == null) return null
-  const hs = hs_mb == null ? "?" : hs_mb >= 1000 ? `${hs_mb / 1000}GB` : `${hs_mb}MB`
-  const th = mbps == null ? "?" : `${mbps} mbps`
-  return `${hs} high-speed · throttle ${th}`
-}
-
-// Chuẩn hoá để so khớp mã cũ ↔ alias/vendor_sku product DB (alias đôi khi có tiền tố W/S/B/listing).
-const core = (s: string) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "")
+const median = (a: number[]): number | null => a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -71,99 +61,73 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {
-    // 1) Mã usage 3HK unlimited + offer_name (gohub_dw)
-    const usageRows = await queryAnalytics<{ sku: string; offer_name: string | null }>(`
-      SELECT f.sku, MAX(l.offer_name) AS offer_name
+    // 1) Mã usage 3HK unlimited (gohub_dw)
+    const usageRows = await queryAnalytics<{ sku: string }>(`
+      SELECT DISTINCT f.sku
       FROM fact_data_usage f
       JOIN dim_sku d ON f.sku = d.sku AND REPLACE(UPPER(d.vendor),' ','') = '3HKDATAPOOL'
-      LEFT JOIN data_usage_log l ON l.iccid = f.iccid AND l.offer_name IS NOT NULL
       WHERE f.sku_type ILIKE '%nlimited%'
-      GROUP BY f.sku
     `)
     if (!usageRows.length) return NextResponse.json({ map: {}, coverage: {} })
 
-    // 2) Product DB (Supabase): throttle_speed + cogs, kèm alias/vendor_sku để bắc cầu mã cũ.
-    const [{ data: skuRows }, { data: itemRows }] = await Promise.all([
-      supabaseAdmin.from("skus")
-        .select("sku_code, vendor_sku, vendor_sku_sim, throttle_speed, latest_cogs")
-        .or("throttle_speed.ilike.%mbps%,vendor_sku.ilike.%UNLI%,sku_code.ilike.%UNL%"),
-      supabaseAdmin.from("items")
-        .select("sku_code, alias, throttle_speed_en, unitprice")
-        .or("throttle_speed_en.ilike.%mbps%,alias.ilike.%UNLI%,item_name_en.ilike.%Unlimited%"),
-    ])
+    // 2) Product DB (Supabase skus): mã mới UNL + throttle_speed + giá (latest_cogs). Tenant VN & US gộp theo key.
+    const { data: skuRows } = await supabaseAdmin.from("skus")
+      .select("sku_code, vendor_sku, vendor_sku_sim, tenant, throttle_speed, latest_cogs")
+      .or("sku_code.ilike.%UNL%,vendor_sku.ilike.%UNL%")
 
-    // Index: core(candidate code) → throttle_speed string + cogs
-    const prodIdx = new Map<string, { thr: string | null; cost: number | null }>()
-    for (const r of skuRows ?? []) {
-      const entry = { thr: r.throttle_speed as string | null, cost: r.latest_cogs != null ? Number(r.latest_cogs) : null }
-      for (const cand of [r.vendor_sku, r.vendor_sku_sim, r.sku_code]) if (cand) {
-        const k = core(cand); if (!prodIdx.has(k) || entry.thr) prodIdx.set(k, entry)
-      }
-    }
-    for (const r of itemRows ?? []) {
-      const entry = { thr: r.throttle_speed_en as string | null, cost: r.unitprice != null ? Number(r.unitprice) : null }
-      for (const cand of [r.alias, r.sku_code]) if (cand) {
-        const k = core(cand); if (!prodIdx.has(k) || (entry.thr && !prodIdx.get(k)!.thr)) prodIdx.set(k, entry)
+    // Index: `${country}|${days}|${mbps}` → [{ hs, cost }]
+    const idx = new Map<string, { hs: "1GB" | "500MB" | null; cost: number | null }[]>()
+    for (const s of skuRows ?? []) {
+      for (const code of [s.sku_code, s.vendor_sku, s.vendor_sku_sim]) {
+        if (!code) continue
+        const p = newParse(code); if (!p || !p.mbps || !p.days) continue
+        const key = `${p.country}|${p.days}|${p.mbps}`
+        const arr = idx.get(key) ?? idx.set(key, []).get(key)!
+        arr.push({ hs: hsOf(s.throttle_speed), cost: s.latest_cogs != null ? Number(s.latest_cogs) : null })
+        break
       }
     }
 
-    // Khớp 1 usage SKU với product DB: trùng core, hoặc core sản phẩm CHỨA core usage (alias có tiền tố).
-    function matchProduct(usageSku: string): { thr: string | null; cost: number | null } | null {
-      const k = core(usageSku)
-      if (prodIdx.has(k)) return prodIdx.get(k)!
-      for (const [pk, v] of prodIdx) if (pk.includes(k) || k.includes(pk)) return v
-      return null
-    }
-
-    // Pass 1: phân giải hs/mbps từ throttle_speed → offer_name → ký tự SKU. Gom cohort cogs cho fallback giá.
-    type Resolved = { sku: string; hs_mb: number | null; mbps: number | null; cost: number | null; source: string }
-    const resolved: Resolved[] = []
-    for (const u of usageRows) {
-      const prod = matchProduct(u.sku)
-      let hs_mb: number | null = null, mbps: number | null = null
-      const sources: string[] = []
-      if (prod?.thr) { const s = parseSpeed(prod.thr); hs_mb = s.hs_mb; mbps = s.mbps; if (s.hs_mb != null || s.mbps != null) sources.push("throttle_speed") }
-      if (hs_mb == null || mbps == null) {
-        const s = offerSpeed(u.offer_name)
-        if (hs_mb == null && s.hs_mb != null) { hs_mb = s.hs_mb; sources.push("offer") }
-        if (mbps == null && s.mbps != null) { mbps = s.mbps; if (!sources.includes("offer")) sources.push("offer") }
+    // Ngưỡng giá/ngày (VND) tách 1GB vs 500MB cho 10 mbps — từ các SKU đã có nhãn (lọc cost VND-scale > 1000).
+    const band1: number[] = [], band5: number[] = []
+    for (const [key, arr] of idx) {
+      const [, days, mbps] = key.split("|"); if (mbps !== "10" || +days <= 0) continue
+      for (const r of arr) if (r.cost != null && r.cost > 1000) {
+        if (r.hs === "1GB") band1.push(Math.round(r.cost / +days))
+        else if (r.hs === "500MB") band5.push(Math.round(r.cost / +days))
       }
-      if (mbps == null) { const t = throttleFromCode(u.sku); if (t != null) { mbps = t; sources.push("code") } }
-      resolved.push({ sku: u.sku, hs_mb, mbps, cost: prod?.cost ?? null, source: sources.join("+") || "none" })
     }
+    const m1 = median(band1), m5 = median(band5)
+    const threshold = (m1 != null && m5 != null) ? (m1 + m5) / 2 : 41000   // fallback từ khảo sát data
 
-    // Cohort cogs theo (mbps, days) cho các SKU ĐÃ biết high-speed → tâm 500 vs 1000 để đoán cái còn thiếu.
-    const cohort = new Map<string, { c500: number[]; c1000: number[] }>()
-    for (const r of resolved) {
-      if (r.hs_mb == null || r.cost == null || r.mbps == null) continue
-      const d = daysOf(r.sku); if (d == null) continue
-      const key = `${r.mbps}|${d}`
-      const c = cohort.get(key) ?? cohort.set(key, { c500: [], c1000: [] }).get(key)!
-      if (r.hs_mb <= 700) c.c500.push(r.cost)
-      else if (r.hs_mb >= 1000 && r.hs_mb < 1900) c.c1000.push(r.cost)
-    }
-    const mean = (a: number[]) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null
-
-    // Pass 2: fallback giá cho high-speed còn thiếu; rồi build group. Default 500MB nếu vẫn không suy được.
+    // 3) Phân nhóm từng usage SKU — chỉ ra 3 loại hợp lệ.
     const map: Record<string, { group: string | null; source: string }> = {}
     const coverage: Record<string, number> = {}
-    for (const r of resolved) {
-      let hs_mb = r.hs_mb, source = r.source
-      if (hs_mb == null && r.mbps != null) {
-        const d = daysOf(r.sku); const key = `${r.mbps}|${d}`; const c = cohort.get(key)
-        const m500 = c ? mean(c.c500) : null, m1000 = c ? mean(c.c1000) : null
-        if (r.cost != null && m500 != null && m1000 != null) {
-          hs_mb = Math.abs(r.cost - m1000) < Math.abs(r.cost - m500) ? 1000 : 500
-          source = (source ? source + "+" : "") + "price"
-        } else { hs_mb = 500; source = (source ? source + "+" : "") + "default500" }
+    for (const u of usageRows) {
+      const o = oldParse(u.sku)
+      let group: string | null = null, source = "no-parse"
+      if (o && o.mbps === 5) { group = G_500_5; source = "rule-5mbps" }
+      else if (o && o.mbps === 10) {
+        const arr = idx.get(`${o.country}|${o.days}|10`) ?? []
+        const costs = (o.days && o.days > 0) ? arr.filter(r => r.cost != null && r.cost > 1000).map(r => r.cost! / o.days!) : []
+        if (costs.length) {
+          const avg = costs.reduce((a, b) => a + b, 0) / costs.length
+          group = avg >= threshold ? G_1GB_10 : G_500_10; source = "price"
+        } else {
+          const labels = arr.map(r => r.hs).filter(Boolean)
+          if (labels.includes("1GB") && !labels.includes("500MB")) { group = G_1GB_10; source = "label" }
+          else if (labels.includes("500MB")) { group = G_500_10; source = "label" }
+          else { group = G_500_10; source = "default" }
+        }
       }
-      const group = label(hs_mb, r.mbps)
-      map[r.sku] = { group, source }
-      const tag = source.split("+")[0] || "none"
-      coverage[tag] = (coverage[tag] ?? 0) + 1
+      map[u.sku] = { group, source }
+      coverage[source] = (coverage[source] ?? 0) + 1
     }
 
-    return NextResponse.json({ map, coverage }, { headers: { "Cache-Control": "private, max-age=600" } })
+    return NextResponse.json(
+      { map, coverage, threshold: Math.round(threshold) },
+      { headers: { "Cache-Control": "private, max-age=600" } },
+    )
   } catch (err: any) {
     console.error("[3hk-speed-map]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

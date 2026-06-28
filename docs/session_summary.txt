@@ -4131,3 +4131,13 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     Parser thấy "3GB" → gán sai. FIX: offerSpeed() bỏ qua offer chứa "fixed" + chỉ lấy high-speed khi offer là
     gói unlimited/daily/throttle. Sau fix: CHN3DUNLIP205D → "500MB·5mbps" đúng; phân bố sạch còn 3 nhóm thật
     (500MB·10 / 500MB·5 / 1GB·10 =1), hết nhóm rác 3GB/2GB·5mbps. tsc+build PASS.
+
+## Item 5 final — mapping mã cũ→mới + giá để tách 1GB vs 500MB (10mbps)
+81. User cung cấp quy tắc mã: CŨ [E]<nước3><3D><P1|P2><ngày>D (E=eSIM; P1=10mbps, P2=5mbps);
+    MỚI <prefix><nước3><3D><A|B>UNL<ngày> (A=5,B=10). Chỉ 3 loại: 500MB·5, 500MB·10, 1GB·10.
+    Rewrite /api/analytics/3hk-speed-map theo code→price (bỏ offer_name nhiễu):
+    - P2(5mbps) → luôn 500MB. P1(10mbps) → map (nước,ngày,10mbps) sang product DB (tenant VN+US),
+      lấy latest_cogs/ngày so ngưỡng (median 1GB ~50k vs 500MB ~32k → threshold ~41k) → 1GB/500MB.
+    - Fix bug parse ngày mã không-E (AS43DUNLIP103D: bỏ "P1" trước khi lấy days=03, trước đọc nhầm 103).
+    - Kết quả: 1GB·10mbps = 15 SKU (EU + USA, đúng thị trường premium); 500MB·10=76; 500MB·5=90.
+    - Nút Chi tiết: cột Nguồn = price/label/default/rule-5mbps. tsc+build PASS.

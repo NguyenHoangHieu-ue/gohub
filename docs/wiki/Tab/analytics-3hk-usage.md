@@ -37,10 +37,13 @@ Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế c�
 - Bundle có `bundle_start_date` trong `[startDate, endDate]` → cộng **toàn bộ lifetime** (`SUM(total_data_gb)`, capacity = `MAX(data_amount_gb)`), kể cả tiêu dùng sau khoảng ngày. Bundle bắt đầu trước khoảng ngày → bị loại hoàn toàn.
 
 ### 5.2 Nhóm tốc độ (high-speed × throttle) — tab Unlimited
-- Tính SERVER-side ở **`/api/analytics/3hk-speed-map`** (`web/src/app/api/analytics/3hk-speed-map/route.ts`), trả map `usageSku → { group }`.
-- Thứ tự suy nhóm: **(1)** `throttle_speed` của product DB (Supabase `skus`/`items`, bắc cầu mã cũ↔mới qua `alias`/`vendor_sku`) → **(2)** `offer_name` (`data_usage_log`) → **(3)** giá `latest_cogs` (cohort theo throttle+số ngày, đoán 500MB vs 1GB) → **(4)** ký tự SKU.
-- **Throttle từ ký tự SKU (mã cũ): `P1 = 10 mbps`, `P2 = 5 mbps`** (theo offer_name + dung lượng thực; định nghĩa cũ trong code bị đảo, đã sửa).
-- Nhãn nhóm giữ format: `"500MB high-speed · throttle 5 mbps"`, `"1GB high-speed · throttle 10 mbps"`...
-- Mỗi nhóm có nút **"Chi tiết (n)"** → bung danh sách SKU thuộc nhóm (SKU, Active SIMs, Plan/Actual GB, Usage %, **Nguồn phân loại** = throttle_speed/offer/price/code/default) để kiểm tra phân loại.
-- ⚠️ Thực tế data: gói 10mbps trong usage gần như đều là **500MB** (product DB gán vậy cho các nước có trong usage); **1GB·10mbps gần như rỗng** trong tập data này (mã cũ P1/P2 chỉ là phỏng đoán, PY hiện không còn sản phẩm). Dùng nút Chi tiết để rà từng SKU.
+- Tính SERVER-side ở **`/api/analytics/3hk-speed-map`**. **CHỈ 3 loại** tồn tại: `500MB·5mbps`, `500MB·10mbps`, `1GB·10mbps`. KHÔNG tự thêm loại khác.
+- **Quy tắc mapping mã (theo nghiệp vụ):**
+  - Mã CŨ usage: `[E]<nước:3><3D><P1|P2><ngày>D` (E=eSIM, không=SIM). **P1 = 10 mbps, P2 = 5 mbps.**
+  - Mã MỚI product DB: `<prefix><nước:3><3D><A|B>UNL<ngày>`. **A = 5 mbps, B = 10 mbps** (P1↔B, P2↔A).
+  - **P2 (5 mbps) → LUÔN 500MB** (chỉ 1 loại 5mbps).
+  - **P1 (10 mbps) → 1GB hay 500MB**: map sang mã mới theo (nước, ngày, 10mbps) — tìm cả tenant **VN & US** — lấy **giá `latest_cogs`/ngày** so ngưỡng (trung điểm median 1GB vs 500MB ≈ 41k VND/ngày từ product DB) → dự đoán. Thiếu giá → nhãn `throttle_speed`; thiếu cả → mặc định 500MB.
+- KHÔNG dùng `offer_name` (join theo iccid → SIM dùng nhiều gói dễ lẫn offer gói khác, vd "Fixed 3GB" → phân loại sai).
+- Mỗi nhóm có nút **"Chi tiết (n)"** → bung danh sách SKU (SKU, Active SIMs, Plan/Actual GB, Usage %, **Nguồn phân loại** = price/label/default/rule-5mbps) để kiểm tra.
+- Thực tế data: ~15 SKU ra **1GB·10mbps** (chủ yếu **EU + USA** — thị trường premium giá cao); còn lại 500MB.
 - ⚠️ Vendor 3HK trong `dim_sku` = `'3HK DATAPOOL'` (CÓ dấu cách) → mọi SQL lọc bằng `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`. Default ngày = đầu-tháng(MAX data)..MAX (data 3HK chậm sync, hiện đến 30/05).
