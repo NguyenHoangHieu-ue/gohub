@@ -22,12 +22,10 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 
 ## 2. Các Phân Hệ Cấu Hình Cốt Lõi
 
-### A. SKU Destination Rule (Luật Đích SKU)
-- Cho phép cấu hình quy tắc bóc tách mã SKU tự động của hệ thống để xác định nhà mạng đích (Destination operator).
-- Các tham số thiết lập:
-  - **Prefix**: Tiền tố nhận diện.
-  - **Offset**: Vị trí bắt đầu cắt chuỗi mã SKU.
-  - **Code Length**: Độ dài chuỗi con cần lấy để định danh nhà mạng.
+### A. SKU Destination Rule (Luật Đích SKU) — ĐÃ CHUYỂN sang Settings (s82)
+- Mục cấu hình luật đích SKU trước ở đây **trùng** với "SKU Destination Definition" trong `/analytics/settings` (cùng key `sku_destination_rules`). (s82) Đã gỡ khỏi Admin, giữ ở Settings.
+- ⚠️ Thực tế: destination hiện **tính cứng theo HỌ SKU trong code** (`getDestinationSQL` ở `lib/analytics-helpers.ts`: digit→ký tự 3-5, E→2-4, 3-letter→1-3) rồi map tên nước qua Turso `country_codes`. Cấu hình trong Settings mang tính tham chiếu/dự phòng, KHÔNG trực tiếp điều khiển báo cáo hiện tại.
+- `/admin` Cài đặt giờ chỉ còn: **Tỷ giá nội bộ** + **Công thức 3HK Datapool**.
 
 ### B. Partner Tiers (Channel & Customer Tiers) — ĐÃ CHUYỂN sang Settings (s82)
 - Mục "Channel & Customer Tiers" trước ở đây **trùng** với "Đối tác chiến lập (Partner Tiers)" trong `/analytics/settings` (cùng API `/api/config/partner-tiers`).

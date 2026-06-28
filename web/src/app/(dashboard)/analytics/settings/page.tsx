@@ -427,7 +427,7 @@ function AnalyticsSettings() {
             </div>
           </div>
         </div>
-        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">Code extract từ vị trí trong SKU theo từng quy tắc startsWith + codeLength — dùng để map destination khi phân tích sản phẩm.</p>
+        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">⚠️ Lưu ý: destination hiện được tính theo <b>HỌ SKU</b> trong code (<code>getDestinationSQL</code>: digit→ký tự 3-5, E→2-4, 3-letter→1-3) rồi map tên nước qua bảng Country Codes. Quy tắc startsWith + codeLength ở đây là <b>tham chiếu/cấu hình dự phòng</b>, không trực tiếp điều khiển báo cáo hiện tại.</p>
       </div>
 
       {/* Item Type Classification */}
