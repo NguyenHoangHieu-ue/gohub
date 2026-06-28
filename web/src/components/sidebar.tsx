@@ -16,7 +16,7 @@ const NAV_INFO = { href: "/info", label: "Information", icon: StickyNote, key: "
 
 // Tabs luôn hiển thị ở trên
 const NAV_MAIN = [
-  { href: "/chatbot",    label: "GoHub AI",    icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Hiếu AI",     icon: Sparkles, key: "chatbot"    },
   { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
   { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"      },
 ]
@@ -33,7 +33,7 @@ const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
 // 3 nhóm lớn của sidebar (keys khớp NAV_ALL để dùng chung logic phân quyền navItems)
 const NAV_CHAT_KB = [
-  { href: "/chatbot",    label: "GoHub AI",       icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Hiếu AI",        icon: Sparkles, key: "chatbot"    },
   { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"         },
   { href: "/promotions", label: "Promotions",     icon: Gift,     key: "promotions" },
 ]
@@ -178,7 +178,17 @@ function roleLabel(role: string) {
   return ROLE_LABELS[role] ?? role
 }
 
-// Một hàng link trong sidebar (dùng chung cho cả 3 nhóm). accent: brand (PM) / blue (Analyst) / violet (Info).
+type Accent = "brand" | "blue" | "violet" | "emerald"
+
+// Active = nền màu ĐẶC + chữ TRẮNG (tương phản cao, dễ nhìn). Mỗi nhóm 1 accent riêng.
+const ACTIVE_BG: Record<Accent, string> = {
+  brand:   "bg-brand-600 text-white shadow-sm",
+  blue:    "bg-blue-600 text-white shadow-sm",
+  violet:  "bg-violet-600 text-white shadow-sm",
+  emerald: "bg-emerald-600 text-white shadow-sm",
+}
+
+// Một hàng link trong sidebar (dùng chung cho cả 3 nhóm).
 function NavRow({ href, label, Icon, active, collapsed, indent = false, accent = "brand" }: {
   href:      string
   label:     string
@@ -186,51 +196,53 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
   active:    boolean
   collapsed: boolean
   indent?:   boolean
-  accent?:   "brand" | "blue" | "violet"
+  accent?:   Accent
 }) {
-  const activeCls     = accent === "blue"
-    ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100"
-    : accent === "violet"
-    ? "bg-violet-50 text-violet-700 shadow-sm border border-violet-100"
-    : "bg-brand-50 text-brand-700 shadow-sm border border-brand-100"
-  const iconActiveCls = accent === "blue" ? "text-blue-500" : accent === "violet" ? "text-violet-500" : "text-brand-500"
-  const dotCls        = accent === "blue" ? "bg-blue-400" : accent === "violet" ? "bg-violet-400" : "bg-brand-400"
   return (
     <Link
       href={href}
       title={collapsed ? label : undefined}
       className={`flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
         ${collapsed ? "justify-center px-0 py-2.5" : `gap-3 px-3 py-2 ${indent ? "pl-8" : ""}`}
-        ${active ? activeCls : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
+        ${active ? ACTIVE_BG[accent] : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"}`}
     >
-      <Icon size={15} className={`flex-shrink-0 ${active ? iconActiveCls : "text-gray-400"}`} />
+      <Icon size={15} className={`flex-shrink-0 ${active ? "text-white" : "text-gray-500"}`} />
       {!collapsed && (
         <>
           <span className="flex-1 whitespace-nowrap">{label}</span>
-          {active && <span className={`w-1 h-1 rounded-full ${dotCls} flex-shrink-0`} />}
+          {active && <span className="w-1.5 h-1.5 rounded-full bg-white/80 flex-shrink-0" />}
         </>
       )}
     </Link>
   )
 }
 
+// Icon nhóm tô màu accent để phân biệt rõ các nhóm lớn (Chat / Product / Analyst)
+const GROUP_ICON: Record<Accent, string> = {
+  brand:   "text-brand-600",
+  blue:    "text-blue-600",
+  violet:  "text-violet-600",
+  emerald: "text-emerald-600",
+}
+
 // Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
-function GroupToggle({ label, Icon, open, onToggle }: {
+function GroupToggle({ label, Icon, open, onToggle, accent = "brand" }: {
   label:    string
   Icon:     LucideIcon
   open:     boolean
   onToggle: () => void
+  accent?:  Accent
 }) {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-3 py-2 text-[12px] font-bold text-gray-700 uppercase tracking-wide hover:text-gray-900 transition-colors"
+      className="w-full flex items-center justify-between px-3 py-2 text-[12px] font-bold text-gray-800 uppercase tracking-wide hover:text-gray-900 transition-colors"
     >
       <div className="flex items-center gap-2">
-        <Icon size={14} className="text-gray-500" />
+        <Icon size={15} className={GROUP_ICON[accent]} strokeWidth={2.4} />
         <span>{label}</span>
       </div>
-      {open ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+      {open ? <ChevronUp size={13} className="text-gray-500" /> : <ChevronDown size={13} className="text-gray-500" />}
     </button>
   )
 }
@@ -300,7 +312,7 @@ export function Sidebar() {
   const navItems = (() => {
     // bod: chatbot + product catalog (xem được SP/NCC) + full analytics
     if (effectiveRole === "bod") {
-      return [{ href: "/chatbot", label: "GoHub AI", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
+      return [{ href: "/chatbot", label: "Hiếu AI", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
     }
     if (effectiveRole === "admin" || effectiveRole === "creator") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)
@@ -355,7 +367,7 @@ export function Sidebar() {
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
             {productItems.map(it => (
-              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="emerald" />
             ))}
             {showAnalytics && analyticsGroups.flatMap(g => g.items).map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
@@ -380,7 +392,7 @@ export function Sidebar() {
             {/* 1 ─ Chat & Knowledge */}
             {chatKbItems.length > 0 && (
               <div>
-                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} />
+                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} accent="brand" />
                 {chatKbOpen && chatKbItems.map(it => (
                   <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
                 ))}
@@ -390,9 +402,9 @@ export function Sidebar() {
             {/* 2 ─ Product (mặc định thu gọn) */}
             {productItems.length > 0 && (
               <div className="mt-1">
-                <GroupToggle label="Product" Icon={Package} open={productOpen} onToggle={() => setProductOpen(o => !o)} />
+                <GroupToggle label="Product" Icon={Package} open={productOpen} onToggle={() => setProductOpen(o => !o)} accent="emerald" />
                 {productOpen && productItems.map(it => (
-                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="emerald" />
                 ))}
               </div>
             )}
@@ -400,10 +412,10 @@ export function Sidebar() {
             {/* 3 ─ Analyst */}
             {showAnalytics && (
               <div className="mt-1 pt-1 border-t border-gray-100">
-                <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} />
+                <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} accent="blue" />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
-                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{group.label}</p>
+                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-blue-600/70 uppercase tracking-wider">{group.label}</p>
                     {group.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}
@@ -411,7 +423,7 @@ export function Sidebar() {
                 ))}
                 {analystOpen && (isAdminUser || isCreatorUser) && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{MANAGEMENT_GROUP.label}</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-blue-600/70 uppercase tracking-wider">{MANAGEMENT_GROUP.label}</p>
                     {MANAGEMENT_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}
@@ -419,7 +431,7 @@ export function Sidebar() {
                 )}
                 {analystOpen && isCreatorUser && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wider">{CREATOR_GROUP.label}</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">{CREATOR_GROUP.label}</p>
                     {CREATOR_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
                     ))}

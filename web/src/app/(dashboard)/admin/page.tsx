@@ -342,7 +342,7 @@ function UserList({ users, loading, currentUser, onRefresh, onNotify }: {
               </div>
               {isFullTabs
                 ? <p className="text-[11px] text-emerald-600 mt-1.5">Cấp đủ 3 tab quản lý cho user này.</p>
-                : tabs.size === 0 && <p className="text-[11px] text-slate-400 mt-1.5">Không cấp tab quản lý nào (chỉ giữ các tab mặc định: GoHub AI, Promotions, Reference).</p>}
+                : tabs.size === 0 && <p className="text-[11px] text-slate-400 mt-1.5">Không cấp tab quản lý nào (chỉ giữ các tab mặc định: Hiếu AI, Promotions, Reference).</p>}
             </div>
 
             {/* Actions */}
