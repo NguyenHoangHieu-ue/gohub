@@ -1,4 +1,5 @@
 import { createHash } from "crypto"
+import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
@@ -48,10 +49,14 @@ export async function cachedQuery<T>(
     for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
   }
 
-  // Warm L2 fire-and-forget (không block response)
-  void supabaseAdmin
-    .from("analytics_query_cache")
-    .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+  // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
+  // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
+  // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
+  try {
+    await supabaseAdmin
+      .from("analytics_query_cache")
+      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+  } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
 
   return data
 }
@@ -85,25 +90,33 @@ export async function cachedAnalyticsQuery<T = Record<string, unknown>>(
   // Ghi registry 1 lần/instance (fire-and-forget) → prewarm replay được
   if (!_registered.has(h)) {
     _registered.add(h)
+    // .then() để KÍCH builder gửi request (void thuần KHÔNG gửi). Fire-and-forget: query nặng phía sau giữ
+    // function sống đủ để upsert xong.
     void supabaseAdmin
       .from("analytics_query_cache")
       .upsert({ cache_key: `sqlreg:${h}`, data: { sql: sql.trim(), ts: Date.now() }, cached_at: new Date().toISOString() })
+      .then(() => {}, () => {})
   }
   return cachedQuery<T[]>(`q:${h}`, () => queryAnalytics<T>(sql), ttlMinutes)
+}
+
+// Đọc registry rows theo prefix. KHÔNG dùng .like('...%') — toán tử này KHÔNG match trong runtime hiện tại
+// (đã verify: select không filter trả đủ rows, .like trả 0). → đọc cache_key (nhẹ) rồi .in() (exact, hoạt động).
+async function readCacheByPrefix(prefix: string): Promise<{ key: string; data: any }[]> {
+  const all = await supabaseAdmin.from("analytics_query_cache").select("cache_key").limit(5000)
+  const keys = (all.data ?? []).map(r => r.cache_key as string).filter(k => k.startsWith(prefix))
+  if (keys.length === 0) return []
+  const { data } = await supabaseAdmin.from("analytics_query_cache").select("cache_key, data").in("cache_key", keys)
+  return (data ?? []).map(r => ({ key: r.cache_key as string, data: (r as any).data }))
 }
 
 // Chạy lại các query đã đăng ký (registry) để giữ cache nóng + làm tươi sau khi data ngày mới được nạp.
 // Tuần tự, có giới hạn để không vượt maxDuration. Gọi từ cron /api/cron/prewarm-analytics.
 export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: number; failed: number }> {
-  const { data: regs } = await supabaseAdmin
-    .from("analytics_query_cache")
-    .select("cache_key, data")
-    .like("cache_key", "sqlreg:%")
-    .limit(500)
-
+  const regs = await readCacheByPrefix("sqlreg:")
   // Ưu tiên query dùng gần đây nhất
-  const rows = (regs ?? [])
-    .map(r => ({ key: r.cache_key as string, sql: (r.data as any)?.sql as string, ts: (r.data as any)?.ts ?? 0 }))
+  const rows = regs
+    .map(r => ({ key: r.key, sql: r.data?.sql as string, ts: r.data?.ts ?? 0 }))
     .filter(r => typeof r.sql === "string" && r.sql.length > 0)
     .sort((a, b) => b.ts - a.ts)
     .slice(0, limit)
@@ -118,6 +131,66 @@ export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: nu
         .from("analytics_query_cache")
         .upsert({ cache_key: dataKey, data: data as object, cached_at: new Date().toISOString() })
       prewarmed++
+    } catch { failed++ }
+  }
+  return { prewarmed, failed }
+}
+
+// ── Prewarm cho endpoint CHUYÊN DỤNG (bod/b2b/b2c/channels) ────────────────────
+// Khác generic /api/analytics/query: các endpoint này có cache key bespoke theo params, không replay
+// bằng SQL được. Cách làm: (1) mỗi request thật GHI LẠI URL (registry "urlreg:<hash>"); (2) cron prewarm
+// xoá key dedicated rồi RE-FETCH chính URL đó (qua Bearer CRON_SECRET) → endpoint tính lại data tươi.
+const _urlReg = new Set<string>()
+
+export function isCronReq(req: NextRequest): boolean {
+  if (!process.env.CRON_SECRET) return false
+  return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+}
+
+// Gọi đầu mỗi GET endpoint analytics cacheable. Cho cron (Bearer) bypass session + ghi URL để prewarm.
+// Trả 401 Response nếu không có session và không phải cron; ngược lại trả null (cho chạy tiếp).
+export function analyticsGuard(req: NextRequest, session: unknown): NextResponse | null {
+  const cron = isCronReq(req)
+  if (!cron) {
+    const url = req.nextUrl.pathname + req.nextUrl.search
+    const h = createHash("sha1").update(url).digest("hex")
+    if (!_urlReg.has(h)) {
+      _urlReg.add(h)
+      // .then() để KÍCH builder gửi request (void thuần KHÔNG gửi). Đăng ký chạy ở đầu handler, query
+      // nặng phía sau giữ function sống đủ để upsert xong.
+      void supabaseAdmin
+        .from("analytics_query_cache")
+        .upsert({ cache_key: `urlreg:${h}`, data: { url, ts: Date.now() }, cached_at: new Date().toISOString() })
+        .then(() => {}, () => {})
+    }
+  }
+  if (!session && !cron) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  return null
+}
+
+// Cron prewarm cho endpoint chuyên dụng: xoá key dedicated (force tươi) rồi re-fetch URL đã đăng ký.
+export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50): Promise<{ prewarmed: number; failed: number }> {
+  const regs = await readCacheByPrefix("urlreg:")
+  const urls = regs
+    .map(r => ({ url: r.data?.url as string, ts: r.data?.ts ?? 0 }))
+    .filter(r => typeof r.url === "string" && r.url.startsWith("/api/analytics/"))
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, limit)
+
+  // Xoá key dedicated (bod-/b2b-/b2c-/ch-) ở L2+L1 → lần fetch sau = cache-miss → data mới.
+  const all = await supabaseAdmin.from("analytics_query_cache").select("cache_key").limit(5000)
+  const delKeys = (all.data ?? []).map(r => r.cache_key as string).filter(k => /^(bod-|b2b-|b2c-|ch-)/.test(k))
+  if (delKeys.length > 0) {
+    await supabaseAdmin.from("analytics_query_cache").delete().in("cache_key", delKeys)
+    for (const k of delKeys) _cache.delete(k)
+  }
+
+  const auth = `Bearer ${process.env.CRON_SECRET ?? ""}`
+  let prewarmed = 0, failed = 0
+  for (const u of urls) {
+    try {
+      const res = await fetch(`${baseUrl}${u.url}`, { headers: { authorization: auth }, cache: "no-store" })
+      res.ok ? prewarmed++ : failed++
     } catch { failed++ }
   }
   return { prewarmed, failed }

@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
-  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN,
+  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
 } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
@@ -143,7 +143,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const guard = analyticsGuard(req, session); if (guard) return guard
 
   const { searchParams } = req.nextUrl
   const startDate      = searchParams.get("startDate")
