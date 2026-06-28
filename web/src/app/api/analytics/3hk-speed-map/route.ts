@@ -31,6 +31,17 @@ function parseSpeed(s?: string | null): Speed {
   return { hs_mb, mbps }
 }
 
+// offer_name join theo iccid (MAX) → 1 SIM dùng nhiều gói có thể vớ phải offer của gói KHÁC (vd "Fixed 3GB").
+// Chỉ tin offer khi là gói unlimited/daily/throttle; gói Fixed hoặc không có dấu hiệu unlimited → bỏ high-speed.
+function offerSpeed(offer?: string | null): Speed {
+  if (!offer) return { hs_mb: null, mbps: null }
+  const t = offer.toLowerCase()
+  if (/\bfixed\b/.test(t)) return { hs_mb: null, mbps: null }   // offer nhiễm từ gói Fixed
+  const s = parseSpeed(offer)
+  if (!/(unli|unlimited|daily|high.?speed|throttle|mbps|drop to)/.test(t)) s.hs_mb = null
+  return s
+}
+
 // Throttle từ ký tự SKU — CHỐT cuối. P1 = 10 mbps, P2 = 5 mbps (đã sửa đảo). PY/khác → null.
 function throttleFromCode(sku: string): number | null {
   const m = sku.match(/P([12Y])/)
@@ -113,7 +124,7 @@ export async function GET() {
       const sources: string[] = []
       if (prod?.thr) { const s = parseSpeed(prod.thr); hs_mb = s.hs_mb; mbps = s.mbps; if (s.hs_mb != null || s.mbps != null) sources.push("throttle_speed") }
       if (hs_mb == null || mbps == null) {
-        const s = parseSpeed(u.offer_name)
+        const s = offerSpeed(u.offer_name)
         if (hs_mb == null && s.hs_mb != null) { hs_mb = s.hs_mb; sources.push("offer") }
         if (mbps == null && s.mbps != null) { mbps = s.mbps; if (!sources.includes("offer")) sources.push("offer") }
       }

@@ -4124,3 +4124,10 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     GIẢI PHÁP (user yêu cầu): thêm nút "Chi tiết (n)" mỗi nhóm tốc độ → bung danh sách SKU (SKU/Active SIMs/
     Plan/Actual/Usage% + cột "Nguồn phân loại" throttle_speed/offer/price/code/default) để user tự rà.
     Additive, giữ nguyên bảng cũ. tsc+build PASS.
+
+## Item 5 follow-up 2 — fix offer_name nhiễm (gói Fixed lẫn vào Unlimited)
+80. User phát hiện CHN3DUNLIP205D (mã P2) bị xếp "3GB·5mbps". Root cause: speed-map join offer_name theo
+    iccid (MAX) — 1 SIM dùng nhiều gói → vớ phải offer "China Fixed 3GB - 3 days" của ĐƠN KHÁC trên cùng SIM.
+    Parser thấy "3GB" → gán sai. FIX: offerSpeed() bỏ qua offer chứa "fixed" + chỉ lấy high-speed khi offer là
+    gói unlimited/daily/throttle. Sau fix: CHN3DUNLIP205D → "500MB·5mbps" đúng; phân bố sạch còn 3 nhóm thật
+    (500MB·10 / 500MB·5 / 1GB·10 =1), hết nhóm rác 3GB/2GB·5mbps. tsc+build PASS.
