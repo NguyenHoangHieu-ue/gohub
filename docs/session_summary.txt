@@ -4222,3 +4222,8 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     → load lặp lại / sau prewarm = tức thì (thay vì 25-50s). Cold-load đầu vẫn ~giới hạn seq-scan.
     KHUYẾN NGHỊ chờ user duyệt: tạo index gohub_dw trên cột ngày fact (fulfiled_date/created_date/...) →
     cold-load nhanh hẳn (seq-scan 585k → index-scan ~8.7k dòng/tháng). Cần quyền CREATE trên gohub_dw.
+91. Cache nốt b2b/b2c/channels (user: cache hết cho đồng bộ). Áp cùng pattern cachedQuery 12h (key theo
+    params route) cho 10 endpoint trước KHÔNG cache: b2b/{kpis,performance,trend},
+    b2c/{kpis,performance,trend,loss-skus}, channels/{kpis,performance,trend}. (commit 23dde50)
+    tsc+build+test PASS. Còn lại uncached có chủ đích: db-status/health/schema (probe/freshness, KHÔNG cache),
+    customer/report + 3hk-speed-map (chưa làm, ít dùng). Index gohub_dw: user QUYẾT không đụng DB.
