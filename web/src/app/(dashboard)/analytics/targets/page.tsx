@@ -145,9 +145,166 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
   )
 }
 
+// Cửa sổ 6 tháng (5 tháng trước + tháng hiện tại) — khớp dashboard B2C.
+function last6Months(): string[] {
+  const now = new Date(); const out: string[] = []
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`) }
+  return out
+}
+const monthLabel = (m: string) => { const [y, mo] = m.split("-"); return `Thg ${parseInt(mo)}/${y}` }
+
+function SaveBtn({ onClick, saving, disabled }: { onClick: () => void; saving: boolean; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={saving || disabled}
+      className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
+        disabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300")}>
+      {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        : disabled ? <Lock className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+      {disabled ? "View Only" : "Lưu"}
+    </button>
+  )
+}
+
+// KPI doanh thu B2C theo tháng × thị trường (VN / US / Total) — app_settings b2c_kpi_targets.
+function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify: (ok: boolean, text: string) => void }) {
+  type Cell = { vn: number; us: number; total: number }
+  const months = last6Months()
+  const [targets, setTargets] = useState<Record<string, Cell>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/b2c-kpi-targets").then(r => r.json()).then(d => { setTargets(d || {}); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
+
+  const cell = (m: string): Cell => targets[m] ?? { vn: 0, us: 0, total: 0 }
+  const setField = (m: string, k: keyof Cell, v: number) => setTargets(t => ({ ...t, [m]: { ...cell(m), [k]: v } }))
+
+  const save = async () => {
+    setSaving(true)
+    const cleaned: Record<string, Cell> = {}
+    for (const [m, c] of Object.entries(targets)) if ((c?.vn || 0) + (c?.us || 0) + (c?.total || 0) > 0) cleaned[m] = c
+    const res = await fetch("/api/config/b2c-kpi-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    setSaving(false)
+    onNotify(res.ok, res.ok ? "Đã lưu KPI target B2C" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-slate-900 text-sm">KPI Target B2C (theo thị trường)</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Target doanh thu B2C theo tháng × thị trường (VND) — hiển thị ở tab KPI của /analytics/b2c.</p>
+        </div>
+        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+      </div>
+      {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">VN</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">US</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map(m => {
+                const c = cell(m)
+                return (
+                  <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
+                    {(["vn", "us", "total"] as const).map(k => (
+                      <td key={k} className={cn("px-5 py-3 text-right", k === "total" && "bg-blue-50/20")}>
+                        {canEdit ? (
+                          <div className="flex justify-end">
+                            <input type="number" min={0} step="any" value={c[k] || ""} onChange={e => setField(m, k, parseFloat(e.target.value) || 0)} placeholder="0"
+                              className="w-32 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                          </div>
+                        ) : <span className="text-sm font-bold text-slate-700">{formatCurrency(c[k] || 0)}</span>}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Ngân sách Marketing B2C theo tháng (VND) — app_settings b2c_budget; dùng tính spend pace.
+function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify: (ok: boolean, text: string) => void }) {
+  const months = last6Months()
+  const [budget, setBudget] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setLoading(false) }).catch(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    const cleaned: Record<string, number> = {}
+    for (const [m, v] of Object.entries(budget)) if (v > 0) cleaned[m] = v
+    const res = await fetch("/api/config/b2c-budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    setSaving(false)
+    onNotify(res.ok, res.ok ? "Đã lưu ngân sách Marketing B2C" : "Hiếu đang fix, vui lòng đợi")
+  }
+
+  const total = months.reduce((s, m) => s + (budget[m] || 0), 0)
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-slate-900 text-sm">Ngân sách Marketing B2C</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Ngân sách kế hoạch theo tháng (VND) — Section 5 /analytics/b2c tính spend pace = chi phí thực tế ÷ ngân sách.</p>
+        </div>
+        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+      </div>
+      {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">Ngân sách (VND)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map(m => (
+                <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
+                  <td className="px-5 py-3 text-right bg-blue-50/20">
+                    {canEdit ? (
+                      <div className="flex justify-end">
+                        <input type="number" min={0} step="any" value={budget[m] || ""} onChange={e => setBudget(b => ({ ...b, [m]: parseFloat(e.target.value) || 0 }))} placeholder="0"
+                          className="w-40 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                      </div>
+                    ) : <span className="text-sm font-bold text-slate-700">{formatCurrency(budget[m] || 0)}</span>}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-slate-200 bg-slate-50/50">
+                <td className="px-5 py-3 text-sm font-bold text-slate-900">Tổng 6 tháng</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TargetsPage() {
   const { data: session } = useSession()
-  const canEdit = session?.user?.role === "admin"
+  const canEdit = ["admin", "creator"].includes(session?.user?.role as string)
 
   const [quarter, setQuarter] = useState(getDefaultQuarter)
   const [loading, setLoading] = useState(false)
@@ -157,6 +314,8 @@ export default function TargetsPage() {
   const [targets3hk, setTargets3hk] = useState<Record<string, number>>({})
   const [targetsGpm2, setTargetsGpm2] = useState<Record<string, number>>({})
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const notify = (ok: boolean, text: string) => { setMessage({ type: ok ? "success" : "error", text }); setTimeout(() => setMessage(null), 3000) }
 
   const fetchData = useCallback(async () => {
     setLoading(true); setMessage(null)
@@ -304,6 +463,10 @@ export default function TargetsPage() {
         onChange={(key, val) => setTargetsGpm2(prev => ({ ...prev, [key]: val }))}
         data={data} loading={loading} canEdit={canEdit}
       />
+
+      {/* B2C KPI & Marketing Budget (chuyển từ Admin sang đây cho đúng chỗ) */}
+      <B2CKpiTargetSection canEdit={canEdit} onNotify={notify} />
+      <B2CMarketingBudgetSection canEdit={canEdit} onNotify={notify} />
 
       {/* Tips */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
