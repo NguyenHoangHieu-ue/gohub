@@ -4241,3 +4241,21 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Cron prewarm chạy cả generic (replay SQL) + dedicated (replay URL).
     Verify LOCAL: no-auth=401, Bearer=200, prewarm rebuild dedicated key tươi (routes prewarmed=2), L2 rows
     persist (bod-report:/ch-trend: xuất hiện). tsc+build+test 13/13 PASS. commit d9bf327.
+
+## ===== TỔNG KẾT PHIÊN (Session 81, 2026-06-28) =====
+Branch `staging` (head 54544ff) — TẤT CẢ đã commit + push, CHƯA merge main. Chờ user test Preview rồi merge.
+Đã làm trong phiên (mục 84–92):
+  1. Scheduled Messages: mọi role được cấp quyền đều xem được + hiện Người tạo (cd8c95e).
+  2. Wiki: fix trang ẩn rò sang non-admin (stale JWT → role DB tươi getDbRole) + creator parity (03903ac).
+  3. KB: fix TRẮNG TRANG (supabaseAdmin lọt client bundle qua lib/kb → tách lib/db-role) (2fd4329).
+  4. KB: creator = super-admin, hết bị chặn tab Wiki (usePermissions thêm creator) (11a7483).
+  5. TỐI ƯU TỐC ĐỘ ANALYTICS (user báo dashboard 20s, bod 25-50s):
+     - Đo: query nặng = seq-scan toàn bảng (fact 585k dòng, cột ngày TEXT, không index); song song/pool không
+       cứu (DB-bound). Cache mới là fix thật. (User QUYẾT không đụng index DB.)
+     - Cache 12h (cachedQuery) cho /api/analytics/query (generic) + 15 endpoint bod/b2b/b2c/channels.
+     - bod-summary gộp ~8 await tuần tự → 1 Promise.all; pool max 2→10.
+     - Prewarm cron 06:30 ICT: generic (replay SQL) + dedicated (replay URL qua registry + bearer bypass).
+     - FIX BUG NỀN: L2 cache (Supabase) CHƯA TỪNG chạy vì `void ...upsert()` không gửi (builder lazy) → await.
+     Commits: 3edd25f, c745e37, 3aa7eec, 23dde50, d9bf327 (+ docs).
+TODO sau khi user test Preview OK: merge staging→main (fix cả production). Vận hành: CRON_SECRET đã set Vercel;
+cron prewarm 06:30 ICT (chỉnh nếu pipeline nạp gohub_dw trễ hơn).
