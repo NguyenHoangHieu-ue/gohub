@@ -4182,3 +4182,8 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     FIX: tách getDbRole sang file server-only lib/db-role.ts; 2 route wiki import từ đó; lib/kb.ts hết
     import supabase. Bundle client /kb: 215→161 kB (xác nhận supabase-js từng lọt vào client). Commit 2fd4329.
     Bài học: KHÔNG thêm import server-only (supabaseAdmin/service key) vào module mà client component import.
+87. Creator bị chặn xem tab Wiki trong KB (user báo): usePermissions (kb/page.tsx) chỉ shortcut
+    `role === "admin"` → creator rớt xuống config-matrix (perm_kb_wiki_view="admin,staff", KHÔNG có creator)
+    → canWikiView=false → ẩn tab Wiki. FIX: `role === "admin" || role === "creator"` return true; DocsTab
+    canDelete cũng cho creator. (commit 11a7483) QUY TẮC CHỐT: creator = super-admin KHÔNG giới hạn gì —
+    ở đâu admin pass thì creator pass (server 403 + client UI gate + allow-list Set). tsc+build PASS.
