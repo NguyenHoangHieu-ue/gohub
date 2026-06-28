@@ -4174,3 +4174,11 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Creator parity: trước UI chỉ check role==="admin" → creator không thấy toggle; nay admin+creator.
     Verify: tsc + next build PASS, vitest 13/13. Commit 03903ac đã push staging.
     Doc: cập nhật docs/wiki/Tab/kb.md (trang ẩn dùng role DB tươi; manager KHÔNG toggle ẩn).
+86. BUG trắng trang KB (do mục 85): thêm `import { supabaseAdmin } from "./supabase"` vào lib/kb.ts —
+    nhưng kb/page.tsx ("use client") import DEPT_LABELS từ @/lib/kb → supabaseAdmin bị kéo vào CLIENT
+    bundle. supabaseAdmin = createClient(url, SUPABASE_SERVICE_KEY) chạy lúc load module với key=undefined
+    trên client → supabase-js ném "supabaseKey is required" → cả trang KB trắng. (next build + tsc KHÔNG
+    bắt được lỗi ranh giới client/server này.)
+    FIX: tách getDbRole sang file server-only lib/db-role.ts; 2 route wiki import từ đó; lib/kb.ts hết
+    import supabase. Bundle client /kb: 215→161 kB (xác nhận supabase-js từng lọt vào client). Commit 2fd4329.
+    Bài học: KHÔNG thêm import server-only (supabaseAdmin/service key) vào module mà client component import.
