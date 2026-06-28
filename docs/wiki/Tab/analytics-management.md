@@ -5,8 +5,8 @@ Trang cấu hình kỹ thuật cốt lõi cho phân hệ Business Intelligence b
 ---
 
 ## 1. Tổng quan & Đường dẫn
-- **Trang Quản lý Người dùng**: `/analytics/users` (`web/src/app/(dashboard)/analytics/users/page.tsx`)
-- **Trang Ma Trận Phân Quyền**: `/admin` (Tab Permissions) hoặc `/analytics/users`
+- **Trang Quản lý Người dùng (GỘP — 1 cửa duy nhất)**: `/analytics/users` (`web/src/app/(dashboard)/analytics/users/page.tsx`). Tất cả thao tác về user gom vào đây qua 5 mục tab: **Người dùng** (danh sách + inline role/phòng ban/quyền báo cáo/PM tabs/xóa/online), **Thêm user**, **Đổi mật khẩu**, **Vai trò × Quyền** (ma trận Role × Report), **Nâng cao** (ma trận Role × Tính năng + Phòng ban × Tab). Các thành phần dùng chung tách ở `web/src/components/user-admin.tsx`.
+- **Lưu ý gộp (s82)**: trang `/admin` KHÔNG còn tab "Người dùng & Phân quyền" / "Thêm user" / "Đổi password" — đã dời hết sang `/analytics/users`. `/admin` chỉ còn Cài đặt / Tạo template / Khuyến mãi / Lịch Lark.
 - **Trang Cấu hình Metadata**: `/analytics/schema` (`web/src/app/(dashboard)/analytics/schema/page.tsx`)
 - **Trang Cấu hình Cài đặt & Cache**: `/analytics/settings` (`web/src/app/(dashboard)/analytics/settings/page.tsx`)
 - **Trang Cài đặt của Creator**: `/analytics/creator` (`web/src/app/(dashboard)/analytics/creator/page.tsx`)
