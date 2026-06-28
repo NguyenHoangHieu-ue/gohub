@@ -1,5 +1,14 @@
 // KB utilities: parse, chunk, embed
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { supabaseAdmin } from "./supabase"
+
+// Lấy role HIỆN TẠI từ DB. JWT (session.user.role) có thể CŨ nếu admin vừa đổi role mà user chưa
+// đăng nhập lại → dùng role DB cho mọi cổng quyền KB (tránh user role cũ "admin" vẫn thấy trang ẩn + toggle).
+export async function getDbRole(username?: string | null, fallback?: string): Promise<string> {
+  if (!username) return fallback ?? ""
+  const { data } = await supabaseAdmin.from("users").select("role").eq("username", username).maybeSingle()
+  return (data?.role as string) ?? fallback ?? ""
+}
 
 export async function parseFileToText(buffer: Buffer, mimeType: string, filename: string): Promise<string> {
   const ext = filename.split(".").pop()?.toLowerCase() ?? ""

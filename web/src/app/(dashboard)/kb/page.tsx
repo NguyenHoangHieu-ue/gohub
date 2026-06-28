@@ -110,8 +110,18 @@ function usePermissions(role: string) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function KBPage() {
   const { data: session } = useSession()
-  const role     = (session?.user as any)?.role ?? "staff"
+  const jwtRole  = (session?.user as any)?.role ?? "staff"
   const username = session?.user?.name ?? ""
+  // Role DB tươi (JWT có thể CŨ nếu admin vừa đổi role) → quyết hiện trang ẩn + nút Ẩn/Hiện.
+  const [dbRole, setDbRole] = useState<string>("")
+  useEffect(() => {
+    if (!session) return
+    fetch("/api/user/me", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.role) setDbRole(d.role) })
+      .catch(() => {})
+  }, [session])
+  const role = dbRole || jwtRole
   const [tab, setTab] = useState<"docs" | "wiki" | "search">("docs")
   const can = usePermissions(role)
 
@@ -443,6 +453,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
 // ─── Wiki Tab ─────────────────────────────────────────────────────────────────
 function WikiTab({ role, username, canWikiEdit }: { role: string; username: string; canWikiEdit: boolean }) {
   const canEdit = (createdBy: string) => canWikiEdit || createdBy === username
+  const isAdmin = role === "admin" || role === "creator"  // creator = super-admin: ẩn/hiện trang + đổi phòng ban
   const [view,       setView]       = useState<"list"|"read"|"edit">("list")
   const [pages,      setPages]      = useState<WikiPage[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -632,7 +643,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
               <th className="px-4 py-3 font-medium">Phòng ban</th>
               <th className="px-4 py-3 font-medium">Cập nhật</th>
               <th className="px-4 py-3 font-medium">Bởi</th>
-              {role === "admin" && <th className="px-4 py-3"/>}
+              {isAdmin && <th className="px-4 py-3"/>}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
               {pages.map(p => (
@@ -645,7 +656,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
                   </td>
                   <td className="px-4 py-3 cursor-pointer" onClick={() => openPage(p)}>{typeBadge(p.page_type)}</td>
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                    {role === "admin" && editingDeptId === p.id ? (
+                    {isAdmin && editingDeptId === p.id ? (
                       <select
                         autoFocus
                         defaultValue={p.department}
@@ -657,9 +668,9 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
                       </select>
                     ) : (
                       <span
-                        onClick={() => role === "admin" ? setEditingDeptId(p.id) : openPage(p)}
-                        className={role === "admin" ? "cursor-pointer" : "cursor-pointer"}
-                        title={role === "admin" ? "Click để đổi phòng ban" : undefined}
+                        onClick={() => isAdmin ? setEditingDeptId(p.id) : openPage(p)}
+                        className="cursor-pointer"
+                        title={isAdmin ? "Click để đổi phòng ban" : undefined}
                       >
                         {deptBadge(p.department)}
                       </span>
@@ -667,7 +678,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400 cursor-pointer" onClick={() => openPage(p)}>{fmtDate(p.updated_at)}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 cursor-pointer" onClick={() => openPage(p)}>{p.updated_by}</td>
-                  {role === "admin" && (
+                  {isAdmin && (
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => toggleHidden(p)} title={p.is_hidden ? "Hiện trang" : "Ẩn trang"}
                         className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100">

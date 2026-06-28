@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
-import { embedText, DEPARTMENTS }   from "@/lib/kb"
+import { embedText, DEPARTMENTS, getDbRole } from "@/lib/kb"
 import { createNotification }       from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const role   = (session.user as any).role
+  // Role DB tươi (JWT có thể cũ) → quyết trang ẩn có hiện hay không
+  const role   = await getDbRole((session.user as any).username, (session.user as any).role)
   const search = req.nextUrl.searchParams.get("search") || ""
   const dept   = req.nextUrl.searchParams.get("dept")   || ""
   const type   = req.nextUrl.searchParams.get("type")   || ""

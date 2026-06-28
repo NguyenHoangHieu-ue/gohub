@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
-import { embedText }                from "@/lib/kb"
+import { embedText, getDbRole }     from "@/lib/kb"
 import { createNotification }       from "@/lib/notifications"
 
 type Ctx = { params: { id: string } }
@@ -11,10 +11,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const [pageRes, versionsRes] = await Promise.all([
+  const [pageRes, versionsRes, role] = await Promise.all([
     supabaseAdmin
       .from("kb_wiki_pages")
-      .select("id, title, content, page_type, department, tags, version, created_by, updated_by, created_at, updated_at")
+      .select("id, title, content, page_type, department, tags, version, is_hidden, created_by, updated_by, created_at, updated_at")
       .eq("id", params.id)
       .maybeSingle(),
     supabaseAdmin
@@ -23,9 +23,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .eq("page_id", params.id)
       .order("version", { ascending: false })
       .limit(20),
+    getDbRole((session.user as any).username, (session.user as any).role),
   ])
 
   if (!pageRes.data) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  // Trang ẩn: chỉ admin/creator mở được (kể cả khi có id trực tiếp)
+  if (pageRes.data.is_hidden && role !== "admin" && role !== "creator")
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
   return NextResponse.json({ page: pageRes.data, versions: versionsRes.data ?? [] })
 }
 
@@ -34,12 +38,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
-  const role     = (session.user as any).role
+  const role     = await getDbRole((session.user as any).username, (session.user as any).role)
 
   const body = await req.json()
   const { title, content, page_type, department, tags, is_hidden } = body
 
-  // is_hidden toggle: admin only, no version history needed
+  // is_hidden toggle: admin/creator only, no version history needed
   if (is_hidden !== undefined && Object.keys(body).length === 1) {
     if (role !== "admin" && role !== "creator") return NextResponse.json({ error: "Không có quyền" }, { status: 403 })
     const { error } = await supabaseAdmin
@@ -113,7 +117,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
-  const role     = (session.user as any).role
+  const role     = await getDbRole((session.user as any).username, (session.user as any).role)
 
   const { data: page } = await supabaseAdmin
     .from("kb_wiki_pages")
