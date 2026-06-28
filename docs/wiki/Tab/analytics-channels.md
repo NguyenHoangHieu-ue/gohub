@@ -1,23 +1,30 @@
 # Channel Performance (Hiệu Suất Kênh Bán Hàng)
 
-Trang phân tích chi tiết hiệu quả doanh số và dòng tiền của từng kênh bán lẻ, bán sỉ và đại lý liên kết.
+Phân tích hiệu quả doanh số & dòng tiền theo từng kênh bán (web, sàn TMĐT, đại lý...), có khấu trừ phí sàn riêng từng kênh.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/channels` (`web/src/app/(dashboard)/analytics/channels/page.tsx`)
-- **API KPIs**: `/api/analytics/channels/kpis` (`web/src/app/api/analytics/channels/kpis/route.ts`)
-- **API Performance**: `/api/analytics/channels/performance` (`web/src/app/api/analytics/channels/performance/route.ts`)
-- **API Trend**: `/api/analytics/channels/trend` (`web/src/app/api/analytics/channels/trend/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: so sánh kênh nào đem lại doanh thu/lợi nhuận tốt nhất sau khi trừ phí sàn → quyết định đẩy mạnh hay cắt kênh.
+- **Tại sao cần phí sàn riêng**: mỗi sàn thu phí khác nhau (Shopee ~8%, Klook ~12%) → nếu không trừ sẽ đánh giá sai lợi nhuận kênh.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/channels` — `web/src/app/(dashboard)/analytics/channels/page.tsx`
+- **API**: `/api/analytics/channels/{kpis, performance, trend}` + `/api/analytics/channels-with-platform-fee`
 
-## 2. Kiến Trúc Kỹ Thuật & Cấu Hình Phí Sàn (Platform Fee)
-- Hệ thống hỗ trợ thiết lập tỷ lệ phí nền tảng riêng biệt cho từng kênh bán (Ví dụ: Shopee phí 8%, Klook phí 12%) tại API `/api/analytics/channels-with-platform-fee`.
-- Doanh thu kênh bán lẻ sau đó sẽ tự động khấu trừ khoản phí sàn này trước khi đưa vào các thuật toán tính toán GPM2 tổng quát.
+## 3. Nguồn dữ liệu & cấu hình phí sàn
+- **Doanh thu kênh**: `gohub_dw` (fact revenue) nhóm theo kênh.
+- **Phí sàn (Platform Fee)**: tỷ lệ riêng từng kênh, cấu hình + áp tại `channels-with-platform-fee`. Doanh thu kênh trừ phí sàn trước khi vào công thức margin/CM1 chung.
 
----
+## 4. Công thức & nghiệp vụ
+- Doanh thu thuần kênh = doanh thu − phí sàn.
+- Margin/**CM1** kênh = doanh thu thuần − COGS − chi phí kênh (term CM1, xem `analytics-bod`).
+- **Trend**: chuỗi theo tháng để thấy xu hướng từng kênh.
 
-## 3. Phân Quyền
-- Vai trò được xem mặc định: **Admin, Creator, Manager, BOD, Staff**.
-- Phân quyền theo phòng ban: Chỉ những nhân viên thuộc bộ phận liên quan trực tiếp đến quản trị kênh mới được cấp quyền truy cập tab này qua trường `allowed_tabs`.\n
+## 5. Vấn đề đã gặp & cách khắc phục
+- **Không cache (S81)**: `channels/{kpis,performance,trend}` trước gọi thẳng DB → chậm. Fix: `cachedQuery` 12h + prewarm.
+- **Đổi term CM1 (S74)**: label margin GP2→CM1, giữ key data.
+
+## 6. Phân quyền
+- Xem: **Admin, Creator, Manager, BOD, Staff**.
+- Staff: cấp theo phòng ban/per-user qua `allowed_analytics` (deny-by-default).

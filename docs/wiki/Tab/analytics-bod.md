@@ -1,43 +1,50 @@
 # Board of Directors Report (Báo Cáo Quản Trị BOD)
 
-Báo cáo cấp cao dành riêng cho Ban Giám đốc, phân tích sâu về cơ cấu biên lợi nhuận, chi phí kênh bán hàng và doanh thu thực tế sau khi trừ mọi loại phí.
+Báo cáo cấp cao cho Ban Giám đốc: phân tích cơ cấu **Contribution Margin (CM1)**, chi phí kênh, đóng góp doanh thu 3HK và dự kiến cuối tháng. Là báo cáo tài chính "ra quyết định" của team Business.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/bod` (`web/src/app/(dashboard)/analytics/bod/page.tsx`)
-- **API BOD Report**: `/api/analytics/bod-report` (`web/src/app/api/analytics/bod-report/route.ts`)
-- **API BOD Summary**: `/api/analytics/bod-summary` (`web/src/app/api/analytics/bod-summary/route.ts`)
-- **API BOD Channel Performance**: `/api/analytics/bod-channel-performance` (`web/src/app/api/analytics/bod-channel-performance/route.ts`)
-- **API BOD Group Margin**: `/api/analytics/bod-group-margin` (`web/src/app/api/analytics/bod-group-margin/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: cho BOD thấy lợi nhuận thực sau khi trừ giá vốn + chi phí vận hành (không chỉ doanh thu), và mức đóng góp của dòng sản phẩm chiến lược 3HK.
+- **Tại sao tách khỏi Dashboard**: số liệu nhạy cảm (giá vốn, margin) + nhiều bảng con (channel performance, group margin) → cần trang chuyên sâu, phân quyền chặt hơn.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/bod` — `web/src/app/(dashboard)/analytics/bod/page.tsx`
+- **API**: `/api/analytics/bod-report`, `/bod-summary`, `/bod-channel-performance`, `/bod-group-margin`.
 
-## 2. Công Thức Tài Chính & Nghiệp Vụ Cốt Lõi
+## 3. Thuật ngữ tài chính (QUAN TRỌNG — đã đổi term)
+> Từ 2026-06-23, đồng bộ với Management Report: **GP2/GPM2 → CM1 (Contribution Margin 1)**. Trên UI hiển thị **CM1 / CM1 %**. Trong code/SQL **giữ nguyên** key/alias lowercase `gpm2`, `gpm2_percent` để không vỡ data shape.
 
-### A. Lợi Nhuận Gộp 2 (Gross Profit Margin 2 - GPM2)
-BOD Report sử dụng chỉ số tài chính nghiêm ngặt **GPM2** (Biên lợi nhuận gộp tầng thứ hai) thay thế cho biên lợi nhuận gộp thông thường nhằm phản ánh chính xác hiệu quả kinh doanh sau khi đã trừ đi chi phí vận hành kênh bán và phí sàn.
+- **Revenue**: doanh thu thực tế.
+- **Gross Profit (GP)** = Revenue − COGS (giá vốn sản phẩm).
+- **GPM%** = GP / Revenue.
+- **CM1** = GP − Operation Cost (phí sàn / phí quảng cáo / phí tài trợ SP...).
+- **CM1 %** = CM1 / Revenue.
+- **3HK Contribution Revenue %** = doanh thu SP 3HK / tổng doanh thu.
 
-$$\text{GPM2} = \text{Doanh thu thực tế} - \text{Giá vốn (COGS)} - \text{Chi phí kênh bán (Channel Costs)} - \text{Phí nền tảng (Platform Fee)}$$
-$$\text{GPM2 \%} = \frac{\text{GPM2}}{\text{Doanh thu thực tế}} \times 100\%$$
+## 4. Công thức & nguồn biến số
+$$\text{CM1} = \text{Revenue} - \text{COGS} - \text{Channel/Operation Cost} - \text{Platform Fee}$$
+$$\text{CM1\%} = \frac{\text{CM1}}{\text{Revenue}} \times 100\%$$
+- **Revenue**: `fact_fulfilment_revenue` (`gohub_dw`).
+- **COGS**: giá vốn sản phẩm (cohort `latest_cogs` / dữ liệu nhập).
+- **Platform Fee / Channel Cost**: cấu hình kênh (phí sàn Shopee/Klook...) + `channel_group_costs`.
+- **3HK contribution**: lọc vendor 3HK — dùng `REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL'` (xem mục 6).
 
-*Nguồn trích xuất các biến số*:
-- **Doanh thu thực tế**: Từ bảng `fact_sales_revenue` (`gohub_dw`).
-- **Giá vốn (COGS)**: Trích xuất từ dữ liệu nhập kho của sản phẩm du lịch.
-- **Platform Fee (Phí nền tảng/Phí sàn)**: Định nghĩa tại cài đặt kênh bán (ví dụ phí sàn Shopee/Klook).
-- **Channel Costs**: Chi phí vận hành, marketing gán trực tiếp cho kênh bán cụ thể.
+## 5. Cách hoạt động (luồng)
+1. `bod-summary` gom nhiều chỉ số (revenue, CM1, 3HK contribution, prev period/year) — đã gộp ~8 await tuần tự thành 1 `Promise.all` cho nhanh.
+2. `bod-channel-performance` + `bod-group-margin` cấp bảng phụ theo kênh/nhóm.
+3. Áp **Projection Factor** (như Dashboard) để dự kiến CM1 cuối tháng.
+4. Tất cả qua cache 12h + prewarm.
 
-### B. Month-End Projection (Dự kiến Cuối Tháng của GPM2)
-Áp dụng hệ số Projection Factor động của tháng hiện hành để dự đoán giá trị GPM2 thực tế khi kết thúc tháng.
+## 6. Vấn đề đã gặp & cách khắc phục
+- **3HK Contribution luôn = 0 / tab 3HK rỗng (S80)**: `dim_sku.vendor` thực tế là `'3HK DATAPOOL'` (CÓ dấu cách) nhưng SQL lọc `'3HKDATAPOOL'` (không dấu cách) → khớp 0 dòng. Fix: chuẩn hoá `REPLACE(UPPER(vendor),' ','')` ở mọi câu lọc 3HK.
+- **Cold-load 25-50s (S81)**: BOD fan-out ~12-40 query không cache. Fix: bọc `cachedQuery` 12h cho `bod-summary/report/group-margin/channel-performance`; gộp await; tăng pool 2→10; prewarm cron.
+- **Đổi term GP2→CM1 (S74)**: chỉ đổi LABEL hiển thị, giữ data key để không vỡ findKPI/shape.
 
----
+## 7. Quy trình vận hành
+- Số liệu nhạy cảm tính trực tiếp trên `gohub_dw`, cache L2 Supabase TTL 12h, prewarm 06:30 ICT → phản hồi gần như tức thì khi lặp lại.
+- Hỗ trợ xuất PDF phục vụ họp chiến lược.
 
-## 3. Quy Trình Vận Hành
-- Số liệu tài chính nhạy cảm được tính toán trực tiếp trên kho dữ liệu `gohub_dw` và cache lại thông qua bộ nhớ đệm 2 tầng của Supabase để đảm bảo tốc độ phản hồi dưới 1 giây.
-- Cho phép xuất báo cáo tài chính BOD Report ra file định dạng PDF chất lượng cao phục vụ họp chiến lược.
-
----
-
-## 4. Phân Quyền
-- **Cực kỳ bảo mật**: Chỉ vai trò **Admin, Creator, BOD, và Manager** mới có quyền truy cập trang này.
-- Vai trò **Staff** và **Standard** hoàn toàn bị chặn và tự động chuyển hướng khi truy cập.\n
+## 8. Phân quyền
+- Chỉ **Admin, Creator, BOD, Manager**. **Staff/Standard** bị chặn + redirect.
+- Lưu ý: `bod` phải có trong allow-list của các API analytics (creator/manager từng bị bỏ quên → 403 âm thầm, đã fix S80).

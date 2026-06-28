@@ -1,36 +1,36 @@
 # B2B Performance (Hiệu Suất Bán Sỉ B2B)
 
-Báo cáo chi tiết về tình hình kinh doanh kênh đại lý B2B, quản lý chi phí phát sinh và so sánh hiệu quả giữa các nhóm đại lý chiến lược và thông thường.
+Báo cáo kênh đại lý/bán sỉ: doanh thu, biên lợi nhuận, chi phí kênh và so sánh **đại lý chiến lược (Strategic)** vs **thường (Non-Strategic)**.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/b2b` (`web/src/app/(dashboard)/analytics/b2b/page.tsx`)
-- **API KPIs**: `/api/analytics/b2b/kpis` (`web/src/app/api/analytics/b2b/kpis/route.ts`)
-- **API Performance**: `/api/analytics/b2b/performance` (`web/src/app/api/analytics/b2b/performance/route.ts`)
-- **API Strategic**: `/api/analytics/b2b/strategic-performance` (`web/src/app/api/analytics/b2b/strategic-performance/route.ts`)
-- **API Trend**: `/api/analytics/b2b/trend` (`web/src/app/api/analytics/b2b/trend/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: theo dõi sức khỏe kênh sỉ — ai (tier nào) đang đóng góp doanh thu/margin, chi phí kênh bao nhiêu, xu hướng theo thời gian.
+- **Tại sao chia Strategic/Non-Strategic**: 2 nhóm có chính sách giá/chiết khấu khác nhau → phải báo cáo riêng để đánh giá đúng hiệu quả từng nhóm.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/b2b` — `web/src/app/(dashboard)/analytics/b2b/page.tsx`
+- **API**: `/api/analytics/b2b/{kpis, performance, strategic-performance, trend}`
 
-## 2. Quy Tắc Nghiệp Vụ & Phân Tầng Đối Tác (Strategic vs Non-Strategic)
-Kênh bán sỉ B2B của GoHub chia đại lý làm 2 tầng để tính chiết khấu và báo cáo riêng biệt:
-- **B2B-Strategic (Đại lý chiến lược)**: Nhóm đối tác sỉ có doanh số lớn, được cam kết chiết khấu và ưu tiên nguồn lực. Phân biệt thông qua trường nhóm đối tác được cấu hình sẵn tại `app_settings` (phần Partner Tiers).
-- **B2B-Non-Strategic (Đại lý sỉ nhỏ/thường)**: Nhóm đại lý bán tự do, áp dụng biểu phí sỉ tiêu chuẩn.
+## 3. Nguồn dữ liệu & phân tầng đối tác
+- **Doanh thu/đơn**: `gohub_dw` (fact revenue), lọc kênh nhóm B2B.
+- **Phân tầng (Partner Tiers)**: danh sách đối tác Strategic cấu hình tại **Settings → Partner Tiers** (`/api/config/partner-tiers`, lưu `app_settings`). **Tại sao cấu hình động**: danh sách đại lý chiến lược thay đổi theo thỏa thuận kinh doanh → không hardcode.
+- **Chi phí kênh**: nhập qua `CostManagementModal` (lưu `channel_group_costs` / Turso) — dùng tính margin sau chi phí.
 
-*Thuật toán loại trừ trùng lắp dữ liệu (Dedup Strategic)*:
-- Đảm bảo doanh số của đại lý chiến lược không bị tính hai lần khi tổng hợp báo cáo kênh chung (sử dụng các hàm SQL helper tối ưu `getGroupCaseSQL` và `getFilteredOtherTiers`).
+## 4. Quy tắc nghiệp vụ & chống trùng (dedup)
+- **Strategic** = đối tác nằm trong tier "Strategic". **Non-Strategic** = phần còn lại.
+- **Dedup**: khi tổng hợp báo cáo kênh chung phải tránh tính đôi doanh số đại lý chiến lược → dùng helper SQL `getGroupCaseSQL` + `getFilteredOtherTiers` (CASE phân nhóm + loại trừ tier đã tính).
+- **Margin %** = biên lợi nhuận gộp của đại lý (đã đổi term sang **CM1** trên label — xem `analytics-bod`).
 
----
+## 5. Tính năng vận hành
+- **Delta Pill**: badge tăng/giảm tô xanh/đỏ theo dấu thực tế (`autoDeltaKind`) — sửa lỗi bản cũ luôn hiện xanh.
+- **Quản lý chi phí kênh sỉ**: `CostManagementModal` lưu chi phí riêng kênh B2B.
+- **Export PDF/Screenshot**: `jspdf` + `modern-screenshot`.
 
-## 3. Các Công Thức Kinh Doanh & Tính Năng Vận Hành
-- **Margin %**: Tỷ lệ biên lợi nhuận gộp của đại lý.
-- **Delta Pill**: Nút hiển thị biến động tăng trưởng xanh/đỏ chính xác theo tỷ lệ thực tế thay vì mặc định luôn xanh như các phiên bản cũ.
-- **Quản lý Chi phí Kênh sỉ (Manage Costs)**: Cho phép cấu hình, lưu trữ chi phí phát sinh riêng của kênh B2B trực tiếp tại giao diện cài đặt thông qua `CostManagementModal`.
-- **Export PDF / Screenshot**: Cho phép lưu trữ nhanh báo cáo B2B dưới dạng văn bản cứng bằng cách tích hợp thư viện `jspdf` và `modern-screenshot`.
+## 6. Vấn đề đã gặp & cách khắc phục
+- **Giá B2B sai (S78)**: chatbot/báo cáo lẫn giá các kênh (OD/WS/Strategic) → cấu hình **Item Type theo kênh** (prefix) trong Settings để lọc đúng giá kênh.
+- **`strategic-performance` không cache (S81)**: trước gọi thẳng `queryAnalytics` → chậm. Fix: bọc `cachedQuery` 12h như các endpoint khác.
+- **Badge biến động luôn xanh (bản cũ)**: thay bằng `DeltaPill` + `autoDeltaKind`.
 
----
-
-## 4. Phân Quyền
-- Vai trò truy cập: **Admin, Creator, BOD, Manager, Staff**.
-- Standard user bị chặn hoàn toàn.\n
+## 7. Phân quyền
+- **Admin, Creator, BOD, Manager, Staff** (Staff thường giới hạn theo phòng ban/per-user). **Standard** bị chặn.

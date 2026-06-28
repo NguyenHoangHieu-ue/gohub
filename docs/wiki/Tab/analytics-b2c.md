@@ -1,51 +1,41 @@
 # B2C Performance (Hiệu Suất Bán Lẻ B2C)
 
-Giao diện báo cáo hiệu suất bán lẻ B2C được thiết kế theo tiêu chuẩn thẩm mỹ cao (Apple-style 5 sections), tích hợp nguồn dữ liệu chi phí marketing thực tế và lượng khách hàng mới từ Chatwoot.
+Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/b2c` (`web/src/app/(dashboard)/analytics/b2c/page.tsx`)
-- **API Monthly Rolling**: `/api/analytics/b2c/monthly` (`web/src/app/api/analytics/b2c/monthly/route.ts`)
-- **API KPIs**: `/api/analytics/b2c/kpis` (`web/src/app/api/analytics/b2c/kpis/route.ts`)
-- **API Trend**: `/api/analytics/b2c/trend` (`web/src/app/api/analytics/b2c/trend/route.ts`)
-- **API Loss SKUs**: `/api/analytics/b2c/loss-skus` (`web/src/app/api/analytics/b2c/loss-skus/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: đo hiệu quả kênh bán lẻ end-to-end — từ lead → khách mới → doanh thu → chi phí marketing → ROAS — để biết tiền marketing đẻ ra bao nhiêu doanh thu.
+- **Tại sao 5 section tách biệt**: mỗi câu hỏi kinh doanh (bán được bao nhiêu? khách ở đâu ra? tốn bao nhiêu để có khách? web chốt tốt không? quảng cáo lời không?) là 1 section riêng → dễ đọc.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/b2c` — `web/src/app/(dashboard)/analytics/b2c/page.tsx` (+ `components/b2c-advanced-dashboard.tsx`)
+- **API**: `/api/analytics/b2c/{monthly, kpis, trend, loss-skus}`
 
-## 2. Cấu Trúc Giao Diện 5 Sections Chuẩn Hóa
-Báo cáo B2C được tổ chức thành 5 phân hệ chuyên sâu giảm tải nhận thức người dùng (Anti-Slop Design):
+## 3. Cấu trúc 5 section
+- **S1 Revenue Rolling**: doanh thu 6 tháng VN/US/Total + tiến độ MTD/MoM/Prorata so KPI.
+- **S2 Customers**: khách mới (New) vs quay lại (Returning), có MoM.
+- **S3 CAC & Leads**: leads từ Chatwoot → so đơn thực tế (conversion).
+- **S4 Website CR**: tỷ lệ mua trên web từ GA4.
+- **S5 Marketing Cost & ROAS**: ngân sách vs chi phí thực + ROAS + spend pace.
 
-- **Section 1: Revenue Rolling**: Biểu đồ cột doanh thu 6 tháng gần nhất phân tách theo thị trường VN/US/Total và hiển thị tiến độ chạy mục tiêu MTD/MoM/Prorata.
-- **Section 2: Customers**: Biểu đồ phân bổ lượng khách hàng mới (New) và khách quay lại (Returning).
-- **Section 3: CAC & Leads (Omni Chatwoot)**: Phân tích hiệu quả chuyển đổi từ Leads Chatwoot sang đơn hàng thực tế.
-- **Section 4: Website Conversion Rate**: Biểu đồ tỉ lệ mua hàng trực tiếp trên Website từ nguồn dữ liệu GA4.
-- **Section 5: Marketing Cost & ROAS**: Tổng hợp ngân sách, chi phí thực tế và chỉ số hoàn vốn chi tiêu quảng cáo (ROAS).
+## 4. Công thức nghiệp vụ
+$$\text{CAC} = \frac{\text{Chi phí Marketing thực tế}}{\text{Số khách hàng mới}} \qquad \text{ROAS} = \frac{\text{Doanh thu B2C}}{\text{Chi phí Marketing thực tế}}$$
+$$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marketing B2C}} \times 100\% \qquad \text{CR} = \frac{\text{Khách mua thực tế}}{\text{Tổng Leads}} \times 100\%$$
 
----
+## 5. Nguồn dữ liệu chi tiết (lấy gì, từ đâu, tại sao)
+- **Doanh thu/khách**: `gohub_dw` (fact revenue, lọc kênh B2C theo prefix item_type cấu hình).
+- **Leads**: **Chatwoot** qua `lib/chatwoot.ts` (account CS 87064), đếm hội thoại theo Inbox (Web, Facebook, Zalo, WhatsApp, Tiktok Shop). **Tại sao Chatwoot**: leads B2C đổ về CS, không nằm trong kho ETL.
+- **Website CR**: **GA4** — config 2 property lưu `app_config['ga4_configs']` (Turso, đã copy sang Supabase).
+- **Marketing Spend**: `channel_group_costs` (Turso) — nhập tay.
+- **KPI target & Ngân sách**: `b2c_kpi_targets` + `b2c_budget` (`app_settings`) — **(S82) cấu hình các giá trị này nay nằm ở trang KPI/Target `/analytics/targets`** (trước đặt nhầm trong Admin). B2C chỉ đọc để hiển thị/tính spend pace.
 
-## 3. Các Công Thức Tài Chính & Tích Hợp Hệ Hệ Thống
+## 6. Vấn đề đã gặp & cách khắc phục
+- **Spend/leads thiếu nguồn (S67-70)**: GA4 2 property + leads ở omni riêng → thiết kế đọc đa nguồn (Chatwoot/GA4/Turso) thay vì chỉ gohub_dw.
+- **Không cache (S81)**: `b2c/{kpis,performance,trend,loss-skus}` trước gọi thẳng DB → chậm. Fix: `cachedQuery` 12h.
+- **Đổi term CM1 (S74)**: label margin đổi GP2→CM1, giữ key `gpm2`.
+- **Cấu hình đặt sai chỗ (S82)**: "KPI Target B2C" + "Ngân sách Marketing B2C" trước nằm trong Admin → chuyển về KPI/Target cho đúng ngữ cảnh.
 
-### A. Chi phí Thu hút Khách hàng mới (Customer Acquisition Cost - CAC)
-$$\text{CAC} = \frac{\text{Chi phí Marketing thực tế}}{\text{Số lượng Khách hàng mới}}$$
-
-### B. Chỉ số Hoàn vốn Chi tiêu Quảng cáo (Return on Ad Spend - ROAS)
-$$\text{ROAS} = \frac{\text{Doanh thu kênh B2C}}{\text{Chi phí Marketing thực tế}}$$
-
-### C. Tiến độ Tiêu hao Ngân sách (Spend Pace)
-$$\text{Spend Pace} = \frac{\text{Chi phí Marketing thực tế}}{\text{Ngân sách Marketing được duyệt (B2C Budget)}} \times 100\%$$
-
-### D. Tỷ lệ Chốt đơn (Conversion Rate - CR)
-$$\text{CR} = \frac{\text{Số lượng Khách mua hàng thực tế (Báo cáo đơn)}}{\text{Tổng số lượng Leads nhận được}}$$
-
----
-
-## 4. Tích hợp Hệ thống Ngoại vi (Chatwoot & GA4 & Turso)
-- **Leads từ Chatwoot**: Kết nối thông qua helper `lib/chatwoot.ts` trực tiếp đến API của tài khoản CS GoHub (Account 87064) thu thập số lượng hội thoại theo từng Inbox (Web, Facebook, Zalo, WhatsApp, Tiktok Shop).
-- **Marketing Spend**: Đọc từ bảng cấu hình chi phí marketing nhập tay trong cơ sở dữ liệu Turso (`channel_group_costs`).
-
----
-
-## 5. Phân Quyền
-- Vai trò xem mặc định: **Admin, Creator, Manager, BOD, Staff**.
-- **Gating Note**: Phần công thức chi chiết, ghi chú nghiệp vụ và nút thay đổi ngân sách B2C chỉ hiển thị đối với vai trò **Admin** để đảm bảo bảo mật dữ liệu.\n
+## 7. Phân quyền
+- Xem: **Admin, Creator, Manager, BOD, Staff**.
+- **Ẩn methodology + nút sửa ngân sách**: chỉ **Admin/Creator** (sửa giá trị thực hiện ở KPI/Target).

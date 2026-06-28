@@ -1,57 +1,58 @@
 # BI Dashboard (Bảng Điều Khiển Tổng Quan)
 
-Trang số liệu kinh doanh tổng đài, cung cấp cái nhìn toàn diện về doanh thu thực tế, dự phóng cuối tháng và theo dõi sát sao tiến độ đạt mục tiêu KPI.
+Trang tổng quan kinh doanh: cho lãnh đạo/nhân viên nhìn nhanh doanh thu thực tế, **dự phóng cuối tháng**, tiến độ đạt KPI và top điểm đến. Đây là trang "mặt tiền" của phân hệ Analytics.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics` (`web/src/app/(dashboard)/analytics/page.tsx`)
-- **API KPIs**: `/api/analytics/kpis` (`web/src/app/api/analytics/kpis/route.ts`)
-- **API Biểu đồ doanh thu**: `/api/analytics/revenue-chart` (`web/src/app/api/analytics/revenue-chart/route.ts`)
-- **API Biểu đồ vùng**: `/api/analytics/region-chart` (`web/src/app/api/analytics/region-chart/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: trả lời 3 câu hỏi trong 5 giây — (1) Tháng này đang bán được bao nhiêu? (2) Theo đà này cuối tháng đạt bao nhiêu? (3) So với KPI đặt ra thì đang nhanh hay chậm?
+- **Tại sao cần trang riêng**: các tab khác (BOD, B2B, B2C) đi sâu từng mảng; Dashboard gom KPI tổng để không phải mở nhiều tab — giảm tải nhận thức (định hướng UI toàn app từ mockup B2C).
 
----
+## 2. Đường dẫn & file
+- **Giao diện Web**: `/analytics` — `web/src/app/(dashboard)/analytics/page.tsx`
+- **API KPIs**: `/api/analytics/kpis` — `web/src/app/api/analytics/kpis/route.ts`
+- **API Biểu đồ doanh thu**: `/api/analytics/revenue-chart`
+- **API Biểu đồ vùng (Top điểm đến)**: `/api/analytics/region-chart`
+- **Lớp kết nối DB**: `web/src/lib/analytics-db.ts` (pool pg tới `gohub_dw`) + `web/src/lib/analytics-helpers.ts` (cache).
 
-## 2. Nguồn Dữ Liệu & Kiến Trúc
-Bảng điều khiển kết nối trực tiếp đến kho dữ liệu `gohub_dw` (PostgreSQL nội bộ) thông qua lớp kết nối tối ưu `web/src/lib/analytics-db.ts`.
+## 3. Cách hoạt động (luồng dữ liệu)
+1. Người dùng chọn khoảng ngày (mặc định = từ đầu tháng hiện tại → hôm nay).
+2. FE gọi song song `kpis` + `revenue-chart` + `region-chart` (giảm round-trip).
+3. Mỗi API tính trên `gohub_dw` rồi trả qua **lớp cache 2 tầng** (xem mục 6) → lần sau lấy cache.
+4. FE tính **dự phóng** (projection) phía client từ số ngày đã trôi qua và render KPI card + chart.
 
-### Các bảng dữ liệu chính được truy vấn:
-- `fact_sales_revenue`: Doanh thu bán hàng thực tế.
-- `analytics_target_planning`: Bảng lưu cấu hình chỉ tiêu KPI của tháng (Supabase).
-- `ref_countries` hoặc `turso country_codes` (332 dòng): Dùng ánh xạ mã nước sang tên quốc gia chuẩn để hiển thị trên biểu đồ "Top Điểm Đến" (`region-chart/route.ts`).
+## 4. Nguồn dữ liệu chi tiết (lấy gì, từ đâu, tại sao)
+- `fact_fulfilment_revenue` / `fact_sales_revenue` (`gohub_dw`): doanh thu thực tế theo ngày. **Tại sao**: đây là bảng fact đã chuẩn hoá từ pipeline ETL, là nguồn doanh thu "thật" của công ty.
+- `analytics_target_planning` (Supabase): chỉ tiêu KPI tháng để so sánh pro-rata. **Tại sao tách Supabase**: KPI do người dùng nhập tay trên web (không thuộc kho ETL).
+- **Mã nước → tên quốc gia** cho "Top Điểm Đến": map qua **Turso `country_codes`** (332 dòng), KHÔNG dùng `dim_location` (vốn là TÊN CHI NHÁNH như "Tân Sơn Nhất - HCM", không phải nước).
 
----
-
-## 3. Công Thức Tính Toán & Quy Tắc Nghiệp Vụ
-
-### A. Hệ số Dự phóng (Projection Factor)
-Dùng để dự kiến kết quả doanh thu khi kết thúc tháng hiện tại dựa trên tiến độ chạy thực tế.
+## 5. Công thức nghiệp vụ
+### A. Hệ số dự phóng (Projection Factor)
 $$\text{Projection Factor} = \frac{\text{Tổng số ngày trong tháng}}{\text{Số ngày đã trôi qua}}$$
+- Chỉ áp cho **tháng hiện tại**; tháng lịch sử = `1.0`.
+- Hiện cảnh báo nếu Date range KHÔNG bắt đầu từ ngày 1 (vì dự phóng sẽ sai nếu thiếu đầu tháng).
 
-*Lưu ý nghiệp vụ*:
-- Chỉ áp dụng hệ số này cho **tháng hiện tại**. Các tháng lịch sử đã qua có hệ số mặc định là `1.0`.
-- Hệ thống hiển thị cảnh báo trực quan nếu khoảng thời gian do người dùng chọn (Date range) không bắt đầu từ ngày đầu tiên của tháng để tránh hiểu sai số liệu dự phóng.
+### B. Doanh thu dự phóng
+$$\text{Projected Revenue} = \text{Doanh thu tích lũy} \times \text{Projection Factor}$$
 
-### B. Doanh thu Dự phóng (Projected Revenue)
-$$\text{Projected Revenue} = \text{Doanh thu thực tế tích lũy} \times \text{Projection Factor}$$
+### C. KPI Pro-rata (đánh giá đang nhanh/chậm)
+$$\text{KPI Pro-rata} = \text{KPI tháng} \times \frac{\text{Số ngày đã trôi qua}}{\text{Tổng số ngày trong tháng}}$$
+$$\%\text{ Đạt} = \frac{\text{Doanh thu thực tế}}{\text{KPI Pro-rata}} \times 100\%$$
+**Tại sao pro-rata**: so doanh thu giữa tháng với KPI cả tháng sẽ luôn "thấp giả" → chia theo ngày trôi qua mới công bằng.
 
-### C. Tỷ lệ hoàn thành KPI Pro-rata (KPI Pro-rata Target)
-Áp dụng cơ chế chia tỷ lệ ngày trôi qua để đánh giá xem doanh thu hiện tại có đang đi đúng hướng đạt mục tiêu cuối tháng hay không.
-$$\text{KPI Pro-rata Target} = \text{Chỉ tiêu KPI của tháng} \times \left( \frac{\text{Số ngày đã trôi qua}}{\text{Tổng số ngày trong tháng}} \right)$$
-$$\text{\% Đạt Pro-rata} = \frac{\text{Doanh thu thực tế đạt được}}{\text{KPI Pro-rata Target}} \times 100\%$$
+## 6. Caching & hiệu năng (tại sao, đã gặp gì)
+- **Vấn đề gốc**: query nặng quét `fact_fulfilment_revenue` (~585k dòng), cột ngày kiểu TEXT không index → **Parallel Seq Scan toàn bảng**; 1 trang fan-out nhiều query → chậm 20s+ khi cold-load.
+- **Giải pháp**: cache 2 tầng trong `analytics-helpers.ts`:
+  - **L1 in-memory** (per-instance) + **L2 Supabase `analytics_query_cache`**, **TTL 12h** (data `gohub_dw` chỉ đổi 1 lần/ngày qua ETL).
+  - **Cron prewarm 06:30 ICT** (`/api/cron/prewarm-analytics`) làm nóng cache trước giờ làm.
+- **Bug nền đã fix (S81)**: `void supabaseAdmin...upsert()` KHÔNG gửi request (builder supabase-js là thenable lazy) → L2 chưa từng chạy; fix bằng `await`.
+- Nút "Xoá Cache" (Settings) flush thủ công khi cần số liệu tươi gấp.
 
----
+## 7. Vấn đề đã gặp & cách khắc phục (lịch sử)
+- **Top Destinations hiển thị sai nước (S79)**: hàm `getDestinationSQL` cắt mã country sai offset — vị trí mã nước trong SKU khác nhau theo họ (digit-prefix → ký tự 3-5; E-prefix → 2-4; 3-letter → 1-3). Fix: cắt theo họ SKU + map qua Turso `country_codes`.
+- **DB không load trên Preview (S79)**: do biến `ANALYTICS_DB_*` chưa tick scope Preview trên Vercel → query trả `[]` âm thầm. Fix vận hành: set env Preview.
 
-## 4. Quản Lý Bộ Nhớ Đệm (Caching Layer)
-Để khắc phục tình trạng truy xuất kho dữ liệu lớn bị chậm, hệ thống áp dụng cơ chế bộ nhớ đệm hai tầng (L2 Supabase Cache - Migration v20):
-- **L1 Cache (In-Memory)**: Lưu trữ trong bộ nhớ máy chủ trong vòng `5 phút` cho mỗi phiên bản instance.
-- **L2 Cache (Supabase `analytics_query_cache`)**: Lưu trữ phân tán dùng chung trong vòng `10 phút`.
-- Admin có thể bấm nút "Xóa Cache" (Màu vàng) trong mục Settings để làm mới số liệu ngay lập tức.
-
----
-
-## 5. Phân Quyền
-- Được quản lý thông qua ma trận `role_permissions` (lưu tại `app_settings` dưới dạng JSON).
-- Vai trò có quyền xem mặc định: **Admin, Creator, Manager, BOD, Staff**.
-- Vai trò **Standard**: Không được phép truy cập trang này.
-- **Ẩn công thức / Methodology**: Các phần chú thích công thức dự phóng phức tạp chỉ hiển thị với vai trò **Admin** (để giảm tải nhận thức và tối ưu trải nghiệm cho các bộ phận khác).\n
+## 8. Phân quyền
+- Ma trận `role_permissions` (lưu `app_settings` JSON) + cấp thêm per-user (`allowed_analytics`).
+- Mặc định xem: **Admin, Creator, Manager, BOD, Staff**. **Standard**: không truy cập.
+- **Ẩn chú thích công thức (methodology)**: chỉ hiện với **Admin** để giảm tải cho bộ phận khác.
