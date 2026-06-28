@@ -10,7 +10,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 // Lưu ý: role-filters (giới hạn dòng theo role) KHÔNG thể auto-áp cho SQL tùy ý — cùng giới hạn như
 // intel. Quyền truy cập trang đã được enforce ở analytics/layout.tsx; endpoint này gate theo role.
 
-const ANALYTICS_ROLES = new Set(["admin", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
+const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 const ALLOWED = /^\s*(SELECT|WITH|EXPLAIN)\b/i
 const BLOCKED = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|VACUUM|ANALYZE)\b/i
 
