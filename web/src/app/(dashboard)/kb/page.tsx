@@ -100,7 +100,7 @@ function usePermissions(role: string) {
       .catch(() => {})
   }, [role]) // re-fetch khi role thay đổi (session vừa load xong)
   return (key: string) => {
-    if (role === "admin") return true
+    if (role === "admin" || role === "creator") return true  // creator = super-admin: không giới hạn
     const allowed = perms[key]
     if (!allowed) return role === "manager" // safe default while loading
     return allowed.includes(role)
@@ -174,7 +174,7 @@ type MrpState = {
 }
 
 function DocsTab({ role, username, canUpload }: { role: string; username: string; canUpload: boolean }) {
-  const canDelete = (uploadedBy: string) => role === "admin" || uploadedBy === username
+  const canDelete = (uploadedBy: string) => role === "admin" || role === "creator" || uploadedBy === username
   const [docs,          setDocs]          = useState<KBDoc[]>([])
   const [loading,       setLoading]       = useState(true)
   const [deptFilter,    setDeptFilter]    = useState<Department | "">("")
