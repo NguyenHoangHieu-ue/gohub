@@ -4098,3 +4098,11 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     DEFAULT_ROLE_PERMISSIONS/ALL_ANALYTICS_IDS (tránh drift). Mỗi role kiểm: (1) login, (2) mọi tab được
     cấp vào được + không Forbidden + có heading, (3) 1 tab không cấp → redirect /chatbot. 20 test (10 role
     × 2) + smoke. `npx playwright test role-matrix` (cần npm run dev chạy + set env creds). tsc+vitest 13/13+build PASS.
+
+## Item 3 follow-up — 3HK tab rỗng (user test Preview)
+77. User test Preview: tất cả tab có data (creator fix OK), RIÊNG 3HK rỗng. Root cause: KHÔNG phải bug —
+    fact_data_usage 3HK chỉ có data đến 2026-05-30 (0 bundle bắt đầu trong tháng 6); tab default lọc THÁNG
+    HIỆN TẠI (06/2026) → rỗng. (Data sync 3HK usage chưa kéo tháng 6 — việc pipeline, không phải web.)
+    FIX UX (user chọn default thông minh): mount effect query MAX(first_report_date) của 3HK → đặt kỳ mặc
+    định = đầu-tháng(max)..max (fallback tháng hiện tại nếu lỗi). Khi data tháng 6 được sync sẽ tự nhảy.
+    Logic-only, không đổi layout. tsc+build PASS.

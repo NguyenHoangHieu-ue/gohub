@@ -90,8 +90,9 @@ export default function ThreeHKDataUsagePage() {
 
   const [activeTab, setActiveTab] = useState<"all" | "Daily" | "Fixed" | "Unlimited">("all")
 
-  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
+  // Để rỗng ban đầu → mount effect đặt kỳ = đầu-tháng(max-data) .. max-data (3HK có thể chậm sync vài tháng).
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataUsageRecord; direction: "asc" | "desc" }>({ key: "first_report_date", direction: "desc" })
 
   const [skuSort, setSkuSort] = useState<{ key: keyof SKUMetrics; direction: "asc" | "desc" }>({ key: "total_usage_gb", direction: "desc" })
@@ -116,6 +117,27 @@ export default function ThreeHKDataUsagePage() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
+  // Default thông minh: lấy ngày data mới nhất của 3HK → đặt kỳ = đầu tháng(max) .. max.
+  // Tránh trông "rỗng" khi data 3HK chậm sync (vd mới đến hết tháng trước). Fallback = tháng hiện tại.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await runQuery(`
+          SELECT MAX(first_report_date)::date AS max_d
+          FROM fact_data_usage
+          WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
+        `)
+        const maxD = rows?.[0]?.max_d ? new Date(rows[0].max_d) : null
+        if (maxD && !isNaN(maxD.getTime())) {
+          const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
+          const start = new Date(maxD.getFullYear(), maxD.getMonth(), 1)
+          setStartDate(fmt(start)); setEndDate(fmt(maxD)); return
+        }
+      } catch (e) { console.error("Error fetching 3hk max date:", e) }
+      const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate)
+    })()
+  }, [])
+
   // Map sku -> nhóm tốc độ (1 lần): server gộp throttle_speed product DB + offer_name + giá để tách
   // 500MB/1GB × 5/10mbps. Không phụ thuộc khoảng ngày.
   useEffect(() => {
@@ -130,6 +152,7 @@ export default function ThreeHKDataUsagePage() {
   }, [])
 
   useEffect(() => {
+    if (!startDate || !endDate) return  // chờ mount effect đặt kỳ mặc định thông minh
     const loadAllData = async () => {
       setLoading(true)
       setError(null)
