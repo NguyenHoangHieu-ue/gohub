@@ -4187,3 +4187,15 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     → canWikiView=false → ẩn tab Wiki. FIX: `role === "admin" || role === "creator"` return true; DocsTab
     canDelete cũng cho creator. (commit 11a7483) QUY TẮC CHỐT: creator = super-admin KHÔNG giới hạn gì —
     ở đâu admin pass thì creator pass (server 403 + client UI gate + allow-list Set). tsc+build PASS.
+
+## Session 81 (tiếp) — Tối ưu tốc độ load trang Analytics
+88. User báo trang analytics load chậm. Chẩn đoán: trang nặng fan-out 10-18 query, mỗi query là 1 POST
+    riêng tới /api/analytics/query (endpoint generic) → endpoint này GỌI THẲNG queryAnalytics, KHÔNG dùng
+    lớp cache 2 tầng (cachedQuery ở analytics-helpers — L1 in-memory 5' + L2 Supabase 10') mà các endpoint
+    chuyên dụng đã dùng. Mỗi lần load = re-query gohub_dw + mở pg-connection mới (pool max:2, TLS tới
+    34.61.204.98). bod 12, products 14, vendors/website 18, channels 11, 3hk 10.
+    FIX (zero-UI, read-only nên an toàn): bọc /api/analytics/query bằng cachedQuery key=sha1(SQL) +
+    trả CACHE_HEADERS (s-maxage 300, SWR 600). Data update 1 lần/ngày (cron) → lần load đầu đập DB, sau
+    lấy cache. flush-analytics-cache (Settings) vẫn xóa được (dùng chung _cache). (commit 3edd25f) tsc+build+test PASS.
+    CÒN TÙY CHỌN (chưa làm, chờ user): (b) batch nhiều query vào 1 request giảm round-trip; (c) tăng pool
+    max; (d) prewarm cache sau cron; (e) thêm index/materialized view trên gohub_dw cho query nặng.
