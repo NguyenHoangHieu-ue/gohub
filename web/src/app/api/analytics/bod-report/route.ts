@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { fetchBODReportData as fetchBODReport } from "@/lib/bod-data"
 
 export async function GET(req: NextRequest) {
@@ -19,13 +19,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const current = await fetchBODReport(startDate, endDate, extraFilters)
+    const key = `bod-report:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const payload = await cachedQuery(key, async () => {
+      const current = await fetchBODReport(startDate, endDate, extraFilters)
+      if (comparisonType === "none") return current
 
-    if (comparisonType !== "none") {
       const s    = new Date(startDate)
       const e    = new Date(endDate)
       let prevStart: Date, prevEnd: Date
-
       if (comparisonType === "previous_period") {
         const diff = e.getTime() - s.getTime()
         prevEnd   = new Date(s.getTime() - 86400000)
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
         extraFilters
       )
 
-      return NextResponse.json(current.map((curr, i) => {
+      return current.map((curr, i) => {
         const prev = comparisonType === "previous_period"
           ? previous[i]
           : previous.find(p => {
@@ -50,10 +51,10 @@ export async function GET(req: NextRequest) {
               return p.date === ly
             })
         return { ...curr, prev_revenue: prev?.revenue || 0 }
-      }))
-    }
+      })
+    }, QUERY_TTL_MIN)
 
-    return NextResponse.json(current)
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/bod-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

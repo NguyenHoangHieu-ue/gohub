@@ -12,9 +12,11 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      max:                2,
+      // max:2 cũ → 1 trang analytics bắn 40-80 query qua 1 instance bị xếp hàng qua 2 kết nối (chậm 25-50s).
+      // 10 cho phép nhiều query chạy song song; gohub_dw default max_connections=100 + cache giảm hit nên an toàn.
+      max:                10,
       idleTimeoutMillis:  30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 8000,
     })
     _pool.on("error", (err) => {
       console.error("[analytics-db] Pool error:", err.message)

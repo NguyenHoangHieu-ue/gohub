@@ -70,7 +70,7 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
 // /api/analytics/query (endpoint generic) gọi qua đây. Khác cachedQuery thường: data gohub_dw chỉ
 // update 1 lần/ngày (pipeline ngoài) nên TTL dài (mặc định 12h) → load đầu ngày đập DB, cả ngày còn lại
 // lấy cache. Đồng thời GHI LẠI SQL gốc (registry row "sqlreg:<hash>") để cron prewarm chạy lại được.
-const QUERY_TTL_MIN = 12 * 60
+export const QUERY_TTL_MIN = 12 * 60  // TTL chung cho cache analytics (data gohub_dw đổi 1 lần/ngày)
 const _registered = new Set<string>()  // tránh ghi registry trùng trong 1 instance
 
 function queryHash(sql: string): string {

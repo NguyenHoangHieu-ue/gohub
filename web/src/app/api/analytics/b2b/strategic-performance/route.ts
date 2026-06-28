@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, getPartnerTiers,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  getDaysInRange, getDaysInMonth, CACHE_HEADERS,
+  getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
   const prevFilter = getPrevDateFilter(startDate || null, endDate || null, "none", source.dateCol, "30 days", companyCode)
 
   try {
+   const key = `b2b-strategic:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}`
+   const result = await cachedQuery(key, async () => {
     const tiers = await getPartnerTiers()
     const partnerMap   = new Map<string, string>() // lower(name) -> tier
     const reversedMap  = new Map<string, string>() // lower(name) -> original name
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
       })
     })
     const partnerNamesLower = Array.from(partnerMap.keys())
-    if (partnerNamesLower.length === 0) return NextResponse.json([], { headers: CACHE_HEADERS })
+    if (partnerNamesLower.length === 0) return [] as any[]
 
     const arrLit = partnerNamesLower.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
 
@@ -207,7 +209,10 @@ export async function GET(req: NextRequest) {
       }
     }).sort((a, b) => b.revenue - a.revenue)
 
-    return NextResponse.json(result, { headers: CACHE_HEADERS })
+    return result
+   }, QUERY_TTL_MIN)
+
+   return NextResponse.json(result, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2b/strategic-performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

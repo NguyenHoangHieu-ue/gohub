@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { fetchBODChannelPerformanceData } from "@/lib/bod-data"
 
 // Port intel bod-channel-performance: từng kênh + CM1 (margin − op-cost theo kênh/tháng prorate).
@@ -21,9 +21,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters)
+    const key = `bod-channel-perf:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const payload = await cachedQuery(key, async () => {
+      const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters)
+      if (comparisonType === "none") return current
 
-    if (comparisonType !== "none") {
       const s = new Date(startDate); const e = new Date(endDate)
       let prevStart: Date, prevEnd: Date
       if (comparisonType === "previous_period") {
@@ -36,13 +38,13 @@ export async function GET(req: NextRequest) {
       const previous = await fetchBODChannelPerformanceData(
         prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters
       )
-      return NextResponse.json(current.map(curr => {
+      return current.map(curr => {
         const prev = previous.find(p => p.channel === curr.channel)
         return { ...curr, prev_revenue: prev ? prev.revenue : 0 }
-      }))
-    }
+      })
+    }, QUERY_TTL_MIN)
 
-    return NextResponse.json(current)
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/bod-channel-performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
