@@ -4151,3 +4151,12 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
 83. Thêm BarChart (recharts) trong tab Unlimited: so sánh Thực tế (GB/ngày/SIM, trung bình có trọng số
     theo active_sims×ngày) vs Giả định high-speed của từng nhóm. Cột Thực tế tô ĐỎ nếu vượt giả định,
     XANH nếu trong; cột Giả định xám nền. Additive, đặt sau bảng breakdown. tsc+build PASS.
+
+## Session 81 (2026-06-28) — Scheduled Messages: mọi người được cấp quyền đều xem được + hiện Người tạo
+84. User: tab Scheduled hiện chỉ admin/creator xem được (role khác dù được cấp tab → GET 403 → rỗng).
+    Cần: mọi người ĐƯỢC CẤP QUYỀN đều thấy lịch hiện có + lưu/hiện người tạo.
+    - API GET /api/admin/scheduled-messages: đổi check role admin/creator → VIEW_ROLES (toàn bộ role analytics).
+      (GET vốn đã trả TẤT CẢ, không lọc created_by; created_by vốn đã lưu khi POST.)
+    - /analytics/scheduled: bỏ gate cứng admin/creator/bod (để layout quyết quyền tab); thêm canEdit
+      (admin/creator) → người chỉ-xem ẩn nút Lịch mới/Sửa/Xóa/Test/Toggle (read-only). Thêm cột "Người tạo".
+    - admin ScheduledTab: thêm badge người tạo trong card. tsc+build PASS.

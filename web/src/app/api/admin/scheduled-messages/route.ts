@@ -3,10 +3,14 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
+// Đọc (GET): mọi role analytics được cấp tab "scheduled" đều XEM được toàn bộ lịch (quyền tab do
+// analytics/layout enforce). Ghi (POST/PUT/DELETE): chỉ admin/creator.
+const VIEW_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
+
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!VIEW_ROLES.has(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data, error } = await supabaseAdmin
     .from("lark_scheduled_messages")

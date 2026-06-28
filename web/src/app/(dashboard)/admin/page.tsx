@@ -3129,11 +3129,10 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1 truncate pl-4">{msg.prompt.slice(0, 100)}{msg.prompt.length > 100 ? "..." : ""}</p>
-                  {msg.last_run_at && (
-                    <p className="text-[10px] text-gray-300 mt-0.5 pl-4">
-                      Lần cuối: {new Date(msg.last_run_at).toLocaleString("vi-VN")}
-                    </p>
-                  )}
+                  <p className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5 pl-4">
+                    {msg.created_by && <span className="flex items-center gap-1"><Users size={10} />{msg.created_by}</span>}
+                    {msg.last_run_at && <span>· Lần cuối: {new Date(msg.last_run_at).toLocaleString("vi-VN")}</span>}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => testRun(msg)} disabled={testingId === msg.id} title="Gửi test ngay"

@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
-import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play } from "lucide-react"
+import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play, User } from "lucide-react"
 
 // Port intel ScheduledMessages — tab riêng (admin-only). Backend web /api/admin/scheduled-messages (+/[id]).
 // Cron tự chạy qua Vercel Cron → /api/cron/scheduled-messages (xem vercel.json).
@@ -46,17 +45,14 @@ const BASE = "/api/admin/scheduled-messages"
 
 export default function ScheduledMessagesPage() {
   const { data: session, status } = useSession()
-  const router = useRouter()
 
-  useEffect(() => {
-    if (status === "authenticated" && !["admin","creator","bod"].includes(session?.user?.role as string)) router.push("/chatbot")
-  }, [status, session, router])
-
-  if (status !== "authenticated" || !["admin","creator","bod"].includes(session?.user?.role as string)) return null
-  return <ScheduledMessages />
+  // Quyền vào tab do analytics/layout enforce (role_permissions ∪ allowed_analytics). Ở đây chỉ cần đăng nhập.
+  if (status !== "authenticated") return null
+  const canEdit = ["admin", "creator"].includes(session?.user?.role as string)
+  return <ScheduledMessages canEdit={canEdit} />
 }
 
-function ScheduledMessages() {
+function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
   const [messages, setMessages] = useState<ScheduledMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [testingId, setTestingId] = useState<string | null>(null)
@@ -254,7 +250,7 @@ function ScheduledMessages() {
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Clock className="w-6 h-6 text-blue-600" />Scheduled Messages</h1>
           <p className="text-slate-500 mt-1">Cấu hình báo cáo AI tự động gửi lên Lark.</p>
         </div>
-        {!isAdding && !isEditing && (
+        {canEdit && !isAdding && !isEditing && (
           <button onClick={startAdding} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">
             <Plus className="w-4 h-4" />Lịch mới
           </button>
@@ -280,19 +276,26 @@ function ScheduledMessages() {
                   <tr className="border-b border-slate-100 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
                     <th className="p-4 w-32">Trạng thái</th>
                     <th className="p-4">Tên &amp; Lịch</th>
-                    <th className="p-4 hidden md:table-cell w-1/3">Prompt</th>
+                    <th className="p-4 hidden md:table-cell w-1/4">Prompt</th>
+                    <th className="p-4 hidden md:table-cell">Người tạo</th>
                     <th className="p-4 hidden lg:table-cell">Lần chạy cuối</th>
-                    <th className="p-4 text-right">Thao tác</th>
+                    {canEdit && <th className="p-4 text-right">Thao tác</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {messages.map(msg => (
                     <tr key={msg.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="p-4">
-                        <button onClick={() => toggleActive(msg)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-colors ${msg.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
-                          <Power className="w-3 h-3" />{msg.is_active ? "Active" : "Paused"}
-                        </button>
+                        {canEdit ? (
+                          <button onClick={() => toggleActive(msg)}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-colors ${msg.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                            <Power className="w-3 h-3" />{msg.is_active ? "Active" : "Paused"}
+                          </button>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${msg.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                            <Power className="w-3 h-3" />{msg.is_active ? "Active" : "Paused"}
+                          </span>
+                        )}
                       </td>
                       <td className="p-4">
                         <div className="font-bold text-slate-800">{msg.name}</div>
@@ -301,19 +304,24 @@ function ScheduledMessages() {
                       <td className="p-4 hidden md:table-cell">
                         <div className="text-sm text-slate-600 line-clamp-2" title={msg.prompt}>{msg.prompt}</div>
                       </td>
+                      <td className="p-4 hidden md:table-cell">
+                        <div className="flex items-center gap-1.5 text-sm text-slate-600"><User className="w-3.5 h-3.5 text-slate-400" />{msg.created_by || "—"}</div>
+                      </td>
                       <td className="p-4 hidden lg:table-cell">
                         <div className="text-sm text-slate-500">{msg.last_run_at ? new Date(msg.last_run_at).toLocaleString("vi-VN") : "Chưa chạy"}</div>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => handleTest(msg.id)} disabled={testingId === msg.id}
-                            className={`p-2 rounded-lg transition-colors ${testingId === msg.id ? "text-slate-400 bg-slate-50" : "text-emerald-600 hover:bg-emerald-50"}`} title="Test ngay">
-                            {testingId === msg.id ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <Play className="w-4 h-4" />}
-                          </button>
-                          <button onClick={() => startEditing(msg)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Sửa"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDelete(msg.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Xoá"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
+                      {canEdit && (
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleTest(msg.id)} disabled={testingId === msg.id}
+                              className={`p-2 rounded-lg transition-colors ${testingId === msg.id ? "text-slate-400 bg-slate-50" : "text-emerald-600 hover:bg-emerald-50"}`} title="Test ngay">
+                              {testingId === msg.id ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <Play className="w-4 h-4" />}
+                            </button>
+                            <button onClick={() => startEditing(msg)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Sửa"><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => handleDelete(msg.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Xoá"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

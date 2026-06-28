@@ -35,5 +35,6 @@ Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong
 ---
 
 ## 3. Phân Quyền
-- Quyền truy cập cài đặt: **Admin và Creator**.
-- BOD Report được loại trừ khỏi danh sách hiển thị mặc định của trang này để tránh rò rỉ số liệu tài chính cấp cao đến các nhóm trò chuyện đại trà.\n
+- **XEM (GET)**: mọi role được cấp tab `scheduled` (qua `role_permissions`/`allowed_analytics`, layout enforce) đều thấy **TẤT CẢ** lịch hiện có + cột **Người tạo** (`created_by`). API GET dùng `VIEW_ROLES` (toàn bộ role analytics), không lọc theo người tạo.
+- **SỬA/XÓA/BẬT-TẮT/TEST (POST/PUT/DELETE)**: chỉ **Admin & Creator**. Người chỉ-xem không thấy nút thao tác (read-only).
+- `created_by` lưu khi tạo (POST). Trang `/analytics/scheduled` (cột Người tạo) + admin ScheduledTab (badge người tạo) đều hiển thị.
