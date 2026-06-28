@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createHash } from "crypto"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
 
 // Endpoint query chung cho các trang Analytics (port "y hệt" gohub-intel /api/query).
 // Bảo mật: chỉ role analytics, CHỈ SELECT/WITH/EXPLAIN, không multi-statement, read-only trên gohub_dw.
@@ -37,8 +39,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const rows = await queryAnalytics(trimmed)
-    return NextResponse.json(rows)
+    // Cache 2 tầng (L1 in-memory 5' + L2 Supabase 10') theo nội dung SQL. Data gohub_dw update
+    // 1 lần/ngày (cron) → mỗi trang nặng (bod/products/vendors/website... 10-18 query) chỉ đập DB
+    // lần đầu, các lần sau lấy từ cache → giảm round-trip + cold pg-connect. Read-only nên an toàn.
+    const key = "q:" + createHash("sha1").update(trimmed).digest("hex")
+    const rows = await cachedQuery(key, () => queryAnalytics(trimmed))
+    return NextResponse.json(rows, { headers: CACHE_HEADERS })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }
