@@ -4076,3 +4076,16 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
 
 ## Item 3 (QA/BA master plan) — đã rà role/guardian/chatbot; CÒN LẠI: review UX các tab ngoài analytics
    (kb/ncc/skus/countries/info/promotions/admin/chatbot) + E2E đăng nhập từng role kiểm data/redirect.
+
+## Item 3 — Phần C (review UX tab ngoài analytics) — đợt 1
+74. Rà UX 8 trang ngoài analytics (kb/ncc/skus/countries/info/promotions/admin/chatbot):
+    - Promotions/Countries/KB: ĐẠT (skeleton/loading, empty-state phân biệt no-result vs no-data, search+count,
+      confirm-modal, thông báo lỗi fallback "Hiếu đang fix"). NCC import = tool admin → giữ lỗi thật để chẩn đoán.
+    - FIX: Info page dùng confirm() NATIVE cho xóa note/file → thay bằng modal chuẩn app (animate-overlay-in/
+      modal-in + state deleting + spinner), đồng bộ pattern KB/Wiki/Admin. (commit aaab8b5)
+    - FIX: Chatbot template download — !res.ok dùng message lạ → thống nhất "Hiếu đang fix, vui lòng đợi".
+    - GIỮ NGUYÊN (UI Strict Lock): /analytics/users + /analytics/scheduled còn confirm() native nhưng thuộc route
+      /analytics → không đụng.
+    - RECOMMENDATION (chưa làm, rủi ro/giá trị thấp): admin/page.tsx:2981 xóa scheduled-message còn confirm()
+      native (file 3156 dòng, đang chạy ổn) — để sau nếu cần.
+   CÒN LẠI item 3: E2E đăng nhập từng role kiểm data/redirect (cần chạy app/Playwright).
