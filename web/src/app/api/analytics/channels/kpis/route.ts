@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
+    const key = `ch-kpis:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}`
+    const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
         `SELECT SUM(f.${source.revenueCol}) as revenue,
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
     const cUni = parseInt(c.units     || "0")
     const pct  = (a: number, b: number) => b === 0 ? 0 : ((a - b) / b) * 100
 
-    return NextResponse.json({
+    return {
       revenue:        cRev,
       margin:         cMar,
       margin_percent: cRev > 0 ? (cMar / cRev) * 100 : 0,
@@ -69,7 +71,10 @@ export async function GET(req: NextRequest) {
       revenue_change: pct(cRev, pRev),
       margin_change:  pct(cMar, pMar),
       orders_change:  pct(cOrd, pOrd),
-    })
+    }
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/channels/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

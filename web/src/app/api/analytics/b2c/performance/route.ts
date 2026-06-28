@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
-  getCountryMappings, getBODFilters,
+  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN,
 } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
@@ -156,9 +156,11 @@ export async function GET(req: NextRequest) {
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const current = await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
+    const key = `b2c-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}`
+    const payload = await cachedQuery(key, async () => {
+      const current = await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
+      if (comparisonType === "none") return current
 
-    if (comparisonType !== "none") {
       const start = new Date(startDate); const end = new Date(endDate)
       let prevStart: Date, prevEnd: Date
       if (comparisonType === "previous_period") {
@@ -170,10 +172,10 @@ export async function GET(req: NextRequest) {
         prevEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
       }
       const previous = await fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn)
-      return NextResponse.json(current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 })))
-    }
+      return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
+    }, QUERY_TTL_MIN)
 
-    return NextResponse.json(current)
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2c/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

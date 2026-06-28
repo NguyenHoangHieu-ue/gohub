@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter,
-  getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS,
+  getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
   else if (granularity === "month") groupBySQL = `TO_CHAR(DATE_TRUNC('month', f.${source.dateCol}::date), 'YYYY-MM')`
 
   try {
+    const key = `b2b-trend:${dateColumn}:${startDate}:${endDate}:${granularity}`
+    const payload = await cachedQuery(key, async () => {
     const [result, channelGrouped] = await Promise.all([
       queryAnalytics<Record<string, any>>(
         `SELECT ${groupBySQL} as name,
@@ -95,7 +97,10 @@ export async function GET(req: NextRequest) {
       return { name: groupDate, revenue: totalRevenue, gpm2: totalMargin - totalOpCost }
     })
 
-    return NextResponse.json(trend, { headers: CACHE_HEADERS })
+    return trend
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2b/trend]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

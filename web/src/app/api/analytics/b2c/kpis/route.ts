@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
 // CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
   const advancedFilter = getBODFilters(searchParams)
 
   try {
+    const key = `b2c-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}`
+    const payload = await cachedQuery(key, async () => {
     const [aggRows, channelRows] = await Promise.all([
       queryAnalytics<Record<string, string>>(
         `WITH current_period AS (
@@ -146,7 +148,7 @@ export async function GET(req: NextRequest) {
     const prevMarginPercent    = prev_revenue > 0 ? (prev_margin / prev_revenue) * 100 : 0
     const chg = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
-    return NextResponse.json([
+    return [
       { label: "Total Revenue", value: current_revenue, lastPeriod: prev_revenue, change: chg(current_revenue, prev_revenue), isPositive: current_revenue >= prev_revenue, isCurrency: true },
       { label: "Units Sold", value: parseFloat(d.current_units || "0"), lastPeriod: parseFloat(d.prev_units || "0"), change: chg(parseFloat(d.current_units || "0"), parseFloat(d.prev_units || "0")), isPositive: parseFloat(d.current_units || "0") >= parseFloat(d.prev_units || "0"), isCurrency: false },
       { label: "Gross Profit", value: current_margin, lastPeriod: prev_margin, change: chg(current_margin, prev_margin), isPositive: current_margin >= prev_margin, isCurrency: true },
@@ -154,7 +156,10 @@ export async function GET(req: NextRequest) {
       { label: "Total Orders", value: parseInt(d.current_orders || "0"), lastPeriod: parseInt(d.prev_orders || "0"), change: chg(parseInt(d.current_orders || "0"), parseInt(d.prev_orders || "0")), isPositive: parseInt(d.current_orders || "0") >= parseInt(d.prev_orders || "0"), isCurrency: false },
       { label: "CM1", value: current_gpm2, lastPeriod: prev_gpm2, change: chg(current_gpm2, prev_gpm2), isPositive: current_gpm2 >= prev_gpm2, isCurrency: true },
       { label: "CM1 %", value: current_gpm2_percent, lastPeriod: prev_gpm2_percent, change: current_gpm2_percent - prev_gpm2_percent, isPositive: current_gpm2_percent >= prev_gpm2_percent, isCurrency: false },
-    ])
+    ]
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2c/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

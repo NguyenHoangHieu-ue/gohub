@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
+    const key = `ch-trend:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}`
+    const payload = await cachedQuery(key, async () => {
     const rows = await queryAnalytics<Record<string, string>>(
       `SELECT TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM-DD') as name,
               SUM(f.${source.revenueCol}) as revenue,
@@ -37,11 +39,14 @@ export async function GET(req: NextRequest) {
        WHERE ${filter} ${chFilter}
        GROUP BY 1 ORDER BY 1`
     )
-    return NextResponse.json(rows.map(r => ({
+    return rows.map(r => ({
       name:    r.name,
       revenue: parseFloat(r.revenue || "0"),
       margin:  parseFloat(r.margin  || "0"),
-    })))
+    }))
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/channels/trend]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

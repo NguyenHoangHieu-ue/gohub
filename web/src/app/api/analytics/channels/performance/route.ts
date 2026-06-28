@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList , CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     : ""
 
   try {
+    const key = `ch-perf:${dateColumn}:${startDate}:${endDate}:${channelGroup}`
+    const payload = await cachedQuery(key, async () => {
     const strategicList = await getStrategicPartnersList()
 
     const rows = await queryAnalytics<Record<string, string>>(
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
        ORDER BY c.group_name, c.revenue DESC`
     )
 
-    return NextResponse.json(rows.map(r => {
+    return rows.map(r => {
       const rev = parseFloat(r.revenue      || "0")
       const mar = parseFloat(r.margin       || "0")
       const prv = parseFloat(r.prev_revenue || "0")
@@ -71,7 +73,10 @@ export async function GET(req: NextRequest) {
         prev_revenue:   prv,
         mom:            prv === 0 ? 0 : ((rev - prv) / prv) * 100,
       }
-    }))
+    })
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/channels/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

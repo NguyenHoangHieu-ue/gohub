@@ -6,7 +6,7 @@ import {
   getAnalyticsSource, getDateFilter,
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  CACHE_HEADERS,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
   const filter = getDateFilter(startDate || null, endDate || null, source.dateCol)
 
   try {
+    const key = `b2b-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}`
+    const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
     if (groupBy === "vendor") {
@@ -165,7 +167,10 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json(result, { headers: CACHE_HEADERS })
+    return result
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2b/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
