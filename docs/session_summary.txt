@@ -4227,3 +4227,17 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     b2c/{kpis,performance,trend,loss-skus}, channels/{kpis,performance,trend}. (commit 23dde50)
     tsc+build+test PASS. Còn lại uncached có chủ đích: db-status/health/schema (probe/freshness, KHÔNG cache),
     customer/report + 3hk-speed-map (chưa làm, ít dùng). Index gohub_dw: user QUYẾT không đụng DB.
+92. Mở rộng prewarm cho endpoint chuyên dụng (bod/b2b/b2c/channels) + PHÁT HIỆN BUG L2 cache chưa từng chạy.
+    - BUG NỀN: `void supabaseAdmin.from().upsert()` KHÔNG gửi request — supabase-js builder là thenable lazy,
+      chỉ chạy khi await/.then(). → bảng analytics_query_cache LUÔN rỗng, L2 (Supabase, dùng chung + sống qua
+      cold start) CHƯA TỪNG hoạt động; chỉ L1 in-memory (5') chạy. FIX: await L2 warm trong cachedQuery; các
+      upsert registry fire-and-forget dùng .then(()=>{},()=>{}) để kích gửi.
+    - Prewarm dedicated: mỗi GET analytics ghi URL thật (registry urlreg) qua analyticsGuard; analyticsGuard
+      cũng cho cron (Bearer CRON_SECRET) bypass session. prewarmAnalyticsUrls đọc registry → xoá key dedicated
+      (force tươi) → re-fetch URL (bearer) → endpoint tính lại data mới. 15 endpoint: đổi dòng auth →
+      analyticsGuard(req, session) + thêm import.
+    - GOTCHA: `.like('key%')` trả 0 dòng trong runtime này (select không filter thì đủ) → registry reads dùng
+      read-all cache_key + lọc prefix JS + .in(); delete dedicated cũng bằng .in().
+    - Cron prewarm chạy cả generic (replay SQL) + dedicated (replay URL).
+    Verify LOCAL: no-auth=401, Bearer=200, prewarm rebuild dedicated key tươi (routes prewarmed=2), L2 rows
+    persist (bod-report:/ch-trend: xuất hiện). tsc+build+test 13/13 PASS. commit d9bf327.
