@@ -12,6 +12,9 @@
     },
     "src/app/api/admin/sync-lark-tickets/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/prewarm-analytics/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -22,6 +25,10 @@
     {
       "path": "/api/admin/sync-lark-tickets",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/prewarm-analytics",
+      "schedule": "30 23 * * *"
     }
   ]
 }

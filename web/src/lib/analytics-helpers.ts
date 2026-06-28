@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
@@ -63,6 +64,63 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
     .delete({ count: "exact" })
     .lt("cached_at", new Date(Date.now() + 1000).toISOString()) // xoá hết
   return { deleted: count ?? 0 }
+}
+
+// ── Query-route cache + prewarm registry ───────────────────────────────────────
+// /api/analytics/query (endpoint generic) gọi qua đây. Khác cachedQuery thường: data gohub_dw chỉ
+// update 1 lần/ngày (pipeline ngoài) nên TTL dài (mặc định 12h) → load đầu ngày đập DB, cả ngày còn lại
+// lấy cache. Đồng thời GHI LẠI SQL gốc (registry row "sqlreg:<hash>") để cron prewarm chạy lại được.
+const QUERY_TTL_MIN = 12 * 60
+const _registered = new Set<string>()  // tránh ghi registry trùng trong 1 instance
+
+function queryHash(sql: string): string {
+  return createHash("sha1").update(sql.trim()).digest("hex")
+}
+
+export async function cachedAnalyticsQuery<T = Record<string, unknown>>(
+  sql: string,
+  ttlMinutes = QUERY_TTL_MIN,
+): Promise<T[]> {
+  const h = queryHash(sql)
+  // Ghi registry 1 lần/instance (fire-and-forget) → prewarm replay được
+  if (!_registered.has(h)) {
+    _registered.add(h)
+    void supabaseAdmin
+      .from("analytics_query_cache")
+      .upsert({ cache_key: `sqlreg:${h}`, data: { sql: sql.trim(), ts: Date.now() }, cached_at: new Date().toISOString() })
+  }
+  return cachedQuery<T[]>(`q:${h}`, () => queryAnalytics<T>(sql), ttlMinutes)
+}
+
+// Chạy lại các query đã đăng ký (registry) để giữ cache nóng + làm tươi sau khi data ngày mới được nạp.
+// Tuần tự, có giới hạn để không vượt maxDuration. Gọi từ cron /api/cron/prewarm-analytics.
+export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: number; failed: number }> {
+  const { data: regs } = await supabaseAdmin
+    .from("analytics_query_cache")
+    .select("cache_key, data")
+    .like("cache_key", "sqlreg:%")
+    .limit(500)
+
+  // Ưu tiên query dùng gần đây nhất
+  const rows = (regs ?? [])
+    .map(r => ({ key: r.cache_key as string, sql: (r.data as any)?.sql as string, ts: (r.data as any)?.ts ?? 0 }))
+    .filter(r => typeof r.sql === "string" && r.sql.length > 0)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, limit)
+
+  let prewarmed = 0, failed = 0
+  for (const r of rows) {
+    try {
+      const data = await queryAnalytics(r.sql)
+      const dataKey = r.key.replace("sqlreg:", "q:")
+      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1 })
+      await supabaseAdmin
+        .from("analytics_query_cache")
+        .upsert({ cache_key: dataKey, data: data as object, cached_at: new Date().toISOString() })
+      prewarmed++
+    } catch { failed++ }
+  }
+  return { prewarmed, failed }
 }
 
 // Cache-Control header value for API responses (browser + CDN cache 5 min)
