@@ -41,3 +41,6 @@ Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế c�
 - Thứ tự suy nhóm: **(1)** `throttle_speed` của product DB (Supabase `skus`/`items`, bắc cầu mã cũ↔mới qua `alias`/`vendor_sku`) → **(2)** `offer_name` (`data_usage_log`) → **(3)** giá `latest_cogs` (cohort theo throttle+số ngày, đoán 500MB vs 1GB) → **(4)** ký tự SKU.
 - **Throttle từ ký tự SKU (mã cũ): `P1 = 10 mbps`, `P2 = 5 mbps`** (theo offer_name + dung lượng thực; định nghĩa cũ trong code bị đảo, đã sửa).
 - Nhãn nhóm giữ format: `"500MB high-speed · throttle 5 mbps"`, `"1GB high-speed · throttle 10 mbps"`...
+- Mỗi nhóm có nút **"Chi tiết (n)"** → bung danh sách SKU thuộc nhóm (SKU, Active SIMs, Plan/Actual GB, Usage %, **Nguồn phân loại** = throttle_speed/offer/price/code/default) để kiểm tra phân loại.
+- ⚠️ Thực tế data: gói 10mbps trong usage gần như đều là **500MB** (product DB gán vậy cho các nước có trong usage); **1GB·10mbps gần như rỗng** trong tập data này (mã cũ P1/P2 chỉ là phỏng đoán, PY hiện không còn sản phẩm). Dùng nút Chi tiết để rà từng SKU.
+- ⚠️ Vendor 3HK trong `dim_sku` = `'3HK DATAPOOL'` (CÓ dấu cách) → mọi SQL lọc bằng `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`. Default ngày = đầu-tháng(MAX data)..MAX (data 3HK chậm sync, hiện đến 30/05).

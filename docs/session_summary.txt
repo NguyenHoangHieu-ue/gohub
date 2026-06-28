@@ -4114,3 +4114,13 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     FIX: đổi cả 5 chỗ sang `REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL'` (4 SQL trong page.tsx + report/route.ts).
     Verify: totals tháng 5 = 24.107 bundles / 128.181 GB (trước = 0). speed-map endpoint vốn đã dùng dạng chuẩn hóa.
     Kết hợp default thông minh (#77) → tab tự hiện data tháng 5. tsc+build PASS.
+
+## Item 5 follow-up — Unlimited breakdown: nút Chi tiết liệt kê SKU
+79. User: không chốt được quy tắc 1GB·10mbps (thiếu info mã cũ; P1/P2 chỉ phỏng đoán; PY không còn SP).
+    Điều tra giá: usage-side cogs bẩn (spread 111×, lẫn HKD/VND) không tách được; product DB tham chiếu sạch
+    (1GB·10mbps ≈21.4k/ngày vs 500MB ≈12.8k). Match usage↔product theo (country,days,mbps): 10mbps trong
+    usage đều ra 500MB (các nước có 10mbps usage đều được product DB gán 500MB; 1GB·10mbps catalog là cho nước
+    khác như CHM vốn chỉ ở 5mbps/PY trong usage). → 1GB·10mbps ~rỗng trong tập data này (không phải bug).
+    GIẢI PHÁP (user yêu cầu): thêm nút "Chi tiết (n)" mỗi nhóm tốc độ → bung danh sách SKU (SKU/Active SIMs/
+    Plan/Actual/Usage% + cột "Nguồn phân loại" throttle_speed/offer/price/code/default) để user tự rà.
+    Additive, giữ nguyên bảng cũ. tsc+build PASS.
