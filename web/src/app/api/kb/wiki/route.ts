@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
-import { embedText, DEPARTMENTS, getDbRole } from "@/lib/kb"
+import { embedText, DEPARTMENTS }   from "@/lib/kb"
+import { getDbRole }                 from "@/lib/db-role"
 import { createNotification }       from "@/lib/notifications"
 
 export async function GET(req: NextRequest) {
