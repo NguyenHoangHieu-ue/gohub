@@ -4209,3 +4209,16 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     Kết quả: trang analytics nặng lấy cache cả ngày; load đầu ngày cũng nhanh. commit c745e37. tsc+build+test PASS.
     Lưu ý vận hành: cron chạy 06:30 ICT — nếu pipeline nạp gohub_dw trễ hơn thì chỉnh giờ cron; nút "Xóa cache"
     (Settings) vẫn flush thủ công. CRON_SECRET phải set trên Vercel để cron auth (nếu chưa set thì route mở).
+90. Đo & tối ưu cold-load analytics (user báo dashboard 20s, bod 25-50s). ĐO TRỰC TIẾP gohub_dw:
+    - mở kết nối nguội 2.4s; RTT/query 282ms; 1 query group-margin ~700ms.
+    - 8 query song song pool=2 (4890ms) ≈ pool=8 (4657ms) → query NẶNG DB-bound, song song KHÔNG nhanh hơn.
+    - EXPLAIN ANALYZE: fact_fulfillment_revenue 585k dòng, lọc ngày = Parallel Seq SCAN TOÀN BẢNG (~277ms),
+      cột fulfiled_date kiểu TEXT, CHỈ có index pkey → KHÔNG có index cột ngày. 1 trang bod ~40 query không
+      cache × seq-scan = nhiều giây thuần DB.
+    KẾT LUẬN: cache là fix thật trong app; cold-load tận gốc cần INDEX cột ngày (việc DB/pipeline).
+    ĐÃ LÀM (commit 3aa7eec): cache 12h (cachedQuery) cho bod-summary/report/group-margin/channel-performance
+    + b2b/strategic-performance (trước KHÔNG cache, gọi thẳng queryAnalytics/lib); bod-summary gom ~8 await
+    tuần tự → 1 Promise.all; pool max 2→10; export QUERY_TTL_MIN. tsc+build+test PASS.
+    → load lặp lại / sau prewarm = tức thì (thay vì 25-50s). Cold-load đầu vẫn ~giới hạn seq-scan.
+    KHUYẾN NGHỊ chờ user duyệt: tạo index gohub_dw trên cột ngày fact (fulfiled_date/created_date/...) →
+    cold-load nhanh hẳn (seq-scan 585k → index-scan ~8.7k dòng/tháng). Cần quyền CREATE trên gohub_dw.
