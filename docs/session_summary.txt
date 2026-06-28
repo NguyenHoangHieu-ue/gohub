@@ -4089,3 +4089,12 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - RECOMMENDATION (chưa làm, rủi ro/giá trị thấp): admin/page.tsx:2981 xóa scheduled-message còn confirm()
       native (file 3156 dòng, đang chạy ổn) — để sau nếu cần.
    CÒN LẠI item 3: E2E đăng nhập từng role kiểm data/redirect (cần chạy app/Playwright).
+
+## Item 3 — Phần C đợt 2 + E2E role-matrix
+75. (b) admin/page.tsx ScheduledTab: xóa lịch gửi confirm() native → modal chuẩn app (animate-overlay-in/
+    modal-in + deleting spinner). Hết confirm() native ở các tab ngoài analytics.
+76. (a) E2E role-matrix: web/src/__e2e__/role-matrix.test.ts (Playwright). Data-driven qua env
+    E2E_<ROLE>_USER/PASS (KHÔNG để cred trong repo; thiếu cred → test.skip). Dùng chung
+    DEFAULT_ROLE_PERMISSIONS/ALL_ANALYTICS_IDS (tránh drift). Mỗi role kiểm: (1) login, (2) mọi tab được
+    cấp vào được + không Forbidden + có heading, (3) 1 tab không cấp → redirect /chatbot. 20 test (10 role
+    × 2) + smoke. `npx playwright test role-matrix` (cần npm run dev chạy + set env creds). tsc+vitest 13/13+build PASS.

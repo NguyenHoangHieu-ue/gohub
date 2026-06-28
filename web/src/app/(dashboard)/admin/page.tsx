@@ -2921,6 +2921,8 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
   const [messages, setMessages] = useState<ScheduledMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [testingId, setTestingId] = useState<string | null>(null)
+  const [confirmDelId, setConfirmDelId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState<Partial<ScheduledMessage>>({})
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -2977,10 +2979,15 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
     fetchMessages()
   }
 
-  const del = async (id: string) => {
-    if (!confirm("Xóa lịch này?")) return
-    await fetch(`/api/admin/scheduled-messages/${id}`, { method: "DELETE" })
-    onNotify("success", "Đã xóa"); fetchMessages()
+  const doDelete = async () => {
+    if (!confirmDelId) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/admin/scheduled-messages/${confirmDelId}`, { method: "DELETE" })
+      onNotify("success", "Đã xóa"); fetchMessages()
+    } finally {
+      setDeleting(false); setConfirmDelId(null)
+    }
   }
 
   const testRun = async (msg: ScheduledMessage) => {
@@ -3141,7 +3148,7 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                     className="p-1.5 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors">
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => del(msg.id)} title="Xóa"
+                  <button onClick={() => setConfirmDelId(msg.id)} title="Xóa"
                     className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors">
                     <Trash2 size={14} />
                   </button>
@@ -3149,6 +3156,25 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Confirm xóa lịch (thay confirm() native — đồng bộ pattern modal của app) */}
+      {confirmDelId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-overlay-in" onClick={() => !deleting && setConfirmDelId(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-[340px] p-5 animate-modal-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center"><Trash2 className="w-4 h-4 text-rose-500" /></div>
+              <h3 className="font-bold text-slate-800 text-sm">Xóa lịch gửi?</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">Bạn chắc chắn muốn xóa lịch gửi tin nhắn này? Thao tác không thể hoàn tác.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDelId(null)} disabled={deleting} className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Hủy</button>
+              <button onClick={doDelete} disabled={deleting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50">
+                {deleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}Xóa
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
