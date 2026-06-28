@@ -4259,3 +4259,44 @@ Branch `staging` (head 54544ff) — TẤT CẢ đã commit + push, CHƯA merge m
      Commits: 3edd25f, c745e37, 3aa7eec, 23dde50, d9bf327 (+ docs).
 TODO sau khi user test Preview OK: merge staging→main (fix cả production). Vận hành: CRON_SECRET đã set Vercel;
 cron prewarm 06:30 ICT (chỉnh nếu pipeline nạp gohub_dw trễ hơn).
+
+
+## Session 82 (2026-06-28) — UI sidebar, đổi tên Bé Gấu/Note, GỘP quản lý User, dọn trùng Admin→Settings, tài liệu KLTN
+ĐÃ MERGE main (head c67f427). Tất cả verify tsc + next build + (docs). Đã FF staging→main nhiều đợt.
+
+93. UI sidebar (user: nền trắng chữ xám khó nhìn, tab active mờ, nhóm chưa rõ màu):
+    - Tăng tương phản: chữ inactive gray-500→gray-700, icon gray-400→gray-500; nhãn nhóm con đậm + có màu.
+    - Tab active: nền nhạt bg-*-50 → nền ĐẶC chữ trắng. Cuối cùng (user chốt): header 3 nhóm CÙNG 1 màu navy đậm
+      (brand-700, chữ/icon trắng); tab đang chọn brand-500 (SÁNG hơn header) + ring. (commits 633d0ee, a0d5979, db33d6c)
+94. Đổi tên: chatbot "GoHub AI" → "Bé Gấu"; tab "Information" → "Note" (GIỮ BUCKET Supabase Storage = 'Information',
+    đổi sẽ vỡ file đã lưu). Sweep sidebar/chatbot/creator/admin/users/info.
+95. GỘP quản lý User thành 1 trang /analytics/users (user chọn vị trí này + gộp hết):
+    - Trang gộp 5 mục tab: Người dùng (list inline role/phòng ban/quyền báo cáo allowed_analytics + PM tabs allowed_tabs/
+      online/xóa) · Thêm user · Đổi mật khẩu · Vai trò × Quyền (Role×Report) · Nâng cao (Role×Tính năng + Phòng ban×Tab).
+    - Tách components dùng chung → web/src/components/user-admin.tsx (AddUserForm, ChangePasswordForm, SystemPermissionsMatrix).
+    - Gỡ tab user (list/add/password) + dọn ~700 dòng code chết khỏi /admin; default tab admin → settings. (commit 75c4a1b)
+96. KPI/Target + dọn Admin (user báo creator view-only + Admin có mục sai chỗ/trùng):
+    - Fix creator edit: canEdit = admin||creator (cả 3 bảng planning + 2 mục B2C). API vốn đã cho creator (view-only chỉ ở client).
+    - Dọn trùng Admin: Guardian (AccessPolicySection) + Role Filters (RoleFiltersSection) TRÙNG /analytics/settings
+      (cùng /api/config/access-policy + /api/config/role-filters) → gỡ khỏi Admin, giữ Settings.
+    - Chuyển "KPI Target B2C" + "Ngân sách Marketing B2C" từ Admin → đúng trang KPI/Target (/analytics/targets);
+      format lại Ngân sách (bảng căn phải + dòng Tổng 6 tháng). (commit 7de94d5)
+97. Tài liệu KLTN (user: viết chi tiết toàn bộ docs/wiki/Tab + 1 file sheet bằng chứng kế hoạch):
+    - Tạo docs/KLTN_Nhat_Ky_Cong_Viec.csv (BOM UTF-8): nhật ký theo ngày 04→28/06, cột Mục tiêu/Việc làm/Kết quả/
+      Khó khăn/Cách xử lý/Trạng thái.
+    - Viết chi tiết 28/28 tab docs (Mục đích & tại sao · luồng · nguồn dữ liệu · công thức · vấn đề đã gặp & cách fix · phân quyền);
+      sửa thông tin lỗi thời: term CM1 (bỏ GPM2), cache 12h+prewarm (không còn 10'), Bé Gấu, Note. (commits b61e278, b0da98e)
+98. Gộp "Channel & Customer Tiers" (admin) vào "Partner Tiers" (settings) — TRÙNG (cùng /api/config/partner-tiers).
+    Giữ ở Settings, lấy UI bản admin (đẹp hơn: thêm/xóa nhóm tier + datalist gợi ý kênh + lưới card), đổi tông màu #003B95.
+    Gỡ PartnerTiersSection khỏi admin. (commit 5405f04)
+99. Dời nốt SKU Destination về Settings (Settings vốn ĐÃ có "SKU Destination Definition" rules[] cùng key sku_destination_rules).
+    PHÁT HIỆN: getDestinationSQL(_rule?) BỎ QUA rule — destination tính CỨNG theo HỌ SKU trong code (S79) → cả 2 UI config
+    SKU Destination là CONFIG CHẾT (không điều khiển report). Gỡ bản admin; thêm caption cảnh báo ở Settings + ghi rõ trong doc.
+    /admin Cài đặt giờ chỉ còn Tỷ giá + Công thức 3HK. (commit c67f427)
+
+## Phân chia sau dọn (s82):
+- /admin: Cài đặt (tỷ giá + 3HK formula) · Tạo template · Khuyến mãi · Lịch Lark — thuần công cụ.
+- /analytics/settings: Database status · Partner Tiers · Guardian · Role Filters · SKU Destination · Item Type — gom cấu hình hệ thống/BI.
+- /analytics/users: 1 cửa quản lý user (list+quyền + thêm/đổi mật khẩu + ma trận).
+
+## Việc VẬN HÀNH còn treo (không phải code): CRON_SECRET trên Vercel (cron prewarm); 3HK fact_data_usage chưa sync tháng 6 (đến 30/05).
