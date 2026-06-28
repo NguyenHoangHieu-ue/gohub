@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
              MAX(sku_type)          as sku_type,
              MAX(activation_date)   as activation_date
       FROM fact_data_usage
-      WHERE sku IN (SELECT sku FROM dim_sku WHERE vendor = '3HKDATAPOOL')
+      WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
       GROUP BY iccid, order_code
     ),
     filtered_bundles AS (

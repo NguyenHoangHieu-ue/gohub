@@ -4106,3 +4106,11 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     FIX UX (user chọn default thông minh): mount effect query MAX(first_report_date) của 3HK → đặt kỳ mặc
     định = đầu-tháng(max)..max (fallback tháng hiện tại nếu lỗi). Khi data tháng 6 được sync sẽ tự nhảy.
     Logic-only, không đổi layout. tsc+build PASS.
+
+## Item 3 follow-up 2 — ROOT CAUSE THẬT tab 3HK rỗng (không phải ngày!)
+78. User báo: chỉnh về tháng 5 vẫn rỗng, cả production lẫn staging. Diagnose: dim_sku.vendor thực tế =
+    '3HK DATAPOOL' (CÓ dấu cách), nhưng 5 câu SQL của tab lọc `vendor = '3HKDATAPOOL'` (KHÔNG dấu cách)
+    → khớp 0 dòng → tab LUÔN rỗng mọi môi trường/mọi ngày (bug có từ đầu, không phải do RBAC/ngày).
+    FIX: đổi cả 5 chỗ sang `REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL'` (4 SQL trong page.tsx + report/route.ts).
+    Verify: totals tháng 5 = 24.107 bundles / 128.181 GB (trước = 0). speed-map endpoint vốn đã dùng dạng chuẩn hóa.
+    Kết hợp default thông minh (#77) → tab tự hiện data tháng 5. tsc+build PASS.
