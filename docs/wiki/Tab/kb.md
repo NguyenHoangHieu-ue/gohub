@@ -54,10 +54,12 @@ Hệ thống lưu trữ dữ liệu tri thức trên Supabase thông qua tiện 
 
 ### C. Quản lý Wiki nội bộ
 - Wiki được biên soạn trực tiếp bằng Markdown, phân quyền theo phòng ban (`department`).
-- Admin có thể chuyển đổi nhanh trạng thái ẩn/hiện (`is_hidden`) hoặc đổi quyền phòng ban trực tiếp trên dòng danh sách.
+- Admin/Creator có thể chuyển đổi nhanh trạng thái ẩn/hiện (`is_hidden`) hoặc đổi quyền phòng ban trực tiếp trên dòng danh sách.
+- **Trang ẩn (`is_hidden`)**: chỉ Admin/Creator mới thấy trong danh sách, thấy nút Ẩn/Hiện, và mở được bằng id trực tiếp. Quyền được kiểm bằng **role lấy tươi từ DB** (`getDbRole` ở server, `/api/user/me` ở client) — không dùng role trong JWT (JWT có thể CŨ nếu admin vừa đổi role mà user chưa đăng nhập lại → role cũ "admin" sẽ rò trang ẩn).
 
 ---
 
 ## 4. Phân Quyền Truy Cập
 - **Standard**: Chỉ đọc các tài liệu và trang Wiki thuộc phòng ban của mình (hoặc các trang công cộng `department = 'all'`).
-- **Manager / Admin / Creator**: Có toàn quyền upload tài liệu, tạo/sửa/xóa Wiki, bật/tắt trạng thái ẩn của Wiki.\n
+- **Manager**: Upload tài liệu, tạo/sửa/xóa Wiki. KHÔNG bật/tắt trạng thái ẩn (chỉ Admin/Creator).
+- **Admin / Creator**: Toàn quyền upload tài liệu, tạo/sửa/xóa Wiki, **bật/tắt trạng thái ẩn** + xem trang ẩn.\n

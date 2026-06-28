@@ -4160,3 +4160,17 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - /analytics/scheduled: bỏ gate cứng admin/creator/bod (để layout quyết quyền tab); thêm canEdit
       (admin/creator) → người chỉ-xem ẩn nút Lịch mới/Sửa/Xóa/Test/Toggle (read-only). Thêm cột "Người tạo".
     - admin ScheduledTab: thêm badge người tạo trong card. tsc+build PASS.
+
+## Session 81 (tiếp) — FIX Wiki: trang ẩn rò sang non-admin (stale JWT role)
+85. User báo tab Knowledge Base: admin/creator đã ẩn vài trang nhưng role khác VẪN thấy (kèm nút bật/tắt
+    ẩn) giống admin. ROOT CAUSE: KB dùng role trong JWT (session.user.role). JWT bị CŨ khi admin đổi role
+    user mà user chưa đăng nhập lại → role cũ "admin" còn trong token → rò trang ẩn + nút toggle.
+    - Server: thêm getDbRole(username) trong lib/kb.ts (đọc users.role tươi từ Supabase). Áp vào:
+      • wiki GET (list): lọc is_hidden theo role DB.
+      • wiki/[id] GET: 404 trang ẩn cho non-admin/creator (bịt lỗ mở trực tiếp bằng id).
+      • wiki/[id] PATCH + DELETE: gate bằng role DB (thay JWT).
+    - Client (kb/page.tsx): KBPage fetch /api/user/me → dbRole tươi (fallback JWT khi đang load); WikiTab
+      thêm isAdmin = admin||creator → parity cho nút Ẩn/Hiện + cột toggle + sửa phòng ban inline.
+    - Creator parity: trước UI chỉ check role==="admin" → creator không thấy toggle; nay admin+creator.
+    Verify: tsc + next build PASS, vitest 13/13. Commit 03903ac đã push staging.
+    Doc: cập nhật docs/wiki/Tab/kb.md (trang ẩn dùng role DB tươi; manager KHÔNG toggle ẩn).
