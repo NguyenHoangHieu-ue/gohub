@@ -2,6 +2,8 @@
 
 Quản lý danh mục các quốc gia, vùng lãnh thổ, nhóm địa lý và hỗ trợ ánh xạ ISO Code chuẩn hóa toàn hệ thống.
 
+> **Mục đích & vai trò**: Master Data địa lý — mọi nơi (SKU, gói NCC, đơn hàng, dashboard "Top điểm đến") đều map về đây để hiển thị tên nước thống nhất. **Tại sao cần**: GoHub dùng mã nước custom (RUS, EU1, W04...) không phải ISO chuẩn; phải có bảng tham chiếu để decode mã→tên + nhóm nước hỗ trợ → tránh mỗi nơi hiểu một kiểu.
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

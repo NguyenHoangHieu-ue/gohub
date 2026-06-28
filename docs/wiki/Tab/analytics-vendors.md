@@ -1,29 +1,27 @@
 # Vendor Performance (Hiệu Suất Nhà Cung Cấp)
 
-Trang tổng hợp báo cáo chi tiêu mua hàng, chất lượng dịch vụ viễn thông cung cấp và đánh giá mức độ đóng góp doanh thu của các Nhà cung cấp đối tác.
+Báo cáo chi tiêu mua hàng, chất lượng mạng và mức đóng góp doanh thu của từng nhà cung cấp (NCC) đối tác.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/vendors` (`web/src/app/(dashboard)/analytics/vendors/page.tsx`)
-- **API Vendor List**: `/api/analytics/vendors/list` (`web/src/app/api/analytics/vendors/list/route.ts`)
-- **API Vendor Report**: `/api/analytics/vendors/report` (`web/src/app/api/analytics/vendors/report/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: đánh giá NCC nào đáng tin (chi phí, chất lượng mạng, thị phần đơn) → quyết định ưu tiên nhập hàng/đàm phán giá.
+- **Tại sao cần**: GoHub bán SIM/eSIM của nhiều NCC (WORLDMOVE, 3HK...); cần so sánh để chọn nguồn tối ưu.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/vendors` — `web/src/app/(dashboard)/analytics/vendors/page.tsx`
+- **API**: `/api/analytics/vendors/list`, `/api/analytics/vendors/report`
 
-## 2. Điểm Nhấn UX & Vận Hành Giao Diện
-- **Bộ lọc Vendor thông minh**: Dropdown lựa chọn danh sách nhà cung cấp được cấu hình thêm một lớp màng bảo vệ (Overlay) trong suốt ở session 61. Khi người dùng click ra ngoài vùng hiển thị, menu dropdown sẽ tự động đóng lại nhẹ nhàng thay vì bị treo đơ trên màn hình.
-- **Phân trang**: Danh sách được giới hạn hiển thị tối đa `20 dòng/trang` để đảm bảo tốc độ phản hồi nhanh.
+## 3. Nguồn dữ liệu & chỉ số
+- **Nguồn**: `gohub_dw` nhóm theo vendor (lưu ý vendor 3HK = `'3HK DATAPOOL'` có dấu cách → chuẩn hoá khi lọc).
+- **Total COGS spent**: tổng tiền nhập hàng trả NCC trong kỳ.
+- **Success/Failure Rate**: tỷ lệ eSIM/mạng lỗi → chất lượng hạ tầng NCC.
+- **Volume Share %**: tỷ trọng đơn của NCC trong tổng đơn GoHub.
 
----
+## 4. Vấn đề đã gặp & UX
+- **Dropdown chọn vendor bị treo (S61)**: thêm overlay trong suốt → click ra ngoài tự đóng menu.
+- **Bug Vendor Performance (S78)**: đã fix (số liệu hiệu suất tính sai).
+- **Phân trang 20 dòng** để phản hồi nhanh; trang fan-out nhiều query → hưởng cache 12h chung.
 
-## 3. Nội Dung Báo Báo & Phân Tích
-- **Chi phí mua hàng (Total COGS spent)**: Tổng dòng tiền GoHub thanh toán nhập hàng cho nhà cung cấp trong kỳ.
-- **Tỉ lệ lỗi mạng / eSIM lỗi (Success/Failure Rate)**: Chỉ số phản ánh chất lượng hạ tầng mạng viễn thông của từng đối tác.
-- **Thị phần sản phẩm (Volume Share %)**: Tỷ trọng đơn hàng của nhà cung cấp này chiếm bao nhiêu phần trăm trong toàn bộ cơ cấu đơn của GoHub.
-
----
-
-## 4. Phân Quyền
-- Vai trò có quyền xem: **Admin, Creator, Manager, BOD, Staff**.
-- Vai trò Standard bị chặn hoàn toàn.\n
+## 5. Phân quyền
+- **Admin, Creator, Manager, BOD, Staff**. **Standard** bị chặn.

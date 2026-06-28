@@ -2,6 +2,8 @@
 
 Quản lý cấu trúc catalog sản phẩm cốt lõi của GoHub bao gồm 4 tầng phân cấp dữ liệu: Products, SKUs, Listings và Items.
 
+> **Mục đích & vai trò**: nguồn sự thật (single source of truth) về sản phẩm GoHub — mọi tab khác (Products BI, chatbot, NCC gap) đều tham chiếu mã/cấu trúc ở đây. **Tại sao 4 tầng Product→SKU→Listing→Item**: tách "gói thương mại" (Product) khỏi "mã kho bán" (SKU), "đăng bán trên sàn" (Listing) và "mã sim vật lý từ NCC" (Item) → 1 gói có thể bán nhiều kênh, nhiều nguồn sim mà không trộn dữ liệu.
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

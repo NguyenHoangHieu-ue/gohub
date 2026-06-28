@@ -1,25 +1,25 @@
 # All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)
 
-Trang phân tích hiệu suất kinh doanh đa năm, đa kỳ, hỗ trợ so sánh hiệu quả tăng trưởng giữa kỳ này với kỳ trước.
+Phân tích hiệu suất đa năm/đa kỳ, so sánh tăng trưởng kỳ này vs kỳ trước theo 3 trục kênh lớn.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/all-time` (`web/src/app/(dashboard)/analytics/all-time/page.tsx`)
-- **API Backend**: `/api/analytics/all-time-performance` (`web/src/app/api/analytics/all-time-performance/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: nhìn bức tranh dài hạn (nhiều năm) thay vì 1 tháng — đánh giá xu hướng tăng trưởng tổng thể theo B2B-Strategic / B2B-Non-Strategic / B2C.
+- **Tại sao tách riêng**: query trên toàn bộ lịch sử rất nặng → cần cơ chế chạy có kiểm soát (nút Áp dụng) khác các tab realtime.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/all-time` — `web/src/app/(dashboard)/analytics/all-time/page.tsx`
+- **API**: `/api/analytics/all-time-performance`
 
-## 2. Quy Tắc Nghiệp Vụ & So Sánh
-- **Bộ lọc ngày**: Khác biệt với các tab khác, bộ lọc ngày của All-Time hoạt động dựa trên cơ chế kích hoạt nút "Áp dụng" thủ công để tránh việc gửi liên tục các query nặng về kho dữ liệu lịch sử.
-- **Phân nhóm Kênh**: Phân lọc doanh thu rõ ràng theo 3 trục kinh doanh lớn:
-  - **B2B-Strategic** (Đối tác sỉ chiến lược).
-  - **B2B-Non-Strategic** (Đại lý sỉ thông thường).
-  - **B2C** (Bán lẻ trực tiếp đến người tiêu dùng).
-- **Casing Nhất quán**: Toàn bộ chuỗi định danh được chuẩn hóa chính xác, ví dụ nhãn `"Non-Strategic"` viết hoa chữ S theo chuẩn kỹ thuật chung.
+## 3. Nguồn dữ liệu & nghiệp vụ
+- **Nguồn**: `gohub_dw` (toàn bộ lịch sử fact revenue).
+- **Phân nhóm 3 trục**: B2B-Strategic / B2B-Non-Strategic / B2C (dùng Partner Tiers + dedup như B2B).
+- **So sánh kỳ**: kỳ chọn vs kỳ trước để tính tăng trưởng.
 
----
+## 4. Kỹ thuật & lưu ý
+- **Bộ lọc ngày dùng nút "Áp dụng" thủ công**: tránh gửi liên tục query nặng về kho lịch sử khi gõ ngày.
+- **Chuẩn hoá casing**: nhãn `"Non-Strategic"` viết hoa chữ S nhất quán với toàn hệ thống (tránh lệch nhóm).
 
-## 3. Phân Quyền
-- Kích hoạt hiển thị cho các vai trò: **Admin, Creator, BOD, Manager, Staff**.
-- Vai trò **Standard**: Bị chặn truy cập.\n
+## 5. Phân quyền
+- **Admin, Creator, BOD, Manager, Staff**. **Standard** bị chặn.

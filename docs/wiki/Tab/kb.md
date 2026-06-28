@@ -2,6 +2,8 @@
 
 Quy trình tải lên tài liệu tri thức, xử lý cắt nhỏ (chunking), tạo vector embedding, tìm kiếm ngữ nghĩa và quản lý trang Wiki nội bộ.
 
+> **Mục đích & vai trò**: bộ não tri thức nội bộ — lưu tài liệu/quy trình/thuật ngữ để (1) nhân viên tra cứu, (2) chatbot agent "Giải Đáp" lấy ngữ cảnh trả lời. **Tại sao dùng embedding + pgvector**: tìm theo Ý NGHĨA (semantic) chứ không chỉ khớp từ khoá → hỏi cách nào cũng ra đúng tài liệu. **Tại sao trang ẩn dùng role DB tươi (s81)**: tránh lỗ hổng JWT cũ làm rò trang ẩn cho người vừa bị hạ quyền.
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

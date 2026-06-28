@@ -1,6 +1,9 @@
-# Information (Cổng Thông Tin Hệ Thống)
+# Note (Cổng Thông Tin Hệ Thống — trước đây "Information")
 
 Tab cung cấp dữ liệu tham khảo, tra cứu danh mục nhóm nước và quản lý tệp tin hướng dẫn vận hành nội bộ.
+
+> **Mục đích & vai trò**: cổng thông tin chung cho mọi nhân viên — ghi chú vận hành nhanh + kho file template/hướng dẫn + tra danh mục nhóm nước. **Tại sao mọi role xem được**: là portal nội bộ phổ thông, không chứa số liệu nhạy cảm.
+> **Đổi tên (s82)**: nhãn tab hiển thị đổi **"Information" → "Note"**. ⚠️ Tên BUCKET Supabase Storage vẫn giữ `"Information"` (đổi sẽ vỡ liên kết file đã lưu) — chỉ đổi nhãn UI.
 
 ---
 

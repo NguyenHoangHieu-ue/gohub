@@ -2,6 +2,8 @@
 
 Trang hiển thị và quản lý các chiến dịch khuyến mãi, chính sách quà tặng và ưu đãi hiện hành của GoHub.
 
+> **Mục đích & vai trò**: nơi quản lý ưu đãi gắn với SKU + làm nguồn để chatbot tự giới thiệu khuyến mãi cho khách. **Tại sao gắn `sku_codes`**: ưu đãi áp theo từng gói cụ thể → khi khách hỏi gói đó, agent `tu-van`/`giai-dap` đọc đúng ưu đãi đang chạy (theo `start_date`/`end_date`).
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

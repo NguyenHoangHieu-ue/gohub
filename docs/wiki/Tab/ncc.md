@@ -2,6 +2,8 @@
 
 Hệ thống quản lý catalog sản phẩm của Nhà Cung Cấp (NCC) lớn gồm WorldMove (WM) và 3HK, hỗ trợ so sánh khoảng trống danh mục và tạo sản phẩm hàng loạt.
 
+> **Mục đích & vai trò**: nơi xem "kho hàng" của NCC và phát hiện **Gap** — gói NCC đang bán mà GoHub CHƯA tạo SKU (`exist=No`) → cơ hội mở sản phẩm mới. **Tại sao cần Bulk Import + Template**: tạo SKU thủ công từng cái rất chậm/dễ sai; sinh template Excel (tách trường bắt buộc vs auto-fill) + import hàng loạt giúp mở sản phẩm nhanh, ít lỗi.
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

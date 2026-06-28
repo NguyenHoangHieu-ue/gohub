@@ -2,6 +2,8 @@
 
 Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, tiến độ chạy mục tiêu tự động đến các kênh hoặc nhóm thảo luận của bộ phận CS, Sales trên ứng dụng Lark.
 
+> **Mục đích & vai trò**: tự động đẩy báo cáo định kỳ vào nhóm Lark (không cần ai mở web) → team luôn nắm số liệu mới. **Tại sao tách quyền XEM vs SỬA (S81)**: ai được cấp tab cũng cần thấy lịch đang chạy (minh bạch, tránh trùng lịch), nhưng chỉ admin/creator được sửa để tránh phá lịch của người khác.
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

@@ -1,23 +1,25 @@
-# Fulfillment Report (Báo Cáo Hoàn Thành Đơn Hàng)
+# Fulfillment Report (Báo Cáo Hoàn Thành Đơn)
 
-Báo cáo phân tích hiệu suất và chất lượng vận hành kỹ thuật của quy trình cấp phát SIM/eSIM tự động đến tay người dùng.
-
----
-
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/fulfillment` (`web/src/app/(dashboard)/analytics/fulfillment/page.tsx`)
-- **API Backend**: `/api/analytics/fulfillment-report` (`web/src/app/api/analytics/fulfillment-report/route.ts`)
+Phân tích chất lượng vận hành cấp phát SIM/eSIM tự động: tỷ lệ thành công, thời gian hoàn thành, phân bổ đối tác giao.
 
 ---
 
-## 2. Cơ Chế Vận Hành & Khai Thác Dữ Liệu
-Báo cáo kết nối trực tiếp đến bảng dữ liệu vận hành đơn của kho dữ liệu `gohub_dw` để trích xuất các chỉ số:
-- **Tỉ lệ cấp phát thành công (Success Rate)**: Số lượng mã eSIM/SIM vật lý được gửi đến người dùng thành công trên tổng lượng đơn thanh toán.
-- **Thời gian hoàn thành đơn trung bình (Mean Fulfillment Time)**: Đo lường tốc độ cấp phát tự động của hệ thống từ lúc nhận đơn cho tới khi kích hoạt sim thành công.
-- **Chi tiết phân bổ đối tác vận chuyển**: Phân tích hiệu quả phân phát thẻ SIM vật lý của từng đơn vị giao hàng.
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: đo chất lượng khâu giao hàng/kích hoạt — đơn có được cấp eSIM/SIM thành công & nhanh không.
+- **Tại sao quan trọng**: doanh thu chỉ "thật" khi đơn được fulfil; tỷ lệ lỗi cao = mất tiền + mất uy tín.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/fulfillment` — `web/src/app/(dashboard)/analytics/fulfillment/page.tsx`
+- **API**: `/api/analytics/fulfillment-report`
 
-## 3. Phân Quyền
-- Được truy cập đối với các vai trò: **Admin, Creator, Manager, BOD, Staff**.
-- Standard user bị loại trừ khỏi phạm vi cấp quyền xem trang này.\n
+## 3. Nguồn dữ liệu & chỉ số
+- **Nguồn**: bảng vận hành đơn trong `gohub_dw` (`fact_fulfilment_*`).
+- **Success Rate** = số eSIM/SIM gửi thành công / tổng đơn thanh toán.
+- **Mean Fulfillment Time** = thời gian trung bình từ nhận đơn → kích hoạt thành công.
+- **Phân bổ đối tác giao**: hiệu quả giao SIM vật lý theo từng đơn vị vận chuyển.
+
+## 4. Lưu ý
+- Bảng fact fulfillment ~585k dòng, cột ngày kiểu TEXT không index → query nặng; hưởng lợi từ cache 12h + prewarm chung của phân hệ analytics.
+
+## 5. Phân quyền
+- **Admin, Creator, Manager, BOD, Staff**. **Standard** bị loại trừ.

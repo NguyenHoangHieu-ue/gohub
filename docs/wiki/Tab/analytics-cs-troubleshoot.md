@@ -1,28 +1,27 @@
 # CS Troubleshoot Hub (Trung Tâm Khắc Phục Sự Cố CS)
 
-Phân hệ quản trị dành riêng cho bộ phận Chăm sóc Khách hàng (Customer Service) để đối soát, tra cứu lịch sử khiếu nại và đồng bộ hóa các vé sự cố (Tickets) từ hệ thống Lark.
+Phân hệ cho bộ phận Chăm sóc Khách hàng: tra cứu lịch sử khiếu nại + đồng bộ vé sự cố (tickets) từ Lark.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/cs-troubleshoot` (`web/src/app/(dashboard)/analytics/cs-troubleshoot/page.tsx`)
-- **API Backend**: `/api/reports/cs-troubleshoot` (`web/src/app/api/reports/cs-troubleshoot/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: CS tra cứu nhanh lịch sử vé sự cố của khách, đối soát và đồng bộ vé mới từ Lark.
+- **Tại sao cần**: vé sự cố nằm ở Lark; cần kéo về kho tập trung để tra cứu/thống kê thay vì lục Lark thủ công.
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/cs-troubleshoot` — `web/src/app/(dashboard)/analytics/cs-troubleshoot/page.tsx`
+- **API**: `/api/reports/cs-troubleshoot`
+- **Sync vé**: `/api/admin/sync-lark-tickets` (có cron Vercel 02:00 UTC hằng ngày từ S78)
 
-## 2. Kiến Trúc Kỹ Thuật & Tích Hợp Dữ Liệu Lark
+## 3. Nguồn dữ liệu & tích hợp Lark
+- **Lưu trữ**: bảng `lark_cs_tickets` (Supabase) — ~24,712 bản ghi, đồng bộ từ Turso.
+- **Script migrate**: `scripts/migrate_turso_tickets.py` (one-off chuyển dữ liệu cũ).
+- **Đồng bộ định kỳ**: cron `sync-lark-tickets` kéo vé mới từ Lark (auth `CRON_SECRET`).
 
-### A. Hạ tầng Lưu Trữ
-- Toàn bộ dữ liệu sự cố được đồng bộ từ Turso sang Supabase lưu trữ tập trung tại bảng `lark_cs_tickets` với quy mô hơn **24,712 bản ghi**.
-- Quá trình chuyển đổi dữ liệu được thực hiện tự động bằng tập lệnh Python: `scripts/migrate_turso_tickets.py`.
+## 4. Tính năng vận hành
+- **Phân trang 20 dòng** (`pager.tsx`).
+- **2 nút admin**: "Đồng bộ vé từ Lark (Sync)" + "Di chuyển dữ liệu (Migrate)" — chạy trực tiếp trên UI, không cần SSH server.
+- **Thông báo lỗi thân thiện**: ẩn lỗi thô → banner *"Hiếu đang fix, vui lòng đợi"*.
 
-### B. Tính năng Giao diện & Vận Hành
-- **Phân trang 20 dòng**: Bảng danh sách phản hồi sự cố áp dụng cơ chế phân trang `20 hàng` thông qua component `pager.tsx` để tối ưu hiệu suất.
-- **Manual Trigger Buttons**: Cung cấp 2 nút chức năng đặc quyền dành riêng cho quản trị viên là "Đồng bộ vé từ Lark (Sync)" và "Di chuyển dữ liệu (Migrate)" để cập nhật vé khẩn cấp trực tiếp tại giao diện mà không cần chạy dòng lệnh server.
-- **Thông báo lỗi thân thiện**: Nếu có sự cố đường truyền, hệ thống sẽ ẩn lỗi hệ thống thô và hiển thị banner thông báo thân thiện: *"Hiếu đang fix, vui lòng đợi"* để giữ trải nghiệm người dùng luôn chuyên nghiệp.
-
----
-
-## 3. Phân Quyền
-- Vai trò xem: **Admin, Creator, Manager, BOD, Staff**.
-- Vai trò Standard không có quyền truy cập.\n
+## 5. Phân quyền
+- **Admin, Creator, Manager, BOD, Staff** (thường cấp cho phòng ops-&-cs). **Standard** không truy cập.

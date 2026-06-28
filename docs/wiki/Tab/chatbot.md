@@ -2,6 +2,8 @@
 
 Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và phân vùng dữ liệu của hệ thống Chatbot đa tác nhân (6 Agents) tích hợp trên Giao diện Web và Lark Bot.
 
+> **Mục đích & vai trò**: "Bé Gấu" là trợ lý AI trung tâm — nhân viên hỏi tự nhiên (tiếng Việt) về gói cước/giá/SKU/catalog NCC/số liệu kinh doanh thay vì phải tự tra DB hay mở nhiều tab. **Tại sao chia 6 agent chuyên biệt**: nếu nhồi tất cả vào 1 prompt, LLM dễ quá tải ngữ cảnh + trả sai; tách theo vùng dữ liệu giúp mỗi agent "giỏi 1 việc" và bảo mật theo quyền. **Tại sao có Guardian + lọc COGS**: tránh rò thông tin nhạy cảm (giá vốn, nội bộ hệ thống) cho người không có quyền. Đổi tên hiển thị "GoHub AI"→**"Bé Gấu"** (s82).
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

@@ -2,6 +2,8 @@
 
 Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế của người dùng sử dụng các gói eSIM/SIM thuộc Zone của nhà mạng đối tác 3HK.
 
+> **Mục đích & vai trò**: 3HK là dòng sản phẩm chiến lược (2 key metric của team Business: CM1 + 3HK Contribution %). Trang này đối chiếu **data thực tế tiêu thụ** vs **định mức gói đã bán** để (1) phát hiện lạm dụng băng thông/nghẽn, (2) kiểm chứng giả định dung lượng khi định giá gói Unlimited. **Tại sao phức tạp**: gói Unlimited 3HK thực chất là "fixed high-speed + throttle" với 3 biến thể (500MB/1GB × 5/10mbps), mã cũ↔mới khác nhau → phải mapping kỹ (mục 5).
+
 ---
 
 ## 1. Tổng quan & Đường dẫn

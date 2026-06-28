@@ -1,27 +1,26 @@
 # Customer Performance (Hiệu Suất Khách Hàng B2B)
 
-Báo cáo phân tích hành vi mua hàng, giá trị vòng đời và phân tầng các khách hàng sỉ B2B lớn của GoHub.
+Phân tích hành vi mua, giá trị vòng đời và phân tầng khách hàng sỉ B2B lớn.
 
 ---
 
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/customers` (`web/src/app/(dashboard)/analytics/customers/page.tsx`)
-- **API Backend**: `/api/customers` (`web/src/app/api/customers/route.ts`)
+## 1. Mục đích & vai trò
+- **Dùng để làm gì**: nhận diện khách sỉ "VIP" (mua nhiều/đều), khách đang giảm mua → chăm sóc/giữ chân đúng đối tượng.
+- **Tại sao tập trung B2B**: khách sỉ ít nhưng giá trị lớn, theo dõi cá nhân hoá được (khác B2C đại trà).
 
----
+## 2. Đường dẫn & file
+- **Web**: `/analytics/customers` — `web/src/app/(dashboard)/analytics/customers/page.tsx`
+- **API**: `/api/customers`
 
-## 2. Kỹ Thuật Phân Phối Dữ Liệu
-- **Phân trang tối ưu (Pagination 20)**: Do tệp khách hàng sỉ của doanh nghiệp rất lớn, bảng danh sách khách hàng được cấu hình hiển thị chính xác `20 hàng trên một trang` kết hợp với thanh chuyển trang `pager.tsx` để giảm thời gian phản hồi máy chủ và tải giao diện nhẹ nhàng hơn.
-- **Xử lý mã rác**: Lọc bỏ các bản ghi khách hàng mang mã `'NaN'` (chỉ có khoảng 13 đơn lẻ trong hệ thống) và hiển thị thành danh mục "Chưa xác định" để đảm bảo tính trong sạch của báo cáo.
+## 3. Nguồn dữ liệu & chỉ số
+- **Nguồn**: `gohub_dw` nhóm theo khách hàng sỉ.
+- **Order Count**: số lần tạo đơn nhập.
+- **Total Spent**: tổng tiền ròng khách trả.
+- **Frequency**: khoảng thời gian trung bình giữa các lần mua → đo độ "đều".
 
----
+## 4. Xử lý dữ liệu rác & hiệu năng
+- **Mã `'NaN'`** (~13 bản ghi): gom thành "Chưa xác định" để báo cáo sạch.
+- **Phân trang 20 dòng** (`pager.tsx`) vì tệp khách lớn.
 
-## 3. Chỉ Số Phân Tích Khách Hàng
-- **Lượng đơn mua hàng (Order Count)**: Đếm tổng số lần khách sỉ tạo đơn nhập hàng.
-- **Doanh số cống hiến (Total Spent)**: Tổng dòng tiền ròng khách hàng thanh toán cho GoHub.
-- **Tần suất đặt hàng (Frequency)**: Khoảng thời gian trung bình giữa các lần nhập hàng của đại lý.
-
----
-
-## 4. Phân Quyền
-- Kích hoạt truy cập cho: **Admin, Creator, BOD, Manager, Staff**.\n
+## 5. Phân quyền
+- **Admin, Creator, BOD, Manager, Staff**. **Standard** bị chặn (dữ liệu khách → bảo mật).
