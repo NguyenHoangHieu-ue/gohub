@@ -4199,3 +4199,13 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     lấy cache. flush-analytics-cache (Settings) vẫn xóa được (dùng chung _cache). (commit 3edd25f) tsc+build+test PASS.
     CÒN TÙY CHỌN (chưa làm, chờ user): (b) batch nhiều query vào 1 request giảm round-trip; (c) tăng pool
     max; (d) prewarm cache sau cron; (e) thêm index/materialized view trên gohub_dw cho query nặng.
+89. Prewarm cache analytics (user chọn): vì data gohub_dw đổi 1 lần/ngày, TTL 10' khiến cache nguội giữa
+    các lần xem + prewarm nửa đêm sẽ hết hạn trước sáng. Thiết kế:
+    - cachedAnalyticsQuery (analytics-helpers): TTL 12h + ghi mỗi SQL thành registry row "sqlreg:<hash>"
+      trong analytics_query_cache (tái dùng cột data jsonb — KHÔNG đổi schema) để replay được.
+    - prewarmAnalyticsCache: chạy lại tối đa 40 query gần đây nhất (tuần tự), ghi đè cache tươi.
+    - /api/cron/prewarm-analytics (Bearer CRON_SECRET, maxDuration 60) + vercel cron "30 23 * * *" =
+      06:30 ICT (làm nóng trước giờ làm + kéo data ngày mới). /api/analytics/query đổi sang dùng cachedAnalyticsQuery.
+    Kết quả: trang analytics nặng lấy cache cả ngày; load đầu ngày cũng nhanh. commit c745e37. tsc+build+test PASS.
+    Lưu ý vận hành: cron chạy 06:30 ICT — nếu pipeline nạp gohub_dw trễ hơn thì chỉnh giờ cron; nút "Xóa cache"
+    (Settings) vẫn flush thủ công. CRON_SECRET phải set trên Vercel để cron auth (nếu chưa set thì route mở).
