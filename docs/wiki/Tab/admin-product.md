@@ -29,9 +29,9 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
   - **Offset**: Vị trí bắt đầu cắt chuỗi mã SKU.
   - **Code Length**: Độ dài chuỗi con cần lấy để định danh nhà mạng.
 
-### B. Partner Tiers (Nhóm Đại Lý & Đối Tác)
-- Thiết lập phân tầng đối tác sỉ (B2B) trực quan bằng dạng thẻ (Chips) thay thế cho việc nhập chuỗi JSON thô như trước.
-- Admin có thể thêm/bớt nhóm, quản lý danh sách đối tác thuộc từng Tier để hệ thống BI tính toán doanh thu/báo cáo sỉ chính xác theo phân cấp.
+### B. Partner Tiers (Channel & Customer Tiers) — ĐÃ CHUYỂN sang Settings (s82)
+- Mục "Channel & Customer Tiers" trước ở đây **trùng** với "Đối tác chiến lập (Partner Tiers)" trong `/analytics/settings` (cùng API `/api/config/partner-tiers`).
+- (s82) Đã **gộp về Settings**, lấy UI bản admin (đẹp hơn: thêm/xóa nhóm tier, datalist gợi ý tên kênh, lưới card). Admin KHÔNG còn mục này.
 
 ### C. Nút Kiểm soát Đồng bộ (Manual Triggers)
 - Cung cấp các công cụ vận hành khẩn cấp cho phép quản trị viên kích hoạt trực tiếp các tiến trình đồng bộ dữ liệu từ Lark, Turso hoặc xóa sạch bộ nhớ đệm cache hệ thống.
