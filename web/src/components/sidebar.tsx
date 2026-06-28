@@ -180,12 +180,13 @@ function roleLabel(role: string) {
 
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
-// Active = nền màu ĐẶC + chữ TRẮNG (tương phản cao, dễ nhìn). Mỗi nhóm 1 accent riêng.
+// Active = nền SÁNG hơn header nhóm (brand-500) + chữ TRẮNG → nổi bật rõ tab đang chọn.
+const ACTIVE_TAB = "bg-brand-500 text-white shadow-sm ring-1 ring-brand-300"
 const ACTIVE_BG: Record<Accent, string> = {
-  brand:   "bg-brand-600 text-white shadow-sm",
-  blue:    "bg-blue-600 text-white shadow-sm",
-  violet:  "bg-violet-600 text-white shadow-sm",
-  emerald: "bg-emerald-600 text-white shadow-sm",
+  brand:   ACTIVE_TAB,
+  blue:    ACTIVE_TAB,
+  violet:  ACTIVE_TAB,
+  emerald: ACTIVE_TAB,
 }
 
 // Một hàng link trong sidebar (dùng chung cho cả 3 nhóm).
@@ -217,20 +218,18 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
   )
 }
 
-// Icon nhóm tô màu accent để phân biệt rõ các nhóm lớn (Chat / Product / Analyst)
-const GROUP_ICON: Record<Accent, string> = {
-  brand:   "text-brand-700",
-  blue:    "text-blue-700",
-  violet:  "text-violet-700",
-  emerald: "text-emerald-700",
-}
-
-// Nền + viền màu cho header nhóm — mỗi nhóm 1 dải màu riêng, nhìn phát biết nhóm nào
+// Header tất cả nhóm CÙNG 1 màu ĐẬM (navy brand-700), chữ + icon trắng.
 const GROUP_BG: Record<Accent, string> = {
-  brand:   "bg-brand-50   border border-brand-200   text-brand-800   hover:bg-brand-100",
-  blue:    "bg-blue-50    border border-blue-200    text-blue-800    hover:bg-blue-100",
-  violet:  "bg-violet-50  border border-violet-200  text-violet-800  hover:bg-violet-100",
-  emerald: "bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100",
+  brand:   "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
+  blue:    "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
+  violet:  "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
+  emerald: "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
+}
+const GROUP_ICON: Record<Accent, string> = {
+  brand:   "text-white",
+  blue:    "text-white",
+  violet:  "text-white",
+  emerald: "text-white",
 }
 
 // Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
