@@ -4146,3 +4146,8 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
 82. User muốn xem mức dùng thực vs giả định: thay cột "Nguồn phân loại" trong list Chi tiết bằng
     "GB/ngày/SIM" = Total Actual ÷ Active SIMs ÷ số ngày gói (parse từ mã). Tô ĐỎ nếu > giả định high-speed
     (1GB·10mbps→1.0; còn lại→0.5 GB/ngày), XANH nếu trong giả định. Caption giải thích. tsc+build PASS.
+
+## Item 5 — biểu đồ so sánh 3 loại gói
+83. Thêm BarChart (recharts) trong tab Unlimited: so sánh Thực tế (GB/ngày/SIM, trung bình có trọng số
+    theo active_sims×ngày) vs Giả định high-speed của từng nhóm. Cột Thực tế tô ĐỎ nếu vượt giả định,
+    XANH nếu trong; cột Giả định xám nền. Additive, đặt sau bảng breakdown. tsc+build PASS.

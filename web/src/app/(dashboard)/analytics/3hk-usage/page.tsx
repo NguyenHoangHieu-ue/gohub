@@ -5,6 +5,9 @@ import {
   Activity, Search, Filter, Download, RefreshCw, Calendar, Package,
   ChevronUp, ChevronDown, Database, BarChart3,
 } from "lucide-react"
+import {
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
@@ -248,6 +251,24 @@ export default function ThreeHKDataUsagePage() {
   }, [activeTab, skuMetrics, speedMap])
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
+
+  // Dữ liệu biểu đồ so sánh 3 loại gói: Thực tế (GB/ngày/SIM, trung bình có trọng số) vs Giả định.
+  const speedChart = useMemo(() => {
+    if (activeTab !== "Unlimited") return []
+    return speedGroups.map(sg => {
+      const members = speedGroupMembers[sg.speed_group] ?? []
+      let usage = 0, simDays = 0
+      for (const m of members) {
+        const d = daysOfSku(m.sku)
+        usage += m.total_usage_gb
+        if (d && d > 0) simDays += m.active_sims * d
+      }
+      const actual = simDays > 0 ? usage / simDays : 0
+      const assume = sg.speed_group.includes("1GB") ? 1 : 0.5
+      const name = sg.speed_group.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
+      return { name, actual: +actual.toFixed(3), assume, usagePct: +sg.avg_usage_pct.toFixed(1) }
+    })
+  }, [activeTab, speedGroups, speedGroupMembers])
 
   const searchClause = () => debouncedSearch ? `
     AND (
@@ -713,6 +734,36 @@ export default function ThreeHKDataUsagePage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Biểu đồ so sánh mức sử dụng 3 loại gói (chỉ tab Unlimited) */}
+      {activeTab === "Unlimited" && speedChart.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+              So sánh mức sử dụng theo nhóm — Thực tế (GB/ngày/SIM) vs Giả định
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt giả định high-speed của nhóm, <span className="text-emerald-600 font-semibold">xanh</span> = trong giả định. Đường nền xám = mức giả định.</p>
+          </div>
+          <div className="p-4" style={{ height: 320 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={speedChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} barGap={4}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" width={60} />
+                <Tooltip formatter={(v: number, n: string) => [`${Number(v).toFixed(2)} GB`, n]} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="assume" name="Giả định (GB/ngày)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" name="Thực tế (GB/ngày/SIM)" radius={[4, 4, 0, 0]}>
+                  {speedChart.map((d, i) => (
+                    <Cell key={i} fill={d.actual > d.assume ? "#e11d48" : "#10b981"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
