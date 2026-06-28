@@ -24,4 +24,20 @@ Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế c�
 ---
 
 ## 4. Phân Quyền
-- Cho phép xem đối với: **Admin, Creator, Manager, BOD, Staff**.\n
+- Cho phép xem đối với: **Admin, Creator, Manager, BOD, Staff** (và ops-&-cs, product theo `DEFAULT_ROLE_PERMISSIONS`).
+- Data các bảng lấy qua `/api/analytics/query` (SELECT-only). Allow-list role của endpoint này **phải gồm `creator`** — nếu thiếu, creator vào được trang nhưng bảng rỗng (403 âm thầm).
+
+---
+
+## 5. Logic Bundle (Lọc theo kỳ) & Nhóm Tốc Độ Unlimited
+
+### 5.1 Lọc theo Bundle (KHÔNG SUM thô)
+- Đơn vị thống kê = **Bundle** = mỗi cặp `(iccid, order_code)` duy nhất.
+- Cột lọc khoảng ngày = `MIN(first_report_date)` của Bundle (= `bundle_start_date`). **KHÔNG** dùng `activation_date` (chỉ hiển thị).
+- Bundle có `bundle_start_date` trong `[startDate, endDate]` → cộng **toàn bộ lifetime** (`SUM(total_data_gb)`, capacity = `MAX(data_amount_gb)`), kể cả tiêu dùng sau khoảng ngày. Bundle bắt đầu trước khoảng ngày → bị loại hoàn toàn.
+
+### 5.2 Nhóm tốc độ (high-speed × throttle) — tab Unlimited
+- Tính SERVER-side ở **`/api/analytics/3hk-speed-map`** (`web/src/app/api/analytics/3hk-speed-map/route.ts`), trả map `usageSku → { group }`.
+- Thứ tự suy nhóm: **(1)** `throttle_speed` của product DB (Supabase `skus`/`items`, bắc cầu mã cũ↔mới qua `alias`/`vendor_sku`) → **(2)** `offer_name` (`data_usage_log`) → **(3)** giá `latest_cogs` (cohort theo throttle+số ngày, đoán 500MB vs 1GB) → **(4)** ký tự SKU.
+- **Throttle từ ký tự SKU (mã cũ): `P1 = 10 mbps`, `P2 = 5 mbps`** (theo offer_name + dung lượng thực; định nghĩa cũ trong code bị đảo, đã sửa).
+- Nhãn nhóm giữ format: `"500MB high-speed · throttle 5 mbps"`, `"1GB high-speed · throttle 10 mbps"`...

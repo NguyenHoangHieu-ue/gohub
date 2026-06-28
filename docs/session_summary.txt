@@ -4045,3 +4045,34 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
 69. RBAC creator = super-admin (cao hơn admin): nhiều API hardcode admin-only → creator bị 403 (SQL Explorer, tab User...). Sweep toàn bộ ~36 endpoint (sql-query/sql-schema, admin/users(+[username]), settings, promotions, template, channel-costs, scheduled, flush-cache, db-status, migrate, config/*, kb/*, ncc import+cost, planning/targets, feedbacks) → cho admin+creator. Chat/Lark error-verbosity giữ nguyên (không phải cổng 403). tsc+test+build PASS.
 
     Trạng thái: Task 1+3 + RBAC + user button ở nhánh `staging`, chờ verify Preview rồi merge `main`.
+
+
+## Session 80 (2026-06-28) — Fix creator tab rỗng data, 3HK speed-group mapping (throttle+giá), dọn docs
+
+70. Xóa tmp.txt (nội dung Bundle-logic 3HK đã nằm trong report/route.ts). Đọc workflow-pipeline.md.
+
+71. FIX creator tab rỗng data (root cause thật, khác đợt sweep S79):
+    - `/api/analytics/query` + `/api/analytics/health` có ANALYTICS_ROLES THIẾU "creator" (và "manager").
+    - ga4/gsc đã thêm từ S77 nhưng query+health bị bỏ quên → creator vào trang được (layout full) nhưng
+      data fetch qua /api/analytics/query trả 403 ÂM THẦM → bảng rỗng. Đúng 5 tab dùng endpoint này:
+      bod, channels, products, vendors, 3hk-usage. Tab khác dùng endpoint riêng (chỉ gate session) nên OK.
+    - Fix: thêm "creator","manager" vào ANALYTICS_ROLES 2 file → đồng bộ ga4/gsc. (commit 8c6fe7f)
+
+72. 3HK Unlimited — tách 500MB vs 1GB × 5/10mbps (yêu cầu user): tạo /api/analytics/3hk-speed-map.
+    - Khám phá DB: product DB (skus/items) có cột throttle_speed ghi rõ "500 MB...5 mbps"/"1GB...10 mbps"
+      → tốt hơn đoán giá. Bắc cầu mã cũ↔mới qua items.alias / skus.vendor_sku (chứa mã cũ dạng P1/P2/UNLI).
+    - Thứ tự suy: throttle_speed product DB → offer_name → giá (cohort latest_cogs) → ký tự SKU.
+    - ⚠️ SỬA ĐẢO: throttle mã cũ P1=10mbps, P2=5mbps (offer_name "500MB...5mbps" cho P2 + dung lượng thực
+      P1=1.8GB/d, P2=1.6GB/d khớp COGS 10Mbps=1.8/5Mbps=1.6). Code cũ để P1=5/P2=10 → SAI, đã sửa.
+    - Coverage data thật: 147/182 SKU từ nguồn text rõ ràng (throttle_speed 76 + offer 71). Phân bố: 10mbps
+      đa số 500MB, 1GB·10mbps hiếm (khớp product DB). Trang đọc map; UI bảng GIỮ NGUYÊN. (commit 80e987c)
+    - ⏳ CHỜ USER verify Preview: 1GB·10mbps ra ít — xác nhận khớp thực tế hay cần coi P1-UNLI mặc định khác.
+
+73. Cập nhật docs/wiki/Tab/analytics-3hk-usage.md (section 5: Bundle logic + speed-group mapping + lưu ý
+    creator phải có trong allow-list /api/analytics/query).
+
+    Trạng thái: 2 commit (8c6fe7f creator-fix, 80e987c 3hk speed-map) ở nhánh staging — CHƯA push/merge.
+    Chờ user test Preview rồi merge main (fix cả production). tsc + test 13/13 + build PASS.
+
+## Item 3 (QA/BA master plan) — đã rà role/guardian/chatbot; CÒN LẠI: review UX các tab ngoài analytics
+   (kb/ncc/skus/countries/info/promotions/admin/chatbot) + E2E đăng nhập từng role kiểm data/redirect.
