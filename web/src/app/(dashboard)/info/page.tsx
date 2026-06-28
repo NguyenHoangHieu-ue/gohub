@@ -39,7 +39,7 @@ export default function InfoPage() {
             <StickyNote className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Information</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Note</h1>
             <p className="text-slate-500 text-sm">Notes cá nhân & lưu trữ file</p>
           </div>
         </div>

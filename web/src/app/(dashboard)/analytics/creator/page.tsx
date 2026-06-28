@@ -9,13 +9,13 @@ import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
 // Tất cả tab/route có thể ẩn
 const ALL_TABS = [
-  { id: "chatbot",         label: "Hiếu AI (Chatbot)" },
+  { id: "chatbot",         label: "Bé Gấu (Chatbot)" },
   { id: "kb",              label: "Knowledge Base & Wiki" },
   { id: "promotions",      label: "Promotions" },
   { id: "skus",            label: "System SKUs" },
   { id: "ncc",             label: "NCC Catalog" },
   { id: "countries",       label: "Reference" },
-  { id: "info",            label: "Information (Notes/Files)" },
+  { id: "info",            label: "Note (Notes/Files)" },
   { id: "dashboard",       label: "Analytics Dashboard" },
   { id: "bod",             label: "BOD Report" },
   { id: "all-time",        label: "All-Time" },

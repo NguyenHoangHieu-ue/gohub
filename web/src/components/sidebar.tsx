@@ -12,11 +12,11 @@ import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 import { ROLE_LABELS }        from "@/lib/agents/types"
 
 // Information tab — nổi bật, hiển thị cho tất cả role
-const NAV_INFO = { href: "/info", label: "Information", icon: StickyNote, key: "info" }
+const NAV_INFO = { href: "/info", label: "Note", icon: StickyNote, key: "info" }
 
 // Tabs luôn hiển thị ở trên
 const NAV_MAIN = [
-  { href: "/chatbot",    label: "Hiếu AI",     icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
   { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
   { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"      },
 ]
@@ -33,7 +33,7 @@ const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
 // 3 nhóm lớn của sidebar (keys khớp NAV_ALL để dùng chung logic phân quyền navItems)
 const NAV_CHAT_KB = [
-  { href: "/chatbot",    label: "Hiếu AI",        icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Bé Gấu",        icon: Sparkles, key: "chatbot"    },
   { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"         },
   { href: "/promotions", label: "Promotions",     icon: Gift,     key: "promotions" },
 ]
@@ -219,10 +219,18 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
 
 // Icon nhóm tô màu accent để phân biệt rõ các nhóm lớn (Chat / Product / Analyst)
 const GROUP_ICON: Record<Accent, string> = {
-  brand:   "text-brand-600",
-  blue:    "text-blue-600",
-  violet:  "text-violet-600",
-  emerald: "text-emerald-600",
+  brand:   "text-brand-700",
+  blue:    "text-blue-700",
+  violet:  "text-violet-700",
+  emerald: "text-emerald-700",
+}
+
+// Nền + viền màu cho header nhóm — mỗi nhóm 1 dải màu riêng, nhìn phát biết nhóm nào
+const GROUP_BG: Record<Accent, string> = {
+  brand:   "bg-brand-50   border border-brand-200   text-brand-800   hover:bg-brand-100",
+  blue:    "bg-blue-50    border border-blue-200    text-blue-800    hover:bg-blue-100",
+  violet:  "bg-violet-50  border border-violet-200  text-violet-800  hover:bg-violet-100",
+  emerald: "bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100",
 }
 
 // Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
@@ -236,13 +244,13 @@ function GroupToggle({ label, Icon, open, onToggle, accent = "brand" }: {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-3 py-2 text-[12px] font-bold text-gray-800 uppercase tracking-wide hover:text-gray-900 transition-colors"
+      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[12px] font-bold uppercase tracking-wide transition-colors ${GROUP_BG[accent]}`}
     >
       <div className="flex items-center gap-2">
         <Icon size={15} className={GROUP_ICON[accent]} strokeWidth={2.4} />
         <span>{label}</span>
       </div>
-      {open ? <ChevronUp size={13} className="text-gray-500" /> : <ChevronDown size={13} className="text-gray-500" />}
+      {open ? <ChevronUp size={13} className="opacity-60" /> : <ChevronDown size={13} className="opacity-60" />}
     </button>
   )
 }
@@ -312,7 +320,7 @@ export function Sidebar() {
   const navItems = (() => {
     // bod: chatbot + product catalog (xem được SP/NCC) + full analytics
     if (effectiveRole === "bod") {
-      return [{ href: "/chatbot", label: "Hiếu AI", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
+      return [{ href: "/chatbot", label: "Bé Gấu", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
     }
     if (effectiveRole === "admin" || effectiveRole === "creator") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)

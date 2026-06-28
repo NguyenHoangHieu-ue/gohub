@@ -18,7 +18,7 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
   { id: "scheduled", label: "Scheduled Messages" },
-  { id: "info",      label: "Information" },
+  { id: "info",      label: "Note" },
 ]
 const ROLES = ALL_ROLES
 const MATRIX_ROLES = CONFIGURABLE_ROLES

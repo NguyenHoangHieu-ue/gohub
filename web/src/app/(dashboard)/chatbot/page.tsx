@@ -592,7 +592,7 @@ export default function ChatbotPage() {
               }
             </button>
             <Sparkles size={20} className="text-brand-600" />
-            <h1 className="text-lg md:text-xl font-bold text-gray-900">Hiếu AI</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
             {agentName && (
@@ -613,7 +613,7 @@ export default function ChatbotPage() {
                 <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-brand-600/25">
                   <Sparkles size={22} className="text-white" />
                 </div>
-                <p className="font-semibold text-gray-900 text-base mb-1">Hiếu AI</p>
+                <p className="font-semibold text-gray-900 text-base mb-1">Bé Gấu</p>
                 <p className="text-sm text-gray-500 mb-7 max-w-sm leading-relaxed">
                   Tìm sản phẩm, tra cứu SKU & giá, xem catalog NCC, và phân tích doanh thu/đơn hàng.
                 </p>
