@@ -118,6 +118,9 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
   const [uploading, setUploading] = useState(false)
   const [loadingNotes, setLoadingNotes] = useState(true)
   const [loadingFiles, setLoadingFiles] = useState(true)
+  // Xác nhận xóa qua modal (đồng bộ pattern confirm của app, thay confirm() native)
+  const [confirmDel, setConfirmDel] = useState<{ kind: "note" | "file"; id: string; label: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchNotes = useCallback(() => {
@@ -152,11 +155,22 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
     setSelectedNote(prev => prev ? { ...prev, title: editTitle, content: editContent } : null)
   }
 
-  const deleteNote = async (id: string) => {
-    if (!confirm("Xóa note này?")) return
-    await fetch(`/api/info/notes/${id}`, { method: "DELETE" })
-    if (selectedNote?.id === id) setSelectedNote(null)
-    fetchNotes()
+  const doDelete = async () => {
+    if (!confirmDel) return
+    setDeleting(true)
+    try {
+      if (confirmDel.kind === "note") {
+        await fetch(`/api/info/notes/${confirmDel.id}`, { method: "DELETE" })
+        if (selectedNote?.id === confirmDel.id) setSelectedNote(null)
+        fetchNotes()
+      } else {
+        await fetch(`/api/info/files?path=${encodeURIComponent(confirmDel.id)}`, { method: "DELETE" })
+        fetchFiles()
+      }
+    } finally {
+      setDeleting(false)
+      setConfirmDel(null)
+    }
   }
 
   const togglePin = async (note: Note) => {
@@ -175,11 +189,6 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const deleteFile = async (path: string) => {
-    if (!confirm("Xóa file này?")) return
-    await fetch(`/api/info/files?path=${encodeURIComponent(path)}`, { method: "DELETE" })
-    fetchFiles()
-  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
@@ -230,7 +239,7 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {f.url && <a href={f.url} download={f.name} target="_blank" rel="noreferrer" className="w-6 h-6 flex items-center justify-center text-blue-500 hover:bg-blue-50 rounded"><Download className="w-3.5 h-3.5" /></a>}
-                    {isOwn && <button onClick={() => deleteFile(f.path)} className="w-6 h-6 flex items-center justify-center text-rose-400 hover:bg-rose-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    {isOwn && <button onClick={() => setConfirmDel({ kind: "file", id: f.path, label: f.name })} className="w-6 h-6 flex items-center justify-center text-rose-400 hover:bg-rose-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                 </div>
               ))}
@@ -249,7 +258,7 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
                 {isOwn && <button onClick={saveNote} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 disabled:opacity-50">
                   {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
                 </button>}
-                {isOwn && <button onClick={() => deleteNote(selectedNote.id)} className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>}
+                {isOwn && <button onClick={() => setConfirmDel({ kind: "note", id: selectedNote.id, label: selectedNote.title || "note này" })} className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>}
                 <button onClick={() => setSelectedNote(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><X className="w-3.5 h-3.5" /></button>
               </div>
             </div>
@@ -276,6 +285,25 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
           </div>
         )}
       </div>
+
+      {/* Confirm xóa (thay confirm() native — đồng bộ pattern modal của app) */}
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-overlay-in" onClick={() => !deleting && setConfirmDel(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-[340px] p-5 animate-modal-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center"><Trash2 className="w-4 h-4 text-rose-500" /></div>
+              <h3 className="font-bold text-slate-800 text-sm">Xóa {confirmDel.kind === "note" ? "note" : "file"}?</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4 break-words">Bạn chắc chắn muốn xóa <span className="font-semibold text-slate-700">{confirmDel.label}</span>? Thao tác không thể hoàn tác.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmDel(null)} disabled={deleting} className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Hủy</button>
+              <button onClick={doDelete} disabled={deleting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50">
+                {deleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

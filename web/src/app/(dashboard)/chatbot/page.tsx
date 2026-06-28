@@ -126,7 +126,7 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       const res = await fetch("/api/admin/template", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       })
-      if (!res.ok) { alert("Lỗi tạo template. Vui lòng thử lại."); return }
+      if (!res.ok) { alert("Hiếu đang fix, vui lòng đợi"); return }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")
