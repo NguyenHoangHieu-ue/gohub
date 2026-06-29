@@ -8,19 +8,22 @@ import { supabaseAdmin } from "@/lib/supabase"
 //   "500MB high-speed · throttle 5 mbps", "500MB high-speed · throttle 10 mbps", "1GB high-speed · throttle 10 mbps".
 //
 // Quy tắc (theo nghiệp vụ):
-//  • Mã CŨ: [E]<nước:3><3D><P1|P2><ngày>D. E=eSIM, không=SIM. P1 = 10 mbps, P2 = 5 mbps.
-//  • Mã MỚI (product DB): <prefix><nước:3><3D><A|B>UNL<ngày>. A = 5 mbps, B = 10 mbps. (P1↔B, P2↔A)
-//  • P2 (5 mbps) → LUÔN 500MB (chỉ có 1 loại 5 mbps).
-//  • P1 (10 mbps) → 1GB hay 500MB: map sang mã mới theo (nước, ngày, 10 mbps) — tìm cả tenant VN & US —
-//    lấy GIÁ (latest_cogs/ngày) so với ngưỡng (trung điểm median 1GB vs 500MB từ product DB) → dự đoán.
-//    Thiếu giá → dùng nhãn throttle_speed; thiếu cả → mặc định 500MB.
-// Trả map { [usageSku]: { group, source } }. Không dùng offer_name (join theo iccid dễ lẫn gói khác).
+//  • P2 (5 mbps) → LUÔN 500MB (chỉ 1 loại 5 mbps).
+//  • P1 (10 mbps) → phân biệt 1GB vs 500MB bằng CÔNG THỨC datapool:
+//    expected_hkd = 1.8 × days × price_per_gb_hkd (zone ncc_3hk của nước đó)
+//    expected_vnd = expected_hkd × fx_hkd_usd × fx_usd_vnd
+//    So với latest_cogs (VND từ bảng skus) trong range ±20% (bù biến động tỷ giá hàng tháng):
+//      - Trong range → 500MB·10, ngoài range → 1GB·10
+//    Fallback khi thiếu zone price / cogs: dùng nhãn throttle_speed, rồi mặc định 500MB.
 
 const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 
 const G_500_5  = "500MB high-speed · throttle 5 mbps"
 const G_500_10 = "500MB high-speed · throttle 10 mbps"
 const G_1GB_10 = "1GB high-speed · throttle 10 mbps"
+
+const FORMULA_DAILY_UTIL = 1.8   // GB/ngày ước tính cho gói 500MB·10mbps (datapool)
+const FORMULA_RANGE      = 0.20  // ±20% bù biến động tỷ giá HKD/VND hàng tháng
 
 // Parse mã CŨ usage: [E]<CTRY:3><3D>...P1|P2...<days>D
 function oldParse(sku: string): { country: string; esim: boolean; mbps: number | null; days: number | null } | null {
@@ -52,7 +55,6 @@ function hsOf(thr?: string | null): "1GB" | "500MB" | null {
   if (/500/i.test(thr)) return "500MB"
   return null
 }
-const median = (a: number[]): number | null => a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -70,14 +72,39 @@ export async function GET() {
     `)
     if (!usageRows.length) return NextResponse.json({ map: {}, coverage: {} })
 
-    // 2) Product DB (Supabase skus): mã mới UNL + throttle_speed + giá (latest_cogs). Tenant VN & US gộp theo key.
-    const { data: skuRows } = await supabaseAdmin.from("skus")
-      .select("sku_code, vendor_sku, vendor_sku_sim, tenant, throttle_speed, latest_cogs")
-      .or("sku_code.ilike.%UNL%,vendor_sku.ilike.%UNL%")
+    // 2) Fetch song song: skus (cogs), ncc_3hk (zone price), ref_countries (name→code), fx rates
+    const [skuRes, zonesRes, countriesRes, configRes] = await Promise.all([
+      supabaseAdmin.from("skus")
+        .select("sku_code, vendor_sku, vendor_sku_sim, tenant, throttle_speed, latest_cogs")
+        .or("sku_code.ilike.%UNL%,vendor_sku.ilike.%UNL%"),
+      supabaseAdmin.from("ncc_3hk").select("country,price_per_gb_hkd"),
+      supabaseAdmin.from("ref_countries").select("code,name"),
+      supabaseAdmin.from("app_config").select("key,value").in("key", ["fx.hkd_usd", "fx.usd_vnd"]),
+    ])
 
-    // Index: `${country}|${days}|${mbps}` → [{ hs, cost }]
+    // FX rates — fallback về default nếu chưa cấu hình
+    const fxCfg = Object.fromEntries((configRes.data ?? []).map((r: any) => [r.key, parseFloat(r.value)]))
+    const fxHkdUsd = fxCfg["fx.hkd_usd"] ?? 0.1282
+    const fxUsdVnd = fxCfg["fx.usd_vnd"] ?? 26394
+
+    // Map: tên quốc gia (lowercase) → price_per_gb_hkd (từ ncc_3hk)
+    const namePriceMap = new Map<string, number>()
+    for (const z of zonesRes.data ?? []) {
+      if (z.price_per_gb_hkd != null)
+        namePriceMap.set((z.country as string).toLowerCase().trim(), Number(z.price_per_gb_hkd))
+    }
+
+    // Map: ISO-3 code → price_per_gb_hkd (qua ref_countries name matching)
+    const iso3PriceMap = new Map<string, number>()
+    for (const c of countriesRes.data ?? []) {
+      const price = namePriceMap.get((c.name as string).toLowerCase().trim())
+      if (price != null) iso3PriceMap.set(c.code as string, price)
+    }
+
+    // Index từ skus table: `${country}|${days}|${mbps}` → [{ hs, cost }]
+    // Dùng làm fallback khi không có zone price
     const idx = new Map<string, { hs: "1GB" | "500MB" | null; cost: number | null }[]>()
-    for (const s of skuRows ?? []) {
+    for (const s of skuRes.data ?? []) {
       for (const code of [s.sku_code, s.vendor_sku, s.vendor_sku_sim]) {
         if (!code) continue
         const p = newParse(code); if (!p || !p.mbps || !p.days) continue
@@ -88,44 +115,52 @@ export async function GET() {
       }
     }
 
-    // Ngưỡng giá/ngày (VND) tách 1GB vs 500MB cho 10 mbps — từ các SKU đã có nhãn (lọc cost VND-scale > 1000).
-    const band1: number[] = [], band5: number[] = []
-    for (const [key, arr] of idx) {
-      const [, days, mbps] = key.split("|"); if (mbps !== "10" || +days <= 0) continue
-      for (const r of arr) if (r.cost != null && r.cost > 1000) {
-        if (r.hs === "1GB") band1.push(Math.round(r.cost / +days))
-        else if (r.hs === "500MB") band5.push(Math.round(r.cost / +days))
-      }
-    }
-    const m1 = median(band1), m5 = median(band5)
-    const threshold = (m1 != null && m5 != null) ? (m1 + m5) / 2 : 41000   // fallback từ khảo sát data
-
-    // 3) Phân nhóm từng usage SKU — chỉ ra 3 loại hợp lệ.
+    // 3) Phân nhóm từng usage SKU
     const map: Record<string, { group: string | null; source: string }> = {}
     const coverage: Record<string, number> = {}
+
     for (const u of usageRows) {
       const o = oldParse(u.sku)
       let group: string | null = null, source = "no-parse"
-      if (o && o.mbps === 5) { group = G_500_5; source = "rule-5mbps" }
-      else if (o && o.mbps === 10) {
-        const arr = idx.get(`${o.country}|${o.days}|10`) ?? []
-        const costs = (o.days && o.days > 0) ? arr.filter(r => r.cost != null && r.cost > 1000).map(r => r.cost! / o.days!) : []
-        if (costs.length) {
-          const avg = costs.reduce((a, b) => a + b, 0) / costs.length
-          group = avg >= threshold ? G_1GB_10 : G_500_10; source = "price"
+
+      if (o && o.mbps === 5) {
+        // P2 → luôn 500MB·5mbps
+        group = G_500_5; source = "rule-5mbps"
+
+      } else if (o && o.mbps === 10) {
+        const priceHkd = iso3PriceMap.get(o.country)
+        const arr      = idx.get(`${o.country}|${o.days}|10`) ?? []
+        const costs    = arr.filter(r => r.cost != null && r.cost > 1000).map(r => r.cost!)
+
+        if (priceHkd != null && o.days != null && o.days > 0 && costs.length) {
+          // Công thức datapool: expected COGS cho gói 500MB·10mbps
+          const expectedHkd = FORMULA_DAILY_UTIL * o.days * priceHkd
+          const expectedVnd = expectedHkd * fxHkdUsd * fxUsdVnd
+          const avgCost     = costs.reduce((a, b) => a + b, 0) / costs.length
+          const lo          = expectedVnd * (1 - FORMULA_RANGE)
+          const hi          = expectedVnd * (1 + FORMULA_RANGE)
+
+          if (avgCost >= lo && avgCost <= hi) {
+            group = G_500_10; source = "formula-500mb"
+          } else {
+            group = G_1GB_10; source = "formula-1gb"
+          }
+
         } else {
+          // Fallback: không có zone price hoặc không có cogs → dùng nhãn throttle_speed
           const labels = arr.map(r => r.hs).filter(Boolean)
           if (labels.includes("1GB") && !labels.includes("500MB")) { group = G_1GB_10; source = "label" }
-          else if (labels.includes("500MB")) { group = G_500_10; source = "label" }
-          else { group = G_500_10; source = "default" }
+          else if (labels.includes("500MB"))                        { group = G_500_10; source = "label" }
+          else                                                       { group = G_500_10; source = "default" }
         }
       }
+
       map[u.sku] = { group, source }
       coverage[source] = (coverage[source] ?? 0) + 1
     }
 
     return NextResponse.json(
-      { map, coverage, threshold: Math.round(threshold) },
+      { map, coverage, fxHkdUsd, fxUsdVnd },
       { headers: { "Cache-Control": "private, max-age=600" } },
     )
   } catch (err: any) {
