@@ -15,9 +15,13 @@ import { DatePresets } from "@/components/date-presets"
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
-  // Mac dinh: ngay 1 thang hien tai -> hom qua (T-1).
+  if (today.getDate() <= 7) {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
+    return { startDate: fmt(start), endDate: fmt(end) }
+  }
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 
