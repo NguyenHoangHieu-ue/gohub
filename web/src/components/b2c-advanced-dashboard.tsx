@@ -52,45 +52,55 @@ const Delta = ({ v }: { v: number | null }) => {
   )
 }
 
-// Section shell — card đồng bộ với các tab analytics khác
-const Section = ({ icon, title, desc, children, action, accent = "blue", source, note }: {
+// ── Apple-style design tokens (từ mockup) ──────────────────────────────────
+const APPLE_CARD = "rounded-lg border border-black/[0.09] overflow-hidden"
+const APPLE_CARD_STYLE = { background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }
+const APPLE_BG_STYLE = { background: "radial-gradient(circle at 16% 8%,rgba(0,113,227,0.08),transparent 28%),radial-gradient(circle at 86% 16%,rgba(0,166,166,0.09),transparent 26%),linear-gradient(180deg,#fbfbfd 0%,#f5f5f7 50%,#eef1f5 100%)" }
+
+// Section shell — Apple glass card
+const Section = ({ icon, title, desc, children, action, source }: {
   icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
-  accent?: "blue" | "indigo" | "slate"; source?: SourceKind; note?: React.ReactNode
-}) => {
-  const chip = accent === "indigo" ? "bg-indigo-600" : accent === "slate" ? "bg-slate-700" : "bg-blue-600"
-  return (
-    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm", chip)}>{icon}</div>
-          <div>
-            <h2 className="text-base font-bold text-slate-800 tracking-tight">{title}</h2>
-            {desc && <p className="text-xs font-medium text-slate-500 mt-0.5">{desc}</p>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {action}
-          {source && <SourceBadge source={source} />}
+  accent?: string; source?: SourceKind; note?: React.ReactNode
+}) => (
+  <section className={APPLE_CARD} style={APPLE_CARD_STYLE}>
+    <div className="px-6 py-5 border-b border-black/[0.06] flex items-start justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center flex-shrink-0">{icon}</div>
+        <div>
+          <h2 className="text-[15px] font-[650] text-[#1d1d1f]">{title}</h2>
+          {desc && <p className="text-[12px] text-[#6e6e73] mt-0.5">{desc}</p>}
         </div>
       </div>
-      {note && <div className="px-6 pt-4"><LogicNote>{note}</LogicNote></div>}
-      {children}
-    </section>
-  )
-}
-
-// KPI card — đồng bộ format các tab khác
-const KpiCard = ({ icon, label, value, sub, delta, accent }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; delta?: number | null; accent: string
-}) => (
-  <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-    <div className="flex items-center justify-between mb-3">
-      <div className={cn("p-2 rounded-xl", accent)}>{icon}</div>
-      {delta !== undefined && <Delta v={delta ?? null} />}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {action}
+        {source && <SourceBadge source={source} />}
+      </div>
     </div>
-    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
-    <p className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">{value}</p>
-    {sub && <p className="text-xs font-medium text-slate-500 mt-0.5">{sub}</p>}
+    {children}
+  </section>
+)
+
+// KPI metric card — Apple .metric style từ mockup
+const KpiCard = ({ label, value, sub, delta, source: src }: {
+  label: string; value: string; sub?: string; delta?: number | null; source?: string; accent?: string; icon?: React.ReactNode
+}) => (
+  <div className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]" style={APPLE_CARD_STYLE}>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight">{label}</span>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {src && <span className="text-[9px] font-[650] px-1.5 py-0.5 rounded-full bg-[#eaf4ff] text-[#0071e3] uppercase tracking-wide">{src}</span>}
+        {delta !== undefined && delta !== null && (
+          <span className={cn("text-[10px] font-[620] px-1.5 py-0.5 rounded-full whitespace-nowrap",
+            delta >= 0 ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]")}>
+            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </div>
+    <div>
+      <div className="text-[24px] font-[560] text-[#1d1d1f] leading-none mt-2">{value}</div>
+      {sub && <div className="text-[11px] text-[#6e6e73] mt-1.5 leading-tight">{sub}</div>}
+    </div>
   </div>
 )
 
@@ -372,51 +382,101 @@ export function B2CAdvancedDashboard() {
   const hasBudget = data ? data.months.some(m => budgetOf(m) > 0) : false
   const hasLeads = data ? data.months.some(m => leadsOf(m) > 0) : false
 
+  // GA4 totals cho KPI cards (Section trên cùng)
+  const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
+  const ga4Users  = (ga4 as any)?.reduce((s: number, site: any) => s + (site.totalUsers ?? 0), 0) ?? 0
+  const spendCur  = spendOf(current); const budgetCur = budgetOf(current)
+  const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
+  const leadsCur  = leadsOf(current)
+  const cacVn     = spendCur > 0 && (cust?.new.count ?? 0) > 0 ? spendCur / (cust?.new.count ?? 1) : 0
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen p-4 lg:p-6" style={APPLE_BG_STYLE}>
+      <div className="max-w-[1400px] mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">B2C Performance</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Executive dashboard · rolling 6 tháng · {current ? `${monthLabel(current).top} ${current.split("-")[0]}` : "—"}</p>
+            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">gohub b2c</h1>
+            <p className="text-[13px] text-[#6e6e73] mt-1">
+              Monthly B2C report · {current ? `${monthLabel(current).top} ${current.split("-")[0]}` : "—"} · GA4 + Admin GoHub
+            </p>
           </div>
           {data && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
-              MTD: {data.elapsedDays}/{data.totalDays} ngày
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#6e6e73] bg-white/72 border border-black/[0.09] px-3 py-1.5 rounded-full" style={{ backdropFilter: "blur(8px)" }}>
+                MTD: {data.elapsedDays}/{data.totalDays} ngày
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#0071e3] bg-[#eaf4ff] border border-[#0071e3]/20 px-3 py-1.5 rounded-full">
+                MTD + Prorata
+              </span>
+            </div>
           )}
         </div>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">{error}</div>}
-        {loading && <div className="text-sm text-slate-400 py-8">Đang tải dữ liệu…</div>}
+        {error && <div className="rounded-lg bg-[#fdecea] border border-[#d93025]/20 text-[#d93025] p-4 text-[13px]">{error}</div>}
+        {loading && <div className="text-[13px] text-[#6e6e73] py-8 text-center">Đang tải dữ liệu…</div>}
 
         {data && !loading && (
           <>
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <KpiCard icon={<DollarSign className="w-5 h-5" />} accent="bg-blue-50 text-blue-600"
-                label="Doanh thu B2C (MTD)" value={formatCurrency(mtdTotal)} delta={pct(mtdTotal, prevTotal)} sub="vs tháng trước" />
-              <KpiCard icon={<TrendingUp className="w-5 h-5" />} accent="bg-emerald-50 text-emerald-600"
-                label="Dự phóng tháng" value={formatCurrency(proj(mtdTotal))} sub="run-rate prorata" />
-              <KpiCard icon={<UserPlus className="w-5 h-5" />} accent="bg-indigo-50 text-indigo-600"
-                label="Khách mới (MTD)" value={formatNumber(cust?.new.count ?? 0)} sub={`${formatCurrency(newRev)} doanh thu`} />
-              <KpiCard icon={<Users className="w-5 h-5" />} accent="bg-purple-50 text-purple-600"
-                label="Khách quay lại (MTD)" value={formatNumber(cust?.returning.count ?? 0)} sub={`${formatCurrency(retRev)} doanh thu`} />
-              <KpiCard icon={<PieChartIcon className="w-5 h-5" />} accent="bg-orange-50 text-orange-600"
-                label="Tỷ trọng khách mới" value={`${newShare.toFixed(1)}%`} sub="doanh thu khách mới / tổng" />
+            {/* Hero card — big number MTD + mini meter bars (từ mockup) */}
+            <div className={APPLE_CARD} style={{ ...APPLE_CARD_STYLE, borderRadius: 10 }}>
+              <div className="p-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 items-center">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#0071e3] bg-[#eaf4ff] px-2.5 py-1 rounded-full">Snapshot</span>
+                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
+                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">MTD B2C</span>
+                  </div>
+                  <div className="mt-3 text-[14px] text-[#6e6e73] leading-relaxed max-w-lg">
+                    Prorata month-end: <strong className="text-[#1d1d1f]">{formatCurrency(proj(mtdTotal))}</strong>
+                    {data.totalDays > 0 && <> · MTD {((data.elapsedDays / data.totalDays) * 100).toFixed(0)}%</>}
+                    {prevTotal > 0 && <> · MoM <span className={pct(mtdTotal, prevTotal)! >= 0 ? "text-[#2f9d55]" : "text-[#d93025]"}>{pct(mtdTotal, prevTotal)! >= 0 ? "↑" : "↓"}{Math.abs(pct(mtdTotal, prevTotal)!).toFixed(1)}%</span></>}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {[
+                    { label: "VN B2C",  val: data.markets[current]?.vn ?? 0,  total: mtdTotal,      proj: proj(data.markets[current]?.vn ?? 0),  color: "#0071e3" },
+                    { label: "VN Web",  val: data.channels[current]?.web ?? 0, total: mtdTotal,      proj: proj(data.channels[current]?.web ?? 0), color: "#00a6a6" },
+                    { label: "US App",  val: data.channels[current]?.app ?? 0, total: mtdTotal,      proj: proj(data.channels[current]?.app ?? 0), color: "#2f9d55" },
+                    { label: "US B2C",  val: data.markets[current]?.us ?? 0,   total: mtdTotal,      proj: proj(data.markets[current]?.us ?? 0),   color: "#b7791f" },
+                  ].map(({ label, val, total, proj: p, color }) => (
+                    <div key={label} className="grid grid-cols-[80px_1fr_140px] items-center gap-3">
+                      <span className="text-[13px] font-[600] text-[#1d1d1f]">{label}</span>
+                      <div className="h-[10px] rounded-full bg-[#e8ecf1] overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, total > 0 ? (val / total) * 100 : 0)}%`, background: color }} />
+                      </div>
+                      <span className="text-[13px] font-[560] text-[#1d1d1f] text-right">{formatCurrency(val)} <span className="text-[#6e6e73]">/ {formatCurrency(p)}</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 6 KPI cards — y chang mockup: Users, Customers, Budget, ROAS, CAC, Leads */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"}
+                sub={ga4 && ga4.length > 0 ? `CR ${(ga4Total / ga4.length).toFixed(1)}%` : "GA4 chưa kết nối"} source="GA4" />
+              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)}
+                sub={`Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
+              <KpiCard label="Budget" value={budgetCur > 0 ? formatCurrency(budgetCur) : "—"}
+                sub="VN + US paid allocation" source="Chat" />
+              <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"}
+                sub="Paid media blended" source="Chat" />
+              <KpiCard label="CAC" value={cacVn > 0 ? formatCurrency(cacVn) : "—"}
+                sub="Spend ÷ khách mới" source="Chat" />
+              <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"}
+                sub="Chatwoot all channels" source="Chat" />
             </div>
 
             {/* Charts row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Revenue by market */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center"><Globe className="w-4 h-4" /></div>
+              <div className={`${APPLE_CARD} p-5`} style={APPLE_CARD_STYLE}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center"><Globe className="w-4 h-4" /></div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Doanh thu B2C theo thị trường</h3>
-                    <p className="text-xs font-medium text-slate-500">VN vs US · rolling 6 tháng</p>
+                    <h3 className="text-[14px] font-[650] text-[#1d1d1f]">Doanh thu B2C theo thị trường</h3>
+                    <p className="text-[12px] text-[#6e6e73]">VN vs US · rolling 6 tháng</p>
                   </div>
                 </div>
                 <div className="h-[260px]">
@@ -439,12 +499,12 @@ export function B2CAdvancedDashboard() {
               </div>
 
               {/* Customers new vs returning */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Users className="w-4 h-4" /></div>
+              <div className={`${APPLE_CARD} p-5`} style={APPLE_CARD_STYLE}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center"><Users className="w-4 h-4" /></div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Khách mới vs quay lại</h3>
-                    <p className="text-xs font-medium text-slate-500">Doanh thu theo nhóm khách · rolling 6 tháng</p>
+                    <h3 className="text-[14px] font-[650] text-[#1d1d1f]">Khách mới vs quay lại</h3>
+                    <p className="text-[12px] text-[#6e6e73]">Doanh thu theo nhóm khách · rolling 6 tháng</p>
                   </div>
                 </div>
                 <div className="h-[260px]">
