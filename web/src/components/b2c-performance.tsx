@@ -498,13 +498,13 @@ export function B2CPerformance() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-4 lg:p-8" style={{ background: "radial-gradient(circle at 16% 8%, rgba(0,113,227,0.06), transparent 28%), radial-gradient(circle at 86% 16%, rgba(0,166,166,0.07), transparent 26%), linear-gradient(180deg,#fbfbfd 0%,#f5f5f7 50%,#eef1f5 100%)" }}>
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">B2C</h1>
-            <p className="text-[#6e6e73] text-[13px] mt-1">B2C performance · MTD + Prorata</p>
+            <h1 className="text-2xl font-bold text-slate-900">B2C Performance</h1>
+            <p className="text-slate-500 text-sm mt-0.5">B2C channel revenue, margin, và sub-channel metrics.</p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -807,53 +807,66 @@ export function B2CPerformance() {
              </div>
         ) : (
           <>
-        {/* KPIs — Apple mockup style */}
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        {/* KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6">
           {kpis.map((kpi, idx) => (
-            <div
-              key={idx}
-              className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]"
-              style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight">{kpi.label}</span>
+            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div className={cn(
+                  "p-2.5 rounded-xl",
+                  idx === 0 ? "bg-blue-50 text-blue-600" :
+                  idx === 1 ? "bg-cyan-50 text-cyan-600" :
+                  idx === 2 ? "bg-emerald-50 text-emerald-600" :
+                  idx === 3 ? "bg-purple-50 text-purple-600" :
+                  idx === 4 ? "bg-orange-50 text-orange-600" :
+                  idx === 5 ? "bg-rose-50 text-rose-600" :
+                  "bg-indigo-50 text-indigo-600"
+                )}>
+                  {idx === 0 ? <DollarSign className="w-5 h-5" /> :
+                   idx === 1 ? <Package className="w-5 h-5" /> :
+                   idx === 2 ? <TrendingUp className="w-5 h-5" /> :
+                   idx === 3 ? <PieChartIcon className="w-5 h-5" /> :
+                   idx === 4 ? <ShoppingBag className="w-5 h-5" /> :
+                   idx === 5 ? <DollarSign className="w-5 h-5" /> :
+                   <TrendingUp className="w-5 h-5" />}
+                </div>
                 {kpi.change !== 0 && (
-                  <span className={cn(
-                    "text-[10px] font-[620] px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0",
-                    kpi.isPositive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"
+                  <div className={cn(
+                    "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
+                    kpi.isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
-                    {kpi.isPositive ? "↑" : "↓"} {Math.abs(kpi.change).toFixed(1)}%
-                  </span>
+                    {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                    {Math.abs(kpi.change).toFixed(1)}%
+                  </div>
                 )}
               </div>
-              <div>
-                <div className="text-[22px] font-[560] text-[#1d1d1f] leading-none mt-2">
-                  {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("Orders") ? kpi.value.toLocaleString() : kpi.value.toFixed(1) + "%"}
-                </div>
-                <div className="text-[11px] text-[#6e6e73] mt-1.5 leading-tight">
-                  {kpi.lastPeriod !== 0 ? `prev ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.lastPeriod.toFixed(1) + "%"}` : "—"}
-                </div>
-              </div>
+              <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
+              <h3 className="text-2xl font-bold text-slate-900">
+                {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("Orders") ? kpi.value.toLocaleString() : kpi.value.toFixed(1) + "%"}
+              </h3>
+              <p className="text-xs text-slate-400 mt-2">
+                {kpi.lastPeriod !== 0 ? `vs last period: ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.lastPeriod.toFixed(1) + "%"}` : "No prev data"}
+              </p>
             </div>
           ))}
         </div>
 
-        {/* Pro-rata Projection — Apple style */}
+        {/* Pro-rata Projection */}
         {projection && !loading && (
-          <div className="rounded-lg border border-[#0071e3]/14 p-5" style={{ background: "rgba(0,113,227,0.045)" }}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
-                <h3 className="text-[15px] font-[650] text-[#1d1d1f] flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-[#0071e3]" />
-                  Month-End Prorata
+                <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5" />
+                  Month-End Projection (Pro-rata)
                 </h3>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5">
-                  {projection.daysElapsed} ngày / {projection.totalDays} ngày · hệ số ×{projection.factor.toFixed(2)}
+                <p className="text-sm text-blue-600">
+                  Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.
                 </p>
               </div>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-[620] bg-[#eaf4ff] text-[#0071e3]">
-                run-rate
-              </span>
+              <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">
+                {((projection.factor - 1) * 100).toFixed(0)}% Growth Expected
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -923,23 +936,23 @@ export function B2CPerformance() {
         )}
 
         {/* Trend Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
-            <div className="flex items-center justify-between mb-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Revenue & Gross Profit Trend</h3>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5">Monthly breakdown</p>
+                <h3 className="text-lg font-bold text-slate-900">Revenue & Gross Profit Trend</h3>
+                <p className="text-sm text-slate-500">Monthly breakdown of performance</p>
               </div>
-              <div className="flex bg-[#f2f2f2] p-0.5 rounded-md gap-0.5">
+              <div className="flex bg-slate-100 p-1 rounded-lg">
                 <button
                   onClick={() => setPeriod("month")}
-                  className={cn("px-3 py-1 text-[11px] font-[560] rounded-md transition-all", period === "month" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]")}
+                  className={cn("px-3 py-1 text-xs font-medium rounded-md transition-all", period === "month" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
                 >
                   Monthly
                 </button>
                 <button
                   onClick={() => setPeriod("quarter")}
-                  className={cn("px-3 py-1 text-[11px] font-[560] rounded-md transition-all", period === "quarter" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]")}
+                  className={cn("px-3 py-1 text-xs font-medium rounded-md transition-all", period === "quarter" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
                 >
                   Quarterly
                 </button>
@@ -964,11 +977,11 @@ export function B2CPerformance() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Channel Contribution</h3>
-                <p className="text-[12px] text-[#6e6e73] mt-0.5">Revenue share by sub-channel</p>
+                <h3 className="text-lg font-bold text-slate-900">Channel Contribution</h3>
+                <p className="text-sm text-slate-500">Revenue share by sub-channel</p>
               </div>
             </div>
             <div className="h-[300px] flex items-center">
@@ -1000,11 +1013,11 @@ export function B2CPerformance() {
         </div>
 
         {/* Performance Breakdown Table */}
-        <div className="rounded-lg border border-black/[0.09] overflow-hidden" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
-          <div className="p-4 lg:p-5 border-b border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 lg:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Performance Breakdown</h3>
-              <p className="text-[12px] text-[#6e6e73] mt-0.5">Phân tích theo {groupBy}</p>
+              <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
+              <p className="text-sm text-slate-500">Detailed analysis by {groupBy}</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar scrollbar-hide">
               <button
@@ -1404,9 +1417,9 @@ export function B2CPerformance() {
         </div>
 
         {/* Top Loss-making SKUs */}
-        <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
-          <h3 className="text-[15px] font-[650] text-[#1d1d1f] mb-5 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-[#d93025]" />
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-rose-500" />
             Top Loss-making SKUs
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
