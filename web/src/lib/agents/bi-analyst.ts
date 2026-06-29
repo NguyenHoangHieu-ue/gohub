@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
+import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 
@@ -93,17 +94,29 @@ export async function runBIAnalyst(
     ? `${systemInstruction}\n\n━━━ GIỚI HẠN TRUY CẬP DỮ LIỆU (DATA ACCESS RESTRICTION) ━━━\nVai trò "${role}" CHỈ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm điều kiện này vào MỌI câu SQL (WHERE), không được bỏ qua:\n${dataFilter}`
     : systemInstruction
 
-  // Load GA4 sites để inject vào system prompt
+  // Load GA4 sites + partner tiers để inject vào system prompt
   let ga4SiteList = ""
   try {
     const sites = await ga4Sites()
     if (sites.length) ga4SiteList = "\n\nGA4 SITES: " + sites.map(s => `${s.id}="${s.name}" (${s.propertyId})`).join(", ")
   } catch {}
 
+  // Inject danh sách partner tiers THỰC TẾ (không hardcode) để bot biết ai là B2B-Strategic
+  let partnerTierInfo = ""
+  try {
+    const tiers = await getPartnerTiers()
+    const tierLines = Object.entries(tiers)
+      .map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`)
+      .join("\n")
+    if (tierLines) {
+      partnerTierInfo = `\n\n━━━ PARTNER TIERS (B2B) ━━━\nDanh sách kênh theo tier — dùng để phân loại B2B-Strategic vs B2B-Non-Strategic:\n${tierLines}\nKhi JOIN với gohub_dw: B2B-Strategic = channel_name ILIKE ANY(ARRAY[${Object.entries(tiers).find(([k]) => k === "Strategic")?.[1]?.map((c: string) => `'%${c}%'`).join(",") || "''"}])`
+    }
+  } catch {}
+
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
-    systemInstruction: finalInstruction + ga4SiteList,
+    systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
     // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
     generationConfig: { temperature: 0 },

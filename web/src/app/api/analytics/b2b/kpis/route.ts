@@ -7,6 +7,7 @@ import {
   getMonthsInRange, getChannelCostsForMonths, getDaysInRange, getDaysInMonth,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
 } from "@/lib/analytics-helpers"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -72,10 +73,11 @@ export async function GET(req: NextRequest) {
     let prevTotalOpCost = 0
 
     if (allMonths.length > 0) {
-      const channelCosts = await getChannelCostsForMonths(allMonths)
       const pStartString = prevStart.toISOString().split("T")[0]
       const pEndString   = prevEnd.toISOString().split("T")[0]
 
+      // 1. Per-channel costs (analytics_channel_costs)
+      const channelCosts = await getChannelCostsForMonths(allMonths)
       channelRows.forEach(row => {
         const ch = row.channel
         const mo = row.month
@@ -101,6 +103,26 @@ export async function GET(req: NextRequest) {
           })
         }
       })
+
+      // 2. B2B group-level costs (analytics_channel_group_costs, group_name = 'B2B')
+      //    — đây là lý do CM1 = Gross Profit khi không có per-channel costs
+      const { data: gcData } = await supabaseAdmin
+        .from("analytics_channel_group_costs")
+        .select("month, amount")
+        .eq("group_name", "B2B")
+        .in("month", allMonths)
+      for (const gc of gcData || []) {
+        const mo = String(gc.month)
+        const amt = parseFloat(gc.amount || "0")
+        if (currentMonths.includes(mo)) {
+          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
+          totalOpCost += amt * ratio
+        }
+        if (prevMonths.includes(mo)) {
+          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
+          prevTotalOpCost += amt * ratio
+        }
+      }
     }
 
     const cRev = parseFloat(m.current_revenue || "0")

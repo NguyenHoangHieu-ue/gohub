@@ -923,23 +923,23 @@ export function B2CPerformance() {
         )}
 
         {/* Trend Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
+            <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Revenue & Gross Profit Trend</h3>
-                <p className="text-sm text-slate-500">Monthly breakdown of performance</p>
+                <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Revenue & Gross Profit Trend</h3>
+                <p className="text-[12px] text-[#6e6e73] mt-0.5">Monthly breakdown</p>
               </div>
-              <div className="flex bg-slate-100 p-1 rounded-lg">
+              <div className="flex bg-[#f2f2f2] p-0.5 rounded-md gap-0.5">
                 <button
                   onClick={() => setPeriod("month")}
-                  className={cn("px-3 py-1 text-xs font-medium rounded-md transition-all", period === "month" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                  className={cn("px-3 py-1 text-[11px] font-[560] rounded-md transition-all", period === "month" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]")}
                 >
                   Monthly
                 </button>
                 <button
                   onClick={() => setPeriod("quarter")}
-                  className={cn("px-3 py-1 text-xs font-medium rounded-md transition-all", period === "quarter" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                  className={cn("px-3 py-1 text-[11px] font-[560] rounded-md transition-all", period === "quarter" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]")}
                 >
                   Quarterly
                 </button>
@@ -964,11 +964,11 @@ export function B2CPerformance() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
+          <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
+            <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Channel Contribution</h3>
-                <p className="text-sm text-slate-500">Revenue share by sub-channel</p>
+                <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Channel Contribution</h3>
+                <p className="text-[12px] text-[#6e6e73] mt-0.5">Revenue share by sub-channel</p>
               </div>
             </div>
             <div className="h-[300px] flex items-center">
@@ -1000,11 +1000,11 @@ export function B2CPerformance() {
         </div>
 
         {/* Performance Breakdown Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 lg:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="rounded-lg border border-black/[0.09] overflow-hidden" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
+          <div className="p-4 lg:p-5 border-b border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
-              <p className="text-sm text-slate-500">Detailed analysis by {groupBy}</p>
+              <h3 className="text-[15px] font-[650] text-[#1d1d1f]">Performance Breakdown</h3>
+              <p className="text-[12px] text-[#6e6e73] mt-0.5">Phân tích theo {groupBy}</p>
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar scrollbar-hide">
               <button
@@ -1404,9 +1404,9 @@ export function B2CPerformance() {
         </div>
 
         {/* Top Loss-making SKUs */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-rose-500" />
+        <div className="rounded-lg border border-black/[0.09] p-5" style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}>
+          <h3 className="text-[15px] font-[650] text-[#1d1d1f] mb-5 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-[#d93025]" />
             Top Loss-making SKUs
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
