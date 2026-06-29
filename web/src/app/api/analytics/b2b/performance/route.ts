@@ -6,6 +6,7 @@ import {
   getAnalyticsSource, getDateFilter,
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
+  getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
 } from "@/lib/analytics-helpers"
 
@@ -107,7 +108,22 @@ export async function GET(req: NextRequest) {
     // ── Costs (no day-ratio for non-strategic, matching intel) ──────────────────
     const months = startDate && endDate ? getMonthsInRange(startDate, endDate) : []
     const channelCosts = await getChannelCostsForMonths(months)
-    const settingsMap = await getCostSettingsForMonths(months)
+    const settingsMap  = await getCostSettingsForMonths(months)
+
+    // Group-level B2B costs — phân bổ theo tỷ lệ revenue từng channel
+    const groupCosts = await getGroupCostsForMonths(months) as Array<{ group_name: string; month: string; amount: string }>
+    const b2bGroupCosts = groupCosts.filter(c => c.group_name === "B2B")
+    const totalB2BRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
+    // Mỗi channel nhận phần group cost tỷ lệ với revenue (revenue share * total group cost)
+    const groupCostPerChannel: Record<string, number> = {}
+    for (const r of finalRows) {
+      const share = totalB2BRevenue > 0 ? r.revenue / totalB2BRevenue : 0
+      for (const gc of b2bGroupCosts) {
+        const ratio = getDaysInMonth(gc.month) > 0
+          ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+        groupCostPerChannel[r.name] = (groupCostPerChannel[r.name] || 0) + parseFloat(gc.amount || "0") * ratio * share
+      }
+    }
 
     const result = finalRows.map(r => {
       const revenue = r.revenue
@@ -152,6 +168,9 @@ export async function GET(req: NextRequest) {
           })
         }
       })
+
+      // Cộng thêm phần group cost theo revenue share
+      gpm2 -= (groupCostPerChannel[r.name] || 0)
 
       const sub_channels = Object.entries(subChannelPerformance).map(([name, m]) => ({
         name, revenue: m.revenue, margin: m.margin, units: m.units, gpm2: m.gpm2,

@@ -22,9 +22,9 @@ import { CostManagementModal } from "./cost-management-modal"
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  // Mac dinh: ngay 1 thang hien tai -> hom nay.
+  // T-1: data ngày hiện tại chưa đủ, dùng hôm qua làm endDate (nhất quán các tab khác)
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
-  const end = today
+  const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
 const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
@@ -503,8 +503,8 @@ export function B2CPerformance() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">gohub b2c</h1>
-            <p className="text-[#6e6e73] text-[13px] mt-1">B2C performance · GA4 + Admin GoHub · MTD + Prorata</p>
+            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">B2C</h1>
+            <p className="text-[#6e6e73] text-[13px] mt-1">B2C performance · MTD + Prorata</p>
           </div>
           <div className="flex items-center gap-3">
             <button
