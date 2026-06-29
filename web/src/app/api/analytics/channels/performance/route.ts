@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { fetchCosts, getDaysInRange, getDaysInMonth, monthsBetween } from "@/lib/bod-data"
+
+const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -55,19 +58,44 @@ export async function GET(req: NextRequest) {
        ORDER BY c.group_name, c.revenue DESC`
     )
 
+    // Fetch op costs để tính CM1 = margin - opCost (y hệt bod-data pattern)
+    const months = monthsBetween(startDate || "", endDate || "")
+    const { channelCosts, groupCosts } = await fetchCosts(months)
+
     return rows.map(r => {
-      const rev = parseFloat(r.revenue      || "0")
-      const mar = parseFloat(r.margin       || "0")
-      const prv = parseFloat(r.prev_revenue || "0")
+      const rev  = parseFloat(r.revenue      || "0")
+      const mar  = parseFloat(r.margin       || "0")
+      const prv  = parseFloat(r.prev_revenue || "0")
+      const grp  = r.group_name || ""
+
+      // Op cost theo channel (channel_costs: ads/platform/sponsor/media)
+      let opCost = 0
+      channelCosts.filter(cc => cc.channel === r.channel).forEach(cc => {
+        const ratio = getDaysInMonth(cc.month) > 0
+          ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+        COST_KEYS.forEach(key => {
+          const v = (cc as any)[key]
+          if (v) opCost += v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100
+        })
+      })
+      // Op cost theo group (channel_group_costs: B2B / B2C — prorate theo ngày)
+      const tursoGroup = grp.startsWith("B2B") ? "B2B" : grp.includes("B2C") ? "B2C" : grp
+      groupCosts.filter(gc => gc.group_name === tursoGroup).forEach(gc => {
+        const ratio = getDaysInMonth(gc.month) > 0
+          ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+        opCost += gc.amount * ratio
+      })
+
+      const gpm2 = mar - opCost
       return {
         channel:        r.channel,
-        group_name:     r.group_name,
+        group_name:     grp,
         is_strategic:   r.is_strategic === "true" || String(r.is_strategic) === "true",
         revenue:        rev,
         margin:         mar,
         margin_percent: rev > 0 ? (mar / rev) * 100 : 0,
-        gpm2:           mar,
-        gpm2_percent:   rev > 0 ? (mar / rev) * 100 : 0,
+        gpm2,
+        gpm2_percent:   rev > 0 ? (gpm2 / rev) * 100 : 0,
         units:          parseFloat(r.units  || "0"),
         orders:         parseInt(r.orders   || "0"),
         prev_revenue:   prv,

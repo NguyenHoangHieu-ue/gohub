@@ -28,7 +28,7 @@ const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.pa
 
 interface ChannelCost { channel: string; month: string; ads: any; platformFee: any; sponsorProducts: any; media: any }
 
-async function fetchCosts(months: string[]): Promise<{ channelCosts: ChannelCost[]; groupCosts: any[] }> {
+export async function fetchCosts(months: string[]): Promise<{ channelCosts: ChannelCost[]; groupCosts: any[] }> {
   if (months.length === 0) return { channelCosts: [], groupCosts: [] }
   const [{ data: ccData }, { data: gcData }] = await Promise.all([
     supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
