@@ -21,14 +21,28 @@ function fmtDate(s?: string | null) {
 }
 
 export default function InfoPage() {
-  const { data: session } = useSession()
-  const role = (session?.user as any)?.role || "staff"
-  const isAdmin = role === "admin" || role === "creator"
-  const [view, setView] = useState<"mine" | "all">(isAdmin ? "mine" : "mine")
+  const { data: session, status } = useSession()
+  const [canViewAll, setCanViewAll] = useState(false)
+  const [view, setView] = useState<"mine" | "all">("mine")
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
 
+  // Dùng DB role + role_permissions để kiểm tra quyền xem-tất-cả (không dùng JWT stale)
+  useEffect(() => {
+    if (status !== "authenticated") return
+    Promise.all([
+      fetch("/api/user/me").then(r => r.json()).catch(() => null),
+      fetch("/api/config/role-permissions").then(r => r.json()).catch(() => null),
+    ]).then(([me, perms]) => {
+      const role: string = me?.role ?? (session?.user as any)?.role ?? ""
+      if (role === "admin" || role === "creator") { setCanViewAll(true); return }
+      const matrix: Record<string, string[]> = perms ?? {}
+      setCanViewAll((matrix[role] ?? []).includes("info"))
+    })
+  }, [status, (session?.user as any)?.username])
+
   if (!session) return null
-  const targetUsername = view === "all" && selectedUser ? selectedUser : (session.user as any)?.username
+  const myUsername = (session.user as any)?.username
+  const targetUsername = view === "all" && selectedUser ? selectedUser : myUsername
 
   return (
     <div className="p-6 min-h-screen bg-slate-50 space-y-4 max-w-[1400px] mx-auto">
@@ -43,7 +57,7 @@ export default function InfoPage() {
             <p className="text-slate-500 text-sm">Notes cá nhân & lưu trữ file</p>
           </div>
         </div>
-        {isAdmin && (
+        {canViewAll && (
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
             <button onClick={() => { setView("mine"); setSelectedUser(null) }} className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all", view === "mine" ? "bg-violet-600 text-white" : "text-slate-600 hover:bg-slate-50")}>
               Của tôi
@@ -55,10 +69,10 @@ export default function InfoPage() {
         )}
       </div>
 
-      {view === "all" && isAdmin ? (
+      {view === "all" && canViewAll ? (
         <AdminOverview onSelectUser={(u) => { setSelectedUser(u); setView("all") }} selectedUser={selectedUser} />
       ) : (
-        <UserWorkspace username={targetUsername} isOwn={!selectedUser || selectedUser === (session.user as any)?.username} />
+        <UserWorkspace username={targetUsername} isOwn={!selectedUser || selectedUser === myUsername} />
       )}
     </div>
   )
