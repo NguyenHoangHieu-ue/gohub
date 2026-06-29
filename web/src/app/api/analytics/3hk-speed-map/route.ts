@@ -21,14 +21,17 @@ const G_500_5  = "500MB high-speed · throttle 5 mbps"
 const G_500_10 = "500MB high-speed · throttle 10 mbps"
 const G_1GB_10 = "1GB high-speed · throttle 10 mbps"
 
-// Parse mã CŨ usage: [E]<CTRY:3><3D>[P1|P2]...[UNLI]...<days>D
-// Trả về mbps: 5 (P2), 10 (P1), null (không có P = base 1GB)
+// Parse mã CŨ usage: [E]<CTRY:3><3D>[PY|P1|P2][UNLI]...<days>D
+// Phân loại theo sub-type:
+//   P2 + UNL → 500MB 5mbps
+//   P1 + UNL → 500MB 10mbps
+//   PY + UNL → 1GB 10mbps (PYUNLI = gói premium base)
 function parseOldSku(sku: string): { mbps: number | null } | null {
-  // Phải là unlimited SKU (có UNLI hoặc UNL)
-  if (!/UNL/i.test(sku)) return null
-  const pm = sku.match(/P([12])/)
-  if (!pm) return { mbps: null }           // Không P → base 1GB 10mbps
-  return { mbps: pm[1] === "1" ? 10 : 5 } // P1 → 10mbps, P2 → 5mbps
+  if (!/UNL/i.test(sku)) return null       // phải có UNLI/UNL
+  if (/P2/i.test(sku))   return { mbps: 5    }  // P2 → 500MB 5mbps
+  if (/P1/i.test(sku))   return { mbps: 10   }  // P1 → 500MB 10mbps
+  if (/PY/i.test(sku))   return { mbps: null }  // PYUNLI → 1GB 10mbps
+  return null   // pattern không xác định
 }
 
 export async function GET() {
