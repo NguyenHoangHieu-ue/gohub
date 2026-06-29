@@ -161,9 +161,11 @@ export async function GET(req: NextRequest) {
           })
         } else {
           channelCosts.filter(c => c.channel === r.name && c.month === mMonth).forEach(c => {
+            const ratio = getDaysInMonth(mMonth) > 0
+              ? getDaysInRange(startDate || "", endDate || "", mMonth) / getDaysInMonth(mMonth) : 0
             COST_KEYS.forEach(key => {
               const cv = c[key]
-              if (cv) gpm2 -= cv.type === "amount" ? (cv.value || 0) : (mRev * (cv.value || 0)) / 100
+              if (cv) gpm2 -= cv.type === "amount" ? (cv.value || 0) * ratio : (mRev * (cv.value || 0)) / 100
             })
           })
         }

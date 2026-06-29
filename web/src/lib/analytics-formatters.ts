@@ -61,13 +61,16 @@ export function formatTruncatedString(value: string | null | undefined, maxLen =
 
 export function getDefaultDateRange(): { startDate: string; endDate: string } {
   const today = new Date()
-  // Mặc định: ngày 1 của tháng hiện tại -> hôm qua (T-1, vì data ngày hiện tại chưa đủ).
-  const start = new Date(today.getFullYear(), today.getMonth(), 1)
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  return {
-    startDate: formatDateToISO(start),
-    endDate:   formatDateToISO(end),
+  // Port intel-main: ngày ≤ 7 → tháng trước (MTD tháng hiện tại quá ít data);
+  // ngày > 7 → ngày 1 tháng hiện tại → hôm qua (T-1).
+  if (today.getDate() <= 7) {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const end   = new Date(today.getFullYear(), today.getMonth(), 0)  // last day prev month
+    return { startDate: formatDateToISO(start), endDate: formatDateToISO(end) }
   }
+  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
+  return { startDate: formatDateToISO(start), endDate: formatDateToISO(end) }
 }
 
 export type DatePreset = "week" | "month" | "quarter" | "year"
