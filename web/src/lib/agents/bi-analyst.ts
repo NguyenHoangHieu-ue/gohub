@@ -67,6 +67,20 @@ const queryGSCDecl = {
   },
 }
 
+// queryProduct: tra cứu chi tiết SKU/product từ Supabase (COGS, thuộc tính)
+// Dùng khi câu hỏi BI cần kết hợp dữ liệu phân tích (gohub_dw) với thông tin sản phẩm (Supabase).
+const queryProductDecl = {
+  name: "queryProduct",
+  description: "Look up SKU or product details from GoHub product catalog (Supabase). Use when a BI question needs product attributes like COGS, throttle speed, call support, or vendor info that is not in gohub_dw. Input: sku_code (13 chars) OR product_code (8 chars).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      sku_code:     { type: SchemaType.STRING, description: "13-character SKU code (e.g. 1CJPNWM10014)" },
+      product_code: { type: SchemaType.STRING, description: "8-character product code (e.g. 1CJPNWM1)" },
+    },
+  },
+}
+
 export async function runBIAnalyst(
   systemInstruction: string,
   geminiHistory: any[],
@@ -90,7 +104,7 @@ export async function runBIAnalyst(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
     systemInstruction: finalInstruction + ga4SiteList,
-    tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl] }],
+    tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
     // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
     generationConfig: { temperature: 0 },
   })
@@ -131,6 +145,29 @@ export async function runBIAnalyst(
           parts.push({ functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 50) } } })
         } catch (e: any) {
           parts.push({ functionResponse: { name: "queryGSC", response: { error: e.message } } })
+        }
+        continue
+      }
+
+      if (call.name === "queryProduct") {
+        try {
+          const a = call.args as any
+          const code: string = (a.sku_code || a.product_code || "").trim().toUpperCase()
+          let result: any = null
+          if (code.length === 13) {
+            const { data } = await supabaseAdmin.from("skus")
+              .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+              .eq("sku_code", code).maybeSingle()
+            result = data
+          } else if (code.length === 8) {
+            const { data } = await supabaseAdmin.from("products")
+              .select("product_code,status,tenant,sim_esim,product_type,country_group,vendor")
+              .eq("product_code", code).maybeSingle()
+            result = data
+          }
+          parts.push({ functionResponse: { name: "queryProduct", response: result ?? { error: "Không tìm thấy sản phẩm" } } })
+        } catch (e: any) {
+          parts.push({ functionResponse: { name: "queryProduct", response: { error: e.message } } })
         }
         continue
       }

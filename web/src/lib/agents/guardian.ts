@@ -42,14 +42,14 @@ const DEPT_ALLOW = { b2b: "allow" as Decision, b2c: "allow" as Decision, saleb2c
 const DEPT_DEPT  = { b2b: "dept"  as Decision, b2c: "dept"  as Decision, saleb2c: "dept"  as Decision, "ops-&-cs": "dept"  as Decision, hr: "dept"  as Decision, product: "dept"  as Decision }
 
 const DEFAULT_POLICY: Record<GuardCategory, Record<string, Decision>> = {
-  product_catalog:        { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
-  revenue_bi:             { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
-  margin_cogs:            { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
-  staff_hr:               { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY, hr: "allow" },
-  customer_pii:           { admin: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
-  internal_kb_other_dept: { admin: "allow", bod: "allow", staff: "dept",  ...DEPT_DEPT  },
-  system_internal:        { admin: "allow", bod: "deny",  staff: "deny",  ...DEPT_DENY  },
-  general:                { admin: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  product_catalog:        { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  revenue_bi:             { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  margin_cogs:            { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
+  staff_hr:               { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY, hr: "allow" },
+  customer_pii:           { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
+  internal_kb_other_dept: { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "dept",  ...DEPT_DEPT  },
+  system_internal:        { admin: "allow", creator: "allow", manager: "deny",  bod: "deny",  staff: "deny",  ...DEPT_DENY  },
+  general:                { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
 }
 
 export const GUARD_CATEGORIES: GuardCategory[] = [

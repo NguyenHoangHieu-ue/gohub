@@ -31,8 +31,7 @@ export async function queryAnalytics<T = Record<string, unknown>>(
   params?: unknown[]
 ): Promise<T[]> {
   if (!process.env.ANALYTICS_DB_PASSWORD) {
-    console.warn("[analytics-db] ANALYTICS_DB_PASSWORD not set — skipping query")
-    return []
+    throw new Error("ANALYTICS_DB_PASSWORD chưa được cấu hình — không thể truy vấn dữ liệu phân tích. Vui lòng báo Hiếu kiểm tra cài đặt môi trường.")
   }
   const client = await getAnalyticsPool().connect()
   try {
