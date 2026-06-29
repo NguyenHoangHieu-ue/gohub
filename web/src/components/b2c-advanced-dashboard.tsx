@@ -125,8 +125,13 @@ export function B2CAdvancedDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
   const [tab, setTab]         = useState<"revenue" | "kpi">("revenue")
-  // GA4 conversion per site (Section 4) — load lazy, graceful nếu chưa cấu hình
-  const [ga4, setGa4] = useState<{ name: string; cr: number; series: { date: string; sessions: number; cr: number }[] }[] | null>(null)
+  // GA4 per site (Section 3 + 4) — load lazy, graceful nếu chưa cấu hình
+  const [ga4, setGa4] = useState<{
+    name:   string
+    cr:     number
+    kpis:   { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }
+    series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]
+  }[] | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -150,12 +155,17 @@ export function B2CAdvancedDashboard() {
         const sd = await (await fetch("/api/config/ga4")).json()
         const sites: { id: string; name: string }[] = sd.sites ?? []
         if (!sites.length) { setGa4([]); return }
-        const out: { name: string; cr: number; series: { date: string; sessions: number; cr: number }[] }[] = []
+        const out: { name: string; cr: number; kpis: { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }; series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[] }[] = []
         for (const s of sites) {
           const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=28`)
           if (!r.ok) continue
           const d = await r.json()
-          out.push({ name: s.name, cr: d.kpis?.cr ?? 0, series: d.series ?? [] })
+          out.push({
+            name:   s.name,
+            cr:     d.kpis?.cr ?? 0,
+            kpis:   { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
+            series: (d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })),
+          })
         }
         setGa4(out)
       } catch { setGa4([]) }
@@ -397,7 +407,7 @@ export function B2CAdvancedDashboard() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">gohub b2c</h1>
+            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">Gohub B2C</h1>
             <p className="text-[13px] text-[#6e6e73] mt-1">
               Monthly B2C report · {current ? `${monthLabel(current).top} ${current.split("-")[0]}` : "—"} · GA4 + Admin GoHub
             </p>
@@ -566,9 +576,21 @@ export function B2CAdvancedDashboard() {
             </Section>
 
             {/* Section 3 — CAC, Users, Leads */}
-            <Section icon={<UserPlus className="w-5 h-5" />} accent="slate" title="CAC · Leads · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng"
-              source="admin"
->
+            <Section icon={<UserPlus className="w-5 h-5" />} title="CAC · Leads · Users · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng" source="admin">
+              {/* GA4 Users summary (28 ngày MTD) — nguồn GA4 */}
+              {ga4 && ga4.length > 0 && (
+                <div className="px-6 pt-4 pb-2 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {ga4.map(site => (
+                    <div key={site.name} className="rounded-lg border border-black/[0.06] p-3" style={{ background: "rgba(0,113,227,0.04)" }}>
+                      <div className="text-[10px] font-[650] text-[#0071e3] uppercase tracking-wide mb-1">{site.name} <span className="text-[#6e6e73] normal-case">GA4</span></div>
+                      <div className="text-[18px] font-[560] text-[#1d1d1f]">{formatNumber(site.kpis.activeUsers)}</div>
+                      <div className="text-[11px] text-[#6e6e73] mt-0.5">
+                        {formatNumber(site.kpis.purchases)} purchases · CR {site.kpis.cr.toFixed(2)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {hasSpend || hasLeads ? (
                 <SimpleRollTable rows={[
                   { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
@@ -594,32 +616,45 @@ export function B2CAdvancedDashboard() {
               )}
             </Section>
 
-            {/* Section 4 — GA4 Conversion Rate Charts */}
-            <Section icon={<TrendingUp className="w-5 h-5" />} accent="slate" title="GA4 Conversion Rate" desc="Sessions vs CR% theo site · 28 ngày" source="ga4"
-              action={<a href="/analytics/website" className="text-xs font-semibold text-blue-600 hover:underline">Xem chi tiết →</a>}>
+            {/* Section 4 — GA4 Charts: Sessions + Purchases + Revenue + CR% (theo mockup) */}
+            <Section icon={<TrendingUp className="w-5 h-5" />} title="GA4 Conversion Rate Charts" desc="Purchase · Revenue · CR% · Traffic · 28 ngày" source="ga4"
+              action={<a href="/analytics/website" className="text-[12px] font-[600] text-[#0071e3] hover:underline">Xem chi tiết →</a>}>
               {ga4 === null ? (
-                <div className="px-6 pb-6 pt-3 text-sm text-slate-400">Đang tải GA4…</div>
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4…</div>
               ) : ga4.length === 0 ? (
                 <AwaitingData note="GA4 chưa cấu hình hoặc không có dữ liệu. Vào Admin → Cài đặt để kết nối GA4." />
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 pb-6 pt-3">
+                <div className="space-y-1 px-5 pb-5 pt-3">
                   {ga4.map(s => (
-                    <div key={s.name}>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-bold text-slate-700">{s.name}</h4>
-                        <span className="text-xs font-semibold text-emerald-600">CR {s.cr.toFixed(2)}%</span>
+                    <div key={s.name} className="rounded-lg border border-black/[0.06] overflow-hidden" style={{ background: "rgba(255,255,255,0.72)" }}>
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.05]">
+                        <h4 className="text-[14px] font-[650] text-[#6e6e73]">{s.name}</h4>
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <span className="text-[#6e6e73]">Sessions</span>
+                          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#d93025] inline-block" />Revenue</span>
+                          <span className="font-[650] text-[#2f9d55]">CR {s.cr.toFixed(2)}%</span>
+                        </div>
                       </div>
-                      <div className="h-[220px]">
+                      <div className="h-[280px] px-2 pt-2 pb-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={s.series}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" />
-                            <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} />
-                            <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={v => `${v}%`} />
-                            <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
-                              formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : formatNumber(v)} />
-                            <Bar yAxisId="l" dataKey="sessions" name="Sessions" fill="#2563eb" radius={[3, 3, 0, 0]} barSize={10} />
-                            <Line yAxisId="r" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2} dot={false} />
+                          <ComposedChart data={s.series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} interval="preserveStartEnd" />
+                            <YAxis yAxisId="sess" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
+                            <YAxis yAxisId="rev" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
+                            <YAxis yAxisId="cr" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#2f9d55", fontSize: 10 }} tickFormatter={v => `${v.toFixed(1)}%`} width={36} hide />
+                            <Tooltip
+                              contentStyle={{ borderRadius: "8px", border: "1px solid rgba(0,0,0,0.09)", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.07)", fontSize: 12 }}
+                              formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : n === "Revenue" ? formatCurrency(v) : formatNumber(Math.round(v))}
+                            />
+                            {/* Sessions = bar */}
+                            <Bar yAxisId="sess" dataKey="sessions" name="Sessions" fill="#0071e3" fillOpacity={0.25} radius={[2, 2, 0, 0]} barSize={8} />
+                            {/* Revenue = bar phủ */}
+                            <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill="#d93025" fillOpacity={0.18} radius={[2, 2, 0, 0]} barSize={8} />
+                            {/* CR% = line */}
+                            <Line yAxisId="cr" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2} dot={false} />
+                            {/* Purchases = line */}
+                            <Line yAxisId="sess" type="monotone" dataKey="purchases" name="Purchases" stroke="#00a6a6" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
@@ -629,18 +664,21 @@ export function B2CAdvancedDashboard() {
               )}
             </Section>
 
-            {/* Section 5 — Spend & ROAS */}
-            <Section icon={<PieChartIcon className="w-5 h-5" />} accent="indigo" title="Chi phí Marketing & ROAS" desc="Budget · Spend · ROAS · rolling 6 tháng"
-              source="admin"
->
+            {/* Section 5 — Spend & ROAS (Budget · Spend MTD · Spend Pace · Spend Prorata · ROAS) */}
+            <Section icon={<PieChartIcon className="w-5 h-5" />} title="Chi phí Marketing & ROAS" desc="Budget · Spend · Spend Pace · Prorata · ROAS · rolling 6 tháng" source="admin">
               {hasSpend ? (
                 <SimpleRollTable rows={[
-                  { label: "Chi phí MKT",  fmt: formatCompactNumber, get: spendOf },
                   ...(hasBudget ? [
-                    { label: "Ngân sách",  fmt: formatCompactNumber, delta: false, get: budgetOf },
-                    { label: "Spend pace", fmt: fmtPctV, delta: false,
+                    { label: "Ngân sách",    fmt: formatCompactNumber, delta: false, get: budgetOf },
+                  ] : []),
+                  { label: "Spend MTD",    fmt: formatCompactNumber, get: spendOf },
+                  ...(hasBudget ? [
+                    { label: "Spend Pace", fmt: fmtPctV, delta: false,
                       get: (m: string) => { const b = budgetOf(m); return b > 0 ? spendOf(m) / b * 100 : 0 } },
                   ] : []),
+                  // Spend Prorata: chỉ áp cho tháng hiện tại (tháng trước đã hoàn thành)
+                  { label: "Spend Prorata", fmt: formatCompactNumber, delta: false,
+                    get: (m: string) => m === current ? proj(spendOf(m)) : spendOf(m) },
                   { label: "Doanh thu B2C", fmt: formatCompactNumber, get: revOf },
                   { label: "ROAS",          fmt: fmtX, delta: false, highlight: true,
                     get: m => { const s = spendOf(m); return s > 0 ? revOf(m) / s : 0 } },
