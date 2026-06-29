@@ -3,17 +3,26 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { runScheduledMessage } from "@/lib/scheduled-runner"
+import { getDbRole } from "@/lib/db-role"
 
-function adminOnly(session: any) {
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  return null
+// Dùng DB role (getDbRole) thay JWT role — tránh JWT cũ khiến admin vừa được assign vẫn bị 403.
+const WRITABLE_TABS_KEY = "permissions.writable_tabs"
+
+async function canWriteScheduled(username: string): Promise<boolean> {
+  const dbRole = await getDbRole(username)
+  if (["admin", "creator"].includes(dbRole)) return true
+  const { data } = await supabaseAdmin.from("app_config").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle()
+  if (!data?.value) return false
+  try {
+    const cfg = JSON.parse(data.value) as Record<string, string[]>
+    return (cfg[username] ?? []).includes("scheduled")
+  } catch { return false }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  const guard = adminOnly(session)
-  if (guard) return guard
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()
   const { name, prompt, cron_expression, lark_webhook_url, lark_keyword, is_active } = body
@@ -39,8 +48,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  const guard = adminOnly(session)
-  if (guard) return guard
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -54,8 +63,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 // POST /api/admin/scheduled-messages/[id] — test run immediately
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  const guard = adminOnly(session)
-  if (guard) return guard
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data: msg, error } = await supabaseAdmin
     .from("lark_scheduled_messages")

@@ -303,8 +303,19 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
 }
 
 export default function TargetsPage() {
-  const { data: session } = useSession()
-  const canEdit = ["admin", "creator"].includes(session?.user?.role as string)
+  const { data: session, status } = useSession()
+  const [canEdit, setCanEdit] = useState(false)
+
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/user/me").then(r => r.json()).then((d: any) => {
+      const role: string = d.role ?? ""
+      const tabs: string[] = d.writable_tabs ?? []
+      setCanEdit(["admin", "creator"].includes(role) || tabs.includes("targets"))
+    }).catch(() => {
+      setCanEdit(["admin", "creator"].includes(session?.user?.role as string))
+    })
+  }, [status, session?.user?.username])
 
   const [quarter, setQuarter] = useState(getDefaultQuarter)
   const [loading, setLoading] = useState(false)

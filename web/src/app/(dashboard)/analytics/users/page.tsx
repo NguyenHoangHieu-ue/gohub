@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Plus, Key, Lock } from "lucide-react"
+import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Plus, Key, Lock, Edit3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { ConfirmModal } from "@/components/confirm-modal"
@@ -32,13 +32,20 @@ const PM_TABS = [
 const ROLES = ALL_ROLES
 const MATRIX_ROLES = CONFIGURABLE_ROLES
 
-type Section = "users" | "add" | "password" | "matrix" | "advanced"
-const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
-  { id: "users",    label: "Người dùng",    icon: <Users    size={15} /> },
-  { id: "add",      label: "Thêm user",     icon: <Plus     size={15} /> },
-  { id: "password", label: "Đổi mật khẩu",  icon: <Key      size={15} /> },
-  { id: "matrix",   label: "Vai trò × Quyền", icon: <Shield size={15} /> },
-  { id: "advanced", label: "Nâng cao",      icon: <Lock     size={15} /> },
+type Section = "users" | "add" | "password" | "matrix" | "advanced" | "edit-perms"
+const SECTIONS: { id: Section; label: string; icon: React.ReactNode; creatorOnly?: boolean }[] = [
+  { id: "users",      label: "Người dùng",        icon: <Users    size={15} /> },
+  { id: "add",        label: "Thêm user",          icon: <Plus     size={15} /> },
+  { id: "password",   label: "Đổi mật khẩu",       icon: <Key      size={15} /> },
+  { id: "matrix",     label: "Vai trò × Quyền",    icon: <Shield   size={15} /> },
+  { id: "advanced",   label: "Nâng cao",           icon: <Lock     size={15} /> },
+  { id: "edit-perms", label: "Quyền chỉnh sửa",    icon: <Edit3    size={15} />, creatorOnly: true },
+]
+
+// Tab có thể được creator gán quyền write per-user
+const WRITABLE_TAB_DEFS = [
+  { key: "scheduled", label: "Scheduled Messages" },
+  { key: "targets",   label: "KPI / Target" },
 ]
 
 export default function UserManagementPage() {
@@ -46,7 +53,7 @@ export default function UserManagementPage() {
   const router = useRouter()
   useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot") }, [status, session, router])
   if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
-  return <UserAdmin currentUser={session.user.username as string} />
+  return <UserAdmin currentUser={session.user.username as string} currentRole={session.user.role as string} />
 }
 
 function roleBadge(role: string) {
@@ -56,8 +63,12 @@ function roleBadge(role: string) {
   return "bg-teal-100 text-teal-700"
 }
 
-function UserAdmin({ currentUser }: { currentUser: string }) {
+function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentRole: string }) {
   const [section, setSection] = useState<Section>("users")
+  const isCreator = currentRole === "creator"
+  // writable_tabs config: { [username]: string[] }
+  const [writableConfig, setWritableConfig] = useState<Record<string, string[]>>({})
+  const [savingWritable, setSavingWritable] = useState<string | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [matrix, setMatrix] = useState<Record<string, string[]>>({})
@@ -72,6 +83,11 @@ function UserAdmin({ currentUser }: { currentUser: string }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  useEffect(() => {
+    if (!isCreator) return
+    fetch("/api/config/writable-tabs").then(r => r.json()).then(d => { if (d.config) setWritableConfig(d.config) }).catch(() => {})
+  }, [isCreator])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -189,7 +205,7 @@ function UserAdmin({ currentUser }: { currentUser: string }) {
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {SECTIONS.map(s => (
+        {SECTIONS.filter(s => !s.creatorOnly || isCreator).map(s => (
           <button key={s.id} onClick={() => setSection(s.id)}
             className={cn("flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap",
               section === s.id ? "bg-white text-[#003B95] shadow-sm" : "text-slate-500 hover:text-slate-700")}>
@@ -353,6 +369,82 @@ function UserAdmin({ currentUser }: { currentUser: string }) {
 
       {/* ── Nâng cao: ma trận hệ thống ── */}
       {section === "advanced" && <SystemPermissionsMatrix onNotify={notify} />}
+
+      {/* ── Quyền chỉnh sửa (creator only) ── */}
+      {section === "edit-perms" && isCreator && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2"><Edit3 className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Quyền chỉnh sửa tab per-user</h2></div>
+            <p className="text-xs text-slate-400 mt-1">Cho phép user cụ thể chỉnh sửa nội dung trong các tab dưới đây (ngoài quyền role). Chỉ creator thấy &amp; cấu hình mục này.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role</th>
+                  {WRITABLE_TAB_DEFS.map(t => (
+                    <th key={t.key} className="px-6 py-3 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.label}</th>
+                  ))}
+                  <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lưu</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {users.filter(u => !["creator", "admin"].includes(u.role)).map(u => {
+                  const userTabs = writableConfig[u.username] ?? []
+                  const toggleTab = (tabKey: string) => {
+                    const cur = new Set(writableConfig[u.username] ?? [])
+                    cur.has(tabKey) ? cur.delete(tabKey) : cur.add(tabKey)
+                    setWritableConfig(prev => ({ ...prev, [u.username]: Array.from(cur) }))
+                  }
+                  const saveUserWritable = async () => {
+                    setSavingWritable(u.username)
+                    try {
+                      const res = await fetch("/api/config/writable-tabs", {
+                        method: "PATCH", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: u.username, tabs: writableConfig[u.username] ?? [] }),
+                      })
+                      const d = await res.json()
+                      if (res.ok) { notify(true, `Đã lưu quyền chỉnh sửa cho ${u.name || u.username}`); if (d.config) setWritableConfig(d.config) }
+                      else notify(false, d.error || "Lưu thất bại")
+                    } finally { setSavingWritable(null) }
+                  }
+                  return (
+                    <tr key={u.username} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-3">
+                        <p className="font-semibold text-slate-800 text-sm">{u.name || u.username}</p>
+                        <p className="text-[11px] text-slate-400">{u.username}</p>
+                      </td>
+                      <td className="px-6 py-3"><span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", roleBadge(u.role))}>{u.role}</span></td>
+                      {WRITABLE_TAB_DEFS.map(t => {
+                        const on = userTabs.includes(t.key)
+                        return (
+                          <td key={t.key} className="px-6 py-3 text-center">
+                            <button onClick={() => toggleTab(t.key)}
+                              className={cn("w-7 h-7 rounded-lg inline-flex items-center justify-center transition-all border",
+                                on ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-300 border-slate-200 hover:border-blue-300")}>
+                              {on && <Check className="w-4 h-4" />}
+                            </button>
+                          </td>
+                        )
+                      })}
+                      <td className="px-6 py-3 text-right">
+                        <button onClick={saveUserWritable} disabled={savingWritable === u.username}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50 ml-auto">
+                          {savingWritable === u.username ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {users.filter(u => !["creator", "admin"].includes(u.role)).length === 0 && (
+                  <tr><td colSpan={2 + WRITABLE_TAB_DEFS.length + 1} className="px-6 py-8 text-center text-slate-400 text-sm">Không có user nào để cấu hình (admin/creator tự động có toàn quyền)</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -278,7 +278,7 @@ export async function searchSkus(params: {
     if (!codes.length) return []
     const { data, error } = await supabaseAdmin
       .from("sku_catalog")
-      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
       .eq("status", "Active")
       .in("country_group", codes)
     if (error) console.error("[searchSkus]", error.message)
@@ -385,6 +385,7 @@ export async function searchSkus(params: {
     }
   }
 
+  if (result.length > 40) note += ` | ⚠ Hiển thị 40/${result.length} SKU (có nhiều hơn — thông báo với user)`
   return { skus: result.slice(0, 40), note }
 }
 
@@ -628,8 +629,9 @@ export async function searchSkusByGroupCode(
     ].filter(Boolean).join("|")
   })
 
+  const truncNote = result.length > 50 ? ` (hiển thị 50/${result.length} — có thêm, thông báo với user)` : ""
   return [
-    `=== MÃ NHÓM "${code}": ${result.length} SKU Active ===`,
+    `=== MÃ NHÓM "${code}": ${result.length} SKU Active${truncNote} ===`,
     `sku_code|tenant|sim|data|days|throttle|kyc|call${isCost ? "|cogs_vnd|cogs_usd" : ""}`,
     ...rows
   ].join("\n")

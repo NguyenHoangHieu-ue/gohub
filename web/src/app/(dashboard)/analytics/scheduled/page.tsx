@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play, User } from "lucide-react"
 
@@ -45,10 +45,20 @@ const BASE = "/api/admin/scheduled-messages"
 
 export default function ScheduledMessagesPage() {
   const { data: session, status } = useSession()
+  const [canEdit, setCanEdit] = useState<boolean>(false)
 
-  // Quyền vào tab do analytics/layout enforce (role_permissions ∪ allowed_analytics). Ở đây chỉ cần đăng nhập.
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/user/me").then(r => r.json()).then((d: any) => {
+      const role: string = d.role ?? ""
+      const tabs: string[] = d.writable_tabs ?? []
+      setCanEdit(["admin", "creator"].includes(role) || tabs.includes("scheduled"))
+    }).catch(() => {
+      setCanEdit(["admin", "creator"].includes(session?.user?.role as string))
+    })
+  }, [status, session?.user?.username])
+
   if (status !== "authenticated") return null
-  const canEdit = ["admin", "creator"].includes(session?.user?.role as string)
   return <ScheduledMessages canEdit={canEdit} />
 }
 

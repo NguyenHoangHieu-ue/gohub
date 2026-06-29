@@ -257,16 +257,17 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited") return []
     return speedGroups.map(sg => {
       const members = speedGroupMembers[sg.speed_group] ?? []
-      let usage = 0, simDays = 0
+      let usage = 0, planGb = 0, simDays = 0
       for (const m of members) {
         const d = daysOfSku(m.sku)
         usage += m.total_usage_gb
+        planGb += m.total_plan_gb
         if (d && d > 0) simDays += m.active_sims * d
       }
       const actual = simDays > 0 ? usage / simDays : 0
-      const assume = sg.speed_group.includes("1GB") ? 1 : 0.5
+      const assume = simDays > 0 ? planGb / simDays : 0   // data-driven: total_plan / (sims × days)
       const name = sg.speed_group.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
-      return { name, actual: +actual.toFixed(3), assume, usagePct: +sg.avg_usage_pct.toFixed(1) }
+      return { name, actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
     })
   }, [activeTab, speedGroups, speedGroupMembers])
 
@@ -684,8 +685,8 @@ export default function ThreeHKDataUsagePage() {
                       <tr className="bg-slate-50/40">
                         <td colSpan={6} className="px-6 py-3">
                           <p className="text-[11px] text-slate-400 mb-2">
-                            GB/ngày/SIM = Total Actual ÷ Active SIMs ÷ số ngày gói. Giả định high-speed: <b>{assumeGb} GB/ngày</b>.
-                            <span className="text-rose-600 font-semibold"> Đỏ</span> = user dùng vượt giả định,
+                            Giả định (GB/ngày/SIM) = Total Plan ÷ Active SIMs ÷ số ngày gói. Thực tế = Total Actual ÷ Active SIMs ÷ số ngày.
+                            <span className="text-rose-600 font-semibold"> Đỏ</span> = thực tế vượt giả định,
                             <span className="text-emerald-600 font-semibold"> xanh</span> = trong giả định.
                           </p>
                           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -695,6 +696,7 @@ export default function ThreeHKDataUsagePage() {
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Giả định (GB/ngày/SIM)</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">GB/ngày/SIM</th>
@@ -703,13 +705,17 @@ export default function ThreeHKDataUsagePage() {
                               <tbody className="divide-y divide-slate-50">
                                 {members.length > 0 ? members.map((m, j) => {
                                   const d = daysOfSku(m.sku)
+                                  const assumePerDay = (d && d > 0 && m.active_sims > 0) ? m.total_plan_gb / m.active_sims / d : null
                                   const gbPerDaySim = (d && d > 0 && m.active_sims > 0) ? m.total_usage_gb / m.active_sims / d : null
-                                  const over = gbPerDaySim != null && gbPerDaySim > assumeGb
+                                  const over = gbPerDaySim != null && assumePerDay != null && gbPerDaySim > assumePerDay
                                   return (
                                   <tr key={j} className="hover:bg-slate-50/50">
                                     <td className="px-4 py-2 font-mono text-xs text-slate-700">{m.sku}</td>
                                     <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{m.active_sims.toLocaleString()}</td>
                                     <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
+                                    <td className="px-4 py-2 text-right text-slate-500 text-xs">
+                                      {assumePerDay == null ? "—" : `${assumePerDay.toFixed(3)} GB`}
+                                    </td>
                                     <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
                                     <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
                                     <td className={cn("px-4 py-2 text-right text-xs font-bold", gbPerDaySim == null ? "text-slate-300" : over ? "text-rose-600" : "text-emerald-600")}>
@@ -718,7 +724,7 @@ export default function ThreeHKDataUsagePage() {
                                   </tr>
                                   )
                                 }) : (
-                                  <tr><td colSpan={6} className="px-4 py-3 text-center text-slate-400 text-xs">Không có SKU</td></tr>
+                                  <tr><td colSpan={7} className="px-4 py-3 text-center text-slate-400 text-xs">Không có SKU</td></tr>
                                 )}
                               </tbody>
                             </table>

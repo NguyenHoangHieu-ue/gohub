@@ -322,10 +322,9 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const [refCache, routed, guard, isCost] = await Promise.all([
       getRefCache(),
       route(userText, history, role),
-      // Lark group: KHÔNG phân biệt được role → chỉ chặn câu hỏi nội bộ hệ thống
-      // (bot hoạt động thế nào / workflow / code / prompt / schema...) cho mọi người.
-      // Sản phẩm / doanh thu / catalog... vẫn trả lời bình thường.
-      guardCheck(userText, role, undefined, { onlyCategories: ["system_internal"], ignoreRole: true }),
+      // Lark group: KHÔNG phân biệt được role → chặn nội bộ hệ thống + PII khách hàng cho mọi người.
+      // (system_internal: code/prompt/schema; customer_pii: tên/SĐT/email khách cụ thể)
+      guardCheck(userText, role, undefined, { onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true }),
       canViewCogs(role),
     ])
     const { agentId, params, needsClarification, clarificationQuestion } = routed

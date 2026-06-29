@@ -180,13 +180,28 @@ function roleLabel(role: string) {
 
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
-// Active = nền SÁNG hơn header nhóm (brand-500) + chữ TRẮNG → nổi bật rõ tab đang chọn.
-const ACTIVE_TAB = "bg-brand-500 text-white shadow-sm ring-1 ring-brand-300"
+// Active: mỗi nhóm dùng màu riêng — rõ ràng, không monotone.
 const ACTIVE_BG: Record<Accent, string> = {
-  brand:   ACTIVE_TAB,
-  blue:    ACTIVE_TAB,
-  violet:  ACTIVE_TAB,
-  emerald: ACTIVE_TAB,
+  brand:   "bg-[#003B95] text-white shadow-sm",                      // Management: navy đậm
+  blue:    "bg-indigo-600 text-white shadow-sm",                     // Analytics: indigo
+  violet:  "bg-violet-600 text-white shadow-sm",                     // Chat & KB: violet
+  emerald: "bg-emerald-600 text-white shadow-sm",                    // Products: emerald
+}
+
+// Inactive hover: nhẹ nhàng theo tông màu nhóm (không xám đồng loạt)
+const INACTIVE_HOVER: Record<Accent, string> = {
+  brand:   "text-slate-600 hover:bg-slate-100 hover:text-[#003B95]",
+  blue:    "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700",
+  violet:  "text-slate-600 hover:bg-violet-50 hover:text-violet-700",
+  emerald: "text-slate-600 hover:bg-emerald-50 hover:text-emerald-700",
+}
+
+// Icon inactive: nhạt, hover nhuộm màu nhóm
+const INACTIVE_ICON: Record<Accent, string> = {
+  brand:   "text-slate-400 group-hover:text-[#003B95]",
+  blue:    "text-slate-400 group-hover:text-indigo-500",
+  violet:  "text-slate-400 group-hover:text-violet-500",
+  emerald: "text-slate-400 group-hover:text-emerald-500",
 }
 
 // Một hàng link trong sidebar (dùng chung cho cả 3 nhóm).
@@ -203,33 +218,33 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
     <Link
       href={href}
       title={collapsed ? label : undefined}
-      className={`flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
-        ${collapsed ? "justify-center px-0 py-2.5" : `gap-3 px-3 py-2 ${indent ? "pl-8" : ""}`}
-        ${active ? ACTIVE_BG[accent] : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"}`}
+      className={`group flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
+        ${collapsed ? "justify-center px-0 py-2.5" : `gap-2.5 px-3 py-[7px] ${indent ? "pl-7" : ""}`}
+        ${active ? ACTIVE_BG[accent] : INACTIVE_HOVER[accent]}`}
     >
-      <Icon size={15} className={`flex-shrink-0 ${active ? "text-white" : "text-gray-500"}`} />
+      <Icon size={15} className={`flex-shrink-0 transition-colors ${active ? "text-white" : INACTIVE_ICON[accent]}`} />
       {!collapsed && (
         <>
           <span className="flex-1 whitespace-nowrap">{label}</span>
-          {active && <span className="w-1.5 h-1.5 rounded-full bg-white/80 flex-shrink-0" />}
+          {active && <span className="w-1.5 h-1.5 rounded-full bg-white/70 flex-shrink-0" />}
         </>
       )}
     </Link>
   )
 }
 
-// Header tất cả nhóm CÙNG 1 màu ĐẬM (navy brand-700), chữ + icon trắng.
+// Header nhóm: mỗi accent khác màu để phân biệt rõ nhóm.
 const GROUP_BG: Record<Accent, string> = {
-  brand:   "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
-  blue:    "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
-  violet:  "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
-  emerald: "bg-brand-700 border border-brand-800 text-white hover:bg-brand-600",
+  brand:   "bg-slate-700 text-white hover:bg-slate-600",              // Management
+  blue:    "bg-indigo-700 text-white hover:bg-indigo-600",            // Analytics
+  violet:  "bg-violet-700 text-white hover:bg-violet-600",            // Chat & KB
+  emerald: "bg-teal-700 text-white hover:bg-teal-600",               // Products
 }
 const GROUP_ICON: Record<Accent, string> = {
-  brand:   "text-white",
-  blue:    "text-white",
-  violet:  "text-white",
-  emerald: "text-white",
+  brand:   "text-slate-200",
+  blue:    "text-indigo-200",
+  violet:  "text-violet-200",
+  emerald: "text-teal-200",
 }
 
 // Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
@@ -341,7 +356,7 @@ export function Sidebar() {
 
   return (
     <aside className={`
-      fixed left-0 top-0 h-full bg-white border-r border-gray-200
+      fixed left-0 top-0 h-full bg-gradient-to-b from-white via-white to-slate-50/70 border-r border-slate-200/80
       flex flex-col z-40 select-none overflow-visible
       transition-all duration-200 ease-in-out
       ${collapsed ? "w-16" : "w-60"}
@@ -371,7 +386,7 @@ export function Sidebar() {
           <>
             {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
             {chatKbItems.map(it => (
-              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
             {productItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="emerald" />
@@ -380,7 +395,7 @@ export function Sidebar() {
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
             ))}
             {(isAdminUser || isCreatorUser) && MANAGEMENT_GROUP.items.map(it => (
-              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
             {isCreatorUser && CREATOR_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
@@ -399,9 +414,9 @@ export function Sidebar() {
             {/* 1 ─ Chat & Knowledge */}
             {chatKbItems.length > 0 && (
               <div>
-                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} accent="brand" />
+                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} accent="violet" />
                 {chatKbOpen && chatKbItems.map(it => (
-                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
                 ))}
               </div>
             )}
@@ -422,7 +437,7 @@ export function Sidebar() {
                 <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} accent="blue" />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
-                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-blue-600/70 uppercase tracking-wider">{group.label}</p>
+                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">{group.label}</p>
                     {group.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}
@@ -430,9 +445,9 @@ export function Sidebar() {
                 ))}
                 {analystOpen && (isAdminUser || isCreatorUser) && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-blue-600/70 uppercase tracking-wider">{MANAGEMENT_GROUP.label}</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{MANAGEMENT_GROUP.label}</p>
                     {MANAGEMENT_GROUP.items.map(it => (
-                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
                     ))}
                   </div>
                 )}

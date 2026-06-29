@@ -219,6 +219,17 @@ export async function buildToolContext(
         `Hỏi user theo cấu trúc: (1) Tóm tắt bạn hiểu gì, (2) Hỏi rõ: nước đến, số ngày (tùy chọn), SIM/eSIM (tùy chọn).`
       )
     }
+
+    // Bổ sung KB: tài liệu nội bộ (hướng dẫn kích hoạt, lưu ý KYC, chính sách...) liên quan đến câu hỏi
+    if (userMsg && userMsg.length > 10) {
+      const kbResult = await searchKnowledgeBase(userMsg)
+      if (kbResult) {
+        sections.push(
+          `=== TÀI LIỆU NỘI BỘ (KB) ===`,
+          `[Trích từ knowledge base — tham chiếu nếu liên quan]\n${kbResult}`
+        )
+      }
+    }
   }
 
   if (agentId === "tra-cuu") {
@@ -357,6 +368,17 @@ export async function buildToolContext(
             sections.push(`=== ITEMS ===`, JSON.stringify(items, null, 2))
           }
         }
+      }
+    }
+
+    // KB: tài liệu nội bộ liên quan đến mã / sản phẩm được tra cứu
+    if (userMsg && userMsg.length > 10) {
+      const kbResult = await searchKnowledgeBase(userMsg)
+      if (kbResult) {
+        sections.push(
+          `=== TÀI LIỆU NỘI BỘ (KB) ===`,
+          `[Trích từ knowledge base — tham chiếu nếu liên quan]\n${kbResult}`
+        )
       }
     }
   }
