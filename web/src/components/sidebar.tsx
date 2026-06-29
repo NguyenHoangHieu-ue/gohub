@@ -180,28 +180,19 @@ function roleLabel(role: string) {
 
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
-// Active: mỗi nhóm dùng màu riêng — rõ ràng, không monotone.
+// ── Basic design: 1 màu active duy nhất (brand navy), hover nhạt, group header xám nhẹ ──
+const ACTIVE_ITEM = "bg-[#003B95] text-white shadow-sm"
 const ACTIVE_BG: Record<Accent, string> = {
-  brand:   "bg-[#003B95] text-white shadow-sm",                      // Management: navy đậm
-  blue:    "bg-indigo-600 text-white shadow-sm",                     // Analytics: indigo
-  violet:  "bg-violet-600 text-white shadow-sm",                     // Chat & KB: violet
-  emerald: "bg-emerald-600 text-white shadow-sm",                    // Products: emerald
+  brand: ACTIVE_ITEM, blue: ACTIVE_ITEM, violet: ACTIVE_ITEM, emerald: ACTIVE_ITEM,
 }
-
-// Inactive hover: nhẹ nhàng theo tông màu nhóm (không xám đồng loạt)
 const INACTIVE_HOVER: Record<Accent, string> = {
-  brand:   "text-slate-600 hover:bg-slate-100 hover:text-[#003B95]",
-  blue:    "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700",
-  violet:  "text-slate-600 hover:bg-violet-50 hover:text-violet-700",
-  emerald: "text-slate-600 hover:bg-emerald-50 hover:text-emerald-700",
+  brand: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  blue:  "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  violet:"text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  emerald:"text-slate-600 hover:bg-slate-100 hover:text-slate-900",
 }
-
-// Icon inactive: nhạt, hover nhuộm màu nhóm
 const INACTIVE_ICON: Record<Accent, string> = {
-  brand:   "text-slate-400 group-hover:text-[#003B95]",
-  blue:    "text-slate-400 group-hover:text-indigo-500",
-  violet:  "text-slate-400 group-hover:text-violet-500",
-  emerald: "text-slate-400 group-hover:text-emerald-500",
+  brand: "text-slate-400", blue: "text-slate-400", violet: "text-slate-400", emerald: "text-slate-400",
 }
 
 // Một hàng link trong sidebar (dùng chung cho cả 3 nhóm).
@@ -218,33 +209,30 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
     <Link
       href={href}
       title={collapsed ? label : undefined}
-      className={`group flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
+      className={`flex items-center rounded-lg text-[13px] font-medium transition-all duration-150
         ${collapsed ? "justify-center px-0 py-2.5" : `gap-2.5 px-3 py-[7px] ${indent ? "pl-7" : ""}`}
         ${active ? ACTIVE_BG[accent] : INACTIVE_HOVER[accent]}`}
     >
-      <Icon size={15} className={`flex-shrink-0 transition-colors ${active ? "text-white" : INACTIVE_ICON[accent]}`} />
+      <Icon size={15} className={`flex-shrink-0 ${active ? "text-white" : INACTIVE_ICON[accent]}`} />
       {!collapsed && (
         <>
           <span className="flex-1 whitespace-nowrap">{label}</span>
-          {active && <span className="w-1.5 h-1.5 rounded-full bg-white/70 flex-shrink-0" />}
+          {active && <span className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />}
         </>
       )}
     </Link>
   )
 }
 
-// Header nhóm: mỗi accent khác màu để phân biệt rõ nhóm.
+// Group header: xám nhẹ, chữ tối — không rực màu, đủ phân cấp với items bên dưới.
 const GROUP_BG: Record<Accent, string> = {
-  brand:   "bg-slate-700 text-white hover:bg-slate-600",              // Management
-  blue:    "bg-indigo-700 text-white hover:bg-indigo-600",            // Analytics
-  violet:  "bg-violet-700 text-white hover:bg-violet-600",            // Chat & KB
-  emerald: "bg-teal-700 text-white hover:bg-teal-600",               // Products
+  brand:   "bg-slate-100 text-slate-500 hover:bg-slate-200",
+  blue:    "bg-slate-100 text-slate-500 hover:bg-slate-200",
+  violet:  "bg-slate-100 text-slate-500 hover:bg-slate-200",
+  emerald: "bg-slate-100 text-slate-500 hover:bg-slate-200",
 }
 const GROUP_ICON: Record<Accent, string> = {
-  brand:   "text-slate-200",
-  blue:    "text-indigo-200",
-  violet:  "text-violet-200",
-  emerald: "text-teal-200",
+  brand: "text-slate-400", blue: "text-slate-400", violet: "text-slate-400", emerald: "text-slate-400",
 }
 
 // Header bấm để mở/đóng 1 nhóm lớn (chỉ hiện ở chế độ mở rộng)
@@ -356,7 +344,7 @@ export function Sidebar() {
 
   return (
     <aside className={`
-      fixed left-0 top-0 h-full bg-gradient-to-b from-white via-white to-slate-50/70 border-r border-slate-200/80
+      fixed left-0 top-0 h-full bg-white border-r border-slate-200
       flex flex-col z-40 select-none overflow-visible
       transition-all duration-200 ease-in-out
       ${collapsed ? "w-16" : "w-60"}
@@ -437,7 +425,7 @@ export function Sidebar() {
                 <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} accent="blue" />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
-                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-indigo-400 uppercase tracking-widest">{group.label}</p>
+                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{group.label}</p>
                     {group.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}

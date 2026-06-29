@@ -129,7 +129,9 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
           })
         })
       } else {
-        projected_gpm2 = gpm2 * projectionRatio
+        // Intel pattern: op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
+        const opCostFixed = margin - gpm2
+        projected_gpm2 = projected_margin - opCostFixed
       }
     }
 

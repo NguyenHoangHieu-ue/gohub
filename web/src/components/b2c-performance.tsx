@@ -498,13 +498,13 @@ export function B2CPerformance() {
   }
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex-1 overflow-auto p-4 lg:p-8" style={{ background: "radial-gradient(circle at 16% 8%, rgba(0,113,227,0.06), transparent 28%), radial-gradient(circle at 86% 16%, rgba(0,166,166,0.07), transparent 26%), linear-gradient(180deg,#fbfbfd 0%,#f5f5f7 50%,#eef1f5 100%)" }}>
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">B2C Performance</h1>
-            <p className="text-slate-500">Analyze B2C channel revenue, margin, and sub-channel metrics.</p>
+            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">gohub b2c</h1>
+            <p className="text-[#6e6e73] text-[13px] mt-1">B2C performance · GA4 + Admin GoHub · MTD + Prorata</p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -807,69 +807,53 @@ export function B2CPerformance() {
              </div>
         ) : (
           <>
-        {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6">
+        {/* KPIs — Apple mockup style */}
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
           {kpis.map((kpi, idx) => (
             <div
               key={idx}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"
+              className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]"
+              style={{ background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn(
-                  "p-2.5 rounded-xl",
-                  idx === 0 ? "bg-blue-50 text-blue-600" :
-                  idx === 1 ? "bg-cyan-50 text-cyan-600" :
-                  idx === 2 ? "bg-emerald-50 text-emerald-600" :
-                  idx === 3 ? "bg-purple-50 text-purple-600" :
-                  idx === 4 ? "bg-orange-50 text-orange-600" :
-                  idx === 5 ? "bg-rose-50 text-rose-600" :
-                  "bg-indigo-50 text-indigo-600"
-                )}>
-                  {idx === 0 ? <DollarSign className="w-5 h-5" /> :
-                   idx === 1 ? <Package className="w-5 h-5" /> :
-                   idx === 2 ? <TrendingUp className="w-5 h-5" /> :
-                   idx === 3 ? <PieChartIcon className="w-5 h-5" /> :
-                   idx === 4 ? <ShoppingBag className="w-5 h-5" /> :
-                   idx === 5 ? <DollarSign className="w-5 h-5" /> :
-                   <TrendingUp className="w-5 h-5" />}
-                </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight">{kpi.label}</span>
                 {kpi.change !== 0 && (
-                  <div className={cn(
-                    "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
-                    kpi.isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                  <span className={cn(
+                    "text-[10px] font-[620] px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0",
+                    kpi.isPositive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"
                   )}>
-                    {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                    {Math.abs(kpi.change).toFixed(1)}%
-                  </div>
+                    {kpi.isPositive ? "↑" : "↓"} {Math.abs(kpi.change).toFixed(1)}%
+                  </span>
                 )}
               </div>
-              <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
-              <h3 className="text-2xl font-bold text-slate-900">
-                {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("Orders") ? kpi.value.toLocaleString() : kpi.value.toFixed(1) + "%"}
-              </h3>
-              <p className="text-xs text-slate-400 mt-2">
-                {kpi.lastPeriod !== 0 ? `vs last period: ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.lastPeriod.toFixed(1) + "%"}` : "No prev data"}
-              </p>
+              <div>
+                <div className="text-[22px] font-[560] text-[#1d1d1f] leading-none mt-2">
+                  {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("Orders") ? kpi.value.toLocaleString() : kpi.value.toFixed(1) + "%"}
+                </div>
+                <div className="text-[11px] text-[#6e6e73] mt-1.5 leading-tight">
+                  {kpi.lastPeriod !== 0 ? `prev ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.lastPeriod.toFixed(1) + "%"}` : "—"}
+                </div>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Pro-rata Projection */}
+        {/* Pro-rata Projection — Apple style */}
         {projection && !loading && (
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div className="rounded-lg border border-[#0071e3]/14 p-5" style={{ background: "rgba(0,113,227,0.045)" }}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Month-End Projection (Pro-rata)
+                <h3 className="text-[15px] font-[650] text-[#1d1d1f] flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-[#0071e3]" />
+                  Month-End Prorata
                 </h3>
-                <p className="text-sm text-blue-600">
-                  Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.
+                <p className="text-[12px] text-[#6e6e73] mt-0.5">
+                  {projection.daysElapsed} ngày / {projection.totalDays} ngày · hệ số ×{projection.factor.toFixed(2)}
                 </p>
               </div>
-              <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">
-                {((projection.factor - 1) * 100).toFixed(0)}% Growth Expected
-              </div>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-[620] bg-[#eaf4ff] text-[#0071e3]">
+                run-rate
+              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
