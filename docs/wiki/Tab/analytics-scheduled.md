@@ -10,6 +10,8 @@ Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, ti
 - **Giao diện Web**: `/analytics/scheduled` (`web/src/app/(dashboard)/analytics/scheduled/page.tsx`)
 - **API Scheduled**: `/api/admin/scheduled-messages` (`web/src/app/api/admin/scheduled-messages/route.ts`)
 - **API Cron Job**: `/api/cron/scheduled-messages` (`web/src/app/api/cron/scheduled-messages/route.ts`)
+- **Runner (chạy 1 báo cáo)**: `web/src/lib/scheduled-runner.ts` — dùng chung cho nút Test (POST) và cron.
+- **Số liệu tính sẵn**: `web/src/lib/scheduled-report-data.ts` — SQL cố định đúng định nghĩa Dashboard.
 
 ---
 
@@ -28,11 +30,19 @@ Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong
 2. **Kích hoạt tự động (GitHub Actions)**:
    - Một tiến trình tự động chạy ngầm (GitHub Actions Cron) được kích hoạt định kỳ.
    - Tiến trình này gửi yêu cầu HTTP POST bảo mật đến đầu cuối `/api/cron/scheduled-messages`.
-3. **Biên soạn báo cáo**:
+3. **Biên soạn báo cáo (kiến trúc precompute — S85)**:
    - Máy chủ API kiểm tra các lịch hẹn giờ đến hạn gửi.
-   - Kéo số liệu mới nhất từ kho dữ liệu `gohub_dw`, biên soạn thành thông điệp tóm tắt ngắn gọn kèm biểu tượng trực quan.
+   - `scheduled-report-data.ts` TÍNH SẴN toàn bộ số liệu bằng SQL cố định (đúng định nghĩa Dashboard, dùng chung
+     helper `getDateFilter` / `fetchBODGroupMarginData`) — tách thị trường **VN / US / Tổng** theo `company_code`,
+     kèm so sánh kỳ trước (MoM/WoW), pro-rata target, 3HK Contribution %; bản Daily thêm ma trận 3 ngày + top khách
+     B2B + kênh B2C. Kỳ (daily/weekly/monthly) suy từ `cron_expression`/tên lịch qua `inferPeriod()`.
+   - Khối số liệu này được nhồi vào prompt → **Gemini (BI Analyst) chỉ FORMAT, KHÔNG tự chạy SQL** (1 vòng gọi).
+     **Tại sao đổi**: trước đây để Gemini tự sinh SQL nhiều vòng → báo cáo Daily dễ timeout và số có thể lệch Dashboard.
 4. **Gửi tin nhắn qua Lark Bot**:
    - Sử dụng helper kết nối Lark API `lib/lark.ts` để bắn thông điệp trực tiếp vào nhóm chat của công ty.
+
+> **Timeout**: cron route cấu hình `maxDuration: 60` trong `web/vercel.json`; nút "Test ngay" (`[id]/route.ts`)
+> set `export const maxDuration = 60` inline (route này không nằm trong vercel.json).
 
 ---
 

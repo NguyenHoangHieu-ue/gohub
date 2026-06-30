@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
-import { Plus, Trash2, Pin, Upload, FileText, Download, X, Save, RefreshCw, Users, ChevronRight, File, StickyNote } from "lucide-react"
+import { Plus, Trash2, Pin, Upload, FileText, Download, X, Save, RefreshCw, Users, ChevronRight, File, StickyNote, BookOpen, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
+import KBPage from "@/app/(dashboard)/kb/page"
 
 interface Note { id: string; username: string; title: string; content: string; is_pinned: boolean; created_at: string; updated_at: string }
 interface FileItem { name: string; path: string; size?: number; created_at?: string; url?: string }
@@ -25,6 +26,8 @@ export default function InfoPage() {
   const [canViewAll, setCanViewAll] = useState(false)
   const [view, setView] = useState<"mine" | "all">("mine")
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  // Tab chính: Notes & Files  |  Knowledge Base (KB gộp vào trong Note)
+  const [mainTab, setMainTab] = useState<"notes" | "kb">("notes")
 
   // Dùng DB role + role_permissions để kiểm tra quyền xem-tất-cả (không dùng JWT stale)
   useEffect(() => {
@@ -54,10 +57,10 @@ export default function InfoPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Note</h1>
-            <p className="text-slate-500 text-sm">Notes cá nhân & lưu trữ file</p>
+            <p className="text-slate-500 text-sm">Notes cá nhân, lưu trữ file & Kiến thức nội bộ</p>
           </div>
         </div>
-        {canViewAll && (
+        {mainTab === "notes" && canViewAll && (
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
             <button onClick={() => { setView("mine"); setSelectedUser(null) }} className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all", view === "mine" ? "bg-violet-600 text-white" : "text-slate-600 hover:bg-slate-50")}>
               Của tôi
@@ -69,7 +72,23 @@ export default function InfoPage() {
         )}
       </div>
 
-      {view === "all" && canViewAll ? (
+      {/* Tab chính: Notes & Files | Knowledge Base */}
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setMainTab("notes")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg transition-all", mainTab === "notes" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+          <StickyNote className="w-4 h-4" />Notes & Files
+        </button>
+        <button onClick={() => setMainTab("kb")}
+          className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg transition-all", mainTab === "kb" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+          <BookOpen className="w-4 h-4" />Knowledge Base
+        </button>
+      </div>
+
+      {mainTab === "kb" ? (
+        <div className="-mx-6 -mb-4">
+          <KBPage />
+        </div>
+      ) : view === "all" && canViewAll ? (
         <AdminOverview onSelectUser={(u) => { setSelectedUser(u); setView("all") }} selectedUser={selectedUser} />
       ) : (
         <UserWorkspace username={targetUsername} isOwn={!selectedUser || selectedUser === myUsername} />
@@ -135,6 +154,7 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
   // Xác nhận xóa qua modal (đồng bộ pattern confirm của app, thay confirm() native)
   const [confirmDel, setConfirmDel] = useState<{ kind: "note" | "file"; id: string; label: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [preview, setPreview] = useState<FileItem | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchNotes = useCallback(() => {
@@ -245,17 +265,18 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
             {loadingFiles ? <div className="py-6 flex justify-center"><div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
               : files.length === 0 ? <p className="py-6 text-center text-xs text-slate-400">Chưa có file</p>
               : files.map(f => (
-                <div key={f.path} className="px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50/60 group">
+                <button key={f.path} onClick={() => f.url && setPreview(f)} className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50/60 group text-left">
                   <FileText className="w-4 h-4 text-blue-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
                     <p className="text-[10px] text-slate-400">{fmtSize(f.size)}</p>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {f.url && <a href={f.url} download={f.name} target="_blank" rel="noreferrer" className="w-6 h-6 flex items-center justify-center text-blue-500 hover:bg-blue-50 rounded"><Download className="w-3.5 h-3.5" /></a>}
-                    {isOwn && <button onClick={() => setConfirmDel({ kind: "file", id: f.path, label: f.name })} className="w-6 h-6 flex items-center justify-center text-rose-400 hover:bg-rose-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    {f.url && <span className="w-6 h-6 flex items-center justify-center text-violet-500 hover:bg-violet-50 rounded" title="Xem"><Eye className="w-3.5 h-3.5" /></span>}
+                    {f.url && <a href={f.url} download={f.name} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="w-6 h-6 flex items-center justify-center text-blue-500 hover:bg-blue-50 rounded" title="Tải về"><Download className="w-3.5 h-3.5" /></a>}
+                    {isOwn && <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); setConfirmDel({ kind: "file", id: f.path, label: f.name }) }} className="w-6 h-6 flex items-center justify-center text-rose-400 hover:bg-rose-50 rounded" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></span>}
                   </div>
-                </div>
+                </button>
               ))}
           </div>
         </div>
@@ -318,6 +339,63 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
           </div>
         </div>
       )}
+
+      {/* Xem nội dung file đã import (ảnh / PDF / text) */}
+      {preview && <FilePreview file={preview} onClose={() => setPreview(null)} />}
+    </div>
+  )
+}
+
+// ─── File preview: ảnh hiện trực tiếp, PDF nhúng iframe, text/markdown đọc nội dung ──
+function FilePreview({ file, onClose }: { file: FileItem; onClose: () => void }) {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
+  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"].includes(ext)
+  const isPdf   = ext === "pdf"
+  const isText  = ["txt", "md", "markdown", "csv", "json", "log", "yml", "yaml", "xml", "ts", "tsx", "js", "jsx", "sql", "html", "css"].includes(ext)
+  const [text, setText] = useState<string | null>(null)
+  const [loading, setLoading] = useState(isText)
+  const [err, setErr] = useState(false)
+
+  useEffect(() => {
+    if (!isText || !file.url) return
+    setLoading(true)
+    fetch(file.url).then(r => r.ok ? r.text() : Promise.reject()).then(t => setText(t)).catch(() => setErr(true)).finally(() => setLoading(false))
+  }, [isText, file.url])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-overlay-in p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col animate-modal-in" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText className="w-4 h-4 text-violet-500 shrink-0" />
+            <span className="font-bold text-slate-800 text-sm truncate">{file.name}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {file.url && <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="w-7 h-7 flex items-center justify-center text-blue-500 hover:bg-blue-50 rounded-lg" title="Tải về"><Download className="w-4 h-4" /></a>}
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-4 bg-slate-50/60">
+          {isImage && file.url && (
+            <img src={file.url} alt={file.name} className="max-w-full mx-auto rounded-lg" />
+          )}
+          {isPdf && file.url && (
+            <iframe src={file.url} title={file.name} className="w-full h-[70vh] rounded-lg border border-slate-200 bg-white" />
+          )}
+          {isText && (
+            loading ? <div className="py-16 flex justify-center"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+            : err ? <p className="py-12 text-center text-sm text-slate-400">Không đọc được nội dung file.</p>
+            : <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-mono leading-relaxed bg-white rounded-lg p-4 border border-slate-200">{text}</pre>
+          )}
+          {!isImage && !isPdf && !isText && (
+            <div className="py-12 text-center text-sm text-slate-500">
+              <File className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+              <p>Không hỗ trợ xem trực tiếp định dạng <span className="font-semibold uppercase">.{ext}</span>.</p>
+              {file.url && <a href={file.url} download={file.name} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"><Download className="w-3.5 h-3.5" />Tải về để xem</a>}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

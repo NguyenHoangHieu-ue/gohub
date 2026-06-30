@@ -5,6 +5,10 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { runScheduledMessage } from "@/lib/scheduled-runner"
 import { getDbRole } from "@/lib/db-role"
 
+// Nút "Test ngay" (POST) chạy đồng bộ runScheduledMessage (gọi Gemini) → cần thời gian > default Vercel.
+// Trước đây thiếu maxDuration → Daily (report nặng nhất) bị timeout. Set 60s như cron route.
+export const maxDuration = 60
+
 // Dùng DB role (getDbRole) thay JWT role — tránh JWT cũ khiến admin vừa được assign vẫn bị 403.
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 

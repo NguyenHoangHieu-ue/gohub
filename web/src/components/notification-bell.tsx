@@ -142,11 +142,11 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
       <button
         onClick={handleOpen}
         title="Thông báo"
-        className={`w-full flex items-center rounded-lg text-sm font-medium transition-all duration-150 text-gray-500 hover:bg-gray-50 hover:text-gray-800
+        className={`w-full flex items-center rounded-lg text-sm font-medium transition-all duration-150 text-slate-300 hover:bg-white/10 hover:text-white
           ${collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"}`}
       >
         <div className="relative flex-shrink-0">
-          <Bell size={16} className="text-gray-400" />
+          <Bell size={16} className="text-slate-400" />
           {unread > 0 && (
             <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
               {unread > 9 ? "9+" : unread}

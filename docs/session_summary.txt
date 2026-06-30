@@ -4300,3 +4300,26 @@ cron prewarm 06:30 ICT (chỉnh nếu pipeline nạp gohub_dw trễ hơn).
 - /analytics/users: 1 cửa quản lý user (list+quyền + thêm/đổi mật khẩu + ma trận).
 
 ## Việc VẬN HÀNH còn treo (không phải code): CRON_SECRET trên Vercel (cron prewarm); 3HK fact_data_usage chưa sync tháng 6 (đến 30/05).
+
+## Session 85 (2026-06-30) — Sidebar TỐI + TopBar (về bản hôm qua) + Scheduled precompute, ĐÃ lên production
+(LƯU Ý lịch sử nhánh: file session_summary trên main vốn dừng ở s82 — các phiên s83→s90 chỉ commit code,
+không cập nhật file log này. Entry s85 này nối tiếp trực tiếp sau s82.)
+129. Bối cảnh: làm dở việc scheduled sáng nay (local cũ ở s84/6374161) trong khi production main đã ở s90.
+     Thử merge → phát hiện diverge; user báo "precompute đổi hết sidebar" → THỰC RA precompute KHÔNG đụng sidebar
+     (chỉ 3 file scheduled). Sidebar khác là do s90 đã ĐỔI HƯỚNG thiết kế từ bản TỐI (s84) → bản TRẮNG "basic"
+     (gỡ TopBar, tách lại KB ra tab riêng, gom 3 nhóm gập). User chọn: đưa sidebar TỐI + TopBar của hôm qua VÀO
+     production, KÈM precompute.
+130. Khôi phục cụm UI hôm qua (5 file, lấy từ 6374161) đặt lên nền s90:
+     - sidebar.tsx: nền tối slate-900, active brand-600, hover white/10; Note nổi bật khối tím "+KB";
+       thứ tự Note→Bé Gấu/Promotion→Analytics→Product (KB gộp trong Note, KHÔNG có tab KB riêng).
+     - sidebar-main.tsx: render <TopBar/>. top-bar.tsx: KHÔI PHỤC (s90 đã xóa) — tên+role+SignOut góc phải.
+     - info/page.tsx: bản hôm qua có 2 tab "Notes & Files | Knowledge Base" (nhúng KBPage) → KB vẫn truy cập được
+       qua tab Note (TRÁNH orphan KB vì sidebar tối không có tab KB riêng). s90 vốn chỉ XÓA 86 dòng KB này.
+     - notification-bell.tsx: màu cho nền tối (slate-300/white-10) thay vì gray của s90.
+     GIỮ NGUYÊN các file UI s85–s90 khác (3hk-usage, analytics, settings, b2c-advanced) — không revert.
+131. Scheduled precompute (3 file, từ backup/precompute-s85): scheduled-report-data.ts tính SẴN số liệu bằng SQL
+     cố định khớp Dashboard (tách VN/US/Tổng, MoM/WoW, pro-rata target, CM1 nhóm, 3HK%, daily thêm ma trận 3 ngày
+     + top khách B2B + kênh B2C); scheduled-runner.ts nhồi DATA_BLOCK → Gemini chỉ FORMAT (hết timeout Daily);
+     [id]/route.ts maxDuration=60. Doc: analytics-scheduled.md.
+     Verify tsc + next build + vitest 13/13 PASS (trộn UI hôm qua + precompute trên nền s90). ĐÃ push main + staging.
+     Backup bản precompute-thuần (trên nền s90 trắng) vẫn ở local branch backup/precompute-s85.

@@ -2,23 +2,21 @@
 
 import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
-import { useSession, signOut } from "next-auth/react"
+import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, LogOut, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, BookOpen, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
-import { ROLE_LABELS }        from "@/lib/agents/types"
 
-// Information tab — nổi bật, hiển thị cho tất cả role
+// Note tab — nổi bật, hiển thị cho tất cả role (Knowledge Base đã gộp vào trong trang Note)
 const NAV_INFO = { href: "/info", label: "Note", icon: StickyNote, key: "info" }
 
-// Tabs luôn hiển thị ở trên
+// Tabs luôn hiển thị ở trên (KB đã chuyển vào trong Note → bỏ khỏi sidebar)
 const NAV_MAIN = [
   { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
   { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
-  { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"      },
 ]
 
 // Tabs nhóm Products (collapsible)
@@ -31,11 +29,10 @@ const NAV_PRODUCTS = [
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
 const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
-// 3 nhóm lớn của sidebar (keys khớp NAV_ALL để dùng chung logic phân quyền navItems)
-const NAV_CHAT_KB = [
-  { href: "/chatbot",    label: "Bé Gấu",        icon: Sparkles, key: "chatbot"    },
-  { href: "/kb",         label: "Knowledge Base", icon: BookOpen, key: "kb"         },
-  { href: "/promotions", label: "Promotions",     icon: Gift,     key: "promotions" },
+// Tabs đứng riêng đầu sidebar (Bé Gấu, Promotion) — keys khớp NAV_ALL để dùng chung phân quyền
+const NAV_TOP = [
+  { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
+  { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
 ]
 const NAV_PRODUCT = NAV_PRODUCTS
 
@@ -166,30 +163,18 @@ function useDeptTabs(role: string, department: string) {
   return extraTabs
 }
 
-function roleBadgeClass(role: string) {
-  if (role === "admin")   return "bg-amber-100 text-amber-700"
-  if (role === "manager") return "bg-purple-100 text-purple-700"
-  if (role === "bod")     return "bg-blue-100 text-blue-700"
-  if (role === "staff")   return "bg-teal-100 text-teal-700"
-  return "bg-green-100 text-green-700"
-}
-
-function roleLabel(role: string) {
-  return ROLE_LABELS[role] ?? role
-}
-
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
-// ── Basic design: 1 màu active duy nhất (brand navy), hover nhạt, group header xám nhẹ ──
-const ACTIVE_ITEM = "bg-[#003B95] text-white shadow-sm"
+// ── Dark sidebar: nền tối, chữ trắng. Active = xanh brand sáng nổi trên nền tối, hover = trắng mờ ──
+const ACTIVE_ITEM = "bg-brand-600 text-white shadow-sm"
 const ACTIVE_BG: Record<Accent, string> = {
   brand: ACTIVE_ITEM, blue: ACTIVE_ITEM, violet: ACTIVE_ITEM, emerald: ACTIVE_ITEM,
 }
 const INACTIVE_HOVER: Record<Accent, string> = {
-  brand: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  blue:  "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  violet:"text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  emerald:"text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  brand: "text-slate-300 hover:bg-white/10 hover:text-white",
+  blue:  "text-slate-300 hover:bg-white/10 hover:text-white",
+  violet:"text-slate-300 hover:bg-white/10 hover:text-white",
+  emerald:"text-slate-300 hover:bg-white/10 hover:text-white",
 }
 const INACTIVE_ICON: Record<Accent, string> = {
   brand: "text-slate-400", blue: "text-slate-400", violet: "text-slate-400", emerald: "text-slate-400",
@@ -224,12 +209,12 @@ function NavRow({ href, label, Icon, active, collapsed, indent = false, accent =
   )
 }
 
-// Group header: xám nhẹ, chữ tối — không rực màu, đủ phân cấp với items bên dưới.
+// Group header trên nền tối: nền trắng mờ, chữ sáng nhẹ — đủ phân cấp với items bên dưới.
 const GROUP_BG: Record<Accent, string> = {
-  brand:   "bg-slate-100 text-slate-500 hover:bg-slate-200",
-  blue:    "bg-slate-100 text-slate-500 hover:bg-slate-200",
-  violet:  "bg-slate-100 text-slate-500 hover:bg-slate-200",
-  emerald: "bg-slate-100 text-slate-500 hover:bg-slate-200",
+  brand:   "bg-white/5 text-slate-300 hover:bg-white/10",
+  blue:    "bg-white/5 text-slate-300 hover:bg-white/10",
+  violet:  "bg-white/5 text-slate-300 hover:bg-white/10",
+  emerald: "bg-white/5 text-slate-300 hover:bg-white/10",
 }
 const GROUP_ICON: Record<Accent, string> = {
   brand: "text-slate-400", blue: "text-slate-400", violet: "text-slate-400", emerald: "text-slate-400",
@@ -261,7 +246,6 @@ export function Sidebar() {
   const pathname  = usePathname()
   const { data: session } = useSession()
   const { collapsed, toggle } = useSidebar()
-  const [chatKbOpen,  setChatKbOpen]  = useState(true)
   const [productOpen, setProductOpen] = useState(false)
   const [analystOpen, setAnalystOpen] = useState(true)
 
@@ -275,8 +259,6 @@ export function Sidebar() {
 
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
-  const name       = session?.user?.name     || ""
-  const initials   = name.split(" ").map(w => w[0]?.toUpperCase()).filter(Boolean).slice(0, 2).join("")
 
   const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs } = useSidebarData(username, role)
   const department = dbDept ?? "none"
@@ -333,7 +315,7 @@ export function Sidebar() {
 
   // Phân các tab được phép vào 3 nhóm lớn — ẩn theo hiddenTabs (creator config)
   const allowedKeys  = new Set(navItems.map(n => n.key))
-  const chatKbItems  = NAV_CHAT_KB.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
+  const topItems     = NAV_TOP.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
   const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
   const showInfoTab  = !hiddenTabs.has("info")   // creator có thể ẩn Information tab
   const isAdminUser  = effectiveRole === "admin"
@@ -344,14 +326,14 @@ export function Sidebar() {
 
   return (
     <aside className={`
-      fixed left-0 top-0 h-full bg-white border-r border-slate-200
+      fixed left-0 top-0 h-full bg-slate-900 border-r border-slate-800
       flex flex-col z-40 select-none overflow-visible
       transition-all duration-200 ease-in-out
       ${collapsed ? "w-16" : "w-60"}
     `}>
 
       {/* Brand header */}
-      <div className={`bg-brand-700 border-b border-brand-800/60 flex-shrink-0
+      <div className={`bg-slate-950 border-b border-slate-800 flex-shrink-0
         ${collapsed ? "px-2 py-4" : "px-4 py-4"}`}>
         <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
           <div className="w-8 h-8 bg-brand-500/40 rounded-lg flex items-center justify-center border border-brand-400/30 flex-shrink-0">
@@ -373,14 +355,14 @@ export function Sidebar() {
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
             {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
-            {chatKbItems.map(it => (
+            {topItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
-            ))}
-            {productItems.map(it => (
-              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="emerald" />
             ))}
             {showAnalytics && analyticsGroups.flatMap(g => g.items).map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="blue" />
+            ))}
+            {productItems.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="emerald" />
             ))}
             {(isAdminUser || isCreatorUser) && MANAGEMENT_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
@@ -390,38 +372,31 @@ export function Sidebar() {
             ))}
           </>
         ) : (
-          /* Chế độ mở rộng: 3 nhóm lớn */
+          /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
           <>
-            {/* Information — nổi bật, ẩn nếu creator config ẩn cho role này */}
+            {/* Note — NỔI BẬT, ẩn nếu creator config ẩn cho role này */}
             {showInfoTab && (
-              <div className="mb-1 px-2">
-                <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed={false} accent="violet" />
-              </div>
+              <Link
+                href={NAV_INFO.href}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-2 text-[13px] font-semibold transition-all
+                  ${isActive(NAV_INFO.href)
+                    ? "bg-violet-600 text-white shadow-md ring-1 ring-violet-400/50"
+                    : "bg-violet-500/15 text-violet-200 ring-1 ring-violet-400/30 hover:bg-violet-500/25 hover:text-white"}`}
+              >
+                <StickyNote size={16} className="flex-shrink-0" />
+                <span className="flex-1">Note</span>
+                <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">+ KB</span>
+              </Link>
             )}
 
-            {/* 1 ─ Chat & Knowledge */}
-            {chatKbItems.length > 0 && (
-              <div>
-                <GroupToggle label="Chat & Knowledge" Icon={Sparkles} open={chatKbOpen} onToggle={() => setChatKbOpen(o => !o)} accent="violet" />
-                {chatKbOpen && chatKbItems.map(it => (
-                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
-                ))}
-              </div>
-            )}
+            {/* Bé Gấu + Promotion — đứng riêng đầu sidebar */}
+            {topItems.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
+            ))}
 
-            {/* 2 ─ Product (mặc định thu gọn) */}
-            {productItems.length > 0 && (
-              <div className="mt-1">
-                <GroupToggle label="Product" Icon={Package} open={productOpen} onToggle={() => setProductOpen(o => !o)} accent="emerald" />
-                {productOpen && productItems.map(it => (
-                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="emerald" />
-                ))}
-              </div>
-            )}
-
-            {/* 3 ─ Analyst */}
+            {/* Analytics */}
             {showAnalytics && (
-              <div className="mt-1 pt-1 border-t border-gray-100">
+              <div className="mt-1 pt-1 border-t border-slate-800">
                 <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} accent="blue" />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
@@ -450,10 +425,20 @@ export function Sidebar() {
               </div>
             )}
 
+            {/* Product (sau Analytics, mặc định thu gọn) */}
+            {productItems.length > 0 && (
+              <div className="mt-1 pt-1 border-t border-slate-800">
+                <GroupToggle label="Product" Icon={Package} open={productOpen} onToggle={() => setProductOpen(o => !o)} accent="emerald" />
+                {productOpen && productItems.map(it => (
+                  <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="emerald" />
+                ))}
+              </div>
+            )}
+
           </>
         )}
 
-        <div className={`pt-1 border-t border-gray-100 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
+        <div className={`pt-1 border-t border-slate-800 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
           <NotificationBell collapsed={collapsed} />
         </div>
       </nav>
@@ -473,41 +458,6 @@ export function Sidebar() {
           : <ChevronLeft  size={14} className="group-hover:scale-110 transition-transform" />
         }
       </button>
-
-      {/* User footer */}
-      <div className={`border-t border-gray-100 p-3 space-y-1 flex-shrink-0 ${collapsed ? "px-1.5" : "p-3"}`}>
-        {collapsed ? (
-          <div className="flex justify-center py-1" title={name}>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
-              {initials || "?"}
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-              {initials || "?"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-gray-900 truncate">{name}</div>
-              <div className="mt-0.5">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(effectiveRole)}`}>
-                  {roleLabel(effectiveRole)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          title={collapsed ? "Sign Out" : undefined}
-          className={`w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors
-            ${collapsed ? "justify-center" : ""}`}
-        >
-          <LogOut size={15} />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
-      </div>
     </aside>
   )
 }
