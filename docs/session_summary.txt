@@ -4323,3 +4323,20 @@ không cập nhật file log này. Entry s85 này nối tiếp trực tiếp sau
      [id]/route.ts maxDuration=60. Doc: analytics-scheduled.md.
      Verify tsc + next build + vitest 13/13 PASS (trộn UI hôm qua + precompute trên nền s90). ĐÃ push main + staging.
      Backup bản precompute-thuần (trên nền s90 trắng) vẫn ở local branch backup/precompute-s85.
+
+## ===== TỔNG KẾT PHIÊN (Session 85, 2026-06-30) =====
+ĐÃ MERGE main + staging (head ec5bc10). tsc + next build + vitest 13/13 PASS.
+Diễn biến (có khúc mắc git, đã xử lý an toàn — KHÔNG mất việc s85–s90):
+  1. Đầu phiên: working tree có việc dở "scheduled precompute" (3 file) trên nền local cũ s84 (6374161).
+  2. Định merge lên main → PHÁT HIỆN local cũ 6 phiên: origin/main đã ở s90 (070d468), local mới s84 → DIVERGE.
+     Bài học: PHẢI git fetch + so sánh trước khi merge; nếu diverge → cherry-pick commit mới, ĐỪNG merge cả nhánh.
+     (đã lưu memory git_sync_before_merge).
+  3. User báo "precompute đổi hết sidebar/màu/thứ tự" → ĐIỀU TRA: precompute KHÔNG đụng sidebar (chỉ 3 file scheduled).
+     Sidebar khác là do s90 đã ĐỔI HƯỚNG thiết kế: s84 = sidebar TỐI + TopBar; s85→s90 = quay về TRẮNG "basic"
+     (gỡ TopBar, tách KB ra tab riêng, gom 3 nhóm gập, user info xuống đáy sidebar).
+  4. User chốt: đưa sidebar TỐI + TopBar của hôm qua VÀO production KÈM precompute.
+  5. KẾT QUẢ (commit ec5bc10): 5 file UI (từ 6374161) khôi phục sidebar tối + TopBar + KB-trong-Note (kèm info/page
+     nhúng KBPage để KB không orphan) + notification-bell màu tối; 3 file precompute scheduled; giữ nguyên UI s85–s90
+     khác (3hk/analytics/settings/b2c-advanced). Push main + staging cùng head.
+Còn treo: backup/precompute-s85 (local, chưa xóa); CRON_SECRET Vercel; 3HK fact_data_usage chưa sync tháng 6 (đến 30/05).
+TODO sau deploy: user xem lại sidebar tối + thử nút "Test ngay" Scheduled để xác nhận precompute ra số đúng.
