@@ -4340,3 +4340,22 @@ Diễn biến (có khúc mắc git, đã xử lý an toàn — KHÔNG mất vi�
      khác (3hk/analytics/settings/b2c-advanced). Push main + staging cùng head.
 Còn treo: backup/precompute-s85 (local, chưa xóa); CRON_SECRET Vercel; 3HK fact_data_usage chưa sync tháng 6 (đến 30/05).
 TODO sau deploy: user xem lại sidebar tối + thử nút "Test ngay" Scheduled để xác nhận precompute ra số đúng.
+
+## Session 86 (2026-07-01) — Đưa tab 3HK Data Usage về đúng bản commit 6374161 (s84)
+132. User yêu cầu: chỉ lấy TAB 3HK Data Usage trong commit 6374161 (bản "hôm qua" s84) đặt vào hệ thống.
+     Bối cảnh: s85 khi khôi phục sidebar tối chỉ lấy 5 file UI từ 6374161, CỐ Ý GIỮ NGUYÊN 3hk-usage ở bản
+     nhánh s90 (đơn giản hơn). Nay user muốn tab 3HK quay về bản 6374161 (phức tạp hơn).
+     - Xác định tab = 3 file: web/src/app/(dashboard)/analytics/3hk-usage/page.tsx +
+       api/analytics/3hk-speed-map/route.ts + api/analytics/3hk-usage/report/route.ts (KHÔNG đụng file khác).
+     - `git checkout 6374161 -- <3 file>`. Verify: git diff 6374161 = 0 dòng (khớp 100%), tsc --noEmit PASS.
+     KHÁC BIỆT bản 6374161 (giờ ở production) so với bản s90 vừa thay:
+       • speed-map: xử lý CẢ mã CŨ (P-code: P2→500MB·5mbps, P1→500MB·10mbps, PY→1GB·10mbps) VÀ mã MỚI
+         (A/B UNL đọc cột throttle_speed từ Product DB Supabase qua supabaseAdmin; fallback A=5/B=10).
+       • report route + 4 query bundle trong page: CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data'
+         ELSE MAX(sku_type) (ép type theo mã, không tin cột sku_type sai cho mã mới).
+       • page: daysOfSku xử lý cả mã cũ (...<days>D) lẫn mới (...UNL<days>); assumeGbPerDay = spec NCC cứng
+         (10mbps→1.8GB, 5mbps→1.6GB); CÓ LẠI biểu đồ "Phân bố mức data sử dụng/ngày" (usageDist stacked bar).
+     - Vendor fix REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL' VẪN CÒN ở cả 2 bản → KHÔNG tái sinh bug tab rỗng.
+     Pipeline: commit staging (7af9942) → push → user duyệt → FF-merge main (fetch trước, main=origin/main không
+     diverge, staging trước main đúng 1 commit) → push origin/main. main=staging=origin/main=7af9942.
+     LƯU Ý bản thân: khi đọc `git diff A B`, dòng `-`=A(6374161) / dòng `+`=B(HEAD) — đừng mô tả ngược chiều.
