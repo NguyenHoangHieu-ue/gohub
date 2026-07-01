@@ -2,18 +2,18 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { supabaseAdmin } from "@/lib/supabase"
 
-// Phân loại SKU cũ 3HK Unlimited theo mã SKU trực tiếp — 3 loại:
-//   500MB · 5mbps  = mã có P2  (5 mbps throttle)
-//   500MB · 10mbps = mã có P1  (10 mbps throttle, lower data)
-//   1GB   · 10mbps = mã không có P (base PY UNLI = 1GB 10mbps premium)
+// Phân loại SKU 3HK Unlimited → 1 trong 3 nhóm (high-speed × throttle):
+//   500MB · 5mbps · 500MB · 10mbps · 1GB · 10mbps.
 //
-// Quy tắc chuẩn theo nghiệp vụ:
-//   FY  = Fixed packages (không unlimited)
-//   PY  = Daily (không UNLI) hoặc Unlimited 1GB 10mbps (có UNLI, không có P1/P2)
-//   P1  = sub-branch PY UNLI → 500MB 10mbps
-//   P2  = sub-branch PY UNLI → 500MB 5mbps
-// Không cần COGS, chỉ đọc mã SKU.
+// Mã CŨ (code-based):  [E]<CTRY3><3D>[PY|P1|P2]UNLI<days>D
+//   P2 → 5mbps (500MB) | P1 → 10mbps (500MB) | PY → 1GB 10mbps (base premium)
+// Mã MỚI (Product DB):  <prefix><CTRY3><3D><A|B>UNL<days>
+//   Throttle + dung lượng high-speed lấy từ cột throttle_speed (Supabase skus), vd
+//   "500 MB high speed then drop to 5 mbps" → 500MB·5mbps; "...drop to 10 mbps" → ·10mbps;
+//   "1GB high speed ... 10 mbps" → 1GB·10mbps. Spec thực tế: A=5mbps, B=10mbps.
+//   Fallback khi thiếu throttle_speed: theo chữ A/B (A→5mbps·500MB, B→10mbps·500MB).
 
 const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"])
 
@@ -21,17 +21,35 @@ const G_500_5  = "500MB high-speed · throttle 5 mbps"
 const G_500_10 = "500MB high-speed · throttle 10 mbps"
 const G_1GB_10 = "1GB high-speed · throttle 10 mbps"
 
-// Parse mã CŨ usage: [E]<CTRY:3><3D>[PY|P1|P2][UNLI]...<days>D
-// Phân loại theo sub-type:
-//   P2 + UNL → 500MB 5mbps
-//   P1 + UNL → 500MB 10mbps
-//   PY + UNL → 1GB 10mbps (PYUNLI = gói premium base)
-function parseOldSku(sku: string): { mbps: number | null } | null {
-  if (!/UNL/i.test(sku)) return null       // phải có UNLI/UNL
-  if (/P2/i.test(sku))   return { mbps: 5    }  // P2 → 500MB 5mbps
-  if (/P1/i.test(sku))   return { mbps: 10   }  // P1 → 500MB 10mbps
-  if (/PY/i.test(sku))   return { mbps: null }  // PYUNLI → 1GB 10mbps
-  return null   // pattern không xác định
+const isNewSku = (sku: string) => /[AB]UNL/i.test(sku)
+
+// Mã CŨ → group theo P-code (chỉ áp khi KHÔNG phải mã mới).
+function parseOldGroup(sku: string): { group: string; source: string } | null {
+  if (!/UNL/i.test(sku)) return null
+  if (/P2/i.test(sku)) return { group: G_500_5,  source: "rule-p2" }   // P2 → 500MB 5mbps
+  if (/P1/i.test(sku)) return { group: G_500_10, source: "rule-p1" }   // P1 → 500MB 10mbps
+  if (/PY/i.test(sku)) return { group: G_1GB_10, source: "rule-py" }   // PYUNLI → 1GB 10mbps
+  return null
+}
+
+// Mã MỚI → group từ chuỗi throttle_speed Product DB (chuẩn nhất cho mã mới).
+function groupFromThrottle(throttle: string | null | undefined): { group: string; source: string } | null {
+  if (!throttle) return null
+  const m = /drop\s*to\s*(\d+)\s*mbps/i.exec(throttle)
+  if (!m) return null
+  const mbps = parseInt(m[1])
+  const isGb = /1\s*GB/i.test(throttle)              // "1GB"/"1 GB" high speed
+  if (mbps === 5)  return { group: G_500_5,  source: "throttle-5" }   // 5mbps luôn 500MB
+  if (mbps === 10) return isGb ? { group: G_1GB_10, source: "throttle-1gb-10" }
+                               : { group: G_500_10, source: "throttle-500-10" }
+  return null
+}
+
+// Fallback mã mới khi thiếu throttle_speed: theo chữ A/B (A=5mbps, B=10mbps — khớp spec product).
+function groupFromLetter(sku: string): { group: string; source: string } | null {
+  if (/AUNL/i.test(sku)) return { group: G_500_5,  source: "letter-a-5" }   // A → 5mbps 500MB
+  if (/BUNL/i.test(sku)) return { group: G_500_10, source: "letter-b-10" }  // B → 10mbps 500MB
+  return null
 }
 
 export async function GET() {
@@ -41,34 +59,38 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {
-    // Lấy tất cả SKU unlimited 3HK từ fact_data_usage
+    // Mọi SKU Unlimited theo MÃ (chứa UNL) — KHÔNG tin cột sku_type (mã MỚI bị gán nhầm 'Daily').
     const usageRows = await queryAnalytics<{ sku: string }>(`
       SELECT DISTINCT f.sku
       FROM fact_data_usage f
       JOIN dim_sku d ON f.sku = d.sku AND REPLACE(UPPER(d.vendor),' ','') = '3HKDATAPOOL'
-      WHERE f.sku_type ILIKE '%nlimited%'
+      WHERE f.sku_type ILIKE '%nlimited%' OR UPPER(f.sku) LIKE '%UNL%'
     `)
     if (!usageRows.length) return NextResponse.json({ map: {}, coverage: {} })
+
+    // Throttle_speed của mã MỚI từ Product DB (Supabase skus) — quyết 500MB vs 1GB ở 10mbps.
+    const newSkus = usageRows.map(u => u.sku).filter(isNewSku)
+    const throttleBySku: Record<string, string | null> = {}
+    if (newSkus.length) {
+      const { data } = await supabaseAdmin
+        .from("skus").select("sku_code, throttle_speed").in("sku_code", newSkus)
+      for (const r of data ?? []) throttleBySku[r.sku_code] = r.throttle_speed
+    }
 
     const map: Record<string, { group: string | null; source: string }> = {}
     const coverage: Record<string, number> = {}
 
     for (const u of usageRows) {
-      const parsed = parseOldSku(u.sku)
-      let group: string | null = null
-      let source = "no-parse"
-
-      if (parsed) {
-        if (parsed.mbps === 5) {
-          group = G_500_5;  source = "rule-p2"
-        } else if (parsed.mbps === 10) {
-          group = G_500_10; source = "rule-p1"
-        } else {
-          // mbps === null → không có P1/P2 → base PY UNLI = 1GB 10mbps
-          group = G_1GB_10; source = "rule-no-p"
-        }
+      let res: { group: string; source: string } | null = null
+      if (isNewSku(u.sku)) {
+        // Mã mới: ưu tiên throttle_speed Product DB → fallback theo chữ A/B
+        res = groupFromThrottle(throttleBySku[u.sku]) ?? groupFromLetter(u.sku)
+      } else {
+        // Mã cũ: theo P-code
+        res = parseOldGroup(u.sku)
       }
-
+      const group = res?.group ?? null
+      const source = res?.source ?? "no-parse"
       map[u.sku] = { group, source }
       coverage[source] = (coverage[source] ?? 0) + 1
     }

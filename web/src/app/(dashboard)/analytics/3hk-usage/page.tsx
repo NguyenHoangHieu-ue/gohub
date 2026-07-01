@@ -29,11 +29,21 @@ const formatDate = (d?: string) => {
   return isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString("vi-VN")
 }
 
-// Số ngày của gói từ mã SKU (bỏ token P1/P2 trước, vd AS43DUNLIP103D → 03; ECHN3DP1UNLI05D → 05).
+// Số ngày của gói từ mã SKU — xử lý CẢ cũ + mới:
+//   MỚI: ...UNL<days> kết thúc bằng số, không có 'D' (vd 3ACHN3DBUNL05 → 05).
+//   CŨ:  ...<days>D (bỏ token P1/P2 trước, vd AS43DUNLIP103D → 03; ECHN3DP1UNLI05D → 05).
 const daysOfSku = (sku: string): number | null => {
-  const m = sku.replace(/P[12]/, "").match(/(\d+)D$/)
-  return m ? parseInt(m[1]) : null
+  const mNew = sku.match(/UNL(\d+)$/i)
+  if (mNew) return parseInt(mNew[1])
+  const mOld = sku.replace(/P[12]/i, "").match(/(\d+)D$/i)
+  return mOld ? parseInt(mOld[1]) : null
 }
+
+// Giả định high-speed GB/ngày theo throttle của nhóm (spec NCC): 10mbps → 1.8GB, 5mbps → 1.6GB.
+const assumeGbPerDay = (group: string): number => /10\s*mbps/i.test(group) ? 1.8 : 1.6
+
+// Rút gọn tên nhóm tốc độ cho nhãn biểu đồ: "500MB high-speed · throttle 5 mbps" → "500MB·5mbps".
+const groupShort = (g: string) => g.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
 
 interface DataUsageRecord {
   order_code: string
@@ -257,18 +267,47 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited") return []
     return speedGroups.map(sg => {
       const members = speedGroupMembers[sg.speed_group] ?? []
-      let usage = 0, planGb = 0, simDays = 0
+      let usage = 0, simDays = 0
       for (const m of members) {
         const d = daysOfSku(m.sku)
         usage += m.total_usage_gb
-        planGb += m.total_plan_gb
         if (d && d > 0) simDays += m.active_sims * d
       }
       const actual = simDays > 0 ? usage / simDays : 0
-      const assume = simDays > 0 ? planGb / simDays : 0   // data-driven: total_plan / (sims × days)
-      const name = sg.speed_group.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
-      return { name, actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
+      const assume = assumeGbPerDay(sg.speed_group)   // spec NCC: 10mbps→1.8GB, 5mbps→1.6GB
+      return { name: groupShort(sg.speed_group), actual: +actual.toFixed(3), assume, usagePct: +sg.avg_usage_pct.toFixed(1) }
     })
+  }, [activeTab, speedGroups, speedGroupMembers])
+
+  // Biểu đồ phân bố mức data dùng/ngày/SIM (GB) — đếm số SIM theo dải tiêu dùng, chồng theo nhóm gói.
+  const USAGE_BUCKETS = [
+    { label: "0–0.5",  min: 0,   max: 0.5 },
+    { label: "0.5–1",  min: 0.5, max: 1   },
+    { label: "1–1.5",  min: 1,   max: 1.5 },
+    { label: "1.5–2",  min: 1.5, max: 2   },
+    { label: "2–2.5",  min: 2,   max: 2.5 },
+    { label: "2.5–3",  min: 2.5, max: 3   },
+    { label: "≥3",     min: 3,   max: Infinity },
+  ]
+  const usageDist = useMemo(() => {
+    if (activeTab !== "Unlimited") return { rows: [] as Record<string, number | string>[], groups: [] as string[] }
+    const groups = speedGroups.map(sg => groupShort(sg.speed_group))
+    const rows: Record<string, number | string>[] = USAGE_BUCKETS.map(b => {
+      const o: Record<string, number | string> = { range: b.label }
+      for (const g of groups) o[g] = 0
+      return o
+    })
+    for (const sg of speedGroups) {
+      const gname = groupShort(sg.speed_group)
+      for (const m of speedGroupMembers[sg.speed_group] ?? []) {
+        const d = daysOfSku(m.sku)
+        if (!d || d <= 0 || m.active_sims <= 0) continue
+        const perDay = m.total_usage_gb / m.active_sims / d
+        const bi = USAGE_BUCKETS.findIndex(b => perDay >= b.min && perDay < b.max)
+        if (bi >= 0) rows[bi][gname] = (rows[bi][gname] as number) + m.active_sims
+      }
+    }
+    return { rows, groups }
   }, [activeTab, speedGroups, speedGroupMembers])
 
   const searchClause = () => debouncedSearch ? `
@@ -288,7 +327,7 @@ export default function ThreeHKDataUsagePage() {
     try {
       const sql = `
         WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku_type) as sku_type
+          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
           FROM fact_data_usage
           WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
           GROUP BY iccid, order_code
@@ -330,7 +369,7 @@ export default function ThreeHKDataUsagePage() {
     try {
       const sql = `
         WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku) as sku, MAX(sku_type) as sku_type
+          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku) as sku, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
           FROM fact_data_usage
           WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
           GROUP BY iccid, order_code
@@ -370,7 +409,7 @@ export default function ThreeHKDataUsagePage() {
     try {
       const sql = `
         WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku_type) as sku_type
+          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
           FROM fact_data_usage
           WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
           GROUP BY iccid, order_code
@@ -416,7 +455,7 @@ export default function ThreeHKDataUsagePage() {
       const sql = `
         WITH bundle_starts AS (
           SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku) as sku,
-            MAX(sku_type) as sku_type, MAX(activation_date) as activation_date
+            CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type, MAX(activation_date) as activation_date
           FROM fact_data_usage
           WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
           GROUP BY iccid, order_code
@@ -629,7 +668,7 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Unlimited — Breakdown theo gói (high-speed × throttle)
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">3 loại: 500MB·5mbps · 500MB·10mbps · 1GB·10mbps. Throttle từ mã datatype SKU (mới A/B = 5/10; cũ P1/P2 = 5/10); lượng high-speed từ mô tả gói (throttle_speed/offer).</p>
+            <p className="text-[11px] text-slate-400 mt-1">3 loại: 500MB·5mbps · 500MB·10mbps · 1GB·10mbps. Mã CŨ phân loại theo P-code (P2=5, P1=10, PY=1GB·10); mã MỚI theo cột throttle_speed Product DB (A=5, B=10; tách 500MB/1GB ở 10mbps).</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -652,7 +691,6 @@ export default function ThreeHKDataUsagePage() {
                   speedGroups.map((sg, idx) => {
                     const expanded = expandedGroup === sg.speed_group
                     const members = speedGroupMembers[sg.speed_group] ?? []
-                    const assumeGb = sg.speed_group.includes("1GB") ? 1 : 0.5  // giả định high-speed/ngày
                     return (
                     <React.Fragment key={idx}>
                     <tr className="hover:bg-slate-50/50 transition-colors">
@@ -685,7 +723,8 @@ export default function ThreeHKDataUsagePage() {
                       <tr className="bg-slate-50/40">
                         <td colSpan={6} className="px-6 py-3">
                           <p className="text-[11px] text-slate-400 mb-2">
-                            Giả định (GB/ngày/SIM) = Total Plan ÷ Active SIMs ÷ số ngày gói. Thực tế = Total Actual ÷ Active SIMs ÷ số ngày.
+                            Giả định (GB/ngày/SIM) = mức high-speed theo throttle (spec NCC): 10mbps → 1.8GB, 5mbps → 1.6GB.
+                            Thực tế = Total Actual ÷ Active SIMs ÷ số ngày gói.
                             <span className="text-rose-600 font-semibold"> Đỏ</span> = thực tế vượt giả định,
                             <span className="text-emerald-600 font-semibold"> xanh</span> = trong giả định.
                           </p>
@@ -705,16 +744,16 @@ export default function ThreeHKDataUsagePage() {
                               <tbody className="divide-y divide-slate-50">
                                 {members.length > 0 ? members.map((m, j) => {
                                   const d = daysOfSku(m.sku)
-                                  const assumePerDay = (d && d > 0 && m.active_sims > 0) ? m.total_plan_gb / m.active_sims / d : null
+                                  const assumePerDay = assumeGbPerDay(sg.speed_group)   // spec theo throttle nhóm
                                   const gbPerDaySim = (d && d > 0 && m.active_sims > 0) ? m.total_usage_gb / m.active_sims / d : null
-                                  const over = gbPerDaySim != null && assumePerDay != null && gbPerDaySim > assumePerDay
+                                  const over = gbPerDaySim != null && gbPerDaySim > assumePerDay
                                   return (
                                   <tr key={j} className="hover:bg-slate-50/50">
                                     <td className="px-4 py-2 font-mono text-xs text-slate-700">{m.sku}</td>
                                     <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{m.active_sims.toLocaleString()}</td>
                                     <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
                                     <td className="px-4 py-2 text-right text-slate-500 text-xs">
-                                      {assumePerDay == null ? "—" : `${assumePerDay.toFixed(3)} GB`}
+                                      {`${assumePerDay.toFixed(1)} GB`}
                                     </td>
                                     <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
                                     <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
@@ -768,6 +807,34 @@ export default function ThreeHKDataUsagePage() {
                     <Cell key={i} fill={d.actual > d.assume ? "#e11d48" : "#10b981"} />
                   ))}
                 </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Biểu đồ phân bố mức data dùng/ngày/SIM của các gói Unlimited (chỉ tab Unlimited) */}
+      {activeTab === "Unlimited" && usageDist.groups.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-600" />
+              Phân bố mức data sử dụng/ngày — theo loại gói Unlimited
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo nhóm tốc độ. Đường tham chiếu: giả định 1.6GB (5mbps) · 1.8GB (10mbps).</p>
+          </div>
+          <div className="p-4" style={{ height: 340 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={usageDist.rows} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="range" tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" />
+                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={48} allowDecimals={false} />
+                <Tooltip formatter={(v: number, n: string) => [`${v} SIM`, n]} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {usageDist.groups.map((g, i) => (
+                  <Bar key={g} dataKey={g} name={g} stackId="d"
+                    fill={["#6366f1", "#f59e0b", "#10b981", "#0ea5e9"][i % 4]} radius={[0, 0, 0, 0]} />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -31,14 +31,18 @@ export async function POST(req: NextRequest) {
     ? `AND (f.order_code ILIKE '%${search.replace(/'/g, "''")}%' OR f.iccid ILIKE '%${search.replace(/'/g, "''")}%' OR f.sku ILIKE '%${search.replace(/'/g, "''")}%')`
     : ""
 
+  // Lọc theo type ĐÃ SUY LẠI từ mã (sku_type trong filtered_bundles đã là effective type)
   const tabFilter = tabValue !== "all" ? `AND sku_type = '${tabValue}'` : ""
 
+  // Phân loại type theo MÃ SKU (không tin cột sku_type — sai cho mã MỚI): mọi mã chứa 'UNL'
+  // (cũ PYUNLI/P1/P2 lẫn mới ...A/BUNL...) → 'Unlimited Data'; còn lại giữ nguyên cột (Daily/Fixed).
   const bundleCTE = `
     WITH bundle_starts AS (
       SELECT iccid, order_code,
              MIN(first_report_date) as bundle_start_date,
              MAX(sku)               as sku,
-             MAX(sku_type)          as sku_type,
+             CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data'
+                  ELSE MAX(sku_type) END as sku_type,
              MAX(activation_date)   as activation_date
       FROM fact_data_usage
       WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
