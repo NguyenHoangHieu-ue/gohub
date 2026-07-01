@@ -4359,3 +4359,11 @@ TODO sau deploy: user xem lại sidebar tối + thử nút "Test ngay" Scheduled
      Pipeline: commit staging (7af9942) → push → user duyệt → FF-merge main (fetch trước, main=origin/main không
      diverge, staging trước main đúng 1 commit) → push origin/main. main=staging=origin/main=7af9942.
      LƯU Ý bản thân: khi đọc `git diff A B`, dòng `-`=A(6374161) / dòng `+`=B(HEAD) — đừng mô tả ngược chiều.
+133. Chốt trạng thái các việc vận hành treo (Hiếu xác nhận 2026-07-01):
+     - CRON_SECRET: ĐÃ SET trên Vercel → cron prewarm analytics 06:30 ICT auth OK (hết cảnh báo route mở).
+     - 3HK fact_data_usage sync tháng 6: HIỆN CHƯA CẦN (tab dùng kỳ tháng 5, data đến 30/05). Để đó.
+     - backup/precompute-s85: ĐÃ XÓA (nhánh local, 2 commit riêng = bản precompute-nền-trắng không dùng;
+       xóa không ảnh hưởng code — precompute thật đã trên main).
+     - Verify tab 3HK / sidebar tối / nút "Test ngay" Scheduled: Hiếu báo tạm OK.
+     - Index gohub_dw (cold-load): BỎ QUA — Hiếu KHÔNG có quyền đụng gohub_dw. Cache trong app là fix cuối cùng.
+     - Targets parity (Units vs GPM2%) + endpoint chưa cache (customer/report, 3hk-speed-map): tạm chưa đụng.
