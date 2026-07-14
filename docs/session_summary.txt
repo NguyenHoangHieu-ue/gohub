@@ -4458,3 +4458,20 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
 - Dọn working tree: docs/KLTN_Nhat_Ky_Cong_Viec.csv đang bị xóa (không rõ chủ đích) + .obsidian/*.json đổi (state local)
   — chưa xử lý, Hiếu quyết.
 - Tuỳ chọn (đề xuất, chưa làm): dọn ~20 `session.user?.role as string` benign; bổ sung test auth guard + cache.
+
+## Session 88 (2026-07-14) — Việc nhanh (2,3) + điều tra (4,5,6)
+148. Housekeeping (e0828fb): xóa KLTN csv (Hiếu chủ đích) + commit .obsidian state.
+149. Dọn cast (7526490): bỏ 53 `role/username as string` thừa (Session.user đã typed; server→session.user.role,
+     client→?? ""). Giữ token/data as string ở auth.ts/db-role.ts. Thêm 15 vitest (SQL sanitizer, date math,
+     cachedQuery L1, isCronReq, analyticsGuard) → tổng 28/28 PASS. tsc PASS.
+150. [ITEM 4] Map nguồn data sync API hệ thống: sync.py (sync.yml daily) đồng bộ GoHub API → Supabase 4 bảng lõi:
+     products(973)/skus(12892)/listings/items + dẫn xuất sku_catalog(8877). data_sync.py = sync Neo4j.
+     ĐỌC ở: skus tab (skus/listings/items), 3hk-usage (3hk-speed-map), promotions, chatbot agents
+     (sku_catalog/products/skus/items), MCP, ncc. Bảng "phẳng" nhiều cột mô tả (listings 45 cột) = ứng viên JSON metadata.
+151. [ITEM 5] Neo4j KHÔNG phải đường chính của tu-van. searchSkus() dùng Supabase sku_catalog + ref_support_countries
+     (4-phase fallback). Neo4j (runQuery) CHỈ ở searchSkusSemantic — fallback CUỐI khi searchSkus=0 (context.ts:177).
+     Cũng dùng ở recommendations + semantic-search. → "chatbot không biết nước/gói" gốc ở match nước/classifier, KHÔNG
+     phải Neo4j; nhưng Neo4j (nếu stale) = lưới an toàn chết. Đề xuất: gộp embedding SKU vào Supabase pgvector, bỏ Neo4j.
+152. [ITEM 6] Có ~781 câu hỏi thật để test replay: chat_messages(338 web) + lark_chat_history(443 Lark). Plan test/fix
+     chatbot = harness replay câu hỏi thật qua router/classifier/context → log miss → phân loại lỗi → fix. (chi tiết plan
+     trình bày cho Hiếu, chờ duyệt thực thi.)
