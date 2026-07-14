@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "system/Second-Brain-Architecture.md",
+                "file": "products/SKU-Code-Structure.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Second-Brain-Architecture"
+              "title": "SKU-Code-Structure"
             }
           }
         ]
@@ -185,8 +185,11 @@
   },
   "active": "067ab7af99c980b0",
   "lastOpenFiles": [
-    "HOME.md",
+    "Tab/ACcbsAu8",
+    "HOME.md.tmp.9252.e3e79f385a9d",
+    "HOME.md.tmp.9252.8e90619cfa3e",
     "system/Second-Brain-Architecture.md",
+    "HOME.md",
     "company/GoHub-Overview.md"
   ]
 }
