@@ -688,33 +688,30 @@ export async function identifyCode(code: string): Promise<any> {
 // ─── Tool: get_product_detail ─────────────────────────────────────────────────
 
 // Chỉ đọc cột VN (bỏ _en), bỏ date_created/last_modified_date
-const LISTING_COLS = [
-  "listing_code","reference_product_code","tenant","status","listing_type",
-  "listing_name_vn",
-  "type_of_sim","product_type","network_operator",
-  "supported_countries",
-  "data_type_vn",
-  "category_code",
-  "daily_reset_time_vn",
-  "activation_time_vn",
-  "network_type",
-  "hotspot_vn",
-  "kyc_needed_vn",
-  "kyc_links_vn",
-  "expirations_vn",
-  "top_up_options_vn",
-  "activation_vn",
-  "activation_links_vn",
-  "special_activation_required_vn",
-  "unsupported_apps_vn",
-  "telco_perks_vn",
-  "note_vn",
-  "call_sms_details_vn",
-  "local_phone_number_vn","local_phone_number_country",
-  "call_vn",
-  "apn",
-  "synced_at",
-].join(",")
+// Item 4: field mô tả listings đã chuyển vào JSONB `metadata`. Select core (cột) + metadata.
+const LISTING_COLS = "listing_code,reference_product_code,tenant,status,listing_type,listing_name_vn,type_of_sim,product_type,category_code,metadata"
+
+// Ghép core (cột) + field mô tả (từ metadata) — GIỮ shape gọn cũ (chỉ _vn, bỏ _en/date) để context agent không phình.
+function pickListing(r: any) {
+  const m = r?.metadata ?? {}
+  return {
+    listing_code: r.listing_code, reference_product_code: r.reference_product_code,
+    tenant: r.tenant, status: r.status, listing_type: r.listing_type,
+    listing_name_vn: r.listing_name_vn, type_of_sim: r.type_of_sim, product_type: r.product_type,
+    category_code: r.category_code,
+    network_operator: m.network_operator, supported_countries: m.supported_countries,
+    data_type_vn: m.data_type_vn, daily_reset_time_vn: m.daily_reset_time_vn,
+    activation_time_vn: m.activation_time_vn, network_type: m.network_type,
+    hotspot_vn: m.hotspot_vn, kyc_needed_vn: m.kyc_needed_vn, kyc_links_vn: m.kyc_links_vn,
+    expirations_vn: m.expirations_vn, top_up_options_vn: m.top_up_options_vn,
+    activation_vn: m.activation_vn, activation_links_vn: m.activation_links_vn,
+    special_activation_required_vn: m.special_activation_required_vn,
+    unsupported_apps_vn: m.unsupported_apps_vn, telco_perks_vn: m.telco_perks_vn,
+    note_vn: m.note_vn, call_sms_details_vn: m.call_sms_details_vn,
+    local_phone_number_vn: m.local_phone_number_vn, local_phone_number_country: m.local_phone_number_country,
+    call_vn: m.call_vn, apn: m.apn,
+  }
+}
 
 // Chỉ đọc cột VN, bỏ _en và date fields
 const ITEM_COLS = [
@@ -769,7 +766,7 @@ export async function getProductDetail(sku_code: string): Promise<any> {
       .limit(10),
   ])
 
-  return { sku, product: product ?? {}, listings: listings ?? [], items: items ?? [] }
+  return { sku, product: product ?? {}, listings: (listings ?? []).map(pickListing), items: items ?? [] }
 }
 
 // ─── Tool: get_product_by_code ───────────────────────────────────────────────
@@ -811,7 +808,7 @@ export async function searchListings(params: { product_code?: string; name?: str
     q = q.or(`listing_name_vn.ilike.%${params.name}%,listing_name_en.ilike.%${params.name}%`)
   }
   const { data } = await q.limit(5)
-  return data ?? []
+  return (data ?? []).map(pickListing)
 }
 
 // ─── Tool: decode_sku_code ────────────────────────────────────────────────────

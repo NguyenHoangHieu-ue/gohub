@@ -4555,3 +4555,17 @@ ITEM 4 — MIGRATE LISTINGS (Hiếu duyệt "OK theo đề xuất", listings tr�
 
 CÒN TREO: merge staging→main (chờ B2C người kia + Hiếu chạy v21 SQL); pgvector semantic (optional); Phase 2 listings.
 LƯU Ý: sync.py & migrations dưới backend/ bị .gitignore rộng → phải `git add -f` khi commit (một số file force-tracked).
+
+## Session 89 (2026-07-14) — [ITEM 4] Listings Phase 2: chuyển reads sang metadata
+162. Hiếu đã chạy v21 SQL. Verify: 16.048 listings, metadata đầy 40 keys/row (backfill OK).
+163. Phase 2 — chuyển MỌI đọc listings sang metadata (cột phẳng VẪN còn, chưa drop):
+     - tools.ts: LISTING_COLS = core + `metadata`; thêm pickListing() (core từ cột + field _vn từ metadata, GIỮ shape
+       gọn cũ không phình context); áp vào searchListings + getProductDetail.
+     - /api/listings: SELECT core + metadata → flatten vào row (FE giữ nguyên); search network_operator qua
+       JSON path `metadata->>network_operator.ilike`.
+     - /api/promotions: đọc telco_perks từ metadata + filter `metadata->>telco_perks_en.not.is.null`.
+     - /api/listings/filters (listing_type) + tools.ts:675 (listing_code,status): core, không đổi.
+     Verify: tsc PASS, vitest 28/28, next build PASS + 3 PROBE DB THẬT (listings JSON-path search matched 13.940;
+     searchListings đọc network_operator="Mobifone" từ metadata; promotions filter not.is.null OK).
+TODO Phase 3 (khi Hiếu chắc chắn, decision #4 giữ song song): sync.py ngừng ghi cột phẳng listings + DROP cột cũ
+(migration v22). Rồi lặp quy trình cho products, skus.
