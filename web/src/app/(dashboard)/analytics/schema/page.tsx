@@ -19,10 +19,10 @@ export default function SchemaConfigPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot")
+    if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot")
   }, [status, session, router])
 
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
+  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
 
   return <SchemaConfig email={session.user?.email || ""} />
 }

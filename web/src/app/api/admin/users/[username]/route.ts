@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs"
 // creator is a super-admin role (higher than admin) — allow both.
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role as string)) throw new Error("Unauthorized")
+  if (!session || !["admin", "creator"].includes(session.user.role)) throw new Error("Unauthorized")
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { username: string } }) {

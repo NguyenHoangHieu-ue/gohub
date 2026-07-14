@@ -26,7 +26,7 @@ async function canWriteScheduled(username: string): Promise<boolean> {
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()
   const { name, prompt, cron_expression, lark_webhook_url, lark_keyword, is_active } = body
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -68,7 +68,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data: msg, error } = await supabaseAdmin
     .from("lark_scheduled_messages")

@@ -23,7 +23,7 @@ async function canViewAll(role: string): Promise<boolean> {
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const role = session.user.role as string
+  const role = session.user.role
   if (!(await canViewAll(role))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const [{ data: users }, { data: notes }] = await Promise.all([

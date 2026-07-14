@@ -17,7 +17,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!["admin", "creator"].includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const body = await req.json()
     const { error } = await supabaseAdmin.from("app_settings").upsert({ key: KEY, value: JSON.stringify(body) }, { onConflict: "key" })

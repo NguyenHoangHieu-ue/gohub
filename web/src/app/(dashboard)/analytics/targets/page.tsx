@@ -313,7 +313,7 @@ export default function TargetsPage() {
       const tabs: string[] = d.writable_tabs ?? []
       setCanEdit(["admin", "creator"].includes(role) || tabs.includes("targets"))
     }).catch(() => {
-      setCanEdit(["admin", "creator"].includes(session?.user?.role as string))
+      setCanEdit(["admin", "creator"].includes(session?.user?.role ?? ""))
     })
   }, [status, session?.user?.username])
 

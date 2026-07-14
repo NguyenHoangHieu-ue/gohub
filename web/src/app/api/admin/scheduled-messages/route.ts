@@ -24,7 +24,7 @@ async function canWriteScheduled(username: string): Promise<boolean> {
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!VIEW_ROLES.has(session.user?.role as string)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!VIEW_ROLES.has(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data, error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -38,7 +38,7 @@ export async function GET(_req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const username = session.user?.username as string
+  const username = session.user.username
   if (!(await canWriteScheduled(username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()

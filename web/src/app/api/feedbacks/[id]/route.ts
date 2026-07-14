@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role as string))
+  if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { status, rejectReason } = await req.json()

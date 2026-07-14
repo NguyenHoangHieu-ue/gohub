@@ -45,8 +45,8 @@ const FILTER_ROLES = CONFIGURABLE_ROLES
 export default function SettingsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot") }, [status, session, router])
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
+  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot") }, [status, session, router])
+  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
   return <AnalyticsSettings />
 }
 

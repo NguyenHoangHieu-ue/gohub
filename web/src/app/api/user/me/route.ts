@@ -9,7 +9,7 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const username = session.user.username as string
+  const username = session.user.username
 
   const [userRes, configRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),

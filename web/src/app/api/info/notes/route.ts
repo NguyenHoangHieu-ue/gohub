@@ -7,7 +7,7 @@ import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 async function getUser() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.username) return null
-  return { username: session.user.username, role: session.user.role as string }
+  return { username: session.user.username, role: session.user.role }
 }
 
 // canViewAll: admin/creator hoặc role có "info" trong role_permissions

@@ -1003,7 +1003,7 @@ function ThreeHKTab({ role }: { role?: string }) {
 
 export default function NccPage() {
   const { data: session } = useSession()
-  const role = session?.user?.role as string | undefined
+  const role = session?.user?.role
   const [vendor, setVendor] = useState<VendorTab>("wm")
 
   return (

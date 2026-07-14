@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 async function getUser() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.username) return null
-  return { username: session.user.username, role: session.user.role as string }
+  return { username: session.user.username, role: session.user.role }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

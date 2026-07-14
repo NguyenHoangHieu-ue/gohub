@@ -59,7 +59,7 @@ function applyFilters(q: any, filters: Record<string, string>) {
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const role   = session.user.role as string | undefined
+  const role   = session.user.role
   const sp     = req.nextUrl.searchParams
   const page   = Math.max(1, parseInt(sp.get("page") || "1"))
   const offset = (page - 1) * PAGE_SIZE

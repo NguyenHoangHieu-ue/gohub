@@ -7,7 +7,7 @@ const PAGE_SIZE = 50
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role as string))
+  if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const search  = req.nextUrl.searchParams.get("search") || ""
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role as string))
+  if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { product_code, telco_perks, telco_perks_start, telco_perks_end } = await req.json()

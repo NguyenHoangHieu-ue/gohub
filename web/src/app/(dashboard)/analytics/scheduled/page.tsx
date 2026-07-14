@@ -54,7 +54,7 @@ export default function ScheduledMessagesPage() {
       const tabs: string[] = d.writable_tabs ?? []
       setCanEdit(["admin", "creator"].includes(role) || tabs.includes("scheduled"))
     }).catch(() => {
-      setCanEdit(["admin", "creator"].includes(session?.user?.role as string))
+      setCanEdit(["admin", "creator"].includes(session?.user?.role ?? ""))
     })
   }, [status, session?.user?.username])
 

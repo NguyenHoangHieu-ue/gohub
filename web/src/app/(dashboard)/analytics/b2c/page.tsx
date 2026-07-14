@@ -10,7 +10,7 @@ import { B2CAdvancedDashboard } from "@/components/b2c-advanced-dashboard"
 // Performance = intel-main style channel breakdown (admin/creator có thể toggle).
 export default function B2CPage() {
   const { data: session } = useSession()
-  const role = session?.user?.role as string | undefined
+  const role = session?.user?.role
   const canToggle = role === "admin" || role === "creator"
 
   // Tất cả role mặc định thấy Advanced trước

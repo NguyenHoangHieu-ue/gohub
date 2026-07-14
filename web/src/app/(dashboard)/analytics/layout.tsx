@@ -16,7 +16,7 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   if (!session) redirect("/login")
 
   const role     = session.user.role     as string
-  const username = session.user.username as string
+  const username = session.user.username
 
   // admin/creator: toàn quyền — không cần truy DB (kiểm JWT trước cho nhanh)
   if (role === "admin" || role === "creator") return <>{children}</>

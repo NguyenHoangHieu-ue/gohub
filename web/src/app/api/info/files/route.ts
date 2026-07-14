@@ -8,7 +8,7 @@ const BUCKET = "Information"
 async function getUser() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.username) return null
-  return { username: session.user.username, role: session.user.role as string }
+  return { username: session.user.username, role: session.user.role }
 }
 
 // GET — list files của user (hoặc user khác nếu admin)

@@ -16,10 +16,10 @@ export default function SqlExplorerPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (status === "authenticated" && !["admin","creator","bod"].includes(session?.user?.role as string)) router.push("/chatbot")
+    if (status === "authenticated" && !["admin","creator","bod"].includes(session?.user?.role ?? "")) router.push("/chatbot")
   }, [status, session, router])
 
-  if (status !== "authenticated" || !["admin","creator","bod"].includes(session?.user?.role as string)) return null
+  if (status !== "authenticated" || !["admin","creator","bod"].includes(session?.user?.role ?? "")) return null
 
   return <SqlExplorer />
 }

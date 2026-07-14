@@ -51,9 +51,9 @@ const WRITABLE_TAB_DEFS = [
 export default function UserManagementPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot") }, [status, session, router])
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
-  return <UserAdmin currentUser={session.user.username as string} currentRole={session.user.role as string} />
+  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot") }, [status, session, router])
+  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
+  return <UserAdmin currentUser={session.user.username} currentRole={session.user.role} />
 }
 
 function roleBadge(role: string) {
