@@ -1,3 +1,13 @@
+---
+title: "NCC Catalog (Danh Mục Nhà Cung Cấp)"
+page_type: tab_guide
+department: product
+tags: [tab, ncc, vendor]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # NCC Catalog (Danh Mục Nhà Cung Cấp)
 
 Hệ thống quản lý catalog sản phẩm của Nhà Cung Cấp (NCC) lớn gồm WorldMove (WM) và 3HK, hỗ trợ so sánh khoảng trống danh mục và tạo sản phẩm hàng loạt.

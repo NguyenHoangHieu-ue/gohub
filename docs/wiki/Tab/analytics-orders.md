@@ -1,3 +1,13 @@
+---
+title: "Orders Management (Quản Lý Đơn Hàng BI)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, orders]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Orders Management (Quản Lý Đơn Hàng BI)
 
 Trình duyệt danh sách đơn hàng lấy trực tiếp từ kho dữ liệu, hỗ trợ tìm kiếm nâng cao + xuất Excel để đối soát.

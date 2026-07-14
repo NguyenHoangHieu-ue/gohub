@@ -1,3 +1,13 @@
+---
+title: "B2B Performance (Hiệu Suất Bán Sỉ B2B)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, b2b]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # B2B Performance (Hiệu Suất Bán Sỉ B2B)
 
 Báo cáo kênh đại lý/bán sỉ: doanh thu, biên lợi nhuận, chi phí kênh và so sánh **đại lý chiến lược (Strategic)** vs **thường (Non-Strategic)**.

@@ -1,3 +1,13 @@
+---
+title: "BI Dashboard (Bảng Điều Khiển Tổng Quan)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, dashboard]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # BI Dashboard (Bảng Điều Khiển Tổng Quan)
 
 Trang tổng quan kinh doanh: cho lãnh đạo/nhân viên nhìn nhanh doanh thu thực tế, **dự phóng cuối tháng**, tiến độ đạt KPI và top điểm đến. Đây là trang "mặt tiền" của phân hệ Analytics.

@@ -1,3 +1,13 @@
+---
+title: "User Feedback (Ý Kiến Đóng Góp Người Dùng)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, feedback]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # User Feedback (Ý Kiến Đóng Góp Người Dùng)
 
 Cổng thu thập đánh giá/phản hồi của người dùng về độ chính xác & hiệu quả của công cụ, số liệu trên hệ thống.

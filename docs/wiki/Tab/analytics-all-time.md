@@ -1,3 +1,13 @@
+---
+title: "All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, report]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)
 
 Phân tích hiệu suất đa năm/đa kỳ, so sánh tăng trưởng kỳ này vs kỳ trước theo 3 trục kênh lớn.

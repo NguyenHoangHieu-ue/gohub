@@ -1,3 +1,13 @@
+---
+title: "Channel Performance (Hiệu Suất Kênh Bán Hàng)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, channels]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Channel Performance (Hiệu Suất Kênh Bán Hàng)
 
 Phân tích hiệu quả doanh số & dòng tiền theo từng kênh bán (web, sàn TMĐT, đại lý...), có khấu trừ phí sàn riêng từng kênh.

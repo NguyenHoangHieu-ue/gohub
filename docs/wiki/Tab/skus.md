@@ -1,3 +1,13 @@
+---
+title: "System SKUs (Danh Mục Sản Phẩm Hệ Thống)"
+page_type: tab_guide
+department: product
+tags: [tab, product, sku]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # System SKUs (Danh Mục Sản Phẩm Hệ Thống)
 
 Quản lý cấu trúc catalog sản phẩm cốt lõi của GoHub bao gồm 4 tầng phân cấp dữ liệu: Products, SKUs, Listings và Items.

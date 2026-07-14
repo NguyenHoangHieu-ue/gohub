@@ -1,3 +1,13 @@
+---
+title: "Reference Countries (Danh Mục Quốc Gia Tham Chiếu)"
+page_type: tab_guide
+department: product
+tags: [tab, reference, countries]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Reference Countries (Danh Mục Quốc Gia Tham Chiếu)
 
 Quản lý danh mục các quốc gia, vùng lãnh thổ, nhóm địa lý và hỗ trợ ánh xạ ISO Code chuẩn hóa toàn hệ thống.

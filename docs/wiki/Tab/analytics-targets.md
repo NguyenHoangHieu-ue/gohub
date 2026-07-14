@@ -1,3 +1,13 @@
+---
+title: "KPI Target Planning (Lập Kế Hoạch Chỉ Tiêu Doanh Số)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, targets, kpi]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # KPI Target Planning (Lập Kế Hoạch Chỉ Tiêu Doanh Số)
 
 Trang thiết lập và giám sát mục tiêu KPI doanh thu hàng tháng cho từng thị trường hoặc phân vùng kinh doanh lớn của GoHub.

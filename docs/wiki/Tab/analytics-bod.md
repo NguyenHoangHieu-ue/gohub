@@ -1,3 +1,13 @@
+---
+title: "Board of Directors Report (Báo Cáo Quản Trị BOD)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, bod]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Board of Directors Report (Báo Cáo Quản Trị BOD)
 
 Báo cáo cấp cao cho Ban Giám đốc: phân tích cơ cấu **Contribution Margin (CM1)**, chi phí kênh, đóng góp doanh thu 3HK và dự kiến cuối tháng. Là báo cáo tài chính "ra quyết định" của team Business.

@@ -1,3 +1,13 @@
+---
+title: "Knowledge Base (Cơ Sở Tri Thức & Wiki)"
+page_type: tab_guide
+department: all
+tags: [tab, kb, wiki]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Knowledge Base (Cơ Sở Tri Thức & Wiki)
 
 Quy trình tải lên tài liệu tri thức, xử lý cắt nhỏ (chunking), tạo vector embedding, tìm kiếm ngữ nghĩa và quản lý trang Wiki nội bộ.

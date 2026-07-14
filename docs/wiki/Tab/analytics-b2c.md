@@ -1,3 +1,13 @@
+---
+title: "B2C Performance (Hiệu Suất Bán Lẻ B2C)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, b2c]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # B2C Performance (Hiệu Suất Bán Lẻ B2C)
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).

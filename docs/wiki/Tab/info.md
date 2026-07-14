@@ -1,3 +1,13 @@
+---
+title: "Note (Cổng Thông Tin Hệ Thống)"
+page_type: tab_guide
+department: all
+tags: [tab, note, info]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Note (Cổng Thông Tin Hệ Thống — trước đây "Information")
 
 Tab cung cấp dữ liệu tham khảo, tra cứu danh mục nhóm nước và quản lý tệp tin hướng dẫn vận hành nội bộ.

@@ -1,3 +1,13 @@
+---
+title: "CS Troubleshoot Hub (Trung Tâm Khắc Phục Sự Cố CS)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, cs]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # CS Troubleshoot Hub (Trung Tâm Khắc Phục Sự Cố CS)
 
 Phân hệ cho bộ phận Chăm sóc Khách hàng: tra cứu lịch sử khiếu nại + đồng bộ vé sự cố (tickets) từ Lark.

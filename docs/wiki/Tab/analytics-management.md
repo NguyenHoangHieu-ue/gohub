@@ -1,3 +1,13 @@
+---
+title: "Management BI (Quản Trị Người Dùng & Hệ Thống BI)"
+page_type: tab_guide
+department: tech
+tags: [tab, admin, management]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Management BI (Quản Trị Người Dùng & Hệ Thống BI)
 
 Trang cấu hình kỹ thuật cốt lõi cho phân hệ Business Intelligence bao gồm quản lý tài khoản người dùng, phân quyền chi tiết ma trận chức năng, quản lý metadata cấu hình và tối ưu hóa bộ nhớ đệm.

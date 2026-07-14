@@ -1,3 +1,13 @@
+---
+title: "Staff Performance (Hiệu Suất Nhân Viên)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, staff]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Staff Performance (Hiệu Suất Nhân Viên)
 
 Bảng xếp hạng doanh thu & đơn xử lý của từng nhân viên kinh doanh nội bộ.

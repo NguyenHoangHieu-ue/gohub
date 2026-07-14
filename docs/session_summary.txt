@@ -4396,3 +4396,18 @@ TODO sau deploy: user xem lại sidebar tối + thử nút "Test ngay" Scheduled
 Verify tổng: tsc PASS + vitest 13/13 PASS + next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 do lint
 phase OOM heap mặc định — vấn đề môi trường, không phải code). Diff: 23 file tracked, +33/-542. UI Analytics KHÔNG đụng.
 TODO: chờ Hiếu duyệt staging → FF-merge main (fetch trước theo git_sync_before_merge).
+
+## Session 87 (tiếp, 2026-07-14) — Chuẩn hoá docs/wiki cho Obsidian + web (kb_wiki_pages)
+139. Vấn đề: 28 file docs/wiki/Tab/*.md + workflow-pipeline.md THIẾU frontmatter → Obsidian Dataview không thấy,
+     web sync (kb_wiki_pages dùng title) không nhận. Các nhóm khác (company/vendors/products/pricing/system) đã có FM.
+140. Fix: thêm frontmatter đồng nhất (title=H1, page_type, department, tags, created 2026-06-28, updated 2026-07-14,
+     status active) cho 29 file. Tab → page_type: tab_guide; workflow-pipeline → reference. department ∈ DEPARTMENTS
+     (all/product/tech). Kết quả: 45/45 file có FM, 45 title UNIQUE (không trùng → web upsert an toàn).
+141. HOME.md: bổ sung index đầy đủ — mục "Hướng Dẫn Theo Tab" (28 tab, chia BI / Admin / Sản phẩm) + link
+     workflow-pipeline. Trước đó HOME chỉ liệt kê 15 trang, thiếu toàn bộ Tab.
+142. Verify link toàn wiki: mọi wikilink [[...]] + anchor [[...#Heading]] resolve 100% (0 gãy).
+143. Fix bug script upload (chặn "đưa lên web"): import_wiki.py & reembed_wiki.py có ROOT=parent.parent.parent →
+     trỏ backend/ thay vì gốc repo (file đã bị di chuyển database/import → backend/seeding/import). Đổi sang đi ngược
+     tìm thư mục chứa docs/wiki (bền với di chuyển) + sửa docstring path. Xác minh ROOT→HeThong, docs/wiki & web/.env.local OK.
+     page_type là TEXT tự do (v7_wiki_pages.sql, không CHECK) → tab_guide hợp lệ.
+Chạy đẩy lên web: python backend/seeding/import/import_wiki.py (idempotent, skip theo title; cần pip install pyyaml supabase requests).

@@ -1,3 +1,13 @@
+---
+title: "SQL Explorer (Trình Truy Vấn SQL Nội Bộ)"
+page_type: tab_guide
+department: tech
+tags: [tab, admin, sql]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # SQL Explorer (Trình Truy Vấn SQL Nội Bộ)
 
 Trình chạy truy vấn trực tiếp lên kho `gohub_dw` (PostgreSQL) dành cho quản trị viên/chuyên viên phân tích cao cấp.

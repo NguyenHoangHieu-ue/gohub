@@ -1,3 +1,13 @@
+---
+title: "Products BI (Báo Cáo Hiệu Suất Sản Phẩm)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, products]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Products BI (Báo Cáo Hiệu Suất Sản Phẩm)
 
 Báo cáo chuyên sâu theo sản phẩm/SKU: sản lượng bán, doanh thu, cơ cấu giá vốn (COGS), margin và phân tích theo điểm đến (destination).

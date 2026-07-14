@@ -1,3 +1,13 @@
+---
+title: "Scheduled Messages (Lịch Gửi Báo Cáo Tự Động)"
+page_type: tab_guide
+department: tech
+tags: [tab, admin, scheduled]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Scheduled Messages (Lịch Gửi Báo Cáo Tự Động)
 
 Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, tiến độ chạy mục tiêu tự động đến các kênh hoặc nhóm thảo luận của bộ phận CS, Sales trên ứng dụng Lark.

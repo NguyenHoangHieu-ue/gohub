@@ -1,3 +1,13 @@
+---
+title: "Promotions (Quản Lý Khuyến Mãi)"
+page_type: tab_guide
+department: product
+tags: [tab, promotions]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Promotions (Quản Lý Khuyến Mãi)
 
 Trang hiển thị và quản lý các chiến dịch khuyến mãi, chính sách quà tặng và ưu đãi hiện hành của GoHub.

@@ -1,3 +1,13 @@
+---
+title: "GoHub AI Chatbot (Bé Gấu Thông Thái)"
+page_type: tab_guide
+department: all
+tags: [tab, chatbot, ai]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # GoHub AI Chatbot (Bé Gấu Thông Thái)
 
 Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và phân vùng dữ liệu của hệ thống Chatbot đa tác nhân (6 Agents) tích hợp trên Giao diện Web và Lark Bot.

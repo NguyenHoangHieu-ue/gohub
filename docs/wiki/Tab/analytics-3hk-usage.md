@@ -1,3 +1,13 @@
+---
+title: "3HK Data Usage (Theo Dõi Tiêu Hao Data 3HK)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, 3hk]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # 3HK Data Usage (Theo Dõi Tiêu Hao Data 3HK)
 
 Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế của người dùng sử dụng các gói eSIM/SIM thuộc Zone của nhà mạng đối tác 3HK.

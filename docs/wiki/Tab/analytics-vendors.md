@@ -1,3 +1,13 @@
+---
+title: "Vendor Performance (Hiệu Suất Nhà Cung Cấp)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, vendors]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Vendor Performance (Hiệu Suất Nhà Cung Cấp)
 
 Báo cáo chi tiêu mua hàng, chất lượng mạng và mức đóng góp doanh thu của từng nhà cung cấp (NCC) đối tác.

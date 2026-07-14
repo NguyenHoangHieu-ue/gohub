@@ -1,3 +1,13 @@
+---
+title: "Customer Performance (Hiệu Suất Khách Hàng B2B)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, customers]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Customer Performance (Hiệu Suất Khách Hàng B2B)
 
 Phân tích hành vi mua, giá trị vòng đời và phân tầng khách hàng sỉ B2B lớn.

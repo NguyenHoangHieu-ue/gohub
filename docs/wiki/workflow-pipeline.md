@@ -1,3 +1,13 @@
+---
+title: "Quy Trình Vận Hành Chuẩn (Workflow Standard Pipeline)"
+page_type: reference
+department: tech
+tags: [architecture, pipeline, workflow]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Quy Trình Vận Hành Chuẩn (Workflow Standard Pipeline)
 
 > Tài liệu hướng dẫn thiết lập, triển khai, tự động hóa kiểm thử và bảo mật hệ thống GoHub Intel.

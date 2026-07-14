@@ -1,3 +1,13 @@
+---
+title: "Website Analytics (Phân Tích Website GA4 & GSC)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, website, ga4]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Website Analytics (Phân Tích Website GA4 & GSC)
 
 Tích hợp Google Analytics 4 (GA4) + Google Search Console (GSC) để theo dõi traffic web và hiệu suất SEO của GoHub.

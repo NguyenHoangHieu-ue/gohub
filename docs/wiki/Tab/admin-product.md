@@ -1,3 +1,13 @@
+---
+title: "Admin Product (Quản Trị Sản Phẩm & Hệ Thống)"
+page_type: tab_guide
+department: product
+tags: [tab, admin, product]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Admin Product (Quản Trị Sản Phẩm & Hệ Thống)
 
 Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồm thiết lập luật đích SKU, phân loại nhóm cấp bậc đại lý và đồng bộ hạ tầng.

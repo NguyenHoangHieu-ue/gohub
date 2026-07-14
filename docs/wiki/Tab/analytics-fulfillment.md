@@ -1,3 +1,13 @@
+---
+title: "Fulfillment Report (Báo Cáo Hoàn Thành Đơn)"
+page_type: tab_guide
+department: all
+tags: [tab, analytics, fulfillment]
+created: 2026-06-28
+updated: 2026-07-14
+status: active
+---
+
 # Fulfillment Report (Báo Cáo Hoàn Thành Đơn)
 
 Phân tích chất lượng vận hành cấp phát SIM/eSIM tự động: tỷ lệ thành công, thời gian hoàn thành, phân bổ đối tác giao.
