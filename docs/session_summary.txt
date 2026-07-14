@@ -4428,3 +4428,13 @@ Chạy đẩy lên web: python backend/seeding/import/import_wiki.py (idempotent
      giữ page_type: tab_guide + is_hidden: true; đẩy lên web bằng import_wiki.py.
      LƯU Ý GIỚI HẠN: import_wiki.py SKIP theo title (không update trang đã có) → đổi NỘI DUNG mà giữ title thì phải
      sửa qua tab Wiki web hoặc xóa row cũ rồi chạy lại. (Cân nhắc nâng script thành upsert nếu cần — chờ Hiếu quyết.)
+
+## Session 87 (tiếp 3, 2026-07-14) — Nâng import_wiki.py thành UPSERT (hết skip theo title)
+147. import_wiki.py (backend/, gitignore local): đổi từ SKIP-theo-title → UPSERT:
+     - Trang mới (title chưa có) → INSERT (version 1).
+     - Title đã có + nội dung/metadata (content/page_type/department/tags/is_hidden) ĐỔI → lưu bản cũ vào
+       kb_wiki_versions rồi UPDATE (version+1, re-embed, updated_at) — mirror đúng logic route PUT /api/kb/wiki/[id].
+     - Không đổi → bỏ qua (tránh tạo version thừa).
+     Verify: py_compile OK; chạy lần 1 = Updated 12 (file local mới hơn web s74) / Unchanged 33; chạy lần 2 =
+     Unchanged 45 / Updated 0 → IDEMPOTENT (không update lặp). Giờ quy trình "sửa file Tab/*.md → chạy script →
+     web tự cập nhật + giữ version history" đã liền mạch.
