@@ -4438,3 +4438,23 @@ Chạy đẩy lên web: python backend/seeding/import/import_wiki.py (idempotent
      Verify: py_compile OK; chạy lần 1 = Updated 12 (file local mới hơn web s74) / Unchanged 33; chạy lần 2 =
      Unchanged 45 / Updated 0 → IDEMPOTENT (không update lặp). Giờ quy trình "sửa file Tab/*.md → chạy script →
      web tự cập nhật + giữ version history" đã liền mạch.
+
+## ===== TỔNG KẾT PHIÊN (Session 87, 2026-07-14) =====
+Trạng thái: staging = 3f1b4e5 (đã push origin/staging); origin/main = 21cd89f (production CHƯA đụng — toàn bộ s87
+nằm ở staging, chờ Hiếu duyệt để FF-merge main). Verify: tsc PASS · vitest 13/13 · next build PASS.
+Đã làm (4 cụm, 4 commit trên staging):
+  1. (a88895f) Audit đồng bộ nhánh: main=staging=origin đồng bộ. Dọn dead code CostManagementModal.tsx (-515);
+     bỏ 26 cast (session.user as any) → tsc BẮT & fix 1 lỗ auth (item-channel-types thiếu !session); +.gitignore .claude/.
+  2. (68c3500) Chuẩn hoá docs/wiki: thêm frontmatter 28 Tab + workflow-pipeline (45/45 file có FM, 45 title UNIQUE);
+     HOME.md index đầy đủ; mọi wikilink + anchor resolve 100%.
+  3. (bc3a267) Import 45 trang lên web (kb_wiki_pages, 29 mới + embedding). Wiki tab CHỈ ADMIN: is_hidden=true cho
+     28 trang tab_guide (frontmatter + DB). Chốt Quy Tắc 3 (.ai/RULES.md): đổi tab → BẮT BUỘC cập nhật Tab/<tab>.md.
+  4. (3f1b4e5) Nâng import_wiki.py → UPSERT (backend/ local): title cũ đổi nội dung → update + lưu version; idempotent.
+Chạy import: py -3 backend/seeding/import/import_wiki.py (Python Windows 3.11.9 — KHÔNG dùng python msys/venv_phase1).
+File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/import_wiki.py (upsert + fix ROOT).
+
+## Việc tiếp theo (mở đầu phiên sau)
+- CHỜ DUYỆT: Hiếu review staging → FF-merge main (fetch trước theo git_sync_before_merge; staging trước main 4 commit).
+- Dọn working tree: docs/KLTN_Nhat_Ky_Cong_Viec.csv đang bị xóa (không rõ chủ đích) + .obsidian/*.json đổi (state local)
+  — chưa xử lý, Hiếu quyết.
+- Tuỳ chọn (đề xuất, chưa làm): dọn ~20 `session.user?.role as string` benign; bổ sung test auth guard + cache.
