@@ -4475,3 +4475,17 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
 152. [ITEM 6] Có ~781 câu hỏi thật để test replay: chat_messages(338 web) + lark_chat_history(443 Lark). Plan test/fix
      chatbot = harness replay câu hỏi thật qua router/classifier/context → log miss → phân loại lỗi → fix. (chi tiết plan
      trình bày cho Hiếu, chờ duyệt thực thi.)
+
+## Session 88 (tiếp, 2026-07-14) — [ITEM 6] Harness replay + FIX BUG LỚN chatbot (searchSkus)
+153. Dựng harness replay (web/vitest.replay.config.ts + src/__e2e__/chatbot-replay.test.ts + replay-setup.ts):
+     kéo câu hỏi thật (chat_messages web + lark_chat_history) → extractParams + searchSkus (offline, KHÔNG gọi Gemini)
+     → phân loại nguyên nhân miss. Chạy: npx vitest run --config vitest.replay.config.ts. 354 câu (dedupe).
+154. 🎯 BUG LỚN (root cause "chatbot không biết nước/gói"): searchSkus (tools.ts:281, tu-van) SELECT cột
+     `sku_catalog.call_sms_details` — cột KHÔNG TỒN TẠI (sync.py không build; sku_catalog chỉ có `call`) →
+     PostgREST lỗi → data=null → searchSkus trả 0 SKU cho MỌI nước → chatbot luôn "GoHub chưa có sản phẩm".
+     FIX: bỏ call_sms_details khỏi select. Harness xác nhận: Japan 0→40/652 SKU; ZERO_SKU 29 nước → 0.
+     (bi-analyst.ts:172 KHÁC — query bảng `skus` vốn CÓ call_sms_details, KHÔNG đụng; cần audit cột skus riêng.)
+155. Còn lại (chưa fix, ưu tiên thấp hơn): MAYBE_MISS_GEO 10.7% = câu giống hỏi sản phẩm nhưng không trích được nước.
+     Gồm (a) nước thiếu trong VN_TO_EN: Mongolia/Mông Cổ, Slovenia, Saudi, Belarus (Scotland→nên map United Kingdom);
+     (b) câu ngữ cảnh đa lượt ("nước nào cũng được", "vậy gói 7days 8GB") — cần context hội thoại, không phải map nước.
+     → Plan fix tiếp: mở rộng VN_TO_EN + regression bằng chính harness.
