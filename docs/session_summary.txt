@@ -4367,3 +4367,32 @@ TODO sau deploy: user xem lại sidebar tối + thử nút "Test ngay" Scheduled
      - Verify tab 3HK / sidebar tối / nút "Test ngay" Scheduled: Hiếu báo tạm OK.
      - Index gohub_dw (cold-load): BỎ QUA — Hiếu KHÔNG có quyền đụng gohub_dw. Cache trong app là fix cuối cùng.
      - Targets parity (Units vs GPM2%) + endpoint chưa cache (customer/report, 3hk-speed-map): tạm chưa đụng.
+
+## Session 87 (2026-07-14) — Audit đồng bộ nhánh + dọn dead code / doc drift / type-safety (staging)
+134. Check đồng bộ: main = staging = origin/main = origin/staging = 21cd89f (KHÔNG diverge). Working tree sạch.
+     Baseline: tsc PASS, vitest 13/13 PASS. Áp skill .ai (Staging-first + UI Strict Lock + Surgical/Simplicity).
+     Mandate của user: KHÔNG thêm tính năng, chỉ sửa/cải thiện/nâng cấp code + cấu trúc (hướng OOP đơn giản,
+     không comment thừa) + wiki/docs. Làm trên nhánh staging.
+135. Track A — dead code: xóa web/src/components/CostManagementModal.tsx (515 dòng, PascalCase, 0 import;
+     bản đang dùng là cost-management-modal.tsx kebab). tsc + vitest PASS sau xóa.
+136. Track B — doc drift:
+     - .ai/RULES.md (gitignore, local): sửa bản đồ file _Skills_AI/ → .ai/ (thư mục đã đổi tên); "5 agents" → "6 agents".
+     - WORK.md: header 2026-06-21/s71 → 2026-07-14/s87 (trỏ session_summary là nguồn sự thật); thêm mục Vận hành
+       chốt s86 (CRON_SECRET đã set, cache 2 tầng TTL 12h + prewarm, index gohub_dw bỏ qua, 3HK sync tháng 6 chưa cần).
+     - AGENTS.md giữ nguyên (nội dung 6 agent vẫn khớp code — surgical, không đụng cái không sai).
+137. Track C — type-safety: Session.user ĐÃ có role/username/department trong types/next-auth.d.ts → 26 chỗ
+     (session.user as any) là cast THỪA còn vứt bỏ type-check. Bỏ hết → truy cập trực tiếp (21 file).
+     tsc lập tức BẮT 1 lỗ tiềm ẩn: /api/config/item-channel-types POST thiếu check !session (session null →
+     có thể crash 500 thay vì 401). Fix theo idiom chuẩn: if (!session || !["admin","creator"].includes(session.user.role)).
+138. Track D — audit sâu logic API (không thấy bug thật thêm, xác nhận lớp lõi vững):
+     - Guard creator: admin+creator áp NHẤT QUÁN toàn bộ route nhạy cảm (sweep s79 ổn). role==="admin" còn lại chỉ
+       để hiện thông báo lỗi chi tiết cho admin (chat/lark), không phải guard bảo mật.
+     - Mọi route đọc session.user?.role đều có !session return 401 trước → không crash.
+     - Cache L2 (analytics-helpers.cachedQuery): bug void-upsert ĐÃ fix đúng (await L2 write + .then() kích builder
+       cho fire-and-forget registry). SQL injection chặn qua safeDate/safeCompanyCode/esc().
+     - bi-analyst executeSQL: chỉ SELECT/WITH + chặn multi-statement (dấu ;) — vững.
+     Ghi nhận (chưa sửa, tránh churn không cần): ~20 chỗ còn `session.user?.role as string` (as string benign do
+     optional-chaining, KHÁC as any); coverage test mỏng (1 file/13 test). → đề xuất tương lai, không làm lần này.
+Verify tổng: tsc PASS + vitest 13/13 PASS + next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 do lint
+phase OOM heap mặc định — vấn đề môi trường, không phải code). Diff: 23 file tracked, +33/-542. UI Analytics KHÔNG đụng.
+TODO: chờ Hiếu duyệt staging → FF-merge main (fetch trước theo git_sync_before_merge).

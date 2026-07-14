@@ -16,7 +16,7 @@ const FACTS: { table: string; dateCol: string; loadCol?: string }[] = [
 
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes((session.user as any).role))
+  if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const warehouse: any[] = []

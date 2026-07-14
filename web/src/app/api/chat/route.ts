@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { messages, userName } = await req.json()
   const role       = (session.user.role || "staff") as UserRole
-  const department = (session.user as any).department || "all"
+  const department = session.user.department || "all"
   const name    = userName || session.user.name || "bạn"
   const history = (messages as Message[]).slice(0, -1)
   const lastMsg = (messages as Message[]).at(-1)?.content ?? ""

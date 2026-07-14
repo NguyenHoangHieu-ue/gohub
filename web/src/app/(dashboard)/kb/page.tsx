@@ -110,7 +110,7 @@ function usePermissions(role: string) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function KBPage() {
   const { data: session } = useSession()
-  const jwtRole  = (session?.user as any)?.role ?? "staff"
+  const jwtRole  = session?.user?.role ?? "staff"
   const username = session?.user?.name ?? ""
   // Role DB tươi (JWT có thể CŨ nếu admin vừa đổi role) → quyết hiện trang ẩn + nút Ẩn/Hiện.
   const [dbRole, setDbRole] = useState<string>("")

@@ -36,15 +36,15 @@ export default function InfoPage() {
       fetch("/api/user/me").then(r => r.json()).catch(() => null),
       fetch("/api/config/role-permissions").then(r => r.json()).catch(() => null),
     ]).then(([me, perms]) => {
-      const role: string = me?.role ?? (session?.user as any)?.role ?? ""
+      const role: string = me?.role ?? session?.user?.role ?? ""
       if (role === "admin" || role === "creator") { setCanViewAll(true); return }
       const matrix: Record<string, string[]> = perms ?? {}
       setCanViewAll((matrix[role] ?? []).includes("info"))
     })
-  }, [status, (session?.user as any)?.username])
+  }, [status, session?.user?.username])
 
   if (!session) return null
-  const myUsername = (session.user as any)?.username
+  const myUsername = session.user?.username
   const targetUsername = view === "all" && selectedUser ? selectedUser : myUsername
 
   return (

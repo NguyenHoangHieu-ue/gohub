@@ -58,3 +58,6 @@ WORK.md
 backend/
 docs/session_summary.txt
 docs/MERGE_PLAN.md
+
+# Claude Code local tooling (worktrees, agents) — không commit
+.claude/

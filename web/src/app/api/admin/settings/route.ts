@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes((session.user as any).role))
+  if (!session || !["admin", "creator"].includes(session.user.role))
     throw new Error("Unauthorized")
   return session
 }

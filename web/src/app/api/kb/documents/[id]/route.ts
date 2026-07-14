@@ -11,7 +11,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
-  const role     = (session.user as any).role
+  const role     = session.user.role
 
   // Verify ownership (admin can delete any, others only own)
   const { data: doc } = await supabaseAdmin

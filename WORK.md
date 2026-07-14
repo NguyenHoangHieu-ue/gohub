@@ -1,6 +1,6 @@
 # GoHub — Trạng Thái Hệ Thống & Roadmap
 
-**Cập nhật lần cuối:** 2026-06-21 (session 71 — phân quyền Role×Report + QA analytics + E2E 6 agent)
+**Cập nhật lần cuối:** 2026-07-14 (session 87 — audit đồng bộ nhánh + dọn dead code/doc drift). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật, tới s86).
 
 ---
 
@@ -132,6 +132,12 @@ Tất cả `v1` → `v17` đã chạy. Migrations hiện tại:
 - **GA4 user count theo VN/US** — ✅ Đã xác minh hoàn thành trong Session 71 (đọc metric activeUsers thành công).
 - **CS Troubleshoot — auto-sync** — ✅ Đã hoàn thành (cấu hình Vercel Cron @ 02:00 UTC và tích hợp token CRON_SECRET).
 - **Verify Lark bot E2E** — fix routing s71 tự áp qua router chung; cần test 1 tin nhắn BI/template thật.
+
+### Vận hành (chốt s86, 2026-07-01)
+- **CRON_SECRET** — ✅ đã set trên Vercel (cron prewarm analytics 06:30 ICT auth OK).
+- **Cache analytics 2 tầng TTL 12h + prewarm** — ✅ đang chạy (thay cho bản 10' cũ).
+- **Index gohub_dw** — ❌ bỏ qua (không có quyền DB); cache trong app là fix cuối.
+- **3HK `fact_data_usage` sync tháng 6** — 🔜 chưa cần (tab dùng kỳ tháng 5, data đến 30/05).
 
 ### Pending user cung cấp
 - Quy tắc tạo template · mô tả cột dữ liệu · danh sách NCC chi tiết.

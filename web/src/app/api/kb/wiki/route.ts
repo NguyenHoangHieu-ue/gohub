@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   // Role DB tươi (JWT có thể cũ) → quyết trang ẩn có hiện hay không
-  const role   = await getDbRole((session.user as any).username, (session.user as any).role)
+  const role   = await getDbRole(session.user.username, session.user.role)
   const search = req.nextUrl.searchParams.get("search") || ""
   const dept   = req.nextUrl.searchParams.get("dept")   || ""
   const type   = req.nextUrl.searchParams.get("type")   || ""

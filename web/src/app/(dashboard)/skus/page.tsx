@@ -950,7 +950,7 @@ function ItemCell({ col, row }: { col: string; row: any }) {
 
 export default function SkusPage() {
   const { data: session } = useSession()
-  const role       = (session?.user as any)?.role || "staff"
+  const role       = session?.user?.role || "staff"
   const canSeeCost = role === "admin"
 
   const [activeTab, setActiveTab] = useState<TabId>("products")

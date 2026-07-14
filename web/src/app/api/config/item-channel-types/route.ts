@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!["admin", "creator"].includes((session?.user as any)?.role)) {
+  if (!session || !["admin", "creator"].includes(session.user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   const body = await req.json() as Record<string, string[]>
