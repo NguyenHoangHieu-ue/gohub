@@ -4525,3 +4525,33 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
      Push staging KHÔNG kích sync (Action chạy main). py_compile OK.
 TODO Phase 2 (sau khi Hiếu chạy SQL + xác nhận metadata đầy): chuyển reads listings (/api/listings SELECT_COLS,
 tools.searchListings LISTING_COLS + ilike listing_name, skus/page.tsx) sang đọc metadata; verify; rồi DROP cột cũ.
+
+## ===== TỔNG KẾT PHIÊN (Session 88, 2026-07-14) =====
+Trạng thái: staging = c5015c4 (đã push origin/staging); origin/main = 21cd89f (production CHƯA đụng — chờ merge).
+Verify xuyên suốt: tsc PASS · vitest 28/28 · harness replay. ~14 commit trên staging.
+
+ĐÃ LÀM (theo 6 yêu cầu của Hiếu):
+  1. Không merge main — người khác sẽ đẩy 1 tab B2C lên prod trước (memory pending_merge_s87: fetch+xử lý diverge khi merge).
+  2. Housekeeping (e0828fb): xóa KLTN csv + .obsidian state. (Lỡ commit 3 binary docs → đã gỡ khỏi git, 8a32a55.)
+  3. Dọn cast (7526490): bỏ 53 `role/username as string` thừa + 15 vitest (SQL sanitizer/date/cache/cron/analyticsGuard).
+  4. Map data-sync (báo cáo): products/skus/listings/items + sku_catalog(dẫn xuất) từ GoHub API. Design doc
+     docs/design-metadata-and-neo4j.md (core relational vs metadata JSONB). → BẮT ĐẦU MIGRATE (xem dưới).
+  5. Neo4j: xác nhận CHẾT → gỡ sạch (7c49ad1): client, 2 endpoint chết (UI không gọi), searchSkusSemantic + block
+     context, driver, scripts, workflow, mock test, import mồ côi. pgvector reimplement = optional sau.
+  6. 🎯 CHATBOT — 2 fix lớn:
+     a) (50626fc) BUG GỐC: searchSkus select cột sku_catalog.call_sms_details KHÔNG tồn tại → 0 SKU MỌI nước →
+        chatbot luôn "chưa có sản phẩm". Bỏ cột. Harness: Japan 0→40 SKU, ZERO_SKU 29 nước→0.
+     b) (ba27e52) Thêm 161 nước thiếu (countries-extra.ts, sinh từ ref_countries) + alias VN + fix homograph
+        South Africa. Coverage 161→1 sót; câu hỏi thật GEO_OK 46.3%→50.8%.
+     + Harness replay (vitest.replay.config.ts + __e2e__/chatbot-replay.test.ts): chạy tay `npx vitest run
+       --config vitest.replay.config.ts` để test 781 câu hỏi thật (web+Lark) + coverage nước.
+
+ITEM 4 — MIGRATE LISTINGS (Hiếu duyệt "OK theo đề xuất", listings trước, giữ NEO4J_* env):
+  - Phase 1 ĐÃ ĐẨY staging (c5015c4, ADDITIVE): v21_listings_metadata.sql (ADD metadata JSONB + backfill + GIN);
+    sync.py gom field mô tả listings vào metadata (song song cột phẳng). Reads GIỮ NGUYÊN → chưa đổi hành vi.
+  - ⏳ CHỜ HIẾU: chạy backend/migrations/v21_listings_metadata.sql trong Supabase SQL Editor (TRƯỚC khi merge main).
+  - Phase 2 (sau khi Hiếu chạy SQL + verify metadata đầy): chuyển reads listings sang metadata → verify → drop cột cũ.
+    Rồi lặp cho products, skus.
+
+CÒN TREO: merge staging→main (chờ B2C người kia + Hiếu chạy v21 SQL); pgvector semantic (optional); Phase 2 listings.
+LƯU Ý: sync.py & migrations dưới backend/ bị .gitignore rộng → phải `git add -f` khi commit (một số file force-tracked).
