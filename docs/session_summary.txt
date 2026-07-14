@@ -4510,3 +4510,18 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
 159. [ITEM 4] Viết design chi tiết: docs/design-metadata-and-neo4j.md — tách core relational vs metadata JSONB cho
      products/skus/listings + plan migrate (staging-first, sửa sync.py + mọi select sku_catalog) + phần Neo4j→pgvector.
      ⏳ CHỜ HIẾU DUYỆT schema trước khi migrate production (chạm sync.py + Supabase + backfill).
+
+## Session 88 (tiếp 4) — [ITEM 4] Migrate listings Phase 1 (additive, chờ Hiếu chạy SQL)
+160. Hiếu duyệt "OK theo đề xuất, migrate listings trước". Xác nhận: sync.py ĐƯỢC track (backend/data_sync/ không
+     ignore) + chạy qua Action sync.yml (checkout main, cron 01:00 UTC) → sửa sẽ deploy khi lên main.
+     Không có PG trực tiếp tới Supabase → DDL Hiếu chạy ở SQL Editor.
+161. Phase 1 (ADDITIVE, không đổi hành vi, rollback được):
+     - backend/migrations/v21_listings_metadata.sql: ADD COLUMN metadata JSONB + backfill (to_jsonb(row) trừ cột
+       nòng cốt) + GIN index. Core giữ cột: listing_code, reference_product_code, tenant, status, listing_type,
+       type_of_sim, product_type, category_code, listing_name_en/vn (search/hiển thị). Còn lại → metadata.
+     - sync.py: listings rows thêm key metadata = {field không nòng cốt}, VẪN ghi cột phẳng song song.
+     - Reads GIỮ NGUYÊN (Phase 2 mới chuyển sang metadata rồi DROP cột cũ).
+     ⚠️ Thứ tự: Hiếu CHẠY v21 SQL TRƯỚC khi merge sync.py lên main (sync ghi cột metadata → cột phải tồn tại).
+     Push staging KHÔNG kích sync (Action chạy main). py_compile OK.
+TODO Phase 2 (sau khi Hiếu chạy SQL + xác nhận metadata đầy): chuyển reads listings (/api/listings SELECT_COLS,
+tools.searchListings LISTING_COLS + ilike listing_name, skus/page.tsx) sang đọc metadata; verify; rồi DROP cột cũ.
