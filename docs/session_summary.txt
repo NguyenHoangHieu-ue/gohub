@@ -4569,3 +4569,18 @@ LƯU Ý: sync.py & migrations dưới backend/ bị .gitignore rộng → phải
      searchListings đọc network_operator="Mobifone" từ metadata; promotions filter not.is.null OK).
 TODO Phase 3 (khi Hiếu chắc chắn, decision #4 giữ song song): sync.py ngừng ghi cột phẳng listings + DROP cột cũ
 (migration v22). Rồi lặp quy trình cho products, skus.
+
+## ===== TỔNG KẾT PHIÊN (Session 89, 2026-07-14) =====
+Trạng thái: staging = e6149b5 (đã push origin/staging); origin/main = 21cd89f (production CHƯA đụng).
+Verify: tsc PASS · vitest 28/28 · next build PASS · 3 probe DB thật (listings/searchListings/promotions).
+Việc chính: Item 4 — Listings Phase 2 (chuyển reads sang JSONB metadata; cột phẳng vẫn còn, chưa drop).
+  - Hiếu đã chạy v21 SQL (16.048 listings, metadata 40 keys/row).
+  - Sửa reads: tools.ts (pickListing: core cột + _vn từ metadata), /api/listings (flatten + search JSON-path),
+    /api/promotions (telco_perks từ metadata). FE/agent shape giữ nguyên.
+CÒN TREO:
+  - Phase 3 listings (khi Hiếu yên tâm): sync.py ngừng ghi cột phẳng + DROP cột cũ (migration v22).
+  - Lặp Item 4 cho products, skus (Phase 1→2→3).
+  - Merge staging→main: chờ tab B2C người khác lên prod trước + verify (memory pending_merge_s87).
+  - Nên test tab SKUs + hỏi chatbot 1 gói cụ thể (xác nhận listings đọc metadata ổn trên UI thật).
+  - (Nhắc) staging đang trước main NHIỀU commit (s87→s89): fix chatbot searchSkus (bug lớn), +161 nước,
+    gỡ Neo4j, dọn cast+test, wiki chuẩn hoá+import upsert, listings metadata P1+P2.
