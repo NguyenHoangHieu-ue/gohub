@@ -1,6 +1,7 @@
 ---
 title: "B2C Performance (Hiệu Suất Bán Lẻ B2C)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, b2c]
 created: 2026-06-28

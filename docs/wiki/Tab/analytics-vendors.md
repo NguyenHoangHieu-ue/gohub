@@ -1,6 +1,7 @@
 ---
 title: "Vendor Performance (Hiệu Suất Nhà Cung Cấp)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, vendors]
 created: 2026-06-28

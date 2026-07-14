@@ -1,6 +1,7 @@
 ---
 title: "All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, report]
 created: 2026-06-28

@@ -1,6 +1,7 @@
 ---
 title: "User Feedback (Ý Kiến Đóng Góp Người Dùng)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, feedback]
 created: 2026-06-28

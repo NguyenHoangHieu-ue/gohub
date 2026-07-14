@@ -1,6 +1,7 @@
 ---
 title: "Products BI (Báo Cáo Hiệu Suất Sản Phẩm)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, products]
 created: 2026-06-28

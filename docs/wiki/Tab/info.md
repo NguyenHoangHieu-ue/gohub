@@ -1,6 +1,7 @@
 ---
 title: "Note (Cổng Thông Tin Hệ Thống)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, note, info]
 created: 2026-06-28

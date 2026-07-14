@@ -4411,3 +4411,20 @@ TODO: chờ Hiếu duyệt staging → FF-merge main (fetch trước theo git_sy
      tìm thư mục chứa docs/wiki (bền với di chuyển) + sửa docstring path. Xác minh ROOT→HeThong, docs/wiki & web/.env.local OK.
      page_type là TEXT tự do (v7_wiki_pages.sql, không CHECK) → tab_guide hợp lệ.
 Chạy đẩy lên web: python backend/seeding/import/import_wiki.py (idempotent, skip theo title; cần pip install pyyaml supabase requests).
+
+## Session 87 (tiếp 2, 2026-07-14) — Import wiki lên web + đặt wiki tab CHỈ ADMIN thấy + chốt quy tắc
+144. Chạy import lên web: py -3 (Python Windows 3.11.9 — có sẵn yaml/supabase/requests; venv msys fail vì
+     pydantic-core cần Rust) → `python backend/seeding/import/import_wiki.py`. Kết quả: Inserted 29, Skipped 16,
+     Failed 0, DB total 45 trang (tất cả có embedding). Bug ROOT đã fix giúp script tìm đúng docs/wiki + web/.env.local.
+     Hiếu xác nhận 45 trang HIỆN trên tab Wiki web.
+145. Yêu cầu: wiki của các tab CHỈ ADMIN thấy + mô tả chi tiết những gì tab làm.
+     - Cơ chế: cột kb_wiki_pages.is_hidden (v9) — web lọc is_hidden=false cho user thường; admin/creator thấy hết.
+     - Thêm `is_hidden: true` vào frontmatter 28 file Tab/*.md (page_type tab_guide). workflow-pipeline (reference)
+       KHÔNG ẩn.
+     - import_wiki.py: đọc thêm fm.is_hidden → set khi insert (bền cho lần import sau).
+     - Update DB ngay: set is_hidden=true where page_type='tab_guide' → 28/28 trang xác nhận ẩn với user thường.
+146. Chốt QUY TẮC 3 (.ai/RULES.md — Quy Tắc Vận Hành): đổi BẤT KỲ gì ở 1 tab → BẮT BUỘC cập nhật
+     docs/wiki/Tab/<tab>.md cùng lần (mô tả rõ chi tiết: mục đích/file/luồng/nguồn/công thức/bug đã fix/phân quyền);
+     giữ page_type: tab_guide + is_hidden: true; đẩy lên web bằng import_wiki.py.
+     LƯU Ý GIỚI HẠN: import_wiki.py SKIP theo title (không update trang đã có) → đổi NỘI DUNG mà giữ title thì phải
+     sửa qua tab Wiki web hoặc xóa row cũ rồi chạy lại. (Cân nhắc nâng script thành upsert nếu cần — chờ Hiếu quyết.)

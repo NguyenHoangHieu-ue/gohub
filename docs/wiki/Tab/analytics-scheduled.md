@@ -1,6 +1,7 @@
 ---
 title: "Scheduled Messages (Lịch Gửi Báo Cáo Tự Động)"
 page_type: tab_guide
+is_hidden: true
 department: tech
 tags: [tab, admin, scheduled]
 created: 2026-06-28

@@ -1,6 +1,7 @@
 ---
 title: "Knowledge Base (Cơ Sở Tri Thức & Wiki)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, kb, wiki]
 created: 2026-06-28

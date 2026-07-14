@@ -1,6 +1,7 @@
 ---
 title: "Orders Management (Quản Lý Đơn Hàng BI)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, orders]
 created: 2026-06-28

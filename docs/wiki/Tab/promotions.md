@@ -1,6 +1,7 @@
 ---
 title: "Promotions (Quản Lý Khuyến Mãi)"
 page_type: tab_guide
+is_hidden: true
 department: product
 tags: [tab, promotions]
 created: 2026-06-28

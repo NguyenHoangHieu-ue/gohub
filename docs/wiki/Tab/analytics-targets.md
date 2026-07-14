@@ -1,6 +1,7 @@
 ---
 title: "KPI Target Planning (Lập Kế Hoạch Chỉ Tiêu Doanh Số)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, targets, kpi]
 created: 2026-06-28

@@ -1,6 +1,7 @@
 ---
 title: "Board of Directors Report (Báo Cáo Quản Trị BOD)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, bod]
 created: 2026-06-28

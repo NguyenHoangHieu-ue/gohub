@@ -1,6 +1,7 @@
 ---
 title: "Reference Countries (Danh Mục Quốc Gia Tham Chiếu)"
 page_type: tab_guide
+is_hidden: true
 department: product
 tags: [tab, reference, countries]
 created: 2026-06-28

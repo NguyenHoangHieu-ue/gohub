@@ -1,6 +1,7 @@
 ---
 title: "System SKUs (Danh Mục Sản Phẩm Hệ Thống)"
 page_type: tab_guide
+is_hidden: true
 department: product
 tags: [tab, product, sku]
 created: 2026-06-28

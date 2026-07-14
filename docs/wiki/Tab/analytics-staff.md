@@ -1,6 +1,7 @@
 ---
 title: "Staff Performance (Hiệu Suất Nhân Viên)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, staff]
 created: 2026-06-28

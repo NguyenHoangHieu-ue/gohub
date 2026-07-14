@@ -1,6 +1,7 @@
 ---
 title: "3HK Data Usage (Theo Dõi Tiêu Hao Data 3HK)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, 3hk]
 created: 2026-06-28

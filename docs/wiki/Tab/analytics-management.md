@@ -1,6 +1,7 @@
 ---
 title: "Management BI (Quản Trị Người Dùng & Hệ Thống BI)"
 page_type: tab_guide
+is_hidden: true
 department: tech
 tags: [tab, admin, management]
 created: 2026-06-28

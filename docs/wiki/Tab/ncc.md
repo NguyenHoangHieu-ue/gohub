@@ -1,6 +1,7 @@
 ---
 title: "NCC Catalog (Danh Mục Nhà Cung Cấp)"
 page_type: tab_guide
+is_hidden: true
 department: product
 tags: [tab, ncc, vendor]
 created: 2026-06-28

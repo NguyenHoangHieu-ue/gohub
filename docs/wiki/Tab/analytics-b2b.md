@@ -1,6 +1,7 @@
 ---
 title: "B2B Performance (Hiệu Suất Bán Sỉ B2B)"
 page_type: tab_guide
+is_hidden: true
 department: all
 tags: [tab, analytics, b2b]
 created: 2026-06-28

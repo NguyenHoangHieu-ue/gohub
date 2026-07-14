@@ -1,6 +1,7 @@
 ---
 title: "Admin Product (Quản Trị Sản Phẩm & Hệ Thống)"
 page_type: tab_guide
+is_hidden: true
 department: product
 tags: [tab, admin, product]
 created: 2026-06-28
