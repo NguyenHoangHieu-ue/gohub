@@ -65,3 +65,19 @@ Supabase đã dùng `vector(3072)` cho `kb_wiki_pages` (embedding Gemini). Áp c
 
 ### Phương án tối giản (nếu chưa cần semantic)
 Vì searchSkus (đường chính) đã tốt, có thể **chỉ gỡ Neo4j chết** + để searchSkusSemantic trả [] (đã vậy sẵn) — reimplement pgvector sau khi cần. Ít rủi ro nhất.
+
+### ✅ Trạng thái Item 5 (Session 88)
+ĐÃ THỰC HIỆN phương án tối giản: gỡ toàn bộ Neo4j (client, 2 endpoint chết — đã xác nhận UI KHÔNG gọi, searchSkusSemantic + block context, driver, scripts, workflow). pgvector reimplement = optional sau, chưa làm.
+
+---
+
+## Câu hỏi cần Hiếu chốt trước khi migrate Item 4
+
+1. **Cách chia core vs metadata** — đồng ý như đề xuất trên chưa? Có cột nào muốn GIỮ ở relational (để filter/sort/join nhanh) mà tôi đang xếp vào JSONB không? (VD: `note`, `kyc_needed`, `hotspot`, `operator_code` — hay filter trong report/chatbot.)
+2. **`sku_catalog`** (bảng dẫn xuất, agent đọc nhiều nhất): giữ **phẳng** như hiện tại (an toàn, đã fix bug select) hay cũng tách `metadata`? Đề xuất: **giữ phẳng** — chỉ tách ở bảng nguồn products/skus/listings.
+3. **Thứ tự migrate**: đề xuất **`listings` trước** (45 cột, không phải nguồn agent chính → ít rủi ro), rồi `products`, `skus` sau. Đồng ý?
+4. **Rollback an toàn**: giữ **song song** cột cũ + `metadata` một thời gian (không DROP ngay) → verify chán rồi mới DROP đợt sau. Đồng ý?
+5. **Filter trong metadata**: có field nào trong `metadata` cần filter thường xuyên (→ cần GIN index hoặc để lại relational)? Cho tôi danh sách nếu có.
+6. **Phạm vi đọc cần sửa**: sau khi tách, tôi sẽ sửa mọi `.select()`/đọc cột mô tả ở API (`/api/products|skus|listings`), agent (`tools.ts`/`context.ts`/`bi-analyst.ts`), MCP. Có nơi nào KHÁC bạn biết đang đọc trực tiếp các cột này (script ngoài, dashboard khác) không?
+
+→ Bạn trả lời 6 mục trên (hoặc chỉ nói "OK theo đề xuất"), tôi sẽ migrate từng bảng trên `staging`, verify (tsc + build + chạy thử chatbot/tab SKUs), rồi báo lại trước khi đụng `main`.
