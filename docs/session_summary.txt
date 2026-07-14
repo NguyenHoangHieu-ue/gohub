@@ -4489,3 +4489,12 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
      Gồm (a) nước thiếu trong VN_TO_EN: Mongolia/Mông Cổ, Slovenia, Saudi, Belarus (Scotland→nên map United Kingdom);
      (b) câu ngữ cảnh đa lượt ("nước nào cũng được", "vậy gói 7days 8GB") — cần context hội thoại, không phải map nước.
      → Plan fix tiếp: mở rộng VN_TO_EN + regression bằng chính harness.
+
+## Session 88 (tiếp 2) — Thêm nước thiếu vào map trích nước (extractParams)
+156. Coverage check qua harness: extractParams KHÔNG nhận ra 161/212 nước trong ref_countries (thiếu chủ yếu TÊN
+     TIẾNG ANH; name_vn trong DB rỗng). → tạo lib/agents/countries-extra.ts (COUNTRIES_EXTRA: 161 tên tiếng Anh sinh
+     từ ref_countries + ~14 alias VN/ngắn: Mông Cổ, saudi, nam phi, do thái, bosnia, emirates...). Merge vào build
+     VN_TO_EN_NORM (EXTRA trước, VN_TO_EN curated sau → alias VN thắng). Fix homograph "South Africa"/"Nam Phi"
+     (chứa "Africa" → region bắt nhầm) bằng guard ưu tiên nước.
+     Kết quả: coverage 161→1 nước sót (chỉ Palestinian Territory obscure); câu hỏi thật GEO_OK 46.3%→50.8%,
+     MAYBE_MISS_GEO 10.7%→8.2%. tsc PASS, 28/28 test PASS. Còn lại 8.2% chủ yếu câu đa lượt cần ngữ cảnh hội thoại.

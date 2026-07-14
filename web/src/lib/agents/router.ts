@@ -1,6 +1,7 @@
 ﻿import type { AgentId, UserRole, Message, RouterResult } from "./types"
 import { classify, intentToAgentId } from "./classifier"
 import type { DataSource } from "./classifier"
+import { COUNTRIES_EXTRA } from "./countries-extra"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
 
@@ -146,7 +147,8 @@ function buildNormalizedLookup(map: Record<string, string>): Record<string, stri
   return result
 }
 
-const VN_TO_EN_NORM        = buildNormalizedLookup(VN_TO_EN)
+// COUNTRIES_EXTRA (tên tiếng Anh sinh từ ref_countries) trước, VN_TO_EN (alias VN curated) sau → alias VN thắng khi trùng.
+const VN_TO_EN_NORM        = buildNormalizedLookup({ ...COUNTRIES_EXTRA, ...VN_TO_EN })
 const CITY_TO_COUNTRY_NORM = buildNormalizedLookup(CITY_TO_COUNTRY)
 
 // ISO 2-letter codes + common abbreviations — word-exact match only
@@ -280,6 +282,8 @@ export function extractParams(message: string): ExtractedParams {
   for (const [key, region] of REGION_SORTED) {
     if (wordMatch(msgNorm, key)) { params.region = region; break }
   }
+  // Homograph: "South Africa"/"Nam Phi" chứa "Africa" → region bắt nhầm. Ưu tiên NƯỚC.
+  if (params.region === "africa" && /south africa|nam phi/.test(msgNorm)) params.region = undefined
 
   // GoHub 3-char group/category code detection (word-exact, uppercase 2-4 chars)
   // Ví dụ: JPN, CHM, EU1, APA, GLO, STA, MDE, JAK, TWN, KOR, HKM, SGP...

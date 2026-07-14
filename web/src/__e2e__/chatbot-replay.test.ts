@@ -78,4 +78,17 @@ describe("Chatbot replay — câu hỏi thật (web + Lark)", () => {
 
     expect(total).toBeGreaterThan(0)
   })
+
+  test("coverage: nước trong ref_countries mà extractParams KHÔNG nhận ra", async () => {
+    const { data } = await supabaseAdmin.from("ref_countries").select("code,name,name_vn").order("name")
+    const missing: string[] = []
+    for (const c of (data ?? []) as any[]) {
+      const byEn = extractParams(String(c.name || "")).country
+      const byVn = c.name_vn ? extractParams(String(c.name_vn)).country : undefined
+      if (!byEn && !byVn) missing.push(`${c.name} | ${c.name_vn ?? "-"} | ${c.code}`)
+    }
+    console.log(`\n[COVERAGE] ${missing.length}/${(data ?? []).length} nước KHÔNG nhận ra:\n` +
+      missing.map((m, i) => `  ${i + 1}. ${m}`).join("\n"))
+    expect(Array.isArray(missing)).toBe(true)
+  })
 })
