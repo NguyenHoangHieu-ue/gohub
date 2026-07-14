@@ -4498,3 +4498,15 @@ File local-only (gitignore): .ai/RULES.md (Quy tắc 3), backend/seeding/import/
      (chứa "Africa" → region bắt nhầm) bằng guard ưu tiên nước.
      Kết quả: coverage 161→1 nước sót (chỉ Palestinian Territory obscure); câu hỏi thật GEO_OK 46.3%→50.8%,
      MAYBE_MISS_GEO 10.7%→8.2%. tsc PASS, 28/28 test PASS. Còn lại 8.2% chủ yếu câu đa lượt cần ngữ cảnh hội thoại.
+
+## Session 88 (tiếp 3) — [ITEM 5] Gỡ Neo4j (đã chết) + [ITEM 4] design doc
+157. Kiểm tra live: Neo4j instance ĐÃ CHẾT ("No routing servers available" — Aura free pause/xóa). searchSkusSemantic
+     (fallback tu-van), /api/recommendations, /api/semantic-search đều âm thầm lỗi từ lâu; UI KHÔNG gọi 2 endpoint đó.
+158. Gỡ Neo4j (dead infra): xóa lib/neo4j-client.ts, 2 endpoint chết (recommendations, semantic-search),
+     searchSkusSemantic + block semantic trong context.ts, mock neo4j trong test, neo4j-driver (package.json),
+     scripts neo4j (build-neo4j-graph/neo4j_sync/sync-*-neo4j/test-neo4j-auth), workflow neo4j_sync.yml.
+     Bỏ import mồ côi GoogleGenerativeAI ở tools.ts. tsc PASS, vitest 28/28. (NEO4J_* env Hiếu tự gỡ trong .env.)
+     pgvector reimplement semantic = optional sau (đã ghi design). Đường tu-van CHÍNH (searchSkus) không đụng Neo4j → OK.
+159. [ITEM 4] Viết design chi tiết: docs/design-metadata-and-neo4j.md — tách core relational vs metadata JSONB cho
+     products/skus/listings + plan migrate (staging-first, sửa sync.py + mọi select sku_catalog) + phần Neo4j→pgvector.
+     ⏳ CHỜ HIẾU DUYỆT schema trước khi migrate production (chạm sync.py + Supabase + backfill).

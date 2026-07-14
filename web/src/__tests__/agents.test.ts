@@ -18,11 +18,6 @@ vi.mock("@/lib/supabase", () => ({
   }
 }));
 
-// Mock Neo4j client
-vi.mock("@/lib/neo4j-client", () => ({
-  runQuery: vi.fn()
-}));
-
 import { decodeSkuCode, nccCountryScore, getChannelFromRole } from "../lib/agents/tools";
 import { convertCogs } from "../lib/agents/context";
 import { extractParams } from "../lib/agents/router";

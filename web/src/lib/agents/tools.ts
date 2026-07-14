@@ -1,6 +1,4 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { runQuery }      from "@/lib/neo4j-client"
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { RefCache } from "./cache"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
@@ -1009,31 +1007,6 @@ export function findGaps(params: {
   return result
 }
 
-// ─── Tool: semantic_search ───────────────────────────────────────────────────
-// Fallback khi 4-step Supabase search trả về 0 kết quả.
-// Embed query → Neo4j vector index 'sku_embedding' → trả SKU codes.
-
-export async function searchSkusSemantic(query: string, topK = 10): Promise<string[]> {
-  try {
-    const genAI    = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model    = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
-    const result   = await model.embedContent(query.slice(0, 500))
-    const embedding = result.embedding.values
-
-    const records = await runQuery<{ sku_code: string; score: number }>(
-      `CALL db.index.vector.queryNodes('sku_embedding', $topK, $embedding)
-       YIELD node AS sku, score
-       WHERE score > 0.65
-       RETURN sku.sku_code AS sku_code, score
-       ORDER BY score DESC`,
-      { topK, embedding }
-    )
-    return records.map(r => r.sku_code).filter(Boolean)
-  } catch (err: any) {
-    console.error("[searchSkusSemantic]", err?.message?.slice(0, 80))
-    return []
-  }
-}
 
 // ─── KB Search ───────────────────────────────────────────────────────────────
 
