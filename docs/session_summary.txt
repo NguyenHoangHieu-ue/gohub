@@ -4829,3 +4829,12 @@ Yêu cầu Hiếu: wiki mỗi tab ghi THẬT chi tiết (query, cột, cách đ�
   Kết quả: kb_wiki_pages = 47 pages, 0 title rác; các tab update version mới + re-embed Gemini.
 - Lưu memory feedback_detailed_wiki (preference: enrich wiki khi làm gì đáng kể trên tab).
 Trạng thái: main == staging == 763c972.
+
+## Session 94 (tiếp) — [Wiki] Nâng chi tiết tab sản phẩm/hệ thống + re-sync KB
+Nâng 9 tab: skus (thêm listings JSONB metadata s89, ref_countries, 4 tầng cột), ncc (ncc_datapool/
+data_file_registry), countries (4 ref tables + phân biệt Turso country_codes), promotions (telco_perks từ
+listings metadata), info (user_notes + KBPage nhúng), kb (kb_processing_jobs/kb_wiki_versions + Node sync script +
+gotcha CRLF), chatbot (ncc_datapool, conversations/chat_messages, pickListing, searchSkus fix, FX), admin-product
+(app_settings config storage + flush-cache/template), scheduled (date). Re-sync KB: 8 updated v2, 0 trùng, 0 lỗi.
+Toàn bộ 28 tab wiki giờ ở mức "khỏi tra code" (query/cột/nguồn/gotcha) + KB đồng bộ (47 pages).
+Trạng thái: main == staging.
