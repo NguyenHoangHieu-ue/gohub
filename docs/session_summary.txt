@@ -4782,3 +4782,11 @@ CÒN (3HK, không chặn): E2E xem UI GB/ngày/SIM; nếu 3HK ra tier 1GB thật
    first_report_date trong kỳ; usage/plan gom từ bản ghi trong kỳ. Gộp 4 query về 1 bundlesCTE (dedup).
    Verify DB thật T6 = 36.662 SIM (Fixed 14.726·Daily 18.887·Unlimited 3.049). tsc·vitest 28/28·build PASS.
 Trạng thái: main==staging==6bace68 (deploy prod). Commits: d3eaafb (ecom opCost), 6bace68 (3HK SIM basis).
+
+## Session 93 (tiếp) — [3HK] Khớp CHÍNH XÁC số ICCID báo cáo NCC
+Đối chiếu ảnh NCC (T3-T6). Gốc rễ lệch: first_report_date lưu 00:00:00 UTC; mount effect format endDate
+từ MAX(...)::date qua giờ LOCAL trình duyệt → tz lệch UTC lùi 1 ngày → mất ngày cuối kỳ (~999 SIM T6).
+Fix: getUTC* (endDate ổn định). Verify DB thật T6 KHỚP NCC 100%: Fixed 15.091·Daily 19.399·Unlimited 3.171·
+Tổng 37.661 (commit 8118099). LƯU Ý %: NCC có 2 cách (Simple=TB per-SIM %, Weighted=tổng/tổng); % tab hiện =
+tổng usage/tổng plan ≈ Weighted (không hẳn khớp Simple). Số SIM/ICCID = deliverable chính đã khớp.
+Trạng thái: main==staging==8118099 (deploy prod).
