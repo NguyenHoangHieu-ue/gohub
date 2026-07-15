@@ -5,58 +5,241 @@ is_hidden: true
 department: all
 tags: [tab, analytics, 3hk]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # 3HK Data Usage (Theo Dõi Tiêu Hao Data 3HK)
 
-Trang số liệu theo dõi chi tiết dung lượng tiêu thụ thực tế của người dùng sử dụng các gói eSIM/SIM thuộc Zone của nhà mạng đối tác 3HK.
+Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của SIM/eSIM thuộc nhà mạng đối tác **3HK**, đối chiếu với định mức gói đã bán. 3HK là dòng chiến lược (2 key metric của team Business: **CM1** + **3HK Contribution %**).
 
-> **Mục đích & vai trò**: 3HK là dòng sản phẩm chiến lược (2 key metric của team Business: CM1 + 3HK Contribution %). Trang này đối chiếu **data thực tế tiêu thụ** vs **định mức gói đã bán** để (1) phát hiện lạm dụng băng thông/nghẽn, (2) kiểm chứng giả định dung lượng khi định giá gói Unlimited. **Tại sao phức tạp**: gói Unlimited 3HK thực chất là "fixed high-speed + throttle" với 3 biến thể (500MB/1GB × 5/10mbps), mã cũ↔mới khác nhau → phải mapping kỹ (mục 5).
-
----
-
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/analytics/3hk-usage` (`web/src/app/(dashboard)/analytics/3hk-usage/page.tsx`)
-- **API Backend**: `/api/analytics/3hk-usage/report` (`web/src/app/api/analytics/3hk-usage/report/route.ts`)
+> **Tài liệu này viết đủ để KHÔNG cần đọc code.** Nếu bạn chỉ cần câu SQL → nhảy tới [mục 5](#5-câu-query-thật-tab-sinh-ra). Nếu cần hiểu vì sao số khớp/ lệch báo cáo NCC → [mục 4](#4-cách-đếm--định-nghĩa-kỳ) và [mục 8](#8-đối-chiếu-báo-cáo-ncc).
 
 ---
 
-## 2. Kỹ Thuật Truy Vấn & Bảo Mật
-- **Kết nối kho dữ liệu**: API truy vấn trực tiếp vào bảng số liệu lớn `fact_data_usage` của `gohub_dw` để lấy lưu lượng tiêu hao thực tế.
-- **Vệ sinh câu lệnh (SQL Sanitization)**: Áp dụng các bộ lọc nội suy trực tiếp để đảm bảo quá trình gọi API lọc theo quốc gia hoặc khoảng thời gian không bị lạm dụng chèn mã độc.
-- **Phân trang**: Giới hạn phân trang tối đa `20 hàng/bảng` để giảm thiểu áp lực băng thông máy chủ khi tải lượng bản ghi dữ liệu cực lớn.
+## 1. Đường dẫn & File
+
+| Thành phần | Vị trí |
+|---|---|
+| **Trang web** | `/analytics/3hk-usage` |
+| **File FE** | `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` |
+| **API dữ liệu bảng** | `POST /api/analytics/query` (SELECT-only) — FE tự sinh SQL rồi gửi |
+| **API nhóm tốc độ Unlimited** | `GET /api/analytics/3hk-speed-map` |
+| **Bảng nguồn (analytics)** | `gohub_dw.fact_data_usage` + `gohub_dw.dim_sku` |
+| **Bảng nguồn (product)** | Supabase `skus` (cột `throttle_speed`, cho phân loại Unlimited) |
+
+> ⚠️ **Không còn** route `/api/analytics/3hk-usage/report` — đã xoá (dead code). Trang gửi thẳng SQL qua `/api/analytics/query`.
 
 ---
 
-## 3. Nghiệp Vụ Báo Cáo
-- Thống kê tổng lượng data sử dụng (theo GB/TB) theo từng Zone du lịch của 3HK.
-- Đối chiếu lượng data thực tế tiêu thụ với lưu lượng gói cước định mức đã bán để phát hiện các trường hợp nghẽn mạng hoặc người dùng lạm dụng băng thông quá mức cho phép.
+## 2. Phân quyền
+- Xem được: **Admin, Creator, Manager, BOD, Staff** (+ ops-&-cs, product theo `DEFAULT_ROLE_PERMISSIONS`).
+- Bảng lấy qua `/api/analytics/query` → allow-list role của endpoint đó **phải gồm `creator`**; thiếu thì creator vào trang nhưng bảng rỗng (403 âm thầm).
 
 ---
 
-## 4. Phân Quyền
-- Cho phép xem đối với: **Admin, Creator, Manager, BOD, Staff** (và ops-&-cs, product theo `DEFAULT_ROLE_PERMISSIONS`).
-- Data các bảng lấy qua `/api/analytics/query` (SELECT-only). Allow-list role của endpoint này **phải gồm `creator`** — nếu thiếu, creator vào được trang nhưng bảng rỗng (403 âm thầm).
+## 3. Cột dữ liệu chính trong `fact_data_usage`
+
+| Cột | Ý nghĩa | Dùng làm gì trong tab |
+|---|---|---|
+| `iccid` | Số định danh SIM | Đếm SIM; 1 iccid = 1 order_code (không nhân đôi) |
+| `order_code` | Mã đơn | Ghép với iccid thành "bundle" |
+| `sku` | Mã gói dùng thực tế | Phân loại gói + nhóm tốc độ |
+| `sku_type` | Loại gói (Daily/Fixed/Unlimited Data) | Phân loại (nhưng **tin `sku` hơn** — xem 3.1) |
+| `total_data_gb` | **Dung lượng data đã dùng** của bản ghi (GB) | Cộng ra "Total Actual" |
+| `data_amount_gb` | **Định mức/capacity** của gói (GB) | "Total Plan" |
+| **`first_report_date`** | **⭐ Ngày báo cáo lưu lượng** (snapshot) — lưu ở **00:00:00 UTC** | **CỘT LỌC KỲ CHÍNH** (xem mục 4) |
+| `activation_date` | Ngày kích hoạt SIM | **CHỈ hiển thị** ("Acts: …"), KHÔNG dùng lọc kỳ |
+
+### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited)
+Tin theo **mã SKU**, không tin cột `sku_type` (mã mới từng bị gán nhầm):
+```sql
+CASE WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data' ELSE sku_type END
+```
+
+### 3.2 Cấu trúc bản ghi (quan trọng để hiểu SUM)
+- Mỗi bản ghi = 1 **snapshot theo ngày** của 1 SIM. `first_report_date` là mốc ngày (00:00:00 UTC).
+- ~87% bundle chỉ có **1 bản ghi**; ~13% có 2–3 bản ghi (SIM báo cáo qua nhiều mốc cuối tháng).
+- `total_data_gb` là **incremental** (usage của kỳ đó) → tab **SUM** các bản ghi trong kỳ ra tổng usage.
 
 ---
 
-## 5. Logic Bundle (Lọc theo kỳ) & Nhóm Tốc Độ Unlimited
+## 4. Cách đếm & Định nghĩa kỳ
 
-### 5.1 Lọc theo Bundle (KHÔNG SUM thô)
-- Đơn vị thống kê = **Bundle** = mỗi cặp `(iccid, order_code)` duy nhất.
-- Cột lọc khoảng ngày = `MIN(first_report_date)` của Bundle (= `bundle_start_date`). **KHÔNG** dùng `activation_date` (chỉ hiển thị).
-- Bundle có `bundle_start_date` trong `[startDate, endDate]` → cộng **toàn bộ lifetime** (`SUM(total_data_gb)`, capacity = `MAX(data_amount_gb)`), kể cả tiêu dùng sau khoảng ngày. Bundle bắt đầu trước khoảng ngày → bị loại hoàn toàn.
+### 4.1 Đơn vị = "Bundle"
+- Bundle = mỗi cặp **`(iccid, order_code)`** duy nhất (= 1 SIM). "Active SIMs" = số bundle.
 
-### 5.2 Nhóm tốc độ (high-speed × throttle) — tab Unlimited
-- Tính SERVER-side ở **`/api/analytics/3hk-speed-map`**. **CHỈ 3 loại** tồn tại: `500MB·5mbps`, `500MB·10mbps`, `1GB·10mbps`. KHÔNG tự thêm loại khác.
-- **Quy tắc mapping mã (theo nghiệp vụ):**
-  - Mã CŨ usage: `[E]<nước:3><3D><P1|P2><ngày>D` (E=eSIM, không=SIM). **P1 = 10 mbps, P2 = 5 mbps.**
-  - Mã MỚI product DB: `<prefix><nước:3><3D><A|B>UNL<ngày>`. **A = 5 mbps, B = 10 mbps** (P1↔B, P2↔A).
-  - **P2 (5 mbps) → LUÔN 500MB** (chỉ 1 loại 5mbps).
-  - **P1 (10 mbps) → 1GB hay 500MB**: map sang mã mới theo (nước, ngày, 10mbps) — tìm cả tenant **VN & US** — lấy **giá `latest_cogs`/ngày** so ngưỡng (trung điểm median 1GB vs 500MB ≈ 41k VND/ngày từ product DB) → dự đoán. Thiếu giá → nhãn `throttle_speed`; thiếu cả → mặc định 500MB.
-- KHÔNG dùng `offer_name` (join theo iccid → SIM dùng nhiều gói dễ lẫn offer gói khác, vd "Fixed 3GB" → phân loại sai).
-- Mỗi nhóm có nút **"Chi tiết (n)"** → bung danh sách SKU (SKU, Active SIMs, Plan/Actual GB, Usage %, **Nguồn phân loại** = price/label/default/rule-5mbps) để kiểm tra.
-- Thực tế data: ~15 SKU ra **1GB·10mbps** (chủ yếu **EU + USA** — thị trường premium giá cao); còn lại 500MB.
-- ⚠️ Vendor 3HK trong `dim_sku` = `'3HK DATAPOOL'` (CÓ dấu cách) → mọi SQL lọc bằng `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`. Default ngày = đầu-tháng(MAX data)..MAX (data 3HK chậm sync, hiện đến 30/05).
+### 4.2 ⭐ Định nghĩa "SIM thuộc kỳ" (khớp NCC)
+> **Một SIM/bundle được tính vào kỳ nếu CÓ bản ghi usage với `first_report_date` NẰM TRONG khoảng ngày chọn.** Usage & plan chỉ gom từ **các bản ghi trong kỳ**.
+
+- Đây là cách **"SIM có usage trong kỳ"** — khớp với báo cáo NCC.
+- **KHÔNG** phải "SIM phát sinh lần đầu trong kỳ" (bản cũ dùng `MIN(first_report_date)` = `bundle_start` → chỉ đếm SIM MỚI, ra thiếu ~5.000 SIM/tháng, lệch NCC).
+- **KHÔNG** dùng `activation_date` (nếu đếm theo kích hoạt, tháng 6 chỉ ~26.854 SIM — cũng lệch NCC).
+
+### 4.3 Kỳ mặc định khi mở tab
+`đầu tháng(ngày data mới nhất) → ngày data mới nhất`, lấy từ `MAX(first_report_date)`. Data 3HK sync trễ (thường đến hết tháng trước) nên mặc định trỏ vào tháng mới nhất CÓ data.
+
+### 4.4 ⚠️ GOTCHA timezone (đã từng gây lệch ~999 SIM)
+`first_report_date` lưu **00:00:00 UTC**. Khi FE tính `endDate` từ `MAX(...)::date` **phải dùng `getUTC*`**, KHÔNG dùng giờ local — nếu không, trên trình duyệt lệch UTC (vd US) `getDate()` lùi 1 ngày → mất bản ghi ngày cuối kỳ (vd bản ghi `2026-06-30 00:00 UTC` bị bỏ → thiếu 999 SIM).
+→ So sánh cận trên `first_report_date <= '2026-06-30'` (ngày cuối THÁNG) mới bao trọn; đừng dùng `'2026-06-29'`.
+
+---
+
+## 5. Câu query thật (tab sinh ra)
+
+Cả 4 bảng dùng **chung 1 CTE** (`bundlesCTE`), khác nhau ở `SELECT` cuối. Ví dụ tab **"Tất cả"**, kỳ **tháng 6/2026**:
+
+### CTE dùng chung
+```sql
+WITH period_records AS (
+  SELECT iccid, order_code, sku, sku_type,
+         total_data_gb, data_amount_gb, first_report_date, activation_date
+  FROM fact_data_usage
+  WHERE sku IN (SELECT sku FROM dim_sku
+                WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')   -- vendor lưu là '3HK DATAPOOL' (có dấu cách)
+    AND first_report_date >= '2026-06-01'
+    AND first_report_date <= '2026-06-30'                              -- ngày cuối THÁNG (mục 4.4)
+),
+bundles AS (
+  SELECT iccid, order_code,
+         MAX(sku) AS sku,
+         CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data'
+              ELSE MAX(sku_type) END           AS sku_type,
+         MIN(first_report_date) AS first_report_date,
+         MAX(activation_date)   AS activation_date,
+         SUM(total_data_gb)     AS total_data_gb,   -- usage gom TRONG kỳ
+         MAX(data_amount_gb)    AS data_amount_gb,  -- capacity/plan
+         COUNT(*)               AS record_count
+  FROM period_records
+  GROUP BY iccid, order_code
+)
+```
+
+### [1] Summary cards (Total Usage / Capacity / Avg % / Active SIMs)
+```sql
+-- <CTE>
+SELECT SUM(total_data_gb)  AS total_usage,
+       SUM(data_amount_gb) AS total_capacity,
+       CASE WHEN SUM(data_amount_gb) > 0
+            THEN (SUM(total_data_gb)/SUM(data_amount_gb))*100 ELSE 0 END AS avg_usage,
+       COUNT(*) AS total_count          -- = Active SIMs
+FROM bundles WHERE 1=1;
+```
+
+### [2] Average Usage by SKU Type
+```sql
+-- <CTE>
+SELECT COALESCE(sku_type,'Unknown') AS sku_type,
+       COUNT(*)            AS active_sims,
+       SUM(data_amount_gb) AS total_plan_gb,
+       SUM(total_data_gb)  AS total_usage_gb,
+       CASE WHEN SUM(data_amount_gb) > 0
+            THEN (SUM(total_data_gb)/SUM(data_amount_gb))*100 ELSE 0 END AS avg_usage_pct
+FROM bundles WHERE 1=1
+GROUP BY 1 ORDER BY total_usage_gb DESC;
+```
+
+### [3] Average Usage by SKU
+```sql
+-- <CTE>
+SELECT sku, COUNT(*) AS active_sims,
+       SUM(data_amount_gb) AS total_plan_gb,
+       SUM(total_data_gb)  AS total_usage_gb,
+       CASE WHEN SUM(data_amount_gb) > 0
+            THEN (SUM(total_data_gb)/SUM(data_amount_gb))*100 ELSE 0 END AS avg_usage_pct
+FROM bundles WHERE 1=1
+GROUP BY 1 ORDER BY total_usage_gb DESC;
+```
+
+### [4] Bảng records (phân trang 50 dòng)
+```sql
+-- <CTE>
+SELECT order_code, iccid, sku, sku_type,
+       COALESCE(data_amount_gb,0) AS data_amount_gb,
+       COALESCE(total_data_gb,0)  AS total_data_gb,
+       CASE WHEN data_amount_gb > 0
+            THEN (total_data_gb/data_amount_gb)*100 ELSE 0 END AS usage_pct,
+       first_report_date, activation_date, record_count
+FROM bundles WHERE 1=1
+ORDER BY first_report_date DESC
+LIMIT 50 OFFSET 0;      -- OFFSET = (trang-1)*50
+```
+
+### Phần động (khi KHÔNG phải tab "Tất cả")
+- **Tab Daily/Fixed/Unlimited** → thêm vào mọi `WHERE 1=1`: `AND sku_type = 'Daily Data'` (hoặc `'Fixed Data'` / `'Unlimited Data'`).
+- **Ô Search** → thêm: `AND (order_code ILIKE '%..%' OR iccid ILIKE '%..%' OR sku ILIKE '%..%')`.
+- **Kỳ** → sửa 2 ngày trong `period_records`.
+
+> File `test.sql` ở root repo có sẵn 4 query này để chạy thử trực tiếp trên DB (không commit).
+
+---
+
+## 6. Ý nghĩa các chỉ số hiển thị
+
+| Chỉ số | Nghĩa |
+|---|---|
+| **Total Usage** | Tổng GB thực tế đã dùng trong kỳ (`SUM(total_data_gb)`) |
+| **Total Capacity** | Tổng định mức plan (`SUM(data_amount_gb)`) |
+| **Avg. Usage %** | `Total Usage / Total Capacity × 100` (xấp xỉ % Weighted của NCC) |
+| **Active SIMs** | Số SIM có usage trong kỳ (= số bundle) |
+| **Avg. GB/ngày/SIM** *(chỉ tab Unlimited)* | Thay cho "Avg Usage %" — vì gói unlimited không thể "dùng hết %" (thường >100%). = usage / (Σ active_sims × số ngày gói) |
+
+> **Về cột %**: NCC báo cáo 2 cách — *Simple* (trung bình % của từng SIM) và *Weighted* (Σusage/Σplan). Cột % của tab ≈ **Weighted**. Số **SIM/ICCID** khớp NCC tuyệt đối; % có thể lệch nhẹ do phương pháp khác nhau.
+
+---
+
+## 7. Phân loại nhóm tốc độ gói Unlimited
+
+Tab **Unlimited** có bảng "Breakdown theo gói (high-speed × throttle)" + biểu đồ. Nhóm được tính SERVER-side ở **`/api/analytics/3hk-speed-map`**. Có tối đa **3 nhóm**: `500MB·5mbps`, `500MB·10mbps`, `1GB·10mbps`.
+
+### 7.1 Mã cũ vs mã mới
+| Loại mã | Ví dụ | Cách phân loại |
+|---|---|---|
+| **CŨ** (code-based) | `ECHN3DP1UNLI05D`, `CHN3DUNLIP205D` | Theo P-code: **P2 → 5mbps (500MB)**, **P1 → 10mbps (500MB)**, **PY → 1GB·10mbps** |
+| **MỚI** (`[AB]UNL`) | `EACHN3DBUNL05`, `3ACHN3DAUNL03` | Ưu tiên đọc cột **`throttle_speed`** (Supabase `skus`); fallback theo chữ: **A → 5mbps**, **B → 10mbps** |
+
+- Đối chiếu chéo đã xác nhận nhất quán: **A↔P2 (5mbps)**, **B↔P1 (10mbps)**.
+- Chuỗi `throttle_speed` dạng `"500 MB high speed then drop to 10 mbps"` → parse ra mbps + có "1GB" hay không.
+
+### 7.2 Dung lượng 500MB vs 1GB
+- **Chỉ suy được từ `throttle_speed`** (không suy được từ chữ A/B — chữ chỉ mã hoá tốc độ).
+- **Hiện tại (T6/2026): TẤT CẢ gói mới đều 500MB** — không có mã mới 1GB nào trong catalog/usage. "1GB·10mbps" chỉ còn **1 mã PY cũ** (`ECHM3DPYUNLI05D`).
+- ⚠️ Nếu 3HK ra gói **1GB** sau này, team SP **phải ghi `throttle_speed` chứa "1GB..."** trong Supabase `skus` thì speed-map mới bắt đúng (nếu không, sẽ bị xếp nhầm 500MB).
+
+### 7.3 Backfill throttle_speed (Session 93)
+- 55/147 mã UNL mới từng thiếu `throttle_speed` → đã backfill (suy từ mã cùng họ / chữ A/B, toàn 500MB, 0 conflict) → speed-map giờ đọc nguồn chuẩn cho 100% mã mới.
+
+### 7.4 Giả định để so sánh
+- GB/ngày/SIM giả định theo throttle (spec NCC): **10mbps → 1.8 GB/ngày**, **5mbps → 1.6 GB/ngày**. Biểu đồ tô **đỏ** khi thực tế vượt giả định, **xanh** khi trong giả định.
+
+---
+
+## 8. Đối chiếu báo cáo NCC
+
+Kỳ **tháng 6/2026** — số **ICCID** khớp tuyệt đối:
+
+| Loại | NCC | Tab |
+|---|---|---|
+| Fixed Data | 15.091 | **15.091** ✅ |
+| Daily Data | 19.399 | **19.399** ✅ |
+| Unlimited Data | 3.171 | **3.171** ✅ |
+| **Tổng** | **37.661** | **37.661** ✅ |
+
+**Cách tự verify nhanh** (chạy trên `gohub_dw`):
+```sql
+SELECT COUNT(DISTINCT iccid)
+FROM fact_data_usage
+WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL')
+  AND first_report_date >= '2026-06-01' AND first_report_date <= '2026-06-30';   -- = 37661
+```
+
+---
+
+## 9. Gotchas & Lịch sử thay đổi
+
+- **Vendor có dấu cách**: trong `dim_sku` vendor = `'3HK DATAPOOL'` → luôn lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
+- **Timezone (mục 4.4)**: `first_report_date` = 00:00:00 UTC; format kỳ bằng `getUTC*`.
+- **`fact_data_usage` là 3HK-only**: gần như toàn bộ là 3HK (chỉ ~68 iccid có `sku` null bị loại) → dùng vendor-filter là đủ, không sợ lẫn vendor khác.
+- **Session 90–93**:
+  - s90: speed-map xử lý cả mã cũ (P1/P2/PY) + mã mới (A/B UNL); che cột nhạy cảm.
+  - s93: đổi định nghĩa kỳ sang "SIM có usage trong kỳ" (khớp NCC) + gộp 4 query về 1 `bundlesCTE`; backfill 55 `throttle_speed`; "Avg Usage %" → GB/ngày/SIM cho Unlimited; xoá route chết; fix UTC.
