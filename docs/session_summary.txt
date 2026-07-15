@@ -4771,3 +4771,14 @@ CÒN TREO: chạy migration v17 B2C snapshot (idempotent, không chặn); listin
    chết /api/analytics/3hk-usage/report.
 Trạng thái: main == staging == 5c55d25 (đã deploy production). tsc·vitest 28/28·build PASS xuyên suốt.
 CÒN (3HK, không chặn): E2E xem UI GB/ngày/SIM; nếu 3HK ra tier 1GB thật thì team SP ghi throttle_speed "1GB...".
+
+## Session 93 (2026-07-15) — [B2C ecom tận gốc] + [3HK đếm SIM khớp NCC]
+1. Ecom Revenue & GP Trend: nguyên nhân THẬT = query analytics_channel_costs (opCost theo kênh) KHÔNG lọc kênh
+   → chi phí kênh B2B/ecom tạo dòng profitByChannel opCost>0 → dashboard (filter opCost>0) hiện ecom. Fix
+   .in("channel", B2C_CHANNELS) cho route live b2c/monthly + snapshot builder b2c-report-snapshot; export
+   B2C_CHANNELS. Snapshot table rỗng → live fixed có hiệu lực ngay. (Fact revenue vốn đã lọc group_name='B2C'.)
+2. 3HK số liệu lệch NCC: tab cũ gán SIM vào kỳ theo bundle_start=MIN(first_report) → chỉ SIM phát sinh lần đầu
+   trong kỳ (32.551 T6). NCC = "SIM có usage trong kỳ" (user chốt). Đổi: bundle "thuộc kỳ" nếu CÓ bản ghi
+   first_report_date trong kỳ; usage/plan gom từ bản ghi trong kỳ. Gộp 4 query về 1 bundlesCTE (dedup).
+   Verify DB thật T6 = 36.662 SIM (Fixed 14.726·Daily 18.887·Unlimited 3.049). tsc·vitest 28/28·build PASS.
+Trạng thái: main==staging==6bace68 (deploy prod). Commits: d3eaafb (ecom opCost), 6bace68 (3HK SIM basis).
