@@ -4618,3 +4618,15 @@ CÒN TREO:
      request → ĐÚNG, không tái phát bug S81. Warning build = pdf-parse (pre-existing, không phải code mình).
 173. Wiki (RULES #3): docs/wiki/Tab/analytics-management.md thêm mục Creator Dev Tools (section E + đường dẫn + phân
      quyền), updated 2026-07-15.
+
+## Session 90 (tiếp 2, 2026-07-15) — [Creator DevTools] /code-review high fix + auto-discover
+174. Chạy /code-review high trên diff phiên (5 file). Không có bug crash/sai. Áp 3 hardening cho /api/config/db/table:
+     (1) che cột nhạy cảm (regex password|secret|token|api_key|service_key|private_key → '‹hidden›') trước khi trả browser;
+     (2) Number.isFinite guard cho limit/offset (param phi số không còn thành NaN → .range(NaN));
+     (3) count:"exact" CHỈ ở offset 0, trang sau bỏ count (không quét COUNT(*) mỗi lần lật) — FE giữ count trang đầu.
+175. Auto-discover (yêu cầu Hiếu): thêm nút "Làm mới" + tự cập nhật khi có API/bảng mới.
+     - GET /api/config/api-routes (creator-only): liệt kê mọi API route từ .next/server/app-paths-manifest.json
+       (runtime Vercel), fallback quét src/app/api (dev). Tab API Tester fetch danh sách này (fallback QUICK_ENDPOINTS)
+       + nút Làm mới quét lại.
+     - Tab Database: nút "Làm mới" gọi lại /api/config/db/tables (đọc OpenAPI live → thấy ngay bảng mới thêm).
+     Verify: tsc PASS · vitest 28/28 · next build PASS (3 route /api/config/{api-routes,db/table,db/tables} OK).

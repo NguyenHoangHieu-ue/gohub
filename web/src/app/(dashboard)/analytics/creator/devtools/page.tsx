@@ -76,6 +76,17 @@ function ApiTester() {
   const [loading, setLoading] = useState(false)
   const [resp, setResp] = useState<{ status: number; ok: boolean; ms: number; text: string } | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [routes, setRoutes] = useState<string[]>([])
+  const [routesLoading, setRoutesLoading] = useState(false)
+
+  // Tự động lấy danh sách mọi API route (cập nhật khi thêm route mới) — bấm "Làm mới" để quét lại.
+  const loadRoutes = useCallback(() => {
+    setRoutesLoading(true)
+    fetch("/api/config/api-routes").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.routes?.length) setRoutes(d.routes)
+    }).catch(() => {}).finally(() => setRoutesLoading(false))
+  }, [])
+  useEffect(() => { loadRoutes() }, [loadRoutes])
 
   const send = async () => {
     setLoading(true); setErr(null); setResp(null)
@@ -127,12 +138,20 @@ function ApiTester() {
           />
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {QUICK_ENDPOINTS.map(ep => (
-            <button key={ep} onClick={() => { setMethod("GET"); setPath(ep) }} className="text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors truncate max-w-full">
-              {ep}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Endpoints ({routes.length || QUICK_ENDPOINTS.length})</p>
+            <button onClick={loadRoutes} disabled={routesLoading} className="flex items-center gap-1 text-[11px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50">
+              <RefreshCw className={cn("w-3 h-3", routesLoading && "animate-spin")} />Làm mới
             </button>
-          ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+            {(routes.length ? routes : QUICK_ENDPOINTS).map(ep => (
+              <button key={ep} onClick={() => { setMethod("GET"); setPath(ep) }} className="text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors truncate max-w-full">
+                {ep}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -158,13 +177,16 @@ function DbBrowser() {
   const [tablesErr, setTablesErr] = useState<string | null>(null)
   const [loadingTables, setLoadingTables] = useState(true)
 
-  useEffect(() => {
+  // Đọc OpenAPI live nên bấm "Làm mới" là thấy ngay bảng mới thêm trong Supabase.
+  const loadTables = useCallback(() => {
+    setLoadingTables(true); setTablesErr(null)
     fetch("/api/config/db/tables").then(async r => {
       const d = await r.json()
       if (!r.ok) { setTablesErr(d?.error || "Không tải được danh sách bảng"); return }
       setTables(d.tables || [])
     }).catch(e => setTablesErr(e.message)).finally(() => setLoadingTables(false))
   }, [])
+  useEffect(() => { loadTables() }, [loadTables])
 
   const filtered = tables.filter(t => t.toLowerCase().includes(filter.toLowerCase()))
 
@@ -176,7 +198,12 @@ function DbBrowser() {
             <Search className="w-3.5 h-3.5 text-slate-400" />
             <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Tìm bảng..." className="flex-1 bg-transparent text-sm outline-none" />
           </div>
-          <p className="text-[10px] text-slate-400 mt-1.5 px-1">{tables.length} bảng</p>
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <p className="text-[10px] text-slate-400">{tables.length} bảng</p>
+            <button onClick={loadTables} disabled={loadingTables} className="flex items-center gap-1 text-[10px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50">
+              <RefreshCw className={cn("w-3 h-3", loadingTables && "animate-spin")} />Làm mới
+            </button>
+          </div>
         </div>
         <div className="overflow-y-auto flex-1">
           {loadingTables ? (
@@ -221,7 +248,8 @@ function TableView({ name }: { name: string }) {
       if (!r.ok) { setErr(d?.error || "Không tải được dữ liệu"); setRows([]); setColumns([]); return }
       setRows(d.rows || [])
       setColumns(d.columns || [])
-      setCount(d.count || 0)
+      // count chỉ trả ở trang đầu (offset 0); các trang sau giữ nguyên count đã có.
+      if (off === 0) setCount(d.count || 0)
     }).catch(e => setErr(e.message)).finally(() => setLoading(false))
   }, [name])
 
