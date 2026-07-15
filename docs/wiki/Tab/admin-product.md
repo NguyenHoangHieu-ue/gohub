@@ -5,7 +5,7 @@ is_hidden: true
 department: product
 tags: [tab, admin, product]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -43,7 +43,11 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 - (s82) Đã **gộp về Settings**, lấy UI bản admin (đẹp hơn: thêm/xóa nhóm tier, datalist gợi ý tên kênh, lưới card). Admin KHÔNG còn mục này.
 
 ### C. Nút Kiểm soát Đồng bộ (Manual Triggers)
-- Cung cấp các công cụ vận hành khẩn cấp cho phép quản trị viên kích hoạt trực tiếp các tiến trình đồng bộ dữ liệu từ Lark, Turso hoặc xóa sạch bộ nhớ đệm cache hệ thống.
+- Kích hoạt sync Lark/Turso hoặc **xoá cache** (`/api/admin/flush-analytics-cache` → bảng `analytics_query_cache`).
+- **Tạo template** SP (WM/3HK, eSIM/SIM): `/api/admin/template`.
+
+### D. Nơi lưu cấu hình (Supabase `app_settings`)
+Mọi config admin/settings lưu ở **`app_settings`** dạng key→value: `fx.usd_vnd`/`fx.hkd_usd`/`fx.twd_usd` (tỷ giá — nguồn cho tỷ giá B2C + COGS chatbot), `3hk.*` (công thức 3HK), `partner_tiers`, `sku_destination_rules`, `role_permissions`, `b2c_kpi_targets`. → sửa 1 chỗ, cả hệ dùng chung.
 
 ---
 

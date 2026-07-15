@@ -5,58 +5,57 @@ is_hidden: true
 department: product
 tags: [tab, product, sku]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # System SKUs (Danh Mục Sản Phẩm Hệ Thống)
 
-Quản lý cấu trúc catalog sản phẩm cốt lõi của GoHub bao gồm 4 tầng phân cấp dữ liệu: Products, SKUs, Listings và Items.
+Catalog sản phẩm cốt lõi GoHub — **nguồn sự thật** cho mọi tab khác (Products BI, chatbot, NCC gap). 4 tầng: **Product → SKU → Listing → Item**.
 
-> **Mục đích & vai trò**: nguồn sự thật (single source of truth) về sản phẩm GoHub — mọi tab khác (Products BI, chatbot, NCC gap) đều tham chiếu mã/cấu trúc ở đây. **Tại sao 4 tầng Product→SKU→Listing→Item**: tách "gói thương mại" (Product) khỏi "mã kho bán" (SKU), "đăng bán trên sàn" (Listing) và "mã sim vật lý từ NCC" (Item) → 1 gói có thể bán nhiều kênh, nhiều nguồn sim mà không trộn dữ liệu.
-
----
-
-## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/skus` (`web/src/app/(dashboard)/skus/page.tsx`)
-- **API SKUs**: `/api/skus` (`web/src/app/api/skus/route.ts`)
-- **API Products**: `/api/products` (`web/src/app/api/products/route.ts`)
-- **API Listings**: `/api/listings` (`web/src/app/api/listings/route.ts`)
-- **API Items**: `/api/items` (`web/src/app/api/items/route.ts`)
+> Vì sao 4 tầng: tách "gói thương mại" (Product) khỏi "mã kho bán" (SKU), "đăng bán trên sàn" (Listing) và "mã sim vật lý từ NCC" (Item) → 1 gói bán nhiều kênh/nguồn sim mà không trộn dữ liệu.
 
 ---
 
-## 2. Cấu Trúc Catalog 4 Tầng (Product Hierarchy)
-Catalog sản phẩm được lưu trữ trên Supabase với mối quan hệ chặt chẽ:
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/skus` — `web/src/app/(dashboard)/skus/page.tsx` |
+| API | `/api/skus` (+`/filters`), `/api/products` (+`/filters`), `/api/listings` (+`/filters`), `/api/items` (+`/filters`) |
+| Nguồn | **Supabase**: `products`, `skus`, `listings`, `items`, `ref_countries` |
+| Sync | GitHub Actions `sync.yml` — GoHub Core API → Supabase, hàng ngày 01:00 UTC |
 
+## 2. Cấu trúc 4 tầng
 ```
-[Product] (Gói cước thương mại, ví dụ: Gói Indo-Singapore 7 ngày)
-   │
-   └───► [SKU] (Mã kho bán, ví dụ: INDOSG-7D-1GB)
-           │
-           └───► [Listing] (Sản phẩm đăng bán trên các sàn/kênh bán lẻ)
-                   │
-                   └───► [Item] (Mã sim vật lý/mã kích hoạt chi tiết từ NCC)
+[Product]  gói thương mại (tên gói, số ngày, khu vực)
+   └─► [SKU]      mã kho bán (data/ngày, SIM|eSIM, throttle, latest_cogs, currency)
+          └─► [Listing]  đăng bán trên sàn/website (network_operator, telco_perks, giá kênh)
+                 └─► [Item]  mã sim/eSIM vật lý + APN từ NCC (19 trường chuyên sâu)
 ```
 
-### Các bảng dữ liệu chính:
-- **`products`**: Định nghĩa tên gói, số ngày, khu vực địa lý áp dụng. (Lưu ý: cột rác `data_plan_type` đã được loại bỏ từ session 35).
-- **`skus`**: Lưu trữ dung lượng hàng ngày, loại SIM (SIM hay eSIM), chính sách sử dụng dữ liệu.
-- **`listings`**: Cầu nối hiển thị sản phẩm trên các sàn thương mại điện tử như Shopee, Lazada, Tiktok Shop hoặc website.
-- **`items`**: Bản ghi vật lý của eSIM/SIM thô, liên kết trực tiếp tới nhà mạng đối tác.
+### Bảng chính (cột hay dùng)
+- **`products`**: `product_code`, tên, số ngày, khu vực.
+- **`skus`**: `sku_code`, `product_code`, `data_amount`/`data_amount_unit`, `sim_esim`, `throttle_speed`, `latest_cogs`/`latest_cogs_currency`, `final_cogs_*`, `call`, `expirations`.
+- **`listings`**: `listing_code`, `status`, `listing_type`, + **cột JSONB `metadata`** (40 keys/row — xem 3).
+- **`items`**: mã sim/eSIM + APN, `type_of_sim`, `item_name_vn`.
 
----
+## 3. ⭐ Listings dùng cột JSONB `metadata` (s89 Phase 2)
+- Listings có **cột phẳng CŨ + cột `metadata` (JSONB)**. Mọi ĐỌC listings đã chuyển sang `metadata` (backfill 40 keys/row cho 16.048 listings).
+- `tools.ts` `pickListing()`: core từ cột phẳng + field `_vn`/telco từ metadata (giữ shape gọn, không phình context chatbot).
+- Search theo network_operator = JSON path: `metadata->>network_operator ILIKE '%...%'`.
+- Promotions đọc `telco_perks` từ `metadata->>telco_perks_en`.
+- **Phase 3 (chưa làm)**: sync.py ngừng ghi cột phẳng + DROP cột cũ (migration v22); rồi lặp cho products/skus.
 
-## 3. Quy Trình Vận Hành & Tính Năng Nổi Bật
-- **Tra cứu và Phân trang**: Danh sách SKU và Item hỗ trợ phân trang tự động `20 hàng/bảng` thông qua component `pager.tsx` để tối ưu thời gian tải trang.
-- **Trực quan hóa cấu trúc tên**: Tự động rút gọn các chuỗi tên tiếng Việt quá dài (`item_name_vn > 40 kí tự` hoặc `SKU note > 60 kí tự`) để giữ giao diện luôn gọn gàng và dễ theo dõi.
-- **Xem chi tiết sản phẩm**: Nút "Chi tiết" trên ItemsTable cho phép mở Modal hiển thị toàn bộ 19 trường dữ liệu chuyên sâu từ nhà mạng.
-- **Đồng bộ tự động**: Chạy lệnh GitHub Actions `sync.yml` định kỳ hàng ngày lúc 01:00 UTC để kéo danh mục sản phẩm mới nhất từ GoHub Core API về Supabase.
-- **Xuất tệp tin**: Hỗ trợ xuất dữ liệu toàn bộ danh sách Products/SKUs/Items ra định dạng Excel (XLSX).
+## 4. Tính năng
+- Phân trang (`pager.tsx`), rút gọn tên dài (`item_name_vn > 40`, SKU note `> 60`).
+- Nút "Chi tiết" ItemsTable → modal 19 trường NCC.
+- Export XLSX (Products/SKUs/Items).
+- Tra COGS/FX: SKU có `latest_cogs` + `latest_cogs_currency`; quy đổi qua FX (`app_settings` key `fx.*`, xem [[chatbot]] tool get_sku_cogs).
 
----
+## 5. Phân quyền
+- Hiện theo `allowed_tabs` chứa `skus`.
+- Standard/Staff: đọc. Manager/Admin/Creator: CRUD.
 
-## 4. Phân Quyền Truy Cập
-- Chỉ hiển thị với người dùng được cấp quyền qua `allowed_tabs` chứa khóa `skus`.
-- **Standard / Staff**: Chỉ được phép đọc và tra cứu dữ liệu.
-- **Manager / Admin / Creator**: Có toàn quyền thêm, sửa, xóa cấu hình sản phẩm và thực hiện các thao tác quản trị nâng cao.\n
+## 6. Gotchas
+- Vendor 3HK trong `dim_sku` (analytics) khác `skus` (product) — đây là product catalog Supabase.
+- Đừng đọc cột phẳng listings mới → dùng `metadata` (cột phẳng sẽ bị drop ở Phase 3).

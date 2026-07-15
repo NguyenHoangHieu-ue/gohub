@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, chatbot, ai]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -40,7 +40,7 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 | **Tư Vấn** | `tu-van` | Bảng `sku_catalog` (Supabase) | Tìm kiếm gói cước GoHub theo quốc gia, số ngày, dung lượng, loại SIM (SIM/eSIM). |
 | **Tra Cứu** | `tra-cuu` | Bảng `products`, `skus`, `listings`, `items` | Tra cứu chi tiết thông số, giá vốn (COGS) và tỷ giá dựa trên mã code chuẩn. |
 | **Giải Đáp** | `giai-dap` | Bảng `kb_documents`, `kb_wiki_pages` | Giải thích thuật ngữ viết tắt, cấu trúc mã SKU, quy trình, tài liệu Wiki nội bộ. |
-| **NCC & Gap** | `gap-analysis` | Bảng `ncc_worldmove`, `ncc_3hk` | Duyệt catalog của nhà cung cấp và phát hiện khoảng trống sản phẩm (`exist=No`). |
+| **NCC & Gap** | `gap-analysis` | Bảng `ncc_worldmove`, `ncc_datapool` (3HK) | Duyệt catalog của nhà cung cấp và phát hiện khoảng trống sản phẩm (`exist=No`). |
 | **BI Analyst** | `bi-analyst` | Kho dữ liệu PostgreSQL `gohub_dw` | Tự động sinh mã SQL, thực thi truy vấn và trả về kết quả số liệu kèm biểu đồ. |
 | **Tạo Template** | `tao-template` | Catalog NCC | Tạo file Excel template sản phẩm cho Admin/Manager xuất bản nhanh. |
 
@@ -77,6 +77,13 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
   - Tự động nhận diện các gói "Không giới hạn" (unlimited) khi thuộc tính `data_amount >= 9999` hoặc cờ `is_unlimited = true`.
 
 ---
+
+## 4b. Lưu hội thoại & Ghi chú kỹ thuật
+- **Lịch sử chat** lưu Supabase: `conversations` + `chat_messages` (API `/api/chat/conversations` + `/[id]`).
+- **Đọc listings** trong tool: qua `pickListing()` (core cột + field `_vn`/network_operator từ JSONB `metadata`) — xem [[skus]].
+- **searchSkus fix (s87)**: đã sửa bug lớn ở tra cứu SKU của agent (đảm bảo khớp đúng gói).
+- **FX/COGS**: giá vốn quy đổi qua `app_settings` key `fx.*` (usd_vnd, hkd_usd, twd_usd); COGS 3HK tính từ `ncc_datapool` giá HKD/GB.
+- **Dùng chung Web + Lark**: router/context/bi-analyst dùng chung; Lark bot "Bé Gấu Thông Thái" (p2p + group + thread mention).
 
 ## 5. Phân Quyền Truy Cập
 - **Standard**: Chỉ được dùng các agent `tu-van`, `tra-cuu`, `giai-dap`, `gap-analysis` theo phòng ban. Không được xem giá vốn (COGS), không được dùng BI Analyst.

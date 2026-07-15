@@ -5,7 +5,7 @@ is_hidden: true
 department: product
 tags: [tab, promotions]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -25,7 +25,10 @@ Trang hiển thị và quản lý các chiến dịch khuyến mãi, chính sác
 ---
 
 ## 2. Thiết kế Kỹ Thuật & Schema
-Dữ liệu lưu tại bảng `promotions` trong Supabase:
+
+**Nguồn Supabase**: bảng `promotions` (ưu đãi admin tạo) + đọc **telco perks từ `listings`** (cột JSONB `metadata`, s89: `metadata->>telco_perks_en`, filter `.not.is.null`) và `products` để gắn tên gói. → tab gộp cả ưu đãi curated lẫn perks nhà mạng có sẵn trong listing.
+
+Bảng `promotions`:
 - `id`: Định danh UUID.
 - `title`: Tiêu đề chương trình ưu đãi.
 - `sku_codes`: Mảng mã SKU áp dụng ưu đãi này.

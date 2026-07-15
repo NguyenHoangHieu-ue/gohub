@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, note, info]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -32,9 +32,12 @@ Trang bao gồm 3 phân hệ chính:
    - Tra cứu bảng `ref_categories` (Mã nhóm, tên VN/EN, mã nước ISO, loại Single-country hay Multi-country).
    - Tra cứu bảng `ref_support_countries` (Các quốc gia được hỗ trợ trên thực tế).
 2. **Operating Notes (Ghi chú Vận hành)**:
-   - Các ghi chú nhanh phục vụ công tác điều phối, cập nhật chính sách khẩn cấp. Lưu trữ và truy xuất từ Supabase.
+   - Bảng Supabase **`user_notes`** (title/content). API `/api/info/notes` (+`/[id]`). Nút Lưu **dirty-state** (chỉ sáng khi title/content khác note đang mở — s90).
 3. **Reference Files (Tài liệu tham khảo)**:
-   - Cho phép tải và đọc các file template nghiệp vụ chung của doanh nghiệp.
+   - File template chung, lưu ở **Supabase Storage bucket `"Information"`** (giữ tên cũ dù nhãn UI đổi "Note").
+
+**Bảng dùng**: `ref_categories`, `ref_support_countries` (overview) · `user_notes` (ghi chú) · `app_settings`, `users` (config/quyền).
+> KB/Wiki nhúng trong tab này (info/page nhúng `KBPage`) để KB không "orphan" sau khi gộp sidebar (s85) — xem [[kb]].
 
 ---
 

@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, kb, wiki]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -22,9 +22,10 @@ Quy trình tải lên tài liệu tri thức, xử lý cắt nhỏ (chunking), t
 - **API Documents**: `/api/kb/documents` (`web/src/app/api/kb/documents/route.ts`)
 - **API Wiki**: `/api/kb/wiki` (`web/src/app/api/kb/wiki/route.ts`)
 - **API Tìm kiếm**: `/api/kb/search` (`web/src/app/api/kb/search/route.ts`)
-- **Tập tin xử lý embedding backend**:
-  - `database/embedding_service.py` — Chứa logic gọi API Gemini tạo vector.
-  - `database/import/import_wiki.py` — Chức năng quét và nạp file wiki gốc vào Supabase.
+- **API Xử lý (MRP ingestion)**: `/api/kb/process` (+`/[id]`) — cắt chunk + embed, theo dõi job.
+- **Sync wiki → Supabase (embed)**:
+  - `backend/seeding/import/import_wiki.py` — quét `docs/wiki/**/*.md`, upsert theo title (mới→insert; đổi→lưu version cũ + update + re-embed; không đổi→skip).
+  - **Bản Node thay thế** (khi python build lỗi trên Windows): `web/scripts/sync_wiki.mjs` — cùng logic, chạy `cd web && node scripts/sync_wiki.mjs`. ⚠️ Xử lý line-ending CRLF khi parse frontmatter (nếu không sẽ tạo bản trùng title = tên file).
 
 ---
 
@@ -37,7 +38,11 @@ Hệ thống lưu trữ dữ liệu tri thức trên Supabase thông qua tiện 
   - `document_id`: Khóa ngoại liên kết bảng `kb_documents`.
   - `content`: Nội dung phân đoạn (text).
   - `embedding`: Vector 3072 chiều sinh bởi `gemini-embedding-001`.
-- **Bảng `kb_wiki_pages`**: Quản lý các tài liệu dạng Wiki Markdown (cho phép phân chia phòng ban và ẩn/hiện).
+- **Bảng `kb_wiki_pages`**: Wiki Markdown (title, content, `page_type`, `department`, `is_hidden`, `tags`, `version`, `embedding`). Upsert theo **title**.
+- **Bảng `kb_wiki_versions`**: lịch sử phiên bản wiki (mỗi lần update lưu bản cũ trước khi ghi đè).
+- **Bảng `kb_processing_jobs`**: trạng thái job ingestion (upload → chunk → embed).
+
+**Tất cả bảng KB**: `kb_documents`, `kb_chunks`, `kb_wiki_pages`, `kb_wiki_versions`, `kb_processing_jobs`.
 
 ---
 

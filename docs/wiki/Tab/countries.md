@@ -5,7 +5,7 @@ is_hidden: true
 department: product
 tags: [tab, reference, countries]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -23,10 +23,13 @@ Quản lý danh mục các quốc gia, vùng lãnh thổ, nhóm địa lý và h
 
 ---
 
-## 2. Thiết kế Cơ Sở Dữ Liệu
-Dữ liệu lưu trữ chính tại các bảng:
-- **`ref_countries`**: Bản ghi đầy đủ về quốc gia, mã ISO 2 ký tự (ISO2), ISO 3 ký tự (ISO3), tên tiếng Anh, tên tiếng Việt, và mã vùng điện thoại.
-- **`ref_support_countries`**: Danh sách thực tế các nước mà GoHub có hạ tầng cung cấp dịch vụ viễn thông/SIM du lịch.
+## 2. Thiết kế Cơ Sở Dữ Liệu (Supabase)
+API `/api/countries` đọc các bảng ref: **`ref_countries`, `ref_support_countries`, `ref_categories`, `ref_vendors`**.
+- **`ref_countries`**: quốc gia, mã ISO2/ISO3, tên EN/VI, mã vùng điện thoại.
+- **`ref_support_countries`**: các nước GoHub có hạ tầng SIM du lịch.
+- **`ref_categories`** / **`ref_vendors`**: danh mục nhóm SP / NCC (đồng bộ từ Data xlsx qua `data_sync.yml`).
+
+> ⚠️ **KHÁC với `country_codes` bên analytics**: map SKU→nước đích ở BI dùng bảng **`country_codes` trên Turso** (332 dòng) — KHÔNG phải `ref_countries` Supabase ở đây. Xem [[_analytics-data-model]] §3.
 
 ---
 

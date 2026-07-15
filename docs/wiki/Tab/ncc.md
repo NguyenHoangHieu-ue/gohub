@@ -5,7 +5,7 @@ is_hidden: true
 department: product
 tags: [tab, ncc, vendor]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -28,8 +28,11 @@ Hệ thống quản lý catalog sản phẩm của Nhà Cung Cấp (NCC) lớn g
 ---
 
 ## 2. Kiến Trúc Kỹ Thuật & Cơ Chế Khớp Nối (Gap Analysis)
+
+**Bảng Supabase dùng**: `ncc_worldmove` (catalog WM), `ncc_datapool` (3HK zones), `data_file_registry` (theo dõi file upload), `products` + `skus` (đối chiếu Gap với catalog GoHub).
+
 - **Bảng `ncc_worldmove`**: Chứa hơn `8,921` dòng catalog sản phẩm của đối tác WorldMove. Toàn bộ thông số APN và trạng thái tồn tại (`exist = 'Yes' / 'No'`) được đồng bộ đầy đủ.
-- **Bảng `ncc_3hk`**: Chứa thông tin cấu hình 45 Zones của nhà mạng 3HK.
+- **Bảng `ncc_datapool`**: Chứa thông tin cấu hình 45 Zones của nhà mạng 3HK (giá `price_per_gb_hkd`… — dùng cả trong tính COGS 3HK).
 - **Cơ chế so khớp địa danh (`nccCountryScore`)**:
   - Điểm số khớp: `3` (Trực tiếp), `2` (Khu vực - ví dụ: châu Âu khớp với các nước EU), `1` (Toàn cầu - Worldwide), `0` (Không khớp).
 - **Gap Analysis**: Thuật toán tự động đối chiếu danh mục sản phẩm đang hoạt động của GoHub với catalog đối tác. Hệ thống phân lọc ra các sản phẩm tiềm năng có trạng thái `exist = No` (WM có bán nhưng GoHub chưa tạo SKU tương ứng) để đề xuất bổ sung sản phẩm mới.
