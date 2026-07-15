@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from "react"
 import {
-  AreaChart, Area, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList,
 } from "recharts"
 import {
   ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
 } from "lucide-react"
-import { useSession } from "next-auth/react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 import { SourceBadge, LogicNote, type SourceKind } from "@/components/dashboard-kit"
@@ -18,6 +17,9 @@ interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface KpiTarget { vn: number; us: number; total: number }
+interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturning: number; total: number }
+interface MarketBudgetCell { vn: number; us: number; total: number }
+interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 interface MonthlyData {
   months:       string[]
   currentMonth: string
@@ -25,13 +27,152 @@ interface MonthlyData {
   totalDays:    number
   markets:      Record<string, MarketCell>
   customers:    Record<string, CustRow>
+  customerSource?: "admin-gohub" | "admin-gohub-snapshot" | "analytics-db"
+  customerBreakdown?: "new-returning" | "total-only"
+  customerError?: string
   channels:     Record<string, ChannelCell>
+  profitByChannel?: Record<string, Record<string, ProfitCell>>
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
   budget:       Record<string, number>
+  spendByMarket?: Record<string, MarketBudgetCell>
+  budgetByMarket?: Record<string, MarketBudgetCell>
   leads:        Record<string, number>
+  leadsByMarket?: Record<string, { vn: number; us: number }>
+  users?:        Record<string, UserCell>
   leadsByChannel: { label: string; byMonth: Record<string, number> }[]
+  refreshTimestamp?: string
 }
+
+const DEMO_MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"]
+const demoMonthLabel = (m: string) => {
+  const [y, mo] = m.split("-")
+  return { top: `Thg ${parseInt(mo)}`, sub: `'${y.slice(2)}` }
+}
+const blankCust = (revenue = 0, count = 0): CustCell => ({ revenue, count })
+const byMonth = <T,>(values: T[]) => Object.fromEntries(DEMO_MONTHS.map((m, i) => [m, values[i]])) as Record<string, T>
+const DEMO_DATA: MonthlyData = {
+  months: DEMO_MONTHS,
+  currentMonth: "2026-07",
+  elapsedDays: 13,
+  totalDays: 31,
+  markets: {
+    "2026-01": { vn: 610_000_000, us: 190_000_000, total: 800_000_000 },
+    "2026-02": { vn: 680_000_000, us: 220_000_000, total: 900_000_000 },
+    "2026-03": { vn: 820_000_000, us: 340_000_000, total: 1_160_000_000 },
+    "2026-04": { vn: 1_380_000_000, us: 520_000_000, total: 1_900_000_000 },
+    "2026-05": { vn: 980_000_000, us: 390_000_000, total: 1_370_000_000 },
+    "2026-06": { vn: 737_078_699, us: 146_061_727, total: 883_140_426 },
+    "2026-07": { vn: 650_538_200, us: 65_792_220, total: 716_330_420 },
+  },
+  customers: {
+    "2026-01": { new: blankCust(680_000_000, 1320), returning: blankCust(180_000_000, 340), total: blankCust(860_000_000, 1660) },
+    "2026-02": { new: blankCust(760_000_000, 1450), returning: blankCust(210_000_000, 392), total: blankCust(970_000_000, 1842) },
+    "2026-03": { new: blankCust(1_020_000_000, 1715), returning: blankCust(310_000_000, 480), total: blankCust(1_330_000_000, 2195) },
+    "2026-04": { new: blankCust(1_510_000_000, 2480), returning: blankCust(680_000_000, 760), total: blankCust(2_190_000_000, 3240) },
+    "2026-05": { new: blankCust(1_120_000_000, 1980), returning: blankCust(440_000_000, 520), total: blankCust(1_560_000_000, 2500) },
+    "2026-06": { new: blankCust(1_210_000_000, 2248), returning: blankCust(675_000_000, 916), total: blankCust(1_885_000_000, 3164) },
+    "2026-07": { new: blankCust(460_000_000, 1260), returning: blankCust(256_330_420, 420), total: blankCust(716_330_420, 1680) },
+  },
+  channels: {
+    "2026-01": { web: 240_000_000, app: 180_000_000, other: 380_000_000 },
+    "2026-02": { web: 280_000_000, app: 210_000_000, other: 410_000_000 },
+    "2026-03": { web: 310_000_000, app: 250_000_000, other: 600_000_000 },
+    "2026-04": { web: 420_000_000, app: 330_000_000, other: 1_150_000_000 },
+    "2026-05": { web: 260_000_000, app: 190_000_000, other: 920_000_000 },
+    "2026-06": { web: 288_604_224, app: 104_898_583, other: 489_637_619 },
+    "2026-07": { web: 288_604_224, app: 49_994_096, other: 377_732_100 },
+  },
+  targets: {
+    "2026-01": { vn: 650_000_000, us: 230_000_000, total: 880_000_000 },
+    "2026-02": { vn: 700_000_000, us: 260_000_000, total: 960_000_000 },
+    "2026-03": { vn: 850_000_000, us: 350_000_000, total: 1_200_000_000 },
+    "2026-04": { vn: 1_200_000_000, us: 460_000_000, total: 1_660_000_000 },
+    "2026-05": { vn: 1_000_000_000, us: 410_000_000, total: 1_410_000_000 },
+    "2026-06": { vn: 760_000_000, us: 150_000_000, total: 910_000_000 },
+    "2026-07": { vn: 1_550_000_000, us: 156_000_000, total: 1_708_000_000 },
+  },
+  spend: {
+    "2026-01": 132_000_000,
+    "2026-02": 142_000_000,
+    "2026-03": 156_000_000,
+    "2026-04": 180_000_000,
+    "2026-05": 158_000_000,
+    "2026-06": 181_000_000,
+    "2026-07": 72_000_000,
+  },
+  budget: {
+    "2026-01": 145_000_000,
+    "2026-02": 150_000_000,
+    "2026-03": 160_000_000,
+    "2026-04": 175_000_000,
+    "2026-05": 170_000_000,
+    "2026-06": 185_000_000,
+    "2026-07": 200_000_000,
+  },
+  spendByMarket: {
+    "2026-07": { vn: 52_000_000, us: 20_000_000, total: 72_000_000 },
+  },
+  budgetByMarket: {
+    "2026-07": { vn: 145_000_000, us: 55_000_000, total: 200_000_000 },
+  },
+  leads: {
+    "2026-01": 460,
+    "2026-02": 510,
+    "2026-03": 640,
+    "2026-04": 890,
+    "2026-05": 580,
+    "2026-06": 837,
+    "2026-07": 460,
+  },
+  leadsByMarket: {
+    "2026-01": { vn: 350, us: 110 },
+    "2026-02": { vn: 390, us: 120 },
+    "2026-03": { vn: 480, us: 160 },
+    "2026-04": { vn: 650, us: 240 },
+    "2026-05": { vn: 430, us: 150 },
+    "2026-06": { vn: 612, us: 225 },
+    "2026-07": { vn: 340, us: 120 },
+  },
+  users: {
+    "2026-01": { vnNew: 6800, vnReturning: 2800, usNew: 2600, usReturning: 1050, total: 13250 },
+    "2026-02": { vnNew: 7200, vnReturning: 3100, usNew: 2900, usReturning: 1200, total: 14400 },
+    "2026-03": { vnNew: 8100, vnReturning: 3600, usNew: 3300, usReturning: 1400, total: 16400 },
+    "2026-04": { vnNew: 9800, vnReturning: 4100, usNew: 4200, usReturning: 1800, total: 19900 },
+    "2026-05": { vnNew: 7600, vnReturning: 3400, usNew: 3100, usReturning: 1300, total: 15400 },
+    "2026-06": { vnNew: 8400, vnReturning: 3900, usNew: 3600, usReturning: 1500, total: 17400 },
+    "2026-07": { vnNew: 4200, vnReturning: 1900, usNew: 1800, usReturning: 700, total: 8600 },
+  },
+  leadsByChannel: [
+    { label: "Live Chat", byMonth: byMonth([132, 150, 185, 255, 165, 238, 124]) },
+    { label: "WhatsApp", byMonth: byMonth([72, 82, 98, 136, 88, 128, 72]) },
+    { label: "Zalo OA", byMonth: byMonth([170, 188, 232, 322, 210, 304, 176]) },
+    { label: "Messenger", byMonth: byMonth([56, 60, 78, 110, 72, 104, 58]) },
+    { label: "Instagram", byMonth: byMonth([30, 30, 47, 67, 45, 63, 30]) },
+  ],
+  refreshTimestamp: "2026-07-13T09:00:00+07:00",
+}
+
+const DEMO_GA4 = [
+  {
+    name: "% CR Gohub App",
+    cr: 2.9,
+    kpis: { activeUsers: 9750, sessions: 18200, purchases: 528, revenue: 124_295_198, cr: 2.9 },
+    series: DEMO_MONTHS.map((m, i) => ({ date: `${demoMonthLabel(m).top} ${demoMonthLabel(m).sub}`, sessions: [9100, 9800, 11200, 13400, 10600, 12100, 6200][i], users: [4700, 5100, 5800, 6900, 5400, 6100, 3300][i], purchases: [198, 220, 260, 320, 240, 300, 170][i], revenue: [176_900_000, 201_203_640, 165_463_546, 168_185_318, 113_375_731, 104_898_583, 49_994_096][i], cr: [2.1, 2.2, 2.3, 2.4, 2.3, 2.5, 2.7][i] })),
+  },
+  {
+    name: "% CR Gohub .com",
+    cr: 1.8,
+    kpis: { activeUsers: 6800, sessions: 14300, purchases: 258, revenue: 41_063_220, cr: 1.8 },
+    series: DEMO_MONTHS.map((m, i) => ({ date: `${demoMonthLabel(m).top} ${demoMonthLabel(m).sub}`, sessions: [7600, 8200, 9000, 10200, 7800, 8600, 4200][i], users: [3800, 4100, 4500, 5200, 3900, 4300, 2200][i], purchases: [125, 140, 155, 180, 118, 150, 78][i], revenue: [54_200_000, 63_790_320, 87_449_472, 106_795_656, 31_157_016, 41_163_144, 7_947_720][i], cr: [1.6, 1.7, 1.7, 1.8, 1.5, 1.7, 1.9][i] })),
+  },
+  {
+    name: "% CR Gohub .vn",
+    cr: 3.1,
+    kpis: { activeUsers: 15400, sessions: 26400, purchases: 818, revenue: 650_538_200, cr: 3.1 },
+    series: DEMO_MONTHS.map((m, i) => ({ date: `${demoMonthLabel(m).top} ${demoMonthLabel(m).sub}`, sessions: [13200, 14800, 16900, 21200, 16500, 18800, 9200][i], users: [6800, 7200, 8100, 9800, 7600, 8400, 4200][i], purchases: [420, 480, 540, 690, 510, 590, 310][i], revenue: [410_000_000, 454_843_608, 508_040_724, 759_612_231, 482_210_789, 737_078_699, 650_538_200][i], cr: [3.1, 3.2, 3.1, 3.3, 3.1, 3.1, 3.4][i] })),
+  },
+]
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const monthLabel = (m: string) => {
@@ -117,14 +258,36 @@ const AwaitingData = ({ note }: { note: string }) => (
   </div>
 )
 
+const monthlyRollup = (series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]) => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const rows = new Map<string, { date: string; sessions: number; purchases: number; revenue: number; users: number }>()
+  for (const row of series) {
+    const [mm, dd] = row.date.split("/").map(Number)
+    if (!mm || !dd) continue
+    const inferredYear = mm > now.getMonth() + 1 ? year - 1 : year
+    const key = `${inferredYear}-${String(mm).padStart(2, "0")}`
+    const label = `${monthLabel(key).top} ${monthLabel(key).sub}`
+    const acc = rows.get(key) ?? { date: label, sessions: 0, purchases: 0, revenue: 0, users: 0 }
+    acc.sessions += row.sessions ?? 0
+    acc.purchases += row.purchases ?? 0
+    acc.revenue += row.revenue ?? 0
+    acc.users += row.users ?? 0
+    rows.set(key, acc)
+  }
+  return [...rows.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([, row]) => ({ ...row, cr: row.sessions > 0 ? (row.purchases / row.sessions) * 100 : 0 }))
+}
+
 // Dashboard B2C tùy biến (GA4/leads/CAC/spend, session 66-70) — giữ làm tab "Advanced" (admin).
-export function B2CAdvancedDashboard() {
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "admin"  // note công thức chỉ admin thấy
+export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }: { demoMode?: boolean; localPreview?: boolean } = {}) {
   const [data, setData]       = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
-  const [tab, setTab]         = useState<"revenue" | "kpi">("revenue")
+  const [viewMode, setViewMode] = useState<"month" | "quarter">("month")
+  const [profitMonth, setProfitMonth] = useState<string>("")
   // GA4 per site (Section 3 + 4) — load lazy, graceful nếu chưa cấu hình
   const [ga4, setGa4] = useState<{
     name:   string
@@ -134,121 +297,260 @@ export function B2CAdvancedDashboard() {
   }[] | null>(null)
 
   useEffect(() => {
+    if (demoMode) {
+      setData(DEMO_DATA)
+      setLoading(false)
+      setError(null)
+      return
+    }
     (async () => {
       setLoading(true); setError(null)
       try {
-        const res = await fetch("/api/analytics/b2c/monthly")
-        if (!res.ok) throw new Error(`${res.status}`)
+        const params = new URLSearchParams()
+        if (localPreview) params.set("localPreview", "1")
+        params.set("skipLeads", "1")
+        const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(body?.error || `${res.status}`)
+        }
         setData(await res.json())
       } catch (err) {
-        console.error(err); setError("Hiếu đang fix, vui lòng đợi")
+        console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [demoMode, localPreview])
+
+  useEffect(() => {
+    if (demoMode || !data?.months?.length) return
+    (async () => {
+      try {
+        const params = new URLSearchParams()
+        if (localPreview) params.set("localPreview", "1")
+        params.set("onlyLeads", "1")
+        const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
+        if (!res.ok) return
+        const leadsData = await res.json()
+        setData(prev => prev ? {
+          ...prev,
+          leads: leadsData.leads ?? prev.leads,
+          leadsByChannel: leadsData.leadsByChannel ?? prev.leadsByChannel,
+        } : prev)
+      } catch {}
+    })()
+  }, [demoMode, localPreview, data?.currentMonth])
+
+  useEffect(() => {
+    if (!data?.months?.length) return
+    setProfitMonth(prev => data.months.includes(prev) ? prev : data.currentMonth)
+  }, [data?.currentMonth, data?.months])
 
   // GA4 (Section 4) — riêng, không chặn main load
   useEffect(() => {
+    if (demoMode) {
+      setGa4(DEMO_GA4)
+      return
+    }
     (async () => {
       try {
-        const sd = await (await fetch("/api/config/ga4")).json()
+        const qs = localPreview ? "?localPreview=1" : ""
+        const sd = await (await fetch(`/api/config/ga4${qs}`)).json()
         const sites: { id: string; name: string }[] = sd.sites ?? []
         if (!sites.length) { setGa4([]); return }
         const out: { name: string; cr: number; kpis: { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }; series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[] }[] = []
         for (const s of sites) {
-          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=28`)
+          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=180${localPreview ? "&localPreview=1" : ""}`)
           if (!r.ok) continue
           const d = await r.json()
+          const series = monthlyRollup((d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })))
           out.push({
             name:   s.name,
             cr:     d.kpis?.cr ?? 0,
             kpis:   { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
-            series: (d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })),
+            series,
           })
         }
         setGa4(out)
       } catch { setGa4([]) }
     })()
-  }, [])
+  }, [demoMode, localPreview])
 
-  const completed = data ? data.months.slice(0, 5) : []
-  const current   = data?.currentMonth ?? ""
-  const prevFull  = data ? data.months[4] : ""
-  const proj      = (mtd: number) => data && data.elapsedDays > 0 ? mtd / data.elapsedDays * data.totalDays : 0
+  const quarterKey = (m: string) => {
+    const [y, mo] = m.split("-")
+    return `${y}-Q${Math.ceil(parseInt(mo) / 3)}`
+  }
+  const displayLabel = (key: string) => {
+    if (key.includes("-Q")) {
+      const [y, q] = key.split("-")
+      return { top: q, sub: `'${y.slice(2)}` }
+    }
+    return monthLabel(key)
+  }
+  const viewMonths = data ? (viewMode === "quarter" ? Array.from(new Set(data.months.map(quarterKey))) : data.months) : []
+  const current   = data ? (viewMode === "quarter" ? quarterKey(data.currentMonth) : data.currentMonth) : ""
+  const currentIndex = viewMonths.indexOf(current)
+  const completed = viewMonths.slice(0, currentIndex >= 0 ? currentIndex : Math.max(0, viewMonths.length - 1))
+  const prevFull  = completed[completed.length - 1] ?? ""
+  const calendarMonthsForPeriod = (key: string) => {
+    if (!key.includes("-Q")) return [key]
+    const [year, qRaw] = key.split("-Q")
+    const quarter = Number(qRaw)
+    const startMonth = (quarter - 1) * 3 + 1
+    return [0, 1, 2].map(offset => `${year}-${String(startMonth + offset).padStart(2, "0")}`)
+  }
+  const daysInMonthKey = (m: string) => {
+    const [year, month] = m.split("-").map(Number)
+    return new Date(year, month, 0).getDate()
+  }
+  const actualMonthsForPeriod = (key: string) => {
+    if (!data) return []
+    if (viewMode === "month") return data.months.includes(key) ? [key] : []
+    return calendarMonthsForPeriod(key).filter(m => data.months.includes(m) && m <= data.currentMonth)
+  }
+  const planningMonthsForPeriod = (key: string) => viewMode === "quarter" ? calendarMonthsForPeriod(key) : [key]
+  const monthsFor = actualMonthsForPeriod
+  const sumActualFor = (key: string, get: (m: string) => number) => actualMonthsForPeriod(key).reduce((s, m) => s + get(m), 0)
+  const sumPlanningFor = (key: string, get: (m: string) => number) => planningMonthsForPeriod(key).reduce((s, m) => s + get(m), 0)
+  const isCurrentPeriod = (key: string) => key === current
+  const periodTotalDays = (key: string) => planningMonthsForPeriod(key).reduce((sum, m) => sum + daysInMonthKey(m), 0)
+  const periodElapsedDays = (key: string) => {
+    if (!data) return 0
+    if (!key.includes("-Q")) return key === data.currentMonth ? data.elapsedDays : daysInMonthKey(key)
+    if (key !== current) return periodTotalDays(key)
+    return calendarMonthsForPeriod(key).reduce((sum, m) => (
+      sum + (m === data.currentMonth ? data.elapsedDays : m < data.currentMonth ? daysInMonthKey(m) : 0)
+    ), 0)
+  }
+  const proj = (mtd: number, key = current) => {
+    if (!data || !isCurrentPeriod(key)) return mtd
+    const elapsed = periodElapsedDays(key)
+    const total = periodTotalDays(key)
+    return elapsed > 0 && total > 0 ? mtd / elapsed * total : mtd
+  }
+  const partialPeriodValue = (key: string, elapsedDays: number, get: (m: string) => number) => {
+    let remaining = elapsedDays
+    let value = 0
+    for (const month of planningMonthsForPeriod(key)) {
+      if (remaining <= 0) break
+      const days = daysInMonthKey(month)
+      const used = Math.min(remaining, days)
+      value += get(month) * (used / days)
+      remaining -= used
+    }
+    return value
+  }
+  const comparablePrevPeriodValue = (get: (m: string) => number) => {
+    if (!prevFull) return 0
+    return partialPeriodValue(prevFull, Math.min(periodElapsedDays(current), periodTotalDays(prevFull)), get)
+  }
+  const periodSuffix = viewMode === "quarter" ? "QTD" : "MTD"
+  const periodTitle = viewMode === "quarter" ? "Quarterly B2C report" : "Monthly B2C report"
+  const periodProgressLabel = current ? `${periodElapsedDays(current)}/${periodTotalDays(current)} ngày` : "—"
+  const prorataLabel = viewMode === "quarter" ? "Prorata quarter-end" : "Prorata month-end"
 
   // ── KPI values (MTD tháng hiện tại) ─────────────────────────────────────────
-  const mtdTotal   = data?.markets[current]?.total ?? 0
-  const prevTotal  = data?.markets[prevFull]?.total ?? 0
-  const cust       = data?.customers[current]
-  const newRev     = cust?.new.revenue ?? 0
-  const retRev     = cust?.returning.revenue ?? 0
-  const totRev     = cust?.total.revenue ?? 0
+  const marketOf = (key: string): MarketCell => ({
+    vn: sumActualFor(key, m => data?.markets[m]?.vn ?? 0),
+    us: sumActualFor(key, m => data?.markets[m]?.us ?? 0),
+    total: sumActualFor(key, m => data?.markets[m]?.total ?? 0),
+  })
+  const channelOf = (key: string): ChannelCell => ({
+    web: sumActualFor(key, m => data?.channels[m]?.web ?? 0),
+    app: sumActualFor(key, m => data?.channels[m]?.app ?? 0),
+    other: sumActualFor(key, m => data?.channels[m]?.other ?? 0),
+  })
+  const customerOf = (key: string): CustRow => ({
+    new: { revenue: sumActualFor(key, m => data?.customers[m]?.new.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.new.count ?? 0) },
+    returning: { revenue: sumActualFor(key, m => data?.customers[m]?.returning.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.returning.count ?? 0) },
+    total: { revenue: sumActualFor(key, m => data?.customers[m]?.total.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.total.count ?? 0) },
+  })
+  const targetOf = (key: string): KpiTarget => ({
+    vn: sumPlanningFor(key, m => data?.targets[m]?.vn ?? 0),
+    us: sumPlanningFor(key, m => data?.targets[m]?.us ?? 0),
+    total: sumPlanningFor(key, m => data?.targets[m]?.total ?? 0),
+  })
+  const userAggOf = (key: string): UserCell => ({
+    vnNew: sumActualFor(key, m => data?.users?.[m]?.vnNew ?? 0),
+    vnReturning: sumActualFor(key, m => data?.users?.[m]?.vnReturning ?? 0),
+    usNew: sumActualFor(key, m => data?.users?.[m]?.usNew ?? 0),
+    usReturning: sumActualFor(key, m => data?.users?.[m]?.usReturning ?? 0),
+    total: sumActualFor(key, m => data?.users?.[m]?.total ?? 0),
+  })
+  const mtdTotal   = marketOf(current).total
+  const prevTotal  = marketOf(prevFull).total
+  const cust       = customerOf(current)
+  const newRev     = cust.new.revenue
+  const retRev     = cust.returning.revenue
+  const totRev     = cust.total.revenue
   const newShare   = totRev > 0 ? (newRev / totRev) * 100 : 0
 
   // ── chart series (rolling 6 tháng) ──────────────────────────────────────────
-  const revSeries = data ? data.months.map(m => ({
-    name: `${monthLabel(m).top} ${monthLabel(m).sub}`,
-    "VN B2C": data.markets[m]?.vn ?? 0,
-    "US B2C": data.markets[m]?.us ?? 0,
-  })) : []
-  const custSeries = data ? data.months.map(m => ({
-    name: `${monthLabel(m).top} ${monthLabel(m).sub}`,
-    "Khách mới": data.customers[m]?.new.revenue ?? 0,
-    "Quay lại":  data.customers[m]?.returning.revenue ?? 0,
-  })) : []
+  const revSeries = viewMonths.map(m => ({
+    name: `${displayLabel(m).top} ${displayLabel(m).sub}`,
+    "VN B2C": marketOf(m).vn,
+    "US B2C": marketOf(m).us,
+  }))
+  const custSeries = viewMonths.map(m => ({
+    name: `${displayLabel(m).top} ${displayLabel(m).sub}`,
+    "Khách mới": customerOf(m).new.revenue,
+    "Quay lại":  customerOf(m).returning.revenue,
+  }))
 
   // generic rolling-table renderer
-  const RollingTable = ({ rows }: {
+  const RollingTable = ({ rows, mtdCompare = false }: {
     rows: { label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
+    mtdCompare?: boolean
   }) => (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
-            <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Line</th>
+            <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[180px]">Line</th>
             {completed.map(m => {
-              const l = monthLabel(m)
-              return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+              const l = displayLabel(m)
+              return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
-            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
-            <th className="text-right font-semibold px-4 py-3 text-xs">MoM</th>
-            <th className="text-right font-semibold px-4 py-3 text-xs">Prorata</th>
-            <th className="text-right font-semibold px-4 py-3 text-xs">vs prev</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+            <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">{mtdCompare ? periodSuffix : "MoM"}</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Prorata</th>
+            <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">vs prev</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
           {rows.map(row => {
             const mtd      = row.get(current)
             const prevVal  = row.get(prevFull)
-            const prorata  = proj(mtd)
+            const compareVal = mtdCompare ? comparablePrevPeriodValue(row.get) : prevVal
+            const prorata  = proj(mtd, current)
             return (
               <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-                <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
+                <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
                   {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
                 {completed.map((m, i) => {
                   const v = row.get(m)
                   const prev = i > 0 ? row.get(completed[i - 1]) : null
                   return (
-                    <td key={m} className="px-4 py-4 text-right tabular-nums">
+                    <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                       <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
                       <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
                       {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
                     </td>
                   )
                 })}
-                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
                   <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
-                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
+                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                   {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
                 </td>
-                <td className="px-4 py-4 text-right"><Delta v={pct(mtd, prevVal)} /></td>
-                <td className="px-4 py-4 text-right tabular-nums">
+                <td className="px-4 py-4 text-right min-w-[120px]"><Delta v={pct(mtd, compareVal)} /></td>
+                <td className="px-4 py-4 text-right tabular-nums min-w-[150px]">
                   <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
                   <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
                 </td>
-                <td className="px-4 py-4 text-right"><Delta v={pct(prorata, prevVal)} /></td>
+                <td className="px-4 py-4 text-right min-w-[120px]"><Delta v={pct(prorata, prevVal)} /></td>
               </tr>
             )
           })}
@@ -263,7 +565,7 @@ export function B2CAdvancedDashboard() {
     const targets = data.targets ?? {}
     const hasTarget = Object.values(targets).some(t => (t?.vn || 0) + (t?.us || 0) + (t?.total || 0) > 0)
     if (!hasTarget)
-      return <AwaitingData note="Chưa có KPI target. Admin vào Settings → 'KPI Target B2C' để nhập target doanh thu theo tháng × thị trường (VN / US / Total). Sau khi lưu, tab này hiển thị MTD vs target, prorata vs KPI và % đạt." />
+      return <AwaitingData note="Chưa có KPI target. Vào KPI / Target → 'KPI Target B2C' để nhập target doanh thu theo tháng × thị trường (VN / US / Total). Sau khi lưu, tab này hiển thị MTD/QTD vs target, prorata vs KPI và % đạt." />
 
     const lines: { key: keyof KpiTarget; label: string; highlight?: boolean }[] = [
       { key: "vn",    label: "VN B2C" },
@@ -278,48 +580,48 @@ export function B2CAdvancedDashboard() {
     }
     return (
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="min-w-max w-full text-sm">
           <thead>
             <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
-              <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Line</th>
+              <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[180px]">Line</th>
               {completed.map(m => {
-                const l = monthLabel(m)
-                return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+                const l = displayLabel(m)
+                return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
               })}
-              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
-              <th className="text-right font-semibold px-4 py-3 text-xs">Prorata</th>
-              <th className="text-right font-semibold px-4 py-3 text-xs">% đạt KPI</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Prorata</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">% đạt KPI</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {lines.map(line => {
-              const mtd      = data.markets[current]?.[line.key] ?? 0
-              const prorata  = proj(mtd)
-              const tgtCur   = targets[current]?.[line.key] ?? 0
+              const mtd      = marketOf(current)[line.key] ?? 0
+              const prorata  = proj(mtd, current)
+              const tgtCur   = targetOf(current)[line.key] ?? 0
               return (
                 <tr key={line.key} className={line.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-                  <td className={`px-6 py-4 text-left ${line.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{line.label}</td>
+                  <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${line.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>{line.label}</td>
                   {completed.map(m => {
-                    const v   = data.markets[m]?.[line.key] ?? 0
-                    const tgt = targets[m]?.[line.key] ?? 0
+                    const v   = marketOf(m)[line.key] ?? 0
+                    const tgt = targetOf(m)[line.key] ?? 0
                     return (
-                      <td key={m} className="px-4 py-4 text-right tabular-nums">
+                      <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                         <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
                         <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgt ? formatCompactNumber(tgt) : "—"}</div>
                         <div className="mt-0.5"><Attain actual={v} target={tgt} /></div>
                       </td>
                     )
                   })}
-                  <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+                  <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
                     <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgtCur ? formatCompactNumber(tgtCur) : "—"}</div>
                     <div className="mt-0.5"><Attain actual={mtd} target={tgtCur} /></div>
                   </td>
-                  <td className="px-4 py-4 text-right tabular-nums">
+                  <td className="px-4 py-4 text-right tabular-nums min-w-[150px]">
                     <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
                     <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
                   </td>
-                  <td className="px-4 py-4 text-right"><Attain actual={prorata} target={tgtCur} /></td>
+                  <td className="px-4 py-4 text-right min-w-[120px]"><Attain actual={prorata} target={tgtCur} /></td>
                 </tr>
               )
             })}
@@ -330,48 +632,228 @@ export function B2CAdvancedDashboard() {
   }
 
   // Bảng rolling gọn — value tự định dạng theo từng dòng, KHÔNG prorata (tránh chiếu sai tỷ số như CAC/ROAS).
-  const SimpleRollTable = ({ rows }: {
+  const SimpleRollTable = ({ rows, startMonth }: {
     rows: { label: string; highlight?: boolean; breakdown?: boolean; delta?: boolean; mom?: boolean; fmt: (n: number) => string; get: (m: string) => number; sub?: (m: string) => string }[]
-  }) => (
-    <div className="overflow-x-auto px-0 pb-2">
-      <table className="w-full text-sm">
+    startMonth?: string
+  }) => {
+    const tableCompleted = startMonth
+      ? completed.filter(m => monthsFor(m).some(month => month >= startMonth))
+      : completed
+    const tablePrevFull = tableCompleted[tableCompleted.length - 1] ?? prevFull
+    return (
+      <div className="overflow-x-auto px-0 pb-2">
+        <table className="min-w-max w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+              <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[180px]">Chỉ số</th>
+              {tableCompleted.map(m => {
+                const l = displayLabel(m)
+                return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+              })}
+              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map(row => (
+              <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+                <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
+                  {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+                </td>
+                {tableCompleted.map((m, i) => {
+                  const v = row.get(m)
+                  const prev = i > 0 ? row.get(tableCompleted[i - 1]) : null
+                  return (
+                    <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
+                      <div className="text-slate-800 font-semibold">{row.fmt(v)}</div>
+                      {row.delta !== false && <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>}
+                      {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
+                    </td>
+                  )
+                })}
+                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
+                  <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
+                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                  {row.mom && tablePrevFull && (
+                    <div className="mt-0.5 flex items-center justify-end gap-1">
+                      <Delta v={pct(proj(row.get(current), current), row.get(tablePrevFull))} />
+                      <span className="text-[9px] text-slate-400 uppercase">MoM</span>
+                    </div>
+                  )}
+                  {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  // helpers cho Section 3 & 5
+  const spendOf  = (m: string) => sumActualFor(m, month => data?.spend?.[month] ?? 0)
+  const budgetOf = (m: string) => sumPlanningFor(m, month => data?.budget?.[month] ?? 0)
+  const spendVnOf = (m: string) => sumActualFor(m, month => data?.spendByMarket?.[month]?.vn ?? ((data?.spend?.[month] ?? 0) * 0.7))
+  const spendUsOf = (m: string) => sumActualFor(m, month => data?.spendByMarket?.[month]?.us ?? ((data?.spend?.[month] ?? 0) * 0.3))
+  const budgetVnOf = (m: string) => sumPlanningFor(m, month => data?.budgetByMarket?.[month]?.vn ?? ((data?.budget?.[month] ?? 0) * 0.7))
+  const budgetUsOf = (m: string) => sumPlanningFor(m, month => data?.budgetByMarket?.[month]?.us ?? ((data?.budget?.[month] ?? 0) * 0.3))
+  const leadsOf  = (m: string) => sumActualFor(m, month => data?.leads?.[month] ?? 0)
+  const leadChannelOf = (key: string, byMonthMap: Record<string, number>) => sumActualFor(key, month => byMonthMap[month] ?? 0)
+  const revOf    = (m: string) => marketOf(m).total
+  const profitChannelOf = (key: string) => {
+    const rows = new Map<string, ProfitCell>()
+    for (const month of actualMonthsForPeriod(key)) {
+      const monthRows = data?.profitByChannel?.[month] ?? {}
+      for (const [channel, cell] of Object.entries(monthRows)) {
+        const acc = rows.get(channel) ?? { revenue: 0, cogs: 0, grossProfit: 0, opCost: 0, cm1: 0 }
+        acc.revenue += cell.revenue ?? 0
+        acc.cogs += cell.cogs ?? 0
+        acc.grossProfit += cell.grossProfit ?? 0
+        acc.opCost += cell.opCost ?? 0
+        acc.cm1 += cell.cm1 ?? 0
+        rows.set(channel, acc)
+      }
+    }
+    return [...rows.entries()]
+      .map(([channel, cell]) => ({ channel, ...cell }))
+      .filter(row => row.revenue > 0 || row.grossProfit !== 0 || row.opCost > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+  }
+  const selectedProfitMonth = profitMonth || data?.currentMonth || current
+  const profitRows = data ? profitChannelOf(selectedProfitMonth) : []
+  const profitTotal = profitRows.reduce((acc, row) => ({
+    revenue: acc.revenue + row.revenue,
+    cogs: acc.cogs + row.cogs,
+    grossProfit: acc.grossProfit + row.grossProfit,
+    opCost: acc.opCost + row.opCost,
+    cm1: acc.cm1 + row.cm1,
+  }), { revenue: 0, cogs: 0, grossProfit: 0, opCost: 0, cm1: 0 })
+  const selectedProfitIndex = data?.months.indexOf(selectedProfitMonth) ?? -1
+  const prevProfitMonth = data && selectedProfitIndex > 0 ? data.months[selectedProfitIndex - 1] : ""
+  const prevProfitRows = data && prevProfitMonth ? profitChannelOf(prevProfitMonth) : []
+  const prevProfitTotal = prevProfitRows.reduce((acc, row) => ({
+    revenue: acc.revenue + row.revenue,
+    cogs: acc.cogs + row.cogs,
+    grossProfit: acc.grossProfit + row.grossProfit,
+    opCost: acc.opCost + row.opCost,
+    cm1: acc.cm1 + row.cm1,
+  }), { revenue: 0, cogs: 0, grossProfit: 0, opCost: 0, cm1: 0 })
+  const prevProfitByChannel = new Map<string, ProfitCell>([
+    ["Total B2C", prevProfitTotal],
+    ...prevProfitRows.map(row => [row.channel, row] as [string, ProfitCell]),
+  ])
+  const profitRate = (num: number, den: number) => den > 0 ? (num / den) * 100 : null
+  const profitPct = (num: number, den: number) => {
+    const rate = profitRate(num, den)
+    return rate === null ? "—" : `${rate.toFixed(1)}%`
+  }
+  const newOf    = (m: string) => customerOf(m).new.count
+  const newVnOf   = (m: string) => {
+    const market = data?.markets[m]
+    const totalNew = newOf(m)
+    return market && market.total > 0 ? totalNew * (market.vn / market.total) : totalNew * 0.75
+  }
+  const newUsOf   = (m: string) => Math.max(0, newOf(m) - newVnOf(m))
+  const userOf    = (m: string, key: keyof UserCell) => userAggOf(m)[key] ?? 0
+  const fmtX     = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
+  const fmtPctV  = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
+  const fmtMaybeInt = (n: number) => n > 0 ? formatNumber(Math.round(n)) : "—"
+  const fmtInt0 = (n: number) => formatNumber(Math.round(n || 0))
+  const hasSpend = data ? data.months.some(m => spendOf(m) > 0) : false
+  const hasBudget = data ? data.months.some(m => budgetOf(m) > 0) : false
+  const hasLeads = data ? data.months.some(m => leadsOf(m) > 0) : false
+  const hasUsers = data ? data.months.some(m => (data.users?.[m]?.total ?? 0) > 0) : false
+  const hasProfitTrend = profitRows.length > 0
+
+  type AcquisitionRow = {
+    label: string
+    highlight?: boolean
+    breakdown?: boolean
+    fmt: (n: number) => string
+    get: (m: string) => number
+  }
+  const acquisitionCustomerOf = (m: string) => {
+    const row = customerOf(m)
+    return row.new.count > 0 ? row.new.count : row.total.count
+  }
+  const acquisitionRows: AcquisitionRow[] = data ? [
+    { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
+    { label: "Leads", fmt: fmtInt0, highlight: true, get: leadsOf },
+    ...(data.leadsByChannel ?? []).map(ch => ({
+      label: ch.label,
+      breakdown: true,
+      fmt: fmtInt0,
+      get: (m: string) => leadChannelOf(m, ch.byMonth),
+    })),
+    { label: "Khách mới", fmt: fmtInt0, get: acquisitionCustomerOf },
+    {
+      label: "CAC / khách",
+      fmt: (n: number) => n > 0 ? formatCurrency(n) : "—",
+      get: (m: string) => {
+        const customers = acquisitionCustomerOf(m)
+        return customers > 0 ? spendOf(m) / customers : 0
+      },
+    },
+    {
+      label: "Chi phí / Lead",
+      fmt: (n: number) => n > 0 ? formatCurrency(n) : "—",
+      get: (m: string) => {
+        const leads = leadsOf(m)
+        return leads > 0 ? spendOf(m) / leads : 0
+      },
+    },
+    {
+      label: "Tỷ lệ chốt",
+      fmt: (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—",
+      get: (m: string) => {
+        const leads = leadsOf(m)
+        return leads > 0 ? (acquisitionCustomerOf(m) / leads) * 100 : 0
+      },
+    },
+  ] : []
+  const acquisitionStartMonth = "2026-05"
+  const acquisitionCompleted = completed.filter(m => {
+    const months = monthsFor(m)
+    return months.some(month => month >= acquisitionStartMonth)
+  })
+
+  const AcquisitionTable = () => (
+    <div className="overflow-x-auto px-0 pb-1">
+      <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
-            <th className="text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider">Chỉ số</th>
-            {completed.map(m => {
-              const l = monthLabel(m)
-              return <th key={m} className="text-right font-semibold px-4 py-3 text-xs">{l.top} <span className="text-slate-300">{l.sub}</span></th>
+            <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-2.5 text-xs uppercase tracking-wider min-w-[190px]">Chỉ số</th>
+            {acquisitionCompleted.map(m => {
+              const l = displayLabel(m)
+              return <th key={m} className="text-right font-semibold px-4 py-2.5 text-xs min-w-[180px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
-            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500">{monthLabel(current).top} <span className="text-blue-300">MTD</span></th>
+            <th className="text-right font-semibold px-4 py-2.5 text-xs text-blue-500 min-w-[180px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
-          {rows.map(row => (
+          {acquisitionRows.map(row => (
             <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
-              <td className={`px-6 py-4 text-left ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
+              <td className={`sticky left-0 z-10 bg-white/95 px-6 py-3 text-left min-w-[190px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
                 {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
               </td>
-              {completed.map((m, i) => {
+              {acquisitionCompleted.map((m, i) => {
                 const v = row.get(m)
-                const prev = i > 0 ? row.get(completed[i - 1]) : null
+                const prev = i > 0 ? row.get(acquisitionCompleted[i - 1]) : null
                 return (
-                  <td key={m} className="px-4 py-4 text-right tabular-nums">
+                  <td key={m} className="px-4 py-3 text-right tabular-nums min-w-[180px]">
                     <div className="text-slate-800 font-semibold">{row.fmt(v)}</div>
-                    {row.delta !== false && <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>}
-                    {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
+                    <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
                   </td>
                 )
               })}
-              <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40">
+              <td className="px-4 py-3 text-right tabular-nums bg-blue-50/40 min-w-[180px]">
                 <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
-                <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>
-                {row.mom && completed.length > 0 && (
+                <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                {prevFull && (
                   <div className="mt-0.5 flex items-center justify-end gap-1">
-                    <Delta v={pct(proj(row.get(current)), row.get(completed[completed.length - 1]))} />
+                    <Delta v={pct(row.get(current), row.get(prevFull))} />
                     <span className="text-[9px] text-slate-400 uppercase">MoM</span>
                   </div>
                 )}
-                {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
               </td>
             </tr>
           ))}
@@ -380,25 +862,80 @@ export function B2CAdvancedDashboard() {
     </div>
   )
 
-  // helpers cho Section 3 & 5
-  const spendOf  = (m: string) => data?.spend?.[m] ?? 0
-  const budgetOf = (m: string) => data?.budget?.[m] ?? 0
-  const leadsOf  = (m: string) => data?.leads?.[m] ?? 0
-  const revOf    = (m: string) => data?.markets[m]?.total ?? 0
-  const newOf    = (m: string) => data?.customers[m]?.new.count ?? 0
-  const fmtX     = (n: number) => n > 0 ? `${n.toFixed(2)}×` : "—"
-  const fmtPctV  = (n: number) => n > 0 ? `${n.toFixed(1)}%` : "—"
-  const hasSpend = data ? data.months.some(m => spendOf(m) > 0) : false
-  const hasBudget = data ? data.months.some(m => budgetOf(m) > 0) : false
-  const hasLeads = data ? data.months.some(m => leadsOf(m) > 0) : false
+  const ProfitTrendTable = () => {
+    const rows: (ProfitCell & { channel: string; highlight?: boolean })[] = [
+      { channel: "Total B2C", ...profitTotal, highlight: true },
+      ...profitRows,
+    ].filter(row => row.revenue > 0 || row.grossProfit !== 0 || row.opCost > 0)
+    const RateCell = ({ value, previous }: { value: number | null; previous: number | null }) => {
+      if (value === null) return <span className="text-slate-300">—</span>
+      const diff = previous === null ? null : value - previous
+      const tone = diff === null ? "text-slate-700" : diff >= 0 ? "text-emerald-600" : "text-rose-500"
+      return (
+        <div className={`flex flex-col items-end leading-tight ${tone}`}>
+          <span className="font-semibold">{value.toFixed(1)}%</span>
+          {diff !== null && (
+            <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px]">
+              {diff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+              {Math.abs(diff).toFixed(1)}%
+            </span>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="overflow-x-auto px-0 pb-1">
+        <table className="min-w-max w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+              <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[210px]">Kênh</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Revenue</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">COGS</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Gross Profit</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[105px]">Margin %</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Operation Cost</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">CM1</th>
+              <th className="text-right font-semibold px-4 py-3 text-xs min-w-[105px]">CM1%</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map(row => {
+              const prev = prevProfitByChannel.get(row.channel)
+              const marginRate = profitRate(row.grossProfit, row.revenue)
+              const prevMarginRate = prev ? profitRate(prev.grossProfit, prev.revenue) : null
+              const cm1Rate = profitRate(row.cm1, row.revenue)
+              const prevCm1Rate = prev ? profitRate(prev.cm1, prev.revenue) : null
+              return (
+                <tr key={row.channel} className={row.highlight ? "bg-slate-50/70" : "hover:bg-slate-50/40"}>
+                  <td className={`sticky left-0 z-10 bg-white/95 px-6 py-3.5 text-left min-w-[210px] ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>
+                    {row.highlight ? row.channel : <><span className="text-slate-300 mr-1">›</span>{row.channel}</>}
+                  </td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-slate-800">{formatCompactNumber(row.revenue)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{formatCompactNumber(row.cogs)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-slate-800">{formatCompactNumber(row.grossProfit)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums"><RateCell value={marginRate} previous={prevMarginRate} /></td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{row.opCost > 0 ? formatCompactNumber(row.opCost) : "—"}</td>
+                  <td className={`px-4 py-3.5 text-right tabular-nums font-semibold ${row.cm1 >= 0 ? "text-slate-800" : "text-rose-500"}`}>{formatCompactNumber(row.cm1)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums"><RateCell value={cm1Rate} previous={prevCm1Rate} /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   // GA4 totals cho KPI cards (Section trên cùng)
   const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
-  const ga4Users  = (ga4 as any)?.reduce((s: number, site: any) => s + (site.totalUsers ?? 0), 0) ?? 0
-  const spendCur  = spendOf(current); const budgetCur = budgetOf(current)
+  const ga4Users  = ga4?.reduce((s, site) => s + (site.kpis.activeUsers ?? 0), 0) ?? 0
+  const spendCur  = spendOf(current)
   const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
   const leadsCur  = leadsOf(current)
-  const cacVn     = spendCur > 0 && (cust?.new.count ?? 0) > 0 ? spendCur / (cust?.new.count ?? 1) : 0
+  const customersForCac = acquisitionCustomerOf(current)
+  const cacCur    = spendCur > 0 && customersForCac > 0 ? spendCur / customersForCac : 0
+  const cplCur     = spendCur > 0 && leadsCur > 0 ? spendCur / leadsCur : 0
 
   return (
     <div className="min-h-screen p-4 lg:p-6" style={APPLE_BG_STYLE}>
@@ -406,22 +943,33 @@ export function B2CAdvancedDashboard() {
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">Gohub B2C</h1>
-            <p className="text-[13px] text-[#6e6e73] mt-1">
-              Monthly B2C report · {current ? `${monthLabel(current).top} ${current.split("-")[0]}` : "—"} · GA4 + Admin GoHub
-            </p>
-          </div>
-          {data && (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#6e6e73] bg-white/72 border border-black/[0.09] px-3 py-1.5 rounded-full" style={{ backdropFilter: "blur(8px)" }}>
-                MTD: {data.elapsedDays}/{data.totalDays} ngày
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#0071e3] bg-[#eaf4ff] border border-[#0071e3]/20 px-3 py-1.5 rounded-full">
-                MTD + Prorata
-              </span>
-            </div>
-          )}
+	          <div>
+	            <h1 className="text-[28px] font-[640] text-[#1d1d1f] leading-tight">Gohub B2C</h1>
+	            <p className="text-[13px] text-[#6e6e73] mt-1">
+	              {periodTitle} · {current ? `${displayLabel(current).top} ${displayLabel(current).sub}` : "—"} · GA4 + Admin GoHub
+	            </p>
+	          </div>
+	          {data && (
+	            <div className="flex flex-wrap items-center gap-2">
+	              <div className="flex bg-white/72 border border-black/[0.09] p-0.5 rounded-full text-xs" style={{ backdropFilter: "blur(8px)" }}>
+	                {(["month", "quarter"] as const).map(mode => (
+	                  <button
+	                    key={mode}
+	                    onClick={() => setViewMode(mode)}
+	                    className={`px-3 py-1.5 rounded-full font-[650] transition-all ${viewMode === mode ? "bg-[#0071e3] text-white shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]"}`}
+	                  >
+	                    {mode === "month" ? "Month" : "Quarter"}
+	                  </button>
+	                ))}
+	              </div>
+	              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#6e6e73] bg-white/72 border border-black/[0.09] px-3 py-1.5 rounded-full" style={{ backdropFilter: "blur(8px)" }}>
+	                {periodSuffix}: {periodProgressLabel}
+	              </span>
+	              <span className="inline-flex items-center gap-1.5 text-[12px] font-[560] text-[#0071e3] bg-[#eaf4ff] border border-[#0071e3]/20 px-3 py-1.5 rounded-full">
+	                {periodSuffix} + Prorata
+	              </span>
+	            </div>
+	          )}
         </div>
 
         {error && <div className="rounded-lg bg-[#fdecea] border border-[#d93025]/20 text-[#d93025] p-4 text-[13px]">{error}</div>}
@@ -433,24 +981,25 @@ export function B2CAdvancedDashboard() {
             <div className={APPLE_CARD} style={{ ...APPLE_CARD_STYLE, borderRadius: 10 }}>
               <div className="p-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 items-center">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#0071e3] bg-[#eaf4ff] px-2.5 py-1 rounded-full">Snapshot</span>
-                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
-                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">MTD B2C</span>
-                  </div>
-                  <div className="mt-3 text-[14px] text-[#6e6e73] leading-relaxed max-w-lg">
-                    Prorata month-end: <strong className="text-[#1d1d1f]">{formatCurrency(proj(mtdTotal))}</strong>
-                    {data.totalDays > 0 && <> · MTD {((data.elapsedDays / data.totalDays) * 100).toFixed(0)}%</>}
+	                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#0071e3] bg-[#eaf4ff] px-2.5 py-1 rounded-full">Snapshot</span>
+	                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
+	                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">{periodSuffix} B2C</span>
+	                  </div>
+	                  <div className="mt-3 text-[14px] text-[#6e6e73] leading-relaxed max-w-lg">
+	                    {prorataLabel}: <strong className="text-[#1d1d1f]">{formatCurrency(proj(mtdTotal))}</strong>
+	                    {periodTotalDays(current) > 0 && <> · {periodSuffix} {((periodElapsedDays(current) / periodTotalDays(current)) * 100).toFixed(0)}%</>}
                     {prevTotal > 0 && <> · MoM <span className={pct(mtdTotal, prevTotal)! >= 0 ? "text-[#2f9d55]" : "text-[#d93025]"}>{pct(mtdTotal, prevTotal)! >= 0 ? "↑" : "↓"}{Math.abs(pct(mtdTotal, prevTotal)!).toFixed(1)}%</span></>}
                   </div>
                 </div>
                 <div className="space-y-4">
                   {[
-                    { label: "VN B2C",  val: data.markets[current]?.vn ?? 0,  total: mtdTotal,      proj: proj(data.markets[current]?.vn ?? 0),  color: "#0071e3" },
-                    { label: "VN Web",  val: data.channels[current]?.web ?? 0, total: mtdTotal,      proj: proj(data.channels[current]?.web ?? 0), color: "#00a6a6" },
-                    { label: "US App",  val: data.channels[current]?.app ?? 0, total: mtdTotal,      proj: proj(data.channels[current]?.app ?? 0), color: "#2f9d55" },
-                    { label: "US B2C",  val: data.markets[current]?.us ?? 0,   total: mtdTotal,      proj: proj(data.markets[current]?.us ?? 0),   color: "#b7791f" },
+                    { label: "VN B2C", val: marketOf(current).vn, total: mtdTotal, proj: proj(marketOf(current).vn), color: "#0071e3" },
+                    { label: "US B2C", val: marketOf(current).us, total: mtdTotal, proj: proj(marketOf(current).us), color: "#6366f1" },
+                    { label: "Web",    val: channelOf(current).web, total: mtdTotal, proj: proj(channelOf(current).web), color: "#00a6a6" },
+                    { label: "App",    val: channelOf(current).app, total: mtdTotal, proj: proj(channelOf(current).app), color: "#2f9d55" },
+                    { label: "Khác",   val: channelOf(current).other, total: mtdTotal, proj: proj(channelOf(current).other), color: "#b7791f" },
                   ].map(({ label, val, total, proj: p, color }) => (
-                    <div key={label} className="grid grid-cols-[80px_1fr_140px] items-center gap-3">
+                    <div key={label} className="grid grid-cols-[90px_1fr_140px] items-center gap-3">
                       <span className="text-[13px] font-[600] text-[#1d1d1f]">{label}</span>
                       <div className="h-[10px] rounded-full bg-[#e8ecf1] overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, total > 0 ? (val / total) * 100 : 0)}%`, background: color }} />
@@ -466,17 +1015,41 @@ export function B2CAdvancedDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"}
                 sub={ga4 && ga4.length > 0 ? `CR ${(ga4Total / ga4.length).toFixed(1)}%` : "GA4 chưa kết nối"} source="GA4" />
-              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)}
-                sub={`Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
-              <KpiCard label="Budget" value={budgetCur > 0 ? formatCurrency(budgetCur) : "—"}
-                sub="VN + US paid allocation" source="Chat" />
               <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"}
                 sub="Paid media blended" source="Chat" />
-              <KpiCard label="CAC" value={cacVn > 0 ? formatCurrency(cacVn) : "—"}
+              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)}
+                sub={data.customerError ? "Admin API lỗi" : data.customerBreakdown === "total-only" ? "Total từ Admin API" : `Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
+              <KpiCard label="CAC" value={cacCur > 0 ? formatCurrency(cacCur) : "—"}
                 sub="Spend ÷ khách mới" source="Chat" />
               <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"}
                 sub="Chatwoot all channels" source="Chat" />
+              <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"}
+                sub="Spend ÷ Leads" source="Chat" />
             </div>
+
+            <Section
+              icon={<TrendingUp className="w-5 h-5" />}
+              title="Revenue & Gross Profit Trend"
+              action={
+                <select
+                  value={selectedProfitMonth}
+                  onChange={e => setProfitMonth(e.target.value)}
+                  className="h-8 rounded-lg border border-black/[0.09] bg-white/80 px-3 text-[12px] font-[650] text-[#1d1d1f] outline-none focus:border-[#0071e3]/40 focus:ring-2 focus:ring-[#0071e3]/10"
+                >
+                  {(data.months ?? []).map(month => {
+                    const label = monthLabel(month)
+                    return <option key={month} value={month}>{label.top} {label.sub}</option>
+                  })}
+                </select>
+              }
+              source="admin"
+            >
+              {hasProfitTrend ? (
+                <ProfitTrendTable />
+              ) : (
+                <AwaitingData note="Chưa có dữ liệu Revenue/COGS/Gross Profit theo kênh từ Admin/Warehouse cho period này." />
+              )}
+            </Section>
 
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -539,85 +1112,62 @@ export function B2CAdvancedDashboard() {
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               source="admin"
-              action={
-                <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs">
-                  {(["revenue", "kpi"] as const).map(t => (
-                    <button key={t} onClick={() => setTab(t)}
-                      className={`px-3 py-1.5 rounded-md font-semibold transition-all ${tab === t ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
-                      {t === "revenue" ? "Revenue" : "KPI"}
-                    </button>
-                  ))}
-                </div>
-              }
             >
-              {tab === "revenue" ? (
-                <RollingTable rows={[
-                  { label: "VN B2C",    get: m => data.markets[m]?.vn ?? 0 },
-                  { label: "US B2C",    get: m => data.markets[m]?.us ?? 0 },
-                  { label: "Total B2C", get: m => data.markets[m]?.total ?? 0, highlight: true },
-                  { label: "Web",       get: m => data.channels[m]?.web ?? 0,   breakdown: true },
-                  { label: "App",       get: m => data.channels[m]?.app ?? 0,   breakdown: true },
-                  { label: "Khác",      get: m => data.channels[m]?.other ?? 0, breakdown: true },
-                ]} />
-              ) : (
-                <KpiTable />
-              )}
+              <RollingTable mtdCompare rows={[
+                { label: "VN B2C",    get: m => marketOf(m).vn },
+                { label: "US B2C",    get: m => marketOf(m).us },
+                { label: "Total B2C", get: m => marketOf(m).total, highlight: true },
+                { label: "Web",       get: m => channelOf(m).web,   breakdown: true },
+                { label: "App",       get: m => channelOf(m).app,   breakdown: true },
+                { label: "Khác",      get: m => channelOf(m).other, breakdown: true },
+              ]} />
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
             <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách"
               source="admin"
 >
-              <RollingTable rows={[
-                { label: "New",       get: m => data.customers[m]?.new.revenue ?? 0,       sub: m => `${formatNumber(data.customers[m]?.new.count ?? 0)} khách` },
-                { label: "Returning", get: m => data.customers[m]?.returning.revenue ?? 0, sub: m => `${formatNumber(data.customers[m]?.returning.count ?? 0)} khách` },
-                { label: "Total",     get: m => data.customers[m]?.total.revenue ?? 0,     sub: m => `${formatNumber(data.customers[m]?.total.count ?? 0)} khách`, highlight: true },
-              ]} />
-            </Section>
-
-            {/* Section 3 — CAC, Users, Leads */}
-            <Section icon={<UserPlus className="w-5 h-5" />} title="CAC · Leads · Users · Khách mới" desc="Hiệu quả acquisition · rolling 6 tháng" source="admin">
-              {/* GA4 Users summary (28 ngày MTD) — nguồn GA4 */}
-              {ga4 && ga4.length > 0 && (
-                <div className="px-6 pt-4 pb-2 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {ga4.map(site => (
-                    <div key={site.name} className="rounded-lg border border-black/[0.06] p-3" style={{ background: "rgba(0,113,227,0.04)" }}>
-                      <div className="text-[10px] font-[650] text-[#0071e3] uppercase tracking-wide mb-1">{site.name} <span className="text-[#6e6e73] normal-case">GA4</span></div>
-                      <div className="text-[18px] font-[560] text-[#1d1d1f]">{formatNumber(site.kpis.activeUsers)}</div>
-                      <div className="text-[11px] text-[#6e6e73] mt-0.5">
-                        {formatNumber(site.kpis.purchases)} purchases · CR {site.kpis.cr.toFixed(2)}%
-                      </div>
-                    </div>
-                  ))}
+              {data.customerError && (
+                <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+                  Customer Admin API lỗi: {data.customerError}.
                 </div>
               )}
+              {data.customerBreakdown === "total-only" && !data.customerError && (
+                <div className="mx-6 mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-800">
+                  Admin API summary hiện có Total Customers/Revenue; New vs Returning cần snapshot item-level hoặc API summary breakdown riêng.
+                </div>
+              )}
+	              <RollingTable rows={data.customerBreakdown === "total-only" ? [
+	                { label: "Total", get: m => customerOf(m).total.revenue, sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
+	              ] : [
+	                { label: "New",       get: m => customerOf(m).new.revenue,       sub: m => `${formatNumber(customerOf(m).new.count)} khách` },
+	                { label: "Returning", get: m => customerOf(m).returning.revenue, sub: m => `${formatNumber(customerOf(m).returning.count)} khách` },
+	                { label: "Total",     get: m => customerOf(m).total.revenue,     sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
+	              ]} />
+            </Section>
+
+            <Section
+              icon={<UserPlus className="w-5 h-5" />}
+              title="Acquisition Performance"
+              desc="Chi phí MKT · Leads theo kênh · Khách mới · CAC/CPL · tỷ lệ chốt"
+              source="admin"
+            >
               {hasSpend || hasLeads ? (
-                <SimpleRollTable rows={[
-                  { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
-                  ...(hasLeads ? [
-                    { label: "Leads", fmt: formatNumber, mom: true, get: leadsOf },
-                    ...(data.leadsByChannel ?? []).map(ch => ({
-                      label: ch.label, breakdown: true, mom: true, fmt: formatNumber,
-                      get: (m: string) => ch.byMonth[m] ?? 0,
-                    })),
-                  ] : []),
-                  { label: "Khách mới",   fmt: formatNumber,        get: newOf },
-                  { label: "CAC / khách", fmt: (n: number) => n > 0 ? formatCurrency(n) : "—", delta: false, highlight: true,
-                    get: m => { const nc = newOf(m); return nc > 0 ? spendOf(m) / nc : 0 } },
-                  ...(hasLeads ? [
-                    { label: "Chi phí / Lead", fmt: (n: number) => n > 0 ? formatCurrency(n) : "—", delta: false,
-                      get: (m: string) => { const l = leadsOf(m); return l > 0 ? spendOf(m) / l : 0 } },
-                    { label: "Tỷ lệ chốt", fmt: fmtPctV, delta: false,
-                      get: (m: string) => { const l = leadsOf(m); return l > 0 ? newOf(m) / l * 100 : 0 } },
-                  ] : []),
-                ]} />
+                <>
+                  {data.customerBreakdown === "total-only" && (
+                    <div className="mx-6 mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-800">
+                      Dòng Khách mới đang dùng total customer từ Admin API vì API summary hiện chưa trả breakdown New/Returning trong snapshot này.
+                    </div>
+                  )}
+                  <AcquisitionTable />
+                </>
               ) : (
-                <AwaitingData note="Chưa có dữ liệu chi phí marketing (Turso) lẫn leads (Chatwoot). Kiểm tra TURSO_* và CHATWOOT_* trong env." />
+                <AwaitingData note="Chưa có spend hoặc lead để tính CAC/CPL. Cần dữ liệu chi phí MKT và lead theo kênh." />
               )}
             </Section>
 
-            {/* Section 4 — GA4 Charts: Sessions + Purchases + Revenue + CR% (theo mockup) */}
-            <Section icon={<TrendingUp className="w-5 h-5" />} title="GA4 Conversion Rate Charts" desc="Purchase · Revenue · CR% · Traffic · 28 ngày" source="ga4"
+            {/* Section 4 — GA4 Charts: Purchase + Revenue + CR% + Traffic (theo spec) */}
+            <Section icon={<TrendingUp className="w-5 h-5" />} title="GA4 Conversion Rate Charts" desc="Purchase · Revenue · CR% · Traffic · monthly trend" source="ga4"
               action={<a href="/analytics/website" className="text-[12px] font-[600] text-[#0071e3] hover:underline">Xem chi tiết →</a>}>
               {ga4 === null ? (
                 <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4…</div>
@@ -637,24 +1187,23 @@ export function B2CAdvancedDashboard() {
                       </div>
                       <div className="h-[280px] px-2 pt-2 pb-1">
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={s.series} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                          <ComposedChart data={s.series} margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
                             <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} interval="preserveStartEnd" />
-                            <YAxis yAxisId="sess" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
+                            <YAxis yAxisId="traffic" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
                             <YAxis yAxisId="rev" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
                             <YAxis yAxisId="cr" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#2f9d55", fontSize: 10 }} tickFormatter={v => `${v.toFixed(1)}%`} width={36} hide />
                             <Tooltip
                               contentStyle={{ borderRadius: "8px", border: "1px solid rgba(0,0,0,0.09)", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.07)", fontSize: 12 }}
                               formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : n === "Revenue" ? formatCurrency(v) : formatNumber(Math.round(v))}
                             />
-                            {/* Sessions = bar */}
-                            <Bar yAxisId="sess" dataKey="sessions" name="Sessions" fill="#0071e3" fillOpacity={0.25} radius={[2, 2, 0, 0]} barSize={8} />
-                            {/* Revenue = bar phủ */}
-                            <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill="#d93025" fillOpacity={0.18} radius={[2, 2, 0, 0]} barSize={8} />
-                            {/* CR% = line */}
-                            <Line yAxisId="cr" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2} dot={false} />
-                            {/* Purchases = line */}
-                            <Line yAxisId="sess" type="monotone" dataKey="purchases" name="Purchases" stroke="#00a6a6" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+                            <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                            <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill="#d93025" fillOpacity={0.18} radius={[2, 2, 0, 0]} barSize={12} />
+                            <Line yAxisId="traffic" type="monotone" dataKey="sessions" name="Traffic" stroke="#0071e3" strokeWidth={1.8} dot={false} />
+                            <Line yAxisId="traffic" type="monotone" dataKey="purchases" name="Purchase" stroke="#00a6a6" strokeWidth={1.8} dot={false} strokeDasharray="4 2" />
+                            <Line yAxisId="cr" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2.2} dot={{ r: 2 }}>
+                              <LabelList dataKey="cr" position="top" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "#2f9d55", fontSize: 10, fontWeight: 600 }} />
+                            </Line>
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
@@ -665,13 +1214,22 @@ export function B2CAdvancedDashboard() {
             </Section>
 
             {/* Section 5 — Spend & ROAS (Budget · Spend MTD · Spend Pace · Spend Prorata · ROAS) */}
-            <Section icon={<PieChartIcon className="w-5 h-5" />} title="Chi phí Marketing & ROAS" desc="Budget · Spend · Spend Pace · Prorata · ROAS · rolling 6 tháng" source="admin">
+            <Section
+              icon={<PieChartIcon className="w-5 h-5" />}
+              title="Budget Management"
+              desc={`Budget từ Manage Costs/B2C Channels · Spend · Spend Pace · Prorata · ROAS${data.refreshTimestamp ? ` · refresh ${new Date(data.refreshTimestamp).toLocaleString("vi-VN")}` : ""}`}
+              source="admin"
+            >
               {hasSpend ? (
                 <SimpleRollTable rows={[
                   ...(hasBudget ? [
-                    { label: "Ngân sách",    fmt: formatCompactNumber, delta: false, get: budgetOf },
+                    { label: "Monthly budget", fmt: formatCompactNumber, delta: false, highlight: true, get: budgetOf },
+                    { label: "VN B2C Budget", fmt: formatCompactNumber, delta: false, breakdown: true, get: budgetVnOf },
+                    { label: "US B2C Budget", fmt: formatCompactNumber, delta: false, breakdown: true, get: budgetUsOf },
                   ] : []),
-                  { label: "Spend MTD",    fmt: formatCompactNumber, get: spendOf },
+                  { label: "Spend MTD",    fmt: formatCompactNumber, highlight: true, get: spendOf },
+                  { label: "VN Spend MTD", fmt: formatCompactNumber, breakdown: true, get: spendVnOf },
+                  { label: "US Spend MTD", fmt: formatCompactNumber, breakdown: true, get: spendUsOf },
                   ...(hasBudget ? [
                     { label: "Spend Pace", fmt: fmtPctV, delta: false,
                       get: (m: string) => { const b = budgetOf(m); return b > 0 ? spendOf(m) / b * 100 : 0 } },
