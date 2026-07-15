@@ -4814,3 +4814,18 @@ CÒN TREO (không chặn):
   - Cột % 3HK: NCC có Simple (TB per-SIM) vs Weighted (tổng/tổng); tab hiện ≈ Weighted. Có thể bổ sung 2 cách nếu cần.
   - B2C snapshot table đang rỗng → cron refresh-b2c-report (00:00 UTC+7) sẽ dựng với builder đã lọc B2C_CHANNELS.
   - 3HK: nếu sau này có tier 1GB thật, team SP ghi throttle_speed "1GB..." (groupFromThrottle đã bắt sẵn).
+
+## Session 94 (2026-07-15) — [Wiki] Viết chi tiết wiki tab + sync KB
+Yêu cầu Hiếu: wiki mỗi tab ghi THẬT chi tiết (query, cột, cách đếm) để khỏi tra code + sync KB.
+- Tạo _analytics-data-model.md: mô hình dữ liệu CHUNG mọi tab analytics (fact_fulfillment_revenue/
+  fact_sales_revenue/fact_data_usage, dim_*, getAnalyticsSource Fulfillment↔Created, getDateFilter,
+  cache 12h, guard creator, thuật ngữ CM1, gotcha vendor 3HK/UTC). Các tab trỏ vào [[_analytics-data-model]].
+- Viết lại chi tiết (query thật + cột + gotcha): 3HK (đã làm s93) + BOD, Channels, Orders, Products, B2B,
+  Vendors, Customers, Staff, Fulfillment, All-Time, Dashboard, Targets, Website, CS, Feedback, SQL. Cập nhật
+  B2C (ecom opCost fix, tỷ giá DB, Turso leads env). Management + Scheduled + product tabs (skus/ncc/countries/
+  promotions/kb/info/chatbot/admin-product) giữ nguyên (đã current 2026-07-14, không đụng s90–93).
+- Sync KB: viết Node port của import_wiki.py (python msys build pydantic-core lỗi) → web/scripts/sync_wiki.mjs.
+  BUG parser CRLF lần đầu → 14 bản insert theo tên file (trùng) → sửa parser (\r) + xoá 14 bản + chạy lại.
+  Kết quả: kb_wiki_pages = 47 pages, 0 title rác; các tab update version mới + re-embed Gemini.
+- Lưu memory feedback_detailed_wiki (preference: enrich wiki khi làm gì đáng kể trên tab).
+Trạng thái: main == staging == 763c972.
