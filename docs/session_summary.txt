@@ -4584,3 +4584,17 @@ CÒN TREO:
   - Nên test tab SKUs + hỏi chatbot 1 gói cụ thể (xác nhận listings đọc metadata ổn trên UI thật).
   - (Nhắc) staging đang trước main NHIỀU commit (s87→s89): fix chatbot searchSkus (bug lớn), +161 nước,
     gỡ Neo4j, dọn cast+test, wiki chuẩn hoá+import upsert, listings metadata P1+P2.
+
+## Session 90 (2026-07-15) — [Dashboard] Phân 3 mục thị trường US/VN/All (tab segmented)
+164. Yêu cầu Hiếu: tab Dashboard (/analytics) phân thành 3 mục US/VN/All. Hiếu chốt kiểu "tab chuyển đổi 1 view/lần"
+     (không phải 3 khối xếp chồng). Áp skill .ai (staging-first, surgical, UI lock nhưng đây là chỉ thị trực tiếp).
+165. Phát hiện: backend ĐÃ hỗ trợ sẵn companyCode (ALL/VN/US) — kpis/revenue-chart/region-chart/performance-source/
+     performance-channel/recent-orders/b2b/strategic-performance đều nhận & lọc (getDateFilter(...companyCode)).
+     Filter "Company" trước đây nằm ẩn trong panel Filters. → thuần đổi FE, không đụng API.
+166. Sửa web/src/app/(dashboard)/analytics/page.tsx:
+     - Thêm dải segmented tab All/VN/US ngay dưới header (style khớp toggle Fulfillment/Created), onClick→setCompanyCode.
+     - Bỏ dropdown "Company" trùng trong panel Filters (tab thay thế; tránh 2 control cùng điều khiển companyCode).
+     - companyCode state + queryParams GIỮ NGUYÊN → mọi API tự lọc theo tab đang chọn.
+     Verify: tsc PASS · next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 vì build worker OOM mặc định).
+167. Wiki (RULES #3): cập nhật docs/wiki/Tab/analytics-dashboard.md (mục 3 luồng dữ liệu + updated 2026-07-15).
+     LƯU Ý: import_wiki.py skip theo title → đổi NỘI DUNG giữ title phải sửa qua tab Wiki web hoặc xóa row cũ rồi chạy lại.

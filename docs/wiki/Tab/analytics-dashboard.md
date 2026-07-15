@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, dashboard]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -27,8 +27,8 @@ Trang tổng quan kinh doanh: cho lãnh đạo/nhân viên nhìn nhanh doanh thu
 - **Lớp kết nối DB**: `web/src/lib/analytics-db.ts` (pool pg tới `gohub_dw`) + `web/src/lib/analytics-helpers.ts` (cache).
 
 ## 3. Cách hoạt động (luồng dữ liệu)
-1. Người dùng chọn khoảng ngày (mặc định = từ đầu tháng hiện tại → hôm nay).
-2. FE gọi song song `kpis` + `revenue-chart` + `region-chart` (giảm round-trip).
+1. Người dùng chọn khoảng ngày (mặc định = từ đầu tháng hiện tại → hôm nay) và **thị trường** qua dải tab **All / VN / US** ở đầu trang.
+2. FE gọi song song `kpis` + `revenue-chart` + `region-chart` (giảm round-trip). Tab thị trường truyền tham số `companyCode` (`ALL`/`VN`/`US`) vào MỌI API để lọc toàn bộ số liệu theo thị trường đã chọn.
 3. Mỗi API tính trên `gohub_dw` rồi trả qua **lớp cache 2 tầng** (xem mục 6) → lần sau lấy cache.
 4. FE tính **dự phóng** (projection) phía client từ số ngày đã trôi qua và render KPI card + chart.
 

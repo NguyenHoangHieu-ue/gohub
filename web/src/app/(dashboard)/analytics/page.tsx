@@ -248,6 +248,22 @@ export default function DashboardHome() {
         </div>
       </div>
 
+      {/* Market segment tabs — lọc toàn Dashboard theo thị trường (companyCode) */}
+      <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm w-full sm:w-fit">
+        {([{ code: "ALL", label: "All" }, { code: "VN", label: "VN" }, { code: "US", label: "US" }] as const).map(t => (
+          <button
+            key={t.code}
+            onClick={() => setCompanyCode(t.code)}
+            className={cn(
+              "flex-1 sm:flex-none px-8 py-2 text-sm font-semibold rounded-md transition-all",
+              companyCode === t.code ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {showFilters && (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
           <div className="flex-1 space-y-1.5">
@@ -259,14 +275,6 @@ export default function DashboardHome() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="sm:self-end" />
-          <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Company</label>
-            <select value={companyCode} onChange={e => setCompanyCode(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
-              <option value="ALL">All Companies</option>
-              <option value="VN">VN</option>
-              <option value="US">US</option>
-            </select>
-          </div>
           <div className="flex items-center justify-between sm:justify-start gap-4">
             <button onClick={() => {
               const today = new Date(); const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
