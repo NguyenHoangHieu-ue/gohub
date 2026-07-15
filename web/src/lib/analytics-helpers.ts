@@ -71,6 +71,26 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   return { deleted: count ?? 0 }
 }
 
+export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise<{ deleted: number }> {
+  const clean = prefixes.filter(Boolean)
+  if (clean.length === 0) return { deleted: 0 }
+  for (const key of Array.from(_cache.keys())) {
+    if (clean.some(prefix => key.startsWith(prefix))) _cache.delete(key)
+  }
+
+  const all = await supabaseAdmin.from("analytics_query_cache").select("cache_key").limit(5000)
+  const keys = (all.data ?? [])
+    .map(r => r.cache_key as string)
+    .filter(key => clean.some(prefix => key.startsWith(prefix)))
+  if (keys.length === 0) return { deleted: 0 }
+
+  const { count } = await supabaseAdmin
+    .from("analytics_query_cache")
+    .delete({ count: "exact" })
+    .in("cache_key", keys)
+  return { deleted: count ?? keys.length }
+}
+
 // ── Query-route cache + prewarm registry ───────────────────────────────────────
 // /api/analytics/query (endpoint generic) gọi qua đây. Khác cachedQuery thường: data gohub_dw chỉ
 // update 1 lần/ngày (pipeline ngoài) nên TTL dài (mặc định 12h) → load đầu ngày đập DB, cả ngày còn lại

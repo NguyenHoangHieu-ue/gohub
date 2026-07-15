@@ -15,6 +15,9 @@
     },
     "src/app/api/cron/prewarm-analytics/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/refresh-b2c-report/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -29,6 +32,10 @@
     {
       "path": "/api/cron/prewarm-analytics",
       "schedule": "30 23 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-b2c-report",
+      "schedule": "0 17 * * *"
     }
   ]
 }
