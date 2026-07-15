@@ -1031,16 +1031,19 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               icon={<TrendingUp className="w-5 h-5" />}
               title="Revenue & Gross Profit Trend"
               action={
-                <select
-                  value={selectedProfitMonth}
-                  onChange={e => setProfitMonth(e.target.value)}
-                  className="h-8 rounded-lg border border-black/[0.09] bg-white/80 px-3 text-[12px] font-[650] text-[#1d1d1f] outline-none focus:border-[#0071e3]/40 focus:ring-2 focus:ring-[#0071e3]/10"
-                >
-                  {(data.months ?? []).map(month => {
-                    const label = monthLabel(month)
-                    return <option key={month} value={month}>{label.top} {label.sub}</option>
-                  })}
-                </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-[#0071e3]">Chọn tháng</span>
+                  <select
+                    value={selectedProfitMonth}
+                    onChange={e => setProfitMonth(e.target.value)}
+                    className="h-9 rounded-lg border-2 border-[#0071e3] bg-[#0071e3]/[0.06] px-3 text-[13px] font-bold text-[#0071e3] shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#0071e3]/30 hover:bg-[#0071e3]/[0.1] transition-colors"
+                  >
+                    {(data.months ?? []).map(month => {
+                      const label = monthLabel(month)
+                      return <option key={month} value={month}>{label.top} {label.sub}</option>
+                    })}
+                  </select>
+                </div>
               }
               source="admin"
             >
