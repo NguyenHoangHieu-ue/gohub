@@ -36,12 +36,15 @@ interface CostManagementModalProps {
   onClose: () => void
   onSave: () => void
   initialMonth?: string
+  // "b2c" = mở từ tab B2C: chỉ hiện kênh B2C (ẩn tab B2B/Group — B2C không liên quan ecom/B2B).
+  // Mặc định "all" = đủ 3 tab (dùng cho trang B2B/Channels).
+  scope?: "all" | "b2c"
 }
 
 const B2B_CHANNELS_LIST = ["Traveloka", "VN-Ecom", "Momo", "Klook", "VN OD Klook", "ZaloPay", "Tiket", "Tiqets", "KKday", "Pelago", "BIDV", "Myrealtrip", "Trazy", "CellphoneS", "Vietravel", "Én Việt", "Trip", "Divui", "Coming", "Tiki", "Shopeepay", "Payoo", "LynkID", "Get Your Guide", "PhuotViVu", "VN-Wholesales", "VN-B2B Portal", "Global-Wholesales", "Wholesales", "Global-B2B Portal", "VN-B2B"]
 const B2C_CHANNELS_LIST = ["VN-Loyalty", "VN-Web eSIM", "VN-Social", "Mobile-App", "Global-Web", "VN-Web SIM", "Misc.", "Topup", "US-B2C Portal", "Global-B2C"]
 
-export const CostManagementModal: React.FC<CostManagementModalProps> = ({ isOpen, onClose, onSave, initialMonth }) => {
+export const CostManagementModal: React.FC<CostManagementModalProps> = ({ isOpen, onClose, onSave, initialMonth, scope = "all" }) => {
   const [costMonth, setCostMonth] = useState(initialMonth || new Date().toISOString().slice(0, 7))
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<GroupCost[]>([])
@@ -54,7 +57,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({ isOpen
   })
   const [savingCosts, setSavingCosts] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
-  const [activeCostTab, setActiveCostTab] = useState<"b2c" | "b2b" | "group">("b2b")
+  const [activeCostTab, setActiveCostTab] = useState<"b2c" | "b2b" | "group">(scope === "b2c" ? "b2c" : "b2b")
   const [vnEcomSubChannels, setVnEcomSubChannels] = useState<string[]>([])
   const [travelokaSubChannels, setTravelokaSubChannels] = useState<string[]>([])
   const [shopeepaySubChannels, setShopeepaySubChannels] = useState<string[]>([])
@@ -307,15 +310,17 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({ isOpen
           </div>
 
           <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-            <button
-              onClick={() => setActiveCostTab("b2b")}
-              className={cn(
-                "px-6 py-2 text-sm font-bold rounded-lg transition-all",
-                activeCostTab === "b2b" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              B2B Channels
-            </button>
+            {scope !== "b2c" && (
+              <button
+                onClick={() => setActiveCostTab("b2b")}
+                className={cn(
+                  "px-6 py-2 text-sm font-bold rounded-lg transition-all",
+                  activeCostTab === "b2b" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                B2B Channels
+              </button>
+            )}
             <button
               onClick={() => setActiveCostTab("b2c")}
               className={cn(
@@ -325,15 +330,17 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({ isOpen
             >
               B2C Channels
             </button>
-            <button
-              onClick={() => setActiveCostTab("group")}
-              className={cn(
-                "px-6 py-2 text-sm font-bold rounded-lg transition-all",
-                activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Group Costs
-            </button>
+            {scope !== "b2c" && (
+              <button
+                onClick={() => setActiveCostTab("group")}
+                className={cn(
+                  "px-6 py-2 text-sm font-bold rounded-lg transition-all",
+                  activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Group Costs
+              </button>
+            )}
           </div>
 
           <div className="flex items-center justify-between">

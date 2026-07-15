@@ -1460,6 +1460,7 @@ export function B2CPerformance() {
         onClose={() => setShowCostModal(false)}
         onSave={() => fetchData()}
         initialMonth={startDate.slice(0, 7)}
+        scope="b2c"
       />
     </div>
   )
