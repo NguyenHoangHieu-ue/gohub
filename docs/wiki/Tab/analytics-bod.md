@@ -5,57 +5,44 @@ is_hidden: true
 department: all
 tags: [tab, analytics, bod]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # Board of Directors Report (Báo Cáo Quản Trị BOD)
 
-Báo cáo cấp cao cho Ban Giám đốc: phân tích cơ cấu **Contribution Margin (CM1)**, chi phí kênh, đóng góp doanh thu 3HK và dự kiến cuối tháng. Là báo cáo tài chính "ra quyết định" của team Business.
+Báo cáo tài chính tổng hợp cấp điều hành: Revenue, COGS, Gross Profit, GPM%, CM1, và **3HK Contribution %**. Dùng data model chung — xem [[_analytics-data-model]].
 
 ---
 
-## 1. Mục đích & vai trò
-- **Dùng để làm gì**: cho BOD thấy lợi nhuận thực sau khi trừ giá vốn + chi phí vận hành (không chỉ doanh thu), và mức đóng góp của dòng sản phẩm chiến lược 3HK.
-- **Tại sao tách khỏi Dashboard**: số liệu nhạy cảm (giá vốn, margin) + nhiều bảng con (channel performance, group margin) → cần trang chuyên sâu, phân quyền chặt hơn.
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/bod` — `web/src/app/(dashboard)/analytics/bod/page.tsx` |
+| API | `/api/analytics/bod-summary`, `/api/analytics/bod-report`, `/api/analytics/bod-channel-performance`, `/api/analytics/bod-group-margin` |
+| Logic | `lib/bod-data.ts` (`fetchBODGroupMarginData`, `fetchBODChannelPerformanceData`) |
+| Nguồn | `fact_fulfillment_revenue` (+ `fact_sales_revenue` khi toggle Created) · `dim_order_source` · `dim_sku` |
 
-## 2. Đường dẫn & file
-- **Web**: `/analytics/bod` — `web/src/app/(dashboard)/analytics/bod/page.tsx`
-- **API**: `/api/analytics/bod-report`, `/bod-summary`, `/bod-channel-performance`, `/bod-group-margin`.
+## 2. Chỉ số & công thức
+- **Revenue / COGS / Gross Profit / GPM%** — theo `getAnalyticsSource` (mục 4 & 7 của data-model).
+- **CM1 / CM1%** — GP trừ Operation Cost (phí sàn/ads…). *(label cũ GP2/GPM2)*
+- **3HK Contribution %** = `SUM(revenue WHERE vendor 3HK) / SUM(total revenue) × 100`. Có so sánh **kỳ trước** + **cùng kỳ năm trước** (prev / prevYear).
 
-## 3. Thuật ngữ tài chính (QUAN TRỌNG — đã đổi term)
-> Từ 2026-06-23, đồng bộ với Management Report: **GP2/GPM2 → CM1 (Contribution Margin 1)**. Trên UI hiển thị **CM1 / CM1 %**. Trong code/SQL **giữ nguyên** key/alias lowercase `gpm2`, `gpm2_percent` để không vỡ data shape.
+## 3. Cách tính 3HK Contribution (bod-summary)
+```sql
+SELECT SUM(CASE WHEN TRIM(f.sku) IN
+         (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) ILIKE '3HKDATAPOOL')
+       THEN f.<revenueCol> ELSE 0 END) AS r
+FROM <mainTable> f WHERE <dateFilter> <extraFilters>
+```
+→ `total_3hk_contribution = total_3hk_revenue / total_revenue × 100`.
 
-- **Revenue**: doanh thu thực tế.
-- **Gross Profit (GP)** = Revenue − COGS (giá vốn sản phẩm).
-- **GPM%** = GP / Revenue.
-- **CM1** = GP − Operation Cost (phí sàn / phí quảng cáo / phí tài trợ SP...).
-- **CM1 %** = CM1 / Revenue.
-- **3HK Contribution Revenue %** = doanh thu SP 3HK / tổng doanh thu.
+## 4. Section chính
+- **KPI cards**: Revenue, GP, GPM%, CM1, CM1%, 3HK Contribution % (kèm ▲▼ so kỳ trước / năm trước).
+- **Group Margin** (`bod-group-margin`): margin theo nhóm kênh (B2B-Strategic / B2B-Non-Strategic / B2C).
+- **Channel Performance** (`bod-channel-performance`): doanh thu/margin theo tháng × kênh.
 
-## 4. Công thức & nguồn biến số
-$$\text{CM1} = \text{Revenue} - \text{COGS} - \text{Channel/Operation Cost} - \text{Platform Fee}$$
-$$\text{CM1\%} = \frac{\text{CM1}}{\text{Revenue}} \times 100\%$$
-- **Revenue**: `fact_fulfilment_revenue` (`gohub_dw`).
-- **COGS**: giá vốn sản phẩm (cohort `latest_cogs` / dữ liệu nhập).
-- **Platform Fee / Channel Cost**: cấu hình kênh (phí sàn Shopee/Klook...) + `channel_group_costs`.
-- **3HK contribution**: lọc vendor 3HK — dùng `REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL'` (xem mục 6).
-
-## 5. Cách hoạt động (luồng)
-1. `bod-summary` gom nhiều chỉ số (revenue, CM1, 3HK contribution, prev period/year) — đã gộp ~8 await tuần tự thành 1 `Promise.all` cho nhanh.
-2. `bod-channel-performance` + `bod-group-margin` cấp bảng phụ theo kênh/nhóm.
-3. Áp **Projection Factor** (như Dashboard) để dự kiến CM1 cuối tháng.
-4. Tất cả qua cache 12h + prewarm.
-
-## 6. Vấn đề đã gặp & cách khắc phục
-- **3HK Contribution luôn = 0 / tab 3HK rỗng (S80)**: `dim_sku.vendor` thực tế là `'3HK DATAPOOL'` (CÓ dấu cách) nhưng SQL lọc `'3HKDATAPOOL'` (không dấu cách) → khớp 0 dòng. Fix: chuẩn hoá `REPLACE(UPPER(vendor),' ','')` ở mọi câu lọc 3HK.
-- **Cold-load 25-50s (S81)**: BOD fan-out ~12-40 query không cache. Fix: bọc `cachedQuery` 12h cho `bod-summary/report/group-margin/channel-performance`; gộp await; tăng pool 2→10; prewarm cron.
-- **Đổi term GP2→CM1 (S74)**: chỉ đổi LABEL hiển thị, giữ data key để không vỡ findKPI/shape.
-
-## 7. Quy trình vận hành
-- Số liệu nhạy cảm tính trực tiếp trên `gohub_dw`, cache L2 Supabase TTL 12h, prewarm 06:30 ICT → phản hồi gần như tức thì khi lặp lại.
-- Hỗ trợ xuất PDF phục vụ họp chiến lược.
-
-## 8. Phân quyền
-- Chỉ **Admin, Creator, BOD, Manager**. **Staff/Standard** bị chặn + redirect.
-- Lưu ý: `bod` phải có trong allow-list của các API analytics (creator/manager từng bị bỏ quên → 403 âm thầm, đã fix S80).
+## 5. Gotchas
+- Chế độ **Created** → margin/COGS = 0 (bảng sales không có) → GP/CM1/3HK-contribution chỉ có nghĩa ở **Fulfillment**.
+- 3HK match bằng `vendor ILIKE '3HKDATAPOOL'` (TRIM, ILIKE thẳng — tương đương REPLACE-space vì dữ liệu vendor 3HK).
+- Phân quyền nền: Admin, Creator, BOD, Manager.

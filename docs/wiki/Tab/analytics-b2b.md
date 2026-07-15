@@ -5,43 +5,35 @@ is_hidden: true
 department: all
 tags: [tab, analytics, b2b]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # B2B Performance (Hiệu Suất Bán Sỉ B2B)
 
-Báo cáo kênh đại lý/bán sỉ: doanh thu, biên lợi nhuận, chi phí kênh và so sánh **đại lý chiến lược (Strategic)** vs **thường (Non-Strategic)**.
+Hiệu suất kênh sỉ B2B: doanh thu/margin/units theo kênh & sub-channel, tách **Strategic vs Non-Strategic partners**, trend theo tháng. Dùng data model chung — xem [[_analytics-data-model]].
 
 ---
 
-## 1. Mục đích & vai trò
-- **Dùng để làm gì**: theo dõi sức khỏe kênh sỉ — ai (tier nào) đang đóng góp doanh thu/margin, chi phí kênh bao nhiêu, xu hướng theo thời gian.
-- **Tại sao chia Strategic/Non-Strategic**: 2 nhóm có chính sách giá/chiết khấu khác nhau → phải báo cáo riêng để đánh giá đúng hiệu quả từng nhóm.
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/b2b` — `web/src/app/(dashboard)/analytics/b2b/page.tsx` |
+| API | `/api/analytics/b2b/{kpis, performance, strategic-performance, trend}` |
+| Nguồn | fact (Fulfillment/Sales) + `dim_order_source` · `dim_customer` · `dim_sku` · `dim_staff` |
+| Config | Partner Tiers (Supabase `app_settings`) — danh sách Strategic partners |
 
-## 2. Đường dẫn & file
-- **Web**: `/analytics/b2b` — `web/src/app/(dashboard)/analytics/b2b/page.tsx`
-- **API**: `/api/analytics/b2b/{kpis, performance, strategic-performance, trend}`
+## 2. Lọc & phân loại
+- Toàn bộ lọc `WHERE UPPER(s.group_name) = 'B2B'`.
+- **Strategic** = kênh nằm trong danh sách partner tiers "Strategic" → `channel_name ILIKE ANY(...)`. `strategic-performance` tách riêng nhóm này.
+- Trả về: `channel`, `sub_channel` (sub_group_name), `revenue`, `margin`, `units`, `group_name`, theo `month`.
 
-## 3. Nguồn dữ liệu & phân tầng đối tác
-- **Doanh thu/đơn**: `gohub_dw` (fact revenue), lọc kênh nhóm B2B.
-- **Phân tầng (Partner Tiers)**: danh sách đối tác Strategic cấu hình tại **Settings → Partner Tiers** (`/api/config/partner-tiers`, lưu `app_settings`). **Tại sao cấu hình động**: danh sách đại lý chiến lược thay đổi theo thỏa thuận kinh doanh → không hardcode.
-- **Chi phí kênh**: nhập qua `CostManagementModal` (lưu `channel_group_costs` / Turso) — dùng tính margin sau chi phí.
+## 3. Section chính
+- **KPI**: Revenue, GP, CM1, units, orders (B2B).
+- **Performance theo kênh/sub-channel** + **trend tháng**.
+- **Strategic Performance**: bảng riêng cho đối tác chiến lược (2 key metric team Business).
 
-## 4. Quy tắc nghiệp vụ & chống trùng (dedup)
-- **Strategic** = đối tác nằm trong tier "Strategic". **Non-Strategic** = phần còn lại.
-- **Dedup**: khi tổng hợp báo cáo kênh chung phải tránh tính đôi doanh số đại lý chiến lược → dùng helper SQL `getGroupCaseSQL` + `getFilteredOtherTiers` (CASE phân nhóm + loại trừ tier đã tính).
-- **Margin %** = biên lợi nhuận gộp của đại lý (đã đổi term sang **CM1** trên label — xem `analytics-bod`).
-
-## 5. Tính năng vận hành
-- **Delta Pill**: badge tăng/giảm tô xanh/đỏ theo dấu thực tế (`autoDeltaKind`) — sửa lỗi bản cũ luôn hiện xanh.
-- **Quản lý chi phí kênh sỉ**: `CostManagementModal` lưu chi phí riêng kênh B2B.
-- **Export PDF/Screenshot**: `jspdf` + `modern-screenshot`.
-
-## 6. Vấn đề đã gặp & cách khắc phục
-- **Giá B2B sai (S78)**: chatbot/báo cáo lẫn giá các kênh (OD/WS/Strategic) → cấu hình **Item Type theo kênh** (prefix) trong Settings để lọc đúng giá kênh.
-- **`strategic-performance` không cache (S81)**: trước gọi thẳng `queryAnalytics` → chậm. Fix: bọc `cachedQuery` 12h như các endpoint khác.
-- **Badge biến động luôn xanh (bản cũ)**: thay bằng `DeltaPill` + `autoDeltaKind`.
-
-## 7. Phân quyền
-- **Admin, Creator, BOD, Manager, Staff** (Staff thường giới hạn theo phòng ban/per-user). **Standard** bị chặn.
+## 4. Gotchas
+- Danh sách Strategic partners cấu hình ở **Settings → Partner Tiers** (không hard-code).
+- Created mode → margin/CM1 = 0.
+- Phân quyền nền: Admin, Creator, BOD, Manager, Staff.

@@ -5,32 +5,28 @@ is_hidden: true
 department: all
 tags: [tab, analytics, fulfillment]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # Fulfillment Report (Báo Cáo Hoàn Thành Đơn)
 
-Phân tích chất lượng vận hành cấp phát SIM/eSIM tự động: tỷ lệ thành công, thời gian hoàn thành, phân bổ đối tác giao.
+Tốc độ & chất lượng giao SIM theo tháng / chi nhánh / loại SP. Dùng data model chung — xem [[_analytics-data-model]].
 
 ---
 
-## 1. Mục đích & vai trò
-- **Dùng để làm gì**: đo chất lượng khâu giao hàng/kích hoạt — đơn có được cấp eSIM/SIM thành công & nhanh không.
-- **Tại sao quan trọng**: doanh thu chỉ "thật" khi đơn được fulfil; tỷ lệ lỗi cao = mất tiền + mất uy tín.
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/fulfillment` — `web/src/app/(dashboard)/analytics/fulfillment/page.tsx` |
+| API | `/api/analytics/fulfillment-report` |
+| Nguồn | **`fact_fulfillment_revenue`** (bảng fulfillment, cột `fulfiled_date`) + `dim_location` + `dim_sku` |
 
-## 2. Đường dẫn & file
-- **Web**: `/analytics/fulfillment` — `web/src/app/(dashboard)/analytics/fulfillment/page.tsx`
-- **API**: `/api/analytics/fulfillment-report`
+## 2. Chỉ số trả về
+- `month`, `location` (chi nhánh — `dim_location.location_name`), `product_type`.
+- `revenue = SUM(fulfilled_revenue_amount_vnd)`, `units = SUM(fulfilled_quantity)`.
+- `orders / gross_orders = COUNT(DISTINCT order_code)`, `items_delivery`.
 
-## 3. Nguồn dữ liệu & chỉ số
-- **Nguồn**: bảng vận hành đơn trong `gohub_dw` (`fact_fulfilment_*`).
-- **Success Rate** = số eSIM/SIM gửi thành công / tổng đơn thanh toán.
-- **Mean Fulfillment Time** = thời gian trung bình từ nhận đơn → kích hoạt thành công.
-- **Phân bổ đối tác giao**: hiệu quả giao SIM vật lý theo từng đơn vị vận chuyển.
-
-## 4. Lưu ý
-- Bảng fact fulfillment ~585k dòng, cột ngày kiểu TEXT không index → query nặng; hưởng lợi từ cache 12h + prewarm chung của phân hệ analytics.
-
-## 5. Phân quyền
-- **Admin, Creator, Manager, BOD, Staff**. **Standard** bị loại trừ.
+## 3. Gotchas
+- Báo cáo này **luôn dùng Fulfillment** (`fact_fulfillment_revenue`) — không có chế độ Created.
+- `dim_location` = **chi nhánh**, KHÔNG phải nước đích.

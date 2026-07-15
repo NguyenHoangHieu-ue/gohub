@@ -5,34 +5,29 @@ is_hidden: true
 department: all
 tags: [tab, analytics, vendors]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # Vendor Performance (Hiệu Suất Nhà Cung Cấp)
 
-Báo cáo chi tiêu mua hàng, chất lượng mạng và mức đóng góp doanh thu của từng nhà cung cấp (NCC) đối tác.
+Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DATAPOOL, v.v. Dùng data model chung — xem [[_analytics-data-model]].
 
 ---
 
-## 1. Mục đích & vai trò
-- **Dùng để làm gì**: đánh giá NCC nào đáng tin (chi phí, chất lượng mạng, thị phần đơn) → quyết định ưu tiên nhập hàng/đàm phán giá.
-- **Tại sao cần**: GoHub bán SIM/eSIM của nhiều NCC (WORLDMOVE, 3HK...); cần so sánh để chọn nguồn tối ưu.
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/vendors` — `web/src/app/(dashboard)/analytics/vendors/page.tsx` |
+| API | `/api/analytics/vendors/report`, `/api/analytics/vendors/list` |
+| Nguồn | fact (Fulfillment/Sales) + `dim_sku` (cột `vendor`) + `dim_order_source` |
 
-## 2. Đường dẫn & file
-- **Web**: `/analytics/vendors` — `web/src/app/(dashboard)/analytics/vendors/page.tsx`
-- **API**: `/api/analytics/vendors/list`, `/api/analytics/vendors/report`
+## 2. Logic
+- Gom doanh thu theo `dim_sku.vendor` (join `f.sku = dim_sku.sku`).
+- Trả: `sku` / vendor, `revenue`, `margin`, `units`, `orders` (`COUNT(DISTINCT f.order_code)`), theo `date`, `group_name`.
+- Có thể lọc theo nhóm kênh (B2B/B2C).
 
-## 3. Nguồn dữ liệu & chỉ số
-- **Nguồn**: `gohub_dw` nhóm theo vendor (lưu ý vendor 3HK = `'3HK DATAPOOL'` có dấu cách → chuẩn hoá khi lọc).
-- **Total COGS spent**: tổng tiền nhập hàng trả NCC trong kỳ.
-- **Success/Failure Rate**: tỷ lệ eSIM/mạng lỗi → chất lượng hạ tầng NCC.
-- **Volume Share %**: tỷ trọng đơn của NCC trong tổng đơn GoHub.
-
-## 4. Vấn đề đã gặp & UX
-- **Dropdown chọn vendor bị treo (S61)**: thêm overlay trong suốt → click ra ngoài tự đóng menu.
-- **Bug Vendor Performance (S78)**: đã fix (số liệu hiệu suất tính sai).
-- **Phân trang 20 dòng** để phản hồi nhanh; trang fan-out nhiều query → hưởng cache 12h chung.
-
-## 5. Phân quyền
-- **Admin, Creator, Manager, BOD, Staff**. **Standard** bị chặn.
+## 3. Gotchas
+- **Vendor 3HK** lưu `'3HK DATAPOOL'` (có dấu cách) → lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
+- Created mode → margin = 0.
+- Đây là hiệu suất **bán ra theo vendor** (không phải giá vốn/COGS catalog — cái đó ở SP Hệ Thống).
