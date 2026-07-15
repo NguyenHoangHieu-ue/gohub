@@ -148,9 +148,12 @@ export default function ThreeHKDataUsagePage() {
         `)
         const maxD = rows?.[0]?.max_d ? new Date(rows[0].max_d) : null
         if (maxD && !isNaN(maxD.getTime())) {
-          const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
-          const start = new Date(maxD.getFullYear(), maxD.getMonth(), 1)
-          setStartDate(fmt(start)); setEndDate(fmt(maxD)); return
+          // Dùng UTC: first_report_date lưu ở 00:00:00 UTC. Nếu format theo giờ LOCAL, trình duyệt lệch
+          // UTC (vd US) sẽ lùi 1 ngày → mất SIM của ngày cuối kỳ (lệch báo cáo NCC). getUTC* ổn định mọi tz.
+          const p = (n: number) => String(n).padStart(2, "0")
+          const endStr   = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-${p(maxD.getUTCDate())}`
+          const startStr = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-01`
+          setStartDate(startStr); setEndDate(endStr); return
         }
       } catch (e) { console.error("Error fetching 3hk max date:", e) }
       const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate)
