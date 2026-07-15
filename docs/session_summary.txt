@@ -4630,3 +4630,22 @@ CÒN TREO:
        + nút Làm mới quét lại.
      - Tab Database: nút "Làm mới" gọi lại /api/config/db/tables (đọc OpenAPI live → thấy ngay bảng mới thêm).
      Verify: tsc PASS · vitest 28/28 · next build PASS (3 route /api/config/{api-routes,db/table,db/tables} OK).
+
+## Session 90 (tiếp 3, 2026-07-15) — [UX] Nút Lưu chỉ sáng khi có thay đổi (dirty-state) toàn bộ tab
+176. Yêu cầu Hiếu: mọi nút Lưu mặc định mờ + khoá, chỉ sáng (bấm được) khi có thay đổi. Chốt với Hiếu: GIỮ màu
+     accent riêng từng tab, chỉ làm mờ (opacity) + disable khi chưa đổi (không đồng bộ về amber). Pattern:
+     snapshot dữ liệu lúc load/sau khi lưu → dirty = current !== snapshot → disabled={saving||!dirty} + disabled:opacity-50.
+177. Đã áp:
+     - schema/page.tsx: savedSnap JSON(tables); dirty; button "Lưu cấu hình".
+     - creator/page.tsx: savedSnap JSON(visibility); button "Lưu thay đổi".
+     - targets/page.tsx: SaveBtn thêm prop dirty (mờ khi !dirty); 3 vùng (B2C KPI, B2C Budget, Main plan) mỗi vùng
+       snapshot riêng + set lại sau khi lưu.
+     - users/page.tsx: matrixDirty (ma trận Role×Report), userDirty per-row (saveUser), writableDirty per-row
+       (saveWritable) — snapshot origUsers/origWritable/matrixSnap, cập nhật sau mỗi lần lưu thành công.
+     - components/user-admin.tsx: 2 ma trận (Role×Tính năng + Phòng ban×Tab) — dùng serializeSetMap (JSON không
+       đọc được Set) so sánh dirty.
+     - info/page.tsx: noteDirty (title/content khác note đang mở).
+     - kb/page.tsx: formDirty (sửa→khác bản gốc; tạo mới→đã nhập tiêu đề/nội dung).
+     ĐÃ CÓ SẴN (không sửa): analytics/settings (dirtyTiers/dirtyPolicy/...), admin "Lưu tất cả" (Object.keys(changed)).
+     Form submit (AddUser/ChangePassword/"Lưu lịch") GIỮ NGUYÊN (là form tạo, không phải config dirty).
+     Verify: tsc PASS · vitest 28/28 · next build PASS.

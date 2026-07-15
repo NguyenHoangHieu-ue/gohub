@@ -81,12 +81,22 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
   const [onlineUsers, setOnlineUsers] = useState<Record<string, number>>({})
   const [creatorStatus, setCreatorStatus] = useState<{ hasCreator: boolean; canAssignCreator: boolean; creatorCount: number } | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  // Snapshot để nút Lưu chỉ sáng khi có thay đổi
+  const [matrixSnap, setMatrixSnap] = useState("")
+  const [origUsers, setOrigUsers] = useState<Record<string, string>>({})
+  const [origWritable, setOrigWritable] = useState<Record<string, string>>({})
+
+  const userKey = (u: AdminUser) => JSON.stringify({ role: u.role, department: u.department || "none", allowed_analytics: u.allowed_analytics || null, allowed_tabs: u.allowed_tabs ?? null })
+  const snapWritable = (cfg: Record<string, string[]>) => Object.fromEntries(Object.entries(cfg).map(([k, v]) => [k, JSON.stringify(v || [])]))
+  const matrixDirty = JSON.stringify(matrix) !== matrixSnap
+  const userDirty = (u: AdminUser) => origUsers[u.username] !== userKey(u)
+  const writableDirty = (username: string) => (origWritable[username] ?? "[]") !== JSON.stringify(writableConfig[username] ?? [])
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
   useEffect(() => {
     if (!isCreator) return
-    fetch("/api/config/writable-tabs").then(r => r.json()).then(d => { if (d.config) setWritableConfig(d.config) }).catch(() => {})
+    fetch("/api/config/writable-tabs").then(r => r.json()).then(d => { if (d.config) { setWritableConfig(d.config); setOrigWritable(snapWritable(d.config)) } }).catch(() => {})
   }, [isCreator])
 
   const fetchAll = async () => {
@@ -94,8 +104,10 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
     try {
       const [uRes, mRes, csRes] = await Promise.all([fetch("/api/admin/users"), fetch("/api/config/role-permissions"), fetch("/api/config/creator-status")])
       const uData = await uRes.json()
-      setUsers((uData.users || []).filter((u: any) => u.email || u.lark_open_id).map((u: any) => ({ ...u })))
-      if (mRes.ok) setMatrix(await mRes.json())
+      const list: AdminUser[] = (uData.users || []).filter((u: any) => u.email || u.lark_open_id).map((u: any) => ({ ...u }))
+      setUsers(list)
+      setOrigUsers(Object.fromEntries(list.map(u => [u.username, userKey(u)])))
+      if (mRes.ok) { const m = await mRes.json(); setMatrix(m); setMatrixSnap(JSON.stringify(m)) }
       if (csRes.ok) setCreatorStatus(await csRes.json())
     } finally {
       setLoading(false)
@@ -135,6 +147,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: u.role, department: u.department || "none", allowed_analytics: u.allowed_analytics || null, allowed_tabs: u.allowed_tabs ?? null }),
       })
+      if (res.ok) setOrigUsers(prev => ({ ...prev, [u.username]: userKey(u) }))
       notify(res.ok, res.ok ? `Đã lưu ${u.name || u.username}` : "Lưu thất bại")
     } finally {
       setSavingUser(null)
@@ -165,6 +178,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
       const res = await fetch("/api/config/role-permissions", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(matrix),
       })
+      if (res.ok) setMatrixSnap(JSON.stringify(matrix))
       notify(res.ok, res.ok ? "Đã lưu ma trận phân quyền" : "Lưu thất bại")
     } finally {
       setSavingMatrix(false)
@@ -275,7 +289,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                         Quyền truy cập<ChevronDown className={cn("w-3.5 h-3.5 transition-transform", isExpanded && "rotate-180")} />
                       </button>
                     )}
-                    <button onClick={() => saveUser(u)} disabled={savingUser === u.username} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50">
+                    <button onClick={() => saveUser(u)} disabled={savingUser === u.username || !userDirty(u)} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       {savingUser === u.username ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
                     </button>
                     {u.username !== currentUser && (
@@ -339,7 +353,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Quyền nền theo Role (Role × Report)</h2></div>
-            <button onClick={saveMatrix} disabled={savingMatrix} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50">
+            <button onClick={saveMatrix} disabled={savingMatrix || !matrixDirty} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
               {savingMatrix ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu ma trận
             </button>
           </div>
@@ -405,7 +419,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                         body: JSON.stringify({ username: u.username, tabs: writableConfig[u.username] ?? [] }),
                       })
                       const d = await res.json()
-                      if (res.ok) { notify(true, `Đã lưu quyền chỉnh sửa cho ${u.name || u.username}`); if (d.config) setWritableConfig(d.config) }
+                      if (res.ok) { notify(true, `Đã lưu quyền chỉnh sửa cho ${u.name || u.username}`); if (d.config) { setWritableConfig(d.config); setOrigWritable(snapWritable(d.config)) } }
                       else notify(false, d.error || "Lưu thất bại")
                     } finally { setSavingWritable(null) }
                   }
@@ -429,8 +443,8 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                         )
                       })}
                       <td className="px-6 py-3 text-right">
-                        <button onClick={saveUserWritable} disabled={savingWritable === u.username}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50 ml-auto">
+                        <button onClick={saveUserWritable} disabled={savingWritable === u.username || !writableDirty(u.username)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white rounded-lg text-xs font-bold hover:bg-[#002B70] transition-all disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
                           {savingWritable === u.username ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
                         </button>
                       </td>

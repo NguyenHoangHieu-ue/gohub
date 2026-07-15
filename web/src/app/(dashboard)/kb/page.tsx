@@ -539,6 +539,15 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
     }
   }
 
+  // Nút Lưu chỉ sáng khi có thay đổi: sửa → khác bản gốc; tạo mới → đã nhập tiêu đề/nội dung
+  const kbOrig = selected ? {
+    title: selected.title, content: selected.content ?? "", page_type: selected.page_type,
+    department: selected.department, tags: (selected.tags ?? []).join(", "),
+  } : null
+  const formDirty = kbOrig
+    ? JSON.stringify(editForm) !== JSON.stringify(kbOrig)
+    : editForm.title.trim() !== "" || editForm.content.trim() !== ""
+
   const deletePage = async () => {
     if (!selected) return
     setDeleting(true)
@@ -885,8 +894,8 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
         </div>
 
         <div className="flex gap-3">
-          <button onClick={savePage} disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+          <button onClick={savePage} disabled={saving || !formDirty}
+            className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {saving?<Loader2 size={14} className="animate-spin"/>:null}
             {saving?"Đang lưu...":selected?"Lưu thay đổi":"Tạo trang"}
           </button>

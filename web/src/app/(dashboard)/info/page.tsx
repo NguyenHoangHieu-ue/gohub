@@ -189,6 +189,9 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
     setSelectedNote(prev => prev ? { ...prev, title: editTitle, content: editContent } : null)
   }
 
+  // Nút Lưu chỉ sáng khi tiêu đề/nội dung khác bản đang mở
+  const noteDirty = !!selectedNote && (editTitle !== selectedNote.title || editContent !== selectedNote.content)
+
   const doDelete = async () => {
     if (!confirmDel) return
     setDeleting(true)
@@ -290,7 +293,7 @@ function UserWorkspace({ username, isOwn }: { username: string; isOwn: boolean }
               <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="flex-1 font-bold text-slate-800 bg-transparent outline-none text-base" placeholder="Tiêu đề…" />
               <div className="flex items-center gap-2">
                 {isOwn && <button onClick={() => togglePin(selectedNote)} className={cn("p-1.5 rounded-lg", selectedNote.is_pinned ? "text-violet-600 bg-violet-50" : "text-slate-400 hover:bg-slate-100")} title="Ghim"><Pin className="w-3.5 h-3.5" /></button>}
-                {isOwn && <button onClick={saveNote} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 disabled:opacity-50">
+                {isOwn && <button onClick={saveNote} disabled={saving || !noteDirty} className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed">
                   {saving ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
                 </button>}
                 {isOwn && <button onClick={() => setConfirmDel({ kind: "note", id: selectedNote.id, label: selectedNote.title || "note này" })} className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>}

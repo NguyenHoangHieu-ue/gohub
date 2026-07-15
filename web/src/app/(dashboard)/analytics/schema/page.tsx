@@ -34,6 +34,9 @@ function SchemaConfig({ email }: { email: string }) {
   const [isGeneratingAI, setIsGeneratingAI] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [savedSnap, setSavedSnap] = useState("")   // snapshot đã lưu → nút Lưu chỉ sáng khi khác snapshot
+
+  const dirty = JSON.stringify(tables) !== savedSnap
 
   useEffect(() => { loadSavedSchema() }, [])
 
@@ -41,7 +44,11 @@ function SchemaConfig({ email }: { email: string }) {
     setIsLoading(true)
     try {
       const res = await fetch("/api/config/schema")
-      if (res.ok) setTables((await res.json()).tables || [])
+      if (res.ok) {
+        const loaded = (await res.json()).tables || []
+        setTables(loaded)
+        setSavedSnap(JSON.stringify(loaded))
+      }
     } catch {
       setError("Không tải được cấu hình đã lưu.")
     } finally {
@@ -58,6 +65,7 @@ function SchemaConfig({ email }: { email: string }) {
         body: JSON.stringify({ schema: { tables }, updatedBy: email }),
       })
       if (!res.ok) throw new Error("Lưu thất bại")
+      setSavedSnap(JSON.stringify(tables))
       setSuccessMessage("Đã lưu cấu hình schema!")
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err: any) {
@@ -159,9 +167,9 @@ function SchemaConfig({ email }: { email: string }) {
             <RefreshCw className={cn("w-4 h-4 text-slate-400", isLoading && "animate-spin")} />
             <span className="text-sm font-medium">{isLoading ? "Đang sync..." : "Sync Schema"}</span>
           </button>
-          <button onClick={saveConfiguration} disabled={isSaving}
+          <button onClick={saveConfiguration} disabled={isSaving || !dirty}
             className={cn("flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-700 transition-colors",
-              isSaving && "opacity-50 cursor-not-allowed")}>
+              (isSaving || !dirty) && "opacity-50 cursor-not-allowed")}>
             {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span className="text-sm font-medium">{isSaving ? "Đang lưu..." : "Lưu cấu hình"}</span>
           </button>

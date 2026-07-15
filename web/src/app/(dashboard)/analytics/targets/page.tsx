@@ -153,11 +153,13 @@ function last6Months(): string[] {
 }
 const monthLabel = (m: string) => { const [y, mo] = m.split("-"); return `Thg ${parseInt(mo)}/${y}` }
 
-function SaveBtn({ onClick, saving, disabled }: { onClick: () => void; saving: boolean; disabled?: boolean }) {
+function SaveBtn({ onClick, saving, disabled, dirty = true }: { onClick: () => void; saving: boolean; disabled?: boolean; dirty?: boolean }) {
+  const idle = !dirty && !disabled   // chưa đổi (và không phải View Only) → mờ + khoá
   return (
-    <button onClick={onClick} disabled={saving || disabled}
+    <button onClick={onClick} disabled={saving || disabled || !dirty}
       className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
-        disabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300")}>
+        disabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300",
+        idle && "opacity-50 cursor-not-allowed")}>
       {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         : disabled ? <Lock className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
       {disabled ? "View Only" : "Lưu"}
@@ -170,11 +172,14 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
   type Cell = { vn: number; us: number; total: number }
   const months = last6Months()
   const [targets, setTargets] = useState<Record<string, Cell>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const dirty = JSON.stringify(targets) !== savedSnap
+
   useEffect(() => {
-    fetch("/api/config/b2c-kpi-targets").then(r => r.json()).then(d => { setTargets(d || {}); setLoading(false) }).catch(() => setLoading(false))
+    fetch("/api/config/b2c-kpi-targets").then(r => r.json()).then(d => { setTargets(d || {}); setSavedSnap(JSON.stringify(d || {})); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const cell = (m: string): Cell => targets[m] ?? { vn: 0, us: 0, total: 0 }
@@ -185,6 +190,7 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
     const cleaned: Record<string, Cell> = {}
     for (const [m, c] of Object.entries(targets)) if ((c?.vn || 0) + (c?.us || 0) + (c?.total || 0) > 0) cleaned[m] = c
     const res = await fetch("/api/config/b2c-kpi-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    if (res.ok) setSavedSnap(JSON.stringify(targets))
     setSaving(false)
     onNotify(res.ok, res.ok ? "Đã lưu KPI target B2C" : "Hiếu đang fix, vui lòng đợi")
   }
@@ -196,7 +202,7 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
           <h2 className="font-bold text-slate-900 text-sm">KPI Target B2C (theo thị trường)</h2>
           <p className="text-xs text-slate-400 mt-0.5">Target doanh thu B2C theo tháng × thị trường (VND) — hiển thị ở tab KPI của /analytics/b2c.</p>
         </div>
-        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+        {canEdit && <SaveBtn onClick={save} saving={saving} dirty={dirty} />}
       </div>
       {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
         <div className="overflow-x-auto">
@@ -240,11 +246,14 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
 function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify: (ok: boolean, text: string) => void }) {
   const months = last6Months()
   const [budget, setBudget] = useState<Record<string, number>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const dirty = JSON.stringify(budget) !== savedSnap
+
   useEffect(() => {
-    fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setLoading(false) }).catch(() => setLoading(false))
+    fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setSavedSnap(JSON.stringify(d || {})); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const save = async () => {
@@ -252,6 +261,7 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
     const cleaned: Record<string, number> = {}
     for (const [m, v] of Object.entries(budget)) if (v > 0) cleaned[m] = v
     const res = await fetch("/api/config/b2c-budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    if (res.ok) setSavedSnap(JSON.stringify(budget))
     setSaving(false)
     onNotify(res.ok, res.ok ? "Đã lưu ngân sách Marketing B2C" : "Hiếu đang fix, vui lòng đợi")
   }
@@ -265,7 +275,7 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
           <h2 className="font-bold text-slate-900 text-sm">Ngân sách Marketing B2C</h2>
           <p className="text-xs text-slate-400 mt-0.5">Ngân sách kế hoạch theo tháng (VND) — Section 5 /analytics/b2c tính spend pace = chi phí thực tế ÷ ngân sách.</p>
         </div>
-        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+        {canEdit && <SaveBtn onClick={save} saving={saving} dirty={dirty} />}
       </div>
       {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
         <div className="overflow-x-auto">
@@ -324,6 +334,9 @@ export default function TargetsPage() {
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [targets3hk, setTargets3hk] = useState<Record<string, number>>({})
   const [targetsGpm2, setTargetsGpm2] = useState<Record<string, number>>({})
+  const [savedSnap, setSavedSnap] = useState("")
+
+  const dirty = JSON.stringify([targets, targets3hk, targetsGpm2]) !== savedSnap
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMessage({ type: ok ? "success" : "error", text }); setTimeout(() => setMessage(null), 3000) }
@@ -344,6 +357,7 @@ export default function TargetsPage() {
         Object.entries(item.monthlyGpm2Targets || {}).forEach(([m, v]) => { tg[`${item.channel}_${m}`] = v as number })
       })
       setTargets(t); setTargets3hk(t3); setTargetsGpm2(tg)
+      setSavedSnap(JSON.stringify([t, t3, tg]))
     } catch (err: any) {
       console.error(err)
       setMessage({ type: "error", text: "Hiếu đang fix, vui lòng đợi" })
@@ -377,6 +391,7 @@ export default function TargetsPage() {
       })
 
       if (res.ok) {
+        setSavedSnap(JSON.stringify([targets, targets3hk, targetsGpm2]))
         setMessage({ type: "success", text: "Targets đã lưu thành công!" })
         setTimeout(() => setMessage(null), 3000)
       } else {
@@ -416,10 +431,11 @@ export default function TargetsPage() {
             </select>
           </div>
 
-          <button onClick={handleSave} disabled={saving || loading || !canEdit}
+          <button onClick={handleSave} disabled={saving || loading || !canEdit || !dirty}
             className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm",
               !canEdit ? "bg-slate-200 text-slate-400 cursor-not-allowed" :
-              "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300 shadow-blue-200")}>
+              "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300 shadow-blue-200",
+              canEdit && !dirty && "opacity-50 cursor-not-allowed")}>
             {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
              !canEdit ? <Lock className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {!canEdit ? "View Only" : "Lưu Plan"}

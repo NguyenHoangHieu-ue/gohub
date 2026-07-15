@@ -63,10 +63,13 @@ export default function CreatorPage() {
 
 function CreatorSettings() {
   const [visibility, setVisibility] = useState<Record<string, string[]>>({})
+  const [savedSnap, setSavedSnap] = useState("")   // snapshot đã lưu → nút Lưu chỉ sáng khi khác snapshot
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [creatorInfo, setCreatorInfo] = useState<{ creatorCount: number; canAssignCreator: boolean } | null>(null)
+
+  const dirty = JSON.stringify(visibility) !== savedSnap
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -76,6 +79,7 @@ function CreatorSettings() {
       fetch("/api/config/creator-status").then(r => r.ok ? r.json() : null),
     ]).then(([vis, cs]) => {
       setVisibility(vis || {})
+      setSavedSnap(JSON.stringify(vis || {}))
       setCreatorInfo(cs)
     }).finally(() => setLoading(false))
   }, [])
@@ -94,6 +98,7 @@ function CreatorSettings() {
     setSaving(true)
     try {
       const r = await fetch("/api/config/tab-visibility", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(visibility) })
+      if (r.ok) setSavedSnap(JSON.stringify(visibility))
       notify(r.ok, r.ok ? "Đã lưu cấu hình ẩn tab" : "Lưu thất bại")
     } finally { setSaving(false) }
   }
@@ -110,7 +115,7 @@ function CreatorSettings() {
             <p className="text-slate-500 text-sm">Quyền hạn cao nhất — ẩn/hiện tab cho từng role</p>
           </div>
         </div>
-        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 shadow-sm">
+        <button onClick={save} disabled={saving || !dirty} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
           {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Lưu thay đổi
         </button>
       </div>

@@ -149,16 +149,23 @@ function ToggleBtn({ on, onClick }: { on: boolean; onClick: () => void }) {
   )
 }
 
+// Serialize Record<string,Set> ổn định để so sánh dirty (JSON.stringify không đọc được Set)
+const serializeSetMap = (m: Record<string, Set<string>>) =>
+  JSON.stringify(Object.keys(m).sort().map(k => [k, Array.from(m[k]).sort()]))
+
 export function SystemPermissionsMatrix({ onNotify }: { onNotify: Notify }) {
   const [perms, setPerms] = useState<Record<string, Set<string>>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  const dirty = serializeSetMap(perms) !== savedSnap
 
   useEffect(() => {
     fetch("/api/permissions").then(r => r.json()).then(d => {
       const p: Record<string, Set<string>> = {}
       for (const f of PERM_FEATURES) p[f.key] = new Set(((d.perms?.[f.key] ?? PERM_DEFAULTS[f.key] ?? []) as string[]).filter(r => r !== "admin"))
-      setPerms(p); setLoading(false)
+      setPerms(p); setSavedSnap(serializeSetMap(p)); setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
 
@@ -171,6 +178,7 @@ export function SystemPermissionsMatrix({ onNotify }: { onNotify: Notify }) {
     setSaving(true)
     const updates = PERM_FEATURES.map(f => ({ key: f.key, value: ["admin", ...Array.from(perms[f.key] ?? [])].join(",") }))
     const res = await fetch("/api/admin/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) })
+    if (res.ok) setSavedSnap(serializeSetMap(perms))
     setSaving(false)
     onNotify(res.ok, res.ok ? "Đã lưu cài đặt phân quyền" : "Hiếu đang fix, vui lòng đợi")
   }
@@ -207,7 +215,7 @@ export function SystemPermissionsMatrix({ onNotify }: { onNotify: Notify }) {
           </table>
         </div>
         <div className="px-5 py-3 border-t border-slate-100">
-          <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+          <button onClick={save} disabled={saving || !dirty} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <Save size={14} />{saving ? "Đang lưu..." : "Lưu Role × Tính năng"}
           </button>
         </div>
@@ -220,14 +228,17 @@ export function SystemPermissionsMatrix({ onNotify }: { onNotify: Notify }) {
 
 function DeptTabMatrix({ onNotify }: { onNotify: Notify }) {
   const [matrix, setMatrix] = useState<Record<string, Set<string>>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  const dirty = serializeSetMap(matrix) !== savedSnap
 
   useEffect(() => {
     fetch("/api/permissions").then(r => r.json()).then(d => {
       const m: Record<string, Set<string>> = {}
       for (const dept of DEPARTMENTS) m[dept.key] = new Set((d.perms?.[`perm_dept_${dept.key}_tabs`] ?? DEPT_DEFAULTS[dept.key] ?? []) as string[])
-      setMatrix(m); setLoading(false)
+      setMatrix(m); setSavedSnap(serializeSetMap(m)); setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
 
@@ -240,6 +251,7 @@ function DeptTabMatrix({ onNotify }: { onNotify: Notify }) {
     setSaving(true)
     const updates = DEPARTMENTS.map(d => ({ key: `perm_dept_${d.key}_tabs`, value: Array.from(matrix[d.key] ?? []).join(",") }))
     const res = await fetch("/api/admin/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) })
+    if (res.ok) setSavedSnap(serializeSetMap(matrix))
     setSaving(false)
     onNotify(res.ok, res.ok ? "Đã lưu phân quyền phòng ban" : "Hiếu đang fix, vui lòng đợi")
   }
@@ -269,7 +281,7 @@ function DeptTabMatrix({ onNotify }: { onNotify: Notify }) {
         </table>
       </div>
       <div className="px-5 py-3 border-t border-slate-100">
-        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+        <button onClick={save} disabled={saving || !dirty} className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <Save size={14} />{saving ? "Đang lưu..." : "Lưu phòng ban"}
         </button>
       </div>
