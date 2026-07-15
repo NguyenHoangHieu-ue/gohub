@@ -310,6 +310,24 @@ export default function ThreeHKDataUsagePage() {
     return { rows, groups }
   }, [activeTab, speedGroups, speedGroupMembers])
 
+  // GB/ngày/SIM per SKU (cho tab Unlimited — chỉ số đúng nghĩa thay cho "Usage %" vô nghĩa với gói không giới hạn).
+  const gbPerDaySimOfSku = (sm: SKUMetrics): number | null => {
+    const d = daysOfSku(sm.sku)
+    return d && d > 0 && sm.active_sims > 0 ? sm.total_usage_gb / sm.active_sims / d : null
+  }
+  // Trung bình có trọng số GB/ngày/SIM toàn bộ gói Unlimited (cho summary card).
+  const unlimitedGbPerDaySim = useMemo(() => {
+    if (activeTab !== "Unlimited") return null
+    let usage = 0, simDays = 0
+    for (const sm of skuMetrics) {
+      const d = daysOfSku(sm.sku)
+      if (!d || d <= 0 || sm.active_sims <= 0) continue
+      usage += sm.total_usage_gb
+      simDays += sm.active_sims * d
+    }
+    return simDays > 0 ? usage / simDays : null
+  }, [activeTab, skuMetrics])
+
   const searchClause = () => debouncedSearch ? `
     AND (
       f.order_code ILIKE '%${debouncedSearch.replace(/'/g, "''")}%' OR
@@ -578,12 +596,25 @@ export default function ThreeHKDataUsagePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-amber-50 rounded-xl text-amber-600"><RefreshCw className="w-5 h-5" /></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avg. Usage %</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              {activeTab === "Unlimited" ? "Avg. GB/ngày/SIM" : "Avg. Usage %"}
+            </span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{totals.avgUsage.toFixed(1)}%</p>
-          <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3">
-            <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, totals.avgUsage)}%` }} />
-          </div>
+          {activeTab === "Unlimited" ? (
+            <>
+              <p className="text-2xl font-bold text-slate-900">
+                {unlimitedGbPerDaySim != null ? `${unlimitedGbPerDaySim.toFixed(2)} GB` : "—"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Data high-speed dùng/ngày/SIM (gói unlimited)</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-slate-900">{totals.avgUsage.toFixed(1)}%</p>
+              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3">
+                <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, totals.avgUsage)}%` }} />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -858,7 +889,7 @@ export default function ThreeHKDataUsagePage() {
                   { key: "active_sims" as const, label: "Active SIMs", align: "text-center" },
                   { key: "total_plan_gb" as const, label: "Total Plan (GB)", align: "text-right" },
                   { key: "total_usage_gb" as const, label: "Total Actual (GB)", align: "text-right" },
-                  { key: "avg_usage_pct" as const, label: "Avg. Usage %", align: "text-right" },
+                  { key: "avg_usage_pct" as const, label: activeTab === "Unlimited" ? "GB/ngày/SIM" : "Avg. Usage %", align: "text-right" },
                 ]).map(col => (
                   <th key={col.key} className={cn("px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
                     onClick={() => setSkuSort(prev => ({ key: col.key, direction: prev.key === col.key && prev.direction === "asc" ? "desc" : "asc" }))}>
@@ -881,9 +912,14 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sm.total_plan_gb)}</td>
                     <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sm.total_usage_gb)}</td>
                     <td className="px-6 py-3 text-right">
-                      <span className={cn("text-sm font-bold", sm.avg_usage_pct > 80 ? "text-rose-600" : sm.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
-                        {sm.avg_usage_pct.toFixed(1)}%
-                      </span>
+                      {activeTab === "Unlimited" ? (() => {
+                        const g = gbPerDaySimOfSku(sm)
+                        return <span className="text-sm font-bold text-slate-700">{g != null ? `${g.toFixed(2)} GB` : "—"}</span>
+                      })() : (
+                        <span className={cn("text-sm font-bold", sm.avg_usage_pct > 80 ? "text-rose-600" : sm.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
+                          {sm.avg_usage_pct.toFixed(1)}%
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center justify-end gap-2">
