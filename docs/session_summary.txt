@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-06-26 (session 78 — B2B price fix; item-channel-types; Vendor Performance; sidebar bold + 3→1 API; role_permissions union bug)
+Cập nhật lần cuối: 2026-07-15 (session 90 — Dashboard tab thị trường US/VN/All; Creator Dev Tools API+DB; nút Lưu dirty-state toàn tab)
 ## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config + Vendor Performance bug
 
 ### #1 B2B thấy giá B2C (chatbot)
@@ -4649,3 +4649,30 @@ CÒN TREO:
      ĐÃ CÓ SẴN (không sửa): analytics/settings (dirtyTiers/dirtyPolicy/...), admin "Lưu tất cả" (Object.keys(changed)).
      Form submit (AddUser/ChangePassword/"Lưu lịch") GIỮ NGUYÊN (là form tạo, không phải config dirty).
      Verify: tsc PASS · vitest 28/28 · next build PASS.
+
+## ===== TỔNG KẾT PHIÊN (Session 90, 2026-07-15) =====
+Trạng thái: staging = 7dc40f3 (đã push origin/staging); origin/main = 21cd89f (production CHƯA đụng).
+Verify xuyên suốt: tsc PASS · vitest 28/28 · next build PASS (next build cần NODE_OPTIONS=--max-old-space-size=6144
+vì build worker OOM mặc định trên máy Hiếu). 4 commit phiên này (94b400d, 0f4139d, f91d395, 7dc40f3).
+
+ĐÃ LÀM:
+  1. [Dashboard] Phân 3 mục thị trường US/VN/All (94b400d): thêm dải segmented tab All/VN/US đầu trang /analytics
+     drive companyCode (backend ĐÃ hỗ trợ sẵn ở mọi API). Bỏ dropdown Company trùng trong Filters. Wiki
+     analytics-dashboard.md cập nhật.
+  2. [Creator Dev Tools] (0f4139d + f91d395): trang MỚI /analytics/creator/devtools — CHỈ role creator (page
+     client-gate + 2 API 403, admin cũng chặn). Tab API Tester (gọi thử mọi endpoint nội bộ, kèm cookie) + tab
+     Database (duyệt toàn bộ bảng Supabase, read-only, phân trang). API: /api/config/db/tables (OpenAPI PostgREST),
+     /api/config/db/table (rows 1 bảng), /api/config/api-routes (liệt kê route từ Next manifest). Sidebar CREATOR_GROUP
+     thêm "API & Database". Wiki analytics-management.md mục E.
+     /code-review high → 3 fix: che cột nhạy cảm (password/secret/token → '‹hidden›'); Number.isFinite guard
+     limit/offset; count exact chỉ trang đầu. Auto-discover: nút "Làm mới" ở cả 2 tab (bảng/route mới hiện ngay).
+  3. [UX] Nút Lưu dirty-state (7dc40f3): mọi nút Lưu mờ+khoá tới khi có thay đổi (giữ màu accent riêng tab).
+     Áp: schema, creator, targets (3 vùng), users (matrix + per-row user/writable), user-admin (2 ma trận,
+     serializeSetMap vì state Set), info note, kb wiki. Settings + admin "Lưu tất cả" đã có sẵn.
+
+CÒN TREO (từ trước, chưa đụng):
+  - Item 4 Listings Phase 3 (sync.py ngừng ghi cột phẳng + DROP cột cũ, migration v22); lặp cho products/skus.
+  - Merge staging→main: chờ tab B2C người khác lên prod trước + Hiếu chạy v21 SQL trên prod (memory pending_merge_s87).
+  - Verify thực tế: đăng nhập creator vào Creator → API & Database bấm Làm mới xác nhận route/bảng cập nhật đúng;
+    test 3 tab Dashboard US/VN/All ra số đúng theo thị trường.
+LƯU Ý: staging đang trước main NHIỀU commit (s87→s90).

@@ -1,6 +1,6 @@
 # GoHub — Trạng Thái Hệ Thống & Roadmap
 
-**Cập nhật lần cuối:** 2026-07-14 (session 87 — audit đồng bộ nhánh + dọn dead code/doc drift). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật, tới s86).
+**Cập nhật lần cuối:** 2026-07-15 (session 90 — Dashboard tab thị trường US/VN/All; Creator Dev Tools API+DB; nút Lưu dirty-state toàn tab). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
 
 ---
 
@@ -116,6 +116,7 @@ Tất cả `v1` → `v17` đã chạy. Migrations hiện tại:
 | Scheduled Lark Messages (Gemini → Lark cron) | ✅ Done |
 | Partner Tiers config (Strategic partners) | ✅ Done |
 | Lark ticket sync (Turso migrate + Lark Base API) | ✅ Done |
+| **Creator Dev Tools** (API Tester + duyệt Supabase DB, CHỈ creator) | ✅ Done (s90) — `/analytics/creator/devtools`, auto-discover route/bảng |
 
 ---
 
