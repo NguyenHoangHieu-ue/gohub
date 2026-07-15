@@ -94,7 +94,8 @@ const MANAGEMENT_GROUP = {
 const CREATOR_GROUP = {
   label: "Creator",
   items: [
-    { href: "/analytics/creator", label: "Creator Settings", icon: Crown },
+    { href: "/analytics/creator",          label: "Creator Settings", icon: Crown    },
+    { href: "/analytics/creator/devtools", label: "API & Database",   icon: Terminal },
   ],
 }
 
@@ -319,9 +320,10 @@ export function Sidebar() {
   const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
   const showInfoTab  = !hiddenTabs.has("info")   // creator có thể ẩn Information tab
   const isAdminUser  = effectiveRole === "admin"
+  // "/analytics" và "/analytics/creator" là parent có route con → match chính xác để không sáng cùng lúc với route con
   const isActive = (href: string) =>
-    href === "/analytics"
-      ? pathname === "/analytics"
+    href === "/analytics" || href === "/analytics/creator"
+      ? pathname === href
       : pathname === href || pathname.startsWith(href + "/")
 
   return (

@@ -4598,3 +4598,23 @@ CÒN TREO:
      Verify: tsc PASS · next build PASS (cần NODE_OPTIONS=--max-old-space-size=6144 vì build worker OOM mặc định).
 167. Wiki (RULES #3): cập nhật docs/wiki/Tab/analytics-dashboard.md (mục 3 luồng dữ liệu + updated 2026-07-15).
      LƯU Ý: import_wiki.py skip theo title → đổi NỘI DUNG giữ title phải sửa qua tab Wiki web hoặc xóa row cũ rồi chạy lại.
+
+## Session 90 (tiếp, 2026-07-15) — [Creator] Dev Tools: API Tester + Duyệt Supabase DB (creator-only)
+168. Yêu cầu Hiếu: thêm vào khu Creator 1 nơi check/test API hệ thống + xem toàn bộ database Supabase, CHỈ role creator.
+169. Backend (2 route, guard cứng session.user.role !== "creator" → 403; admin cũng bị chặn):
+     - GET /api/config/db/tables: liệt kê bảng qua OpenAPI PostgREST (fetch ${SUPABASE_URL}/rest/v1/ với service key,
+       lấy Object.keys(definitions), bỏ rpc/). - GET /api/config/db/table?name=&limit=&offset=: đọc rows 1 bảng
+       (supabaseAdmin range + count exact), validate name bằng regex identifier, read-only.
+170. FE: web/src/app/(dashboard)/analytics/creator/devtools/page.tsx (creator-only, client-gate qua /api/user/me,
+     non-creator → /chatbot). 2 tab:
+     - API Tester: method GET/POST/PUT/PATCH/DELETE + path + body JSON (validate) → fetch same-origin (kèm cookie)
+       → hiện status/ms/JSON. Quick-pick endpoints.
+     - Database: list bảng (search client) + TableView phân trang 50 dòng + tổng count, cell NULL/JSON format.
+171. Sidebar: thêm mục "API & Database" (icon Terminal) vào CREATOR_GROUP (chỉ isCreatorUser thấy). Fix kèm:
+     isActive("/analytics/creator") đổi sang match CHÍNH XÁC (trước dùng startsWith → khi ở /devtools thì Creator
+     Settings cũng sáng). Bảo mật 2 lớp: layout cho creator full-access nhưng page-gate + API 403 khoá chặt creator.
+172. [Review test/fix] Verify toàn hệ: tsc PASS · next build PASS (151 trang, cần heap 6144) · vitest 28/28.
+     Quét lớp bug fire-and-forget supabase (void ...upsert): 2 chỗ trong analytics-helpers.ts đều có .then() kích
+     request → ĐÚNG, không tái phát bug S81. Warning build = pdf-parse (pre-existing, không phải code mình).
+173. Wiki (RULES #3): docs/wiki/Tab/analytics-management.md thêm mục Creator Dev Tools (section E + đường dẫn + phân
+     quyền), updated 2026-07-15.

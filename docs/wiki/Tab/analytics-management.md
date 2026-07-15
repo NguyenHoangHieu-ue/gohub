@@ -5,7 +5,7 @@ is_hidden: true
 department: tech
 tags: [tab, admin, management]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -21,6 +21,7 @@ Trang cấu hình kỹ thuật cốt lõi cho phân hệ Business Intelligence b
 - **Trang Cấu hình Metadata**: `/analytics/schema` (`web/src/app/(dashboard)/analytics/schema/page.tsx`)
 - **Trang Cấu hình Cài đặt & Cache**: `/analytics/settings` (`web/src/app/(dashboard)/analytics/settings/page.tsx`)
 - **Trang Cài đặt của Creator**: `/analytics/creator` (`web/src/app/(dashboard)/analytics/creator/page.tsx`)
+- **Creator Dev Tools (Kiểm thử API + Duyệt DB)**: `/analytics/creator/devtools` (`web/src/app/(dashboard)/analytics/creator/devtools/page.tsx`) — API: `/api/config/db/tables` (liệt kê bảng qua OpenAPI PostgREST) + `/api/config/db/table` (đọc rows 1 bảng, phân trang). **CHỈ role `creator`**.
 
 ---
 
@@ -47,8 +48,15 @@ Hệ thống GoHub Intel áp dụng quy chế phân quyền chặt chẽ thông 
 ### D. Bảng điều khiển của Creator (Creator Settings)
 - Kênh quản trị tối cao dành riêng cho người sáng tạo hệ thống (Creator). Layout trang được thiết kế để tự động kiểm tra vai trò người dùng fresh thông qua API `/api/user/me` để cập nhật JWT tức thì, giải quyết dứt điểm tình trạng stale token của tài khoản creator.
 
+### E. Creator Dev Tools (Kiểm thử API + Duyệt Database)
+- Trang `/analytics/creator/devtools` gồm 2 tab:
+  - **API Tester**: gọi thử mọi endpoint nội bộ (`/api/...`) với method GET/POST/PUT/PATCH/DELETE, body JSON tuỳ chọn; hiển thị mã trạng thái, thời gian phản hồi và JSON trả về. Fetch same-origin nên tự đính kèm cookie phiên (tôn trọng guard riêng của từng endpoint).
+  - **Database**: liệt kê toàn bộ bảng Supabase (đọc OpenAPI spec tại `/rest/v1/`) và duyệt dữ liệu từng bảng (read-only, phân trang 50 dòng, có tổng số dòng). Dùng `supabaseAdmin` (service key) phía server.
+- **Bảo mật 2 lớp**: page client-gate đẩy non-creator về `/chatbot`; 2 API (`/api/config/db/tables`, `/api/config/db/table`) chặn cứng `role !== "creator"` → 403 (admin cũng KHÔNG vào được). Tên bảng validate bằng regex identifier.
+
 ---
 
 ## 3. Phân Quyền
 - **Users, Schema, Settings**: Chỉ hiển thị và cấp quyền chỉnh sửa cho vai trò **Admin và Creator**.
-- **Creator Settings**: Chỉ tài khoản có vai trò duy nhất là **`creator`** mới có quyền truy cập và thao tác.\n
+- **Creator Settings**: Chỉ tài khoản có vai trò duy nhất là **`creator`** mới có quyền truy cập và thao tác.
+- **Creator Dev Tools**: CHỈ role **`creator`** (page + cả 2 API đều chặn admin).\n
