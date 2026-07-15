@@ -9,7 +9,7 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerRows } from "@/lib/admin-gohub"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { getB2CChannelBudgetByMonth, B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả dữ liệu từ tháng 1 đến tháng hiện tại MTD:
@@ -286,6 +286,7 @@ export async function GET(req: NextRequest) {
           .from("analytics_channel_costs")
           .select("channel, month, ads, platform_fee, sponsor_products, media")
           .in("month", months)
+          .in("channel", B2C_CHANNELS)   // chỉ kênh B2C — loại chi phí kênh B2B/ecom khỏi profit trend
         if (error) throw new Error(error.message)
 
         for (const row of costRows ?? []) {

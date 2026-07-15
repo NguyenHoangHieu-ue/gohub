@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-const B2C_CHANNELS = [
+// Danh sách kênh B2C — dùng để lọc chi phí kênh (opCost) chỉ trong phạm vi B2C,
+// tránh kênh B2B/ecom (VN-Ecom, Traveloka...) lọt vào Revenue & Gross Profit Trend.
+export const B2C_CHANNELS = [
   "VN-Loyalty",
   "VN-Web eSIM",
   "VN-Social",

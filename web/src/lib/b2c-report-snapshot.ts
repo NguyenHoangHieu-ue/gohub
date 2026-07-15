@@ -4,7 +4,7 @@ import { chatwootConfigured, chatwootLeadsBreakdown } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { getB2CChannelBudgetByMonth, B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 
 export interface MarketCell { vn: number; us: number; total: number }
 export interface CustCell { revenue: number; count: number }
@@ -213,6 +213,7 @@ async function loadRevenue(months: string[]) {
       .from("analytics_channel_costs")
       .select("channel, month, ads, platform_fee, sponsor_products, media")
       .in("month", months)
+      .in("channel", B2C_CHANNELS)   // chỉ kênh B2C — loại chi phí kênh B2B/ecom khỏi profit trend
     if (error) throw new Error(error.message)
     for (const row of costRows ?? []) {
       const month = String(row.month)
