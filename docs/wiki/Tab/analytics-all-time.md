@@ -3,34 +3,30 @@ title: "All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)"
 page_type: tab_guide
 is_hidden: true
 department: all
-tags: [tab, analytics, report]
+tags: [tab, analytics, all-time]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
 # All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)
 
-Phân tích hiệu suất đa năm/đa kỳ, so sánh tăng trưởng kỳ này vs kỳ trước theo 3 trục kênh lớn.
+Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-Strategic / B2B-Non-Strategic / B2C**. Dùng data model chung — xem [[_analytics-data-model]].
 
 ---
 
-## 1. Mục đích & vai trò
-- **Dùng để làm gì**: nhìn bức tranh dài hạn (nhiều năm) thay vì 1 tháng — đánh giá xu hướng tăng trưởng tổng thể theo B2B-Strategic / B2B-Non-Strategic / B2C.
-- **Tại sao tách riêng**: query trên toàn bộ lịch sử rất nặng → cần cơ chế chạy có kiểm soát (nút Áp dụng) khác các tab realtime.
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/all-time` — `web/src/app/(dashboard)/analytics/all-time/page.tsx` |
+| API | `/api/analytics/all-time-performance` |
+| Nguồn | `fact_fulfillment_revenue` + `dim_order_source` + `dim_customer` |
 
-## 2. Đường dẫn & file
-- **Web**: `/analytics/all-time` — `web/src/app/(dashboard)/analytics/all-time/page.tsx`
-- **API**: `/api/analytics/all-time-performance`
+## 2. Logic
+- Gom theo `period` (tháng/năm) × `derived_group`.
+- **`derived_group`**: suy từ `group_name` + partner tier → `B2B-Strategic`, `B2B-Non-Strategic`, `B2C`.
+- Trả: `period`, `derived_group`, `channel_name`, `revenue`, `margin`, `tier`.
 
-## 3. Nguồn dữ liệu & nghiệp vụ
-- **Nguồn**: `gohub_dw` (toàn bộ lịch sử fact revenue).
-- **Phân nhóm 3 trục**: B2B-Strategic / B2B-Non-Strategic / B2C (dùng Partner Tiers + dedup như B2B).
-- **So sánh kỳ**: kỳ chọn vs kỳ trước để tính tăng trưởng.
-
-## 4. Kỹ thuật & lưu ý
-- **Bộ lọc ngày dùng nút "Áp dụng" thủ công**: tránh gửi liên tục query nặng về kho lịch sử khi gõ ngày.
-- **Chuẩn hoá casing**: nhãn `"Non-Strategic"` viết hoa chữ S nhất quán với toàn hệ thống (tránh lệch nhóm).
-
-## 5. Phân quyền
-- **Admin, Creator, BOD, Manager, Staff**. **Standard** bị chặn.
+## 3. Gotchas
+- `tier` (Strategic/Non) lấy từ Partner Tiers (Supabase). Kênh B2B không thuộc Strategic → Non-Strategic.
+- Không giới hạn kỳ ngắn → dữ liệu lớn, dựa vào cache 12h.

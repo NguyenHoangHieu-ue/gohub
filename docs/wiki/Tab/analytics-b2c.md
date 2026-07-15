@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, b2c]
 created: 2026-06-28
-updated: 2026-07-14
+updated: 2026-07-15
 status: active
 ---
 
@@ -110,9 +110,9 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - `ADMIN_GOHUB_API_BASE_URL`
 - `ADMIN_GOHUB_API_KEY`
 - `ADMIN_GOHUB_API_SECRET`
-- `ADMIN_GOHUB_USD_TO_VND`
-- `TURSO_URL`
-- `TURSO_AUTH_TOKEN`
+- `ADMIN_GOHUB_USD_TO_VND` — *chỉ là FALLBACK*; tỷ giá USD→VND giờ đọc từ **DB** `app_settings.fx.usd_vnd` (s93).
+- `TURSO_LEADS_URL` — Turso **chat-center** (nguồn leads), cặp env RIÊNG, tách khỏi `TURSO_URL` (intel/country_codes). ⚠️ ĐỪNG dùng chung `TURSO_URL` — sẽ query nhầm DB (s91).
+- `TURSO_LEADS_AUTH_TOKEN`
 - `CHATWOOT_BASE_URL`
 - `CHATWOOT_ACCOUNT_ID`
 - `CHATWOOT_API_TOKEN`
@@ -121,6 +121,15 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - `OMNI_WEBHOOK_SECRET` (chỉ verify webhook, không dùng để đọc history)
 - `CRON_SECRET` (nên set trên Vercel để bảo vệ cron)
 - `SUPABASE_SERVICE_KEY` phải là service role key hợp lệ để snapshot/cache đọc ghi được.
+
+### Cập nhật s91–93 (ecom, tỷ giá, UX)
+- **Tỷ giá USD→VND** đọc từ DB `app_settings.fx.usd_vnd` (fallback env) — `lib/admin-gohub.ts getUsdToVndRate()`.
+- **Leads Turso** dùng cặp env RIÊNG `TURSO_LEADS_URL/TURSO_LEADS_AUTH_TOKEN` (DB chat-center), tách khỏi `TURSO_URL` (intel `country_codes`) — nếu không sẽ query nhầm DB → lỗi.
+- **KHÔNG có ecom/VN-Ecom trong B2C**:
+  - Dữ liệu revenue/profit vốn đã lọc `group_name='B2C'` (VN-Ecom = B2B).
+  - **Revenue & Gross Profit Trend**: nhánh gộp chi phí kênh (`analytics_channel_costs`) trước KHÔNG lọc kênh → chi phí kênh B2B/ecom tạo dòng `opCost>0` lọt vào. Fix: `.in("channel", B2C_CHANNELS)` cho cả route live `b2c/monthly` + snapshot builder (`lib/b2c-report-snapshot.ts`). `B2C_CHANNELS` export từ `lib/b2c-channel-budget.ts`.
+  - **Cost Management modal** mở từ view Main truyền `scope="b2c"` → chỉ hiện tab "B2C Channels" (ẩn tab B2B/Group có VN-Ecom).
+- **UX**: dropdown "Chọn tháng" ở Revenue & GP Trend làm nổi bật (viền/nền xanh, bold).
 
 ### Checklist trước khi merge/deploy
 - [ ] Chạy migration snapshot `web/db/migrations/v17_b2c_report_monthly_snapshots.sql`.
