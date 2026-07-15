@@ -1,6 +1,8 @@
 // Admin GoHub Internal API — source for B2C customer metrics.
 // Env: ADMIN_GOHUB_API_BASE_URL, ADMIN_GOHUB_API_KEY, ADMIN_GOHUB_API_SECRET.
 
+import { supabaseAdmin } from "@/lib/supabase"
+
 const BASE = (process.env.ADMIN_GOHUB_API_BASE_URL || "").replace(/\/$/, "")
 const KEY = process.env.ADMIN_GOHUB_API_KEY || ""
 const SECRET = process.env.ADMIN_GOHUB_API_SECRET || ""
@@ -79,8 +81,22 @@ function monthRange(month: string): { dateFrom: string; dateTo: string } {
   return { dateFrom: start.toISOString(), dateTo: end.toISOString() }
 }
 
-export function revenueToVnd(buckets: RevenueBucket[] = []): number {
-  const usdRate = Number(process.env.ADMIN_GOHUB_USD_TO_VND || "25000")
+// Tỷ giá USD→VND: ưu tiên DB (Supabase app_settings key 'fx.usd_vnd' — nguồn sự thật, chỉnh trong
+// Settings/agents), fallback env ADMIN_GOHUB_USD_TO_VND, cuối cùng 26000.
+export async function getUsdToVndRate(): Promise<number> {
+  try {
+    const { data } = await supabaseAdmin
+      .from("app_settings").select("value").eq("key", "fx.usd_vnd").maybeSingle()
+    const dbRate = data ? parseFloat(String(data.value)) : NaN
+    if (Number.isFinite(dbRate) && dbRate > 0) return dbRate
+  } catch {
+    // đọc DB lỗi → dùng fallback env
+  }
+  const envRate = Number(process.env.ADMIN_GOHUB_USD_TO_VND)
+  return Number.isFinite(envRate) && envRate > 0 ? envRate : 26000
+}
+
+export function revenueToVnd(buckets: RevenueBucket[] = [], usdRate: number): number {
   return buckets.reduce((sum, b) => {
     const currency = String(b.currency || "").toUpperCase()
     const revenue = Number(b.revenue) || 0
@@ -90,8 +106,8 @@ export function revenueToVnd(buckets: RevenueBucket[] = []): number {
   }, 0)
 }
 
-function summaryRevenueToVnd(buckets: Array<{ currency: string; totalRevenue: number }> = []): number {
-  return revenueToVnd(buckets.map(bucket => ({ currency: bucket.currency, revenue: bucket.totalRevenue })))
+function summaryRevenueToVnd(buckets: Array<{ currency: string; totalRevenue: number }> = [], usdRate: number): number {
+  return revenueToVnd(buckets.map(bucket => ({ currency: bucket.currency, revenue: bucket.totalRevenue })), usdRate)
 }
 
 async function fetchCustomerPage(month: string, page: number): Promise<CustomerRevenueResponse> {
@@ -134,6 +150,7 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
     throw new Error("Admin GoHub API chưa được cấu hình")
   }
 
+  const usdRate = await getUsdToVndRate()
   const buckets: Record<"new" | "returning", { revenue: number; count: number }> = {
     new: { revenue: 0, count: 0 },
     returning: { revenue: 0, count: 0 },
@@ -153,13 +170,13 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
         {
           month,
           type: "new",
-          revenue: String(summaryRevenueToVnd(newBucket?.byCurrency ?? [])),
+          revenue: String(summaryRevenueToVnd(newBucket?.byCurrency ?? [], usdRate)),
           count: String(Number(newBucket?.customerCount ?? 0)),
         },
         {
           month,
           type: "returning",
-          revenue: String(summaryRevenueToVnd(returningBucket?.byCurrency ?? [])),
+          revenue: String(summaryRevenueToVnd(returningBucket?.byCurrency ?? [], usdRate)),
           count: String(Number(returningBucket?.customerCount ?? 0)),
         },
       ],
@@ -180,7 +197,7 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
     for (const item of response.data?.items ?? []) {
       const type = normalizeUserType(item.userType)
       buckets[type].count += 1
-      buckets[type].revenue += revenueToVnd(item.revenueByCurrency)
+      buckets[type].revenue += revenueToVnd(item.revenueByCurrency, usdRate)
     }
   }
 
@@ -205,6 +222,7 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
 export async function adminGohubCustomerRows(months: string[]): Promise<AdminCustomerRow[]> {
   if (!adminGohubConfigured()) return []
 
+  const usdRate = await getUsdToVndRate()
   const rows: AdminCustomerRow[] = []
   for (const month of months) {
     const response = await fetchCustomerPage(month, 1)
@@ -215,13 +233,13 @@ export async function adminGohubCustomerRows(months: string[]): Promise<AdminCus
         {
           month,
           type: "new",
-          revenue: String(summaryRevenueToVnd(byUserType.new?.byCurrency ?? [])),
+          revenue: String(summaryRevenueToVnd(byUserType.new?.byCurrency ?? [], usdRate)),
           count: String(Number(byUserType.new?.customerCount ?? 0)),
         },
         {
           month,
           type: "returning",
-          revenue: String(summaryRevenueToVnd(byUserType.returning?.byCurrency ?? [])),
+          revenue: String(summaryRevenueToVnd(byUserType.returning?.byCurrency ?? [], usdRate)),
           count: String(Number(byUserType.returning?.customerCount ?? 0)),
         },
       )
@@ -231,7 +249,7 @@ export async function adminGohubCustomerRows(months: string[]): Promise<AdminCus
     rows.push({
       month,
       type: "total",
-      revenue: String(summaryRevenueToVnd(summary?.byCurrency ?? [])),
+      revenue: String(summaryRevenueToVnd(summary?.byCurrency ?? [], usdRate)),
       count: String(Number(summary?.customerCount ?? response.pagination?.total ?? 0)),
     })
   }
