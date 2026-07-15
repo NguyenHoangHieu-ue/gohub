@@ -4676,3 +4676,58 @@ CÒN TREO (từ trước, chưa đụng):
   - Verify thực tế: đăng nhập creator vào Creator → API & Database bấm Làm mới xác nhận route/bảng cập nhật đúng;
     test 3 tab Dashboard US/VN/All ra số đúng theo thị trường.
 LƯU Ý: staging đang trước main NHIỀU commit (s87→s90).
+
+## Session 91 (2026-07-15) — [B2C] Tích hợp nhánh DEV codex/b2c-dashboard-preview vào staging
+178. Hiếu: DEV B2C (Minh) đã push nhánh origin/codex/b2c-dashboard-preview; yêu cầu pull về kết hợp với staging.
+     Đọc new_info.txt mục #15/07: route preview /b2c-report-preview, dashboard B2C mới (snapshot/KPI/revenue/
+     customer/acquisition/GA4/budget/profit), Revenue&GP Trend theo kênh (Revenue/COGS/GP/Margin%/OpCost/CM1/CM1%),
+     Customer New/Returning từ Admin API, Lead ưu tiên Turso→Omni/Chatwoot, cron 00:00 UTC+7, migration snapshot.
+179. Phân tích git: merge-base(staging, branch) = 21cd89f = origin/main → branch tách từ MAIN CŨ, KHÔNG từ staging.
+     Staging đã đi trước 22 commit (s87→s90). Branch chỉ 1 commit 5e5c1c9. Theo memory git_sync_before_merge:
+     KHÔNG merge cả nhánh → cherry-pick 1 commit lên staging.
+     Chồng lấn file: CHỈ docs/wiki/Tab/analytics-b2c.md (16 file code kia staging không đụng).
+180. Kiểm tra rủi ro trước khi lấy:
+     - web/db/migrations/ = thư mục MỚI của DEV (track riêng, tách backend/migrations v16→v21) → tên v17 KHÔNG collision.
+     - vercel.json: branch chỉ THÊM cron refresh-b2c-report (0 17 * * * = 00:00 UTC+7) + function 60s; staging===base → sạch.
+     - ENV SUPABASE_SERVICE_KEY DEV dùng KHỚP lib/supabase.ts hiện có (không lệch key âm thầm). CHATWOOT_*/TURSO_* qua client sẵn.
+181. cherry-pick 5e5c1c9 → commit a1be9bd trên staging. Git auto-merge analytics-b2c.md SẠCH, KHÔNG conflict.
+     8 file mới (admin-gohub, b2c-report-snapshot, omni-leads, turso-leads, b2c-channel-budget, cron/refresh-b2c-report,
+     b2c-report-preview/page, v17 migration) + sửa b2c/monthly, b2c-advanced-dashboard, chatwoot, analytics-helpers,
+     website, config/ga4, vercel.json, .env.local.example, wiki.
+182. Verify: tsc PASS · vitest 28/28 · next build PASS (route /b2c-report-preview + /api/cron/refresh-b2c-report vào build).
+     CHƯA push origin/staging (quy tắc s76). Đánh dấu trạng thái vào new_info.txt.
+CÒN TREO (chờ Hiếu VẬN HÀNH, code đã sẵn):
+  1) Chạy migration web/db/migrations/v17_b2c_report_monthly_snapshots.sql trên Supabase.
+  2) Set ENV Vercel: ADMIN_GOHUB_API_BASE_URL/KEY/SECRET, ADMIN_GOHUB_USD_TO_VND, TURSO_URL/AUTH_TOKEN,
+     CHATWOOT_BASE_URL/ACCOUNT_ID/API_TOKEN, OMNI_API_BASE_URL/TOKEN/WEBHOOK_SECRET, SUPABASE_SERVICE_KEY (hợp lệ).
+  3) Nhập spend thật vào Cost Management → gỡ manualSpendOverrides (tạm tháng 5-7/2026).
+  4) Push staging + verify /b2c-report-preview trên link staging (sau khi có ENV + migration).
+
+## Session 91 (tiếp, 2026-07-15) — [B2C env] Nhận env DEV (tmp.txt) + fix xung đột Turso 2 DB
+183. Hiếu đưa tmp.txt = env test local của DEV. So với web/.env.local:
+     - ĐÃ CÓ, khớp: CHATWOOT_* (ACCOUNT_ID/API_TOKEN/BASE_URL), OMNI_WEBHOOK_SECRET, NEXT_PUBLIC_SUPABASE_URL,
+       SUPABASE_SERVICE_KEY (bản .env.local là service_role JWT hợp lệ — tmp.txt chỉ có placeholder anon).
+     - MỚI, thêm vào .env.local: ADMIN_GOHUB_API_BASE_URL/KEY/SECRET, ADMIN_GOHUB_USD_TO_VND, OMNI_API_BASE_URL.
+     - THIẾU (code cần nhưng tmp.txt không có): OMNI_API_TOKEN → Omni (fallback #2) chưa chạy; không sao vì
+       leads ưu tiên #1 = Turso chat-center.
+184. ⚠️ XUNG ĐỘT TURSO (phát hiện & fix): tmp.txt TURSO_URL/TURSO_AUTH_TOKEN trỏ DB chat-center
+     (gohubchatcenter-seikobao, bảng messages/identities...) — KHÁC DB intel hiện hệ thống đang dùng
+     (gohub-intel-baole, bảng country_codes dùng bởi getCountryMappings/region-chart/country-codes API).
+     turso-leads.ts gọi tursoLeadsConfigured()=tursoConfigured() (chỉ check TURSO_URL tồn tại) → vì hệ thống ĐÃ set
+     TURSO_URL (intel) nên gate=true → leads query nhầm DB intel → THROW (no such table messages), KHÔNG rơi fallback.
+     FIX (surgical): lib/turso.ts thêm tursoQueryOn(url,token,sql,args) (tursoQuery gọi lại nó với env mặc định);
+     turso-leads.ts đọc cặp env RIÊNG TURSO_LEADS_URL/TURSO_LEADS_AUTH_TOKEN (chat-center) qua tursoQueryOn;
+     tursoLeadsConfigured() check cặp mới. → country_codes giữ TURSO_URL (intel), leads dùng TURSO_LEADS_* (chat-center),
+     KHÔNG đụng nhau. Cập nhật .env.local.example (thêm TURSO_LEADS_* + comment).
+     Verify: tsc PASS · vitest 28/28 · next build PASS.
+
+*** ENV MỚI HIẾU CẦN THÊM TRÊN VERCEL (staging + production) — Session 91 ***
+  ADMIN_GOHUB_API_BASE_URL = https://api.gohub.com
+  ADMIN_GOHUB_API_KEY      = ik_... (xem tmp.txt)
+  ADMIN_GOHUB_API_SECRET   = is_... (xem tmp.txt)
+  ADMIN_GOHUB_USD_TO_VND   = 25000
+  OMNI_API_BASE_URL        = https://omni.gohub.cloud
+  OMNI_API_TOKEN           = (CHƯA có — xin DEV/team; Omni fallback tắt tới khi có)
+  TURSO_LEADS_URL          = libsql://gohubchatcenter-seikobao.aws-ap-northeast-1.turso.io
+  TURSO_LEADS_AUTH_TOKEN   = eyJ...(read-only, xem tmp.txt)
+  (ĐÃ có sẵn, KHÔNG cần đổi: CHATWOOT_*, OMNI_WEBHOOK_SECRET, SUPABASE_SERVICE_KEY, CRON_SECRET, TURSO_URL/AUTH_TOKEN intel)
