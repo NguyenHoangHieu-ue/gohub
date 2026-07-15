@@ -1,6 +1,8 @@
 # GoHub — Trạng Thái Hệ Thống & Roadmap
 
-**Cập nhật lần cuối:** 2026-07-15 (session 90 — Dashboard tab thị trường US/VN/All; Creator Dev Tools API+DB; nút Lưu dirty-state toàn tab). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
+**Cập nhật lần cuối:** 2026-07-15 (session 91 — tích hợp B2C dashboard của DEV + fix Turso 2 DB + tỷ giá từ DB; **merge staging→main lên production b82dc57**). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
+
+> **Production (main) = staging = `b82dc57`** kể từ s91. Còn lại (không chặn): chạy `web/db/migrations/v17_b2c_report_monthly_snapshots.sql` trên Supabase để bật cron pre-compute snapshot B2C (B2C đã chạy live nhờ ENV Vercel đã set).
 
 ---
 

@@ -4731,3 +4731,28 @@ CÒN TREO (chờ Hiếu VẬN HÀNH, code đã sẵn):
   TURSO_LEADS_URL          = libsql://gohubchatcenter-seikobao.aws-ap-northeast-1.turso.io
   TURSO_LEADS_AUTH_TOKEN   = eyJ...(read-only, xem tmp.txt)
   (ĐÃ có sẵn, KHÔNG cần đổi: CHATWOOT_*, OMNI_WEBHOOK_SECRET, SUPABASE_SERVICE_KEY, CRON_SECRET, TURSO_URL/AUTH_TOKEN intel)
+
+## Session 91 (tiếp, 2026-07-15) — [DEPLOY] Merge staging → main (production)
+185. Hiếu chốt merge staging→main. Kiểm tra git_sync_before_merge: origin/main (21cd89f) LÀ ancestor của staging
+     → fast-forward SẠCH, KHÔNG diverge (không ai push B2C lên main riêng). Staging vượt main 25 commit (s87→s91).
+186. Xác nhận an toàn deploy dù CHƯA chạy migration v17: /api/analytics/b2c/monthly đọc snapshot trong try/catch
+     (dòng 73-100) → bảng thiếu = throw → rơi xuống tính LIVE. Dashboard fetch /api/analytics/b2c/monthly (không đọc
+     bảng trực tiếp). Bảng b2c_report_monthly_snapshots chỉ dùng bởi cron refresh (pre-compute) → thiếu chỉ mất tối
+     ưu + cron log lỗi, KHÔNG vỡ UI. Hiếu đã set ENV trên Vercel.
+187. Merge: checkout main + reset --hard origin/main → merge --ff-only staging → push origin main (21cd89f..b82dc57).
+     origin/main == staging == b82dc57. Vercel auto-deploy production.
+CÒN LẠI (không chặn): chạy migration web/db/migrations/v17_b2c_report_monthly_snapshots.sql trên Supabase (idempotent)
+để bật cron pre-compute snapshot B2C (00:00 UTC+7) + tắt cron log lỗi. B2C hiện chạy LIVE đầy đủ nhờ ENV đã set.
+
+## ===== TỔNG KẾT PHIÊN (Session 91, 2026-07-15) =====
+Trạng thái: staging == main == b82dc57 (ĐÃ lên production). Verify: tsc · vitest 28/28 · next build PASS.
+Việc chính:
+  1. Tích hợp nhánh DEV B2C (codex/b2c-dashboard-preview) vào staging bằng cherry-pick (a1be9bd) — không merge cả
+     nhánh (tách từ main cũ); 1 file wiki auto-merge sạch.
+  2. Fix xung đột Turso 2 DB (368ca0e): leads dùng cặp env RIÊNG TURSO_LEADS_URL/TURSO_LEADS_AUTH_TOKEN (chat-center),
+     country_codes giữ TURSO_URL (intel). Thêm tursoQueryOn().
+  3. Tỷ giá USD→VND đọc từ DB app_settings.fx.usd_vnd (b82dc57) thay hardcode env (fallback env→26000).
+  4. Nhận ENV DEV từ tmp.txt, thêm vào .env.local + liệt kê ENV mới cho Vercel (Hiếu đã set).
+  5. Merge staging→main (fast-forward) → production b82dc57 (s87→s91: chatbot searchSkus, +161 nước, gỡ Neo4j,
+     listings metadata P1+P2, Dashboard US/VN/All, Creator Dev Tools, dirty-state, B2C dashboard).
+CÒN TREO: chạy migration v17 B2C snapshot (idempotent, không chặn); listings Phase 3 (drop cột phẳng) khi Hiếu yên tâm.
