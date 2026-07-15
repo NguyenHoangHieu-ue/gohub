@@ -4790,3 +4790,27 @@ Fix: getUTC* (endDate ổn định). Verify DB thật T6 KHỚP NCC 100%: Fixed 
 Tổng 37.661 (commit 8118099). LƯU Ý %: NCC có 2 cách (Simple=TB per-SIM %, Weighted=tổng/tổng); % tab hiện =
 tổng usage/tổng plan ≈ Weighted (không hẳn khớp Simple). Số SIM/ICCID = deliverable chính đã khớp.
 Trạng thái: main==staging==8118099 (deploy prod).
+
+## ===== TỔNG KẾT PHIÊN (Session 93, 2026-07-15) =====
+Trạng thái: main == staging == 8118099 (đã deploy production, fast-forward xuyên suốt, không diverge).
+Verify mọi commit: tsc · vitest 28/28 · next build PASS.
+
+ĐÃ LÀM (7 commit chính, tất cả đã lên prod):
+  1. Ecom khỏi B2C — 2 tầng:
+     - Cost Management modal: prop scope="b2c" (chỉ tab B2C, ẩn B2B+Group) khi mở từ b2c-performance.
+     - Revenue & Gross Profit Trend (gốc rễ THẬT): query analytics_channel_costs (opCost/kênh) KHÔNG lọc kênh →
+       chi phí kênh B2B/ecom tạo dòng profitByChannel opCost>0 → dashboard filter opCost>0 hiện ecom. Fix
+       .in("channel", B2C_CHANNELS) cho cả route live b2c/monthly + snapshot builder. Export B2C_CHANNELS.
+  2. UX: dropdown "Chọn tháng" ở Revenue & GP Trend nổi bật (viền xanh đậm+nền tint+bold+nhãn).
+  3. 3HK phân loại UNL: backfill throttle_speed 55 mã mới thiếu (suy mã cùng họ/chữ A/B, toàn 500MB, 55/55 OK)
+     → speed-map đọc nguồn chuẩn. Không có mã 1GB mới (chỉ PY cũ). Xoá route chết 3hk-usage/report.
+  4. 3HK "Avg Usage %" → GB/ngày/SIM cho tab Unlimited (summary card + cột bảng SKU); Daily/Fixed giữ %.
+  5. 3HK khớp số ICCID NCC: (a) đổi định nghĩa kỳ = "SIM có usage trong kỳ" (gộp 4 query về bundlesCTE);
+     (b) mount effect tính endDate theo getUTC* (first_report_date lưu 00:00:00 UTC; format local lùi 1 ngày
+     trên tz lệch → mất ngày cuối). Kết quả T6 KHỚP NCC: Fixed 15.091·Daily 19.399·Unlimited 3.171·Tổng 37.661.
+     Hiếu xác nhận còn lệch nhỏ nhưng KHÔNG đáng kể → chấp nhận, đóng.
+
+CÒN TREO (không chặn):
+  - Cột % 3HK: NCC có Simple (TB per-SIM) vs Weighted (tổng/tổng); tab hiện ≈ Weighted. Có thể bổ sung 2 cách nếu cần.
+  - B2C snapshot table đang rỗng → cron refresh-b2c-report (00:00 UTC+7) sẽ dựng với builder đã lọc B2C_CHANNELS.
+  - 3HK: nếu sau này có tier 1GB thật, team SP ghi throttle_speed "1GB..." (groupFromThrottle đã bắt sẵn).
