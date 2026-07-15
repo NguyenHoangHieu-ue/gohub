@@ -4756,3 +4756,18 @@ Việc chính:
   5. Merge staging→main (fast-forward) → production b82dc57 (s87→s91: chatbot searchSkus, +161 nước, gỡ Neo4j,
      listings metadata P1+P2, Dashboard US/VN/All, Creator Dev Tools, dirty-state, B2C dashboard).
 CÒN TREO: chạy migration v17 B2C snapshot (idempotent, không chặn); listings Phase 3 (drop cột phẳng) khi Hiếu yên tâm.
+
+## Session 92 (2026-07-15) — [B2C ecom + UX] + [3HK hoàn thiện phân loại UNL]
+1. Ecom khỏi B2C: verify data + cả 2 view B2C đã sạch (mọi query lọc group_name='B2C'; VN-Ecom=B2B).
+   Nơi duy nhất lộ: cost-management-modal (tab B2B) mở từ b2c-performance. Fix scope="b2c" (chỉ tab B2C,
+   ẩn B2B+Group). Đã deploy main.
+2. UX: dropdown "Chọn tháng" ở Revenue & Gross Profit Trend (b2c-advanced-dashboard) → viền xanh đậm+nền tint+
+   bold+nhãn, nổi bật.
+3. 3HK (quyết định user): (a) backfill throttle_speed 55 mã UNL mới thiếu trong Supabase skus — suy từ mã cùng
+   họ (bỏ số ngày) / chữ A/B, TOÀN 500MB, 0 conflict, 55/55 OK → speed-map hết đoán chữ cái, đọc nguồn chuẩn.
+   (b) 1GB "còn bán" nhưng catalog+usage KHÔNG có mã 1GB mới nào (chỉ PY cũ ECHM3DPYUNLI05D) → không mã nào bị
+   xếp nhầm 500MB. Nếu sau này có 1GB, throttle_speed phải ghi "1GB" (groupFromThrottle đã bắt sẵn). (c) đổi
+   "Avg Usage %" → GB/ngày/SIM cho tab Unlimited (summary card + cột bảng SKU); Daily/Fixed giữ %. (d) xoá route
+   chết /api/analytics/3hk-usage/report.
+Trạng thái: main == staging == 5c55d25 (đã deploy production). tsc·vitest 28/28·build PASS xuyên suốt.
+CÒN (3HK, không chặn): E2E xem UI GB/ngày/SIM; nếu 3HK ra tier 1GB thật thì team SP ghi throttle_speed "1GB...".
