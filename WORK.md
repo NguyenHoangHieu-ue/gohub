@@ -2,7 +2,8 @@
 
 **Cập nhật lần cuối:** 2026-07-15 (session 91 — tích hợp B2C dashboard của DEV + fix Turso 2 DB + tỷ giá từ DB; **merge staging→main lên production b82dc57**). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
 
-> **Production (main) = staging = `b82dc57`** kể từ s91. Còn lại (không chặn): chạy `web/db/migrations/v17_b2c_report_monthly_snapshots.sql` trên Supabase để bật cron pre-compute snapshot B2C (B2C đã chạy live nhờ ENV Vercel đã set).
+> **Production (main) = staging** — deploy liên tục qua s91–94. s93: fix ecom B2C + 3HK khớp NCC. s94: wiki chi tiết 28 tab + `_analytics-data-model.md` + sync KB (47 pages); **lập PLAN UX nâng cấp tab SP/hệ thống** (xem mục 🎨 bên dưới, chi tiết `docs/plan-ux-tabs.md`).
+> Còn lại (không chặn): chạy `web/db/migrations/v17_b2c_report_monthly_snapshots.sql` trên Supabase để bật cron pre-compute snapshot B2C (B2C đã chạy live nhờ ENV Vercel đã set).
 
 ---
 
@@ -147,6 +148,41 @@ Tất cả `v1` → `v17` đã chạy. Migrations hiện tại:
 
 ### Tính Năng Mới Tiềm Năng
 - OnDemand Performance · Weekly digest tự động qua Lark.
+
+---
+
+## 🎨 PLAN UX — Nâng Cấp Các Tab SP/Hệ Thống (từ s94, 2026-07-15)
+
+> **Bối cảnh & mục tiêu**: nâng cấp trải nghiệm các tab **NGOÀI analytics** (analytics tạm gác) theo tiêu chí Hiếu đặt ra:
+> **tiện lợi · tiện ích · thông minh · đầy đủ · cần thiết · dễ tiếp cận · hiện đại**.
+> Phạm vi tab: `skus, ncc, countries, promotions, kb, info, chatbot, admin`.
+> **Chi tiết đầy đủ (việc cụ thể + file + "xong khi")**: `docs/plan-ux-tabs.md`. Trạng thái: **đã lập plan, CHƯA code**.
+
+**Hiện trạng hạ tầng (khảo sát s94)**: đã có search/filter/export/modal + `confirm-modal`/`pager`/`dashboard-kit`/`sidebar-main`/`top-bar`.
+Còn **THIẾU**: toast · command palette · skeleton · tooltip dùng chung; **dark mode chưa đồng bộ**; `dashboard-kit` mới dùng ở vài trang analytics → 8 tab SP/hệ thống UX rời rạc. Page lớn: admin 1836 · ncc 1033 · kb 992 · skus 983 · chatbot 758 dòng.
+
+**Quyết định của Hiếu**: làm **WAVE 0 (nền dùng chung) TRƯỚC**, rồi đào sâu **skus · ncc · kb · chatbot**.
+
+### 🅰️ Wave 0 — Nền dùng chung (nâng mọi tab cùng lúc) — thứ tự triển khai
+1. **0.1 Toast** (`components/toast.tsx` provider + `useToast`) — thay `alert()`/thao tác im lặng. *(tiện lợi, hiện đại)*
+2. **0.2 Skeleton** (`components/skeleton.tsx`) — thay spinner trơ khi tải list. *(tiện lợi, hiện đại)*
+3. **0.6 Keyboard + Empty/Help** (`/` focus search, `Esc` đóng, ↑↓ duyệt; `empty-state.tsx` + `tooltip.tsx`). *(tiện lợi, đầy đủ, dễ tiếp cận)*
+4. **0.5 Design-kit + Dark mode** — chuẩn hoá token từ `dashboard-kit` + bổ sung `dark:` cho 8 tab. *(hiện đại, dễ tiếp cận)*
+5. **0.4 URL-state filter** (`useUrlState` → lưu filter/search/page vào query param). *(tiện lợi)*
+6. **0.3 Command Palette `⌘/Ctrl+K`** (`components/command-palette.tsx`) — nhảy tab/SKU/nước/wiki + hành động nhanh, gọi search API sẵn có. *(thông minh, dễ tiếp cận, hiện đại)*
+7. **0.7 Mobile responsive** — table→card view < md, sidebar off-canvas. *(dễ tiếp cận)*
+
+### 🅱️ Wave 1 — Đào sâu 4 tab ưu tiên (sau Wave 0)
+- **skus**: detail drawer điều hướng Product↔SKU↔Listing↔Item (đọc JSONB `metadata`) · saved views · bulk action · copy mã · import CSV.
+- **ncc**: **Gap dashboard** (đếm `exist='No'` theo NCC/nước) + **tạo SKU 1-click từ gap** · import wizard stepper 3 bước + preview diff · preset template.
+- **kb**: semantic search + filter · editor markdown **live-preview** · **diff version** (`kb_wiki_versions`) · nút "Hỏi AI về tài liệu này" · drag-drop upload + progress (`kb_processing_jobs`).
+- **chatbot**: gợi ý câu hỏi (chips) · sidebar lịch sử (`conversations`/`chat_messages`) · copy/📤 export câu trả lời · 👍👎 feedback · chọn agent thủ công · streaming mượt.
+
+### Nguyên tắc thực thi
+- Mỗi mục = **1 commit**, **staging-first**, verify **tsc·vitest·build**, deploy dần.
+- Sau mỗi thay đổi: cập nhật wiki tab tương ứng (`docs/wiki/Tab/`) + sync KB.
+- **KHÔNG đụng tab analytics**; giữ nguyên nghiệp vụ/dữ liệu — đây là lớp UX/tiện ích.
+- **Bước tiếp theo**: Wave 0 mục **0.1 Toast**.
 
 ---
 
