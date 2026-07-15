@@ -328,11 +328,12 @@ export default function ThreeHKDataUsagePage() {
     return simDays > 0 ? usage / simDays : null
   }, [activeTab, skuMetrics])
 
+  // Search + tab filter áp trên bảng bundles (đã gom) → tên cột trần.
   const searchClause = () => debouncedSearch ? `
     AND (
-      f.order_code ILIKE '%${debouncedSearch.replace(/'/g, "''")}%' OR
-      f.iccid ILIKE '%${debouncedSearch.replace(/'/g, "''")}%' OR
-      f.sku ILIKE '%${debouncedSearch.replace(/'/g, "''")}%'
+      order_code ILIKE '%${debouncedSearch.replace(/'/g, "''")}%' OR
+      iccid ILIKE '%${debouncedSearch.replace(/'/g, "''")}%' OR
+      sku ILIKE '%${debouncedSearch.replace(/'/g, "''")}%'
     )
   ` : ""
   const tabClause = () => {
@@ -340,32 +341,35 @@ export default function ThreeHKDataUsagePage() {
     return activeTab !== "all" ? `AND sku_type = '${tabValue}'` : ""
   }
 
+  // CTE chung mọi bảng 3HK. Định nghĩa kỳ: SIM/bundle "thuộc kỳ" nếu CÓ bản ghi usage
+  // (first_report_date) TRONG kỳ (khớp báo cáo NCC "SIM có usage trong kỳ"), KHÔNG chỉ SIM
+  // phát sinh lần đầu trong kỳ. Usage/plan gom từ CÁC BẢN GHI TRONG KỲ.
+  const V3HK = "sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')"
+  const bundlesCTE = () => `
+    WITH period_records AS (
+      SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, first_report_date, activation_date
+      FROM fact_data_usage
+      WHERE ${V3HK}
+        AND first_report_date >= '${startDate}' AND first_report_date <= '${endDate}'
+    ),
+    bundles AS (
+      SELECT iccid, order_code, MAX(sku) AS sku,
+             CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END AS sku_type,
+             MIN(first_report_date) AS first_report_date, MAX(activation_date) AS activation_date,
+             SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, COUNT(*) AS record_count
+      FROM period_records GROUP BY iccid, order_code
+    )`
+
   const fetchSKUTypeMetrics = async () => {
     setLoadingType(true)
     try {
       const sql = `
-        WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
-          FROM fact_data_usage
-          WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
-          GROUP BY iccid, order_code
-        ),
-        filtered_bundles AS (
-          SELECT iccid, order_code, sku_type
-          FROM bundle_starts
-          WHERE bundle_start_date >= '${startDate}' AND bundle_start_date <= '${endDate}' ${tabClause()}
-        ),
-        per_bundle_usage AS (
-          SELECT fb.sku_type, f.iccid, f.order_code, SUM(f.total_data_gb) as total_usage_gb, MAX(f.data_amount_gb) as total_plan_gb
-          FROM fact_data_usage f
-          JOIN filtered_bundles fb ON f.iccid = fb.iccid AND f.order_code = fb.order_code
-          WHERE 1=1 ${searchClause()}
-          GROUP BY 1, 2, 3
-        )
+        ${bundlesCTE()}
         SELECT COALESCE(sku_type, 'Unknown') as sku_type, COUNT(*) as active_sims,
-          SUM(total_plan_gb) as total_plan_gb, SUM(total_usage_gb) as total_usage_gb,
-          CASE WHEN SUM(total_plan_gb) > 0 THEN (SUM(total_usage_gb) / SUM(total_plan_gb)) * 100 ELSE 0 END as avg_usage_pct
-        FROM per_bundle_usage GROUP BY 1 ORDER BY total_usage_gb DESC
+          SUM(data_amount_gb) as total_plan_gb, SUM(total_data_gb) as total_usage_gb,
+          CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END as avg_usage_pct
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        GROUP BY 1 ORDER BY total_usage_gb DESC
       `
       const result = await runQuery(sql)
       setSkuTypeMetrics(result.map((r: any) => ({
@@ -386,27 +390,11 @@ export default function ThreeHKDataUsagePage() {
     setLoadingSKU(true)
     try {
       const sql = `
-        WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku) as sku, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
-          FROM fact_data_usage
-          WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
-          GROUP BY iccid, order_code
-        ),
-        filtered_bundles AS (
-          SELECT iccid, order_code, sku, sku_type
-          FROM bundle_starts
-          WHERE bundle_start_date >= '${startDate}' AND bundle_start_date <= '${endDate}' ${tabClause()}
-        ),
-        per_bundle_usage AS (
-          SELECT fb.sku, f.iccid, f.order_code, SUM(f.total_data_gb) as total_usage_gb, MAX(f.data_amount_gb) as total_plan_gb
-          FROM fact_data_usage f
-          JOIN filtered_bundles fb ON f.iccid = fb.iccid AND f.order_code = fb.order_code
-          WHERE 1=1 ${searchClause()}
-          GROUP BY 1, 2, 3
-        )
-        SELECT sku, COUNT(*) as active_sims, SUM(total_plan_gb) as total_plan_gb, SUM(total_usage_gb) as total_usage_gb,
-          CASE WHEN SUM(total_plan_gb) > 0 THEN (SUM(total_usage_gb) / SUM(total_plan_gb)) * 100 ELSE 0 END as avg_usage_pct
-        FROM per_bundle_usage GROUP BY 1 ORDER BY total_usage_gb DESC
+        ${bundlesCTE()}
+        SELECT sku, COUNT(*) as active_sims, SUM(data_amount_gb) as total_plan_gb, SUM(total_data_gb) as total_usage_gb,
+          CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END as avg_usage_pct
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        GROUP BY 1 ORDER BY total_usage_gb DESC
       `
       const result = await runQuery(sql)
       setSkuMetrics(result.map((r: any) => ({
@@ -426,28 +414,11 @@ export default function ThreeHKDataUsagePage() {
   const fetchTotals = async () => {
     try {
       const sql = `
-        WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type
-          FROM fact_data_usage
-          WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
-          GROUP BY iccid, order_code
-        ),
-        filtered_bundles AS (
-          SELECT iccid, order_code
-          FROM bundle_starts
-          WHERE bundle_start_date >= '${startDate}' AND bundle_start_date <= '${endDate}' ${tabClause()}
-        ),
-        per_bundle_usage AS (
-          SELECT f.iccid, f.order_code, SUM(f.total_data_gb) as total_usage, MAX(f.data_amount_gb) as capacity
-          FROM fact_data_usage f
-          JOIN filtered_bundles fb ON f.iccid = fb.iccid AND f.order_code = fb.order_code
-          WHERE 1=1 ${searchClause()}
-          GROUP BY 1, 2
-        )
-        SELECT SUM(total_usage) as total_usage, SUM(capacity) as total_capacity,
-          CASE WHEN SUM(capacity) > 0 THEN (SUM(total_usage) / SUM(capacity)) * 100 ELSE 0 END as avg_usage,
+        ${bundlesCTE()}
+        SELECT SUM(total_data_gb) as total_usage, SUM(data_amount_gb) as total_capacity,
+          CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END as avg_usage,
           COUNT(*) as total_count
-        FROM per_bundle_usage
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
       `
       const result = await runQuery(sql)
       if (result && result[0]) {
@@ -471,32 +442,13 @@ export default function ThreeHKDataUsagePage() {
     try {
       const offset = (pageNum - 1) * pageSize
       const sql = `
-        WITH bundle_starts AS (
-          SELECT iccid, order_code, MIN(first_report_date) as bundle_start_date, MAX(sku) as sku,
-            CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END as sku_type, MAX(activation_date) as activation_date
-          FROM fact_data_usage
-          WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')
-          GROUP BY iccid, order_code
-        ),
-        filtered_bundles AS (
-          SELECT iccid, order_code, sku, sku_type, bundle_start_date, activation_date
-          FROM bundle_starts
-          WHERE bundle_start_date >= '${startDate}' AND bundle_start_date <= '${endDate}' ${tabClause()}
-        ),
-        per_bundle_usage AS (
-          SELECT fb.sku, f.iccid, f.order_code, fb.sku_type, fb.bundle_start_date as first_report_date, fb.activation_date,
-            SUM(f.total_data_gb) as total_data_gb, MAX(f.data_amount_gb) as data_amount_gb, COUNT(*) as record_count
-          FROM fact_data_usage f
-          JOIN filtered_bundles fb ON f.iccid = fb.iccid AND f.order_code = fb.order_code
-          WHERE 1=1 ${searchClause()}
-          GROUP BY 1, 2, 3, 4, 5, 6
-        )
+        ${bundlesCTE()}
         SELECT order_code, iccid, sku, sku_type,
           COALESCE(data_amount_gb, 0) as data_amount_gb,
           COALESCE(total_data_gb, 0) as total_data_gb,
           CASE WHEN data_amount_gb > 0 THEN (total_data_gb / data_amount_gb) * 100 ELSE 0 END as usage_pct,
           first_report_date, activation_date, record_count
-        FROM per_bundle_usage
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
         ORDER BY ${sortConfig.key === "first_report_date" ? "first_report_date" : sortConfig.key} ${sortConfig.direction}
         LIMIT ${pageSize} OFFSET ${offset}
       `
