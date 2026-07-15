@@ -4838,3 +4838,28 @@ gotcha CRLF), chatbot (ncc_datapool, conversations/chat_messages, pickListing, s
 (app_settings config storage + flush-cache/template), scheduled (date). Re-sync KB: 8 updated v2, 0 trùng, 0 lỗi.
 Toàn bộ 28 tab wiki giờ ở mức "khỏi tra code" (query/cột/nguồn/gotcha) + KB đồng bộ (47 pages).
 Trạng thái: main == staging.
+
+## Session 94 (tiếp) — [Plan] Lập PLAN UX nâng cấp tab SP/hệ thống + đưa vào WORK.md
+Hiếu: gác lại tab analytics, lập plan update các tab CÒN LẠI (skus/ncc/countries/promotions/kb/info/chatbot/admin)
+theo tiêu chí: tiện lợi/tiện ích/thông minh/đầy đủ/cần thiết/dễ tiếp cận/hiện đại.
+- Khảo sát hiện trạng: đã có search/filter/export/modal; THIẾU toast/command-palette/skeleton/tooltip dùng chung;
+  dark mode chưa đồng bộ; dashboard-kit chỉ dùng vài trang analytics. Page lớn (admin 1836, ncc 1033, kb 992...).
+- Hiếu chốt: WAVE 0 (nền chung) TRƯỚC → đào sâu skus/ncc/kb/chatbot.
+- Đã tạo docs/plan-ux-tabs.md (chi tiết Wave 0: toast→skeleton→empty/help→design-kit+dark→URL-state→⌘K palette→
+  mobile; Wave 1 từng tab: skus detail-drawer/saved-views/bulk/import, ncc gap-dashboard/1-click/wizard, kb
+  semantic search/md editor/diff/hỏi-AI, chatbot gợi ý/lịch sử/export/feedback/agent picker).
+- Đã thêm TOÀN BỘ plan vào WORK.md (mục "🎨 PLAN UX") để nắm ngữ cảnh xuyên phiên; memory plan_ux_tabs.
+- CHƯA code — bước tiếp: Wave 0 mục 0.1 Toast.
+
+## ===== TỔNG KẾT PHIÊN (Session 94, 2026-07-15) =====
+Trạng thái: main == staging == fe4b720 (docs-only phiên này; app runtime không đổi).
+ĐÃ LÀM:
+  1. Wiki chi tiết 28 tab + tạo _analytics-data-model.md (mô hình dữ liệu chung: fact/dim, getAnalyticsSource
+     Fulfillment↔Created, cache, guard, thuật ngữ CM1, gotcha). Nâng cả tab SP/hệ thống (skus metadata s89,
+     ncc_datapool, kb tables/sync, chatbot conversations, admin app_settings...). Mức "khỏi tra code".
+  2. Sync KB: viết web/scripts/sync_wiki.mjs (Node port import_wiki.py — python msys build pydantic-core lỗi).
+     Fix bug parser CRLF (14 bản trùng title=tên file → xoá + sửa \r + chạy lại). kb_wiki_pages = 47 pages, 0 rác.
+  3. Lập PLAN UX nâng cấp tab SP/hệ thống (docs/plan-ux-tabs.md + WORK.md mục 🎨). Wave 0 nền chung trước, rồi
+     skus/ncc/kb/chatbot. Chưa code.
+  Memory mới: feedback_detailed_wiki, plan_ux_tabs.
+CÒN TREO: bắt đầu Wave 0.1 Toast khi Hiếu yêu cầu; (cũ) migration v17 B2C snapshot; cột % 3HK Simple/Weighted.
