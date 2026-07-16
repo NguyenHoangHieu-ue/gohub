@@ -39,8 +39,6 @@ const daysOfSku = (sku: string): number | null => {
   return mOld ? parseInt(mOld[1]) : null
 }
 
-// Giả định high-speed GB/ngày theo throttle của nhóm (spec NCC): 10mbps → 1.8GB, 5mbps → 1.6GB.
-const assumeGbPerDay = (group: string): number => /10\s*mbps/i.test(group) ? 1.8 : 1.6
 
 // Rút gọn tên nhóm tốc độ cho nhãn biểu đồ: "500MB high-speed · throttle 5 mbps" → "500MB·5mbps".
 const groupShort = (g: string) => g.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
@@ -82,6 +80,9 @@ interface SpeedGroupMetrics {
   total_plan_gb: number
   total_usage_gb: number
   avg_usage_pct: number
+  sim_days: number       // Σ(active_sims × số ngày gói) — mẫu số cho GB/ngày/SIM
+  actual_per_day: number // GB thực dùng/ngày/SIM (trọng số) = total_usage_gb ÷ sim_days
+  plan_per_day: number   // GB kế hoạch/ngày/SIM (trọng số) = total_plan_gb ÷ sim_days (từ data_amount_gb)
 }
 
 // Một dòng trong bảng "Data Usage by Country × Month (TB)".
@@ -334,13 +335,19 @@ export default function ThreeHKDataUsagePage() {
     for (const sm of skuMetrics) {
       const group = speedMap[sm.sku]?.group
       if (!group) continue   // bỏ SKU không xác định datatype
-      const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0 })
+      const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0 })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
       g.total_usage_gb += sm.total_usage_gb
+      const dd = daysOfSku(sm.sku)
+      if (dd && dd > 0) g.sim_days += sm.active_sims * dd
     }
     const list = Object.values(acc)
-    for (const g of list) g.avg_usage_pct = g.total_plan_gb > 0 ? (g.total_usage_gb / g.total_plan_gb) * 100 : 0
+    for (const g of list) {
+      g.avg_usage_pct  = g.total_plan_gb > 0 ? (g.total_usage_gb / g.total_plan_gb) * 100 : 0
+      g.actual_per_day = g.sim_days > 0 ? g.total_usage_gb / g.sim_days : 0
+      g.plan_per_day   = g.sim_days > 0 ? g.total_plan_gb  / g.sim_days : 0
+    }
     return list.sort((a, b) => a.speed_group.localeCompare(b.speed_group))
   }, [activeTab, skuMetrics, speedMap])
 
@@ -364,15 +371,18 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited") return []
     return speedGroups.map(sg => {
       const members = speedGroupMembers[sg.speed_group] ?? []
-      let usage = 0, simDays = 0
+      let usage = 0, plan = 0, simDays = 0
       for (const m of members) {
         const d = daysOfSku(m.sku)
         usage += m.total_usage_gb
+        plan  += m.total_plan_gb
         if (d && d > 0) simDays += m.active_sims * d
       }
       const actual = simDays > 0 ? usage / simDays : 0
-      const assume = assumeGbPerDay(sg.speed_group)   // spec NCC: 10mbps→1.8GB, 5mbps→1.6GB
-      return { name: groupShort(sg.speed_group), actual: +actual.toFixed(3), assume, usagePct: +sg.avg_usage_pct.toFixed(1) }
+      // Kế hoạch/ngày = tổng data_amount_gb ÷ tổng (SIM×ngày) — mức 3HK cấp/ngày (từ DB), KHÔNG hardcode
+      // theo throttle (spec cũ 1.6/1.8-theo-mbps BỊ NGƯỢC chiều A/B so với data_amount_gb thực tế).
+      const assume = simDays > 0 ? plan / simDays : 0
+      return { name: groupShort(sg.speed_group), actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
     })
   }, [activeTab, speedGroups, speedGroupMembers])
 
@@ -858,14 +868,15 @@ export default function ThreeHKDataUsagePage() {
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-indigo-500 uppercase tracking-wider text-right">GB/ngày/SIM</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Thực tế / Kế hoạch %</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loadingSKU ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse"><td colSpan={6} className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-full"></div></td></tr>
+                    <tr key={i} className="animate-pulse"><td colSpan={7} className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-full"></div></td></tr>
                   ))
                 ) : speedGroups.length > 0 ? (
                   speedGroups.map((sg, idx) => {
@@ -881,7 +892,12 @@ export default function ThreeHKDataUsagePage() {
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
                       <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sg.total_usage_gb)}</td>
                       <td className="px-6 py-3 text-right">
-                        <span className={cn("text-sm font-bold", sg.avg_usage_pct > 80 ? "text-rose-600" : sg.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
+                        <span className={cn("text-sm font-bold", sg.actual_per_day > sg.plan_per_day ? "text-rose-600" : "text-emerald-600")} title={`Kế hoạch ${sg.plan_per_day.toFixed(2)} GB/ngày/SIM`}>
+                          {sg.actual_per_day.toFixed(2)} GB
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <span className={cn("text-sm font-bold", sg.avg_usage_pct > 100 ? "text-rose-600" : sg.avg_usage_pct > 80 ? "text-amber-600" : "text-emerald-600")}>
                           {sg.avg_usage_pct.toFixed(1)}%
                         </span>
                       </td>
@@ -901,12 +917,12 @@ export default function ThreeHKDataUsagePage() {
                     </tr>
                     {expanded && (
                       <tr className="bg-slate-50/40">
-                        <td colSpan={6} className="px-6 py-3">
+                        <td colSpan={7} className="px-6 py-3">
                           <p className="text-[11px] text-slate-400 mb-2">
-                            Giả định (GB/ngày/SIM) = mức high-speed theo throttle (spec NCC): 10mbps → 1.8GB, 5mbps → 1.6GB.
+                            Kế hoạch (GB/ngày/SIM) = data_amount_gb ÷ số ngày gói (mức 3HK cấp/ngày, từ DB).
                             Thực tế = Total Actual ÷ Active SIMs ÷ số ngày gói.
-                            <span className="text-rose-600 font-semibold"> Đỏ</span> = thực tế vượt giả định,
-                            <span className="text-emerald-600 font-semibold"> xanh</span> = trong giả định.
+                            <span className="text-rose-600 font-semibold"> Đỏ</span> = thực tế vượt kế hoạch (SIM dùng quá mức 3HK cấp → chi phí datapool cao hơn dự kiến),
+                            <span className="text-emerald-600 font-semibold"> xanh</span> = trong kế hoạch.
                           </p>
                           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                             <table className="w-full text-left border-collapse">
@@ -915,7 +931,7 @@ export default function ThreeHKDataUsagePage() {
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Giả định (GB/ngày/SIM)</th>
+                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Kế hoạch (GB/ngày/SIM)</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
                                   <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">GB/ngày/SIM</th>
@@ -924,16 +940,17 @@ export default function ThreeHKDataUsagePage() {
                               <tbody className="divide-y divide-slate-50">
                                 {members.length > 0 ? members.map((m, j) => {
                                   const d = daysOfSku(m.sku)
-                                  const assumePerDay = assumeGbPerDay(sg.speed_group)   // spec theo throttle nhóm
+                                  // Kế hoạch/ngày = data_amount_gb ÷ ngày (từ DB) — mức 3HK cấp/ngày cho gói này.
+                                  const planPerDay = (d && d > 0 && m.active_sims > 0) ? m.total_plan_gb / m.active_sims / d : null
                                   const gbPerDaySim = (d && d > 0 && m.active_sims > 0) ? m.total_usage_gb / m.active_sims / d : null
-                                  const over = gbPerDaySim != null && gbPerDaySim > assumePerDay
+                                  const over = gbPerDaySim != null && planPerDay != null && gbPerDaySim > planPerDay
                                   return (
                                   <tr key={j} className="hover:bg-slate-50/50">
                                     <td className="px-4 py-2 font-mono text-xs text-slate-700">{m.sku}</td>
                                     <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{m.active_sims.toLocaleString()}</td>
                                     <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
                                     <td className="px-4 py-2 text-right text-slate-500 text-xs">
-                                      {`${assumePerDay.toFixed(1)} GB`}
+                                      {planPerDay == null ? "—" : `${planPerDay.toFixed(2)} GB`}
                                     </td>
                                     <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
                                     <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
@@ -955,7 +972,7 @@ export default function ThreeHKDataUsagePage() {
                     )
                   })
                 ) : (
-                  <tr><td colSpan={6} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu nhóm Unlimited trong kỳ này</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu nhóm Unlimited trong kỳ này</td></tr>
                 )}
               </tbody>
             </table>
@@ -969,9 +986,9 @@ export default function ThreeHKDataUsagePage() {
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
-              So sánh mức sử dụng theo nhóm — Thực tế (GB/ngày/SIM) vs Giả định
+              So sánh mức sử dụng theo nhóm — Thực tế (GB/ngày/SIM) vs Kế hoạch
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt giả định high-speed của nhóm, <span className="text-emerald-600 font-semibold">xanh</span> = trong giả định. Đường nền xám = mức giả định.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của nhóm (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
           </div>
           <div className="p-4" style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -981,7 +998,7 @@ export default function ThreeHKDataUsagePage() {
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" width={60} />
                 <Tooltip formatter={(v: number, n: string) => [`${Number(v).toFixed(2)} GB`, n]} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="assume" name="Giả định (GB/ngày)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="assume" name="Kế hoạch (GB/ngày)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="actual" name="Thực tế (GB/ngày/SIM)" radius={[4, 4, 0, 0]}>
                   {speedChart.map((d, i) => (
                     <Cell key={i} fill={d.actual > d.assume ? "#e11d48" : "#10b981"} />

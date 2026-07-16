@@ -269,3 +269,33 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
   - DB hiện chỉ có **Jan–Jun 2026** (6 tháng) → bảng render động theo tháng CÓ THẬT (ảnh NCC gốc 10 tháng là data cũ hơn).
 - **Đối chiếu** (T6/2026): China 131,91 · Japan 15,00 · South Korea 6,88 · **GRAND TOTAL 186,80** TB — khớp DB thật.
 - **File**: `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` (state `countryMonths/countryRows/countryGrand`, `fmtTB`, `monthLabel`, `exportCountryCsv`).
+
+---
+
+## 7. Tab "Unlimited" — Breakdown theo gói (audit cột + góc nhìn doanh nghiệp, s95)
+
+**Nguồn dữ liệu (fact_data_usage, gom qua `bundlesCTE` → `fetchSKUMetrics`)** — mỗi SKU:
+- `active_sims` = `COUNT(*)` bundle (iccid+order_code có usage trong kỳ).
+- `total_plan_gb` = `SUM(data_amount_gb)`. **Với gói Unlimited, `data_amount_gb` KHÔNG phải 9999** mà = **mức 3HK cấp/ngày × số ngày** (đã đối chiếu DB: **A = 1.8 GB/ngày, B = 1.6 GB/ngày**; mã cũ IP1/PY→1.8, IP2→1.6). Đây là "hạn mức mềm" (fair-use), không phải cap cứng.
+- `total_usage_gb` = `SUM(total_data_gb)` — data thực dùng (cả phần đã throttle vẫn tính chi phí datapool).
+- `avg_usage_pct` = `total_usage_gb / total_plan_gb × 100`.
+- Số ngày gói: `daysOfSku(sku)` (mã mới `…UNL05`→5; mã cũ `…05D`, bỏ token P1/P2 trước).
+
+**Bảng "Unlimited — Breakdown theo gói" (cấp nhóm high-speed × throttle):**
+| Cột | Nguồn / công thức |
+|---|---|
+| Nhóm tốc độ | `speedMap[sku].group` (API `3hk-speed-map`, đọc `throttle_speed` Supabase: A="drop to 5 mbps", B="drop to 10 mbps"; mã cũ theo P-code) |
+| Active SIMs | `Σ active_sims` các SKU trong nhóm |
+| Total Plan (GB) | `Σ total_plan_gb` (= Σ data_amount_gb — hạn mức mềm) |
+| Total Actual (GB) | `Σ total_usage_gb` |
+| **GB/ngày/SIM** (thêm s95) | `Σ total_usage_gb ÷ Σ(active_sims × ngày)` — **KPI chi phí chính**; đỏ nếu > kế hoạch/ngày |
+| Thực tế / Kế hoạch % | `avg_usage_pct` (= actual/plan). >100% = SIM dùng VƯỢT hạn mức 3HK cấp → chi phí datapool cao hơn dự kiến |
+| Efficiency | thanh bar theo % (cap 100%) |
+
+**Bảng chi tiết (mở "Chi tiết"):** SKU · Active SIMs · Total Plan (GB) · **Kế hoạch (GB/ngày/SIM)** = `total_plan_gb ÷ active_sims ÷ ngày` (= data_amount_gb ÷ ngày) · Total Actual (GB) · Avg. Usage % · **GB/ngày/SIM** = `total_usage_gb ÷ active_sims ÷ ngày`. Đỏ = thực tế > kế hoạch.
+
+**🐛 BUG đã fix (s95):** trước đây cột "Giả định (GB/ngày/SIM)" + baseline biểu đồ dùng hằng `assumeGbPerDay` (10mbps→1.8, 5mbps→1.6). Nhưng `throttle_speed` thật: A=5mbps, B=10mbps → hằng cho A=1.6, B=1.8, **NGƯỢC** với `data_amount_gb` thật (A=1.8, B=1.6). ⇒ cùng 1 dòng, "Giả định" mâu thuẫn với "Total Plan"/"Usage %". **Fix:** bỏ `assumeGbPerDay`, lấy **kế hoạch/ngày = `data_amount_gb ÷ ngày`** (số thật của 3HK) ở mọi nơi → "Kế hoạch", "Total Plan", "Usage %", "GB/ngày/SIM" nhất quán tuyệt đối.
+
+**Góc nhìn doanh nghiệp:**
+- Gói Unlimited **không có cap cứng** → "Usage %" là **tỉ lệ Thực tế/Kế hoạch (cost vs budget)**, **>100% là bình thường** (nhiều SKU 120–355%) và nghĩa là **vượt chi phí datapool dự kiến** → rủi ro biên lợi nhuận. KPI cần theo dõi là **GB/ngày/SIM** (đã đưa lên cả cấp nhóm + summary card), không phải "Usage %" kiểu gói Fixed.
+- Ngưỡng màu Usage% đổi mốc 100/80 (đỏ khi >100% = vượt budget) thay cho 80/50 (vốn hợp với gói Fixed).

@@ -4938,3 +4938,20 @@ Verify: tsc · vitest 28/28 · next build PASS.
    - 3hk-usage đặc biệt: default kỳ set ASYNC (max date), nên dùng appliedTick (bump khi set default + khi bấm Lọc)
      làm dep thay ngày → initial load vẫn chạy, đổi ngày thủ công KHÔNG fetch tới khi bấm Lọc.
    Verify: tsc · vitest 28/28 · next build PASS.
+
+## Session 95 (tiếp) — [3HK] Audit tab Unlimited + FIX baseline "Giả định" bị ngược
+Hiếu: check kỹ mọi cột tab Unlimited (DB → cột tự tính) + góc nhìn doanh nghiệp.
+Đối chiếu DB thật (fact_data_usage + Supabase skus.throttle_speed):
+- data_amount_gb của gói Unlimited KHÔNG phải 9999 mà = mức 3HK cấp/ngày × số ngày (A=1.8/ngày, B=1.6/ngày;
+  IP1/PY=1.8, IP2=1.6). throttle_speed thật: A="drop to 5 mbps", B="drop to 10 mbps".
+- BUG: cột "Giả định (GB/ngày/SIM)" + baseline chart dùng hằng assumeGbPerDay (10mbps→1.8, 5mbps→1.6) →
+  A=1.6, B=1.8 — NGƯỢC với data_amount_gb thật (A=1.8, B=1.6). Cùng 1 dòng "Giả định" mâu thuẫn "Total Plan"/"Usage %".
+FIX (page.tsx tab 3HK):
+- Bỏ hằng assumeGbPerDay. Kế hoạch/ngày = data_amount_gb ÷ ngày (số thật 3HK) ở: cột chi tiết (đổi tên
+  "Giả định"→"Kế hoạch"), baseline biểu đồ (assume = Σplan ÷ Σ(sim×ngày)), tô màu đỏ/xanh (over vs plan).
+- Thêm cột cấp NHÓM "GB/ngày/SIM" (actual_per_day, trọng số) — KPI chi phí chính (trước chỉ có ở per-SKU + card).
+- Đổi nhãn nhóm "Avg. Usage %"→"Thực tế / Kế hoạch %"; ngưỡng màu 100/80 (đỏ khi >100%=vượt budget datapool)
+  thay 80/50 (mốc gói Fixed). Cập nhật ghi chú giải thích.
+Góc nhìn DN: gói Unlimited không có cap cứng → Usage% = cost/budget, >100% BÌNH THƯỜNG = vượt chi phí datapool
+dự kiến (rủi ro margin); KPI đúng là GB/ngày/SIM. Cập nhật wiki analytics-3hk-usage §7.
+Verify: tsc · next build PASS.
