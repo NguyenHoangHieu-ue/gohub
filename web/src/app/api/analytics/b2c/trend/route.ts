@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       margin:         parseFloat(r.margin         || "0"),
       margin_percent: parseFloat(r.margin_percent || "0"),
     }))
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

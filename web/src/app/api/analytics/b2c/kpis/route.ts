@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
 // CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
       { label: "CM1", value: current_gpm2, lastPeriod: prev_gpm2, change: chg(current_gpm2, prev_gpm2), isPositive: current_gpm2 >= prev_gpm2, isCurrency: true },
       { label: "CM1 %", value: current_gpm2_percent, lastPeriod: prev_gpm2_percent, change: current_gpm2_percent - prev_gpm2_percent, isPositive: current_gpm2_percent >= prev_gpm2_percent, isCurrency: false },
     ]
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

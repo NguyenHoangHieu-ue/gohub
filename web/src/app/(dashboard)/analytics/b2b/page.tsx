@@ -126,7 +126,7 @@ export default function B2BPerformance() {
     }
   }
 
-  const fetchData = async () => {
+  const fetchData = async (fresh = false) => {
     setLoading(true); setError(null)
     try {
       const queryParams = new URLSearchParams()
@@ -134,13 +134,16 @@ export default function B2BPerformance() {
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
       queryParams.append("comparisonType", "previous_period")
+      // fresh=true (sau khi lưu Cost/Target) → bỏ qua cache server, lấy số tươi ngay.
+      if (fresh) queryParams.append("nocache", "1")
+      const nc = fresh ? "&nocache=1" : ""
 
       const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
       ])
 
@@ -307,7 +310,7 @@ export default function B2BPerformance() {
             <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
               <Settings className="w-3.5 h-3.5" />Manage Costs
             </button>
-            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
+            <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>
             <button onClick={exportToPDF} disabled={exporting} className={cn("flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50", exporting && "animate-pulse")}>
@@ -770,7 +773,7 @@ export default function B2BPerformance() {
           </>
         )}
       </div>
-      <CostManagementModal isOpen={showCostModal} onClose={() => setShowCostModal(false)} onSave={() => fetchData()} initialMonth={startDate.slice(0, 7)} />
+      <CostManagementModal isOpen={showCostModal} onClose={() => setShowCostModal(false)} onSave={() => fetchData(true)} initialMonth={startDate.slice(0, 7)} />
     </div>
   )
 }

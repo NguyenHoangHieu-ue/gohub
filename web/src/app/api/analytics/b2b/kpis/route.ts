@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
   getMonthsInRange, getChannelCostsForMonths, getDaysInRange, getDaysInMonth,
-  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
       { label: "CM1",           value: cGpm2, lastPeriod: pGpm2, change: pct(cGpm2, pGpm2), isPositive: cGpm2 >= pGpm2, isCurrency: true  },
       { label: "CM1 %",         value: cRev > 0 ? (cGpm2/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pGpm2/pRev)*100 : 0, change: (cRev > 0 ? (cGpm2/cRev)*100 : 0) - (pRev > 0 ? (pGpm2/pRev)*100 : 0), isPositive: (cRev > 0 ? (cGpm2/cRev)*100 : 0) >= (pRev > 0 ? (pGpm2/pRev)*100 : 0), isCurrency: false },
     ]
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter,
-  getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
     })
 
     return trend
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, getPartnerTiers,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
     }).sort((a, b) => b.revenue - a.revenue)
 
     return result
-   }, QUERY_TTL_MIN)
+   }, QUERY_TTL_MIN, noCache(req))
 
    return NextResponse.json(result, { headers: CACHE_HEADERS })
   } catch (err: any) {

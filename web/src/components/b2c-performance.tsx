@@ -260,7 +260,7 @@ export function B2CPerformance() {
     }
   }
 
-  const fetchData = async () => {
+  const fetchData = async (fresh = false) => {
     setLoading(true)
     setError(null)
     try {
@@ -268,6 +268,8 @@ export function B2CPerformance() {
       if (startDate) queryParams.append("startDate", startDate)
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
+      // fresh=true (sau khi lưu Cost/Target) → bỏ qua cache server, lấy số tươi ngay.
+      if (fresh) queryParams.append("nocache", "1")
 
       // Add advanced filters
       selectedVendors.forEach(v => queryParams.append("vendors", v))
@@ -1458,7 +1460,7 @@ export function B2CPerformance() {
       <CostManagementModal
         isOpen={showCostModal}
         onClose={() => setShowCostModal(false)}
-        onSave={() => fetchData()}
+        onSave={() => fetchData(true)}
         initialMonth={startDate.slice(0, 7)}
         scope="b2c"
       />

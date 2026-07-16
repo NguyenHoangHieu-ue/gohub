@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
-  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       }
       const previous = await fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn)
       return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

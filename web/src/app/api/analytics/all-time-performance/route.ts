@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate, noCache } from "@/lib/analytics-helpers"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
       }
 
       return { monthly: processRows(false), quarterly: processRows(true) }
-    })
+    }, undefined, noCache(req))
 
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err: any) {

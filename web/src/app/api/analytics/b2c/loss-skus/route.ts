@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 
 // Port intel /api/analytics/b2c/loss-skus: top 10 SKU B2C bị LỖ (margin < 0) trong kỳ.
 // Dùng cho intel B2CPerformance (B2C-2). Advanced filters (vendors/subChannels/productTypes) qua getBODFilters.
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       revenue: parseFloat(r.revenue || "0"),
       loss:    Math.abs(parseFloat(r.loss || "0")),
     }))
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

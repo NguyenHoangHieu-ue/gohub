@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isCronReq, noCache } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
@@ -311,7 +311,7 @@ export async function GET(req: NextRequest) {
       }
 
       return { markets, customers, channels, profitByChannel, customerSource, customerBreakdown, customerError }
-    })
+    }, undefined, noCache(req))
 
     // KPI targets: nhập ở KPI / Target. Budget: lấy từ Manage Costs → B2C Channels.
     let targets: Record<string, { vn: number; us: number; total: number }> = {}

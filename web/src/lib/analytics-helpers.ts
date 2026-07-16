@@ -17,7 +17,19 @@ export async function cachedQuery<T>(
   key: string,
   fn:  () => Promise<T>,
   ttlMinutes = TTL_L2,
+  bypass = false,   // true → bỏ qua ĐỌC cache (L1+L2), tính lại tươi; VẪN ghi cache mới (re-warm).
 ): Promise<T> {
+  if (bypass) {
+    const data = await fn()
+    _cache.set(key, { data, exp: Date.now() + TTL_L1 })
+    try {
+      await supabaseAdmin
+        .from("analytics_query_cache")
+        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+    } catch { /* Supabase lỗi → vẫn trả data */ }
+    return data
+  }
+
   // L1 hit
   const hit = _cache.get(key)
   if (hit && Date.now() < hit.exp) return hit.data as T
@@ -165,6 +177,12 @@ const _urlReg = new Set<string>()
 export function isCronReq(req: NextRequest): boolean {
   if (!process.env.CRON_SECRET) return false
   return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+}
+
+// FE thêm ?nocache=1 (sau khi lưu cost/target) → route bỏ qua đọc cache, tính lại tươi + re-warm.
+// Dùng: cachedQuery(key, fn, ttl, noCache(req)).
+export function noCache(req: NextRequest): boolean {
+  return req.nextUrl.searchParams.get("nocache") === "1"
 }
 
 // Gọi đầu mỗi GET endpoint analytics cacheable. Cho cron (Bearer) bypass session + ghi URL để prewarm.

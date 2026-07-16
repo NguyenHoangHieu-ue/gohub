@@ -7,7 +7,7 @@ import {
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
   getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
-  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -189,7 +189,7 @@ export async function GET(req: NextRequest) {
     })
 
     return result
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
