@@ -165,7 +165,7 @@ Còn **THIẾU**: toast · command palette · skeleton · tooltip dùng chung; *
 
 ### 🅰️ Wave 0 — Nền dùng chung (nâng mọi tab cùng lúc) — thứ tự triển khai
 1. **0.1 Toast** ✅ **XONG (s95)** — `components/toast.tsx` (`ToastProvider` + `useToast`, gắn ở `(dashboard)/layout`, stack góc phải, tự tắt 3s, dark-mode). Đã thay toàn bộ `alert()` (cs-troubleshoot·orders·products·scheduled·chatbot·ncc). **Bước tiếp: 0.2 Skeleton.**
-2. **0.2 Skeleton** (`components/skeleton.tsx`) — thay spinner trơ khi tải list. *(tiện lợi, hiện đại)*
+2. **0.2 Skeleton** ✅ **XONG (s95)** — `components/skeleton.tsx` (`Skeleton`/`SkeletonText`/`SkeletonTable`/`SkeletonCards`/`SkeletonList`, dark-mode). Áp `SkeletonTable` cho countries·promotions·kb (docs+wiki). skus·ncc đã có row-skeleton sẵn (giữ). **Bước tiếp: 0.6 Empty/Help + tooltip** (hoặc 0.3 ⌘K).
 3. **0.6 Keyboard + Empty/Help** (`/` focus search, `Esc` đóng, ↑↓ duyệt; `empty-state.tsx` + `tooltip.tsx`). *(tiện lợi, đầy đủ, dễ tiếp cận)*
 4. **0.5 Design-kit + Dark mode** — chuẩn hoá token từ `dashboard-kit` + bổ sung `dark:` cho 8 tab. *(hiện đại, dễ tiếp cận)*
 5. **0.4 URL-state filter** (`useUrlState` → lưu filter/search/page vào query param). *(tiện lợi)*
@@ -182,7 +182,7 @@ Còn **THIẾU**: toast · command palette · skeleton · tooltip dùng chung; *
 - Mỗi mục = **1 commit**, **staging-first**, verify **tsc·vitest·build**, deploy dần.
 - Sau mỗi thay đổi: cập nhật wiki tab tương ứng (`docs/wiki/Tab/`) + sync KB.
 - **KHÔNG đụng tab analytics**; giữ nguyên nghiệp vụ/dữ liệu — đây là lớp UX/tiện ích.
-- **Bước tiếp theo**: Wave 0 mục **0.2 Skeleton** (0.1 Toast đã xong s95).
+- **Bước tiếp theo**: Wave 0 mục **0.6 Empty/Help + tooltip** hoặc **0.3 Command Palette ⌘K** (0.1 Toast + 0.2 Skeleton đã xong s95).
 
 ---
 

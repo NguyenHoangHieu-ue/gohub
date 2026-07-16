@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Info, Search } from "lucide-react"
+import { SkeletonTable } from "@/components/skeleton"
 
 interface Country      { code: string; name: string; name_vn: string | null }
 interface SupportCountry {
@@ -120,7 +121,7 @@ export default function InfoPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Đang tải...</div>
+        <SkeletonTable rows={10} cols={3} />
       ) : activeTab === "countries" ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">

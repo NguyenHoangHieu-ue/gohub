@@ -4916,3 +4916,10 @@ CÒN TREO: Wave 0.2 Skeleton (bước tiếp Plan UX); cột % 3HK Simple/Weight
 - GHI NHẬN (chưa sửa, cần Hiếu xác nhận): tab **B2B KHÔNG hiển thị dòng target** nào (chỉ dùng projectionFactor);
   target theo kênh (analytics_target_planning) đang xem ở TAB TARGETS. Nếu Hiếu muốn thêm target-vs-actual lên B2B → làm riêng.
 Verify: tsc · vitest 28/28 · next build PASS.
+
+## Session 95 (tiếp) — Wave 0.2 Skeleton
+- Tạo components/skeleton.tsx: Skeleton (primitive animate-pulse dark-mode) + SkeletonText/SkeletonTable/
+  SkeletonCards/SkeletonList. SkeletonTable = header mờ + rows×cols khớp bảng list.
+- Áp SkeletonTable: countries (thay "Đang tải..." text) · promotions (thay 6-block cơ bản) · kb docs (cols5)
+  + kb wiki pages (cols4). skus·ncc ĐÃ có row-skeleton trong <tbody> sẵn (khớp cột) → giữ nguyên, không đụng.
+- Verify: tsc · next build PASS. Bước tiếp Plan UX: 0.6 Empty/Help+tooltip hoặc 0.3 ⌘K palette.

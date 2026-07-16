@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { Gift, Search } from "lucide-react"
+import { SkeletonTable } from "@/components/skeleton"
 
 interface Promotion {
   product_code:        string
@@ -129,9 +130,7 @@ export default function PromotionsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
-        </div>
+        <SkeletonTable rows={8} cols={6} />
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center text-gray-400">
           {search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}

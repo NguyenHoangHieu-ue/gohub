@@ -13,6 +13,7 @@ import type { MrpPlan } from "@/lib/mrp"
 import { DEPT_LABELS, type Department } from "@/lib/kb"
 import { ConfirmModal } from "@/components/confirm-modal"
 import { MermaidBlock  } from "@/components/mermaid-block"
+import { SkeletonTable } from "@/components/skeleton"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface KBDoc {
@@ -402,7 +403,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
       </div>
 
       {loading ? (
-        <div className="space-y-2">{[...Array(4)].map((_,i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse"/>)}</div>
+        <SkeletonTable rows={6} cols={5} />
       ) : docs.length === 0 ? (
         <div className="py-12 text-center text-gray-400">Chưa có tài liệu nào</div>
       ) : (
@@ -640,7 +641,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       </div>
 
       {loading ? (
-        <div className="space-y-2">{[...Array(4)].map((_,i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse"/>)}</div>
+        <SkeletonTable rows={6} cols={4} />
       ) : pages.length === 0 ? (
         <div className="py-16 text-center text-gray-400"><PenLine size={32} className="mx-auto mb-3 text-gray-300"/><p>Chưa có wiki page nào. Bấm "Tạo trang" để bắt đầu.</p></div>
       ) : (
