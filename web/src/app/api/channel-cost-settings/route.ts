@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // GET /api/channel-cost-settings?month=YYYY-MM → { [channel]: mode }
 export async function GET(req: NextRequest) {
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
         { onConflict: "channel,month", ignoreDuplicates: false }
       )
     if (error) throw new Error(error.message)
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error("[channel-cost-settings POST]", err.message)

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // ── Quarter helpers ─────────────────────────────────────────────────────────
 function getQuarterMonths(quarter: string): string[] {
@@ -175,6 +176,8 @@ export async function POST(req: NextRequest) {
       .upsert(rows, { onConflict: "month,channel", ignoreDuplicates: false })
 
     if (error) throw new Error(error.message)
+    // Target thay đổi → xoá cache analytics (targets-summary + KPI cache 12h).
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error("[planning/targets POST]", err.message)

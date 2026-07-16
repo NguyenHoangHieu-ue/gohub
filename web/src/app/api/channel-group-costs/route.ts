@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // GET /api/channel-group-costs?month=YYYY-MM&group=B2B
 export async function GET(req: NextRequest) {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
       .select("id")
       .single()
     if (error) throw new Error(error.message)
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true, id: data?.id })
   } catch (err: any) {
     console.error("[channel-group-costs POST]", err.message)

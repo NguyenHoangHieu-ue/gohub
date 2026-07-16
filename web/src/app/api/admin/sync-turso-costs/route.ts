@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 function tursoHttpUrl(url: string): string {
   return url.replace(/^libsql:\/\//, "https://").replace(/^http:\/\//, "https://")
@@ -63,6 +64,7 @@ export async function POST(_req: NextRequest) {
       .insert(insertRows)
     if (insError) throw new Error(`Insert error: ${insError.message}`)
 
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true, synced: insertRows.length, months: months.length })
   } catch (err: any) {
     console.error("[sync-turso-costs]", err.message)

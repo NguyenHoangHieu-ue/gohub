@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // GET /api/channel-costs?month=YYYY-MM → { [channel]: { ads, platformFee, sponsorProducts, media } }
 export async function GET(req: NextRequest) {
@@ -69,6 +70,8 @@ export async function POST(req: NextRequest) {
         { onConflict: "channel,month", ignoreDuplicates: false }
       )
     if (error) throw new Error(error.message)
+    // Cost thay đổi → xoá cache analytics (KPI CM1/opCost cache 12h theo ngày, không theo cost).
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error("[channel-costs POST]", err.message)

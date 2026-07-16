@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // b2c_kpi_targets = { [month "YYYY-MM"]: { vn, us, total } } — target doanh thu B2C theo tháng × thị trường.
 
@@ -26,5 +27,7 @@ export async function POST(req: Request) {
     value: JSON.stringify(body ?? {}),
     category: "analytics",
   }, { onConflict: "key" })
+  // B2C KPI target đọc trong /api/analytics/b2c/monthly (cache 12h) → xoá cache để dashboard cập nhật ngay.
+  await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({ ok: true })
 }

@@ -4901,3 +4901,18 @@ tab 3HK giống ảnh NCC; (4) thêm agent chatbot truy xuất TOÀN BỘ bảng
 Verify mọi bước: tsc PASS · vitest 28/28 · next build PASS (cần NODE_OPTIONS max-old-space 6GB do máy OOM ở page-data,
 không phải lỗi code). CHƯA push origin (quy tắc s76 — chờ Hiếu duyệt).
 CÒN TREO: Wave 0.2 Skeleton (bước tiếp Plan UX); cột % 3HK Simple/Weighted (cũ).
+
+## Session 95 (tiếp) — Push + FIX B2B/B2C không phản ánh Manager Costs & KPI/Target
+- Push staging (4a77012) rồi tiếp.
+- BUG Hiếu báo: điền Manager Costs (Cost Management) + KPI/Target → tab B2B/B2C KHÔNG đổi.
+  GỐC RỄ: các route KPI (b2b/kpis, b2c/monthly...) bọc kết quả trong cachedQuery TTL 12h (QUERY_TTL_MIN),
+  KEY chỉ theo NGÀY — KHÔNG theo cost/target. Các route LƯU cost/target KHÔNG hề xoá cache → sau khi lưu,
+  tab đọc bản cache cũ tới 12h. (opCost→CM1 nằm TRONG payload cached của b2b/kpis; B2C KPI target đọc từ
+  app_settings.b2c_kpi_targets trong b2c/monthly cached; per-channel cost/group cost tương tự.)
+  FIX: gọi flushAnalyticsCache() sau MỌI mutation cost/target (xoá L1 in-mem + L2 supabase analytics_query_cache):
+    channel-costs POST · channel-group-costs POST + [id] DELETE · channel-cost-settings POST ·
+    planning/targets POST · config/b2c-kpi-targets POST · admin/sync-turso-costs POST.
+  Sau fix: lưu xong → cache xoá → lần load kế TÍNH LẠI tươi (L1 per-instance còn tối đa 5' — chấp nhận, trước là 12h).
+- GHI NHẬN (chưa sửa, cần Hiếu xác nhận): tab **B2B KHÔNG hiển thị dòng target** nào (chỉ dùng projectionFactor);
+  target theo kênh (analytics_target_planning) đang xem ở TAB TARGETS. Nếu Hiếu muốn thêm target-vs-actual lên B2B → làm riêng.
+Verify: tsc · vitest 28/28 · next build PASS.

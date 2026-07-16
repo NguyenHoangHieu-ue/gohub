@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // DELETE /api/channel-group-costs/:id
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -17,6 +18,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       .delete()
       .eq("id", params.id)
     if (error) throw new Error(error.message)
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error("[channel-group-costs DELETE]", err.message)
