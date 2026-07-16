@@ -64,7 +64,9 @@ export default function OrderManagementPage() {
 
   useEffect(() => {
     fetchOrders()
-  }, [page, startDate, endDate, selectedChannel, selectedStaff, selectedOrderSource, viewMode, selectedCustomerTier, selectedChannelGroup])
+    // Bỏ startDate/endDate khỏi deps — ngày chỉ áp khi bấm "Lọc" (tránh lọc liền mỗi lần đổi ngày).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, selectedChannel, selectedStaff, selectedOrderSource, viewMode, selectedCustomerTier, selectedChannelGroup])
 
   const fetchChannels = async (channelGroup?: string, tier?: string) => {
     try {
@@ -483,12 +485,21 @@ export default function OrderManagementPage() {
             <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end pb-0.5" />
           </form>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button
-              onClick={handleReset}
-              className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Reset Filters
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleReset}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Reset Filters
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPage(1); fetchOrders() }}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+              >
+                Lọc
+              </button>
+            </div>
             <div className="flex items-center gap-2 text-xs text-slate-400 italic">
               <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />
               {isLoading ? "Updating..." : "Updated"}

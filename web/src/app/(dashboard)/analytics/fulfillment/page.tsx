@@ -42,7 +42,7 @@ export default function FulfillmentReport() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
 
-  useEffect(() => { fetchFulfillmentData() }, [startDate, endDate]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchFulfillmentData() }, []) // eslint-disable-line react-hooks/exhaustive-deps — lọc theo ngày chỉ chạy khi bấm "Lọc"
 
   const fetchFulfillmentData = async () => {
     setLoading(true); setError(null)
@@ -112,6 +112,7 @@ export default function FulfillmentReport() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
+          <button onClick={() => fetchFulfillmentData()} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
           <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
             <Download className="w-4 h-4" />Export CSV
           </button>

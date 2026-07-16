@@ -88,7 +88,7 @@ export default function DashboardHome() {
 
   const projection = getProjectionInfo()
 
-  useEffect(() => { fetchData() }, [startDate, endDate, dateColumn, companyCode]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [dateColumn, companyCode]) // eslint-disable-line react-hooks/exhaustive-deps — ngày chỉ áp khi bấm "Lọc"
 
   const fetchData = async () => {
     setIsLoading(true); setError(null)
@@ -275,6 +275,7 @@ export default function DashboardHome() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="sm:self-end" />
+          <button onClick={() => fetchData()} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95 sm:self-end">Lọc</button>
           <div className="flex items-center justify-between sm:justify-start gap-4">
             <button onClick={() => {
               const today = new Date(); const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)

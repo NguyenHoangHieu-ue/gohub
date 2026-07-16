@@ -85,7 +85,7 @@ export default function CSTroubleshootReport() {
     }
   }
 
-  useEffect(() => { fetchData() }, [dateRange, channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps — ngày chỉ áp khi bấm "Lọc"
 
   if (error) {
     return (
@@ -119,6 +119,7 @@ export default function CSTroubleshootReport() {
                 <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="bg-transparent border-none text-[10px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
               </div>
               <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
+              <button onClick={() => fetchData()} className="px-4 py-2 md:py-2.5 bg-blue-600 text-white rounded-xl text-[10px] md:text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
               <div className="flex items-center gap-2 w-full md:w-auto">
                 <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[10px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500/20 flex-1 md:flex-none">
                   <option value="All">All Channels</option>

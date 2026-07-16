@@ -131,6 +131,8 @@ export default function ThreeHKDataUsagePage() {
   // Để rỗng ban đầu → mount effect đặt kỳ = đầu-tháng(max-data) .. max-data (3HK có thể chậm sync vài tháng).
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
+  // Ngày chỉ áp khi bấm "Lọc" (không tự lọc mỗi lần đổi ngày). appliedTick bump → chạy lại query.
+  const [appliedTick, setAppliedTick] = useState(0)
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataUsageRecord; direction: "asc" | "desc" }>({ key: "first_report_date", direction: "desc" })
 
   const [skuSort, setSkuSort] = useState<{ key: keyof SKUMetrics; direction: "asc" | "desc" }>({ key: "total_usage_gb", direction: "desc" })
@@ -181,10 +183,10 @@ export default function ThreeHKDataUsagePage() {
           const p = (n: number) => String(n).padStart(2, "0")
           const endStr   = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-${p(maxD.getUTCDate())}`
           const startStr = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-01`
-          setStartDate(startStr); setEndDate(endStr); return
+          setStartDate(startStr); setEndDate(endStr); setAppliedTick(t => t + 1); return
         }
       } catch (e) { console.error("Error fetching 3hk max date:", e) }
-      const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate)
+      const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate); setAppliedTick(t => t + 1)
     })()
   }, [])
 
@@ -285,7 +287,7 @@ export default function ThreeHKDataUsagePage() {
     }
     loadAllData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, debouncedSearch, sortConfig, activeTab])
+  }, [appliedTick, debouncedSearch, sortConfig, activeTab])
 
   const sortedSkuMetrics = useMemo(() => {
     const items = [...skuMetrics]
@@ -637,6 +639,9 @@ export default function ThreeHKDataUsagePage() {
           </div>
 
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
+
+          <button onClick={() => { setPage(1); setAppliedTick(t => t + 1) }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
 
           <button onClick={() => { setPage(1); fetchTotals(); fetchSKUMetrics(); fetchSKUTypeMetrics(); fetchRecords(1, true) }}
             className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">

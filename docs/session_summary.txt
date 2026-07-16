@@ -4923,3 +4923,18 @@ Verify: tsc · vitest 28/28 · next build PASS.
 - Áp SkeletonTable: countries (thay "Đang tải..." text) · promotions (thay 6-block cơ bản) · kb docs (cols5)
   + kb wiki pages (cols4). skus·ncc ĐÃ có row-skeleton trong <tbody> sẵn (khớp cột) → giữ nguyên, không đụng.
 - Verify: tsc · next build PASS. Bước tiếp Plan UX: 0.6 Empty/Help+tooltip hoặc 0.3 ⌘K palette.
+
+## Session 95 (tiếp) — Cache-buster (thấy đổi ngay) + Filter thời gian bấm "Lọc"
+1. CACHE-BUSTER: cachedQuery thêm tham số bypass (bỏ đọc L1/L2, tính tươi + re-warm). Helper noCache(req)
+   đọc ?nocache=1. Áp 10 route cached (b2b kpis/performance/strategic/trend · b2c kpis/loss-skus/monthly/
+   performance/trend · all-time). FE: b2b page + b2c-performance → fetchData(fresh) refetch nocache=1 khi
+   onSave Manage Costs (b2b page Apply Filters onClick sửa () => fetchData() để không nuốt MouseEvent thành fresh).
+   → Sau khi lưu cost, tab tính lại NGAY (không chờ 5' L1 / 12h L2).
+2. FILTER THỜI GIAN — bấm "Lọc" mới lọc (Hiếu: đổi ngày không tự lọc liền):
+   - Nhiều tab ĐÃ đúng sẵn (Apply Filters, ngày KHÔNG trong deps fetch): b2b, bod, all-time, channels,
+     customers, products, staff, vendors, b2c-performance → giữ nguyên.
+   - SỬA 6 tab đang auto-fetch khi đổi ngày: fulfillment, dashboard(page.tsx), orders, 3hk-usage, website,
+     cs-troubleshoot → bỏ startDate/endDate (hoặc dateRange) khỏi deps useEffect + thêm nút "Lọc" cạnh DatePresets.
+   - 3hk-usage đặc biệt: default kỳ set ASYNC (max date), nên dùng appliedTick (bump khi set default + khi bấm Lọc)
+     làm dep thay ngày → initial load vẫn chạy, đổi ngày thủ công KHÔNG fetch tới khi bấm Lọc.
+   Verify: tsc · vitest 28/28 · next build PASS.
