@@ -5,18 +5,21 @@ import { Sidebar }          from "@/components/sidebar"
 import { SidebarMain }      from "@/components/sidebar-main"
 import { SidebarProvider }  from "@/components/sidebar-context"
 import { HeartbeatProvider } from "@/components/heartbeat-provider"
+import { ToastProvider }     from "@/components/toast"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
 
   return (
-    <SidebarProvider>
-      <HeartbeatProvider />
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <SidebarMain>{children}</SidebarMain>
-      </div>
-    </SidebarProvider>
+    <ToastProvider>
+      <SidebarProvider>
+        <HeartbeatProvider />
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <SidebarMain>{children}</SidebarMain>
+        </div>
+      </SidebarProvider>
+    </ToastProvider>
   )
 }

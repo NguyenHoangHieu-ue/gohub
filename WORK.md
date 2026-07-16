@@ -1,9 +1,9 @@
 # GoHub — Trạng Thái Hệ Thống & Roadmap
 
-**Cập nhật lần cuối:** 2026-07-15 (session 91 — tích hợp B2C dashboard của DEV + fix Turso 2 DB + tỷ giá từ DB; **merge staging→main lên production b82dc57**). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
+**Cập nhật lần cuối:** 2026-07-16 (session 95 — **Wave 0.1 Toast** + **3HK sub-report Usage by Country** + **agent chatbot mới "Kho Dữ Liệu" (data-explorer)** truy xuất toàn hệ thống). Chi tiết diễn biến từng phiên: `docs/session_summary.txt` (nguồn sự thật).
 
-> **Production (main) = staging** — deploy liên tục qua s91–94. s93: fix ecom B2C + 3HK khớp NCC. s94: wiki chi tiết 28 tab + `_analytics-data-model.md` + sync KB (47 pages); **lập PLAN UX nâng cấp tab SP/hệ thống** (xem mục 🎨 bên dưới, chi tiết `docs/plan-ux-tabs.md`).
-> Còn lại (không chặn): chạy `web/db/migrations/v17_b2c_report_monthly_snapshots.sql` trên Supabase để bật cron pre-compute snapshot B2C (B2C đã chạy live nhờ ENV Vercel đã set).
+> **Production (main) = staging** — deploy liên tục qua s91–95. s93: fix ecom B2C + 3HK khớp NCC. s94: wiki chi tiết 28 tab + `_analytics-data-model.md` + sync KB (47 pages); **lập PLAN UX nâng cấp tab SP/hệ thống** (xem mục 🎨 bên dưới, chi tiết `docs/plan-ux-tabs.md`). s95: bắt đầu Wave 0 (Toast) + 3HK country table + data-explorer agent.
+> ✅ Migration `web/db/migrations/v17_b2c_report_monthly_snapshots.sql` **đã chạy** (Hiếu, s95) → cron pre-compute snapshot B2C hoạt động.
 
 ---
 
@@ -164,7 +164,7 @@ Còn **THIẾU**: toast · command palette · skeleton · tooltip dùng chung; *
 **Quyết định của Hiếu**: làm **WAVE 0 (nền dùng chung) TRƯỚC**, rồi đào sâu **skus · ncc · kb · chatbot**.
 
 ### 🅰️ Wave 0 — Nền dùng chung (nâng mọi tab cùng lúc) — thứ tự triển khai
-1. **0.1 Toast** (`components/toast.tsx` provider + `useToast`) — thay `alert()`/thao tác im lặng. *(tiện lợi, hiện đại)*
+1. **0.1 Toast** ✅ **XONG (s95)** — `components/toast.tsx` (`ToastProvider` + `useToast`, gắn ở `(dashboard)/layout`, stack góc phải, tự tắt 3s, dark-mode). Đã thay toàn bộ `alert()` (cs-troubleshoot·orders·products·scheduled·chatbot·ncc). **Bước tiếp: 0.2 Skeleton.**
 2. **0.2 Skeleton** (`components/skeleton.tsx`) — thay spinner trơ khi tải list. *(tiện lợi, hiện đại)*
 3. **0.6 Keyboard + Empty/Help** (`/` focus search, `Esc` đóng, ↑↓ duyệt; `empty-state.tsx` + `tooltip.tsx`). *(tiện lợi, đầy đủ, dễ tiếp cận)*
 4. **0.5 Design-kit + Dark mode** — chuẩn hoá token từ `dashboard-kit` + bổ sung `dark:` cho 8 tab. *(hiện đại, dễ tiếp cận)*
@@ -182,7 +182,25 @@ Còn **THIẾU**: toast · command palette · skeleton · tooltip dùng chung; *
 - Mỗi mục = **1 commit**, **staging-first**, verify **tsc·vitest·build**, deploy dần.
 - Sau mỗi thay đổi: cập nhật wiki tab tương ứng (`docs/wiki/Tab/`) + sync KB.
 - **KHÔNG đụng tab analytics**; giữ nguyên nghiệp vụ/dữ liệu — đây là lớp UX/tiện ích.
-- **Bước tiếp theo**: Wave 0 mục **0.1 Toast**.
+- **Bước tiếp theo**: Wave 0 mục **0.2 Skeleton** (0.1 Toast đã xong s95).
+
+---
+
+## 🆕 Session 95 (2026-07-16) — Toast + 3HK Country + Data Explorer agent
+
+1. **Wave 0.1 Toast** ✅ (xem mục 🎨 ở trên).
+2. **3HK Data Usage — sub-report "Data Usage by Country × Month (TB)"**: bảng country × tháng đọc `data_usage_log`
+   (nguồn thô có cột `country`), TB = `SUM(data_gb)/1024`, top 16 nước + gộp **OTHERS**, cột **Total** + **Run-rate 12M**
+   (tháng mới nhất × 12), dòng **GRAND TOTAL**, nút export **CSV**. Query gom country×tháng dạng dài rồi pivot client-side;
+   độc lập kỳ/tab (12 tháng gần nhất, bỏ `report_date NULL`). Số khớp mẫu NCC (China Jun 131,91 · Grand Jun 186,80).
+   File: `app/(dashboard)/analytics/3hk-usage/page.tsx`.
+3. **Chatbot — agent mới "Kho Dữ Liệu" (`data-explorer`, 🗄️)**: truy xuất DỮ LIỆU THÔ toàn hệ thống — tool `executeSQL`
+   (gohub_dw) + `querySupabase` (REST select 26 bảng catalog/config) + `listSupabaseTables`. Trả nhanh "đếm/liệt kê/tra bảng".
+   File mới `lib/agents/data-explorer.ts`; đăng ký `types`/`agents`/`classifier`(intent `data_explore`)/`router`(override
+   `DATA_EXPLORE_RE`); dispatch ở `/api/chat` + `/api/lark/events` (giống bi-analyst, non-stream); badge+chart ở chatbot page.
+   **Guardian/bảo mật**: guardCheck (message-level) vẫn chạy trước; TẦNG agent: bảng nhạy cảm (users/hội thoại/ticket/
+   app_settings) chỉ admin·creator; role không phải admin chèn `role_filters` vào SQL gohub_dw; lược cột COGS nếu không có
+   quyền xem giá vốn; luôn lược cột `embedding`. Verify: tsc · vitest 28/28 · next build PASS.
 
 ---
 

@@ -84,6 +84,25 @@ interface SpeedGroupMetrics {
   avg_usage_pct: number
 }
 
+// Một dòng trong bảng "Data Usage by Country × Month (TB)".
+interface CountryUsageRow {
+  country: string
+  monthly: Record<string, number>  // ym ("YYYY-MM") -> TB
+  total: number                    // tổng TB toàn kỳ hiển thị
+  runRate: number                  // TB tháng mới nhất × 12
+}
+
+// Nhãn tháng tiếng Anh viết hoa cho cột (khớp mẫu NCC): "2026-06" -> "JUN". Nếu bảng trải nhiều năm thì thêm "'YY".
+const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+const monthLabel = (ym: string, multiYear: boolean) => {
+  const [y, m] = ym.split("-")
+  const idx = parseInt(m, 10) - 1
+  const name = MONTH_ABBR[idx] ?? ym
+  return multiYear ? `${name} '${y.slice(2)}` : name
+}
+// TB 2 chữ số thập phân theo vi-VN (dấu phẩy) — khớp mẫu "16,92".
+const fmtTB = (n: number) => (n || 0).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 // Nhóm tốc độ (high-speed × throttle) được tính SERVER-side ở /api/analytics/3hk-speed-map:
 // gộp throttle_speed product DB (chính) + offer_name + giá (cogs) + ký tự SKU (P1=10/P2=5).
 // Trang chỉ tra map[sku].group. (Trước đây suy client-side từ mã SKU; mã CŨ bị đảo 5/10mbps.)
@@ -118,6 +137,15 @@ export default function ThreeHKDataUsagePage() {
   const [skuTypeSort, setSkuTypeSort] = useState<{ key: keyof SKUTypeMetrics; direction: "asc" | "desc" }>({ key: "total_usage_gb", direction: "desc" })
 
   const [totals, setTotals] = useState({ totalUsage: 0, totalCapacity: 0, avgUsage: 0, count: 0 })
+
+  // Sub-report: Data Usage by Country × Month (TB). Nguồn data_usage_log (log thô có cột country),
+  // đơn vị TB = data_gb / 1024. Độc lập với kỳ/tab của bảng chính — luôn hiển thị trend theo tháng
+  // (tối đa 12 tháng gần nhất). RUN-RATE 12M = tổng tháng mới nhất × 12 (ước năm hoá).
+  const [countryMonths, setCountryMonths] = useState<string[]>([])
+  const [countryRows, setCountryRows] = useState<CountryUsageRow[]>([])
+  const [countryGrand, setCountryGrand] = useState<{ monthly: Record<string, number>; total: number; runRate: number }>({ monthly: {}, total: 0, runRate: 0 })
+  const [loadingCountry, setLoadingCountry] = useState(false)
+  const [countryError, setCountryError] = useState<string | null>(null)
 
   const runQuery = async (sql: string) => {
     const res = await fetch("/api/analytics/query", {
@@ -171,6 +199,70 @@ export default function ThreeHKDataUsagePage() {
         setSpeedMap(json.map || {})
       } catch (e) { console.error("Error fetching 3hk speed map:", e) }
     })()
+  }, [])
+
+  // Sub-report Country × Month: tải 1 lần (độc lập kỳ/tab). Gom country × tháng ở dạng "dài" rồi pivot client-side.
+  const TOP_COUNTRIES = 16   // top N theo tổng TB, phần còn lại gộp "OTHERS"
+  useEffect(() => {
+    (async () => {
+      setLoadingCountry(true); setCountryError(null)
+      try {
+        // Bỏ report_date NULL (rác không thuộc tháng nào). Giới hạn 12 tháng gần nhất cho gọn.
+        const sql = `
+          SELECT COALESCE(NULLIF(TRIM(country), ''), 'Unknown') AS country,
+                 to_char(report_date, 'YYYY-MM') AS ym,
+                 SUM(data_gb) / 1024.0 AS tb
+          FROM data_usage_log
+          WHERE report_date IS NOT NULL
+            AND report_date >= (SELECT MAX(report_date) FROM data_usage_log) - INTERVAL '11 months'
+          GROUP BY 1, 2
+          ORDER BY 1, 2
+        `
+        const rows: Array<{ country: string; ym: string; tb: string }> = await runQuery(sql)
+
+        const monthSet = new Set<string>()
+        const byCountry: Record<string, Record<string, number>> = {}
+        for (const r of rows) {
+          const ym = r.ym
+          const tb = parseFloat(r.tb || "0")
+          monthSet.add(ym)
+          ;(byCountry[r.country] ??= {})[ym] = (byCountry[r.country][ym] ?? 0) + tb
+        }
+        const months = Array.from(monthSet).sort()
+        const latest = months[months.length - 1]
+
+        // Dựng dòng theo country + tổng + run-rate, sắp theo tổng giảm dần.
+        const all: CountryUsageRow[] = Object.entries(byCountry).map(([country, monthly]) => {
+          const total = months.reduce((s, m) => s + (monthly[m] ?? 0), 0)
+          return { country, monthly, total, runRate: (monthly[latest] ?? 0) * 12 }
+        }).sort((a, b) => b.total - a.total)
+
+        // Top N + gộp phần còn lại vào "OTHERS".
+        const top = all.slice(0, TOP_COUNTRIES)
+        const rest = all.slice(TOP_COUNTRIES)
+        if (rest.length > 0) {
+          const otherMonthly: Record<string, number> = {}
+          for (const m of months) otherMonthly[m] = rest.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
+          const otherTotal = rest.reduce((s, r) => s + r.total, 0)
+          top.push({ country: "OTHERS", monthly: otherMonthly, total: otherTotal, runRate: (otherMonthly[latest] ?? 0) * 12 })
+        }
+
+        // GRAND TOTAL (mọi country, kể cả OTHERS).
+        const grandMonthly: Record<string, number> = {}
+        for (const m of months) grandMonthly[m] = all.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
+        const grandTotal = all.reduce((s, r) => s + r.total, 0)
+
+        setCountryMonths(months)
+        setCountryRows(top)
+        setCountryGrand({ monthly: grandMonthly, total: grandTotal, runRate: (grandMonthly[latest] ?? 0) * 12 })
+      } catch (e: any) {
+        console.error("Error fetching country usage:", e)
+        setCountryError("Không tải được bảng Usage by Country.")
+      } finally {
+        setLoadingCountry(false)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -485,6 +577,31 @@ export default function ThreeHKDataUsagePage() {
     setPage(1)
   }
 
+  // Bảng country có trải nhiều năm không → quyết định nhãn tháng có kèm "'YY".
+  const countryMultiYear = useMemo(
+    () => new Set(countryMonths.map(m => m.slice(0, 4))).size > 1,
+    [countryMonths],
+  )
+
+  // Xuất CSV bảng Country × Month (bao gồm cột Total, Run-rate + dòng GRAND TOTAL).
+  const exportCountryCsv = () => {
+    if (countryRows.length === 0) return
+    const header = ["Country", ...countryMonths.map(m => monthLabel(m, countryMultiYear)), "Total", "Run-rate 12M"]
+    const csvNum = (n: number) => (n || 0).toFixed(2)  // dấu chấm cho CSV (an toàn Excel/US)
+    const lines = [
+      header.join(","),
+      ...countryRows.map(r => [r.country, ...countryMonths.map(m => csvNum(r.monthly[m] ?? 0)), csvNum(r.total), csvNum(r.runRate)].join(",")),
+      ["GRAND TOTAL", ...countryMonths.map(m => csvNum(countryGrand.monthly[m] ?? 0)), csvNum(countryGrand.total), csvNum(countryGrand.runRate)].join(","),
+    ]
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `3hk-usage-by-country-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -580,6 +697,78 @@ export default function ThreeHKDataUsagePage() {
           <p className="text-2xl font-bold text-slate-900">{totals.count.toLocaleString()}</p>
           <p className="text-xs text-slate-500 mt-1">Sim tracks in this period</p>
         </div>
+      </div>
+
+      {/* Data Usage by Country × Month (TB) — sub-report từ data_usage_log */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-blue-600" />
+              Data Usage by Country × Month (TB)
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Nguồn <code className="text-slate-600">data_usage_log</code> · Đơn vị TB (data_gb/1024)
+              {countryMonths.length > 0 && (
+                <> · Tháng {monthLabel(countryMonths[0], countryMultiYear)} – {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)}</>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {countryMonths.length > 0 && (
+              <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                RUN-RATE 12M = {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)} × 12 = {fmtTB(countryGrand.runRate)} TB
+              </span>
+            )}
+            <button onClick={exportCountryCsv} disabled={countryRows.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
+              <Download className="w-3.5 h-3.5" /> CSV
+            </button>
+          </div>
+        </div>
+
+        {loadingCountry ? (
+          <div className="p-8 text-center text-sm text-slate-400">Đang tải dữ liệu theo quốc gia…</div>
+        ) : countryError ? (
+          <div className="p-8 text-center text-sm text-rose-500">{countryError}</div>
+        ) : countryRows.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-400">Không có dữ liệu usage theo quốc gia.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-left font-bold text-xs uppercase tracking-wider">Country</th>
+                  {countryMonths.map((m) => (
+                    <th key={m} className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider whitespace-nowrap">{monthLabel(m, countryMultiYear)}</th>
+                  ))}
+                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-slate-800 whitespace-nowrap">Total</th>
+                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-blue-700 whitespace-nowrap">Run-rate 12M</th>
+                </tr>
+              </thead>
+              <tbody>
+                {countryRows.map((row) => (
+                  <tr key={row.country} className={cn("border-b border-slate-100 hover:bg-slate-50/70", row.country === "OTHERS" && "text-slate-500 italic")}>
+                    <td className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-semibold text-slate-700 whitespace-nowrap">{row.country}</td>
+                    {countryMonths.map((m) => (
+                      <td key={m} className="px-3 py-2 tabular-nums text-slate-600">{fmtTB(row.monthly[m] ?? 0)}</td>
+                    ))}
+                    <td className="px-3 py-2 tabular-nums font-bold text-slate-900 bg-slate-50">{fmtTB(row.total)}</td>
+                    <td className="px-3 py-2 tabular-nums font-semibold text-blue-700 bg-blue-50/60">{fmtTB(row.runRate)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-amber-50 border-t-2 border-amber-200 font-bold text-slate-900">
+                  <td className="sticky left-0 z-10 bg-amber-50 px-3 py-2.5 text-left uppercase text-xs tracking-wider">Grand Total</td>
+                  {countryMonths.map((m) => (
+                    <td key={m} className="px-3 py-2.5 tabular-nums">{fmtTB(countryGrand.monthly[m] ?? 0)}</td>
+                  ))}
+                  <td className="px-3 py-2.5 tabular-nums bg-amber-100">{fmtTB(countryGrand.total)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-blue-800 bg-blue-100/70">{fmtTB(countryGrand.runRate)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* SKU Type Performance Table */}

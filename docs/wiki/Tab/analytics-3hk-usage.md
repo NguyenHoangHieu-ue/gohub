@@ -243,3 +243,29 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 - **Session 90–93**:
   - s90: speed-map xử lý cả mã cũ (P1/P2/PY) + mã mới (A/B UNL); che cột nhạy cảm.
   - s93: đổi định nghĩa kỳ sang "SIM có usage trong kỳ" (khớp NCC) + gộp 4 query về 1 `bundlesCTE`; backfill 55 `throttle_speed`; "Avg Usage %" → GB/ngày/SIM cho Unlimited; xoá route chết; fix UTC.
+
+---
+
+## 6. Sub-report: Data Usage by Country × Month (TB) — thêm s95
+
+Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x Month (TB)". **Độc lập** với kỳ/tab của bảng chính (mount effect riêng, chạy 1 lần).
+
+- **Nguồn**: `data_usage_log` (log thô từng ngày — cột `report_date`, `country`, `data_gb`). KHÔNG dùng `fact_data_usage` (bảng đó không có `country`).
+- **Đơn vị**: TB = `SUM(data_gb) / 1024`.
+- **Query** (gom dạng "dài" rồi pivot client-side, tránh crosstab SQL động):
+  ```sql
+  SELECT COALESCE(NULLIF(TRIM(country),''),'Unknown') AS country,
+         to_char(report_date,'YYYY-MM') AS ym,
+         SUM(data_gb)/1024.0 AS tb
+  FROM data_usage_log
+  WHERE report_date IS NOT NULL
+    AND report_date >= (SELECT MAX(report_date) FROM data_usage_log) - INTERVAL '11 months'
+  GROUP BY 1,2 ORDER BY 1,2
+  ```
+- **Pivot (FE)**: top 16 nước theo tổng TB + gộp phần còn lại vào **OTHERS**; mỗi dòng có cột **Total** + **Run-rate 12M** (= TB tháng mới nhất × 12); dòng cuối **GRAND TOTAL** (mọi nước). Nút **CSV** export (dấu chấm thập phân, BOM UTF-8).
+- **Gotcha**:
+  - Phải lọc `report_date IS NOT NULL` — có ~358k dòng report_date NULL (≈318 TB) sẽ làm sai GRAND TOTAL nếu gộp.
+  - Nhãn tháng EN viết hoa (JAN…DEC); nếu bảng trải nhiều năm thì thêm `'YY`. Số format vi-VN 2 chữ số (dấu phẩy) khớp mẫu "16,92".
+  - DB hiện chỉ có **Jan–Jun 2026** (6 tháng) → bảng render động theo tháng CÓ THẬT (ảnh NCC gốc 10 tháng là data cũ hơn).
+- **Đối chiếu** (T6/2026): China 131,91 · Japan 15,00 · South Korea 6,88 · **GRAND TOTAL 186,80** TB — khớp DB thật.
+- **File**: `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` (state `countryMonths/countryRows/countryGrand`, `fmtTB`, `monthLabel`, `exportCountryCsv`).

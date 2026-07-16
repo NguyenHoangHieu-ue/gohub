@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play, User } from "lucide-react"
+import { useToast } from "@/components/toast"
 
 // Port intel ScheduledMessages — tab riêng (admin-only). Backend web /api/admin/scheduled-messages (+/[id]).
 // Cron tự chạy qua Vercel Cron → /api/cron/scheduled-messages (xem vercel.json).
@@ -63,6 +64,7 @@ export default function ScheduledMessagesPage() {
 }
 
 function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
+  const toast = useToast()
   const [messages, setMessages] = useState<ScheduledMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [testingId, setTestingId] = useState<string | null>(null)
@@ -93,7 +95,7 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
   const handleSave = async () => {
     const cronToSave = scheduleMode === "custom" ? customCron : generateCron(scheduleMode, scheduleTime, scheduleDayOfWeek, scheduleDayOfMonth)
     if (!formData.name || !formData.prompt || !cronToSave) {
-      alert("Vui lòng nhập đủ Name, Prompt và lịch.")
+      toast.warning("Vui lòng nhập đủ Name, Prompt và lịch.")
       return
     }
     try {
@@ -107,12 +109,13 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
       if (res.ok) {
         setIsAdding(false); setIsEditing(null); setFormData({})
         fetchMessages()
+        toast.success(isEditing ? "Đã cập nhật scheduled message." : "Đã tạo scheduled message.")
       } else {
-        alert(`Lỗi: ${(await res.json()).error}`)
+        toast.error(`Lỗi: ${(await res.json()).error}`)
       }
     } catch (err) {
       console.error(err)
-      alert("Không lưu được scheduled message.")
+      toast.error("Không lưu được scheduled message.")
     }
   }
 
@@ -131,11 +134,11 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
     try {
       const res = await fetch(`${BASE}/${id}`, { method: "POST" })
       const data = await res.json()
-      if (res.ok) alert("Test thành công: " + (data.message || data.preview || "đã gửi"))
-      else alert("Test thất bại: " + (data.error || "Unknown error"))
+      if (res.ok) toast.success("Test thành công: " + (data.message || data.preview || "đã gửi"))
+      else toast.error("Test thất bại: " + (data.error || "Unknown error"))
     } catch (err) {
       console.error(err)
-      alert("Test lỗi.")
+      toast.error("Test lỗi.")
     } finally {
       setTestingId(null)
     }

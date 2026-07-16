@@ -6,6 +6,7 @@ import { DatePresets } from "@/components/date-presets"
 import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar, ShoppingBag, Globe, Package, RefreshCw, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
+import { useToast } from "@/components/toast"
 
 interface Order {
   order_code: string
@@ -21,6 +22,7 @@ interface Order {
 }
 
 export default function OrderManagementPage() {
+  const toast = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
@@ -179,7 +181,7 @@ export default function OrderManagementPage() {
         const data = await response.json()
 
         if (data.length === 0) {
-          alert("No data to export for the selected filters.")
+          toast.info("No data to export for the selected filters.")
           return
         }
 

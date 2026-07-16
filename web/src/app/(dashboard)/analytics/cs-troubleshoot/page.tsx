@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { useToast } from "@/components/toast"
 
 // Port "y hệt" gohub-intel CSTroubleshootReport. Backend /api/reports/cs-troubleshoot ĐÃ khớp shape.
 // Adapt (user chốt): GIỮ sync của web → nút Sync gọi POST /api/admin/sync-lark-tickets (thay intel sync-lark).
@@ -40,6 +41,7 @@ interface CSTroubleshootData {
 }
 
 export default function CSTroubleshootReport() {
+  const toast = useToast()
   const [data, setData] = useState<CSTroubleshootData | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -75,9 +77,9 @@ export default function CSTroubleshootReport() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || "Failed to sync")
       await fetchData()
-      alert(json.message || `Đã đồng bộ ${json.synced ?? ""} bản ghi từ Lark.`)
+      toast.success(json.message || `Đã đồng bộ ${json.synced ?? ""} bản ghi từ Lark.`)
     } catch (err: any) {
-      alert(`Sync error: ${err.message}`)
+      toast.error(`Sync error: ${err.message}`)
     } finally {
       setSyncing(false)
     }

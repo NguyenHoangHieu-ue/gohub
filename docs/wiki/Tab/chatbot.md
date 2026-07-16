@@ -42,7 +42,13 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 | **Giải Đáp** | `giai-dap` | Bảng `kb_documents`, `kb_wiki_pages` | Giải thích thuật ngữ viết tắt, cấu trúc mã SKU, quy trình, tài liệu Wiki nội bộ. |
 | **NCC & Gap** | `gap-analysis` | Bảng `ncc_worldmove`, `ncc_datapool` (3HK) | Duyệt catalog của nhà cung cấp và phát hiện khoảng trống sản phẩm (`exist=No`). |
 | **BI Analyst** | `bi-analyst` | Kho dữ liệu PostgreSQL `gohub_dw` | Tự động sinh mã SQL, thực thi truy vấn và trả về kết quả số liệu kèm biểu đồ. |
+| **Kho Dữ Liệu** | `data-explorer` | **CẢ HAI**: `gohub_dw` (SQL) + Supabase (REST 26 bảng catalog/config) | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh (SKU active, số nước, thống kê catalog, usage theo nước…). |
 | **Tạo Template** | `tao-template` | Catalog NCC | Tạo file Excel template sản phẩm cho Admin/Manager xuất bản nhanh. |
+
+> **Agent `data-explorer` (🗄️ Kho Dữ Liệu, thêm s95)** — dùng cho câu hỏi cần đọc NHIỀU bảng / đếm-liệt kê nhanh mà không phải mở đúng tab.
+> - **Tool**: `executeSQL` (gohub_dw, chỉ SELECT/WITH) · `querySupabase` (select có cấu trúc: `table/columns/filters[eq,neq,gt,gte,lt,lte,like,ilike,in,is]/order/limit≤200/countOnly`) · `listSupabaseTables`. File: `web/src/lib/agents/data-explorer.ts` (`runDataExplorer`, Gemini function-calling temp0, ≤8 vòng).
+> - **Phân biệt với `bi-analyst`**: bi-analyst = CHỈ SỐ kinh doanh có kỳ (doanh thu/lợi nhuận/target/hiệu suất); data-explorer = ĐẾM/LIỆT KÊ/THỐNG KÊ dữ liệu catalog/hệ thống. Classifier có intent `data_explore`; router có override `DATA_EXPLORE_RE` (conservative: "có bao nhiêu SKU/nước…", "tra dữ liệu", "kho dữ liệu").
+> - **Bảo mật (guardian nhiều tầng)**: `guardCheck` message-level chạy TRƯỚC (như mọi agent). Tầng agent: 10 bảng nhạy cảm (`users`, hội thoại, ticket, `app_settings`…) **chỉ admin·creator**; role≠admin bị chèn `role_filters` vào SQL gohub_dw; lược cột COGS nếu không có quyền xem giá vốn; luôn lược cột `embedding`. Dispatch ở `/api/chat` + `/api/lark/events` (non-stream, giống bi-analyst).
 
 ---
 

@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import ChatChart from "@/components/chat-chart"
+import { useToast } from "@/components/toast"
 
 // sessionStorage keys
 const SS_CONV_ID      = "gohub_conv_id"
@@ -33,6 +34,7 @@ const AGENT_COLORS: Record<string, string> = {
   "gap-analysis":  "bg-purple-100 text-purple-700",
   "tao-template":  "bg-emerald-100 text-emerald-700",
   "bi-analyst":    "bg-indigo-100 text-indigo-700",
+  "data-explorer": "bg-slate-200 text-slate-700",
 }
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ function extractTemplateAction(text: string): Record<string, any> | null {
 }
 
 function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [done,    setDone]    = useState(false)
 
@@ -126,7 +129,7 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       const res = await fetch("/api/admin/template", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       })
-      if (!res.ok) { alert("Hiếu đang fix, vui lòng đợi"); return }
+      if (!res.ok) { toast.error("Hiếu đang fix, vui lòng đợi"); return }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")
@@ -136,7 +139,7 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       URL.revokeObjectURL(url)
       setDone(true)
     } catch {
-      alert("Hiếu đang fix, vui lòng đợi")
+      toast.error("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }
@@ -657,8 +660,8 @@ export default function ChatbotPage() {
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (() => {
-                      // Extract chart block from bi-analyst messages
-                      const chartResult = msg.agent?.id === "bi-analyst"
+                      // Extract chart block from bi-analyst / data-explorer messages
+                      const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
                         ? extractChartData(msg.content) : null
 
                       const renderMarkdown = (text: string) => (

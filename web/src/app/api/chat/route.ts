@@ -7,6 +7,7 @@ import { AGENTS }                              from "@/lib/agents/agents"
 import { route }                               from "@/lib/agents/router"
 import { buildToolContext }                    from "@/lib/agents/context"
 import { runBIAnalyst }                        from "@/lib/agents/bi-analyst"
+import { runDataExplorer }                     from "@/lib/agents/data-explorer"
 import { guardCheck, canViewCogs }             from "@/lib/agents/guardian"
 import { getChannelFromRole }                  from "@/lib/agents/tools"
 import type { Message, UserRole }              from "@/lib/agents/types"
@@ -85,17 +86,19 @@ export async function POST(req: NextRequest) {
 
     const encoder = new TextEncoder()
 
-    // ── bi-analyst: function calling (non-streaming) ──
-    if (agentId === "bi-analyst") {
+    // ── bi-analyst / data-explorer: function calling (non-streaming) ──
+    if (agentId === "bi-analyst" || agentId === "data-explorer") {
       const stream = new ReadableStream({
         async start(controller) {
           try {
             controller.enqueue(encoder.encode(`__AGENT__:${agentId}:${agentName}\n`))
-            const text = await runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
+            const text = agentId === "data-explorer"
+              ? await runDataExplorer(systemInstruction, geminiHistory, lastMsg, role, isCost)
+              : await runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
             controller.enqueue(encoder.encode(text))
             controller.close()
           } catch (err: any) {
-            const msg = role === "admin" ? `Lỗi BI: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+            const msg = role === "admin" ? `Lỗi ${agentId}: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
             controller.enqueue(encoder.encode(msg))
             controller.close()
           }

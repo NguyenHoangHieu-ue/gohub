@@ -10,6 +10,7 @@ export type IntentType =
   | "ncc_catalog"
   | "template_create"
   | "bi_analytics"
+  | "data_explore"
   | "unclear"
 
 // Nguồn dữ liệu user muốn hỏi — KHÓA để phân biệt "trong hệ thống GoHub" vs "catalog NCC"
@@ -34,6 +35,7 @@ const INTENT_TO_AGENT: Record<IntentType, AgentId> = {
   ncc_catalog:     "gap-analysis",  // NCC (browse + gap) gộp về 1 chủ sở hữu để tránh overlap với tu-van
   template_create: "tao-template",
   bi_analytics:    "bi-analyst",
+  data_explore:    "data-explorer",
   unclear:         "giai-dap",     // chỉ dùng nếu không short-circuit hỏi lại
 }
 
@@ -52,7 +54,12 @@ INTENT (chọn đúng 1):
 - gap_analysis: SO SÁNH catalog NCC với hệ thống GoHub (cái gì NCC có mà GoHub chưa tạo). VD: "WM có gì chưa import", "gap analysis", "NCC chưa tạo", "so sánh NCC vs hệ thống".
 - template_create: tạo/xuất file Excel template sản phẩm. VD: "tạo template WM Nhật", "xuất template 3HK".
 - bi_analytics: phân tích KINH DOANH (doanh thu, đơn hàng, kênh bán, nhân viên sales, B2B/B2C, fulfillment, target, GPM, top SKU bán chạy, doanh số). VD: "doanh thu tháng này", "đơn hàng tuần trước", "top kênh bán", "nhân viên nào bán nhiều nhất".
+- data_explore: TRUY XUẤT/ĐẾM/LIỆT KÊ DỮ LIỆU THÔ trực tiếp từ bảng hệ thống (không phải KPI kinh doanh thuần, cũng không phải tra 1 mã cụ thể). Bao gồm câu hỏi tổng hợp catalog/hệ thống cần đọc nhiều bảng: "có bao nhiêu SKU active", "đếm số sản phẩm theo vendor", "liệt kê wiki", "bao nhiêu nước trong hệ thống", "dữ liệu bảng X", "thống kê catalog", "usage data theo nước". Khi user muốn "tra dữ liệu / báo cáo nhanh" chung chung nhiều nguồn → data_explore.
 - unclear: câu hỏi quá mơ hồ, KHÔNG đủ thông tin để tìm kiếm/trả lời (thiếu nước/khu vực/mã và không nói rõ muốn gì). VD: "tư vấn cho tôi", "có gói nào không", "giúp mình với", "sim nào tốt".
+
+PHÂN BIỆT bi_analytics vs data_explore:
+- Hỏi CHỈ SỐ kinh doanh/tài chính có kỳ (doanh thu, lợi nhuận, target, hiệu suất kênh/nhân viên) → bi_analytics.
+- Hỏi ĐẾM/LIỆT KÊ/THỐNG KÊ dữ liệu catalog/hệ thống (SKU, sản phẩm, nước, wiki, NCC, usage thô) → data_explore.
 
 PHÂN BIỆT mã nhóm nước (AP2, CHM, EU1, APA...):
 - "gói AP2", "list AP2", "AP2 có gì" → product_search.
@@ -75,7 +82,8 @@ COUNTRY: tên tiếng Anh ("Japan","Thailand","South Korea"). null nếu không 
 SIM_TYPE: "esim" | "sim" | null.
 
 OUTPUT (JSON thuần):
-{"intent":"<intent>","data_source":<"gohub_system"|"ncc_catalog"|"both"|null>,"country":<"Country"|null>,"sim_type":<"esim"|"sim"|null>,"needs_clarification":<true|false>,"clarification_question":<"..."|null>,"confidence":<0.0-1.0>}`
+{"intent":"<intent>","data_source":<"gohub_system"|"ncc_catalog"|"both"|null>,"country":<"Country"|null>,"sim_type":<"esim"|"sim"|null>,"needs_clarification":<true|false>,"clarification_question":<"..."|null>,"confidence":<0.0-1.0>}
+(intent hợp lệ: product_search, product_lookup, price_cogs, system_explain, ncc_catalog, gap_analysis, template_create, bi_analytics, data_explore, unclear)`
 
 let genAI: GoogleGenerativeAI | null = null
 function getAI() {

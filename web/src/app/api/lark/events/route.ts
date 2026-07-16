@@ -7,6 +7,7 @@ import { route }                     from "@/lib/agents/router"
 import { GoogleGenerativeAI }        from "@google/generative-ai"
 import { buildToolContext }          from "@/lib/agents/context"
 import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
+import { runDataExplorer }           from "@/lib/agents/data-explorer"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
 import {
@@ -369,9 +370,11 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       parts: [{ text: m.content }],
     }))
 
-    // bi-analyst: dùng function calling (executeSQL trên gohub_dw) — giống web chatbot
+    // bi-analyst / data-explorer: dùng function calling (executeSQL/querySupabase) — giống web chatbot
     let response: string
-    if (agentId === "bi-analyst") {
+    if (agentId === "data-explorer") {
+      response = await runDataExplorer(systemInstruction, geminiHistory, userText, role, isCost)
+    } else if (agentId === "bi-analyst") {
       response = await runBIAnalyst(systemInstruction, geminiHistory, userText, role)
     } else {
       // Call Gemini (non-streaming for Lark)

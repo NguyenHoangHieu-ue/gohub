@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle, Download, Loader2 } from "lucide-react"
 import * as XLSX from "xlsx"
 import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
+import { useToast } from "@/components/toast"
 
 const canSeeCost = (role?: string) => role === "admin"
 
@@ -539,6 +540,7 @@ function SkuSubTable({ skus, showCost }: { skus: SystemSku[]; showCost: boolean 
 // ─── WM Tab ─────────────────────────────────────────────────────────────────
 
 function WMTab({ role }: { role?: string }) {
+  const toast = useToast()
   const showCost = canSeeCost(role)
   const [products, setProducts] = useState<WMProduct[]>([])
   const [total, setTotal]       = useState(0)
@@ -566,7 +568,7 @@ function WMTab({ role }: { role?: string }) {
       if (!res.ok) throw new Error(data.error ?? "Lỗi phân tích file")
       setPreview(data)
     } catch (err: any) {
-      alert(err.message ?? "Không thể phân tích file")
+      toast.error(err.message ?? "Không thể phân tích file")
     } finally {
       setImporting(false)
     }

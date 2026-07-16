@@ -13,6 +13,7 @@ import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { useToast } from "@/components/toast"
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -45,6 +46,7 @@ interface RegionData { region: string; revenue: number; units: number }
 interface SKUPerformance { sku: string; category: string; vendor: string; region: string; revenue: number; units: number; orders: number; margin: number }
 
 export default function ProductPerformancePage() {
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [metrics, setMetrics] = useState<ProductMetrics>({
     revenue: 0, revenueChange: 0, orders: 0, ordersChange: 0, units: 0, unitsChange: 0, aov: 0, aovChange: 0, margin: 0, marginChange: 0,
@@ -423,11 +425,11 @@ export default function ProductPerformancePage() {
         a.click()
         document.body.removeChild(a)
       } else {
-        alert("Failed to export data")
+        toast.error("Failed to export data")
       }
     } catch (err) {
       console.error("Export error:", err)
-      alert("Error exporting data")
+      toast.error("Error exporting data")
     }
   }
 

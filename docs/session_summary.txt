@@ -4863,3 +4863,41 @@ Trạng thái: main == staging == fe4b720 (docs-only phiên này; app runtime kh
      skus/ncc/kb/chatbot. Chưa code.
   Memory mới: feedback_detailed_wiki, plan_ux_tabs.
 CÒN TREO: bắt đầu Wave 0.1 Toast khi Hiếu yêu cầu; (cũ) migration v17 B2C snapshot; cột % 3HK Simple/Weighted.
+
+## Session 95 (2026-07-16) — Toast + 3HK Usage by Country + Data Explorer agent
+Hiếu giao 4 việc: (1) đã tự chạy migration v17; (2) làm Wave 0.1 Toast; (3) thêm sub-report "Usage by Country" vào
+tab 3HK giống ảnh NCC; (4) thêm agent chatbot truy xuất TOÀN BỘ bảng dữ liệu (Supabase + gohub_dw) + thêm vào guardian.
+
+1. Migration v17: Hiếu xác nhận đã chạy → gỡ khỏi "còn treo" WORK.md; tick ✅ trong new_info.txt.
+
+2. Wave 0.1 Toast (nền dùng chung, Plan UX):
+   - Tạo components/toast.tsx: ToastProvider (context) + useToast() với success/error/info/warning + dismiss;
+     stack góc trên phải, tự tắt 3s (config duration), icon+màu theo loại, dark-mode, animation toast-in.
+     useToast() ngoài provider → fallback console (an toàn SSR/test).
+   - Gắn <ToastProvider> bọc ngoài ở app/(dashboard)/layout.tsx (server component render client provider).
+   - Thay TẤT CẢ alert() (0 còn lại) → toast ở: cs-troubleshoot, orders, products, scheduled (component con
+     ScheduledMessages — KHÔNG phải wrapper Page, đã sửa scope), chatbot (TemplateDownloadButton), ncc (WMTab).
+
+3. 3HK tab — sub-report "Data Usage by Country × Month (TB)":
+   - Nguồn data_usage_log (log thô, có cột country/data_gb/report_date). TB = SUM(data_gb)/1024. Xác minh DB thật:
+     country names khớp ảnh (China/Japan/South Korea...); số khớp (China Jun 131,91 · Grand Jun 186,80).
+   - Query gom country×tháng dạng "dài" (WHERE report_date NOT NULL, 12 tháng gần nhất) rồi pivot client-side:
+     top 16 nước theo tổng + gộp OTHERS; cột Total + Run-rate 12M (tháng mới nhất×12); dòng GRAND TOTAL; export CSV.
+   - Độc lập kỳ/tab (mount effect riêng, chạy 1 lần). Nhãn tháng EN viết hoa (JAN..DEC), format vi-VN 2 chữ số.
+   - LƯU Ý: DB chỉ có Jan–Jun 2026 (6 tháng) → bảng render động theo tháng có thật (ảnh gốc 10 tháng là data cũ hơn).
+
+4. Agent chatbot mới "Kho Dữ Liệu" (data-explorer, 🗄️):
+   - lib/agents/data-explorer.ts: runDataExplorer (Gemini function-calling, temp0) với 3 tool:
+     executeSQL (gohub_dw, chỉ SELECT/WITH, chặn multi-stmt) · querySupabase (REST select có cấu trúc: table/columns/
+     filters[op eq..ilike/in/is]/order/limit≤200/countOnly) · listSupabaseTables.
+   - Danh mục 26 bảng catalog/config (SUPABASE_TABLES) + 10 bảng NHẠY CẢM (users/hội thoại/ticket/app_settings...).
+   - GUARDIAN nhiều tầng: guardCheck (message-level) vẫn chạy TRƯỚC dispatch (chat + lark). Tầng agent:
+     bảng nhạy cảm chỉ admin·creator; role≠admin chèn role_filters (getRoleDataFilter) vào SQL gohub_dw;
+     lược cột COGS nếu !isCost && !privileged; LUÔN lược cột embedding/vector (tràn token).
+   - Đăng ký: types.ts (AgentId) · agents.ts (AGENTS + prompt schema 2 nguồn) · classifier.ts (intent data_explore +
+     phân biệt bi_analytics vs data_explore) · router.ts (AGENT_NAMES + override DATA_EXPLORE_RE conservative).
+   - Dispatch: /api/chat + /api/lark/events (non-stream, giống bi-analyst). Chatbot page: màu badge + chart rendering.
+
+Verify mọi bước: tsc PASS · vitest 28/28 · next build PASS (cần NODE_OPTIONS max-old-space 6GB do máy OOM ở page-data,
+không phải lỗi code). CHƯA push origin (quy tắc s76 — chờ Hiếu duyệt).
+CÒN TREO: Wave 0.2 Skeleton (bước tiếp Plan UX); cột % 3HK Simple/Weighted (cũ).

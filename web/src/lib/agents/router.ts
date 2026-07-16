@@ -417,7 +417,12 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "gap-analysis":  "NCC & Gap",
   "tao-template":  "Tạo Template",
   "bi-analyst":    "BI Analyst",
+  "data-explorer": "Kho Dữ Liệu",
 }
+
+// Data Explorer — tín hiệu user muốn TRA/ĐẾM/LIỆT KÊ dữ liệu thô nhiều bảng (catalog/hệ thống).
+// Conservative: chỉ ép khi có động từ đếm/liệt kê + đối tượng dữ liệu, hoặc nhắc thẳng "kho dữ liệu".
+const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/
 
 // BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
 const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng/
@@ -504,7 +509,10 @@ export async function route(message: string, history: Message[], role: UserRole)
   } else if (params.groupCode && EXPLAIN_GROUP_RE.test(nrm)) {
     // "AP2 gồm nước nào / AP2 là gì" → giải thích, không phải tìm sản phẩm
     agentId = "giai-dap"
-  } else if (agentId !== "bi-analyst" && !params.skuCodes?.length && !params.productCodes?.length) {
+  } else if (DATA_EXPLORE_RE.test(nrm) && !params.skuCodes?.length && !params.productCodes?.length) {
+    // "có bao nhiêu SKU active / đếm sản phẩm theo vendor / tra dữ liệu bảng X" → truy xuất dữ liệu thô
+    agentId = "data-explorer"
+  } else if (agentId !== "bi-analyst" && agentId !== "data-explorer" && !params.skuCodes?.length && !params.productCodes?.length) {
     // Override BI: câu doanh số/nhân viên/top bán chạy hay bị nhầm sang product_search
     const hasProductTarget = !!(params.country || params.region || params.groupCode)
     if (DEFINITE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget)) {
