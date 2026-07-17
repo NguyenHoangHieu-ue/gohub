@@ -201,9 +201,97 @@ export default function ChannelPerformancePage() {
       : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
   }
 
-  const exportToCSV = (data: any[], filename: string) => {
-    if (!data || data.length === 0) return
-    exportRawRows(data as Record<string, unknown>[], `${filename}_${selectedChannel}_${startDate}_${endDate}`)
+  // Export Performance Breakdown — KHỚP ĐÚNG cột + số của bảng hiển thị (tính lại y hệt JSX).
+  const exportPerformanceBreakdown = () => {
+    if (!performanceData || performanceData.length === 0) return
+    const totalRevenue = metrics?.revenue || 1
+    const totalOpCost = metrics?.totalOpCost || 0
+    const mode = channelSettingsMap[selectedChannel] || "total"
+    const start = new Date(startDate || "2026-03-01")
+    const end = new Date(endDate || "2026-03-31")
+    const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000) + 1
+    const ratio = Math.min(1, diffDays / daysInMonth)
+    const pf = projection ? projection.factor : 0
+
+    const rows = performanceData.map((row: any) => {
+      let opCostRow = 0
+      if (mode === "subchannels") {
+        const c = channelCostsMap[`${selectedChannel} - ${row.sub_channel}`]
+        if (c && Object.keys(c).length > 0) {
+          ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
+            if (c[key]) {
+              opCostRow += c[key].type === "amount"
+                ? (parseFloat(c[key].value) || 0) * ratio
+                : (row.revenue * (parseFloat(c[key].value) || 0)) / 100
+            }
+          })
+        }
+      } else {
+        opCostRow = (row.revenue / totalRevenue) * totalOpCost
+      }
+      const rowGpm2 = row.margin - opCostRow
+      const rowGpm2Percent = row.revenue > 0 ? (rowGpm2 / row.revenue) * 100 : 0
+      const contribution = (row.revenue / totalRevenue) * 100
+      const growth = row.prev_revenue > 0 ? ((row.revenue - row.prev_revenue) / row.prev_revenue) * 100 : 0
+
+      const out: Record<string, unknown> = {
+        "Sub-channel": row.sub_channel,
+        "Orders": row.orders,
+        "Units Sold": row.units,
+        "Revenue": Math.round(row.revenue),
+        "Dự phóng Rev": projection ? Math.round(row.revenue * pf) : "",
+        "Gross Profit 1": Math.round(row.margin || 0),
+        "Dự phóng GP1": projection ? Math.round((row.margin || 0) * pf) : "",
+        "Contribution Margin 1": Math.round(rowGpm2 || 0),
+        "Dự phóng CM1": projection ? Math.round((rowGpm2 || 0) * pf) : "",
+        "GPM 2 %": Number(rowGpm2Percent.toFixed(1)),
+      }
+      if (comparisonType !== "none") {
+        out[comparisonType === "previous_period" ? "%MoM" : "%YoY"] = Math.round(growth)
+      }
+      out["AOV"] = Math.round(row.revenue / (row.orders || 1))
+      out["Contribution %"] = Number(contribution.toFixed(1))
+      return out
+    })
+    exportRawRows(rows, `performance_breakdown_${selectedChannel}_${startDate}_${endDate}`, "Performance")
+  }
+
+  // Export Daily Details — khớp bảng (Date, Orders, Unit Sold, Revenue, [%MoM/%YoY], AOV), thứ tự mới→cũ như hiển thị.
+  const exportDaily = () => {
+    if (!trendData || trendData.length === 0) return
+    const dateLabel = dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"
+    const rows = trendData.slice().reverse().map((row: any) => {
+      const out: Record<string, unknown> = {
+        [dateLabel]: row.date,
+        "Orders": row.orders,
+        "Unit Sold": row.units,
+        "Revenue": Math.round(row.revenue),
+      }
+      if (comparisonType !== "none") {
+        out[comparisonType === "previous_period" ? "%MoM" : "%YoY"] =
+          row.prevRevenue > 0 ? Math.round(((row.revenue - row.prevRevenue) / row.prevRevenue) * 100) : 100
+      }
+      out["AOV"] = Math.round(row.revenue / (row.orders || 1))
+      return out
+    })
+    exportRawRows(rows, `daily_performance_${selectedChannel}_${startDate}_${endDate}`, "Daily")
+  }
+
+  // Export Top Products — khớp bảng (Product, Orders, Units, Revenue, Gross Profit, Dự phóng Rev, AOV). Full topProducts.
+  const exportTopProductsFull = () => {
+    if (!topProducts || topProducts.length === 0) return
+    const pf = projection ? projection.factor : 0
+    const rows = topProducts.map((p: any) => ({
+      "Product Name": p.product_name,
+      "Orders": p.orders,
+      "Units": p.units,
+      "Revenue": Math.round(p.revenue),
+      "Gross Profit": Math.round(p.margin || 0),
+      "Dự phóng Rev": projection ? Math.round(p.revenue * pf) : "",
+      "AOV": Math.round(p.revenue / (p.orders || 1)),
+    }))
+    exportRawRows(rows, `top_products_${selectedChannel}_${startDate}_${endDate}`, "Top Products")
   }
 
   const [showFilters, setShowFilters] = useState(false)
@@ -1237,7 +1325,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
             <p className="text-sm text-slate-500">Breakdown by sub-channel for {selectedChannel} (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(performanceData, "performance_breakdown")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportPerformanceBreakdown} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -1447,7 +1535,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Daily Performance Details</h3>
             <p className="text-sm text-slate-500">Daily breakdown (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(trendData, "daily_performance")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportDaily} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -1515,7 +1603,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Top Selling Products</h3>
             <p className="text-sm text-slate-500">Highest revenue products (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(topProducts, "top_products")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportTopProductsFull} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
             Export
           </button>
