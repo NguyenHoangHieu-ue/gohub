@@ -426,6 +426,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
 
           {/* Tab switcher */}
           <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
+            {/* B2B Channels chỉ hiện khi scope="all" (mở từ B2B/Channels tab) */}
             {scope !== "b2c" && (
               <button
                 onClick={() => setActiveCostTab("b2b")}
@@ -436,12 +437,11 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               onClick={() => setActiveCostTab("b2c")}
               className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2c" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >B2C Channels</button>
-            {scope !== "b2c" && (
-              <button
-                onClick={() => setActiveCostTab("group")}
-                className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
-              >Group Costs</button>
-            )}
+            {/* Group Costs luôn hiện (B2C cũng cần nhập chi phí nhóm) */}
+            <button
+              onClick={() => setActiveCostTab("group")}
+              className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+            >Group Costs</button>
           </div>
 
           {/* Save All */}
