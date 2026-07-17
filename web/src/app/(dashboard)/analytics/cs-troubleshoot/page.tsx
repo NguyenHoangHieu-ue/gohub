@@ -77,7 +77,14 @@ export default function CSTroubleshootReport() {
     try {
       const res = await fetch("/api/admin/sync-lark-tickets", { method: "POST" })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || "Failed to sync")
+      if (!res.ok) {
+        const errMsg = json.error || "Failed to sync"
+        // Lỗi thiếu env vars → hướng dẫn cụ thể
+        if (errMsg.includes("LARK_BASE_ID") || errMsg.includes("LARK_TABLE_ID")) {
+          throw new Error("Chưa set LARK_BASE_ID / LARK_TABLE_ID trên Vercel. Set xong phải Redeploy để có hiệu lực.")
+        }
+        throw new Error(errMsg)
+      }
       await fetchData()
       toast.success(json.message || `Đã đồng bộ ${json.totalSynced ?? ""} bản ghi từ Lark.`)
       // Refresh sync status + data
@@ -182,7 +189,9 @@ export default function CSTroubleshootReport() {
               }
             </div>
             {!syncStatus.configured && (
-              <span className="text-xs font-bold text-red-600">⚠ Thiếu LARK_BASE_ID / LARK_TABLE_ID</span>
+              <span className="text-xs font-bold text-red-600">
+                ⚠ LARK_BASE_ID / LARK_TABLE_ID chưa được đọc — kiểm tra Vercel env vars và redeploy để có hiệu lực
+              </span>
             )}
           </div>
         )}

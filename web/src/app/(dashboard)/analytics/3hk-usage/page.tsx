@@ -204,27 +204,20 @@ export default function ThreeHKDataUsagePage() {
     })()
   }, [])
 
-  // Sub-report Country × Month: tải 1 lần (độc lập kỳ/tab). Gom country × tháng ở dạng "dài" rồi pivot client-side.
-  const TOP_COUNTRIES = 16   // top N theo tổng TB, phần còn lại gộp "OTHERS"
+  // Sub-report Country × Month: tải lại mỗi khi bấm "Lọc" (appliedTick thay đổi).
+  // Hiển thị TẤT CẢ nước (không gộp OTHERS). Dùng startDate/endDate của page.
   useEffect(() => {
-    (async () => {
+    if (!startDate || !endDate) return
+    ;(async () => {
       setLoadingCountry(true); setCountryError(null)
       try {
-        // Tính cutoff date ở client (tránh subquery MAX scan 1.1M rows → timeout).
-        // Lấy 12 tháng gần nhất: từ đầu tháng (hiện tại - 11 tháng) đến hiện tại.
-        const cutoffDate = (() => {
-          const d = new Date()
-          d.setMonth(d.getMonth() - 11)
-          d.setDate(1)
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
-        })()
         const sql = `
           SELECT COALESCE(NULLIF(TRIM(country), ''), 'Unknown') AS country,
                  to_char(report_date::date, 'YYYY-MM')          AS ym,
                  ROUND((SUM(data_gb) / 1024.0)::numeric, 4)    AS tb
           FROM data_usage_log
           WHERE report_date IS NOT NULL
-            AND report_date::date >= '${cutoffDate}'::date
+            AND report_date::date BETWEEN '${startDate}'::date AND '${endDate}'::date
           GROUP BY 1, 2
           ORDER BY 1, 2
         `
@@ -233,37 +226,26 @@ export default function ThreeHKDataUsagePage() {
         const monthSet = new Set<string>()
         const byCountry: Record<string, Record<string, number>> = {}
         for (const r of rows) {
-          const ym = r.ym
-          const tb = parseFloat(r.tb || "0")
+          const ym = r.ym; const tb = parseFloat(r.tb || "0")
           monthSet.add(ym)
           ;(byCountry[r.country] ??= {})[ym] = (byCountry[r.country][ym] ?? 0) + tb
         }
         const months = Array.from(monthSet).sort()
         const latest = months[months.length - 1]
 
-        // Dựng dòng theo country + tổng + run-rate, sắp theo tổng giảm dần.
+        // Dựng dòng theo country, sắp theo tổng giảm dần. KHÔNG gộp OTHERS — hiện tất cả nước.
         const all: CountryUsageRow[] = Object.entries(byCountry).map(([country, monthly]) => {
           const total = months.reduce((s, m) => s + (monthly[m] ?? 0), 0)
           return { country, monthly, total, runRate: (monthly[latest] ?? 0) * 12 }
         }).sort((a, b) => b.total - a.total)
 
-        // Top N + gộp phần còn lại vào "OTHERS".
-        const top = all.slice(0, TOP_COUNTRIES)
-        const rest = all.slice(TOP_COUNTRIES)
-        if (rest.length > 0) {
-          const otherMonthly: Record<string, number> = {}
-          for (const m of months) otherMonthly[m] = rest.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
-          const otherTotal = rest.reduce((s, r) => s + r.total, 0)
-          top.push({ country: "OTHERS", monthly: otherMonthly, total: otherTotal, runRate: (otherMonthly[latest] ?? 0) * 12 })
-        }
-
-        // GRAND TOTAL (mọi country, kể cả OTHERS).
+        // GRAND TOTAL
         const grandMonthly: Record<string, number> = {}
         for (const m of months) grandMonthly[m] = all.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
         const grandTotal = all.reduce((s, r) => s + r.total, 0)
 
         setCountryMonths(months)
-        setCountryRows(top)
+        setCountryRows(all)
         setCountryGrand({ monthly: grandMonthly, total: grandTotal, runRate: (grandMonthly[latest] ?? 0) * 12 })
       } catch (e: any) {
         console.error("Error fetching country usage:", e)
@@ -273,7 +255,7 @@ export default function ThreeHKDataUsagePage() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [appliedTick, startDate, endDate])
 
   useEffect(() => {
     if (!startDate || !endDate) return  // chờ mount effect đặt kỳ mặc định thông minh
