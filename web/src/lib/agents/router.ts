@@ -428,14 +428,19 @@ const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|
 // + bán được bao nhiêu, số lượng bán, kênh nào, lịch sử bán hàng...
 const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng|ban duoc bao nhieu|bán được bao nhiêu|so luong ban|số lượng bán|xuat ban|xuất bán|lich su ban|lịch sử bán|thong ke ban hang|thống kê bán hàng|trong bao nhieu ngay|trong bao nhiêu ngày|bao nhieu ngay qua|bao nhiêu ngày qua|bao nhieu don|bao nhiêu đơn|so don hang|số đơn hàng|doanh so ban|mua bao nhieu|mua được bao nhiêu|ban hang tren kenh|bán hàng trên kênh|kenh nao ban|kênh nào bán|ban tren kenh|bán trên kênh|hieu qua ban hang|hiệu quả bán hàng|san pham ban duoc|sản phẩm bán được|cm1|contribution margin/
 
-// Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước): nhân viên/doanh thu/đơn hàng...
-const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b/
+// Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước HOẶC mã SKU): nhân viên/doanh thu/đơn hàng/bán được...
+// (mã SKU khi đi kèm câu hỏi doanh số = FILTER cho BI query, KHÔNG phải chỉ tra cứu — vd "số bán của con X").
+const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bso luong (ban|sim|esim|don|cai)\b/
+// Tín hiệu USAGE 3HK — ép bi-analyst (fact_data_usage), tránh nhầm sang gap-analysis khi nhắc "3HK".
+const USAGE_BI_RE = /luong su dung|luong dung|muc (su )?dung|su dung data|data usage|3hk data usage|tieu thu data|usage.*3hk|3hk.*usage|thong ke.*data_usage_log|query.*data_usage/
 // Tín hiệu BI dạng XẾP HẠNG — chỉ ép bi-analyst khi KHÔNG có mục tiêu sản phẩm (nước/khu vực/mã nhóm),
 // tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
 const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
 
 // Tạo/xuất template — action mạnh, ép tao-template (hay bị nhắc WM/3HK → route nhầm gap-analysis).
 const TEMPLATE_RE = /\b(tao|xuat|tai|lam|generate)\b[^.!?]*template|template[^.!?]*\b(wm|3hk|wordmove|worldmove)\b|tao file excel|xuat file excel/
+// Từ khoá GAP thật sự (browse NCC / so sánh chưa có) — để phân biệt với hỏi SP GoHub theo nước.
+const GAP_KEYWORD_RE = /\bgap\b|ncc co|chua co|chua import|chua nhap|worldmove co|wm co|3hk co|so sanh ncc|con cung cap|con gói|con goi|vendor co/
 // Giải thích mã nhóm: "AP2 gồm nước nào / AP2 là gì" → giai-dap (không phải product_search).
 const EXPLAIN_GROUP_RE = /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/
 
@@ -513,12 +518,21 @@ export async function route(message: string, history: Message[], role: UserRole)
   } else if (DATA_EXPLORE_RE.test(nrm) && !params.skuCodes?.length && !params.productCodes?.length) {
     // "có bao nhiêu SKU active / đếm sản phẩm theo vendor / tra dữ liệu bảng X" → truy xuất dữ liệu thô
     agentId = "data-explorer"
-  } else if (agentId !== "bi-analyst" && agentId !== "data-explorer" && !params.skuCodes?.length && !params.productCodes?.length) {
-    // Override BI: câu doanh số/nhân viên/top bán chạy hay bị nhầm sang product_search
+  } else if (agentId !== "bi-analyst" && agentId !== "data-explorer") {
+    // Override BI: câu doanh số/usage/nhân viên/top bán chạy hay bị nhầm sang product_search hoặc tra-cuu.
+    // ⭐ Cho phép override KỂ CẢ khi có mã SKU: "số bán của con X", "check X bán được không" = BI (mã = filter).
     const hasProductTarget = !!(params.country || params.region || params.groupCode)
-    if (DEFINITE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget)) {
+    const hasCode = !!(params.skuCodes?.length || params.productCodes?.length)
+    if (DEFINITE_BI_RE.test(nrm) || USAGE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget && !hasCode)) {
       agentId = "bi-analyst"
     }
+  }
+
+  // Override: gap-analysis nhưng KHÔNG nhắc vendor (WM/3HK/NCC) + có nước + không có từ khoá gap
+  // → hỏi sản phẩm GoHub (vd "có sản phẩm nào ở cả Malaysia và Singapore") → tu-van.
+  if (agentId === "gap-analysis" && params.dataSource !== "ncc_catalog"
+      && (params.country || params.region) && !GAP_KEYWORD_RE.test(nrm)) {
+    agentId = "tu-van"
   }
 
   // AI country ghi đè regex nếu confidence cao VÀ regex không tìm được
