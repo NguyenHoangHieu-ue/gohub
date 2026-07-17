@@ -36,8 +36,11 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const appToken   = process.env.LARK_BASE_ID   || ""
-  const tableId    = process.env.LARK_TABLE_ID   || ""
+  // Cắt phần dư nếu user paste cả URL fragment (vd "tbl27...&view=vew..." → chỉ lấy "tbl27...").
+  // Tránh lỗi 1254041 TableIdNotFound khi env vô tình kèm "&view=" / "?" / khoảng trắng.
+  const clean = (v: string) => v.split(/[&?\s]/)[0].trim()
+  const appToken   = clean(process.env.LARK_BASE_ID  || "")
+  const tableId    = clean(process.env.LARK_TABLE_ID || "")
 
   if (!appToken || !tableId) {
     return NextResponse.json({

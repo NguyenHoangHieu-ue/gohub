@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
+import { exportToExcel, exportRawRows } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -94,23 +95,7 @@ export default function ProductPerformancePage() {
   }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: string }[]) => {
-    const csvRows = [
-      columns.map(c => c.label).join(","),
-      ...data.map(row => columns.map(c => {
-        const val = row[c.key] ?? 0
-        return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
-      }).join(",")),
-    ]
-    const csvContent = csvRows.join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${startDate}_to_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportToExcel(data as Record<string, unknown>[], columns, `${filename}_${startDate}_to_${endDate}`)
   }
 
   const exportToPDF = async () => {
@@ -399,31 +384,19 @@ export default function ProductPerformancePage() {
       const response = await fetch(`/api/orders/export?${params}`)
       if (response.ok) {
         const data = await response.json()
-        const headers = ["Order ID", "Date", "Staff", "Customer", "Channel", "Order Source", "Product", "SKU", "Qty", "Revenue"]
-        let csvContent = "﻿" + headers.join(",") + "\n"
-        data.forEach((item: any) => {
-          csvContent += [
-            `"${item.order_id || ""}"`,
-            `"${item.date ? (typeof item.date === "string" ? item.date.split("T")[0] : new Date(item.date).toISOString().split("T")[0]) : ""}"`,
-            `"${(item.staff || "").replace(/"/g, '""')}"`,
-            `"${(item.customer || item.customer_name || "").replace(/"/g, '""')}"`,
-            `"${(item.channel || "").replace(/"/g, '""')}"`,
-            `"${(item.order_source || "").replace(/"/g, '""')}"`,
-            `"${(item.product_name || "").replace(/"/g, '""')}"`,
-            `"${(item.sku || "").replace(/"/g, '""')}"`,
-            item.fulfilled_quantity || 0,
-            item.revenue || 0,
-          ].join(",") + "\n"
-        })
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.setAttribute("hidden", "")
-        a.setAttribute("href", url)
-        a.setAttribute("download", `Product_Performance_${startDate}_to_${endDate}.csv`)
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
+        const rows = data.map((item: any) => ({
+          "Order ID": item.order_id || "",
+          "Date": item.date ? (typeof item.date === "string" ? item.date.split("T")[0] : new Date(item.date).toISOString().split("T")[0]) : "",
+          "Staff": item.staff || "",
+          "Customer": item.customer || item.customer_name || "",
+          "Channel": item.channel || "",
+          "Order Source": item.order_source || "",
+          "Product": item.product_name || "",
+          "SKU": item.sku || "",
+          "Qty": item.fulfilled_quantity || 0,
+          "Revenue": item.revenue || 0,
+        }))
+        exportRawRows(rows, `Product_Performance_${startDate}_to_${endDate}`, "Products")
       } else {
         toast.error("Failed to export data")
       }
@@ -463,7 +436,7 @@ export default function ProductPerformancePage() {
             <button onClick={handleExport} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
               <Download className="w-4 h-4" />
-              Export Orders CSV
+              Export Orders
             </button>
           </div>
         </div>
@@ -732,7 +705,7 @@ export default function ProductPerformancePage() {
                 <button onClick={() => exportToCSV(group.data, group.id.replace(/-/g, "_"), [
                   { label: "Channel", key: "channel_name" }, { label: "Revenue", key: "revenue" }, { label: "Units Sold", key: "units_sold" }, { label: "Orders", key: "orders" }, { label: "Gross Margin", key: "margin" },
                 ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                  <Download className="w-3 h-3" /> CSV
+                  <Download className="w-3 h-3" /> Export
                 </button>
               </div>
               <div className="overflow-x-auto">

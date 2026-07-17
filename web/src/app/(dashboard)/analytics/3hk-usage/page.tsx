@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportRawRows, exportAOA } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel ThreeHKDataUsage. Data qua /api/analytics/query (SELECT-only).
 // Bỏ motion/react (không dùng), inline getDefaultDateRange/formatDate.
@@ -572,6 +573,43 @@ export default function ThreeHKDataUsagePage() {
     }
   }
 
+  const [exportingRecords, setExportingRecords] = useState(false)
+  // Xuất TẤT CẢ records của kỳ/tab hiện tại ra Excel (query KHÔNG phân trang).
+  const exportRecords = async () => {
+    if (exportingRecords) return
+    setExportingRecords(true)
+    try {
+      const sql = `
+        ${bundlesCTE()}
+        SELECT order_code, iccid, sku, sku_type,
+          COALESCE(data_amount_gb, 0) as data_amount_gb,
+          COALESCE(total_data_gb, 0) as total_data_gb,
+          CASE WHEN data_amount_gb > 0 THEN (total_data_gb / data_amount_gb) * 100 ELSE 0 END as usage_pct,
+          first_report_date, activation_date, record_count
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        ORDER BY ${sortConfig.key === "first_report_date" ? "first_report_date" : sortConfig.key} ${sortConfig.direction}
+      `
+      const result = await runQuery(sql)
+      const rows = (Array.isArray(result) ? result : []).map((r: any) => ({
+        "Order Code": r.order_code || "",
+        "ICCID": r.iccid || "",
+        "SKU": r.sku || "",
+        "SKU Type": r.sku_type || "",
+        "Plan (GB)": parseFloat(r.data_amount_gb || 0),
+        "Actual (GB)": parseFloat(r.total_data_gb || 0),
+        "Usage %": Number(parseFloat(r.usage_pct || 0).toFixed(2)),
+        "First Report": r.first_report_date || "",
+        "Activation": r.activation_date || "",
+        "Records": r.record_count || 0,
+      }))
+      exportRawRows(rows, `3hk-records-${activeTab}-${startDate}_to_${endDate}`, "Records")
+    } catch (err) {
+      console.error("Error exporting 3HK records:", err)
+    } finally {
+      setExportingRecords(false)
+    }
+  }
+
   const handlePageChange = (pageNum: number) => {
     setPage(pageNum)
     fetchRecords(pageNum, true)
@@ -588,23 +626,16 @@ export default function ThreeHKDataUsagePage() {
     [countryMonths],
   )
 
-  // Xuất CSV bảng Country × Month (bao gồm cột Total, Run-rate + dòng GRAND TOTAL).
+  // Xuất Excel bảng Country × Month (bao gồm cột Total, Run-rate + dòng GRAND TOTAL).
   const exportCountryCsv = () => {
     if (countryRows.length === 0) return
     const header = ["Country", ...countryMonths.map(m => monthLabel(m, countryMultiYear)), "Total", "Run-rate 12M"]
-    const csvNum = (n: number) => (n || 0).toFixed(2)  // dấu chấm cho CSV (an toàn Excel/US)
-    const lines = [
-      header.join(","),
-      ...countryRows.map(r => [r.country, ...countryMonths.map(m => csvNum(r.monthly[m] ?? 0)), csvNum(r.total), csvNum(r.runRate)].join(",")),
-      ["GRAND TOTAL", ...countryMonths.map(m => csvNum(countryGrand.monthly[m] ?? 0)), csvNum(countryGrand.total), csvNum(countryGrand.runRate)].join(","),
+    const num = (n: number) => Number((n || 0).toFixed(2))
+    const rows: (string | number)[][] = [
+      ...countryRows.map(r => [r.country, ...countryMonths.map(m => num(r.monthly[m] ?? 0)), num(r.total), num(r.runRate)]),
+      ["GRAND TOTAL", ...countryMonths.map(m => num(countryGrand.monthly[m] ?? 0)), num(countryGrand.total), num(countryGrand.runRate)],
     ]
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `3hk-usage-by-country-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    exportAOA(header, rows, `3hk-usage-by-country-${new Date().toISOString().slice(0, 10)}`, "By Country")
   }
 
   return (
@@ -730,7 +761,7 @@ export default function ThreeHKDataUsagePage() {
             )}
             <button onClick={exportCountryCsv} disabled={countryRows.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
-              <Download className="w-3.5 h-3.5" /> CSV
+              <Download className="w-3.5 h-3.5" /> Export
             </button>
           </div>
         </div>
@@ -1120,9 +1151,9 @@ export default function ThreeHKDataUsagePage() {
       {/* Records Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-end gap-4">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+          <button onClick={exportRecords} disabled={exportingRecords} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
             <Download className="w-4 h-4" />
-            Export CSV
+            {exportingRecords ? "Exporting..." : "Export"}
           </button>
         </div>
 

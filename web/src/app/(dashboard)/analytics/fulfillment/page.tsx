@@ -8,6 +8,7 @@ import { Truck, Package, Filter, Calendar, Download, AlertCircle, CheckCircle2, 
 import { cn } from "@/lib/utils"
 import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportRawRows } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel FulfillmentReport. Backend /api/analytics/fulfillment-report (chung shape).
 // Adapt: "use client"; cn @/lib/utils; inline getDefaultDateRange; Export CSV wired (intel để trống).
@@ -86,12 +87,12 @@ export default function FulfillmentReport() {
 
   const handleExportCSV = () => {
     if (!data || data.monthly.length === 0) return
-    const headers = ["Month", "Gross Orders", "Cancel", "Return", "Net Orders", "Revenue", "Items Delivery", "Orders Delivery", "Orders Return"]
-    const rows = data.monthly.map(m => [m.month, m.gross_orders, m.cancel, m.returns, m.net_orders, m.revenue, m.items_delivery, m.orders_delivery, m.orders_return].join(","))
-    const csv = "﻿" + [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob)
-    a.setAttribute("download", `fulfillment_${startDate}_to_${endDate}.csv`); document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    const rows = data.monthly.map(m => ({
+      "Month": m.month, "Gross Orders": m.gross_orders, "Cancel": m.cancel, "Return": m.returns,
+      "Net Orders": m.net_orders, "Revenue": m.revenue, "Items Delivery": m.items_delivery,
+      "Orders Delivery": m.orders_delivery, "Orders Return": m.orders_return,
+    }))
+    exportRawRows(rows, `fulfillment_${startDate}_to_${endDate}`, "Fulfillment")
   }
 
   const Skeleton = ({ className }: { className?: string }) => (<div className={cn("animate-pulse bg-slate-200 rounded", className)} />)
@@ -114,7 +115,7 @@ export default function FulfillmentReport() {
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <button onClick={() => fetchFulfillmentData()} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
           <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
-            <Download className="w-4 h-4" />Export CSV
+            <Download className="w-4 h-4" />Export
           </button>
         </div>
       </div>

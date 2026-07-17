@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "@/components/cost-management-modal"
+import { exportRawRows } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -202,30 +203,7 @@ export default function ChannelPerformancePage() {
 
   const exportToCSV = (data: any[], filename: string) => {
     if (!data || data.length === 0) return
-
-    const headers = Object.keys(data[0])
-    const csvRows = []
-    csvRows.push(headers.join(","))
-
-    for (const row of data) {
-      const values = headers.map(header => {
-        const val = row[header]
-        const escaped = ("" + val).replace(/"/g, '""')
-        return `"${escaped}"`
-      })
-      csvRows.push(values.join(","))
-    }
-
-    const csvString = "﻿" + csvRows.join("\n")
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${selectedChannel}_${startDate}_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportRawRows(data as Record<string, unknown>[], `${filename}_${selectedChannel}_${startDate}_${endDate}`)
   }
 
   const [showFilters, setShowFilters] = useState(false)
@@ -1261,7 +1239,7 @@ export default function ChannelPerformancePage() {
           </div>
           <button onClick={() => exportToCSV(performanceData, "performance_breakdown")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -1471,7 +1449,7 @@ export default function ChannelPerformancePage() {
           </div>
           <button onClick={() => exportToCSV(trendData, "daily_performance")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -1539,7 +1517,7 @@ export default function ChannelPerformancePage() {
           </div>
           <button onClick={() => exportToCSV(topProducts, "top_products")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">

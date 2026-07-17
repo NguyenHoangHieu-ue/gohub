@@ -10,6 +10,7 @@ import {
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { cn } from "@/lib/utils"
+import { exportRawRows } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
 // đã align) + /api/channels. Adapt: "use client"; bỏ motion; inline getDefaultDateRange.
@@ -127,29 +128,26 @@ export default function AllTimeReport() {
   const handleExport = () => {
     if (!data) return
     const periods = Array.from(new Set(data[activeView].map(d => d.period))).sort()
-    const headers = [
-      "Period", "B2B Strategic Revenue", "B2B Strategic GPM%", "B2B Strategic CM1%",
-      "B2B Non-Strategic Revenue", "B2B Non-Strategic GPM%", "B2B Non-Strategic CM1%",
-      "B2C Revenue", "B2C GPM%", "B2C CM1%", "Total Revenue",
-    ]
-    const csvRows = [headers.join(","), ...periods.map(period => {
+    const rows = periods.map(period => {
       const b2bS = data[activeView].find(d => d.period === period && d.group_name === "B2B-Strategic")
       const b2bN = data[activeView].find(d => d.period === period && d.group_name === "B2B-Non-Strategic")
       const b2c = data[activeView].find(d => d.period === period && d.group_name === "B2C")
       const totalRev = (Number(b2bS?.revenue) || 0) + (Number(b2bN?.revenue) || 0) + (Number(b2c?.revenue) || 0)
-      return [
-        period, b2bS?.revenue || 0, (b2bS?.gpm || 0).toFixed(2), (b2bS?.gpm2 || 0).toFixed(2),
-        b2bN?.revenue || 0, (b2bN?.gpm || 0).toFixed(2), (b2bN?.gpm2 || 0).toFixed(2),
-        b2c?.revenue || 0, (b2c?.gpm || 0).toFixed(2), (b2c?.gpm2 || 0).toFixed(2), totalRev,
-      ].join(",")
-    })]
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `All_Time_Performance_${activeView}_${startDate}_to_${endDate}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+      return {
+        "Period": period,
+        "B2B Strategic Revenue": b2bS?.revenue || 0,
+        "B2B Strategic GPM%": Number((b2bS?.gpm || 0).toFixed(2)),
+        "B2B Strategic CM1%": Number((b2bS?.gpm2 || 0).toFixed(2)),
+        "B2B Non-Strategic Revenue": b2bN?.revenue || 0,
+        "B2B Non-Strategic GPM%": Number((b2bN?.gpm || 0).toFixed(2)),
+        "B2B Non-Strategic CM1%": Number((b2bN?.gpm2 || 0).toFixed(2)),
+        "B2C Revenue": b2c?.revenue || 0,
+        "B2C GPM%": Number((b2c?.gpm || 0).toFixed(2)),
+        "B2C CM1%": Number((b2c?.gpm2 || 0).toFixed(2)),
+        "Total Revenue": totalRev,
+      }
+    })
+    exportRawRows(rows, `All_Time_Performance_${activeView}_${startDate}_to_${endDate}`, "All-Time")
   }
 
   if (loading) {
@@ -198,7 +196,7 @@ export default function AllTimeReport() {
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />Filters
           </button>
           <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95">
-            <Download className="w-4 h-4" />Export CSV
+            <Download className="w-4 h-4" />Export
           </button>
         </div>
       </div>

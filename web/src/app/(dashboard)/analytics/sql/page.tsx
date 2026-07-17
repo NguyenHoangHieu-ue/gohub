@@ -8,6 +8,7 @@ import {
   Copy, Check, AlertCircle, Loader2, Table as TableIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { exportRawRows } from "@/lib/export-excel"
 
 interface TableInfo { tableName: string; columns: { columnName: string; dataType: string }[] }
 
@@ -63,12 +64,13 @@ function SqlExplorer() {
   }
 
   const exportCsv = () => {
-    const rows = [columns.join(","), ...results.map(r =>
-      columns.map(c => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(",")
-    )]
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" })
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob)
-    a.download = `sql_export_${new Date().toISOString().split("T")[0]}.csv`; a.click()
+    // Xuất TẤT CẢ dòng kết quả query ra Excel (theo đúng thứ tự cột).
+    const rows = results.map(r => {
+      const obj: Record<string, unknown> = {}
+      for (const c of columns) obj[c] = r[c] ?? ""
+      return obj
+    })
+    exportRawRows(rows, `sql_export_${new Date().toISOString().split("T")[0]}`, "Query")
   }
 
   const copy = () => { navigator.clipboard.writeText(query); setCopied(true); setTimeout(() => setCopied(false), 2000) }
@@ -167,7 +169,7 @@ function SqlExplorer() {
               <button onClick={exportCsv}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50">
                 <Download className="w-3.5 h-3.5" />
-                Export CSV
+                Export
               </button>
             )}
           </div>
