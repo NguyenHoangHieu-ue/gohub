@@ -425,10 +425,11 @@ const AGENT_NAMES: Record<AgentId, string> = {
 const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/
 
 // BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
-const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng/
+// + bán được bao nhiêu, số lượng bán, kênh nào, lịch sử bán hàng...
+const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng|ban duoc bao nhieu|bán được bao nhiêu|so luong ban|số lượng bán|xuat ban|xuất bán|lich su ban|lịch sử bán|thong ke ban hang|thống kê bán hàng|trong bao nhieu ngay|trong bao nhiêu ngày|bao nhieu ngay qua|bao nhiêu ngày qua|bao nhieu don|bao nhiêu đơn|so don hang|số đơn hàng|doanh so ban|mua bao nhieu|mua được bao nhiêu|ban hang tren kenh|bán hàng trên kênh|kenh nao ban|kênh nào bán|ban tren kenh|bán trên kênh|hieu qua ban hang|hiệu quả bán hàng|san pham ban duoc|sản phẩm bán được|cm1|contribution margin/
 
 // Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước): nhân viên/doanh thu/đơn hàng...
-const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b/
+const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b/
 // Tín hiệu BI dạng XẾP HẠNG — chỉ ép bi-analyst khi KHÔNG có mục tiêu sản phẩm (nước/khu vực/mã nhóm),
 // tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
 const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|top \d* ?(sku|san pham|kenh|nhan vien|khach)/

@@ -210,14 +210,21 @@ export default function ThreeHKDataUsagePage() {
     (async () => {
       setLoadingCountry(true); setCountryError(null)
       try {
-        // Bỏ report_date NULL (rác không thuộc tháng nào). Giới hạn 12 tháng gần nhất cho gọn.
+        // Tính cutoff date ở client (tránh subquery MAX scan 1.1M rows → timeout).
+        // Lấy 12 tháng gần nhất: từ đầu tháng (hiện tại - 11 tháng) đến hiện tại.
+        const cutoffDate = (() => {
+          const d = new Date()
+          d.setMonth(d.getMonth() - 11)
+          d.setDate(1)
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+        })()
         const sql = `
           SELECT COALESCE(NULLIF(TRIM(country), ''), 'Unknown') AS country,
-                 to_char(report_date, 'YYYY-MM') AS ym,
-                 SUM(data_gb) / 1024.0 AS tb
+                 to_char(report_date::date, 'YYYY-MM')          AS ym,
+                 ROUND((SUM(data_gb) / 1024.0)::numeric, 4)    AS tb
           FROM data_usage_log
           WHERE report_date IS NOT NULL
-            AND report_date >= (SELECT MAX(report_date) FROM data_usage_log) - INTERVAL '11 months'
+            AND report_date::date >= '${cutoffDate}'::date
           GROUP BY 1, 2
           ORDER BY 1, 2
         `

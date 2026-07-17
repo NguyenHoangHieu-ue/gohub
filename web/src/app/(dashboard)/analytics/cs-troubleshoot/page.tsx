@@ -30,6 +30,7 @@ function getDefaultDateRange() {
 }
 
 interface CSTroubleshootData {
+  hasTicketData: boolean
   kpis: { unitsSold: number; ticketCount: number; tbsRate: number; avgHandleTime: number; replacementCount: number; refundCount: number }
   shifts: { shift: string; tickets: number }[]
   issues: { name: string; count: number }[]
@@ -47,6 +48,7 @@ export default function CSTroubleshootReport() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"tbs" | "sku" | "vendor" | "source" | "invalid">("tbs")
+  const [syncStatus, setSyncStatus] = useState<{ count: number; lastSync: string | null; configured: boolean } | null>(null)
 
   const [dateRange, setDateRange] = useState(() => {
     const defaultRange = getDefaultDateRange()
@@ -77,7 +79,10 @@ export default function CSTroubleshootReport() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || "Failed to sync")
       await fetchData()
-      toast.success(json.message || `Đã đồng bộ ${json.synced ?? ""} bản ghi từ Lark.`)
+      toast.success(json.message || `Đã đồng bộ ${json.totalSynced ?? ""} bản ghi từ Lark.`)
+      // Refresh sync status + data
+      fetch("/api/admin/sync-lark-tickets").then(r => r.ok ? r.json() : null).then(d => { if (d) setSyncStatus(d) }).catch(() => {})
+      await fetchData()
     } catch (err: any) {
       toast.error(`Sync error: ${err.message}`)
     } finally {
@@ -86,6 +91,14 @@ export default function CSTroubleshootReport() {
   }
 
   useEffect(() => { fetchData() }, [channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps — ngày chỉ áp khi bấm "Lọc"
+
+  // Load sync status on mount để biết có data chưa
+  useEffect(() => {
+    fetch("/api/admin/sync-lark-tickets")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSyncStatus(d) })
+      .catch(() => {})
+  }, [])
 
   if (error) {
     return (
@@ -156,6 +169,29 @@ export default function CSTroubleshootReport() {
       </div>
 
       <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-4 md:py-8">
+        {/* Sync status + no-data banner */}
+        {syncStatus && (
+          <div className={cn("mb-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm border",
+            syncStatus.count === 0 ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"
+          )}>
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 shrink-0" />
+              {syncStatus.count === 0
+                ? <span>Chưa có dữ liệu ticket nào trong Supabase. Nhấn <strong>Sync Lark</strong> để tải dữ liệu từ Lark Base.</span>
+                : <span><strong>{syncStatus.count.toLocaleString()}</strong> tickets · Last sync: {syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleString("vi-VN") : "N/A"}</span>
+              }
+            </div>
+            {!syncStatus.configured && (
+              <span className="text-xs font-bold text-red-600">⚠ Thiếu LARK_BASE_ID / LARK_TABLE_ID</span>
+            )}
+          </div>
+        )}
+        {data && !data.hasTicketData && !loading && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 bg-slate-50 border border-dashed border-slate-300 text-sm text-slate-500">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>Không có ticket nào trong kỳ đã chọn. Thử chọn kỳ khác hoặc nhấn <strong>Sync Lark</strong> để đồng bộ dữ liệu mới nhất.</span>
+          </div>
+        )}
         {activeTab === "tbs" && <TBSOverview data={data} loading={loading} />}
         {activeTab === "sku" && <SKUPerformance data={data} loading={loading} />}
         {activeTab === "vendor" && <VendorPerformance data={data} loading={loading} />}
