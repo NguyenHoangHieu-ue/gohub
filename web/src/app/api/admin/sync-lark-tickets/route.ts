@@ -145,9 +145,21 @@ export async function GET(_req: NextRequest) {
     .limit(1)
     .single()
 
+  // Trả trạng thái chi tiết để debug: từng env var có được đọc không.
+  const hasBaseId    = !!process.env.LARK_BASE_ID
+  const hasTableId   = !!process.env.LARK_TABLE_ID
+  const hasAppId     = !!process.env.LARK_APP_ID
+  const hasAppSecret = !!process.env.LARK_APP_SECRET
+
   return NextResponse.json({
     count: count ?? 0,
     lastSync: latest?.updated_at ?? null,
-    configured: !!(process.env.LARK_BASE_ID && process.env.LARK_TABLE_ID),
+    configured: hasBaseId && hasTableId,
+    envCheck: {
+      LARK_BASE_ID:    hasBaseId    ? "✅ set" : "❌ missing",
+      LARK_TABLE_ID:   hasTableId   ? "✅ set" : "❌ missing",
+      LARK_APP_ID:     hasAppId     ? "✅ set" : "❌ missing (cần để xác thực bot)",
+      LARK_APP_SECRET: hasAppSecret ? "✅ set" : "❌ missing (cần để xác thực bot)",
+    },
   })
 }
