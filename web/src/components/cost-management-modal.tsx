@@ -59,12 +59,14 @@ function costsDiffer(a: ChannelCost | undefined, b: ChannelCost | undefined): bo
   return false
 }
 
-const BLANK_GROUP: GroupCost = { group_name: "B2C", month: "", item_name: "", amount: 0, note: "" }
-
 export const CostManagementModal: React.FC<CostManagementModalProps> = ({
   isOpen, onClose, onSave, initialMonth, scope = "all",
 }) => {
   const toast = useToast()
+
+  // Group default: B2C scope → B2C, B2B scope (all) → B2B
+  const defaultGroup = scope === "b2c" ? "B2C" : "B2B"
+  const BLANK_GROUP: GroupCost = { group_name: defaultGroup as "B2C" | "B2B", month: "", item_name: "", amount: 0, note: "" }
 
   const [costMonth,          setCostMonth]          = useState(initialMonth || new Date().toISOString().slice(0, 7))
   const [monthlyCosts,       setMonthlyCosts]       = useState<Record<string, ChannelCost>>({})
@@ -84,9 +86,11 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
 
   const fetchData = async (month: string) => {
     try {
+      // Group costs: filter by scope để B2C modal chỉ thấy B2C items, B2B modal chỉ thấy B2B items.
+      const groupFilter = scope === "b2c" ? "&group=B2C" : "&group=B2B"
       const [costsRes, groupRes, settingsRes, vnEcomSubRes, travelokaSubRes, shopeepaySubRes] = await Promise.all([
         fetch(`/api/channel-costs?month=${month}`),
-        fetch(`/api/channel-group-costs?month=${month}`),
+        fetch(`/api/channel-group-costs?month=${month}${groupFilter}`),
         fetch(`/api/channel-cost-settings?month=${month}`),
         fetch(`/api/config/subchannels?channel=VN-Ecom`),
         fetch(`/api/config/subchannels?channel=Traveloka`),
@@ -293,7 +297,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
         return
       }
       toast.success(newGroupCost.id ? "Đã cập nhật chi phí" : "Đã thêm chi phí mới")
-      setNewGroupCost({ ...BLANK_GROUP, month: costMonth })
+      setNewGroupCost({ group_name: defaultGroup as "B2C" | "B2B", month: costMonth, item_name: "", amount: 0, note: "" })
       await fetchData(costMonth)
       onSave()   // refresh analytics numbers
     } catch {
@@ -380,8 +384,12 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               <div className="flex gap-1">
                 <input
                   type="number"
-                  value={costs[cat]?.value ?? 0}
-                  onChange={e => updateCost(chanName, cat, "value", parseFloat(e.target.value) || 0)}
+                  min={0}
+                  step="any"
+                  // Show "" when 0 → user can click and type immediately without fighting the "0"
+                  value={costs[cat]?.value ? costs[cat].value : ""}
+                  placeholder="0"
+                  onChange={e => updateCost(chanName, cat, "value", e.target.value === "" ? 0 : (parseFloat(e.target.value) || 0))}
                   className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                 />
                 <select
@@ -437,11 +445,11 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               onClick={() => setActiveCostTab("b2c")}
               className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2c" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >B2C Channels</button>
-            {/* Group Costs luôn hiện (B2C cũng cần nhập chi phí nhóm) */}
+            {/* Group Costs luôn hiện; label chỉ rõ scope */}
             <button
               onClick={() => setActiveCostTab("group")}
               className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
-            >Group Costs</button>
+            >{scope === "b2c" ? "B2C Group" : "B2B Group"}</button>
           </div>
 
           {/* Save All */}
@@ -476,7 +484,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                     <h3 className="font-bold text-blue-900">{newGroupCost.id ? "Sửa mục chi phí" : "Thêm chi phí mới"}</h3>
                     {newGroupCost.id && (
                       <button
-                        onClick={() => { setNewGroupCost({ ...BLANK_GROUP, month: costMonth }); setGroupFormError(null) }}
+                        onClick={() => { setNewGroupCost({ group_name: defaultGroup as "B2C" | "B2B", month: costMonth, item_name: "", amount: 0, note: "" }); setGroupFormError(null) }}
                         className="text-xs text-blue-600 hover:underline font-bold"
                       >Huỷ sửa</button>
                     )}
@@ -539,7 +547,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="font-bold text-slate-800 px-2">Chi phí tháng {costMonth}</h3>
+                  <h3 className="font-bold text-slate-800 px-2">Chi phí {defaultGroup} tháng {costMonth}</h3>
                   {groupCosts.length === 0 ? (
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-slate-400 text-sm">Chưa có chi phí nào tháng này.</p>
