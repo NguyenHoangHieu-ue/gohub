@@ -13,7 +13,7 @@ const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 async function canWriteScheduled(username: string): Promise<boolean> {
   const dbRole = await getDbRole(username)
   if (["admin", "creator"].includes(dbRole)) return true
-  const { data } = await supabaseAdmin.from("app_config").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle()
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle()
   if (!data?.value) return false
   try {
     const cfg = JSON.parse(data.value) as Record<string, string[]>

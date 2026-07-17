@@ -22,10 +22,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { username: 
     if ("allowed_analytics" in body) update.allowed_analytics = body.allowed_analytics ?? null
     if ("allowed_tabs" in body)      update.allowed_tabs      = body.allowed_tabs ?? null
 
-    await supabaseAdmin.from("users").update(update).eq("username", params.username)
+    const { error } = await supabaseAdmin.from("users").update(update).eq("username", params.username)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  } catch (e) {
+    const msg = (e as Error).message
+    return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 500 })
   }
 }
 
