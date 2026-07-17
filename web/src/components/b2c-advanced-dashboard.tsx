@@ -283,9 +283,10 @@ const monthlyRollup = (series: { date: string; sessions: number; cr: number; pur
 
 // Dashboard B2C tùy biến (GA4/leads/CAC/spend, session 66-70) — giữ làm tab "Advanced" (admin).
 export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }: { demoMode?: boolean; localPreview?: boolean } = {}) {
-  const [data, setData]       = useState<MonthlyData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState<string | null>(null)
+  const [data, setData]           = useState<MonthlyData | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [viewMode, setViewMode] = useState<"month" | "quarter">("month")
   const [profitMonth, setProfitMonth] = useState<string>("")
   // GA4 per site (Section 3 + 4) — load lazy, graceful nếu chưa cấu hình
@@ -296,6 +297,28 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]
   }[] | null>(null)
 
+  // Hàm load data (có thể force-refresh để bypass snapshot → lấy data live như Performance)
+  const loadData = async (forceRefresh = false) => {
+    if (demoMode) return
+    setLoading(true); setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (localPreview) params.set("localPreview", "1")
+      params.set("skipLeads", "1")
+      if (forceRefresh) params.set("nocache", "1")
+      const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `${res.status}`)
+      }
+      setData(await res.json())
+    } catch (err) {
+      console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setLoading(false); setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
     if (demoMode) {
       setData(DEMO_DATA)
@@ -303,25 +326,8 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       setError(null)
       return
     }
-    (async () => {
-      setLoading(true); setError(null)
-      try {
-        const params = new URLSearchParams()
-        if (localPreview) params.set("localPreview", "1")
-        params.set("skipLeads", "1")
-        const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
-          throw new Error(body?.error || `${res.status}`)
-        }
-        setData(await res.json())
-      } catch (err) {
-        console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [demoMode, localPreview])
+    loadData()
+  }, [demoMode, localPreview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (demoMode || !data?.months?.length) return

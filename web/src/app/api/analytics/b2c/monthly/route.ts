@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq, noCache } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isCronReq, noCache, flushAnalyticsCacheByPrefixes } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
@@ -69,9 +69,12 @@ export async function GET(req: NextRequest) {
   const skipLeads = req.nextUrl.searchParams.get("skipLeads") === "1"
   const onlyLeads = req.nextUrl.searchParams.get("onlyLeads") === "1"
 
+  const forceRefresh = noCache(req)
+
   try {
+    // Skip snapshot khi nocache=1 (user muốn data live, tránh lệch với Performance tab).
     try {
-      const snapshots = await readB2CMonthlySnapshots(months)
+      const snapshots = forceRefresh ? [] : await readB2CMonthlySnapshots(months)
       if (snapshots.length === months.length) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
         if (onlyLeads) {
