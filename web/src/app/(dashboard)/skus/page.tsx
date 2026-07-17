@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Package, Search, ChevronLeft, ChevronRight, X, ChevronDown, Download, Loader2 } from "lucide-react"
 import * as XLSX from "xlsx"
+import { EmptyTableRow } from "@/components/empty-state"
+import { InfoTooltip } from "@/components/tooltip"
 
 const PAGE_SIZE = 20
 
@@ -547,11 +549,7 @@ function TableShell({ cols, rows, loading, renderRow }: {
                 </tr>
               ))
             ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={cols.length} className="px-4 py-12 text-center text-sm text-gray-400">
-                  Không có dữ liệu
-                </td>
-              </tr>
+              <EmptyTableRow colSpan={cols.length} title="Không có dữ liệu" description="Thử bỏ bộ lọc hoặc đổi từ khoá" />
             ) : rows.map(row => renderRow(row, cols))}
           </tbody>
         </table>

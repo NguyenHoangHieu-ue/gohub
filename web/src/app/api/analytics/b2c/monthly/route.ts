@@ -9,7 +9,7 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerRows } from "@/lib/admin-gohub"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { getB2CChannelBudgetByMonth, B2C_CHANNELS } from "@/lib/b2c-channel-budget"
+import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả dữ liệu từ tháng 1 đến tháng hiện tại MTD:
@@ -313,19 +313,21 @@ export async function GET(req: NextRequest) {
       return { markets, customers, channels, profitByChannel, customerSource, customerBreakdown, customerError }
     }, undefined, noCache(req))
 
-    // KPI targets: nhập ở KPI / Target. Budget: lấy từ Manage Costs → B2C Channels.
+    // KPI targets + Budget: đều nhập trong tab KPI/Target.
+    // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
     let targets: Record<string, { vn: number; us: number; total: number }> = {}
-    try {
-      const { data: rows } = await supabaseAdmin
-        .from("app_settings").select("key, value").eq("key", "b2c_kpi_targets")
-      for (const r of rows ?? []) {
-        if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
-      }
-    } catch {}
     let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
     try {
-      budget = await getB2CChannelBudgetByMonth(months)
-    } catch (e) { console.error("[b2c/monthly] budget (b2c channel costs)", (e as Error).message) }
+      const { data: rows } = await supabaseAdmin
+        .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
+      for (const r of rows ?? []) {
+        if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
+        if (r.key === "b2c_budget" && r.value) {
+          const saved: Record<string, number> = JSON.parse(r.value)
+          for (const m of months) if (saved[m]) budget[m] = saved[m]
+        }
+      }
+    } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
 
     // Chi phí marketing B2C theo tháng (Supabase analytics_channel_group_costs)
     const spend: Record<string, number> = {}
@@ -340,16 +342,6 @@ export async function GET(req: NextRequest) {
         if (spend[r.month] !== undefined) spend[r.month] += Number(r.amount) || 0
       }
     } catch (e) { console.error("[b2c/monthly] spend (supabase)", (e as Error).message) }
-    // Manual temporary B2C costs from Cost Management screenshots.
-    // Remove this once these B2C group costs are entered in the source table.
-    const manualSpendOverrides: Record<string, number> = {
-      "2026-05": 86_633_334 + 20_099_340 + 26_188_452,
-      "2026-06": 93_239_567 + 2_989_734,
-      "2026-07": 128_000_000,
-    }
-    for (const [month, amount] of Object.entries(manualSpendOverrides)) {
-      if (spend[month] !== undefined) spend[month] = amount
-    }
 
     // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
     const { leads, leadsByChannel } = skipLeads

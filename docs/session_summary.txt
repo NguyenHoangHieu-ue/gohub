@@ -1,5 +1,87 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-15 (session 90 — Dashboard tab thị trường US/VN/All; Creator Dev Tools API+DB; nút Lưu dirty-state toàn tab)
+Cập nhật lần cuối: 2026-07-17 (session 97 — Manage Cost + B2C toggle + Budget nguồn KPI/Target + Wave 0.4/0.6)
+
+## Session 97 (2026-07-17) — Bỏ manualSpendOverrides + Wave 0.6 Empty/Help + Verify real-time
+
+### Tình trạng cập nhật từ user
+- ✅ Staging đã push lên main
+- ✅ ENV Vercel đã set đầy đủ
+- ✅ Migration v17_b2c_report_monthly_snapshots đã chạy (đã ghi ở session 95)
+
+### Task 1: Bỏ manualSpendOverrides trong B2C
+- `web/src/app/api/analytics/b2c/monthly/route.ts`: xóa block `manualSpendOverrides` (10 dòng tạm thời cho T5-7/2026).
+  Từ nay spend B2C lấy trực tiếp từ `analytics_channel_group_costs` (Supabase, nhập qua Manager Costs).
+
+### Task 1b: B2C Tab + Manage Cost — toàn diện
+
+**B2C toggle:**
+- `b2c/page.tsx`: bỏ `canToggle = admin/creator`. Mọi user có quyền B2C thấy cả 2 tab Advanced + Performance.
+- Xóa import `useSession` thừa.
+
+**API write roles mở rộng** (từ `["admin","creator"]` → thêm bod/b2b/b2c/saleb2c/staff):
+- `channel-costs POST`
+- `channel-group-costs POST`
+- `channel-group-costs/[id] DELETE`
+- `channel-cost-settings POST`
+→ Sửa root cause Issue 2: Total/Sub-channel Mode toggle trả 403 silent với non-admin.
+
+**CostManagementModal — rewrite toàn bộ `components/cost-management-modal.tsx`:**
+
+*Bug fixes:*
+- **Dirty-state tracking**: state `savedCosts` (baseline từ API) + `isDirty(channel)` + `isTabDirty` (memo) → Save button xám khi chưa có thay đổi, xanh khi có. Save All button cũng theo dirty-state.
+- **Sau khi save**: `setSavedCosts` cập nhật baseline → button về xám ngay (không cần re-fetch).
+- **`alert()` bỏ hoàn toàn**: thay bằng `groupFormError` state (lỗi inline cạnh form, highlight input đỏ).
+- **`onSave()` gọi đúng chỗ**: Group Cost save, delete đều gọi `onSave()` → analytics refresh.
+- **Toast thay inline save-success**: dùng `useToast()` (success/error) cho mọi thao tác.
+- **Delete xác nhận**: nút Xoá → hiện "Xoá / Huỷ" inline (không `confirm()`, không modal mới).
+- **Subchannel mode**: sau khi `toggleSubchannelMode` thất bại (403 cũ → giờ 200) hiện toast.error thay vì im lặng.
+- **Save subchannels**: sau save batch, cập nhật `savedCosts` cho từng sub-channel key → dirty-state đúng.
+- **Save All failure**: đếm số kênh lỗi, toast.error cụ thể.
+
+*UX improvements:*
+- Save button text: "Save" khi dirty, "Saved" khi sạch (không phải cùng text lúc nào).
+- Save All button text: "Save All B2C/B2B" khi dirty, "No Changes" khi sạch.
+- Nhãn category tiếng người đọc được (Platform Fee, Sponsor Prods thay camelCase).
+- Group Cost form: nhãn tiếng Việt ("Tên mục *", "Số tiền (VND) *", "Ghi chú").
+- Group Cost empty state: tiếng Việt "Chưa có chi phí nào tháng này."
+- Tsc PASS, next build PASS.
+
+### Task 2: Wave 0.6 — Empty/Help States
+- **Mới**: `components/empty-state.tsx` — `EmptyState` (icon+title+description+CTA) + `EmptyTableRow` (dùng trong tbody).
+- **Mới**: `components/tooltip.tsx` — `Tooltip` (CSS-only) + `InfoTooltip` (icon ? cạnh tiêu đề cột).
+- **Mới**: `components/search-shortcut.tsx` — phím `/` focus ô tìm kiếm đầu tiên trên trang.
+- **Áp dụng**: `countries/page.tsx` (4 bảng), `promotions/page.tsx`, `kb/page.tsx` (3 chỗ), `ncc/page.tsx` (2 bảng + 3 InfoTooltip), `skus/page.tsx` (EmptyTableRow).
+- **Layout**: `(dashboard)/layout.tsx` thêm `<SearchShortcut />`.
+- tsc PASS, next build PASS (exit 0).
+
+### Task 3: Wave 0.4 — URL-state cho filter/search
+- **Mới**: `hooks/use-url-state.ts` — `useUrlState(key, default, debounce)` và `useUrlStates(defaults, debounce)`.
+  Đọc/ghi searchParams vào URL (replace, không reload). Text input debounce 300ms, select/tab debounce=0.
+- **Áp dụng**:
+  - `promotions/page.tsx`: 3 filter (q, vendor, sim) lưu URL. Nút "Xóa filter" reset cả 3 cùng lúc.
+  - `countries/page.tsx`: 5 param (tab, qc, qs, qv, qcat) — tab active + search từng sub-tab lưu URL.
+  - `kb/page.tsx`: `tab` (docs/wiki/search) lưu URL, giữ nguyên điều kiện canWikiView.
+- **Hiệu ứng**: F5/back-button/chia sẻ link giữ nguyên bộ lọc và tab đang xem.
+- tsc PASS, next build PASS.
+
+### Task 4: Verify real-time B2B/B2C khi lưu KPI/Target và Manager Cost
+**Manager Cost (CostManagementModal) trên B2B/B2C:**
+- B2B page: `onSave={() => fetchData(true)}` → `nocache=1` → tất cả 6 API (`b2b/kpis`, `performance`, `strategic-performance`, `trend`, `channels-with-platform-fee`) đều nhận `nocache=1`.
+- `b2b/kpis` route dùng `cachedQuery(key, fn, ttl, noCache(req))` → khi `noCache=true`, bỏ qua L1+L2 cache, recalculate fresh (gồm `getChannelCostsForMonths` từ Supabase).
+- B2C Performance (`b2c-performance.tsx`): cùng pattern, `b2c/kpis` + `b2c/trend` + `b2c/performance` đều respect `nocache=1`.
+- `POST /api/channel-costs` và `POST /api/channel-group-costs` đều gọi `flushAnalyticsCache()` trước khi trả về → L1 in-memory + L2 Supabase cache xóa sạch.
+- **KẾT LUẬN**: ✅ Manager Cost real-time hoàn toàn.
+
+**KPI Target (từ analytics/targets page):**
+- `POST /api/planning/targets` → `flushAnalyticsCache()` ✅
+- B2B/B2C Performance tabs KHÔNG hiển thị planned targets (chỉ actual vs prev period) → không có gap.
+- Dashboard (`analytics/page.tsx`) hiển thị target progress (via `targets-summary`) → fresh trên next load sau flush.
+- **KẾT LUẬN**: ✅ Targets flush cache đúng; không cần auto-refresh vì B2B/B2C không render target.
+
+**B2C Advanced Dashboard (admin "Advanced" tab):**
+- Fetches `/api/analytics/b2c/monthly` nhưng không pass `nocache=1` sau khi save. Tuy nhiên đây là admin-only view phụ; spend đọc từ `analytics_channel_group_costs` (Supabase fresh khi cache trống sau flush).
+- Minor gap: nếu admin đang xem Advanced tab và save cost, cần F5 để refresh. Không nghiêm trọng.
+
 ## Session 78 (2026-06-26) — B2B giá sai fix + Item Type Channel config + Vendor Performance bug
 
 ### #1 B2B thấy giá B2C (chatbot)

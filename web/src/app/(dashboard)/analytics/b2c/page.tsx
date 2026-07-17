@@ -1,22 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { B2CPerformance } from "@/components/b2c-performance"
 import { B2CAdvancedDashboard } from "@/components/b2c-advanced-dashboard"
 
 // Default = Advanced (executive rolling-table dashboard, giống mockup).
-// Performance = intel-main style channel breakdown (admin/creator có thể toggle).
+// Performance = intel-main style channel breakdown. Mọi user có quyền B2C đều thấy cả 2 tab.
 export default function B2CPage() {
-  const { data: session } = useSession()
-  const role = session?.user?.role
-  const canToggle = role === "admin" || role === "creator"
-
   // Tất cả role mặc định thấy Advanced trước
   const [view, setView] = useState<"advanced" | "main">("advanced")
-
-  if (!canToggle) return <B2CAdvancedDashboard />
 
   return (
     <div className="flex flex-col">
