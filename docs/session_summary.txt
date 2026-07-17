@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-17 (session 97 — Manage Cost full fix + B2C toggle all roles + Wave 0.6/0.4)
+Cập nhật lần cuối: 2026-07-17 (session 97 — Manage Cost + B2C toggle + Budget nguồn KPI/Target + Wave 0.4/0.6)
 
 ## Session 97 (2026-07-17) — Bỏ manualSpendOverrides + Wave 0.6 Empty/Help + Verify real-time
 
