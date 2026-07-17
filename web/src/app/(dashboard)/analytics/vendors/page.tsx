@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportAOA } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel VendorPerformance. Data qua /api/analytics/query (SELECT-only) +
 // /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
@@ -554,7 +555,7 @@ export default function VendorPerformancePage() {
 
   const exportChannelCSV = () => {
     const headers = ["Business Group", "Channel", "Total Order", "Unit Sold", "Gross Revenue", "Projected Revenue", "Total Channel Rev (All Vendors)", "%Contrib (vs Others)", "%MoM"]
-    const rows: string[] = []
+    const rows: (string | number)[][] = []
 
     const claimedByChannel: Record<string, { revenue: number, orders: number, units: number, prevRevenue: number }> = {}
     strategicPerformance.forEach((s: any) => {
@@ -661,11 +662,11 @@ export default function VendorPerformancePage() {
           groupPrevRevenue += (channel.prevRevenue || 0)
 
           rows.push([
-            groupName, `"${channel.channel_name || "Unknown"}"`, channel.orders, channel.units_sold,
-            rev.toFixed(0), projection ? (rev * projection.factor).toFixed(0) : "-",
-            parseFloat(channel.total_channel_revenue || 0).toFixed(0),
+            groupName, channel.channel_name || "Unknown", channel.orders, channel.units_sold,
+            Number(rev.toFixed(0)), projection ? Number((rev * projection.factor).toFixed(0)) : "-",
+            Number(parseFloat(channel.total_channel_revenue || 0).toFixed(0)),
             contribution ? contribution.toFixed(2) + "%" : "-", mom ? mom.toFixed(2) + "%" : "0%",
-          ].join(","))
+          ])
         })
 
         const correctGroupAllVendorsChannelRevenue = Array.from(uniqueChannelNamesInGroup).reduce((acc, name) => {
@@ -677,11 +678,11 @@ export default function VendorPerformancePage() {
         const groupContrib = correctGroupAllVendorsChannelRevenue > 0 ? (groupRevenue / correctGroupAllVendorsChannelRevenue * 100) : 0
 
         rows.push([
-          `Total ${groupName}`, "", groupOrders, groupUnits, groupRevenue.toFixed(0),
-          projection ? (groupRevenue * projection.factor).toFixed(0) : "-",
-          correctGroupAllVendorsChannelRevenue.toFixed(0), groupContrib.toFixed(2) + "%",
+          `Total ${groupName}`, "", groupOrders, groupUnits, Number(groupRevenue.toFixed(0)),
+          projection ? Number((groupRevenue * projection.factor).toFixed(0)) : "-",
+          Number(correctGroupAllVendorsChannelRevenue.toFixed(0)), groupContrib.toFixed(2) + "%",
           groupMom ? groupMom.toFixed(2) + "%" : "0%",
-        ].join(","))
+        ])
 
         grandTotalRevenue += groupRevenue
         grandTotalOrders += groupOrders
@@ -696,20 +697,14 @@ export default function VendorPerformancePage() {
     }, 0)
 
     rows.push([
-      "GRAND TOTAL", "", grandTotalOrders, grandTotalUnits, grandTotalRevenue.toFixed(0),
-      projection ? (grandTotalRevenue * projection.factor).toFixed(0) : "-",
-      finalGrandTotalAllVendorsChannelRevenue.toFixed(0),
+      "GRAND TOTAL", "", grandTotalOrders, grandTotalUnits, Number(grandTotalRevenue.toFixed(0)),
+      projection ? Number((grandTotalRevenue * projection.factor).toFixed(0)) : "-",
+      Number(finalGrandTotalAllVendorsChannelRevenue.toFixed(0)),
       finalGrandTotalAllVendorsChannelRevenue > 0 ? (grandTotalRevenue / finalGrandTotalAllVendorsChannelRevenue * 100).toFixed(2) + "%" : "-",
       grandTotalPrevRevenue > 0 ? ((grandTotalRevenue - grandTotalPrevRevenue) / grandTotalPrevRevenue * 100).toFixed(2) + "%" : "0%",
-    ].join(","))
+    ])
 
-    const csvContent = "﻿" + [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `Channel_Distribution_${startDate}_to_${endDate}.csv`)
-    link.click()
+    exportAOA(headers, rows, `Channel_Distribution_${startDate}_to_${endDate}`, "Channels")
   }
 
   const Skeleton = ({ className }: { className?: string }) => (
@@ -1005,7 +1000,7 @@ export default function VendorPerformancePage() {
             <button onClick={exportChannelCSV}
               className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 h-[38px] px-3 bg-blue-50/50 hover:bg-blue-50 rounded-lg transition-all">
               <Download className="w-4 h-4" />
-              Export CSV
+              Export
             </button>
           </div>
           <div className="overflow-x-auto">

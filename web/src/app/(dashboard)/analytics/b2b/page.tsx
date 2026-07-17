@@ -15,6 +15,7 @@ import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { CostManagementModal } from "@/components/cost-management-modal"
 import { DatePresets } from "@/components/date-presets"
+import { exportToExcel } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -94,20 +95,8 @@ export default function B2BPerformance() {
   }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
-    const csvRows = [
-      columns.map(c => c.label).join(","),
-      ...data.map(row => columns.map(c => {
-        const val = row[c.key as keyof PerformanceData] ?? 0
-        return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
-      }).join(",")),
-    ]
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${startDate}_to_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link); link.click(); document.body.removeChild(link)
+    exportToExcel(data as Record<string, unknown>[], columns.map(c => ({ label: c.label, key: String(c.key) })),
+      `${filename}_${startDate}_to_${endDate}`)
   }
 
   const exportToPDF = async () => {
@@ -445,7 +434,7 @@ export default function B2BPerformance() {
                       const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
                       exportToCSV(exportData, "Strategic_Partners_Performance", columns)
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all font-bold text-[10px]">
-                      <Download className="w-3 h-3" />CSV
+                      <Download className="w-3 h-3" />Export
                     </button>
                     <div className="flex items-center gap-2 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold"><Zap className="w-3 h-3" />PRIORITY TRACKING</div>
                   </div>

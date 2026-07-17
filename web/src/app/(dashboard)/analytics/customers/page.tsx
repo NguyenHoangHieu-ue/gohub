@@ -13,6 +13,7 @@ import { SourceBadge } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
+import { exportRawRows } from "@/lib/export-excel"
 
 interface KPI {
   label: string
@@ -576,7 +577,21 @@ export default function CustomerPerformancePage() {
                   <h3 className="text-xl font-black text-slate-900 italic uppercase">All Customers Breakdown</h3>
                   <p className="text-sm text-slate-400 font-medium italic">Comprehensive performance metrics per client.</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all">
+                <button
+                  onClick={() => {
+                    // Xuất TẤT CẢ khách (bỏ strategic partners, không giới hạn phân trang)
+                    const all = performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name))
+                    const rows = all.map(r => ({
+                      "Customer": r.name,
+                      "Revenue": r.revenue,
+                      "GP": r.margin,
+                      "Units": r.units,
+                      "Orders": r.orders,
+                      "AOV": r.orders > 0 ? Math.round(r.revenue / r.orders) : 0,
+                    }))
+                    exportRawRows(rows, `Customers_Breakdown_${startDate}_to_${endDate}`, "Customers")
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all">
                   <Download className="w-4 h-4" />
                   Export
                 </button>

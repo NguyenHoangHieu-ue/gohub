@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportAOA } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel BODReport. Backend: bod-summary/bod-report/bod-group-margin/bod-channel-performance
 // (CM1 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
@@ -159,21 +160,15 @@ export default function BODReport() {
     if (!channelPerformance.length) return
     const headers = ["Group", "Channel", "Units", "Revenue", "COGS", "Margin", "Margin %", "CM1", "CM1 %"]
     if (projection) headers.splice(4, 0, "Projected Revenue")
-    const rows = channelPerformance.map(row => {
-      const d = [
-        `"${row.group}"`, `"${row.channel}"`, row.units, row.revenue, row.cogs, row.margin,
-        `"${(row.margin_percent || 0).toFixed(2)}%"`, row.gpm2, `"${(row.gpm2_percent || 0).toFixed(2)}%"`,
+    const rows: (string | number)[][] = channelPerformance.map(row => {
+      const d: (string | number)[] = [
+        row.group, row.channel, row.units, row.revenue, row.cogs, row.margin,
+        `${(row.margin_percent || 0).toFixed(2)}%`, row.gpm2, `${(row.gpm2_percent || 0).toFixed(2)}%`,
       ]
-      if (projection) d.splice(4, 0, (row.revenue * projection.factor).toFixed(0))
-      return d.join(",")
+      if (projection) d.splice(4, 0, Number((row.revenue * projection.factor).toFixed(0)))
+      return d
     })
-    const csvString = [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `channel_performance_${dateRange.start}_${dateRange.end}.csv`)
-    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url)
+    exportAOA(headers, rows, `channel_performance_${dateRange.start}_${dateRange.end}`, "Channel Perf")
   }
 
   const fetchData = async () => {
@@ -535,7 +530,7 @@ export default function BODReport() {
             <p className="text-sm text-slate-500">Revenue, Orders, Units and Margin analysis by business unit</p>
           </div>
           <button onClick={exportChannelPerformanceCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            <Download className="w-3.5 h-3.5" />Export CSV
+            <Download className="w-3.5 h-3.5" />Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -688,7 +683,7 @@ export default function BODReport() {
             <p className="text-sm text-slate-500">Detailed metrics by channel grouped by business unit</p>
           </div>
           <button onClick={exportChannelPerformanceCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            <Download className="w-3.5 h-3.5" />Export CSV
+            <Download className="w-3.5 h-3.5" />Export
           </button>
         </div>
         <div className="overflow-x-auto">

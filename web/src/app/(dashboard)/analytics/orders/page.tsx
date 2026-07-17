@@ -7,6 +7,7 @@ import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar, Shopping
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useToast } from "@/components/toast"
+import { exportRawRows } from "@/lib/export-excel"
 
 interface Order {
   order_code: string
@@ -183,47 +184,30 @@ export default function OrderManagementPage() {
         const data = await response.json()
 
         if (data.length === 0) {
-          toast.info("No data to export for the selected filters.")
+          toast.info("Không có dữ liệu để xuất với bộ lọc hiện tại.")
           return
         }
 
-        const headers = ["Order ID", viewMode === "created" ? "Created Date" : "Fulfilled Date", "Customer", "Staff", "Channel", "Order Source", "Product Name", "SKU", "Quantity", "Unit Price", "Revenue (VND)", "Location"]
-        const csvRows = [headers.join(",")]
-
-        data.forEach((item: any) => {
-          const dateStr = item.date ? (
-            viewMode === "created"
-              ? new Date(item.date).toLocaleString("en-GB").replace(",", "")
-              : new Date(item.date).toLocaleDateString()
-          ) : ""
-
-          const row = [
-            `"${item.order_id || ""}"`,
-            `"${dateStr}"`,
-            `"${item.customer || ""}"`,
-            `"${item.staff || ""}"`,
-            `"${item.channel || ""}"`,
-            `"${item.order_source || ""}"`,
-            `"${item.product_name?.replace(/"/g, '""') || ""}"`,
-            `"${item.sku || ""}"`,
-            item.fulfilled_quantity || 0,
-            item.unit_price_after_discount_vnd || 0,
-            item.revenue || 0,
-            `"${item.location || ""}"`,
-          ]
-          csvRows.push(row.join(","))
-        })
-
-        const csvContent = "﻿" + csvRows.join("\n")
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.setAttribute("href", url)
-        link.setAttribute("download", `Orders_${viewMode}_Export_${startDate}_to_${endDate}.csv`)
-        link.style.visibility = "hidden"
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
+        // Xuất TẤT CẢ dòng (API không giới hạn) ra Excel.
+        const rows = data.map((item: any) => ({
+          "Order ID": item.order_id || "",
+          [viewMode === "created" ? "Created Date" : "Fulfilled Date"]: item.date
+            ? (viewMode === "created"
+                ? new Date(item.date).toLocaleString("en-GB").replace(",", "")
+                : new Date(item.date).toLocaleDateString())
+            : "",
+          "Customer": item.customer || "",
+          "Staff": item.staff || "",
+          "Channel": item.channel || "",
+          "Order Source": item.order_source || "",
+          "Product Name": item.product_name || "",
+          "SKU": item.sku || "",
+          "Quantity": item.fulfilled_quantity || 0,
+          "Unit Price": item.unit_price_after_discount_vnd || 0,
+          "Revenue (VND)": item.revenue || 0,
+          "Location": item.location || "",
+        }))
+        exportRawRows(rows, `Orders_${viewMode}_${startDate}_to_${endDate}`, "Orders")
       } else {
         console.error("Export failed")
       }
@@ -292,7 +276,7 @@ export default function OrderManagementPage() {
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export CSV"}</span>
+            <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export"}</span>
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
+import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { Pager, PAGE_ROWS } from "@/components/pager"
@@ -153,29 +154,20 @@ export default function StaffPerformancePage() {
       const response = await fetch(`/api/orders/export?${params}`)
       if (response.ok) {
         const data = await response.json()
-        const headers = ["Order ID", "Company", "Date", "Staff", "Customer", "Channel", "Order Source", "Product", "SKU", "Qty", "Revenue"]
-        const csvRows = [headers.join(",")]
-        data.forEach((item: any) => {
-          csvRows.push([
-            `"${item.order_id}"`,
-            `"${item.company_code}"`,
-            `"${item.date?.split("T")[0]}"`,
-            `"${item.staff}"`,
-            `"${item.customer_name?.replace(/"/g, '""')}"`,
-            `"${item.channel}"`,
-            `"${item.order_source?.replace(/"/g, '""')}"`,
-            `"${item.product_name?.replace(/"/g, '""')}"`,
-            `"${item.sku}"`,
-            item.fulfilled_quantity,
-            item.revenue,
-          ].join(","))
-        })
-        const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
-        link.download = `Recent_Transactions_${startDate}_to_${endDate}.csv`
-        link.click()
+        const rows = data.map((item: any) => ({
+          "Order ID": item.order_id || "",
+          "Company": item.company_code || "",
+          "Date": item.date?.split("T")[0] || "",
+          "Staff": item.staff || "",
+          "Customer": item.customer_name || item.customer || "",
+          "Channel": item.channel || "",
+          "Order Source": item.order_source || "",
+          "Product": item.product_name || "",
+          "SKU": item.sku || "",
+          "Qty": item.fulfilled_quantity || 0,
+          "Revenue": item.revenue || 0,
+        }))
+        exportRawRows(rows, `Recent_Transactions_${startDate}_to_${endDate}`, "Transactions")
       }
     } catch (err) {
       console.error("Export failed:", err)
@@ -185,33 +177,23 @@ export default function StaffPerformancePage() {
   const handleExportSummary = () => {
     try {
       const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
-      const headers = ["Rank", "Staff Code", "Staff Name", "Orders", "Units", "Revenue (VND)", "Avg Order Value", "Contribution %"]
-      const csvRows = [headers.join(",")]
-
-      staffMetrics.forEach((staff, idx) => {
+      const rows = staffMetrics.map((staff, idx) => {
         const revValue = parseFloat(staff.total_revenue)
         const ordValue = parseInt(staff.total_orders)
-        const contribution = totalRevenue > 0 ? ((revValue / totalRevenue) * 100).toFixed(2) : "0.00"
-        const aov = ordValue > 0 ? (revValue / ordValue).toFixed(2) : "0.00"
-
-        csvRows.push([
-          idx + 1,
-          `"${staff.staff_code}"`,
-          `"${staff.staff_name}"`,
-          ordValue,
-          staff.total_units,
-          revValue,
-          aov,
-          contribution,
-        ].join(","))
+        const contribution = totalRevenue > 0 ? Number(((revValue / totalRevenue) * 100).toFixed(2)) : 0
+        const aov = ordValue > 0 ? Number((revValue / ordValue).toFixed(2)) : 0
+        return {
+          "Rank": idx + 1,
+          "Staff Code": staff.staff_code,
+          "Staff Name": staff.staff_name,
+          "Orders": ordValue,
+          "Units": staff.total_units,
+          "Revenue (VND)": revValue,
+          "Avg Order Value": aov,
+          "Contribution %": contribution,
+        }
       })
-
-      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `Staff_Performance_Summary_${startDate}_to_${endDate}.csv`
-      link.click()
+      exportRawRows(rows, `Staff_Performance_Summary_${startDate}_to_${endDate}`, "Staff")
     } catch (err) {
       console.error("Export summary failed:", err)
     }
@@ -466,7 +448,7 @@ export default function StaffPerformancePage() {
               <button
                 onClick={handleExportSummary}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Export this table to CSV"
+                title="Xuất bảng này ra Excel"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export
@@ -561,7 +543,7 @@ export default function StaffPerformancePage() {
               <button
                 onClick={handleExportTransactions}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Export detailed transactions to CSV"
+                title="Xuất chi tiết giao dịch ra Excel"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export
