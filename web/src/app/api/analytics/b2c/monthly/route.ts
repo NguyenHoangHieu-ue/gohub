@@ -58,18 +58,27 @@ export async function GET(req: NextRequest) {
 
   // YTD: từ tháng 1 đến tháng hiện tại
   const now = new Date()
+  const forceRefresh = noCache(req)
+
+  // Ngày tham chiếu: T-1 (hôm qua) khi forceRefresh (Advanced live mode), hôm nay khi cron/snapshot.
+  // Advanced tab luôn dùng T-1 để số liệu đầy đủ (data hôm nay chưa close hết).
+  const refDate = forceRefresh
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+    : now
+  const fmtDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  const windowEnd = fmtDate(refDate)   // T-1 khi live, hôm nay khi cron
+
   const months: string[] = []
-  for (let i = 0; i <= now.getMonth(); i++) {
-    months.push(`${now.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
+  for (let i = 0; i <= refDate.getMonth(); i++) {
+    months.push(`${refDate.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
   }
   const windowStart = `${months[0]}-01`
   const currentMonth = months[months.length - 1]
-  const elapsedDays = now.getDate()
-  const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const elapsedDays = refDate.getDate()   // ngày của refDate (T-1 khi live)
+  const totalDays = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0).getDate()
   const skipLeads = req.nextUrl.searchParams.get("skipLeads") === "1"
   const onlyLeads = req.nextUrl.searchParams.get("onlyLeads") === "1"
-
-  const forceRefresh = noCache(req)
 
   try {
     // Skip snapshot khi nocache=1 (user muốn data live, tránh lệch với Performance tab).
@@ -177,7 +186,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const data = await cachedQuery(`b2c-monthly:v7:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
+    // Cache key khác nhau khi live (windowEnd = T-1) vs cron (windowEnd = today)
+    const cacheKey = `b2c-monthly:v7:${windowStart}:${windowEnd}:${adminGohubConfigured() ? "admin-summary" : "db"}`
+    const data = await cachedQuery(cacheKey, async () => {
+      // Khi forceRefresh: dùng windowEnd (T-1) làm upper bound để số ngày hiện tại khớp T-1.
+      const endClause = `AND f.fulfiled_date::date <= '${windowEnd}'::date`
       const [marketRows, custRows, channelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -187,6 +200,7 @@ export async function GET(req: NextRequest) {
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
              AND f.fulfiled_date::date >= $1
+             ${endClause}
           GROUP BY 1, 2`,
           [windowStart]
         ),
@@ -202,6 +216,7 @@ export async function GET(req: NextRequest) {
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
              AND f.fulfiled_date::date >= $1
+             ${endClause}
            GROUP BY 1, 2`,
           [windowStart]
         ),
@@ -215,6 +230,7 @@ export async function GET(req: NextRequest) {
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
              AND f.fulfiled_date::date >= $1
+             ${endClause}
            GROUP BY 1, 2`,
           [windowStart]
         ),
@@ -314,7 +330,7 @@ export async function GET(req: NextRequest) {
       }
 
       return { markets, customers, channels, profitByChannel, customerSource, customerBreakdown, customerError }
-    }, undefined, noCache(req))
+    }, undefined, forceRefresh)
 
     // KPI targets + Budget: đều nhập trong tab KPI/Target.
     // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
@@ -352,7 +368,14 @@ export async function GET(req: NextRequest) {
       : await loadLeads()
 
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, targets, budget, spend, leads, leadsByChannel, refreshTimestamp: new Date().toISOString(), ...data },
+      {
+        months, currentMonth, elapsedDays, totalDays,
+        targets, budget, spend, leads, leadsByChannel,
+        dataAsOf: windowEnd,  // ngày T-1 khi live, hôm nay khi cron
+        isLive: forceRefresh,
+        refreshTimestamp: new Date().toISOString(),
+        ...data
+      },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {
