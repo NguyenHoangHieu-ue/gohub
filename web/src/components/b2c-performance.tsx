@@ -21,13 +21,18 @@ import { CostManagementModal } from "./cost-management-modal"
 
 function getDefaultDateRange() {
   const today = new Date()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  // T-1: data ngày hiện tại chưa đủ, dùng hôm qua làm endDate (nhất quán các tab khác)
+  // Dùng local date method (KHÔNG dùng toISOString - sẽ bị shift timezone UTC+7 → ngày lùi 1)
+  const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
+  if (today.getDate() <= 7) {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
+    return { startDate: fmt(start), endDate: fmt(end) }
+  }
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
   const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
-const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
+const formatDateToISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
 
 interface KPI {
   label: string
