@@ -1,5 +1,25 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-17 (session 99-103 — CS Lark chạy được, Export→Excel full, date filter TZ, B2C real-time T-1)
+Cập nhật lần cuối: 2026-07-17 (session 104 — chatbot routing audit 26/26, CS July sync, User perms app_config→app_settings)
+
+## Session 104 (2026-07-17) — Chatbot audit + CS July + User permissions
+
+### #1 Chatbot audit (AI engineer + tester, dùng câu hỏi THẬT Supabase chat_messages)
+- Data coverage: bi-analyst đủ 12/12 bảng gohub_dw; data-explorer 38/40 bảng Supabase (thiếu 2 cache nội bộ, bỏ qua OK).
+- 3 routing bug fix (router.ts):
+  · Bug A: câu doanh số CÓ mã SKU → tra-cuu thay bi-analyst ("số bán con X", "check X bán được"). Fix: BI override chạy kể cả có mã (mã = filter). DEFINITE_BI_RE +so ban/ban duoc/units sold/cm1/cogs/margin/revenue/prorata.
+  · Bug B: usage 3HK → gap-analysis thay bi-analyst. Fix: USAGE_BI_RE ép bi-analyst.
+  · Bug C: "SP nào ở cả Malaysia và Singapore" → gap thay tu-van. Fix: gap+không vendor+có nước+không gap-keyword → tu-van.
+- E2E test MỚI `__e2e__/chatbot-routing.test.ts`: 26 câu hỏi thật → **26/26 PASS** (route() live Gemini). Chạy: vitest config riêng (e2e bị exclude mặc định).
+
+### #2 CS Troubleshoot tháng 7 chỉ có Units Sold — FIXED
+- Root: lark_cs_tickets Supabase max creation_date = 15/6 (data cũ). Lark base CÓ 1,561 ticket tháng 7 (T078*, max 17/7) nhưng sync gần nhất FAIL (TableIdNotFound do &view= trước fix clean()).
+- Fix: sync thủ công 18,050 records (1,561 July) vào Supabase → tháng 7 giờ đủ metrics. Code deployed đúng → cron 2h sáng giữ tươi.
+
+### #3 User "Quyền chỉnh sửa" không phân quyền được — FIXED
+- Root: 4 route (writable-tabs GET/PATCH, user/me, scheduled-messages ×2) query bảng `app_config` KHÔNG TỒN TẠI Supabase (PGRST205) — đúng phải `app_settings`.
+- Fix: đổi app_config→app_settings cả 4 file. + PATCH users check error thay vì luôn ok:true (silent fail).
+
+## Session 99-103 (2026-07-17) — CS Lark chạy được, Export→Excel full, date filter TZ, B2C real-time T-1
 
 ## Session 99-103 (2026-07-17) — CS Lark, Export Excel, date filter, B2C real-time
 
