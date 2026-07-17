@@ -21,6 +21,8 @@ interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturn
 interface MarketBudgetCell { vn: number; us: number; total: number }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 interface MonthlyData {
+  dataAsOf?: string       // T-1 date khi live (YYYY-MM-DD)
+  isLive?: boolean
   months:       string[]
   currentMonth: string
   elapsedDays:  number
@@ -283,10 +285,9 @@ const monthlyRollup = (series: { date: string; sessions: number; cr: number; pur
 
 // Dashboard B2C tùy biến (GA4/leads/CAC/spend, session 66-70) — giữ làm tab "Advanced" (admin).
 export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }: { demoMode?: boolean; localPreview?: boolean } = {}) {
-  const [data, setData]           = useState<MonthlyData | null>(null)
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const [data, setData]       = useState<MonthlyData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"month" | "quarter">("month")
   const [profitMonth, setProfitMonth] = useState<string>("")
   // GA4 per site (Section 3 + 4) — load lazy, graceful nếu chưa cấu hình
@@ -297,15 +298,15 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]
   }[] | null>(null)
 
-  // Hàm load data (có thể force-refresh để bypass snapshot → lấy data live như Performance)
-  const loadData = async (forceRefresh = false) => {
+  // Luôn query live (nocache=1) để bypass snapshot → số liệu real-time đến T-1.
+  const loadData = async () => {
     if (demoMode) return
     setLoading(true); setError(null)
     try {
       const params = new URLSearchParams()
       if (localPreview) params.set("localPreview", "1")
       params.set("skipLeads", "1")
-      if (forceRefresh) params.set("nocache", "1")
+      params.set("nocache", "1")   // luôn live, không đọc snapshot
       const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
       if (!res.ok) {
         const body = await res.json().catch(() => null)
@@ -315,7 +316,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     } catch (err) {
       console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
     } finally {
-      setLoading(false); setRefreshing(false)
+      setLoading(false)
     }
   }
 
@@ -987,7 +988,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             <div className={APPLE_CARD} style={{ ...APPLE_CARD_STYLE, borderRadius: 10 }}>
               <div className="p-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 items-center">
                 <div>
-	                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#0071e3] bg-[#eaf4ff] px-2.5 py-1 rounded-full">Snapshot</span>
+	                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#34a853] bg-[#e6f4ea] px-2.5 py-1 rounded-full">
+                    Live · T-1{data?.dataAsOf ? ` (đến ${data.dataAsOf})` : ""}
+                  </span>
 	                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
 	                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">{periodSuffix} B2C</span>
 	                  </div>
