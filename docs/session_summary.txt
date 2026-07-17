@@ -1,5 +1,51 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-17 (session 97 — Manage Cost + B2C toggle + Budget nguồn KPI/Target + Wave 0.4/0.6)
+Cập nhật lần cuối: 2026-07-17 (session 99-103 — CS Lark chạy được, Export→Excel full, date filter TZ, B2C real-time T-1)
+
+## Session 99-103 (2026-07-17) — CS Lark, Export Excel, date filter, B2C real-time
+
+### CS Troubleshoot Lark sync — ĐÃ CHẠY ĐƯỢC (chuỗi debug dài)
+- Base "Master Ticket Database" (`tbl27pAJ7JW2mHKo`, BASE_ID `Nv4JbFWGmaKkOpscr62lNa4Agmx`, 18k records) bật **Advanced Permissions**.
+- Chuỗi lỗi: `99991672` (thiếu scope → thêm `bitable:app:readonly`) → `1254302 RolePermNotAllow` (app "Can view" bị chặn) → FIX: đổi app **Bé Gấu sang "Can manage"** trong Add Applications (Lark KHÔNG cho gán app vào Role) → BYPASS.
+- Rồi `1254041 TableIdNotFound`: env `LARK_TABLE_ID` bị kèm `&view=vewMzMQAmg`. FIX code: `clean()` tự cắt `&/?/space` khỏi BASE_ID/TABLE_ID.
+- Field thật: handler = **"Ticket Handler"** (không phải "Handler"). page_size 100→**500** (18k records ~37 trang, gọn trong maxDuration 60s).
+- Diagnostic: GET /api/admin/sync-lark-tickets trả `envCheck` từng var. Chi tiết: [[lark_base_advanced_perm]].
+
+### Export: tất cả "Export CSV" → "Export" (.xlsx) + xuất FULL data
+- MỚI `lib/export-excel.ts`: `exportToExcel` / `exportRawRows` / `exportAOA` (dùng chung, xuất TẤT CẢ dòng).
+- 11 tab chuyển CSV→xlsx: orders, b2b, all-time, fulfillment, sql, vendors, channels, products, staff, customers, bod, 3hk-usage.
+- 2 nút TRƯỚC ĐỜ CHẾT (no onClick) → wire xuất full: **customers** (All Customers Breakdown), **3hk Records** (query KHÔNG phân trang).
+- **Products SKU Breakdown**: query tách base KHÔNG LIMIT → bảng vẫn top 50, Export chạy full query xuất TẤT CẢ SKU. Cột export KHỚP bảng: SKU·Country Code·Country·Category·Vendor·Revenue·Units·Orders·**Margin %** (margin/revenue).
+- ⚠️ Yêu cầu user: export phải GIỐNG report hiển thị (cột/format). Đã khớp SKU Breakdown; các tab khác cần rà tiếp nếu user báo lệch.
+
+### Date filter timezone bug (toàn analytics)
+- Root: `b2c-performance.tsx` dùng `toISOString().split("T")[0]` → UTC+7 lệch: `new Date(2026,6,1)` (1/7 ICT) = 30/6 UTC → hiện "30/6" thay "1/7".
+- FIX: đổi sang local `getFullYear/getMonth/getDate` (b2c-performance + channels 6 chỗ SQL date). Thêm `<=7` fallback cho website/3hk-usage cho nhất quán. Ngày 17/7 → default "1/7-16/7" đúng.
+
+### B2C Advanced Dashboard — real-time T-1
+- `b2c/monthly` route: khi `nocache=1` (Advanced) → `refDate = T-1` (hôm qua), skip snapshot, query gohub_dw live, upper-bound `fulfiled_date <= windowEnd`. elapsedDays theo T-1. Response thêm `dataAsOf` + `isLive`.
+- `B2CAdvancedDashboard`: luôn `nocache=1` → bỏ snapshot; badge "Live · T-1 (đến YYYY-MM-DD)".
+- B2C budget nguồn: đổi `getB2CChannelBudgetByMonth` (tính từ channel costs) → đọc `app_settings.b2c_budget` (nhập ở KPI/Target).
+
+### Deploy: tất cả tsc + build PASS, merged staging → main từng bước.
+
+## Session 98 (2026-07-17) — BOD 3HK Contribution 0% + Manage Cost scope
+
+### Fix 1: BOD 3HK Contribution % = 0.00%
+- Root cause: `bod-summary/route.ts` dùng `TRIM(vendor) ILIKE '3HKDATAPOOL'`
+  chỉ match 1,675 rows. Phần lớn DB là `'3HK DATAPOOL'` (có space, 4,515 rows) → không bắt được → sum = 0.
+- Fix: đổi sang `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (khớp cả 2 cách viết).
+- Cùng fix trong `planning/targets/route.ts` query `revenue_3hk` (cùng bug).
+- Thêm `noCache(req)` cho `bod-summary` để bypass cache ngay lập tức sau khi deploy.
+- Pattern đúng đã có sẵn trong: `scheduled-report-data.ts`, `3hk-speed-map`, `3hk-usage/page.tsx`.
+
+### Fix 2: Manage Cost trong B2C thiếu Group Costs tab
+- Root cause: `scope="b2c"` trong `CostManagementModal` dùng `scope !== "b2c"` để ẩn CẢ 2 button:
+  B2B Channels + Group Costs → user B2C không nhập được chi phí nhóm.
+- Fix: tách điều kiện — chỉ ẩn B2B Channels khi `scope="b2c"`; Group Costs luôn hiện (cả B2B lẫn B2C cần).
+- Kết quả: B2C modal: B2C Channels + Group Costs. B2B modal: B2B Channels + B2C Channels + Group Costs.
+
+### Deploy
+- tsc PASS, next build PASS. Pushed staging + merged → main.
 
 ## Session 97 (2026-07-17) — Bỏ manualSpendOverrides + Wave 0.6 Empty/Help + Verify real-time
 
