@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
          TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
          SUM(f.fulfilled_revenue_amount_vnd) as revenue,
          SUM(f.gross_profit_vnd) as margin,
-         SUM(CASE WHEN v.vendor ILIKE '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as revenue_3hk
+         SUM(CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as revenue_3hk
        FROM fact_fulfillment_revenue f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        LEFT JOIN dim_sku v ON f.sku = v.sku

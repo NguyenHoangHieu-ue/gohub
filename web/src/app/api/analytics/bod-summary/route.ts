@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
 // Port intel bod-summary: summary (rev/margin/gpm2 + %) lấy từ fetchBODGroupMarginData (gồm op-cost);
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const source = getAnalyticsSource(dateColumn)
     const fetch3hkRev = async (sd: string, ed: string) => {
       const rows = await queryAnalytics<{ r: string }>(
-        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) ILIKE '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
+        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
          FROM ${source.mainTable} f WHERE ${getDateFilter(sd, ed, source.dateCol)} ${extraFilters}`
       )
       return parseFloat(rows[0]?.r || "0")
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       ;(prevYear.summary as any).total_3hk_contribution = prevYear.summary.total_revenue > 0 ? (ly3hk / prevYear.summary.total_revenue) * 100 : 0
 
       return { ...current, previous_period: prev.summary, previous_year: prevYear.summary }
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
