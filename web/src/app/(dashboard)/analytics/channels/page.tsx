@@ -367,9 +367,12 @@ export default function ChannelPerformancePage() {
       const start = new Date(startDate || "2026-03-01")
       const end = new Date(endDate || "2026-03-31")
 
+      // Dùng local date method để format ISO (tránh toISOString UTC shift trong UTC+7)
+      const fmtLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
+
       if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        const startStr = start.toISOString().split("T")[0]
-        const endStr = end.toISOString().split("T")[0]
+        const startStr = fmtLocal(start)
+        const endStr = fmtLocal(end)
 
         dateFilter = `AND ${dateColumn}::date >= '${startStr}' AND ${dateColumn}::date <= '${endStr}'`
 
@@ -382,14 +385,14 @@ export default function ChannelPerformancePage() {
           const prevStart = new Date(prevEnd)
           prevStart.setDate(prevStart.getDate() - diffDays + 1)
 
-          prevDateFilter = `AND ${dateColumn}::date >= '${prevStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevEnd.toISOString().split("T")[0]}'`
+          prevDateFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevEnd)}'`
         } else if (comparisonType === "previous_year") {
           const prevStart = new Date(start)
           prevStart.setFullYear(prevStart.getFullYear() - 1)
           const prevEnd = new Date(end)
           prevEnd.setFullYear(prevEnd.getFullYear() - 1)
 
-          prevDateFilter = `AND ${dateColumn}::date >= '${prevStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevEnd.toISOString().split("T")[0]}'`
+          prevDateFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevEnd)}'`
         }
       } else {
         dateFilter = `AND ${dateColumn}::date >= '2026-03-01' AND ${dateColumn}::date <= '2026-03-31'`
@@ -397,7 +400,7 @@ export default function ChannelPerformancePage() {
 
       const prevMonthStart = new Date(start.getFullYear(), start.getMonth() - 1, 1)
       const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0)
-      const prevMonthFilter = `AND ${dateColumn}::date >= '${prevMonthStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevMonthEnd.toISOString().split("T")[0]}'`
+      const prevMonthFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevMonthStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevMonthEnd)}'`
 
       const escapedChannel = (selectedChannel || "").replace(/'/g, "''")
       let channelFilter = `(
@@ -649,7 +652,7 @@ export default function ChannelPerformancePage() {
         let prevTotalOpCost = 0
         const opCostBreakdown = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0 }
         try {
-          const startMonth = start.toISOString().substring(0, 7)
+          const startMonth = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}`
 
           const [costRes, settingsRes] = await Promise.all([
             fetch(`/api/channel-costs?month=${startMonth}`),
@@ -717,7 +720,7 @@ export default function ChannelPerformancePage() {
             } else {
               prevStart.setFullYear(prevStart.getFullYear() - 1)
             }
-            const prevStartMonth = prevStart.toISOString().substring(0, 7)
+            const prevStartMonth = `${prevStart.getFullYear()}-${String(prevStart.getMonth()+1).padStart(2,"0")}`
 
             const [pCostRes, pSettingsRes] = await Promise.all([
               fetch(`/api/channel-costs?month=${prevStartMonth}`),
