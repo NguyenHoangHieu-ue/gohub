@@ -16,6 +16,7 @@ interface MarketCell { vn: number; us: number; total: number }
 interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
+interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
 interface KpiTarget { vn: number; us: number; total: number }
 interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturning: number; total: number }
 interface MarketBudgetCell { vn: number; us: number; total: number }
@@ -31,6 +32,7 @@ interface MonthlyData {
   customerBreakdown?: "new-returning" | "total-only"
   customerError?: string
   channels:     Record<string, ChannelCell>
+  marketChannels?: Record<string, MarketChannelCell>
   profitByChannel?: Record<string, Record<string, ProfitCell>>
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
@@ -82,6 +84,15 @@ const DEMO_DATA: MonthlyData = {
     "2026-05": { web: 260_000_000, app: 190_000_000, other: 920_000_000 },
     "2026-06": { web: 288_604_224, app: 104_898_583, other: 489_637_619 },
     "2026-07": { web: 288_604_224, app: 49_994_096, other: 377_732_100 },
+  },
+  marketChannels: {
+    "2026-01": { vnSales: 430_000_000, vnWeb: 180_000_000, usSales: 20_000_000, usApp: 120_000_000, usWeb: 50_000_000 },
+    "2026-02": { vnSales: 480_000_000, vnWeb: 200_000_000, usSales: 30_000_000, usApp: 150_000_000, usWeb: 40_000_000 },
+    "2026-03": { vnSales: 590_000_000, vnWeb: 230_000_000, usSales: 60_000_000, usApp: 170_000_000, usWeb: 110_000_000 },
+    "2026-04": { vnSales: 1_050_000_000, vnWeb: 330_000_000, usSales: 100_000_000, usApp: 330_000_000, usWeb: 90_000_000 },
+    "2026-05": { vnSales: 760_000_000, vnWeb: 220_000_000, usSales: 130_000_000, usApp: 190_000_000, usWeb: 70_000_000 },
+    "2026-06": { vnSales: 489_637_619, vnWeb: 247_441_080, usSales: 0, usApp: 104_898_583, usWeb: 41_163_144 },
+    "2026-07": { vnSales: 430_000_000, vnWeb: 220_538_200, usSales: 15_798_124, usApp: 49_994_096, usWeb: 0 },
   },
   targets: {
     "2026-01": { vn: 650_000_000, us: 230_000_000, total: 880_000_000 },
@@ -461,6 +472,13 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     app: sumActualFor(key, m => data?.channels[m]?.app ?? 0),
     other: sumActualFor(key, m => data?.channels[m]?.other ?? 0),
   })
+  const marketChannelOf = (key: string): MarketChannelCell => ({
+    vnSales: sumActualFor(key, m => data?.marketChannels?.[m]?.vnSales ?? 0),
+    vnWeb: sumActualFor(key, m => data?.marketChannels?.[m]?.vnWeb ?? 0),
+    usSales: sumActualFor(key, m => data?.marketChannels?.[m]?.usSales ?? 0),
+    usApp: sumActualFor(key, m => data?.marketChannels?.[m]?.usApp ?? 0),
+    usWeb: sumActualFor(key, m => data?.marketChannels?.[m]?.usWeb ?? 0),
+  })
   const customerOf = (key: string): CustRow => ({
     new: { revenue: sumActualFor(key, m => data?.customers[m]?.new.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.new.count ?? 0) },
     returning: { revenue: sumActualFor(key, m => data?.customers[m]?.returning.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.returning.count ?? 0) },
@@ -500,7 +518,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
   // generic rolling-table renderer
   const RollingTable = ({ rows, mtdCompare = false }: {
-    rows: { label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
+    rows: { key?: string; label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
     mtdCompare?: boolean
   }) => (
     <div className="overflow-x-auto">
@@ -525,7 +543,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             const compareVal = mtdCompare ? comparablePrevPeriodValue(row.get) : prevVal
             const prorata  = proj(mtd, current)
             return (
-              <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+              <tr key={row.key ?? row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
                 <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
                   {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
@@ -1114,12 +1132,14 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               source="admin"
             >
               <RollingTable mtdCompare rows={[
-                { label: "VN B2C",    get: m => marketOf(m).vn },
-                { label: "US B2C",    get: m => marketOf(m).us },
-                { label: "Total B2C", get: m => marketOf(m).total, highlight: true },
-                { label: "Web",       get: m => channelOf(m).web,   breakdown: true },
-                { label: "App",       get: m => channelOf(m).app,   breakdown: true },
-                { label: "Khác",      get: m => channelOf(m).other, breakdown: true },
+                { label: "VN B2C",        get: m => marketOf(m).vn },
+                { key: "vn-sales", label: "VN Sales B2C", get: m => marketChannelOf(m).vnSales, breakdown: true },
+                { key: "vn-web",   label: "Web",          get: m => marketChannelOf(m).vnWeb,   breakdown: true },
+                { label: "US B2C",        get: m => marketOf(m).us },
+                { key: "us-sales", label: "US Sales B2C", get: m => marketChannelOf(m).usSales, breakdown: true },
+                { key: "us-app",   label: "App",          get: m => marketChannelOf(m).usApp,   breakdown: true },
+                { key: "us-web",   label: "Web",          get: m => marketChannelOf(m).usWeb,   breakdown: true },
+                { label: "Total B2C",     get: m => marketOf(m).total, highlight: true },
               ]} />
             </Section>
 

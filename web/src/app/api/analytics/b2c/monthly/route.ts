@@ -21,6 +21,7 @@ interface MarketCell { vn: number; us: number; total: number }
 interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
+interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 type CostValue = { type?: string; value?: number }
 
@@ -72,7 +73,8 @@ export async function GET(req: NextRequest) {
   try {
     try {
       const snapshots = await readB2CMonthlySnapshots(months)
-      if (snapshots.length === months.length) {
+      const hasMarketChannelBreakdown = snapshots.every(s => (s.payload as any)?.marketChannels)
+      if (snapshots.length === months.length && hasMarketChannelBreakdown) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
         if (onlyLeads) {
           return NextResponse.json(
@@ -174,8 +176,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const data = await cachedQuery(`b2c-monthly:v7:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
-      const [marketRows, custRows, channelRows, profitRows] = await Promise.all([
+    const data = await cachedQuery(`b2c-monthly:v8:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
+      const [marketRows, custRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')           AS market,
@@ -200,6 +202,20 @@ export async function GET(req: NextRequest) {
            WHERE UPPER(s.group_name) = 'B2C'
              AND f.fulfiled_date::date >= $1
            GROUP BY 1, 2`,
+          [windowStart]
+        ),
+        queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
+          `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                  COALESCE(f.company_code, 'NA')            AS market,
+                  CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
+                       WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                       ELSE 'sales' END                     AS ctype,
+                  SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.fulfiled_date::date >= $1
+           GROUP BY 1, 2, 3`,
           [windowStart]
         ),
         queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
@@ -268,6 +284,23 @@ export async function GET(req: NextRequest) {
         else cell.other += rev
       }
 
+      // ── Nested market breakdown: VN/US x Sales/Web/App, sourced from the same warehouse grain ──
+      const marketChannels: Record<string, MarketChannelCell> = {}
+      for (const m of months) marketChannels[m] = { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 }
+      for (const r of marketChannelRows) {
+        const cell = marketChannels[r.month]
+        if (!cell) continue
+        const rev = parseFloat(r.revenue || "0")
+        if (r.market === "VN") {
+          if (r.ctype === "web") cell.vnWeb += rev
+          else cell.vnSales += rev
+        } else if (r.market === "US") {
+          if (r.ctype === "web") cell.usWeb += rev
+          else if (r.ctype === "app") cell.usApp += rev
+          else cell.usSales += rev
+        }
+      }
+
       // ── Profit trend: Revenue / COGS / GP / CM1 by real source channel ──
       const profitByChannel: Record<string, Record<string, ProfitCell>> = {}
       for (const m of months) profitByChannel[m] = {}
@@ -309,7 +342,7 @@ export async function GET(req: NextRequest) {
         console.error("[b2c/monthly] profit channel costs", (e as Error).message)
       }
 
-      return { markets, customers, channels, profitByChannel, customerSource, customerBreakdown, customerError }
+      return { markets, customers, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
     })
 
     // KPI targets: nhập ở KPI / Target. Budget: lấy từ Manage Costs → B2C Channels.
