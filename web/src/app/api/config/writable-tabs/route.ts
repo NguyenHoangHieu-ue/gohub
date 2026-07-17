@@ -13,7 +13,7 @@ const CONFIG_KEY = "permissions.writable_tabs"
 
 async function readConfig(): Promise<Record<string, string[]>> {
   const { data } = await supabaseAdmin
-    .from("app_config").select("value").eq("key", CONFIG_KEY).maybeSingle()
+    .from("app_settings").select("value").eq("key", CONFIG_KEY).maybeSingle()
   if (!data?.value) return {}
   try { return JSON.parse(data.value) } catch { return {} }
 }
@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest) {
   if (tabs.length === 0) delete config[username]
   else config[username] = tabs
 
-  const { error } = await supabaseAdmin.from("app_config").upsert(
+  const { error } = await supabaseAdmin.from("app_settings").upsert(
     { key: CONFIG_KEY, value: JSON.stringify(config), category: "permissions", label: "Quyền chỉnh sửa tab per-user" },
     { onConflict: "key" }
   )

@@ -13,7 +13,7 @@ export async function GET() {
 
   const [userRes, configRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
-    supabaseAdmin.from("app_config").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
   ])
 
   let writableTabs: string[] = []
