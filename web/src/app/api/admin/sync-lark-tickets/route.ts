@@ -52,7 +52,7 @@ export async function POST(_req: NextRequest) {
 
     do {
       const url = new URL(`${LARK_API}/bitable/v1/apps/${appToken}/tables/${tableId}/records`)
-      url.searchParams.set("page_size", "100")
+      url.searchParams.set("page_size", "500")   // max Lark bitable — giảm số vòng (18k records ~37 trang thay vì 181)
       if (pageToken) url.searchParams.set("page_token", pageToken)
 
       const res = await fetch(url.toString(), {
@@ -97,7 +97,7 @@ export async function POST(_req: NextRequest) {
             source:           getLarkString(f["Source"]),
             channel:          getLarkString(f["Channel"]),
             vendor:           getLarkString(f["Vendor"]),
-            handler:          getLarkString(f["Handler"]),
+            handler:          getLarkString(f["Ticket Handler"] ?? f["PIC (CS-OPs)"] ?? f["Handler"]),
             product_action:   getLarkString(f["Product Action"]),
             money_action:     getLarkString(f["Money Action"]),
             creation_date,
