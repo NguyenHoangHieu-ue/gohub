@@ -1,5 +1,27 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-17 (session 104 — chatbot routing audit 26/26, CS July sync, User perms app_config→app_settings)
+Cập nhật lần cuối: 2026-07-17 (session 105 — lấy nested B2C market breakdown từ branch codex team khác)
+
+## Session 105 (2026-07-17) — Lấy tính năng từ branch codex/b2c-dashboard-preview (team Minh)
+
+### Bối cảnh: team khác push branch, sợ xung đột với code hiện tại
+- Branch `codex/b2c-dashboard-preview` @ 1dd06a6. Có 2 commit chưa vào staging:
+  · 5e5c1c9 "Build B2C report preview" — ĐÃ có sẵn (cherry-pick s91 hash a1be9bd) → bỏ qua.
+  · 1dd06a6 "Add nested B2C revenue market breakdown" (Minh, hôm nay) — MỚI, đã lấy.
+
+### Tính năng lấy: Nested B2C revenue breakdown theo thị trường
+- Tab B2C → Advanced → Section 1: thay breakdown phẳng Web/App/Khác → NESTED theo VN/US:
+  VN B2C (› VN Sales, › Web) / US B2C (› US Sales, › App, › Web) / Total B2C.
+- Thêm chiều `marketChannels` (vnSales/vnWeb/usSales/usApp/usWeb) từ fact_fulfillment_revenue
+  (group company_code × sub_group_name: Websites→web, Mobile-App→app, else→sales).
+
+### ⚠️ Cách lấy: ÁP THỦ CÔNG (không cherry-pick thẳng)
+- Commit Minh dựa trên bản CŨ 3 file mà session này vừa sửa nhiều (T-1 real-time, budget KPI/Target,
+  Live badge) → cherry-pick sẽ ghi đè mất. → Áp tay từng hunk. Tính năng ADDITIVE, KHÔNG đụng logic của tôi.
+- 3 file: b2c-report-snapshot.ts (interface+query+mapping+thread snapshot), b2c/monthly/route.ts
+  (query giữ endClause windowEnd T-1, cache v7→v8, check hasMarketChannelBreakdown bỏ snapshot cũ),
+  b2c-advanced-dashboard.tsx (marketChannelOf + RollingTable key prop + nested rows).
+- Snapshot cũ thiếu marketChannels → tự bỏ qua, query lại live; cron refresh-b2c-report tạo snapshot mới.
+- tsc + build PASS. CHỈ push staging (feature team khác, test trước khi lên main). Commit ff7cd45.
 
 ## Session 104 (2026-07-17) — Chatbot audit + CS July + User permissions
 
