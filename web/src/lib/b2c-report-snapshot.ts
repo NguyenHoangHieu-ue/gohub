@@ -10,11 +10,13 @@ export interface MarketCell { vn: number; us: number; total: number }
 export interface CustCell { revenue: number; count: number }
 export interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 export interface ChannelCell { web: number; app: number; other: number }
+export interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
 export interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 export interface B2CMonthPayload {
   market: MarketCell
   customers: CustRow
   channels: ChannelCell
+  marketChannels?: MarketChannelCell
   profitByChannel?: Record<string, ProfitCell>
   spend: number
   budget: number
@@ -57,6 +59,7 @@ function emptyPayload(): B2CMonthPayload {
       total: { revenue: 0, count: 0 },
     },
     channels: { web: 0, app: 0, other: 0 },
+    marketChannels: { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 },
     profitByChannel: {},
     spend: 0,
     budget: 0,
@@ -89,6 +92,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   const markets: Record<string, MarketCell> = {}
   const customers: Record<string, CustRow> = {}
   const channels: Record<string, ChannelCell> = {}
+  const marketChannels: Record<string, MarketChannelCell> = {}
   const profitByChannel: Record<string, Record<string, ProfitCell>> = {}
   const spend: Record<string, number> = {}
   const budget: Record<string, number> = {}
@@ -100,6 +104,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
     markets[month] = payload.market
     customers[month] = payload.customers
     channels[month] = payload.channels
+    marketChannels[month] = payload.marketChannels ?? { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 }
     profitByChannel[month] = payload.profitByChannel ?? {}
     spend[month] = payload.spend
     budget[month] = payload.budget
@@ -119,6 +124,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
     markets,
     customers,
     channels,
+    marketChannels,
     profitByChannel,
     spend,
     budget,
@@ -140,7 +146,7 @@ async function loadRevenue(months: string[]) {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
   const elapsedDays = now.getDate()
   const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const [marketRows, channelRows, profitRows] = await Promise.all([
+  const [marketRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
     queryAnalytics<{ month: string; market: string; revenue: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
               COALESCE(f.company_code, 'NA')           AS market,
@@ -165,6 +171,21 @@ async function loadRevenue(months: string[]) {
        GROUP BY 1, 2`,
       [windowStart],
     ),
+    // Nested market × loại kênh (VN/US × Sales/Web/App) — cùng grain fact_fulfillment_revenue.
+    queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
+      `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+              COALESCE(f.company_code, 'NA')            AS market,
+              CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
+                   WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                   ELSE 'sales' END                     AS ctype,
+              SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
+       FROM fact_fulfillment_revenue f
+       JOIN dim_order_source s ON f.order_source_code = s.code
+       WHERE UPPER(s.group_name) = 'B2C'
+         AND f.fulfiled_date::date >= $1
+       GROUP BY 1, 2, 3`,
+      [windowStart],
+    ),
     queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM')          AS month,
               COALESCE(NULLIF(TRIM(s.channel_name), ''), 'Khác') AS channel,
@@ -180,8 +201,13 @@ async function loadRevenue(months: string[]) {
     ),
   ])
 
-  const payloads: Record<string, Pick<B2CMonthPayload, "market" | "channels" | "profitByChannel">> = {}
-  for (const month of months) payloads[month] = { market: { vn: 0, us: 0, total: 0 }, channels: { web: 0, app: 0, other: 0 }, profitByChannel: {} }
+  const payloads: Record<string, Pick<B2CMonthPayload, "market" | "channels" | "marketChannels" | "profitByChannel">> = {}
+  for (const month of months) payloads[month] = {
+    market: { vn: 0, us: 0, total: 0 },
+    channels: { web: 0, app: 0, other: 0 },
+    marketChannels: { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 },
+    profitByChannel: {},
+  }
 
   for (const r of marketRows) {
     const cell = payloads[r.month]?.market
@@ -198,6 +224,19 @@ async function loadRevenue(months: string[]) {
     if (r.ctype === "web") cell.web += rev
     else if (r.ctype === "app") cell.app += rev
     else cell.other += rev
+  }
+  for (const r of marketChannelRows) {
+    const cell = payloads[r.month]?.marketChannels
+    if (!cell) continue
+    const rev = parseFloat(r.revenue || "0")
+    if (r.market === "VN") {
+      if (r.ctype === "web") cell.vnWeb += rev
+      else cell.vnSales += rev
+    } else if (r.market === "US") {
+      if (r.ctype === "web") cell.usWeb += rev
+      else if (r.ctype === "app") cell.usApp += rev
+      else cell.usSales += rev
+    }
   }
   for (const r of profitRows) {
     const profit = payloads[r.month]?.profitByChannel
@@ -296,6 +335,7 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
 
     payload.market = revenue[month]?.market ?? payload.market
     payload.channels = revenue[month]?.channels ?? payload.channels
+    payload.marketChannels = revenue[month]?.marketChannels ?? payload.marketChannels
     payload.profitByChannel = revenue[month]?.profitByChannel ?? payload.profitByChannel
     payload.spend = marketing.spend[month] ?? 0
     payload.budget = marketing.budget[month] ?? 0
