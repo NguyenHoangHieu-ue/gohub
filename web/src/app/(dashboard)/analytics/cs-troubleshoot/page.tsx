@@ -48,7 +48,10 @@ export default function CSTroubleshootReport() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"tbs" | "sku" | "vendor" | "source" | "invalid">("tbs")
-  const [syncStatus, setSyncStatus] = useState<{ count: number; lastSync: string | null; configured: boolean } | null>(null)
+  const [syncStatus, setSyncStatus] = useState<{
+    count: number; lastSync: string | null; configured: boolean
+    envCheck?: Record<string, string>
+  } | null>(null)
 
   const [dateRange, setDateRange] = useState(() => {
     const defaultRange = getDefaultDateRange()
@@ -189,9 +192,28 @@ export default function CSTroubleshootReport() {
               }
             </div>
             {!syncStatus.configured && (
-              <span className="text-xs font-bold text-red-600">
-                ⚠ LARK_BASE_ID / LARK_TABLE_ID chưa được đọc — kiểm tra Vercel env vars và redeploy để có hiệu lực
-              </span>
+              <div className="text-xs font-bold text-red-600 space-y-1">
+                <div>⚠ Lark Base chưa kết nối — kiểm tra Vercel env vars và redeploy nếu vừa set</div>
+                {syncStatus.envCheck && (
+                  <div className="font-mono font-normal text-[11px] text-red-500 space-y-0.5">
+                    {Object.entries(syncStatus.envCheck).map(([k, v]) => (
+                      <div key={k}>{k}: {v}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {syncStatus.configured && syncStatus.envCheck && (
+              Object.values(syncStatus.envCheck).some(v => v.includes("❌")) && (
+                <div className="text-xs text-amber-700 space-y-0.5">
+                  <div>⚠ Base/Table set nhưng thiếu bot credentials:</div>
+                  <div className="font-mono text-[11px] space-y-0.5">
+                    {Object.entries(syncStatus.envCheck).filter(([,v]) => v.includes("❌")).map(([k, v]) => (
+                      <div key={k}>{k}: {v}</div>
+                    ))}
+                  </div>
+                </div>
+              )
             )}
           </div>
         )}
