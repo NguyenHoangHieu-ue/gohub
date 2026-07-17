@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from "react"
 import { Gift, Search } from "lucide-react"
 import { SkeletonTable } from "@/components/skeleton"
+import { EmptyState } from "@/components/empty-state"
+import { useUrlStates } from "@/hooks/use-url-state"
 
 interface Promotion {
   product_code:        string
@@ -61,9 +63,10 @@ function fmtDate(d: string | null) {
 export default function PromotionsPage() {
   const [items,   setItems]   = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState("")
-  const [vendor,  setVendor]  = useState("")
-  const [simType, setSimType] = useState("")
+  const [filters, setFilters] = useUrlStates({ q: "", vendor: "", sim: "" })
+  const search  = filters.q
+  const vendor  = filters.vendor
+  const simType = filters.sim
 
   useEffect(() => {
     fetch("/api/promotions")
@@ -106,23 +109,23 @@ export default function PromotionsPage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => setFilters({ q: e.target.value })}
             placeholder="Tìm mã SP, nội dung, nước..."
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
-        <select value={vendor} onChange={e => setVendor(e.target.value)}
+        <select value={vendor} onChange={e => setFilters({ vendor: e.target.value })}
           className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
           <option value="">Tất cả Vendor</option>
           {vendors.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
-        <select value={simType} onChange={e => setSimType(e.target.value)}
+        <select value={simType} onChange={e => setFilters({ sim: e.target.value })}
           className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
           <option value="">Tất cả SIM</option>
           {simTypes.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         {(vendor || simType || search) && (
-          <button onClick={() => { setVendor(""); setSimType(""); setSearch("") }}
+          <button onClick={() => setFilters({ q: "", vendor: "", sim: "" })}
             className="px-3 py-2 text-sm text-gray-500 hover:text-red-600 border border-gray-200 rounded-xl hover:border-red-200 transition-colors">
             Xóa filter
           </button>
@@ -132,9 +135,10 @@ export default function PromotionsPage() {
       {loading ? (
         <SkeletonTable rows={8} cols={6} />
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">
-          {search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
-        </div>
+        <EmptyState
+          title={search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
+          description={search || vendor || simType ? "Thử bỏ bộ lọc hoặc đổi từ khoá" : undefined}
+        />
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">

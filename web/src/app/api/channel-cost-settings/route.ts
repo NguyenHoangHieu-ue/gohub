@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) {
+  const COST_WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "saleb2c", "staff"]
+  if (!COST_WRITE_ROLES.includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -6,6 +6,8 @@ import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown
 import * as XLSX from "xlsx"
 import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
 import { useToast } from "@/components/toast"
+import { EmptyTableRow } from "@/components/empty-state"
+import { InfoTooltip } from "@/components/tooltip"
 
 const canSeeCost = (role?: string) => role === "admin"
 
@@ -816,9 +818,9 @@ function WMTab({ role }: { role?: string }) {
               <th className="text-left px-4 py-2.5">Vùng</th>
               <th className="text-left px-4 py-2.5">SIM</th>
               <th className="text-left px-4 py-2.5">Data</th>
-              {showCost && <th className="text-left px-4 py-2.5">COGS</th>}
-              <th className="text-left px-4 py-2.5">Trong HT</th>
-              <th className="text-left px-4 py-2.5">SKU HT</th>
+              {showCost && <th className="text-left px-4 py-2.5">COGS <InfoTooltip content="Giá nhập gốc từ NCC (admin only). Đơn vị theo currency của gói." /></th>}
+              <th className="text-left px-4 py-2.5">Trong HT <InfoTooltip content="GoHub đã tạo SKU bán cho gói này chưa (exist = Yes/No)." /></th>
+              <th className="text-left px-4 py-2.5">SKU HT <InfoTooltip content="Danh sách mã SKU GoHub tương ứng đã tạo." /></th>
               <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
@@ -834,7 +836,7 @@ function WMTab({ role }: { role?: string }) {
                 </tr>
               ))
             ) : products.length === 0 ? (
-              <tr><td colSpan={showCost ? 9 : 8} className="text-center py-12 text-gray-400">Không có dữ liệu</td></tr>
+              <EmptyTableRow colSpan={showCost ? 9 : 8} title="Không có dữ liệu" description="Thử bỏ bộ lọc hoặc đổi từ khoá" />
             ) : products.map(p => (
               <>
                 <tr key={p.vendor_product_id}
@@ -976,7 +978,7 @@ function ThreeHKTab({ role }: { role?: string }) {
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={showCost ? 5 : 4} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+              <EmptyTableRow colSpan={showCost ? 5 : 4} title="Không tìm thấy" description="Thử bỏ bộ lọc" />
             ) : filtered.map(z => (
               <tr key={z.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                 <td className="px-4 py-2.5 font-mono text-xs font-semibold text-brand-700">{z.zone}</td>

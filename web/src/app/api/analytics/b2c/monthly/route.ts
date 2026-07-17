@@ -340,16 +340,6 @@ export async function GET(req: NextRequest) {
         if (spend[r.month] !== undefined) spend[r.month] += Number(r.amount) || 0
       }
     } catch (e) { console.error("[b2c/monthly] spend (supabase)", (e as Error).message) }
-    // Manual temporary B2C costs from Cost Management screenshots.
-    // Remove this once these B2C group costs are entered in the source table.
-    const manualSpendOverrides: Record<string, number> = {
-      "2026-05": 86_633_334 + 20_099_340 + 26_188_452,
-      "2026-06": 93_239_567 + 2_989_734,
-      "2026-07": 128_000_000,
-    }
-    for (const [month, amount] of Object.entries(manualSpendOverrides)) {
-      if (spend[month] !== undefined) spend[month] = amount
-    }
 
     // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
     const { leads, leadsByChannel } = skipLeads

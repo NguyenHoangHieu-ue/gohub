@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { Info, Search } from "lucide-react"
 import { SkeletonTable } from "@/components/skeleton"
+import { EmptyTableRow } from "@/components/empty-state"
+import { useUrlStates } from "@/hooks/use-url-state"
 
 interface Country      { code: string; name: string; name_vn: string | null }
 interface SupportCountry {
@@ -36,11 +38,13 @@ export default function InfoPage() {
   const [vendors, setVendors]                   = useState<Vendor[]>([])
   const [categories, setCategories]             = useState<Category[]>([])
   const [loading, setLoading]                   = useState(true)
-  const [activeTab, setActiveTab]               = useState<Tab>("countries")
-  const [searchC, setSearchC]   = useState("")
-  const [searchSC, setSearchSC] = useState("")
-  const [searchV, setSearchV]   = useState("")
-  const [searchCat, setSearchCat] = useState("")
+  const [f, setF] = useUrlStates({ tab: "countries", qc: "", qs: "", qv: "", qcat: "" })
+  const activeTab = f.tab as Tab
+  const setActiveTab = (t: Tab) => setF({ tab: t })
+  const searchC   = f.qc;   const setSearchC   = (v: string) => setF({ qc:   v })
+  const searchSC  = f.qs;   const setSearchSC  = (v: string) => setF({ qs:   v })
+  const searchV   = f.qv;   const setSearchV   = (v: string) => setF({ qv:   v })
+  const searchCat = f.qcat; const setSearchCat = (v: string) => setF({ qcat: v })
 
   useEffect(() => {
     fetch("/api/countries")
@@ -139,7 +143,7 @@ export default function InfoPage() {
               </thead>
               <tbody>
                 {filteredC.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+                  ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredC.map(c => (
                     <tr key={c.code} className="border-b border-gray-50 hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.code}</td>
@@ -169,7 +173,7 @@ export default function InfoPage() {
               </thead>
               <tbody>
                 {filteredSC.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+                  ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredSC.map(sc => (
                     <tr key={sc.code} className="border-b border-gray-50 hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{sc.code}</td>
@@ -202,7 +206,7 @@ export default function InfoPage() {
               </thead>
               <tbody>
                 {filteredCat.length === 0
-                  ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+                  ? <EmptyTableRow colSpan={5} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredCat.map(c => (
                     <tr key={c.category_code} className="border-b border-gray-50 hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.category_code}</td>
@@ -240,7 +244,7 @@ export default function InfoPage() {
               </thead>
               <tbody>
                 {filteredV.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
+                  ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredV.map(v => (
                     <tr key={v.vendor_code} className="border-b border-gray-50 hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{v.vendor_code}</td>

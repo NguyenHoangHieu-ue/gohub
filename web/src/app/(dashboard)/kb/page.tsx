@@ -14,6 +14,8 @@ import { DEPT_LABELS, type Department } from "@/lib/kb"
 import { ConfirmModal } from "@/components/confirm-modal"
 import { MermaidBlock  } from "@/components/mermaid-block"
 import { SkeletonTable } from "@/components/skeleton"
+import { EmptyState } from "@/components/empty-state"
+import { useUrlState } from "@/hooks/use-url-state"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface KBDoc {
@@ -123,7 +125,8 @@ export default function KBPage() {
       .catch(() => {})
   }, [session])
   const role = dbRole || jwtRole
-  const [tab, setTab] = useState<"docs" | "wiki" | "search">("docs")
+  const [tab, setTabRaw] = useUrlState("tab", "docs", 0)
+  const setTab = (t: "docs" | "wiki" | "search") => setTabRaw(t)
   const can = usePermissions(role)
 
   const canUpload   = can("perm_kb_upload")
@@ -405,7 +408,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
       {loading ? (
         <SkeletonTable rows={6} cols={5} />
       ) : docs.length === 0 ? (
-        <div className="py-12 text-center text-gray-400">Chưa có tài liệu nào</div>
+        <EmptyState title="Chưa có tài liệu nào" description="Upload file để chatbot có thể đọc và trả lời" />
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
@@ -643,7 +646,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       {loading ? (
         <SkeletonTable rows={6} cols={4} />
       ) : pages.length === 0 ? (
-        <div className="py-16 text-center text-gray-400"><PenLine size={32} className="mx-auto mb-3 text-gray-300"/><p>Chưa có wiki page nào. Bấm "Tạo trang" để bắt đầu.</p></div>
+        <EmptyState icon={<PenLine />} title="Chưa có wiki page nào" description='Bấm "Tạo trang" để bắt đầu.' />
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
@@ -960,7 +963,7 @@ function SearchTab() {
       </form>
 
       {searching && <div className="flex items-center gap-2 text-sm text-gray-400 py-4"><Loader2 size={15} className="animate-spin"/>Đang tìm kiếm...</div>}
-      {searched && !searching && results.length === 0 && <div className="py-12 text-center text-gray-400">Không tìm thấy kết quả phù hợp</div>}
+      {searched && !searching && results.length === 0 && <EmptyState title="Không tìm thấy kết quả phù hợp" description="Thử dùng từ khoá khác hoặc ngắn hơn" />}
 
       {results.length > 0 && (
         <div className="space-y-3">
