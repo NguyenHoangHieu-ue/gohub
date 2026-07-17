@@ -58,6 +58,8 @@ export default function ProductPerformancePage() {
   const [skuPerformance, setSkuPerformance] = useState<SKUPerformance[]>([])
   const reportRef = React.useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
+  const skuFullQueryRef = React.useRef<string>("")   // query SKU không LIMIT → export FULL
+  const [exportingSku, setExportingSku] = useState(false)
 
   // Filters
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -96,6 +98,35 @@ export default function ProductPerformancePage() {
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: string }[]) => {
     exportToExcel(data as Record<string, unknown>[], columns, `${filename}_${startDate}_to_${endDate}`)
+  }
+
+  // Export SKU Breakdown FULL (chạy lại query KHÔNG LIMIT) — cột khớp đúng bảng hiển thị.
+  const exportSkuBreakdownFull = async () => {
+    if (!skuFullQueryRef.current || exportingSku) return
+    setExportingSku(true)
+    try {
+      const skus = await runQuery(skuFullQueryRef.current)
+      const rows = (Array.isArray(skus) ? skus : []).map((s: any) => {
+        const revenue = parseFloat(s.revenue || 0)
+        const margin = parseFloat(s.margin || 0)
+        return {
+          "SKU": s.sku || "",
+          "Country Code": s.region || "",
+          "Country": countryMappings[s.region] || "",
+          "Category": s.category || "",
+          "Vendor": s.vendor || "",
+          "Revenue": revenue,
+          "Units": parseInt(s.units || 0),
+          "Orders": parseInt(s.orders || 0),
+          "Margin %": revenue > 0 ? Number(((margin / revenue) * 100).toFixed(1)) : 0,
+        }
+      })
+      exportRawRows(rows, `SKU_Breakdown_${startDate}_to_${endDate}`, "SKU Breakdown")
+    } catch (err) {
+      console.error("Export SKU breakdown failed:", err)
+    } finally {
+      setExportingSku(false)
+    }
   }
 
   const exportToPDF = async () => {
@@ -251,11 +282,14 @@ export default function ProductPerformancePage() {
 
       const regionQuery = `SELECT ${regionExpr} as region_code, SUM(${revCol}) as revenue, SUM(${qtyCol}) as units FROM ${mainTable} f WHERE ${filterSQL} GROUP BY 1 ORDER BY revenue DESC LIMIT 10`
 
-      const skuBreakdownQuery = `
+      // Base query (KHÔNG LIMIT) — lưu để export FULL; bảng chỉ hiển thị top 50.
+      const skuBreakdownBase = `
         SELECT f.sku, v.category_name as category, v.vendor, ${regionExpr} as region,
           SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units, COUNT(DISTINCT f.order_code) as orders, SUM(f.${marginCol}) as margin
         FROM ${mainTable} f LEFT JOIN dim_sku v ON f.sku = v.sku
-        WHERE ${filterSQL} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC LIMIT 50`
+        WHERE ${filterSQL} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC`
+      skuFullQueryRef.current = skuBreakdownBase
+      const skuBreakdownQuery = `${skuBreakdownBase} LIMIT 50`
 
       const [mRecords, pmRecords, trends, channels, regions, skus, strategicRes] = await Promise.all([
         runQuery(metricsQuery),
@@ -754,12 +788,10 @@ export default function ProductPerformancePage() {
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">SKU Breakdown</h2>
-              <span className="text-xs text-slate-500">Showing top 50 products by revenue</span>
+              <span className="text-xs text-slate-500">Bảng hiển thị top 50 theo doanh thu · Export xuất TẤT CẢ SKU</span>
             </div>
-            <button onClick={() => exportToCSV(skuPerformance, "SKU_Performance", [
-              { label: "SKU", key: "sku" }, { label: "Category", key: "category" }, { label: "Vendor", key: "vendor" }, { label: "Revenue", key: "revenue" }, { label: "Units", key: "units" }, { label: "Orders", key: "orders" }, { label: "Margin", key: "margin" },
-            ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-              <Download className="w-3 h-3" /> CSV
+            <button onClick={exportSkuBreakdownFull} disabled={exportingSku} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px] disabled:opacity-50">
+              <Download className="w-3 h-3" /> {exportingSku ? "Exporting..." : "Export"}
             </button>
           </div>
           <div className="overflow-x-auto">
