@@ -28,10 +28,13 @@ trường hợp (product/report/thống kê). Cách làm: mỗi con vòng AUDIT 
   extractParams tự bắt loại SIM. Router: GAP_KEYWORD +word-boundary (fix '3hk co' khớp "3hk contribution");
   chặn BI override cướp câu NCC/gap ("WorldMove bao nhiêu gói chưa tạo SKU" → gap-analysis).
 
-### Giới hạn còn lại (feature riêng, chưa làm)
-- tu-van đa quốc gia: "gói dùng được ở CẢ Malaysia VÀ Singapore" — searchSkus chưa xét giao gói đa quốc gia.
+### Multi-country tu-van (làm nốt cùng session)
+- "gói dùng được ở CẢ Malaysia VÀ Singapore" trước trả SAI "chưa có". Nay: extractParams gom countries[] khi có
+  "cả…và / đồng thời / cùng lúc" (không nhầm "so sánh Nhật và Hàn"); searchSkusMultiCountry giao tập nhóm nước
+  phủ TẤT CẢ nước → GoHub CÓ ~21 nhóm phủ Malaysia+Singapore (AP2/APA…). tu-van 6/7 → 7/7.
 
-Verify: tsc PASS · vitest 28/28 · routing 32/32 · next build PASS. Wiki: system/Chatbot-Agents-Guardian.md.
+Verify: tsc PASS · vitest 28/28 · routing 33/33 · next build PASS. Wiki: system/Chatbot-Agents-Guardian.md.
+Commit: ae3464d (audit 7 agent) + a5c9f55 (multi-country) — ĐÃ push origin/staging.
 
 ## Session 105 (2026-07-17) — Lấy tính năng từ branch codex/b2c-dashboard-preview (team Minh)
 
