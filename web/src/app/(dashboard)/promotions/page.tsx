@@ -141,7 +141,8 @@ export default function PromotionsPage() {
         />
       ) : (
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left text-xs text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
                 <th className="px-4 py-3 font-medium">Mã SP</th>
@@ -183,6 +184,7 @@ export default function PromotionsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

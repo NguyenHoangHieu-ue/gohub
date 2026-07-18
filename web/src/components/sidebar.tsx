@@ -164,6 +164,19 @@ function useDeptTabs(role: string, department: string) {
   return extraTabs
 }
 
+// Nhận diện viewport mobile (< md = 768px) để off-canvas + luôn hiện dạng mở rộng.
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)")
+    const on = () => setMobile(mq.matches)
+    on()
+    mq.addEventListener("change", on)
+    return () => mq.removeEventListener("change", on)
+  }, [])
+  return mobile
+}
+
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
 // ── Dark sidebar: nền tối, chữ trắng. Active = xanh brand sáng nổi trên nền tối, hover = trắng mờ ──
@@ -246,7 +259,10 @@ function GroupToggle({ label, Icon, open, onToggle, accent = "brand" }: {
 export function Sidebar() {
   const pathname  = usePathname()
   const { data: session } = useSession()
-  const { collapsed, toggle } = useSidebar()
+  const { collapsed, toggle, mobileOpen, closeMobile } = useSidebar()
+  const isMobile = useIsMobile()
+  // Trên mobile luôn render dạng MỞ RỘNG (off-canvas), bỏ qua trạng thái thu gọn của desktop.
+  const effCollapsed = isMobile ? false : collapsed
   const [productOpen, setProductOpen] = useState(false)
   const [analystOpen, setAnalystOpen] = useState(true)
 
@@ -257,6 +273,9 @@ export function Sidebar() {
       setProductOpen(true)
     }
   }, [pathname])
+
+  // Đóng off-canvas sau khi điều hướng sang trang khác trên mobile.
+  useEffect(() => { closeMobile() }, [pathname, closeMobile])
 
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
@@ -327,21 +346,32 @@ export function Sidebar() {
       : pathname === href || pathname.startsWith(href + "/")
 
   return (
+    <>
+    {/* Backdrop mobile: chạm ra ngoài để đóng off-canvas */}
+    {isMobile && mobileOpen && (
+      <div
+        onClick={closeMobile}
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+        aria-hidden
+      />
+    )}
     <aside className={`
       fixed left-0 top-0 h-full bg-slate-900 border-r border-slate-800
-      flex flex-col z-40 select-none overflow-visible
+      flex flex-col z-50 select-none overflow-visible
       transition-all duration-200 ease-in-out
-      ${collapsed ? "w-16" : "w-60"}
+      ${isMobile
+        ? `w-60 ${mobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`
+        : `translate-x-0 ${collapsed ? "w-16" : "w-60"}`}
     `}>
 
       {/* Brand header */}
       <div className={`bg-slate-950 border-b border-slate-800 flex-shrink-0
-        ${collapsed ? "px-2 py-4" : "px-4 py-4"}`}>
-        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+        ${effCollapsed ? "px-2 py-4" : "px-4 py-4"}`}>
+        <div className={`flex items-center ${effCollapsed ? "justify-center" : "gap-3"}`}>
           <div className="w-8 h-8 bg-brand-500/40 rounded-lg flex items-center justify-center border border-brand-400/30 flex-shrink-0">
             <Radio size={16} className="text-white" strokeWidth={2} />
           </div>
-          {!collapsed && (
+          {!effCollapsed && (
             <div className="overflow-hidden">
               <div className="text-white font-semibold text-sm leading-tight tracking-tight whitespace-nowrap">Gohub Intel</div>
               <div className="text-brand-300/80 text-[11px] whitespace-nowrap tracking-wide uppercase">Intelligence Hub</div>
@@ -351,9 +381,9 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? "px-1.5" : "px-2.5"}`}>
+      <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${effCollapsed ? "px-1.5" : "px-2.5"}`}>
 
-        {collapsed ? (
+        {effCollapsed ? (
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
             {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
@@ -440,18 +470,18 @@ export function Sidebar() {
           </>
         )}
 
-        <div className={`pt-1 border-t border-slate-800 mt-1 ${collapsed ? "px-1.5" : "px-0"}`}>
-          <NotificationBell collapsed={collapsed} />
+        <div className={`pt-1 border-t border-slate-800 mt-1 ${effCollapsed ? "px-1.5" : "px-0"}`}>
+          <NotificationBell collapsed={effCollapsed} />
         </div>
       </nav>
 
-      {/* Toggle tab — dán vào cạnh phải sidebar */}
+      {/* Toggle tab — dán vào cạnh phải sidebar (chỉ desktop; mobile dùng nút hamburger ở TopBar) */}
       <button
         onClick={toggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         className="absolute -right-3 top-1/2 -translate-y-1/2 z-50
           w-6 h-12 bg-white border border-gray-200 rounded-r-lg shadow-sm
-          flex items-center justify-center
+          hidden md:flex items-center justify-center
           text-gray-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50
           transition-all duration-150 group"
       >
@@ -461,5 +491,6 @@ export function Sidebar() {
         }
       </button>
     </aside>
+    </>
   )
 }

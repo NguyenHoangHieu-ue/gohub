@@ -10,8 +10,9 @@ export const metadata: Metadata = {
   description: "Gohub Intel — Business Intelligence & Product Hub",
 }
 
-// Đặt class 'dark' TRƯỚC khi paint để tránh nhấp nháy (FOUC): 'dark'/'light' rõ ràng, else theo OS.
-const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`
+// Đặt class 'dark' TRƯỚC khi paint để tránh nhấp nháy (FOUC).
+// Mặc định LIGHT: chỉ bật dark khi user CHỦ ĐỘNG chọn (localStorage theme='dark') — KHÔNG theo OS.
+const themeScript = `try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
