@@ -493,7 +493,7 @@ export default function ChatbotPage() {
       <div className="p-3 border-b border-gray-200">
         <button
           onClick={() => { startNew(); onSelect?.() }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-colors"
         >
           <Plus size={15} />
           Cuộc trò chuyện mới
@@ -514,8 +514,8 @@ export default function ChatbotPage() {
                   onClick={() => { switchConversation(conv); onSelect?.() }}
                   className={`group flex items-start gap-1 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
                     conv.id === activeConvId
-                      ? "bg-brand-100 text-brand-800"
-                      : "hover:bg-gray-100 text-gray-700"
+                      ? "bg-brand-100 dark:bg-brand-900/40 text-brand-800 dark:text-brand-200"
+                      : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300"
                   }`}
                 >
                   <MessageSquare size={13} className="flex-shrink-0 mt-0.5 text-gray-400" />
@@ -550,14 +550,14 @@ export default function ChatbotPage() {
       {/* ── Conversation list — desktop sidebar / mobile drawer ── */}
       <div className={`
         fixed md:relative inset-y-0 left-0 z-40
-        w-64 bg-gray-50 border-r border-gray-200
+        w-64 bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800
         flex flex-col flex-shrink-0
         transform transition-all duration-200 ease-in-out
         ${mobileDrawer ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         ${!chatSidebar ? "md:w-0 md:border-0 md:overflow-hidden" : "md:w-56"}
       `}>
         {/* Mobile drawer header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 md:hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-slate-800 md:hidden">
           <span className="text-sm font-semibold text-gray-700">Lịch sử trò chuyện</span>
           <button onClick={() => setMobileDrawer(false)} className="p-1 text-gray-400 hover:text-gray-600">
             <X size={18} />
@@ -584,9 +584,9 @@ export default function ChatbotPage() {
               onClick={toggleChatSidebar}
               title={chatSidebar ? "Thu gọn lịch sử" : "Mở lịch sử trò chuyện"}
               className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5
-                text-xs font-medium text-gray-500
-                bg-white border border-gray-200 rounded-lg shadow-sm
-                hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50
+                text-xs font-medium text-gray-500 dark:text-slate-400
+                bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm
+                hover:text-brand-600 dark:hover:text-brand-300 hover:border-brand-300 hover:bg-brand-50 dark:hover:bg-slate-700
                 transition-all duration-150"
             >
               {chatSidebar
@@ -595,7 +595,7 @@ export default function ChatbotPage() {
               }
             </button>
             <Sparkles size={20} className="text-brand-600" />
-            <h1 className="text-lg md:text-xl font-bold text-gray-900">Bé Gấu</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-slate-100">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
             {busy && (
@@ -608,7 +608,7 @@ export default function ChatbotPage() {
         </div>
 
         {/* Chat container */}
-        <div className="flex-1 bg-gray-50/80 border border-gray-200 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm">
+        <div className="flex-1 bg-gray-50/80 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm">
           <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-4">
 
             {/* Empty state */}
@@ -617,7 +617,7 @@ export default function ChatbotPage() {
                 <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-brand-600/25">
                   <Sparkles size={22} className="text-white" />
                 </div>
-                <p className="font-semibold text-gray-900 text-base mb-1">Bé Gấu</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100 text-base mb-1">Bé Gấu</p>
                 <p className="text-sm text-gray-500 mb-7 max-w-sm leading-relaxed">
                   Tìm sản phẩm, tra cứu SKU & giá, xem catalog NCC, và phân tích doanh thu/đơn hàng.
                 </p>
@@ -628,7 +628,7 @@ export default function ChatbotPage() {
                       <div className="grid grid-cols-2 gap-2">
                         {group.prompts.map(q => (
                           <button key={q} onClick={() => send(q)}
-                            className="text-left px-3.5 py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50/50 transition-all shadow-sm">
+                            className="text-left px-3.5 py-2.5 text-sm text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl hover:border-brand-300 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-50/50 dark:hover:bg-slate-700/50 transition-all shadow-sm">
                             {q}
                           </button>
                         ))}
@@ -656,7 +656,7 @@ export default function ChatbotPage() {
                   <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === "user"
                       ? "bg-brand-600 text-white rounded-tr-sm shadow-sm"
-                      : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
+                      : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded-tl-sm shadow-sm"
                   }`}>
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -690,7 +690,7 @@ export default function ChatbotPage() {
                         <div className="markdown-body">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
                             p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
                             em:     ({ children }) => <em className="italic">{children}</em>,
                             ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
                             ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
@@ -698,14 +698,14 @@ export default function ChatbotPage() {
                             h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
                             h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
                             h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                            hr:     () => <hr className="my-2 border-gray-300" />,
-                            code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                            table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                            thead:  ({ children }) => <thead className="bg-gray-100 text-gray-600">{children}</thead>,
+                            hr:     () => <hr className="my-2 border-gray-300 dark:border-slate-600" />,
+                            code:   ({ children }) => <code className="bg-gray-200 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                            table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
+                            thead:  ({ children }) => <thead className="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{children}</thead>,
                             tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
                             tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
-                            th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700">{children}</th>,
-                            td:     ({ children }) => <td className="px-3 py-2 text-gray-600">{children}</td>,
+                            th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700 dark:text-slate-200">{children}</th>,
+                            td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
                           }}>
                             {text}
                           </ReactMarkdown>
@@ -748,7 +748,7 @@ export default function ChatbotPage() {
                 <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-600/20">
                   <Bot size={14} className="text-white" />
                 </div>
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
                   <div className="flex gap-1.5 items-center">
                     {[0, 1, 2].map(i => (
                       <span key={i} className="w-1.5 h-1.5 bg-brand-300 rounded-full animate-bounce"
@@ -762,13 +762,13 @@ export default function ChatbotPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0 rounded-b-2xl">
+          <div className="border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex-shrink-0 rounded-b-2xl">
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
                 placeholder="Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."
                 disabled={busy}
-                className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white disabled:opacity-60 transition"
+                className="flex-1 px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60 transition"
               />
               <button type="submit" disabled={!input.trim() || busy}
                 className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
