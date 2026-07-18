@@ -52,10 +52,17 @@ Data/ncc/
 Data/*.md
 
 # ─── Internal docs (không public) ───────────────────────────────────────────
+# Quy tắc: trong docs/ CHỈ commit docs/wiki/** — mọi file rời khác (.md/.txt/.xlsx/.docx) bỏ qua.
 Bug.txt
 WORK.md
 .ai/
 backend/
+new_info.txt
+test.sql
+docs/*.md
+docs/*.txt
+docs/*.xlsx
+docs/*.docx
 docs/session_summary.txt
 docs/MERGE_PLAN.md
 
