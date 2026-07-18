@@ -7,6 +7,7 @@ import { SidebarProvider }  from "@/components/sidebar-context"
 import { HeartbeatProvider } from "@/components/heartbeat-provider"
 import { ToastProvider }     from "@/components/toast"
 import { SearchShortcut }   from "@/components/search-shortcut"
+import { CommandPalette }   from "@/components/command-palette"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -17,6 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <SidebarProvider>
         <HeartbeatProvider />
         <SearchShortcut />
+        <CommandPalette />
         <div className="flex min-h-screen">
           <Sidebar />
           <SidebarMain>{children}</SidebarMain>
