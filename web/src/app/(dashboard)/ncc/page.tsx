@@ -130,13 +130,13 @@ function ImportModal({
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-slate-700">
           <div>
-            <p className="font-semibold text-gray-900 text-sm">Import WM Catalog</p>
+            <p className="font-semibold text-gray-900 dark:text-slate-100 text-sm">Import WM Catalog</p>
             <p className="text-xs text-gray-400 mt-0.5 font-mono">{preview.fileName}</p>
           </div>
           {!confirming && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-slate-300">
               <X size={18} />
             </button>
           )}
@@ -147,11 +147,11 @@ function ImportModal({
           {done && (
             <div className="flex flex-col items-center py-6 gap-3">
               <CheckCircle2 size={40} className="text-green-500" />
-              <p className="font-semibold text-gray-800">Import hoàn thành</p>
+              <p className="font-semibold text-gray-800 dark:text-slate-100">Import hoàn thành</p>
               <div className="text-xs text-gray-500 text-center space-y-1">
-                <p>Đã upsert <span className="font-semibold text-gray-700">{done.upserted}</span> sản phẩm</p>
+                <p>Đã upsert <span className="font-semibold text-gray-700 dark:text-slate-200">{done.upserted}</span> sản phẩm</p>
                 {done.discontinued > 0 && (
-                  <p>Đã ngưng <span className="font-semibold text-gray-700">{done.discontinued}</span> sản phẩm cũ</p>
+                  <p>Đã ngưng <span className="font-semibold text-gray-700 dark:text-slate-200">{done.discontinued}</span> sản phẩm cũ</p>
                 )}
               </div>
               <button onClick={onClose} className="mt-2 px-4 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">
@@ -229,7 +229,7 @@ function ImportModal({
                         <p className="font-mono text-[11px] font-semibold text-brand-700">{p.vendor_product_id}</p>
                         <p className="text-[10px] text-gray-500 truncate max-w-[250px]">{p.product_name}</p>
                       </div>
-                      <p className="text-[11px] text-gray-600 whitespace-nowrap ml-2">
+                      <p className="text-[11px] text-gray-600 dark:text-slate-300 whitespace-nowrap ml-2">
                         {p.cogs ? `${p.cogs} TWD` : "—"}
                       </p>
                     </div>
@@ -278,7 +278,7 @@ function ImportModal({
                         <p className="font-mono text-[11px] font-semibold text-brand-700">{z.vendor_code} / {z.zone_id}</p>
                         <p className="text-[10px] text-gray-500 truncate max-w-[240px]">{z.zone_name} — {z.countries?.slice(0, 60)}</p>
                       </div>
-                      <p className="text-[11px] text-gray-600 ml-2 whitespace-nowrap">
+                      <p className="text-[11px] text-gray-600 dark:text-slate-300 ml-2 whitespace-nowrap">
                         {z.price_per_gb} {z.currency}/GB
                       </p>
                     </div>
@@ -305,9 +305,9 @@ function ImportModal({
 
         {/* Footer */}
         {!done && (
-          <div className="flex items-center justify-end gap-2 p-5 border-t border-gray-100">
+          <div className="flex items-center justify-end gap-2 p-5 border-t border-gray-100 dark:border-slate-700">
             <button onClick={onClose} disabled={confirming}
-              className="px-4 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40">
+              className="px-4 py-1.5 text-sm text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 disabled:opacity-40">
               Bỏ qua
             </button>
             {hasChanges && (
@@ -350,7 +350,7 @@ function DiffSection({
         </span>
       </button>
       {open && (
-        <div className="px-3 pb-2 bg-white border-t border-gray-100">
+        <div className="px-3 pb-2 bg-white border-t border-gray-100 dark:border-slate-700">
           {children}
         </div>
       )}
@@ -406,12 +406,12 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-gray-100">
+        <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-slate-700">
           <div>
             <p className="font-mono font-semibold text-brand-700 text-sm">{product.vendor_product_id}</p>
             <p className="text-xs text-gray-500 mt-0.5">{product.product_name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0 mt-0.5">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-slate-300 ml-4 flex-shrink-0 mt-0.5">
             <X size={18} />
           </button>
         </div>
@@ -423,11 +423,11 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
             return (
               <div key={sec.title}>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{sec.title}</p>
-                <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+                <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 dark:divide-slate-700">
                   {validRows.map(([label, val]) => (
                     <div key={label} className="px-3 py-2 grid grid-cols-[130px_1fr] gap-2 items-start">
                       <span className="text-xs text-gray-400 font-medium pt-0.5">{label}</span>
-                      <span className="text-xs text-gray-700 whitespace-pre-wrap break-words">{String(val)}</span>
+                      <span className="text-xs text-gray-700 dark:text-slate-200 whitespace-pre-wrap break-words">{String(val)}</span>
                     </div>
                   ))}
                 </div>
@@ -439,13 +439,13 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
           {product.providers && (
             <div>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Nhà mạng theo quốc gia</p>
-              <div className="bg-gray-50 rounded-xl divide-y divide-gray-100">
+              <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 dark:divide-slate-700">
                 {product.providers.split("\n")
                   .map(p => p.trim())
                   .filter(Boolean)
                   .map((provider, idx) => (
                     <div key={idx} className="px-3 py-2.5 flex items-center justify-between">
-                      <span className="text-xs text-gray-700">{provider}</span>
+                      <span className="text-xs text-gray-700 dark:text-slate-200">{provider}</span>
                       {provider.includes("(") && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
                           Multi
@@ -464,7 +464,7 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
               <div className="bg-gray-50 rounded-xl overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-gray-400 font-medium border-b border-gray-100">
+                    <tr className="text-gray-400 font-medium border-b border-gray-100 dark:border-slate-700">
                       <th className="text-left px-3 py-2">SKU Code</th>
                       <th className="text-left px-3 py-2">Tenant</th>
                       <th className="text-left px-3 py-2">Data</th>
@@ -474,9 +474,9 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
                   </thead>
                   <tbody>
                     {product.system_skus.map(s => (
-                      <tr key={s.sku_code} className="border-t border-gray-100">
+                      <tr key={s.sku_code} className="border-t border-gray-100 dark:border-slate-700">
                         <td className="px-3 py-1.5 font-mono font-semibold text-brand-700">{s.sku_code}</td>
-                        <td className="px-3 py-1.5 text-gray-600">{s.tenant}</td>
+                        <td className="px-3 py-1.5 text-gray-600 dark:text-slate-300">{s.tenant}</td>
                         <td className="px-3 py-1.5">{s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "—"}</td>
                         <td className="px-3 py-1.5">{s.day_amount ?? "—"}</td>
                         {showCost && <td className="px-3 py-1.5">{s.latest_cogs ? `${s.latest_cogs} ${s.latest_cogs_currency ?? ""}` : "—"}</td>}
@@ -498,7 +498,7 @@ function DetailModal({ product, showCost, onClose }: { product: WMProduct; showC
 function SkuSubTable({ skus, showCost }: { skus: SystemSku[]; showCost: boolean }) {
   if (!skus.length) return <div className="px-6 py-3 text-xs text-gray-400">Không tìm thấy SKU</div>
   return (
-    <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+    <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 dark:border-slate-700">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-gray-400 font-medium">
@@ -513,21 +513,21 @@ function SkuSubTable({ skus, showCost }: { skus: SystemSku[]; showCost: boolean 
         </thead>
         <tbody>
           {skus.map(s => (
-            <tr key={s.sku_code} className="border-t border-gray-100">
+            <tr key={s.sku_code} className="border-t border-gray-100 dark:border-slate-700">
               <td className="py-1.5 pr-4 font-mono font-semibold text-brand-700 whitespace-nowrap">{s.sku_code}</td>
-              <td className="py-1.5 pr-4 text-gray-600">{s.tenant}</td>
+              <td className="py-1.5 pr-4 text-gray-600 dark:text-slate-300">{s.tenant}</td>
               <td className="py-1.5 pr-4">
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                   s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
                 }`}>{s.status}</span>
               </td>
-              <td className="py-1.5 pr-4 text-gray-700">
+              <td className="py-1.5 pr-4 text-gray-700 dark:text-slate-200">
                 {s.data_amount ? `${s.data_amount}${s.data_amount_unit ?? "GB"}` : "—"}
               </td>
-              <td className="py-1.5 pr-4 text-gray-700">{s.day_amount ?? "—"}</td>
+              <td className="py-1.5 pr-4 text-gray-700 dark:text-slate-200">{s.day_amount ?? "—"}</td>
               <td className="py-1.5 pr-4 text-gray-500">{s.throttle_speed || "—"}</td>
               {showCost && (
-                <td className="py-1.5 text-gray-700">
+                <td className="py-1.5 text-gray-700 dark:text-slate-200">
                   {s.latest_cogs ? `${s.latest_cogs} ${s.latest_cogs_currency ?? ""}` : "—"}
                 </td>
               )}
@@ -742,33 +742,33 @@ function WMTab({ role }: { role?: string }) {
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === "Enter" && applySearch()}
-            placeholder="Tìm ID, tên, vùng..." className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-52" />
+            placeholder="Tìm ID, tên, vùng..." className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400 w-52" />
         </div>
         <select value={simType} onChange={e => { setSimType(e.target.value); setPage(1) }}
-          className="py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700">
+          className="py-1.5 px-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700 dark:text-slate-200">
           <option value="">Tất cả SIM</option>
           <option value="eSIM">eSIM</option>
           <option value="SIM">SIM</option>
           <option value="Top-Up SIM">Top-Up SIM</option>
         </select>
         <select value={dataType} onChange={e => { setDataType(e.target.value); setPage(1) }}
-          className="py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700">
+          className="py-1.5 px-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400 bg-white text-gray-700 dark:text-slate-200">
           <option value="">Tất cả loại data</option>
           <option value="unlimited">Unlimited</option>
           <option value="daily">Daily</option>
           <option value="fixed">Fixed</option>
         </select>
         <input value={days} onChange={e => { setDays(e.target.value); setPage(1); }} placeholder="Days"
-          type="number" min="1" className="w-20 py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400" />
+          type="number" min="1" className="w-20 py-1.5 px-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400" />
         <input value={dataMin} onChange={e => { setDataMin(e.target.value); setPage(1); }} placeholder="GB min"
-          type="number" step="0.1" className="w-24 py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400" />
+          type="number" step="0.1" className="w-24 py-1.5 px-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400" />
         <input value={dataMax} onChange={e => { setDataMax(e.target.value); setPage(1); }} placeholder="GB max"
-          type="number" step="0.1" className="w-24 py-1.5 px-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400" />
-        <button onClick={() => fetchData(page, gap)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500">
+          type="number" step="0.1" className="w-24 py-1.5 px-2.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400" />
+        <button onClick={() => fetchData(page, gap)} className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-gray-500">
           <RefreshCw size={14} />
         </button>
         <button onClick={handleExport} disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50">
           {exporting ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
           {exporting ? "Đang xuất..." : "Export XLSX"}
         </button>
@@ -777,7 +777,7 @@ function WMTab({ role }: { role?: string }) {
             <a
               href="/api/ncc/template"
               download="GoHub_NCC_Template.xlsx"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
             >
               Tải template
             </a>
@@ -801,7 +801,7 @@ function WMTab({ role }: { role?: string }) {
           {gapBtns.map(b => (
             <button key={b.key} onClick={() => changeGap(b.key)}
               className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                gap === b.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                gap === b.key ? "bg-white text-gray-900 dark:text-slate-100 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
               }`}>{b.label}</button>
           ))}
         </div>
@@ -809,10 +809,10 @@ function WMTab({ role }: { role?: string }) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500 font-medium">
+            <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 text-xs text-gray-500 font-medium">
               <th className="text-left px-4 py-2.5">Vendor ID</th>
               <th className="text-left px-4 py-2.5">Tên</th>
               <th className="text-left px-4 py-2.5">Vùng</th>
@@ -842,20 +842,20 @@ function WMTab({ role }: { role?: string }) {
                 <tr key={p.vendor_product_id}
                   onClick={() => p.in_system && setExpanded(prev => prev === p.vendor_product_id ? null : p.vendor_product_id)}
                   className={`border-b border-gray-50 transition-colors ${
-                    p.in_system ? "cursor-pointer hover:bg-blue-50/40" : "hover:bg-gray-50/50"
+                    p.in_system ? "cursor-pointer hover:bg-blue-50/40" : "hover:bg-gray-50 dark:hover:bg-slate-700/50/50"
                   } ${expanded === p.vendor_product_id ? "bg-blue-50/30" : ""}`}
                 >
                   <td className="px-4 py-2.5 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{p.vendor_product_id}</td>
-                  <td className="px-4 py-2.5 text-gray-700 text-xs max-w-[220px] truncate" title={p.product_name ?? ""}>{p.product_name ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-gray-600 text-xs whitespace-nowrap">{p.region ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-gray-700 dark:text-slate-200 text-xs max-w-[220px] truncate" title={p.product_name ?? ""}>{p.product_name ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap">{p.region ?? "—"}</td>
                   <td className="px-4 py-2.5 text-xs">
                     <span className={`px-1.5 py-0.5 rounded font-medium ${
-                      p.sim_type === "eSIM" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"
+                      p.sim_type === "eSIM" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600 dark:text-slate-300"
                     }`}>{p.sim_type ?? "—"}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-700 text-xs whitespace-nowrap">{fmtData(p)}</td>
+                  <td className="px-4 py-2.5 text-gray-700 dark:text-slate-200 text-xs whitespace-nowrap">{fmtData(p)}</td>
                   {showCost && (
-                    <td className="px-4 py-2.5 text-gray-700 text-xs whitespace-nowrap">
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-slate-200 text-xs whitespace-nowrap">
                       {p.cogs ? `${p.cogs} ${p.cogs_currency ?? ""}` : "—"}
                     </td>
                   )}
@@ -901,11 +901,11 @@ function WMTab({ role }: { role?: string }) {
           <p className="text-xs text-gray-400">Trang {page} / {totalPages}</p>
           <div className="flex gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">
+              className="p-1.5 rounded border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700/50">
               <ChevronLeft size={14} />
             </button>
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="p-1.5 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">
+              className="p-1.5 rounded border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-700/50">
               <ChevronRight size={14} />
             </button>
           </div>
@@ -914,9 +914,9 @@ function WMTab({ role }: { role?: string }) {
 
       {/* APN Summary */}
       {products.length > 0 && products[0]?.apn_summary && (
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-xs font-semibold text-gray-600 mb-2">Thông tin APN từ nhà cung cấp</p>
-          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{products[0].apn_summary}</p>
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 dark:border-slate-700">
+          <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-2">Thông tin APN từ nhà cung cấp</p>
+          <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{products[0].apn_summary}</p>
         </div>
       )}
     </div>
@@ -952,13 +952,13 @@ function ThreeHKTab({ role }: { role?: string }) {
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm zone, quốc gia..."
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-52" />
+            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-brand-400 w-52" />
         </div>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500 font-medium">
+            <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 text-xs text-gray-500 font-medium">
               <th className="text-left px-4 py-2.5 w-16">Zone</th>
               <th className="text-left px-4 py-2.5">Quốc gia</th>
               <th className="text-left px-4 py-2.5">Network</th>
@@ -980,12 +980,12 @@ function ThreeHKTab({ role }: { role?: string }) {
             ) : filtered.length === 0 ? (
               <EmptyTableRow colSpan={showCost ? 5 : 4} title="Không tìm thấy" description="Thử bỏ bộ lọc" />
             ) : filtered.map(z => (
-              <tr key={z.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+              <tr key={z.id} className="border-b border-gray-50 hover:bg-gray-50 dark:hover:bg-slate-700/50/50">
                 <td className="px-4 py-2.5 font-mono text-xs font-semibold text-brand-700">{z.zone}</td>
-                <td className="px-4 py-2.5 text-gray-800 text-xs">{z.country}</td>
+                <td className="px-4 py-2.5 text-gray-800 dark:text-slate-100 text-xs">{z.country}</td>
                 <td className="px-4 py-2.5 text-gray-500 text-xs">{z.network ?? "—"}</td>
                 {showCost && (
-                  <td className="px-4 py-2.5 text-gray-700 text-xs font-medium">
+                  <td className="px-4 py-2.5 text-gray-700 dark:text-slate-200 text-xs font-medium">
                     {z.price_per_gb_hkd ? `${z.price_per_gb_hkd} HKD` : "—"}
                   </td>
                 )}
@@ -1014,7 +1014,7 @@ export default function NccPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center gap-2.5">
         <Truck size={20} className="text-brand-600" />
-        <h1 className="text-xl font-semibold text-gray-900">SP Vendor</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-slate-100">SP Vendor</h1>
       </div>
 
       {/* Vendor tabs */}
@@ -1022,7 +1022,7 @@ export default function NccPage() {
         {([["wm", "WORLDMOVE"], ["3hk", "3HK"]] as [VendorTab, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setVendor(key)}
             className={`px-5 py-1.5 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 ${
-              vendor === key ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              vendor === key ? "bg-white text-brand-700 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
             }`}>
             <Globe size={13} />
             {label}
