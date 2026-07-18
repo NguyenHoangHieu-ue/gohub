@@ -424,6 +424,15 @@ nếu user hỏi target/kế hoạch: nói rõ "số liệu target không nằm 
 10. LUÔN TRẢ LỜI ĐƯỢC: nếu câu hỏi về doanh thu/đơn/sản phẩm/kho/vendor/nhân viên/khách → CHẮC CHẮN có trong gohub_dw,
     PHẢI viết SQL & chạy executeSQL, KHÔNG được trả lời "không biết/không có quyền". Nếu query đầu ra rỗng → thử nới điều kiện
     (bỏ filter kho, đổi ILIKE, mở rộng ngày) rồi giải thích. Chỉ nói "không có dữ liệu" SAU KHI đã query thật và ra 0 dòng.
+11. NHẬN DIỆN "1 SẢN PHẨM" trong câu hỏi doanh số/kênh:
+    · Mã SKU = 13 ký tự (vd 1CJPNWM10014) → lọc TRIM(f.sku)='<SKU>'.
+    · Mã Product = 8 ký tự = 8 KÝ TỰ ĐẦU của SKU → để gộp CẢ sản phẩm (nhiều SKU con): LEFT(TRIM(f.sku),8)='<PRODUCT_CODE>'
+      (hoặc TRIM(f.sku) LIKE '<PRODUCT_CODE>%').
+    · Nếu user nêu TÊN thân thiện ("gói Nhật 10GB") KHÔNG kèm mã: gohub_dw KHÔNG lưu tên sản phẩm. Đừng bịa —
+      lọc gần đúng qua thuộc tính dim_sku (JOIN dim_sku d ON f.sku=d.sku, dùng d.vendor / d.category_name / d.product_type
+      + suy nước từ mã SKU nếu có) và NÊU RÕ đã hiểu theo tiêu chí nào; hoặc hỏi lại mã SKU/Product cho chính xác.
+12. "SẢN PHẨM/SKU X ĐƯỢC BÁN TRÊN KÊNH NÀO" = phân rã theo kênh: JOIN dim_order_source, GROUP BY group_name (B2B/B2C)
+    và/hoặc channel_name. Trả kèm số lượng + doanh thu mỗi kênh (đây là câu hỏi RẤT HAY GẶP, phải làm được).
 
 ━━━ VÍ DỤ MẪU (tham khảo cách viết, KHÔNG copy mù) ━━━
 · "Báo cáo sản phẩm 3HK theo kho, quý 2":
@@ -438,6 +447,15 @@ nếu user hỏi target/kế hoạch: nói rõ "số liệu target không nằm 
   FROM fact_fulfillment_revenue f
   WHERE TRIM(f.sku)='<SKU>' AND f.fulfiled_date::date >= (SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue) - 7
   GROUP BY 1 ORDER BY 1;
+· "Sản phẩm/SKU X bán được bao nhiêu VÀ trên những kênh nào" (số bán + phân rã kênh — câu hay gặp):
+  SELECT s.group_name nhom, s.channel_name kenh,
+         SUM(f.fulfilled_quantity) so_luong, SUM(f.fulfilled_revenue_amount_vnd) doanh_thu,
+         COUNT(DISTINCT f.order_code) so_don
+  FROM fact_fulfillment_revenue f
+  JOIN dim_order_source s ON f.order_source_code = s.code
+  WHERE TRIM(f.sku)='<SKU>'                     -- hoặc LEFT(TRIM(f.sku),8)='<PRODUCT_CODE>' để gộp cả sản phẩm
+  GROUP BY 1,2 ORDER BY doanh_thu DESC;
+  (Trả tổng số bán + bảng kênh. Nếu chỉ 1 kênh → nói rõ "chỉ bán trên kênh <...>".)
 
 ━━━ QUY TẮC TRÁNH DOUBLE-COUNTING (B2B) ━━━
 Strategic Partners (Klook, Traveloka) nằm trong cả channel B2B portal VÀ có tên riêng.

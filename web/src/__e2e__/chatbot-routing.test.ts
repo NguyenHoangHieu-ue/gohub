@@ -25,6 +25,10 @@ const CASES: [string, string | string[]][] = [
   // ── Bug A: mã SKU + câu hỏi doanh số → bi-analyst (KHÔNG phải tra-cuu) ──
   ["cho tôi biết số bán của con 1CKORCUF01005 từ đầu tháng đến nay", "bi-analyst"],
   ["check xem con 1CKORCUF01005 có bán được từ ngày 1/7 đến nay không", "bi-analyst"],
+  // ── Bug C: số bán + "bán trên kênh nào" của 1 sản phẩm → bi-analyst (phân rã kênh) ──
+  ["số bán của con 1CKORCUF01005 và nó được bán trên những kênh nào", "bi-analyst"],
+  ["sản phẩm 1CKORCUF01005 bán trên kênh nào", "bi-analyst"],
+  ["con 1CKORCUF01005 bán được bao nhiêu và trên kênh nào", "bi-analyst"],
   // ── Bug B: usage 3HK → bi-analyst (fact_data_usage), KHÔNG phải gap-analysis ──
   ["cho tôi biết lượng sử dụng của các gói 3HK trong tháng 6 đi", ["bi-analyst", "data-explorer"]],
   ["thử query trong bảng data_usage_log và thống kê dùm trong tổng data đang có", ["data-explorer", "bi-analyst"]],
