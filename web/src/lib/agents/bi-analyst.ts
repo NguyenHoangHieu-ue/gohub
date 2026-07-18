@@ -125,8 +125,8 @@ export async function runBIAnalyst(
   const chat = model.startChat({ history: geminiHistory })
   let result = await chat.sendMessage(lastMsg)
 
-  // Function calling loop — max 8 iterations
-  for (let i = 0; i < 8; i++) {
+  // Function calling loop — max 10 iterations (query so sánh nhiều kỳ / WoW cần nhiều lượt tool)
+  for (let i = 0; i < 10; i++) {
     const calls = result.response.functionCalls()
     if (!calls || calls.length === 0) break
 
@@ -218,5 +218,16 @@ export async function runBIAnalyst(
     result = await chat.sendMessage(parts)
   }
 
-  return result.response.text()
+  // Fallback chống câu trả lời RỖNG: Gemini đôi khi kết thúc function-calling mà không sinh text
+  // (nhất là query so sánh nhiều kỳ / WoW). Nudge 1 lượt để buộc tổng hợp kết quả đã truy vấn.
+  let text = result.response.text()
+  if (!text.trim()) {
+    try {
+      const followup = await chat.sendMessage(
+        "Dựa TRÊN kết quả các truy vấn đã chạy ở trên, hãy viết câu trả lời hoàn chỉnh bằng tiếng Việt cho user (kèm số liệu, bảng markdown nếu cần). KHÔNG gọi thêm tool."
+      )
+      text = followup.response.text()
+    } catch { /* giữ text rỗng → xử lý ở tầng gọi */ }
+  }
+  return text
 }

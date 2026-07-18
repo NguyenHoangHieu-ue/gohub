@@ -1,5 +1,37 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-07-17 (session 105 — lấy nested B2C market breakdown từ branch codex team khác)
+Cập nhật lần cuối: 2026-07-18 (session 106 — audit + tối ưu triệt để 7 agent chatbot bằng harness LLM-judge)
+
+## Session 106 (2026-07-18) — Audit & tối ưu 7 agent chatbot (harness LLM-judge)
+
+Mục tiêu Hiếu giao: test/fix để MỖI agent khai thác đúng hết bảng dữ liệu được phép + trả lời tốt mọi
+trường hợp (product/report/thống kê). Cách làm: mỗi con vòng AUDIT → BANK → GRADE(LLM-judge) → FIX → VERIFY.
+
+### Hạ tầng test mới (web/src/__e2e__ + vitest.audit.config.ts)
+- agent-audit.test.ts: introspect gohub_dw (13 bảng thật) + probe 38 bảng Supabase → đối chiếu prompt vs DB.
+- answer.ts: answerQuestion() pipeline non-stream DÙNG CHUNG (mirror /api/chat) → harness test đúng code thật.
+- agent-grade.test.ts + agent-banks.ts: bank câu hỏi/agent, chạy answer thật rồi Gemini chấm rubric must/mustNot.
+  GRADE_AGENT="a,b,c"|"all"; chạy song song pool 3; judge parse bền (regex fallback, cấm dấu " trong reason).
+- chatbot-routing.test.ts: +6 câu regression mới → 32/32 PASS.
+
+### Kết quả grade (trước → sau)
+- bi-analyst 2/13 → 12-13/13 · data-explorer 6/9 → 8/9 · tu-van 5/7 → 6/7 · giai-dap 4/6 → 6/6
+- tra-cuu 5/5 · gap-analysis 5/5 · tao-template 3/3 (đã hoàn hảo sẵn).
+
+### Lỗi THẬT đã sửa
+- bi-analyst: 🔒 PII leak (trả tên thật khách "Anh Công…" → chỉ customer_code); CM1 bịa = Gross Profit (thêm
+  glossary: CM1 = GP − Operation Cost, OpCost KHÔNG có trong gohub_dw → không đánh đồng); câu trả lời RỖNG khi
+  Gemini kết thúc function-calling không sinh text (thêm fallback nudge + loop 8→10); cảnh báo bảng mirror
+  fact_fulfilment_revenue_power_bi (1 chữ "l" — đếm trùng); routing "theo kho"/"contribution"/"mua nhiều nhất".
+- data-explorer: catalog 38 bảng 0 drift; hướng dẫn "đếm theo nhóm" (querySupabase KHÔNG có GROUP BY → countOnly
+  từng nhóm); routing "liệt kê wiki" + "đếm item" → data-explorer.
+- giai-dap: thêm glossary chỉ số kinh doanh (CM1…). tu-van: nước lạ (Monaco) → báo "chưa có" thay vì hỏi lại;
+  extractParams tự bắt loại SIM. Router: GAP_KEYWORD +word-boundary (fix '3hk co' khớp "3hk contribution");
+  chặn BI override cướp câu NCC/gap ("WorldMove bao nhiêu gói chưa tạo SKU" → gap-analysis).
+
+### Giới hạn còn lại (feature riêng, chưa làm)
+- tu-van đa quốc gia: "gói dùng được ở CẢ Malaysia VÀ Singapore" — searchSkus chưa xét giao gói đa quốc gia.
+
+Verify: tsc PASS · vitest 28/28 · routing 32/32 · next build PASS. Wiki: system/Chatbot-Agents-Guardian.md.
 
 ## Session 105 (2026-07-17) — Lấy tính năng từ branch codex/b2c-dashboard-preview (team Minh)
 

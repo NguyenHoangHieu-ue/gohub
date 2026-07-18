@@ -405,6 +405,11 @@ export function extractParams(message: string): ExtractedParams {
   if (!params.dataSource && /\bncc\b|nha cung cap|nhà cung cấp|catalog vendor|catalog ncc/.test(msgNorm))
     params.dataSource = "ncc_catalog"
 
+  // Loại SIM (defense-in-depth: extractParams tự bắt, không chỉ dựa AI classifier).
+  // "sim vật lý / sim cứng / physical sim" = SIM; "esim / e-sim / sim điện tử" = eSIM.
+  if (/sim vat ly|sim cung|physical sim|sim thuong/.test(msgNorm)) params.simType = "sim"
+  else if (/\besim\b|e-sim|e sim|sim dien tu|sim so/.test(msgNorm)) params.simType = "esim"
+
   return params
 }
 
@@ -422,7 +427,7 @@ const AGENT_NAMES: Record<AgentId, string> = {
 
 // Data Explorer — tín hiệu user muốn TRA/ĐẾM/LIỆT KÊ dữ liệu thô nhiều bảng (catalog/hệ thống).
 // Conservative: chỉ ép khi có động từ đếm/liệt kê + đối tượng dữ liệu, hoặc nhắc thẳng "kho dữ liệu".
-const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/
+const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|liet ke.{0,12}(wiki|trang wiki|san pham|sku|listing|item|nuoc|vendor|ncc)|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|item|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/
 
 // BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
 // + bán được bao nhiêu, số lượng bán, kênh nào, lịch sử bán hàng...
@@ -430,17 +435,17 @@ const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan 
 
 // Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước HOẶC mã SKU): nhân viên/doanh thu/đơn hàng/bán được...
 // (mã SKU khi đi kèm câu hỏi doanh số = FILTER cho BI query, KHÔNG phải chỉ tra cứu — vd "số bán của con X").
-const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bso luong (ban|sim|esim|don|cai)\b/
+const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bso luong (ban|sim|esim|don|cai)\b|\btheo kho\b|theo chi nhanh|bao cao.{0,20}(theo (kho|kenh|thang|quy|nhan vien|nam)|doanh thu|doanh so|ban hang)|\bcontribution\b/
 // Tín hiệu USAGE 3HK — ép bi-analyst (fact_data_usage), tránh nhầm sang gap-analysis khi nhắc "3HK".
 const USAGE_BI_RE = /luong su dung|luong dung|muc (su )?dung|su dung data|data usage|3hk data usage|tieu thu data|usage.*3hk|3hk.*usage|thong ke.*data_usage_log|query.*data_usage/
 // Tín hiệu BI dạng XẾP HẠNG — chỉ ép bi-analyst khi KHÔNG có mục tiêu sản phẩm (nước/khu vực/mã nhóm),
 // tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
-const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
+const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|mua nhieu nhat|mua nhieu|khach.{0,12}mua nhieu|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
 
 // Tạo/xuất template — action mạnh, ép tao-template (hay bị nhắc WM/3HK → route nhầm gap-analysis).
 const TEMPLATE_RE = /\b(tao|xuat|tai|lam|generate)\b[^.!?]*template|template[^.!?]*\b(wm|3hk|wordmove|worldmove)\b|tao file excel|xuat file excel/
 // Từ khoá GAP thật sự (browse NCC / so sánh chưa có) — để phân biệt với hỏi SP GoHub theo nước.
-const GAP_KEYWORD_RE = /\bgap\b|ncc co|chua co|chua import|chua nhap|worldmove co|wm co|3hk co|so sanh ncc|con cung cap|con gói|con goi|vendor co/
+const GAP_KEYWORD_RE = /\bgap\b|ncc co\b|chua co\b|chua import|chua nhap|chua tao|chua duoc.{0,12}tao|worldmove co\b|wm co\b|3hk co\b|so sanh ncc|con cung cap|con goi\b|vendor co\b/
 // Giải thích mã nhóm: "AP2 gồm nước nào / AP2 là gì" → giai-dap (không phải product_search).
 const EXPLAIN_GROUP_RE = /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/
 
@@ -523,7 +528,11 @@ export async function route(message: string, history: Message[], role: UserRole)
     // ⭐ Cho phép override KỂ CẢ khi có mã SKU: "số bán của con X", "check X bán được không" = BI (mã = filter).
     const hasProductTarget = !!(params.country || params.region || params.groupCode)
     const hasCode = !!(params.skuCodes?.length || params.productCodes?.length)
-    if (DEFINITE_BI_RE.test(nrm) || USAGE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget && !hasCode)) {
+    // KHÔNG cướp câu NCC/gap có từ khoá gap RÕ RÀNG (vd "WorldMove có bao nhiêu gói CHƯA TẠO SKU" — 'bao nhiêu gói'
+    // khớp BI nhưng là catalog gap). Chỉ chặn khi có GAP_KEYWORD; KHÔNG chặn chỉ vì nhắc vendor
+    // (vd "3HK theo kho quý 2" là báo cáo doanh thu BI, không phải gap).
+    const isGapCtx = GAP_KEYWORD_RE.test(nrm)
+    if (!isGapCtx && (DEFINITE_BI_RE.test(nrm) || USAGE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget && !hasCode))) {
       agentId = "bi-analyst"
     }
   }
@@ -533,6 +542,12 @@ export async function route(message: string, history: Message[], role: UserRole)
   if (agentId === "gap-analysis" && params.dataSource !== "ncc_catalog"
       && (params.country || params.region) && !GAP_KEYWORD_RE.test(nrm)) {
     agentId = "tu-van"
+  }
+
+  // Post-guard: câu hỏi CATALOG/GAP của NCC (có từ khoá gap + nhắc vendor NCC) lỡ thành bi-analyst
+  // (vd "WorldMove có bao nhiêu gói chưa tạo SKU") → chủ sở hữu đúng là gap-analysis, KHÔNG phải BI gohub_dw.
+  if (agentId === "bi-analyst" && GAP_KEYWORD_RE.test(nrm) && /worldmove|world move|\bwm\b|3hk|ncc|nha cung cap/.test(nrm)) {
+    agentId = "gap-analysis"
   }
 
   // AI country ghi đè regex nếu confidence cao VÀ regex không tìm được

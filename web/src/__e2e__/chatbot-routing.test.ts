@@ -39,6 +39,13 @@ const CASES: [string, string | string[]][] = [
   // ── gap-analysis (NCC catalog / WM) ──
   ["WorldMove còn cung cấp gói Mongolia, 5 Days , 8GB không?", "gap-analysis"],
   ["gói Mongolia của Worldmove có số điện thoại, gọi đc k", "gap-analysis"],
+  // ── Regression từ audit agent (session tối ưu 7 agent) ──
+  ["Báo cáo sản phẩm 3HK theo kho trong quý 2", "bi-analyst"],           // "theo kho" = BI dù nhắc 3HK
+  ["khách hàng nào mua nhiều nhất?", "bi-analyst"],                       // "mua nhiều nhất" = BI ranking
+  ["3HK Contribution Revenue % tháng 6 là bao nhiêu?", "bi-analyst"],     // "contribution" = BI
+  ["Liệt kê các trang wiki nội bộ", "data-explorer"],                    // liệt kê wiki = tra dữ liệu
+  ["Đếm số item theo kênh bán", "data-explorer"],                        // đếm theo nhóm = data-explorer
+  ["WorldMove có bao nhiêu gói chưa được GoHub tạo SKU?", ["gap-analysis", "data-explorer"]], // gap KHÔNG bị BI cướp
 ]
 
 describe("Chatbot routing — câu hỏi thật của user", () => {
