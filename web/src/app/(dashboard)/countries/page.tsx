@@ -24,7 +24,7 @@ function SearchInput({ value, onChange, placeholder }: {
       <input
         value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-56"
+        className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:border-brand-400 w-56"
       />
     </div>
   )
@@ -106,16 +106,16 @@ export default function InfoPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Info size={20} className="text-brand-600" />
-        <h1 className="text-xl font-bold text-gray-900">Thông tin</h1>
+        <Info size={20} className="text-brand-600 dark:text-brand-400" />
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Thông tin</h1>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${
-              activeTab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === t.key ? "bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 shadow-sm" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
             }`}
           >
             {t.label}
@@ -132,10 +132,10 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredC.length} / {countries.length} nước</p>
             <SearchInput value={searchC} onChange={setSearchC} placeholder="Tìm code, tên nước..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50">
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Code</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (EN)</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (VN)</th>
@@ -145,10 +145,10 @@ export default function InfoPage() {
                 {filteredC.length === 0
                   ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredC.map(c => (
-                    <tr key={c.code} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={c.code} className="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50/50 dark:hover:bg-slate-700/40">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.code}</td>
-                      <td className="px-4 py-2 text-gray-800">{c.name}</td>
-                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{c.name}</td>
+                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
                     </tr>
                   ))
                 }
@@ -162,10 +162,10 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredSC.length} / {supportCountries.length} nhóm</p>
             <SearchInput value={searchSC} onChange={setSearchSC} placeholder="Tìm mã, tên nước..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50">
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Mã</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Nước hỗ trợ</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-56">Country Codes</th>
@@ -175,10 +175,10 @@ export default function InfoPage() {
                 {filteredSC.length === 0
                   ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredSC.map(sc => (
-                    <tr key={sc.code} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={sc.code} className="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50/50 dark:hover:bg-slate-700/40">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{sc.code}</td>
-                      <td className="px-4 py-2 text-gray-700 text-xs leading-relaxed">{sc.support_country ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-2 text-gray-400 text-xs font-mono leading-relaxed">{sc.country_codes ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 text-gray-700 text-xs leading-relaxed">{sc.support_country ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
+                      <td className="px-4 py-2 text-gray-400 text-xs font-mono leading-relaxed">{sc.country_codes ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
                     </tr>
                   ))
                 }
@@ -193,10 +193,10 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredCat.length} / {categories.length} category</p>
             <SearchInput value={searchCat} onChange={setSearchCat} placeholder="Tìm mã, tên..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50">
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-24">Mã</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (EN)</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (VN)</th>
@@ -208,11 +208,11 @@ export default function InfoPage() {
                 {filteredCat.length === 0
                   ? <EmptyTableRow colSpan={5} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredCat.map(c => (
-                    <tr key={c.category_code} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={c.category_code} className="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50/50 dark:hover:bg-slate-700/40">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.category_code}</td>
-                      <td className="px-4 py-2 text-gray-800">{c.name_en}</td>
-                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-400">{c.iso_code ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{c.name_en}</td>
+                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-400">{c.iso_code ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
                       <td className="px-4 py-2 text-xs">
                         {c.region_type === "Multi-Country"
                           ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[11px] font-medium">Đa quốc gia</span>
@@ -233,10 +233,10 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredV.length} / {vendors.length} vendor</p>
             <SearchInput value={searchV} onChange={setSearchV} placeholder="Tìm mã, tên vendor..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
+                <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50">
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Mã</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-48">Tên vendor</th>
                   <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ghi chú</th>
@@ -246,10 +246,10 @@ export default function InfoPage() {
                 {filteredV.length === 0
                   ? <EmptyTableRow colSpan={3} title="Không tìm thấy" description="Thử từ khoá khác" />
                   : filteredV.map(v => (
-                    <tr key={v.vendor_code} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <tr key={v.vendor_code} className="border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50/50 dark:hover:bg-slate-700/40">
                       <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{v.vendor_code}</td>
                       <td className="px-4 py-2 text-gray-800 font-medium">{v.name}</td>
-                      <td className="px-4 py-2 text-gray-400 text-xs">{v.description ?? <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-2 text-gray-400 text-xs">{v.description ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</td>
                     </tr>
                   ))
                 }

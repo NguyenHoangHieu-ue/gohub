@@ -98,8 +98,8 @@ export default function PromotionsPage() {
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-baseline gap-2">
-        <Gift size={20} className="text-brand-600 mt-0.5" />
-        <h1 className="text-xl font-bold text-gray-900">Khuyến Mãi</h1>
+        <Gift size={20} className="text-brand-600 dark:text-brand-400 mt-0.5" />
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Khuyến Mãi</h1>
         {!loading && <span className="text-sm text-gray-400 ml-1">{filtered.length}/{items.length} sản phẩm</span>}
       </div>
 
@@ -111,22 +111,22 @@ export default function PromotionsPage() {
             value={search}
             onChange={e => setFilters({ q: e.target.value })}
             placeholder="Tìm mã SP, nội dung, nước..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <select value={vendor} onChange={e => setFilters({ vendor: e.target.value })}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:text-slate-100">
           <option value="">Tất cả Vendor</option>
           {vendors.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
         <select value={simType} onChange={e => setFilters({ sim: e.target.value })}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:text-slate-100">
           <option value="">Tất cả SIM</option>
           {simTypes.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         {(vendor || simType || search) && (
           <button onClick={() => setFilters({ q: "", vendor: "", sim: "" })}
-            className="px-3 py-2 text-sm text-gray-500 hover:text-red-600 border border-gray-200 rounded-xl hover:border-red-200 transition-colors">
+            className="px-3 py-2 text-sm text-gray-500 dark:text-slate-400 hover:text-red-600 border border-gray-200 dark:border-slate-700 rounded-xl hover:border-red-200 transition-colors">
             Xóa filter
           </button>
         )}
@@ -140,10 +140,10 @@ export default function PromotionsPage() {
           description={search || vendor || simType ? "Thử bỏ bộ lọc hoặc đổi từ khoá" : undefined}
         />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+              <tr className="text-left text-xs text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
                 <th className="px-4 py-3 font-medium">Mã SP</th>
                 <th className="px-4 py-3 font-medium">Vendor</th>
                 <th className="px-4 py-3 font-medium">Loại</th>
@@ -152,20 +152,20 @@ export default function PromotionsPage() {
                 <th className="px-4 py-3 font-medium">Tên gói (VN)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {filtered.map(p => (
-                <tr key={p.product_code} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">{p.product_code}</td>
+                <tr key={p.product_code} className="hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs text-brand-700 dark:text-brand-300 whitespace-nowrap">{p.product_code}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {vendorBadge(p.vendor_code)}
                       {simBadge(p.type_of_sim)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {p.tenant && <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{p.tenant}</span>}
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-slate-400">
+                    {p.tenant && <span className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-300">{p.tenant}</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap space-y-1">
+                  <td className="px-4 py-3 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap space-y-1">
                     {(p.telco_perks_start || p.telco_perks_end) ? (
                       <>
                         <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
@@ -175,9 +175,9 @@ export default function PromotionsPage() {
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-800 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
-                    {p.listing_name_vn ?? <span className="text-gray-300">—</span>}
+                  <td className="px-4 py-3 text-gray-800 dark:text-slate-200 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-slate-400 max-w-[160px]">
+                    {p.listing_name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span>}
                   </td>
                 </tr>
               ))}
