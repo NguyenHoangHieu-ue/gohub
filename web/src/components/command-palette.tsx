@@ -158,16 +158,16 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden" onKeyDown={onKey}>
+      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-black/5 dark:ring-slate-700 overflow-hidden" onKeyDown={onKey}>
         {/* Ô tìm */}
-        <div className="flex items-center gap-2 px-4 border-b border-gray-100">
+        <div className="flex items-center gap-2 px-4 border-b border-gray-100 dark:border-slate-800">
           <Search size={17} className="text-gray-400 flex-shrink-0" />
           <input
             ref={inputRef} value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Tìm trang, hành động, SKU, nước…"
-            className="flex-1 py-3.5 text-sm bg-transparent outline-none placeholder:text-gray-400"
+            className="flex-1 py-3.5 text-sm bg-transparent outline-none text-gray-800 dark:text-slate-100 placeholder:text-gray-400"
           />
-          <kbd className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">ESC</kbd>
+          <kbd className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">ESC</kbd>
         </div>
 
         {/* Kết quả */}
@@ -181,11 +181,11 @@ export function CommandPalette() {
                 <button
                   key={c.id} data-idx={i}
                   onMouseEnter={() => setSel(i)} onClick={() => c.run()}
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${i === sel ? "bg-brand-50" : "hover:bg-gray-50"}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${i === sel ? "bg-brand-50 dark:bg-slate-800" : "hover:bg-gray-50 dark:hover:bg-slate-800/60"}`}
                 >
-                  <c.icon size={15} className={i === sel ? "text-brand-600" : "text-gray-400"} />
+                  <c.icon size={15} className={i === sel ? "text-brand-600 dark:text-brand-300" : "text-gray-400"} />
                   <span className="flex-1 min-w-0">
-                    <span className={`block text-sm truncate ${i === sel ? "text-brand-800 font-medium" : "text-gray-700"}`}>{c.label}</span>
+                    <span className={`block text-sm truncate ${i === sel ? "text-brand-800 dark:text-brand-200 font-medium" : "text-gray-700 dark:text-slate-200"}`}>{c.label}</span>
                     {c.sub && <span className="block text-[11px] text-gray-400 truncate">{c.sub}</span>}
                   </span>
                   {i === sel && <CornerDownLeft size={13} className="text-brand-400 flex-shrink-0" />}
@@ -196,7 +196,7 @@ export function CommandPalette() {
         </div>
 
         {/* Footer gợi ý phím */}
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100 text-[11px] text-gray-400">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100 dark:border-slate-800 text-[11px] text-gray-400">
           <span className="flex items-center gap-1"><ArrowUp size={11} /><ArrowDown size={11} /> di chuyển</span>
           <span className="flex items-center gap-1"><CornerDownLeft size={11} /> chọn</span>
           <span className="flex items-center gap-1 ml-auto"><CommandIcon size={11} /> K để mở</span>
