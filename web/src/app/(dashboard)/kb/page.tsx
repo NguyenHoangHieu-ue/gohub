@@ -47,7 +47,7 @@ const PAGE_TYPES: Record<string, { label: string; color: string }> = {
   pricing_rule:   { label: "Giá",       color: "bg-amber-100 text-amber-700"  },
   meeting_note:   { label: "Họp",       color: "bg-purple-100 text-purple-700"},
   reference:      { label: "Tham chiếu",color: "bg-teal-100 text-teal-700"   },
-  note:           { label: "Ghi chú",   color: "bg-gray-100 text-gray-600"   },
+  note:           { label: "Ghi chú",   color: "bg-gray-100 text-gray-600 dark:text-slate-300"   },
 }
 
 const FILE_ICON: Record<string, React.ReactNode> = {
@@ -149,13 +149,13 @@ export default function KBPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-baseline gap-2">
         <BookOpen size={20} className="text-brand-600 mt-0.5" />
-        <h1 className="text-xl font-bold text-gray-900">Kiến Thức Nội Bộ</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Kiến Thức Nội Bộ</h1>
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         {visibleTabs.map(({ id, label, icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${tab===id?"bg-white text-brand-700 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${tab===id?"bg-white text-brand-700 shadow-sm":"text-gray-500 hover:text-gray-700 dark:text-slate-200"}`}>
             {icon}{label}
           </button>
         ))}
@@ -273,27 +273,27 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
   return (
     <div className="space-y-5">
       {canUpload && (
-      <form onSubmit={handleUpload} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Upload size={15} className="text-brand-500"/>Upload tài liệu mới</h3>
+      <form onSubmit={handleUpload} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-200 flex items-center gap-2"><Upload size={15} className="text-brand-500"/>Upload tài liệu mới</h3>
         {uploadMsg && (
           <div className={`px-3 py-2 rounded-lg text-sm ${uploadMsg.type==="success"?"bg-green-50 border border-green-200 text-green-700":"bg-red-50 border border-red-200 text-red-700"}`}>{uploadMsg.text}</div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-1">
-            <label className="block text-xs font-medium text-gray-600 mb-1">File *</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">File *</label>
             <input ref={inputRef} type="file" accept=".pdf,.docx,.md,.txt" onChange={e => setFileRef(e.target.files?.[0]??null)}
-              className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"/>
+              className="w-full text-sm text-gray-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"/>
             <p className="text-xs text-gray-400 mt-1">PDF, DOCX, MD, TXT — tối đa 10MB</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Phòng ban</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Phòng ban</label>
             <select value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value as Department}))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
               {DEPTS.map(([k,v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tên (tuỳ chọn)</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Tên (tuỳ chọn)</label>
             <input type="text" value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="Để trống = dùng tên file"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"/>
           </div>
@@ -312,7 +312,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
             <div className="flex items-center gap-2 text-sm font-semibold text-brand-700">
               <Brain size={15}/> AI Phân Tích (MRP)
             </div>
-            <button onClick={() => setMrp(null)} className="text-gray-400 hover:text-gray-600"><X size={14}/></button>
+            <button onClick={() => setMrp(null)} className="text-gray-400 hover:text-gray-600 dark:text-slate-300"><X size={14}/></button>
           </div>
 
           {mrp.status === "analyzing" && (
@@ -323,14 +323,14 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
 
           {mrp.status === "plan_ready" && mrp.plan && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-600 italic">{mrp.plan.summary}</p>
+              <p className="text-sm text-gray-600 dark:text-slate-300 italic">{mrp.plan.summary}</p>
 
               {(mrp.plan.key_extractions?.length ?? 0) > 0 && (
                 <div className="space-y-1">
                   <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Thông tin trích xuất</p>
                   <div className="flex flex-wrap gap-1.5">
                     {mrp.plan.key_extractions.slice(0, 8).map((ex, i) => (
-                      <span key={i} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
+                      <span key={i} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 dark:text-slate-300 rounded-full">
                         {ex.item}{ex.value ? ` → ${ex.value}` : ""}
                       </span>
                     ))}
@@ -344,9 +344,9 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
                     Wiki pages đề xuất ({mrp.plan.proposed_pages.length})
                   </p>
                   {mrp.plan.proposed_pages.map((p, i) => (
-                    <div key={i} className="border border-gray-200 rounded-lg p-3 space-y-1.5 bg-gray-50">
+                    <div key={i} className="border border-gray-200 dark:border-slate-700 rounded-lg p-3 space-y-1.5 bg-gray-50">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-800">{p.title}</span>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">{p.title}</span>
                         {typeBadge(p.page_type)}
                         {deptBadge(p.department)}
                       </div>
@@ -365,7 +365,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
                       Tạo {mrp.plan.proposed_pages.length} wiki page{mrp.plan.proposed_pages.length > 1 ? "s" : ""}
                     </button>
                     <button onClick={rejectMrp}
-                      className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium rounded-lg transition-colors">
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:text-slate-300 text-xs font-medium rounded-lg transition-colors">
                       <XCircle size={12}/> Bỏ qua
                     </button>
                   </div>
@@ -400,7 +400,7 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
         <div className="flex gap-1 flex-wrap">
           {([["","Tất cả"],...DEPTS] as [string,string][]).map(([k,v]) => (
             <button key={k} onClick={() => setDeptFilter(k as any)}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${deptFilter===k?"bg-brand-600 text-white":"bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{v}</button>
+              className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${deptFilter===k?"bg-brand-600 text-white":"bg-gray-100 text-gray-600 dark:text-slate-300 hover:bg-gray-200"}`}>{v}</button>
           ))}
         </div>
       </div>
@@ -410,9 +410,9 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
       ) : docs.length === 0 ? (
         <EmptyState title="Chưa có tài liệu nào" description="Upload file để chatbot có thể đọc và trả lời" />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+            <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
               <th className="px-4 py-3 font-medium">Tên tài liệu</th>
               <th className="px-4 py-3 font-medium">Phòng ban</th>
               <th className="px-4 py-3 font-medium text-right">Chunks</th>
@@ -420,10 +420,10 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
               <th className="px-4 py-3 font-medium">Ngày</th>
               <th className="px-4 py-3"/>
             </tr></thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {docs.map(d => (
-                <tr key={d.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3"><div className="flex items-center gap-2">{FILE_ICON[d.file_type]??<File size={14} className="text-gray-400"/>}<span className="font-medium text-gray-800">{d.name}</span><span className="text-[10px] text-gray-400 uppercase">.{d.file_type}</span></div></td>
+                <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                  <td className="px-4 py-3"><div className="flex items-center gap-2">{FILE_ICON[d.file_type]??<File size={14} className="text-gray-400"/>}<span className="font-medium text-gray-800 dark:text-slate-100">{d.name}</span><span className="text-[10px] text-gray-400 uppercase">.{d.file_type}</span></div></td>
                   <td className="px-4 py-3">{deptBadge(d.department)}</td>
                   <td className="px-4 py-3 text-right text-gray-500 text-xs">{d.chunk_count}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{d.uploaded_by}</td>
@@ -634,7 +634,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
           {DEPTS.map(([k,v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <button onClick={() => { setSearch(""); setTypeFilter(""); setDeptFilter(""); fetchPages() }}
-          className="px-3 py-2 text-sm border border-gray-200 text-gray-500 rounded-xl hover:border-gray-300 transition-colors">Reset</button>
+          className="px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 text-gray-500 rounded-xl hover:border-gray-300 transition-colors">Reset</button>
         {canWikiEdit && (
           <button onClick={startCreate}
             className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors ml-auto">
@@ -648,9 +648,9 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       ) : pages.length === 0 ? (
         <EmptyState icon={<PenLine />} title="Chưa có wiki page nào" description='Bấm "Tạo trang" để bắt đầu.' />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+            <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
               <th className="px-4 py-3 font-medium">Tiêu đề</th>
               <th className="px-4 py-3 font-medium">Loại</th>
               <th className="px-4 py-3 font-medium">Phòng ban</th>
@@ -658,10 +658,10 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
               <th className="px-4 py-3 font-medium">Bởi</th>
               {isAdmin && <th className="px-4 py-3"/>}
             </tr></thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {pages.map(p => (
-                <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${p.is_hidden ? "opacity-60" : ""}`}>
-                  <td className="px-4 py-3 font-medium text-gray-800 cursor-pointer" onClick={() => openPage(p)}>
+                <tr key={p.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${p.is_hidden ? "opacity-60" : ""}`}>
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-slate-100 cursor-pointer" onClick={() => openPage(p)}>
                     <span className="flex items-center gap-2">
                       {p.title}
                       {p.is_hidden && <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-500 rounded-full font-normal">Ẩn</span>}
@@ -694,7 +694,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
                   {isAdmin && (
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => toggleHidden(p)} title={p.is_hidden ? "Hiện trang" : "Ẩn trang"}
-                        className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                        className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700">
                         {p.is_hidden ? <Eye size={13}/> : <EyeOff size={13}/>}
                       </button>
                     </td>
@@ -716,7 +716,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
               onClick={() => { const p = pages.find(pg => pg.id === String(r.document_id)); if (p) openPage(p) }}>
               <div className="flex items-center gap-2 flex-wrap">
                 {r.page_type && typeBadge(r.page_type)}
-                <span className="text-sm font-semibold text-gray-800">{r.document_name}</span>
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">{r.document_name}</span>
                 {deptBadge(r.department)}
                 <span className="text-xs text-gray-400 ml-auto">{Math.round(r.similarity * 100)}% khớp</span>
               </div>
@@ -740,15 +740,15 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
         </button>
         <div className="flex gap-1 ml-auto">
           <button onClick={() => setShowHistory(h => !h)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${showHistory?"bg-brand-50 border-brand-300 text-brand-700":"border-gray-200 text-gray-500 hover:border-gray-300"}`}>
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${showHistory?"bg-brand-50 border-brand-300 text-brand-700":"border-gray-200 dark:border-slate-700 text-gray-500 hover:border-gray-300"}`}>
             <History size={13}/>Lịch sử ({versions.length})
           </button>
           {canEdit(selected.created_by) && (
             <>
-              <button onClick={startEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:border-brand-300 hover:text-brand-700 transition-colors">
+              <button onClick={startEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-brand-300 hover:text-brand-700 transition-colors">
                 <PenLine size={13}/>Sửa
               </button>
-              <button onClick={() => setConfirmDel(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
+              <button onClick={() => setConfirmDel(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-slate-700 text-red-500 hover:bg-red-50 hover:border-red-200 transition-colors">
                 <Trash2 size={13}/>Xóa
               </button>
             </>
@@ -756,30 +756,30 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-6">
         <div className="flex flex-wrap items-start gap-2 mb-4">
-          <h2 className="text-xl font-bold text-gray-900 flex-1">{selected.title}</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex-1">{selected.title}</h2>
           <div className="flex gap-1.5 flex-wrap">{typeBadge(selected.page_type)}{deptBadge(selected.department)}</div>
         </div>
         <p className="text-xs text-gray-400 mb-4">Cập nhật {fmtDate(selected.updated_at)} bởi {selected.updated_by}</p>
         {selected.tags?.length > 0 && (
           <div className="flex gap-1 flex-wrap mb-4">
-            {selected.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{t}</span>)}
+            {selected.tags.map(t => <span key={t} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 dark:text-slate-300 rounded-full">{t}</span>)}
           </div>
         )}
         <div className="markdown-body prose prose-sm max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
             p:  ({children}) => <p  className="mb-3">{children}</p>,
             h1: ({children}) => <h1 className="text-lg font-bold mb-2 mt-4">{children}</h1>,
-            h2: ({children}) => <h2 className="text-base font-semibold mb-2 mt-3 border-b border-gray-100 pb-1">{children}</h2>,
+            h2: ({children}) => <h2 className="text-base font-semibold mb-2 mt-3 border-b border-gray-100 dark:border-slate-700 pb-1">{children}</h2>,
             h3: ({children}) => <h3 className="text-sm font-semibold mb-1 mt-3">{children}</h3>,
             ul: ({children}) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
             ol: ({children}) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
-            li: ({children}) => <li className="text-gray-700">{children}</li>,
-            table: ({children}) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200"><table className="text-xs w-full border-collapse">{children}</table></div>,
+            li: ({children}) => <li className="text-gray-700 dark:text-slate-200">{children}</li>,
+            table: ({children}) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 dark:border-slate-700"><table className="text-xs w-full border-collapse">{children}</table></div>,
             thead: ({children}) => <thead className="bg-gray-50">{children}</thead>,
-            th:    ({children}) => <th className="px-3 py-2 text-left font-semibold border-b border-gray-200">{children}</th>,
-            td:    ({children}) => <td className="px-3 py-2 border-b border-gray-100">{children}</td>,
+            th:    ({children}) => <th className="px-3 py-2 text-left font-semibold border-b border-gray-200 dark:border-slate-700">{children}</th>,
+            td:    ({children}) => <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-700">{children}</td>,
             a: ({ href, children }) => {
               if (href?.startsWith("wiki://")) {
                 const query = decodeURIComponent(href.slice(7))
@@ -808,8 +808,8 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       </div>
 
       {showHistory && versions.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">Lịch sử thay đổi</h4>
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-3">Lịch sử thay đổi</h4>
           <div className="space-y-1">
             {versions.map(v => (
               <div key={v.id} className="flex items-center gap-3 text-xs text-gray-500 py-1.5 border-b border-gray-50 last:border-0">
@@ -839,36 +839,36 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
         <button onClick={() => setView(selected?"read":"list")} className="flex items-center gap-1 text-sm text-gray-500 hover:text-brand-600 transition-colors">
           <ChevronLeft size={15}/>{selected?"Quay lại":"Danh sách"}
         </button>
-        <h3 className="text-sm font-semibold text-gray-700">{selected?"Chỉnh sửa trang":"Tạo trang mới"}</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-slate-200">{selected?"Chỉnh sửa trang":"Tạo trang mới"}</h3>
       </div>
 
       {msg && (
         <div className={`px-3 py-2 rounded-lg text-sm ${msg.type==="success"?"bg-green-50 border border-green-200 text-green-700":"bg-red-50 border border-red-200 text-red-700"}`}>{msg.text}</div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-3">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tiêu đề *</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Tiêu đề *</label>
             <input value={editForm.title} onChange={e => setEditForm(f=>({...f,title:e.target.value}))} placeholder="Tên trang"
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"/>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Loại trang</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Loại trang</label>
             <select value={editForm.page_type} onChange={e => setEditForm(f=>({...f,page_type:e.target.value}))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
               {Object.entries(PAGE_TYPES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Phòng ban</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Phòng ban</label>
             <select value={editForm.department} onChange={e => setEditForm(f=>({...f,department:e.target.value}))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
               {DEPTS.map(([k,v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tags (cách nhau bằng dấu phẩy)</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Tags (cách nhau bằng dấu phẩy)</label>
             <input value={editForm.tags} onChange={e => setEditForm(f=>({...f,tags:e.target.value}))} placeholder="WM, Japan, eSIM..."
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"/>
           </div>
@@ -876,14 +876,14 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-medium text-gray-600">Nội dung (Markdown)</label>
+            <label className="text-xs font-medium text-gray-600 dark:text-slate-300">Nội dung (Markdown)</label>
             <button onClick={() => setPreviewMd(p=>!p)}
               className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
               {previewMd?<><PenLine size={11}/>Soạn thảo</>:<><Eye size={11}/>Xem trước</>}
             </button>
           </div>
           {previewMd ? (
-            <div className="min-h-[300px] p-4 border border-gray-200 rounded-xl bg-gray-50 prose prose-sm max-w-none text-sm">
+            <div className="min-h-[300px] p-4 border border-gray-200 dark:border-slate-700 rounded-xl bg-gray-50 prose prose-sm max-w-none text-sm">
               {editForm.content ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{editForm.content}</ReactMarkdown>
               ) : (
@@ -904,7 +904,7 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
             {saving?"Đang lưu...":selected?"Lưu thay đổi":"Tạo trang"}
           </button>
           <button onClick={() => setView(selected?"read":"list")}
-            className="px-5 py-2.5 text-sm border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors">
+            className="px-5 py-2.5 text-sm border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
             Hủy
           </button>
         </div>
@@ -969,17 +969,17 @@ function SearchTab() {
         <div className="space-y-3">
           <p className="text-xs text-gray-400">{results.length} kết quả cho &ldquo;{query}&rdquo;</p>
           {results.map((r,i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-2 hover:border-brand-200 transition-colors">
+            <div key={i} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-4 space-y-2 hover:border-brand-200 transition-colors">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.source==="wiki"?"bg-purple-100 text-purple-600":"bg-gray-100 text-gray-500"}`}>
                   {r.source==="wiki"?"📝 Wiki":"📄 Tài liệu"}
                 </span>
                 {r.page_type && typeBadge(r.page_type)}
-                <span className="text-sm font-semibold text-gray-800">{r.document_name}</span>
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">{r.document_name}</span>
                 {deptBadge(r.department)}
                 <span className="text-xs text-gray-400 ml-auto">{Math.round(r.similarity*100)}% khớp</span>
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed line-clamp-4 whitespace-pre-wrap">{r.content}</p>
+              <p className="text-sm text-gray-600 dark:text-slate-300 leading-relaxed line-clamp-4 whitespace-pre-wrap">{r.content}</p>
             </div>
           ))}
         </div>
