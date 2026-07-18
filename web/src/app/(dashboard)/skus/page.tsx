@@ -196,18 +196,18 @@ function Pagination({ page, totalPages, total, onPrev, onNext }: {
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const to   = Math.min(page * PAGE_SIZE, total)
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700">
       <span className="text-xs text-gray-400">
         {total === 0 ? "0 records" : `${from}–${to} / ${total.toLocaleString()}`}
       </span>
       <div className="flex items-center gap-1">
         <button onClick={onPrev} disabled={page === 1}
-          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronLeft size={16} />
         </button>
-        <span className="text-xs text-gray-600 px-2">{page} / {totalPages}</span>
+        <span className="text-xs text-gray-600 dark:text-slate-300 px-2">{page} / {totalPages}</span>
         <button onClick={onNext} disabled={page === totalPages}
-          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+          className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
           <ChevronRight size={16} />
         </button>
       </div>
@@ -228,7 +228,7 @@ function FieldGrid({ row, fields }: { row: any; fields: ModalField[] }) {
         return (
           <div key={f.key} className="flex flex-col gap-0.5">
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{f.label}</dt>
-            <dd className="text-xs text-gray-800 leading-relaxed break-words">{String(v)}</dd>
+            <dd className="text-xs text-gray-800 dark:text-slate-100 leading-relaxed break-words">{String(v)}</dd>
           </div>
         )
       })}
@@ -252,12 +252,12 @@ function DetailModal({ row, onClose, title, fields, sections }: {
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
       onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-slate-700">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</h2>
           <button onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 transition-colors">
             <X size={15} />
           </button>
         </div>
@@ -317,7 +317,7 @@ function downloadXlsx(data: any[], columns: { key: string; label: string }[], fi
 function ExportBtn({ onClick, loading }: { onClick: () => void; loading: boolean }) {
   return (
     <button onClick={onClick} disabled={loading}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50 whitespace-nowrap">
       {loading ? <Loader2 size={12} className="animate-spin"/> : <Download size={12}/>}
       {loading ? "Đang xuất..." : "Export XLSX"}
     </button>
@@ -350,7 +350,7 @@ function FilterBar({
         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input type="text" value={search} onChange={e => onSearch(e.target.value)}
           placeholder="Tìm kiếm..."
-          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition" />
+          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-gray-50 focus:bg-white transition" />
       </div>
       <ComboFilter label="Tenant" value={tenant} onChange={onTenant} width="w-20"
         options={["US","VN"]} />
@@ -359,7 +359,7 @@ function FilterBar({
       {extra}
       {hasFilter && (
         <button onClick={reset}
-          className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap">
+          className="px-3 py-1.5 text-xs text-gray-500 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors whitespace-nowrap">
           Reset
         </button>
       )}
@@ -397,7 +397,7 @@ function ComboFilter({ label, value, onChange, width = "w-28", options, small = 
           onChange={e => { onChange(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
           placeholder="Tất cả"
-          className={`w-full ${sz} border border-gray-200 rounded-lg bg-white pr-6 focus:outline-none focus:ring-2 focus:ring-brand-300 transition`}
+          className={`w-full ${sz} border border-gray-200 dark:border-slate-700 rounded-lg bg-white pr-6 focus:outline-none focus:ring-2 focus:ring-brand-300 transition`}
         />
         <button
           type="button"
@@ -407,11 +407,11 @@ function ComboFilter({ label, value, onChange, width = "w-28", options, small = 
         </button>
       </div>
       {open && options.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-gray-100 rounded-xl shadow-xl overflow-y-auto max-h-52 w-full min-w-[110px]">
+        <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl shadow-xl overflow-y-auto max-h-52 w-full min-w-[110px]">
           <button
             type="button"
             onMouseDown={() => { onChange(""); setOpen(false) }}
-            className="w-full text-left px-3 py-2 text-[11px] text-gray-400 hover:bg-gray-50 border-b border-gray-50 transition-colors">
+            className="w-full text-left px-3 py-2 text-[11px] text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 transition-colors">
             — Tất cả —
           </button>
           {visible.map(o => (
@@ -422,7 +422,7 @@ function ComboFilter({ label, value, onChange, width = "w-28", options, small = 
               className={`w-full text-left px-3 py-1.5 text-xs transition-colors font-mono ${
                 value === o
                   ? "bg-brand-50 text-brand-700 font-semibold"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  : "text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700/50 hover:text-gray-700 dark:text-slate-200"
               }`}>
               {o}
             </button>
@@ -525,11 +525,11 @@ function TableShell({ cols, rows, loading, renderRow }: {
   renderRow: (row: any, cols: { key: string; label: string }[]) => React.ReactNode
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
+            <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700">
               {cols.map(h => (
                 <th key={h.key} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 whitespace-nowrap select-none">
                   {h.label}
@@ -537,7 +537,7 @@ function TableShell({ cols, rows, loading, renderRow }: {
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-50 dark:divide-slate-700">
             {loading ? (
               [...Array(5)].map((_, i) => (
                 <tr key={i}>
@@ -643,7 +643,7 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
         </div>
         <ExportBtn onClick={handleExport} loading={exporting} />
       </div>
-      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+      <div className="bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3">
         <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
           SKU Code — <span className="font-normal normal-case">[PurchaseType · ProductType · Country · Vendor · DataType · DataAmount · DayAmount]</span>
         </p>
@@ -668,7 +668,7 @@ function SkusTable({ canSeeCost }: { canSeeCost: boolean }) {
         </div>
       </div>
       <TableShell cols={cols} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
-        <tr key={row.sku_code} className="hover:bg-gray-50 transition-colors">
+        <tr key={row.sku_code} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
           {cols.map(col => col.key === "_detail"
             ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
                 <button onClick={() => setDetailRow(row)}
@@ -722,7 +722,7 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
     if (!v) return <td className="px-3 py-2 text-xs text-gray-400">—</td>
     const names = (v as string).split(", ").filter(Boolean)
     return (
-      <td className="px-3 py-2 text-xs text-gray-600" title={v}>
+      <td className="px-3 py-2 text-xs text-gray-600 dark:text-slate-300" title={v}>
         {names.slice(0, 2).join(", ")}{names.length > 2 && <span className="ml-1 bg-gray-100 text-gray-400 px-1 rounded">+{names.length - 2}</span>}
       </td>
     )
@@ -730,9 +730,9 @@ function SkuCell({ col, row, canSeeCost }: { col: string; row: any; canSeeCost: 
   if (col === "note") {
     if (!v) return <td className="px-3 py-2 text-xs text-gray-300">—</td>
     const s = v.length > 60 ? v.slice(0, 60) + "…" : v
-    return <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px]" title={v}>{s}</td>
+    return <td className="px-3 py-2 text-xs text-gray-600 dark:text-slate-300 max-w-[200px]" title={v}>{s}</td>
   }
-  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
+  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-slate-200">{v || <span className="text-gray-300">—</span>}</td>
 }
 
 // ─── Listings table ───────────────────────────────────────────────────────────
@@ -787,7 +787,7 @@ function ListingsTable({ canSeeCost }: { canSeeCost: boolean }) {
         rows={d.rows}
         loading={d.loading}
         renderRow={(row, cols) => (
-          <tr key={row.listing_code} className="hover:bg-gray-50 transition-colors">
+          <tr key={row.listing_code} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
             {cols.map(col => col.key === "_detail"
               ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
                   <button onClick={() => setDetailRow(row)}
@@ -835,9 +835,9 @@ function ListingCell({ col, row }: { col: string; row: any }) {
   if (col === "listing_name_vn") {
     if (!v) return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-300">—</td>
     const short = (v as string).length > 48 ? (v as string).slice(0, 48) + "…" : v
-    return <td className="px-3 py-2 text-xs text-gray-700 min-w-[150px] max-w-[220px]" title={v}>{short}</td>
+    return <td className="px-3 py-2 text-xs text-gray-700 dark:text-slate-200 min-w-[150px] max-w-[220px]" title={v}>{short}</td>
   }
-  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
+  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-slate-200">{v || <span className="text-gray-300">—</span>}</td>
 }
 
 // ─── Items table ──────────────────────────────────────────────────────────────
@@ -892,7 +892,7 @@ function ItemsTable({ canSeeCost }: { canSeeCost: boolean }) {
         </p>
       )}
       <TableShell cols={ITEM_COLS} rows={d.rows} loading={d.loading} renderRow={(row, cols) => (
-        <tr key={row.item_code} className="hover:bg-gray-50 transition-colors">
+        <tr key={row.item_code} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
           {cols.map(col => col.key === "_detail"
             ? <td key="_detail" className="px-2 py-2 whitespace-nowrap">
                 <button onClick={() => setDetailRow(row)}
@@ -922,7 +922,7 @@ function ItemCell({ col, row }: { col: string; row: any }) {
   const v = row[col]
   if (col === "status")       return <td className="px-3 py-2 whitespace-nowrap"><StatusBadge value={v} /></td>
   if (col === "tenant")       return <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">{v || "—"}</td>
-  if (col === "item_code")    return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600">{v}</td>
+  if (col === "item_code")    return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-600 dark:text-slate-300">{v}</td>
   if (col === "alias")        return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-brand-700 font-semibold">{v || <span className="text-gray-300 font-normal">—</span>}</td>
   if (col === "sku_code")     return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{v || "—"}</td>
   if (col === "listing_code") return <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">{v || "—"}</td>
@@ -937,11 +937,11 @@ function ItemCell({ col, row }: { col: string; row: any }) {
   if (col === "item_name_vn") {
     if (!v) return <td className="px-3 py-2 text-xs text-gray-300">—</td>
     const s = v.length > 40 ? v.slice(0, 40) + "…" : v
-    return <td className="px-3 py-2 text-xs text-gray-700 max-w-[180px]" title={v}>{s}</td>
+    return <td className="px-3 py-2 text-xs text-gray-700 dark:text-slate-200 max-w-[180px]" title={v}>{s}</td>
   }
   if (col === "item_name_en")
-    return <td className="px-3 py-2 text-xs text-gray-700 min-w-[140px] max-w-[220px]">{v || <span className="text-gray-300">—</span>}</td>
-  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{v || <span className="text-gray-300">—</span>}</td>
+    return <td className="px-3 py-2 text-xs text-gray-700 dark:text-slate-200 min-w-[140px] max-w-[220px]">{v || <span className="text-gray-300">—</span>}</td>
+  return <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700 dark:text-slate-200">{v || <span className="text-gray-300">—</span>}</td>
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -957,7 +957,7 @@ export default function SkusPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center gap-2.5">
         <Package size={20} className="text-brand-600" />
-        <h1 className="text-xl font-semibold text-gray-900">SP Hệ Thống</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-slate-100">SP Hệ Thống</h1>
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
@@ -966,7 +966,7 @@ export default function SkusPage() {
             className={`px-5 py-1.5 text-sm font-medium rounded-lg transition-all ${
               activeTab === t.id
                 ? "bg-white text-brand-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
             }`}>
             {t.label}
           </button>
