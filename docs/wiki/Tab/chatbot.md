@@ -5,13 +5,13 @@ is_hidden: true
 department: all
 tags: [tab, chatbot, ai]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-07-18
 status: active
 ---
 
 # GoHub AI Chatbot (Bé Gấu Thông Thái)
 
-Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và phân vùng dữ liệu của hệ thống Chatbot đa tác nhân (6 Agents) tích hợp trên Giao diện Web và Lark Bot.
+Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và phân vùng dữ liệu của hệ thống Chatbot đa tác nhân (7 Agents) tích hợp trên Giao diện Web và Lark Bot.
 
 > **Mục đích & vai trò**: "Bé Gấu" là trợ lý AI trung tâm — nhân viên hỏi tự nhiên (tiếng Việt) về gói cước/giá/SKU/catalog NCC/số liệu kinh doanh thay vì phải tự tra DB hay mở nhiều tab. **Tại sao chia 6 agent chuyên biệt**: nếu nhồi tất cả vào 1 prompt, LLM dễ quá tải ngữ cảnh + trả sai; tách theo vùng dữ liệu giúp mỗi agent "giỏi 1 việc" và bảo mật theo quyền. **Tại sao có Guardian + lọc COGS**: tránh rò thông tin nhạy cảm (giá vốn, nội bộ hệ thống) cho người không có quyền. Đổi tên hiển thị "GoHub AI"→**"Bé Gấu"** (s82).
 
@@ -32,8 +32,8 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 
 ---
 
-## 2. Kiến trúc 6 Tác Nhân (Agents) & Phân Vùng Dữ Liệu
-Để tránh LLM bị quá tải ngữ cảnh và tăng tính chính xác, hệ thống phân chia thành 6 Agent chuyên biệt sở hữu các vùng dữ liệu độc quyền:
+## 2. Kiến trúc 7 Tác Nhân (Agents) & Phân Vùng Dữ Liệu
+Để tránh LLM bị quá tải ngữ cảnh và tăng tính chính xác, hệ thống phân chia thành 7 Agent chuyên biệt sở hữu các vùng dữ liệu độc quyền:
 
 | Tên Agent | ID Agent | Vùng Dữ Liệu Sở Hữu | Nhiệm Vụ / Phạm Vi Hoạt Động |
 |---|---|---|---|
@@ -42,11 +42,11 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 | **Giải Đáp** | `giai-dap` | Bảng `kb_documents`, `kb_wiki_pages` | Giải thích thuật ngữ viết tắt, cấu trúc mã SKU, quy trình, tài liệu Wiki nội bộ. |
 | **NCC & Gap** | `gap-analysis` | Bảng `ncc_worldmove`, `ncc_datapool` (3HK) | Duyệt catalog của nhà cung cấp và phát hiện khoảng trống sản phẩm (`exist=No`). |
 | **BI Analyst** | `bi-analyst` | Kho dữ liệu PostgreSQL `gohub_dw` | Tự động sinh mã SQL, thực thi truy vấn và trả về kết quả số liệu kèm biểu đồ. |
-| **Kho Dữ Liệu** | `data-explorer` | **CẢ HAI**: `gohub_dw` (SQL) + Supabase (REST 26 bảng catalog/config) | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh (SKU active, số nước, thống kê catalog, usage theo nước…). |
+| **Kho Dữ Liệu** | `data-explorer` | **CẢ HAI**: `gohub_dw` (SQL) + Supabase (REST 38 bảng catalog/config) | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh (SKU active, số nước, thống kê catalog, usage theo nước…). |
 | **Tạo Template** | `tao-template` | Catalog NCC | Tạo file Excel template sản phẩm cho Admin/Manager xuất bản nhanh. |
 
 > **Agent `data-explorer` (🗄️ Kho Dữ Liệu, thêm s95)** — dùng cho câu hỏi cần đọc NHIỀU bảng / đếm-liệt kê nhanh mà không phải mở đúng tab.
-> - **Tool**: `executeSQL` (gohub_dw, chỉ SELECT/WITH) · `querySupabase` (select có cấu trúc: `table/columns/filters[eq,neq,gt,gte,lt,lte,like,ilike,in,is]/order/limit≤200/countOnly`) · `listSupabaseTables`. File: `web/src/lib/agents/data-explorer.ts` (`runDataExplorer`, Gemini function-calling temp0, ≤8 vòng).
+> - **Tool**: `executeSQL` (gohub_dw, chỉ SELECT/WITH) · `querySupabase` (select có cấu trúc: `table/columns/filters[eq,neq,gt,gte,lt,lte,like,ilike,in,is]/order/limit≤200/countOnly`) · `listSupabaseTables`. File: `web/src/lib/agents/data-explorer.ts` (`runDataExplorer`, Gemini function-calling temp0, ≤10 vòng). **Đếm theo nhóm**: querySupabase KHÔNG có GROUP BY → agent lấy giá trị nhóm rồi `countOnly` từng nhóm (hoặc dùng executeSQL nếu bảng ở gohub_dw).
 > - **Phân biệt với `bi-analyst`**: bi-analyst = CHỈ SỐ kinh doanh có kỳ (doanh thu/lợi nhuận/target/hiệu suất); data-explorer = ĐẾM/LIỆT KÊ/THỐNG KÊ dữ liệu catalog/hệ thống. Classifier có intent `data_explore`; router có override `DATA_EXPLORE_RE` (conservative: "có bao nhiêu SKU/nước…", "tra dữ liệu", "kho dữ liệu").
 > - **Bảo mật (guardian nhiều tầng)**: `guardCheck` message-level chạy TRƯỚC (như mọi agent). Tầng agent: 10 bảng nhạy cảm (`users`, hội thoại, ticket, `app_settings`…) **chỉ admin·creator**; role≠admin bị chèn `role_filters` vào SQL gohub_dw; lược cột COGS nếu không có quyền xem giá vốn; luôn lược cột `embedding`. Dispatch ở `/api/chat` + `/api/lark/events` (non-stream, giống bi-analyst).
 
@@ -94,4 +94,18 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
 ## 5. Phân Quyền Truy Cập
 - **Standard**: Chỉ được dùng các agent `tu-van`, `tra-cuu`, `giai-dap`, `gap-analysis` theo phòng ban. Không được xem giá vốn (COGS), không được dùng BI Analyst.
 - **Staff / BOD / Manager / Admin**: Có quyền kích hoạt Agent `bi-analyst` để truy vấn dữ liệu kinh doanh gohub_dw (đối với Staff/BOD thì bị giới hạn phạm vi dữ liệu theo quyền được phân).
-- **Admin / Manager**: Có quyền sử dụng agent `tao-template` để sinh tệp tải lên.\n
+- **Admin / Manager**: Có quyền sử dụng agent `tao-template` để sinh tệp tải lên.
+
+---
+
+## 6. Cải tiến s106 (2026-07-18) — audit + tối ưu 7 agent
+
+Bộ E2E `web/src/__e2e__/agent-audit|agent-grade` (LLM-judge) audit từng agent vs DB thật rồi chấm chất lượng câu trả lời. Chi tiết: [[system/Chatbot-Agents-Guardian]] §"Test harness". Các fix chính:
+
+- **bi-analyst**: 🔒 PII — chỉ trả `customer_code`, KHÔNG lộ tên/SĐT/email khách. Glossary chỉ số: **CM1 = Gross Profit − Operation Cost**; Operation Cost KHÔNG có trong gohub_dw → không đánh đồng CM1 = Gross Profit. Cảnh báo bảng mirror `fact_fulfilment_revenue_power_bi` (1 chữ "l" — đếm trùng, không dùng). `dim_location` = **kho/chi nhánh** (không phải nước); eSIM/3HK fulfill `location_id=0` ('Unknown') → giải thích thay vì "không có dữ liệu". Fallback chống câu trả lời rỗng (function-calling ≤10 vòng).
+- **Định tuyến (router)**: "báo cáo 3HK **trong/theo kho** Hà Nội" → `bi-analyst` (không nhầm gap-analysis); "3HK **Contribution** %" không bị `3hk co` nuốt (word-boundary); "khách **mua nhiều nhất**" → bi-analyst; "liệt kê wiki" / "đếm item theo kênh" → data-explorer; câu **gap NCC** ("WM có bao nhiêu gói **chưa tạo** SKU") không bị BI override cướp → gap-analysis.
+- **tu-van đa quốc gia (multi-country)**: câu "gói dùng được ở **CẢ Malaysia VÀ Singapore**" → `searchSkusMultiCountry` giao tập nhóm nước phủ ĐỒNG THỜI mọi nước hỏi (extractParams gom `countries[]` khi có "cả…và / đồng thời / cùng lúc"; không nhầm "so sánh Nhật và Hàn"). GoHub CÓ ~21 nhóm phủ cả Malaysia+Singapore (AP2/APA…). Nước ngoài danh mục (vd Monaco) → báo "chưa có" thay vì hỏi lại.
+- **giai-dap**: bổ sung glossary chỉ số kinh doanh (Revenue/GP/GPM%/CM1/CM1%/3HK Contribution).
+
+### UX: hiệu ứng "đang trả lời"
+Agent `bi-analyst`/`data-explorer` chạy function-calling 10–30s (non-stream) → trước đây bong bóng rỗng, trông như treo. Nay hiện **typing dots + "[tên agent] đang trả lời…"** trong bong bóng khi chưa có nội dung, badge nhấp nháy ở header (mọi kích thước màn hình). File `web/src/app/(dashboard)/chatbot/page.tsx`.
