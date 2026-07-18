@@ -598,9 +598,10 @@ export default function ChatbotPage() {
             <h1 className="text-lg md:text-xl font-bold text-gray-900">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
-            {agentName && (
-              <span className="text-xs text-gray-400 animate-pulse hidden sm:block">
-                {agentName} đang xử lý...
+            {busy && (
+              <span className="flex items-center gap-1.5 text-xs text-brand-500">
+                <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse" />
+                {agentName ? `${agentName} đang trả lời…` : "Đang xử lý…"}
               </span>
             )}
           </div>
@@ -660,6 +661,27 @@ export default function ChatbotPage() {
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (() => {
+                      // Chưa có nội dung (agent bi-analyst/data-explorer đang chạy function-calling 10-30s)
+                      // → hiện hiệu ứng "đang trả lời" thay vì bong bóng rỗng (tránh cảm giác đơ).
+                      if (!msg.content) {
+                        if (streaming && i === messages.length - 1) {
+                          return (
+                            <div className="flex items-center gap-2 py-0.5">
+                              <div className="flex gap-1">
+                                {[0, 1, 2].map(k => (
+                                  <span key={k} className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce"
+                                    style={{ animationDelay: `${k * 0.15}s`, animationDuration: "0.8s" }} />
+                                ))}
+                              </div>
+                              <span className="text-xs text-gray-400">
+                                {(msg.agent?.name || "Bé Gấu")} đang trả lời…
+                              </span>
+                            </div>
+                          )
+                        }
+                        return <span className="text-xs text-gray-400 italic">Không có nội dung trả lời.</span>
+                      }
+
                       // Extract chart block from bi-analyst / data-explorer messages
                       const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
                         ? extractChartData(msg.content) : null

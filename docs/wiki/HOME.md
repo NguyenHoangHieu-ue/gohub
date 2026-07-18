@@ -58,7 +58,7 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 ## Kiến Trúc & Diagram
 
 - [[system/Second-Brain-Architecture|Second Brain — Flow Diagrams]] — 6 Mermaid diagrams: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 6 Agents + Guardian · 7 Phases Roadmap
-- [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]] — 6 agent (tư vấn/tra cứu/giải đáp/NCC&gap/template/BI) + cổng kiểm soát quyền hạn câu hỏi
+- [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]] — 7 agent (tư vấn/tra cứu/giải đáp/NCC&gap/template/BI/kho dữ liệu) + cổng kiểm soát quyền hạn câu hỏi
 - [[workflow-pipeline|Quy Trình Vận Hành Chuẩn]] — Workflow pipeline end-to-end
 
 ---
@@ -102,7 +102,7 @@ Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình 
 - [[Tab/promotions|Promotions]] — Quản lý khuyến mãi
 - [[Tab/kb|Knowledge Base]] — Cơ sở tri thức & Wiki
 - [[Tab/info|Note]] — Cổng thông tin hệ thống
-- [[Tab/chatbot|GoHub AI Chatbot]] — Bé Gấu Thông Thái (6 agent)
+- [[Tab/chatbot|GoHub AI Chatbot]] — Bé Gấu Thông Thái (7 agent)
 
 ---
 

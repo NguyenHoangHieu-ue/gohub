@@ -387,6 +387,73 @@ export async function searchSkus(params: {
   return { skus: result.slice(0, 40), note }
 }
 
+// ─── Tool: search_skus_multi_country ─────────────────────────────────────────
+// Tìm gói ĐA QUỐC GIA phủ ĐỒNG THỜI tất cả nước user hỏi (vd "gói dùng được ở CẢ Malaysia VÀ Singapore").
+// Cách làm: mỗi nước có tập nhóm 'all' (mã nhóm chứa nước đó); GIAO các tập → nhóm phủ mọi nước.
+export async function searchSkusMultiCountry(params: {
+  countries: string[]
+  days?: number
+  data_gb?: number
+  is_unlimited?: boolean
+  vendor?: string
+  sim_type?: string
+}, ref: RefCache): Promise<{ skus: any[]; note: string; matched: string[]; missing: string[] }> {
+  const uniq = [...new Set(params.countries.map(c => c.trim()).filter(Boolean))]
+  const perCountry = uniq.map(c => ({ name: c, ...getCountryCodes(c, ref) }))
+  const missing = perCountry.filter(p => !p.all.length).map(p => p.name)
+
+  // Giao tập mã nhóm phủ TẤT CẢ nước (chỉ tính nước nhận diện được)
+  const recognized = perCountry.filter(p => p.all.length)
+  let intersection: string[] = recognized.length ? [...new Set(recognized[0].all)] : []
+  for (const p of recognized.slice(1)) intersection = intersection.filter(code => p.all.includes(code))
+
+  if (!intersection.length) {
+    return {
+      skus: [], matched: [], missing,
+      note: `GoHub chưa có gói ĐƠN nào phủ đồng thời ${uniq.join(" + ")}${missing.length ? ` (chưa nhận diện: ${missing.join(", ")})` : ""}. Gợi ý: mua gói riêng cho từng nước.`,
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sku_catalog")
+    .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+    .eq("status", "Active")
+    .in("country_group", intersection)
+  if (error) console.error("[searchSkusMultiCountry]", error.message)
+
+  let result = [...(data ?? [])].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
+  let note = `Gói ĐA QUỐC GIA phủ cả ${uniq.join(" + ")} (${intersection.length} nhóm: ${intersection.slice(0, 8).join(", ")}).`
+
+  // Áp filter tuỳ chọn (giống searchSkus)
+  if (params.vendor) {
+    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7).toUpperCase() === params.vendor!.toUpperCase())
+    if (v.length) result = v
+  }
+  if (params.sim_type) {
+    const v = result.filter((s: any) => s.sim_esim?.toLowerCase() === params.sim_type!.toLowerCase())
+    if (v.length) result = v
+  }
+  if (params.is_unlimited) {
+    const v = result.filter((s: any) => s.is_unlimited || (s.data_amount ?? 0) >= 9999)
+    if (v.length) result = v; else note += ` | Không có gói unlimited`
+  } else if (params.data_gb != null) {
+    const exact = result.filter((s: any) => s.data_amount === params.data_gb)
+    if (exact.length) result = exact
+  }
+  if (params.days != null) {
+    const exact = result.filter((s: any) => s.day_amount === params.days)
+    if (exact.length) result = exact
+    else {
+      const avail = [...new Set(result.map((s: any) => s.day_amount as number))].sort((a, b) => a - b)
+      note += ` | Không có gói ${params.days}d, có: ${avail.slice(0, 6).join("/")}d`
+    }
+  }
+  if (missing.length) note += ` | ⚠ Chưa nhận diện: ${missing.join(", ")} — kết quả chỉ chắc cho ${recognized.map(p => p.name).join(", ")}`
+  if (result.length > 40) note += ` | ⚠ Hiển thị 40/${result.length} SKU`
+
+  return { skus: result.slice(0, 40), matched: recognized.map(p => p.name), missing, note }
+}
+
 // ─── Tool: search_skus_for_region ────────────────────────────────────────────
 // Tìm SKU cho cả một khu vực (châu Á, châu Âu...).
 // Dùng coverage ratio để phân loại nhóm nước: single-country vs multi-country.

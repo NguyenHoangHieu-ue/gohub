@@ -14,7 +14,7 @@ import { getRoleDataFilter }               from "./bi-analyst"
 //   · Role không phải admin → chèn role_filters (giống bi-analyst) vào MỌI SQL gohub_dw.
 
 // Danh mục bảng Supabase (nguồn từ PostgREST — 40 bảng). Chỉ những bảng liệt kê ở đây mới query được.
-const SUPABASE_TABLES: Record<string, string> = {
+export const SUPABASE_TABLES: Record<string, string> = {
   // Sản phẩm / catalog GoHub
   products:               "Sản phẩm (product_code 8 ký tự, tenant, status, vendor_code, product_type, type_of_sim, supported_countries, hotspot, kyc_needed, telco_perks)",
   skus:                   "SKU (sku_code 13 ký tự, product_code, status, sim_esim, data_amount, day_amount, call, throttle_speed, latest_cogs, latest_cogs_currency)",
@@ -51,7 +51,7 @@ const SUPABASE_TABLES: Record<string, string> = {
 }
 
 // Bảng nhạy cảm (PII / auth / hội thoại / nội bộ) — CHỈ admin & creator.
-const SENSITIVE_TABLES: Record<string, string> = {
+export const SENSITIVE_TABLES: Record<string, string> = {
   users:                  "Tài khoản người dùng (auth, PII)",
   app_settings:           "Cấu hình hệ thống (chứa policy/secret)",
   conversations:          "Hội thoại chatbot (PII)",
@@ -224,7 +224,7 @@ export async function runDataExplorer(
   const chat = model.startChat({ history: geminiHistory })
   let result = await chat.sendMessage(lastMsg)
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const calls = result.response.functionCalls()
     if (!calls || calls.length === 0) break
     const parts: any[] = []
@@ -268,5 +268,15 @@ export async function runDataExplorer(
     result = await chat.sendMessage(parts)
   }
 
-  return result.response.text()
+  // Fallback chống câu trả lời RỖNG (Gemini kết thúc tool-calling mà không sinh text).
+  let text = result.response.text()
+  if (!text.trim()) {
+    try {
+      const followup = await chat.sendMessage(
+        "Dựa TRÊN kết quả các truy vấn đã chạy ở trên, hãy viết câu trả lời hoàn chỉnh bằng tiếng Việt cho user (kèm bảng markdown nếu cần). KHÔNG gọi thêm tool."
+      )
+      text = followup.response.text()
+    } catch { /* giữ rỗng */ }
+  }
+  return text
 }
