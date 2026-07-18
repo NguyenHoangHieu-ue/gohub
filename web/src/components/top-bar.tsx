@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession, signOut } from "next-auth/react"
-import { LogOut } from "lucide-react"
+import { LogOut, Search } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ROLE_LABELS } from "@/lib/agents/types"
 
@@ -35,25 +35,37 @@ export function TopBar() {
   if (!session) return null
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center justify-end gap-3 px-5">
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-          {initials || "?"}
-        </div>
-        <div className="text-right leading-tight">
-          <div className="text-sm font-semibold text-slate-900 truncate max-w-[200px]">{name}</div>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
-            {ROLE_LABELS[role] ?? role}
-          </span>
-        </div>
-      </div>
+    <header className="sticky top-0 z-30 h-14 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center justify-between gap-3 px-5">
+      {/* Tìm nhanh — mở Command Palette (⌘K) */}
       <button
-        onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        onClick={() => window.dispatchEvent(new Event("gohub:open-palette"))}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg hover:border-brand-300 hover:text-brand-600 transition-colors min-w-[180px] md:min-w-[240px]"
       >
-        <LogOut size={15} />
-        <span className="hidden sm:inline">Sign Out</span>
+        <Search size={15} className="flex-shrink-0" />
+        <span className="flex-1 text-left hidden sm:inline">Tìm nhanh…</span>
+        <kbd className="text-[10px] font-semibold bg-white border border-slate-200 px-1.5 py-0.5 rounded hidden sm:inline">⌘K</kbd>
       </button>
+
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {initials || "?"}
+          </div>
+          <div className="text-right leading-tight">
+            <div className="text-sm font-semibold text-slate-900 truncate max-w-[200px]">{name}</div>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
+              {ROLE_LABELS[role] ?? role}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        >
+          <LogOut size={15} />
+          <span className="hidden sm:inline">Sign Out</span>
+        </button>
+      </div>
     </header>
   )
 }
