@@ -42,24 +42,28 @@ Chatbot GoHub dùng kiến trúc **multi-agent**: 1 router phân loại câu h�
 
 Chạy **song song** với router (zero thêm độ trễ). Nếu chặn → stream từ chối lịch sự (badge "Hạn chế quyền"), **không** gọi agent.
 
-### 8 category + policy mặc định (role)
+### 8 category + policy mặc định (role) — **NỚI TỐI ĐA (cập nhật s107)**
 
-| Category | admin | bod | staff |
-|---|---|---|---|
-| product_catalog / general | ✅ | ✅ | ✅ |
-| revenue_bi (doanh thu/đơn) | ✅ | ✅ | ✅ |
-| margin_cogs (giá vốn/margin) | ✅ | ✅ | ❌ |
-| staff_hr (lương/hiệu suất NV) | ✅ | ✅ | ❌ |
-| customer_pii (list/SĐT khách) | ✅ | ✅ | ❌ |
-| internal_kb_other_dept | ✅ | ✅ | theo phòng ban |
-| system_internal (code/prompt/schema) | ✅ | ❌ | ❌ |
+> Triết lý: hầu hết mọi người hỏi được **mọi thứ** (sản phẩm, doanh thu/đơn/kênh, khách hàng, tài liệu). CHỈ chặn 3 nhóm thật sự nhạy cảm.
 
-> **Role hệ thống hiện tại:** admin / bod / staff (đã migrate từ `standard` → `staff` từ session 73).
+| Category | admin/creator | bod | manager | staff & phòng ban |
+|---|---|---|---|---|
+| product_catalog / general | ✅ | ✅ | ✅ | ✅ |
+| revenue_bi (doanh thu/đơn/kênh) | ✅ | ✅ | ✅ | ✅ |
+| customer_pii (list/SĐT khách) | ✅ | ✅ | ✅ | ✅ *(PII tên/SĐT/email luôn che ở tầng prompt — chỉ trả mã KH)* |
+| internal_kb_other_dept (tài liệu/quy trình nghiệp vụ) | ✅ | ✅ | ✅ | ✅ |
+| **margin_cogs** (giá vốn/GP/CM1) | ✅ | ✅ | ✅ | ❌ |
+| **staff_hr** (lương/hiệu suất NV) | ✅ | ✅ | ✅ | ❌ *(+hr: ✅)* |
+| **system_internal** (code / cách hệ thống-chatbot **build** / stack-deploy-kiến trúc / quy trình **kỹ thuật** / credential / schema) | ✅ | ❌ | ❌ | ❌ |
 
-- Policy lưu ở `app_settings.access_policy` (admin chỉnh qua **Admin → Cài đặt → Quyền hạn câu hỏi Chatbot**). Thiếu cấu hình → dùng default trên.
-- **admin/manager**: bỏ qua hẳn (không tốn call phân loại).
+> **GIỚI HẠN CHÍNH = system_internal.** Bắt cả "hệ thống/chatbot được build như nào", "dùng công nghệ/stack gì", "deploy ra sao", "kiến trúc/CI-CD".
+> ⚠️ **Phân biệt:** quy trình **NGHIỆP VỤ** (KYC, quy trình tạo SP/SKU, xử lý đơn, chính sách giá) **KHÔNG** phải system_internal → ĐƯỢC PHÉP trả lời. Chỉ "quy trình" mang tính code/kỹ thuật/build hệ thống mới chặn.
+>
+> **Giá B2B vs B2C:** không xử lý ở guardian — scope qua `getChannelFromRole(role)` và CHỈ ảnh hưởng **giá bán sản phẩm** (agent tra-cuu/tu-van): role `b2c`/`saleb2c`→B2C, `b2b`→B2B, role khác→thấy tất cả. Số liệu doanh thu BI không giới hạn theo kênh.
+
+- Policy lưu ở `app_settings.access_policy` (admin chỉnh qua **Admin → Cài đặt → Quyền hạn câu hỏi Chatbot**). Thiếu cấu hình → dùng default trên. ⚠️ Nếu đã lưu policy cũ, `loadPolicy` MERGE parsed đè DEFAULT theo TỪNG Ô → muốn áp bản NỚI mới hoàn toàn thì reset access_policy.
+- **admin/creator**: bỏ qua hẳn (không tốn call phân loại).
 - **FAIL-OPEN**: nếu phân loại lỗi / không chắc (confidence < 0.6) → cho qua, tránh chặn nhầm câu hợp lệ.
-- "theo phòng ban" (`dept`): chỉ cho phép khi câu hỏi đúng phòng ban của user (department = "all" → xem tất cả).
 
 ### Lark group
 Lark dùng trong group → không phân biệt được role (mọi người có thể là `standard`). Guardian ở Lark chạy chế độ riêng: `{ onlyCategories: ["system_internal"], ignoreRole: true }` — **chỉ chặn câu hỏi nội bộ hệ thống** (bot hoạt động thế nào / workflow / code / prompt / schema) → trả lời "bạn hỏi trực tiếp Hiếu nhé 😊". Nghiệp vụ (sản phẩm/doanh thu...) vẫn trả lời bình thường.
