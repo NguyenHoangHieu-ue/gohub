@@ -37,9 +37,11 @@ export async function GET(req: NextRequest) {
       params.push(`%${search}%`)
       where += ` AND (f.order_code ILIKE $${params.length} OR f.sku ILIKE $${params.length})`
     }
-    if (channel) {
+    // "all"/"All"/rỗng = KHÔNG lọc (FE gửi default "all" lowercase → trước đây thêm nhầm `= 'all'` → xuất RỖNG).
+    const isAll = (v: string) => !v || v.toLowerCase() === "all"
+    if (!isAll(channel)) {
       params.push(channel); where += ` AND TRIM(s.channel_name) = $${params.length}`
-    } else if (channelGroup && channelGroup !== "All") {
+    } else if (!isAll(channelGroup)) {
       params.push(channelGroup); where += ` AND s.group_name = $${params.length}`
     }
     if (staff) {
