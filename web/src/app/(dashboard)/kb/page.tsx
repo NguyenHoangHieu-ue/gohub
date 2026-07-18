@@ -410,8 +410,8 @@ function DocsTab({ role, username, canUpload }: { role: string; username: string
       ) : docs.length === 0 ? (
         <EmptyState title="Chưa có tài liệu nào" description="Upload file để chatbot có thể đọc và trả lời" />
       ) : (
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
               <th className="px-4 py-3 font-medium">Tên tài liệu</th>
               <th className="px-4 py-3 font-medium">Phòng ban</th>
@@ -648,8 +648,8 @@ function WikiTab({ role, username, canWikiEdit }: { role: string; username: stri
       ) : pages.length === 0 ? (
         <EmptyState icon={<PenLine />} title="Chưa có wiki page nào" description='Bấm "Tạo trang" để bắt đầu.' />
       ) : (
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead><tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
               <th className="px-4 py-3 font-medium">Tiêu đề</th>
               <th className="px-4 py-3 font-medium">Loại</th>

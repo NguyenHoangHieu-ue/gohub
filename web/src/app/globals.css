@@ -10,8 +10,11 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Dark mode (class-based, bật/tắt qua ThemeToggle) — nền tối cho canvas chung */
-.dark body { @apply bg-slate-900 text-slate-100; }
+/* Dark mode (class-based, bật/tắt qua ThemeToggle).
+   - color-scheme: dark → form control/scrollbar/dropdown/date-picker native đổi sang tông tối (hết chói trắng).
+   - Canvas slate-950 (đậm hơn) để card slate-800 nổi rõ; chữ slate-200 thay slate-100 để đỡ gắt/chói mắt. */
+.dark { color-scheme: dark; }
+.dark body { @apply bg-slate-950 text-slate-200; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

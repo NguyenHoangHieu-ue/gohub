@@ -23,7 +23,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
     <div className={cn("flex flex-col items-center justify-center py-16 text-center select-none", className)}>
       {icon && <div className="mb-3 text-slate-300 dark:text-slate-600 [&_svg]:w-9 [&_svg]:h-9">{icon}</div>}
       <p className="text-sm font-medium text-slate-500 dark:text-slate-300">{title}</p>
-      {description && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 max-w-xs">{description}</p>}
+      {description && <p className="mt-1 text-xs text-slate-400 max-w-xs">{description}</p>}
       {action && (
         <button
           onClick={action.onClick}

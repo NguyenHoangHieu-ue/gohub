@@ -3,14 +3,21 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 
 interface SidebarCtx {
-  collapsed: boolean
-  toggle:    () => void
+  collapsed:    boolean          // thu gọn icon-rail (chỉ desktop)
+  toggle:       () => void
+  mobileOpen:   boolean          // off-canvas mở trên mobile (< md)
+  openMobile:   () => void
+  closeMobile:  () => void
 }
 
-const Ctx = createContext<SidebarCtx>({ collapsed: false, toggle: () => {} })
+const Ctx = createContext<SidebarCtx>({
+  collapsed: false, toggle: () => {},
+  mobileOpen: false, openMobile: () => {}, closeMobile: () => {},
+})
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed]   = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -26,7 +33,14 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  return <Ctx.Provider value={{ collapsed, toggle }}>{children}</Ctx.Provider>
+  const openMobile  = useCallback(() => setMobileOpen(true), [])
+  const closeMobile = useCallback(() => setMobileOpen(false), [])
+
+  return (
+    <Ctx.Provider value={{ collapsed, toggle, mobileOpen, openMobile, closeMobile }}>
+      {children}
+    </Ctx.Provider>
+  )
 }
 
 export const useSidebar = () => useContext(Ctx)

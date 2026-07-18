@@ -1,10 +1,11 @@
 "use client"
 
 import { useSession, signOut } from "next-auth/react"
-import { LogOut, Search } from "lucide-react"
+import { LogOut, Search, Menu } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ROLE_LABELS } from "@/lib/agents/types"
 import { ThemeToggle } from "./theme-toggle"
+import { useSidebar } from "./sidebar-context"
 
 function roleBadgeClass(role: string) {
   if (role === "creator") return "bg-violet-100 text-violet-700"
@@ -18,6 +19,7 @@ function roleBadgeClass(role: string) {
 // Thanh trên cùng — tên người dùng + vai trò + Sign Out ở góc phải.
 export function TopBar() {
   const { data: session } = useSession()
+  const { openMobile } = useSidebar()
   const sessionRole = session?.user?.role || "staff"
   const name = session?.user?.name || ""
   const username = session?.user?.username || ""
@@ -36,11 +38,20 @@ export function TopBar() {
   if (!session) return null
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-white/85 dark:bg-slate-900/85 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 px-5">
+    <header className="sticky top-0 z-30 h-14 bg-white/85 dark:bg-slate-900/85 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 px-4 md:px-5">
+      {/* Hamburger — chỉ mobile: mở sidebar off-canvas */}
+      <button
+        onClick={openMobile}
+        aria-label="Mở menu"
+        className="md:hidden p-2 -ml-1 rounded-lg text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+      >
+        <Menu size={20} />
+      </button>
+
       {/* Tìm nhanh — mở Command Palette (⌘K) */}
       <button
         onClick={() => window.dispatchEvent(new Event("gohub:open-palette"))}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-300 hover:text-brand-600 dark:hover:text-brand-300 transition-colors min-w-[180px] md:min-w-[240px]"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-300 hover:text-brand-600 dark:hover:text-brand-300 transition-colors min-w-0 md:min-w-[240px]"
       >
         <Search size={15} className="flex-shrink-0" />
         <span className="flex-1 text-left hidden sm:inline">Tìm nhanh…</span>
@@ -53,7 +64,7 @@ export function TopBar() {
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {initials || "?"}
           </div>
-          <div className="text-right leading-tight">
+          <div className="text-right leading-tight hidden sm:block">
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{name}</div>
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
               {ROLE_LABELS[role] ?? role}
