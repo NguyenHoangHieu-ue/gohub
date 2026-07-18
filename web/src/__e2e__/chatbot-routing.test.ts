@@ -46,6 +46,7 @@ const CASES: [string, string | string[]][] = [
   ["Liệt kê các trang wiki nội bộ", "data-explorer"],                    // liệt kê wiki = tra dữ liệu
   ["Đếm số item theo kênh bán", "data-explorer"],                        // đếm theo nhóm = data-explorer
   ["WorldMove có bao nhiêu gói chưa được GoHub tạo SKU?", ["gap-analysis", "data-explorer"]], // gap KHÔNG bị BI cướp
+  ["có sản phẩm nào dùng được ở cả Malaysia và Singapore không", "tu-van"], // multi-country → tu-van
 ]
 
 describe("Chatbot routing — câu hỏi thật của user", () => {

@@ -2,7 +2,7 @@ import { supabaseAdmin }            from "@/lib/supabase"
 import { getRefCache }              from "@/lib/agents/cache"
 import type { ExtractedParams }     from "@/lib/agents/router"
 import {
-  searchSkus, searchSkusForRegion, searchSkusByGroupCode,
+  searchSkus, searchSkusForRegion, searchSkusByGroupCode, searchSkusMultiCountry,
   REGION_DISPLAY,
   getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
@@ -103,6 +103,33 @@ export async function buildToolContext(
         )
         sections.push(regionCtx)
       }
+    }
+
+    // ── Case 2b: Multi-country — gói dùng ĐỒNG THỜI nhiều nước ("cả Malaysia VÀ Singapore") ──
+    else if (params.countries && params.countries.length >= 2) {
+      const { skus, note, matched, missing } = await searchSkusMultiCountry({
+        countries:    params.countries,
+        days:         params.days,
+        data_gb:      params.dataGB,
+        is_unlimited: params.isUnlimited,
+        vendor:       params.vendor,
+        sim_type:     params.simType,
+      }, ref)
+      const rows = skus.map((s: any) => {
+        const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+          : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+        return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`, s.country_group,
+                s.note ? `[note:${s.note}]` : null].filter(Boolean).join("|")
+      })
+      sections.push(
+        `=== SẢN PHẨM GOHUB ĐA QUỐC GIA (phủ CẢ ${params.countries.join(" + ")}): ${skus.length} SKU ===`,
+        note ? `Lưu ý: ${note}` : "",
+        skus.length ? `sku_code|tenant|sim|data|days|nhóm_nước|[note nếu có]` : "",
+        ...rows,
+        skus.length
+          ? `Đây là gói ĐA QUỐC GIA dùng được cho tất cả các nước trên trong 1 SIM. Nếu user chỉ đi 1 nước, có thể có gói riêng rẻ hơn.`
+          : `KHÔNG có gói đơn nào phủ đồng thời ${params.countries.join(", ")}. Gợi ý user: (1) mua gói riêng từng nước, hoặc (2) xem gói khu vực (vd Đông Nam Á) nếu các nước cùng khu vực.${missing.length ? ` (Chưa nhận diện: ${missing.join(", ")}.)` : ""}`
+      )
     }
 
     // ── Case 3: Single-country query (CHỈ sản phẩm GoHub — NCC do agent Gap Analysis phụ trách) ──

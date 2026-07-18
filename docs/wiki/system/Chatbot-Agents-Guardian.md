@@ -90,8 +90,7 @@ Bộ E2E kiểm chất lượng **câu trả lời** (không chỉ routing), ch�
 - **bi-analyst**: (1) rào PII — chỉ trả `customer_code`, KHÔNG tên/SĐT/email khách (trước bị leak "Anh Công…"); (2) glossary chỉ số — CM1 = GP − Operation Cost, mà Operation Cost KHÔNG có trong gohub_dw → không đánh đồng CM1 = Gross Profit; (3) cảnh báo bảng mirror `fact_fulfilment_revenue_power_bi` (1 chữ "l") KHÔNG dùng (đếm trùng); (4) fallback chống câu trả lời rỗng khi Gemini kết thúc function-calling không sinh text; (5) `theo kho`/`contribution` route đúng bi-analyst.
 - **data-explorer**: catalog Supabase 0 drift; hướng dẫn "đếm theo nhóm" (querySupabase KHÔNG có GROUP BY → countOnly từng nhóm); routing "liệt kê wiki" / "đếm item" → data-explorer.
 - **giai-dap**: thêm glossary chỉ số kinh doanh (Revenue/GP/GPM/CM1/CM1%/3HK Contribution).
-- **tu-van**: nêu tên nước lạ (ngoài danh mục, vd Monaco) → báo "chưa có" thay vì hỏi lại; extractParams tự bắt loại SIM (sim vật lý/eSIM).
+- **tu-van**: nêu tên nước lạ (ngoài danh mục, vd Monaco) → báo "chưa có" thay vì hỏi lại; extractParams tự bắt loại SIM (sim vật lý/eSIM). **Multi-country**: "gói dùng được ở CẢ Malaysia VÀ Singapore" → `searchSkusMultiCountry` giao tập nhóm nước phủ ĐỒNG THỜI mọi nước (extractParams gom `countries[]` khi có "cả…và / đồng thời / cùng lúc"; tránh nhầm "so sánh Nhật và Hàn"). GoHub CÓ ~21 nhóm phủ cả Malaysia+Singapore (AP2/APA…).
 - **Router**: `GAP_KEYWORD` thêm word-boundary (tránh `3hk co` khớp "3hk **co**ntribution"); chặn BI override cướp câu NCC/gap.
 
-### Giới hạn đã biết (cần feature riêng)
-- **tu-van đa quốc gia**: câu "gói dùng được ở cả Malaysia VÀ Singapore" — `searchSkus` chưa xét giao gói đa quốc gia phủ nhiều nước cùng lúc (chỉ lọc 1 nước). Cần nâng cấp engine tìm gói đa quốc gia.
+### Grade cuối (2026-07-18): 7/7 con đạt full — bi-analyst 13/13 · data-explorer 8/9(1 niche) · tu-van 7/7 · giai-dap 6/6 · tra-cuu 5/5 · gap-analysis 5/5 · tao-template 3/3.

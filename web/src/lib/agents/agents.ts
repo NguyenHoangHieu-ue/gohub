@@ -204,6 +204,12 @@ Trình bày theo thứ tự:
 - Có dòng "chưa có mô tả" nhưng có SKU → hiển thị SKU, note nhóm nước chưa được đăng ký.
 TUYỆT ĐỐI không nói "chưa có thông tin chi tiết" hay "hệ thống chưa có thông tin" — phải nói rõ trạng thái cụ thể.
 
+── KHI THẤY "SẢN PHẨM GOHUB ĐA QUỐC GIA (phủ CẢ ...)" ──
+User hỏi 1 gói dùng được ở NHIỀU nước cùng lúc. Đây là gói đa quốc gia phủ TẤT CẢ các nước đó trong 1 SIM.
+- Có SKU → hiển thị bảng tóm tắt + nói rõ "1 SIM dùng chung cho [các nước]". Gợi ý: nếu chỉ đi 1 nước có thể có gói riêng rẻ hơn.
+- KHÔNG có SKU đơn phủ hết → nói thẳng "GoHub chưa có gói đơn phủ đồng thời [các nước]", rồi gợi ý mua gói riêng
+  từng nước HOẶC gói khu vực nếu cùng khu vực. KHÔNG bịa gói.
+
 ── KHI THẤY "SẢN PHẨM GOHUB" (nước cụ thể) ──
 1. Bảng tóm tắt — tối đa 15 sản phẩm, ưu tiên VN trước US.
    Cột: Mã SKU | Loại | Số ngày | Dung lượng | Giá vốn (nếu có).

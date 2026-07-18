@@ -195,6 +195,7 @@ const ISO_TO_EN: Record<string, string> = {
 
 export interface ExtractedParams {
   country?:        string
+  countries?:      string[]    // ≥2 nước khi user hỏi gói dùng cho NHIỀU nước cùng lúc ("cả Malaysia và Singapore")
   region?:         string     // "asia" | "southeast_asia" | "europe" | etc.
   groupCode?:      string     // GoHub 3-char code trực tiếp: JPN, CHM, EU1, APA, GLO...
   skuCodes?:       string[]
@@ -376,6 +377,22 @@ export function extractParams(message: string): ExtractedParams {
       const words = msgNormC.split(/[\s,.\-\/]+/).filter(Boolean)
       for (const w of words) {
         if (ISO_TO_EN[w]) { params.country = ISO_TO_EN[w]; break }
+      }
+    }
+
+    // Multi-country: câu hỏi 1 gói dùng cho NHIỀU nước CÙNG LÚC ("gói dùng được ở CẢ Malaysia VÀ Singapore").
+    // Siết tín hiệu để tránh nhầm "so sánh Nhật và Hàn" (compare, không phải gói đa quốc gia):
+    // cần "cả ... và", hoặc "đồng thời / cùng lúc / cả hai nước / nhiều nước".
+    const isMultiIntent = /\bca\b[^.!?]*\bva\b|\bva\b[^.!?]*\bca\b|dong thoi|cung luc|cung mot luc|ca hai nuoc|ca 2 nuoc|nhieu nuoc|multi.?country/.test(msgNormC)
+    if (isMultiIntent) {
+      const found: string[] = []
+      for (const [key, en] of sortedNorm) {
+        if (wordMatch(msgNormC, key) && !found.includes(en)) found.push(en)
+        if (found.length >= 5) break
+      }
+      if (found.length >= 2) {
+        params.countries = found
+        if (!params.country) params.country = found[0]
       }
     }
   }
