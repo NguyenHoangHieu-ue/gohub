@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getPartnerTiers, cachedQuery } from "@/lib/analytics-helpers"
+import { getPartnerTiers, cachedQuery, flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -22,5 +22,8 @@ export async function POST(req: Request) {
     value: JSON.stringify(body),
     category: "analytics",
   }, { onConflict: "key" })
+  // Strategic partners ảnh hưởng nhiều report (B2B strategic/performance/other, all-time, bod, channels...) — chúng
+  // cache theo ngày và đọc getPartnerTiers() bên trong. Xóa cache để report tính lại theo danh sách strategic mới.
+  await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({ ok: true })
 }
