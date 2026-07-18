@@ -64,7 +64,7 @@ function AdminPanel() {
           <Shield size={18} className="text-brand-600" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-gray-900 leading-tight">Quản Trị Hệ Thống</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-tight">Quản Trị Hệ Thống</h1>
           <p className="text-xs text-gray-500 leading-tight">{TAB_META[tab].label}</p>
         </div>
       </div>
@@ -93,7 +93,7 @@ function AdminPanel() {
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
                   tab === id
                     ? "bg-white text-brand-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
                 }`}
               >
                 {TAB_META[id].icon}
@@ -198,13 +198,13 @@ function SettingsTab({ onNotify }: {
   const formulaSettings = settings.filter(s => s.category === "formula")
 
   const renderSection = (title: string, rows: AppSetting[]) => (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-      <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">{title}</h3>
-      <div className="divide-y divide-gray-100">
+    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-3">
+      <h3 className="font-semibold text-gray-800 dark:text-slate-100 text-sm uppercase tracking-wide">{title}</h3>
+      <div className="divide-y divide-gray-100 dark:divide-slate-700">
         {rows.map(s => (
           <div key={s.key} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-gray-700">{s.label}</div>
+              <div className="text-sm font-medium text-gray-700 dark:text-slate-200">{s.label}</div>
               <div className="text-xs text-gray-400 font-mono mt-0.5">{s.key}</div>
               {s.updated_at && (
                 <div className="text-xs text-gray-300 mt-0.5">
@@ -751,14 +751,14 @@ function TemplateTab({ onNotify }: {
         {([["create", "Tạo mới"], ["customize", "Tùy chỉnh template"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setSubTab(key)}
             className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${
-              subTab === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              subTab === key ? "bg-white text-gray-900 dark:text-slate-100 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
             }`}>{label}</button>
         ))}
       </div>
 
       {/* ─── Tùy chỉnh template (placeholder) ─────────────────────── */}
       {subTab === "customize" && (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center space-y-2">
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-8 text-center space-y-2">
           <p className="text-gray-500 font-medium">Tùy chỉnh cấu trúc template</p>
           <p className="text-sm text-gray-400">Tính năng đang phát triển — cho phép chỉnh sửa format cột, tên sheet, công thức giá trong file Excel xuất ra.</p>
         </div>
@@ -767,9 +767,9 @@ function TemplateTab({ onNotify }: {
       {subTab === "create" && <>
 
       {/* ─── NCC Selector ────────────────────────────────────────────── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-4">
         <div className="flex items-center gap-4">
-          <span className="text-sm font-semibold text-gray-700">Nhà cung cấp (NCC):</span>
+          <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Nhà cung cấp (NCC):</span>
           {[
             { code: "WM",  name: "WORLDMOVE",      available: true  },
             { code: "3H",  name: "3HK",             available: true  },
@@ -783,8 +783,8 @@ function TemplateTab({ onNotify }: {
                 selectedNCC === ncc.code
                   ? "bg-brand-600 text-white border-brand-600"
                   : ncc.available
-                  ? "border-gray-200 text-gray-700 hover:border-brand-400"
-                  : "border-gray-100 text-gray-300 cursor-not-allowed"
+                  ? "border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:border-brand-400"
+                  : "border-gray-100 dark:border-slate-700 text-gray-300 cursor-not-allowed"
               }`}>
               {ncc.name}
               {!ncc.available && <span className="ml-1.5 text-[10px]">soon</span>}
@@ -796,32 +796,32 @@ function TemplateTab({ onNotify }: {
 
       {/* ─── Step 1: 3HK — Chọn zone ──────────────────────────── */}
       {selectedNCC === "3H" && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">1. Chọn Zone 3HK</h3>
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-3">
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100 text-sm uppercase tracking-wide">1. Chọn Zone 3HK</h3>
           {loadingZones ? (
             <p className="text-sm text-gray-400">Đang tải zones...</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-100">
+            <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+                  <tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
                     <th className="px-3 py-2 w-8" />
                     <th className="px-3 py-2">Zone</th>
                     <th className="px-3 py-2">Nước cover</th>
                     <th className="px-3 py-2 text-right">Giá/GB (HKD)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {zoneGroups.map(z => (
                     <tr key={z.zone}
-                      className={`cursor-pointer hover:bg-gray-50 transition-colors ${selectedZone?.zone === z.zone ? "bg-brand-50" : ""}`}
+                      className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${selectedZone?.zone === z.zone ? "bg-brand-50" : ""}`}
                       onClick={() => setSelectedZone(z)}
                     >
                       <td className="px-3 py-2">
                         <input type="radio" readOnly checked={selectedZone?.zone === z.zone} />
                       </td>
                       <td className="px-3 py-2 font-mono font-bold text-brand-700">{z.zone}</td>
-                      <td className="px-3 py-2 text-xs text-gray-600">{z.countries.slice(0, 8).join(", ")}{z.countries.length > 8 ? ` +${z.countries.length - 8}` : ""}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600 dark:text-slate-300">{z.countries.slice(0, 8).join(", ")}{z.countries.length > 8 ? ` +${z.countries.length - 8}` : ""}</td>
                       <td className="px-3 py-2 text-right font-mono">{z.price_per_gb}</td>
                     </tr>
                   ))}
@@ -839,9 +839,9 @@ function TemplateTab({ onNotify }: {
 
       {/* ─── Step 1: WM — Chọn sản phẩm ────────────────────────── */}
       {selectedNCC === "WM" && (
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100 text-sm uppercase tracking-wide">
             1. Chọn sản phẩm {selectedNCC}
           </h3>
           {selected.size > 0 && (
@@ -880,10 +880,10 @@ function TemplateTab({ onNotify }: {
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-gray-100">
+        <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+              <tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
                 <th className="px-3 py-2 w-8">
                   <input type="checkbox"
                     checked={products.length > 0 && products.every(p => selected.has(p.vendor_product_id))}
@@ -899,14 +899,14 @@ function TemplateTab({ onNotify }: {
                 <th className="px-3 py-2 text-right">COGS (TWD)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {loadingP ? (
                 <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Đang tải...</td></tr>
               ) : products.length === 0 ? (
                 <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">Không có dữ liệu</td></tr>
               ) : products.map(p => (
                 <tr key={p.vendor_product_id}
-                  className={`cursor-pointer hover:bg-gray-50 transition-colors ${selected.has(p.vendor_product_id) ? "bg-brand-50" : ""}`}
+                  className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${selected.has(p.vendor_product_id) ? "bg-brand-50" : ""}`}
                   onClick={() => toggleSelect(p)}
                 >
                   <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
@@ -916,12 +916,12 @@ function TemplateTab({ onNotify }: {
                     />
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-gray-500">{p.vendor_product_id}</td>
-                  <td className="px-3 py-2 text-gray-800">{p.product_name}</td>
+                  <td className="px-3 py-2 text-gray-800 dark:text-slate-100">{p.product_name}</td>
                   <td className="px-3 py-2 text-gray-500">{p.region}</td>
                   <td className="px-3 py-2 text-gray-500">{p.sim_type}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{p.days}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{fmtWMData(p)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-gray-700">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
+                  <td className="px-3 py-2 text-right text-gray-700 dark:text-slate-200">{p.days}</td>
+                  <td className="px-3 py-2 text-right text-gray-700 dark:text-slate-200">{fmtWMData(p)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-gray-700 dark:text-slate-200">{p.cogs ? p.cogs.toLocaleString() : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -940,9 +940,9 @@ function TemplateTab({ onNotify }: {
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>Trang {page}/{totalPages}</span>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronLeft size={15} /></button>
+                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronLeft size={15} /></button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronRight size={15} /></button>
+                className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronRight size={15} /></button>
             </div>
           )}
         </div>
@@ -951,8 +951,8 @@ function TemplateTab({ onNotify }: {
 
       {/* ─── Step 2: 3HK — Combo builder ──────────────────────── */}
       {selectedNCC === "3H" && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">2. Cấu hình Combo 3HK</h3>
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100 text-sm uppercase tracking-wide">2. Cấu hình Combo 3HK</h3>
 
           {/* Country config */}
           <div>
@@ -972,29 +972,29 @@ function TemplateTab({ onNotify }: {
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Loại data</p>
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-4">
-                <span className="text-sm font-medium text-gray-700 w-20">Daily</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-200 w-20">Daily</span>
                 {DAILY_DATA_OPTIONS.map(gb => (
                   <label key={gb} className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" checked={dailyGB.has(gb)}
                       onChange={() => setDailyGB(prev => { const s = new Set(prev); s.has(gb) ? s.delete(gb) : s.add(gb); return s })} />
-                    <span className="text-sm text-gray-700">{gb}GB/ngày</span>
+                    <span className="text-sm text-gray-700 dark:text-slate-200">{gb}GB/ngày</span>
                   </label>
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-4">
-                <span className="text-sm font-medium text-gray-700 w-20">Fixed</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-200 w-20">Fixed</span>
                 {FIXED_DATA_OPTIONS.map(gb => (
                   <label key={gb} className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" checked={fixedGB.has(gb)}
                       onChange={() => setFixedGB(prev => { const s = new Set(prev); s.has(gb) ? s.delete(gb) : s.add(gb); return s })} />
-                    <span className="text-sm text-gray-700">{gb}GB</span>
+                    <span className="text-sm text-gray-700 dark:text-slate-200">{gb}GB</span>
                   </label>
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-4">
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input type="checkbox" checked={unlimitedEnabled} onChange={e => setUnlimitedEnabled(e.target.checked)} />
-                  <span className="text-sm font-medium text-gray-700 w-20">Unlimited</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-slate-200 w-20">Unlimited</span>
                 </label>
                 {unlimitedEnabled && (
                   <div className="flex items-center gap-3 ml-2">
@@ -1002,7 +1002,7 @@ function TemplateTab({ onNotify }: {
                     {([10, 5] as const).map(m => (
                       <label key={m} className="flex items-center gap-1.5 cursor-pointer select-none">
                         <input type="radio" checked={unlimThrottle === m} onChange={() => setUnlimThrottle(m)} />
-                        <span className="text-sm text-gray-700">{m} Mbps</span>
+                        <span className="text-sm text-gray-700 dark:text-slate-200">{m} Mbps</span>
                       </label>
                     ))}
                   </div>
@@ -1019,24 +1019,24 @@ function TemplateTab({ onNotify }: {
                 <label key={d} className="flex items-center gap-1.5 cursor-pointer select-none">
                   <input type="checkbox" checked={selectedDays.has(d)}
                     onChange={() => setSelectedDays(prev => { const s = new Set(prev); s.has(d) ? s.delete(d) : s.add(d); return s })} />
-                  <span className="text-sm text-gray-700">{d} ngày</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-200">{d} ngày</span>
                 </label>
               ))}
             </div>
           </div>
 
           {/* SIM type option — Bug #32 */}
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-gray-100 dark:border-slate-700">
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Loại SIM xuất ra</p>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input type="checkbox" checked disabled />
-                <span className="text-sm text-gray-700 font-medium">eSIM (luôn có)</span>
+                <span className="text-sm text-gray-700 dark:text-slate-200 font-medium">eSIM (luôn có)</span>
               </label>
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
                 <input type="checkbox" checked={includeSIM}
                   onChange={e => setIncludeSIM(e.target.checked)} />
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-gray-700 dark:text-slate-200">
                   Top-up SIM (SIM vật lý)
                   <span className="text-xs text-gray-400 ml-1">— mỗi combo sẽ tạo thêm 1 hàng SIM</span>
                 </span>
@@ -1054,9 +1054,9 @@ function TemplateTab({ onNotify }: {
 
       {/* ─── Step 2: WM — Cấu hình ─────────────────────────────── */}
       {selectedNCC === "WM" && (
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">2. Cấu hình Template</h3>
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100 text-sm uppercase tracking-wide">2. Cấu hình Template</h3>
           <button
             onClick={autoFill}
             disabled={selected.size === 0}
@@ -1096,7 +1096,7 @@ function TemplateTab({ onNotify }: {
 
         {/* Advanced defaults */}
         <details className="group">
-          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">
+          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 dark:text-slate-300 select-none">
             ▸ Tuỳ chỉnh nâng cao (ít thay đổi)
           </summary>
           <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1110,7 +1110,7 @@ function TemplateTab({ onNotify }: {
             <TemplField label="Call" value={config.call} onChange={v => setC("call", v)} placeholder="No" />
             <TemplField label="Hotspot" value={config.hotspot} onChange={v => setC("hotspot", v)} placeholder="Yes" />
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">KYC Needed</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">KYC Needed</label>
               <select value={config.kycNeeded} onChange={e => setC("kycNeeded", e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="No">No</option>
@@ -1118,7 +1118,7 @@ function TemplateTab({ onNotify }: {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Expiration (days)</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">Expiration (days)</label>
               <input type="number" value={config.expirationDays}
                 onChange={e => setC("expirationDays", parseInt(e.target.value) || 90)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -1152,8 +1152,8 @@ function TemplateTab({ onNotify }: {
 
       {/* ─── Step 4: Preview panel ─────────────────────────────── */}
       {previewRows && (
-        <div ref={previewRef} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50 flex-wrap gap-3">
+        <div ref={previewRef} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 flex-wrap gap-3">
             <div className="flex gap-1">
               {([
                 { id: "us",   label: `SKU US (${previewRows.us.length})` },
@@ -1162,7 +1162,7 @@ function TemplateTab({ onNotify }: {
               ] as const).map(t => (
                 <button key={t.id} onClick={() => setPreviewTab(t.id)}
                   className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
-                    previewTab === t.id ? "bg-white text-gray-900 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700"
+                    previewTab === t.id ? "bg-white text-gray-900 dark:text-slate-100 shadow-sm border border-gray-200 dark:border-slate-700" : "text-gray-500 hover:text-gray-700 dark:text-slate-200"
                   }`}>
                   {t.label}
                 </button>
@@ -1182,15 +1182,15 @@ function TemplateTab({ onNotify }: {
             {previewTab !== "prod" && (
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
+                  <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700">
                     {["SKU Code","Name VN","Name EN","COGS","Curr.","Days","Data","Throttle","Vendor SKU"].map(h => (
                       <th key={h} className="px-3 py-2 text-left font-medium text-gray-400 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-50 dark:divide-slate-700">
                   {(previewTab === "us" ? previewRows.us : previewRows.vn).map((r, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
+                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
                       <td className="px-3 py-2 font-mono text-brand-700 whitespace-nowrap">{r.sku}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{r.name_vn}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-gray-500">{r.name_en}</td>
@@ -1233,7 +1233,7 @@ function TemplateTab({ onNotify }: {
                   ].map(([k, v]) => (
                     <div key={k} className="flex gap-2">
                       <span className="text-gray-400 min-w-[160px]">{k}</span>
-                      <span className="font-medium text-gray-800">{v || <span className="text-red-400">chưa nhập</span>}</span>
+                      <span className="font-medium text-gray-800 dark:text-slate-100">{v || <span className="text-red-400">chưa nhập</span>}</span>
                     </div>
                   ))}
                 </div>
@@ -1256,7 +1256,7 @@ function TemplField({ label, value, onChange, placeholder }: {
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-slate-300 mb-1">{label}</label>
       <input
         type="text"
         value={value}
@@ -1396,7 +1396,7 @@ function PromotionsTab({ onNotify }: {
           className={`px-4 py-2 text-sm rounded-xl border font-medium transition-colors ${
             onlyHas
               ? "bg-brand-50 border-brand-300 text-brand-700"
-              : "border-gray-300 text-gray-600 hover:border-gray-400"
+              : "border-gray-300 text-gray-600 dark:text-slate-300 hover:border-gray-400"
           }`}
         >
           {onlyHas ? "Có khuyến mãi" : "Tất cả SP"}
@@ -1405,10 +1405,10 @@ function PromotionsTab({ onNotify }: {
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
+            <tr className="text-left text-xs text-gray-500 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
               <th className="px-4 py-3 font-medium">Mã SP</th>
               <th className="px-4 py-3 font-medium">Vendor</th>
               <th className="px-4 py-3 font-medium">Loại</th>
@@ -1417,7 +1417,7 @@ function PromotionsTab({ onNotify }: {
               <th className="px-4 py-3 font-medium text-right">Thao tác</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
             {loading ? (
               [...Array(6)].map((_, i) => (
                 <tr key={i}><td colSpan={6} className="px-4 py-3">
@@ -1427,7 +1427,7 @@ function PromotionsTab({ onNotify }: {
             ) : items.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Không có dữ liệu</td></tr>
             ) : items.map(p => (
-              <tr key={p.product_code} className={`hover:bg-gray-50 transition-colors ${editing === p.product_code ? "bg-brand-50/40" : ""}`}>
+              <tr key={p.product_code} className={`hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors ${editing === p.product_code ? "bg-brand-50/40" : ""}`}>
                 <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">{p.product_code}</td>
                 <td className="px-4 py-3">
                   {p.vendor_code && (
@@ -1466,7 +1466,7 @@ function PromotionsTab({ onNotify }: {
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <span className={`text-sm whitespace-pre-wrap ${p.telco_perks ? "text-gray-800" : "text-gray-300 italic"}`}>
+                      <span className={`text-sm whitespace-pre-wrap ${p.telco_perks ? "text-gray-800 dark:text-slate-100" : "text-gray-300 italic"}`}>
                         {p.telco_perks || "Chưa có"}
                       </span>
                       {(p.telco_perks_start || p.telco_perks_end) && (
@@ -1531,9 +1531,9 @@ function PromotionsTab({ onNotify }: {
           <span>Trang {page}/{totalPages}</span>
           <div className="flex gap-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronLeft size={15} /></button>
+              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronLeft size={15} /></button>
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-              className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-40"><ChevronRight size={15} /></button>
+              className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronRight size={15} /></button>
           </div>
         </div>
       )}
@@ -1663,7 +1663,7 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
     <div className="space-y-4 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-gray-800">Lịch gửi Lark tự động</h3>
+          <h3 className="font-semibold text-gray-800 dark:text-slate-100">Lịch gửi Lark tự động</h3>
           <p className="text-xs text-gray-400 mt-0.5">Gemini tạo nội dung → gửi Lark theo lịch cron (UTC)</p>
         </div>
         <button onClick={openAdd}
@@ -1675,27 +1675,27 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
       {/* Form */}
       {showForm && (
         <div className="bg-white border border-brand-200 rounded-xl p-5 space-y-4">
-          <h4 className="font-semibold text-sm text-gray-800">{editId ? "Sửa lịch" : "Thêm lịch mới"}</h4>
+          <h4 className="font-semibold text-sm text-gray-800 dark:text-slate-100">{editId ? "Sửa lịch" : "Thêm lịch mới"}</h4>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-600 block mb-1">Tên lịch *</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-slate-300 block mb-1">Tên lịch *</label>
               <input type="text" value={form.name || ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="VD: Báo cáo doanh thu thứ Hai"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-600 block mb-1">Prompt Gemini *</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-slate-300 block mb-1">Prompt Gemini *</label>
               <textarea rows={3} value={form.prompt || ""} onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
                 placeholder="VD: Tóm tắt hiệu suất kinh doanh tuần này trong 3 câu ngắn bằng tiếng Việt"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-600 block mb-1">Lịch gửi (UTC)</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-slate-300 block mb-1">Lịch gửi (UTC)</label>
               <div className="flex gap-2 flex-wrap">
                 {["daily","weekly","monthly","custom"].map(m => (
                   <button key={m} onClick={() => setSchedMode(m)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                      schedMode === m ? "bg-brand-600 text-white border-brand-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                      schedMode === m ? "bg-brand-600 text-white border-brand-600" : "bg-white text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50"
                     }`}>
                     {m === "daily" ? "Hàng ngày" : m === "weekly" ? "Hàng tuần" : m === "monthly" ? "Hàng tháng" : "Custom cron"}
                   </button>
@@ -1706,14 +1706,14 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                   <div>
                     <label className="text-[10px] text-gray-400 block mb-0.5">Giờ gửi</label>
                     <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
-                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none" />
+                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none" />
                   </div>
                 )}
                 {schedMode === "weekly" && (
                   <div>
                     <label className="text-[10px] text-gray-400 block mb-0.5">Thứ</label>
                     <select value={schedDow} onChange={e => setSchedDow(e.target.value)}
-                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none">
+                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none">
                       {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
                     </select>
                   </div>
@@ -1722,7 +1722,7 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                   <div>
                     <label className="text-[10px] text-gray-400 block mb-0.5">Ngày</label>
                     <input type="number" min={1} max={28} value={schedDom} onChange={e => setSchedDom(e.target.value)}
-                      className="w-16 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none" />
+                      className="w-16 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none" />
                   </div>
                 )}
                 {schedMode === "custom" && (
@@ -1730,7 +1730,7 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                     <label className="text-[10px] text-gray-400 block mb-0.5">Cron expression (UTC)</label>
                     <input type="text" value={customCron} onChange={e => setCustomCron(e.target.value)}
                       placeholder="0 9 * * 1"
-                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none font-mono" />
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none font-mono" />
                   </div>
                 )}
               </div>
@@ -1739,25 +1739,25 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
               </p>
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Lark Webhook URL (optional)</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-slate-300 block mb-1">Lark Webhook URL (optional)</label>
               <input type="text" value={form.lark_webhook_url || ""} onChange={e => setForm(f => ({ ...f, lark_webhook_url: e.target.value }))}
                 placeholder="https://open.larksuite.com/open-apis/bot/v2/hook/..."
-                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full px-3 py-2 text-xs border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Keyword prefix (optional)</label>
+              <label className="text-xs font-medium text-gray-600 dark:text-slate-300 block mb-1">Keyword prefix (optional)</label>
               <input type="text" value={form.lark_keyword || ""} onChange={e => setForm(f => ({ ...f, lark_keyword: e.target.value }))}
                 placeholder="VD: 📊 Báo cáo:"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           </div>
-          <div className="flex gap-2 pt-2 border-t border-gray-100">
+          <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-slate-700">
             <button onClick={save}
               className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition-colors">
               <Save size={14} className="inline mr-1.5" />{editId ? "Cập nhật" : "Lưu lịch"}
             </button>
             <button onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium rounded-xl transition-colors">
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 dark:text-slate-300 text-sm font-medium rounded-xl transition-colors">
               Hủy
             </button>
           </div>
@@ -1766,20 +1766,20 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
 
       {/* List */}
       {messages.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200">
+        <div className="text-center py-10 text-gray-400 text-sm bg-gray-50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
           <Clock size={32} className="mx-auto mb-2 opacity-30" />
           Chưa có lịch gửi nào
         </div>
       ) : (
         <div className="space-y-2">
           {messages.map(msg => (
-            <div key={msg.id} className={`bg-white border rounded-xl p-4 transition-all ${msg.is_active ? "border-gray-200" : "border-dashed border-gray-200 opacity-60"}`}>
+            <div key={msg.id} className={`bg-white border rounded-xl p-4 transition-all ${msg.is_active ? "border-gray-200 dark:border-slate-700" : "border-dashed border-gray-200 dark:border-slate-700 opacity-60"}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${msg.is_active ? "bg-emerald-400" : "bg-gray-300"}`} />
-                    <span className="font-semibold text-sm text-gray-800 truncate">{msg.name}</span>
-                    <span className="font-mono text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 shrink-0">
+                    <span className="font-semibold text-sm text-gray-800 dark:text-slate-100 truncate">{msg.name}</span>
+                    <span className="font-mono text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 dark:border-slate-700 shrink-0">
                       {msg.cron_expression}
                     </span>
                   </div>
@@ -1795,11 +1795,11 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                     {testingId === msg.id ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
                   </button>
                   <button onClick={() => toggle(msg)} title={msg.is_active ? "Tắt" : "Bật"}
-                    className={`p-1.5 rounded-lg transition-colors ${msg.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-400 hover:bg-gray-50"}`}>
+                    className={`p-1.5 rounded-lg transition-colors ${msg.is_active ? "text-emerald-500 hover:bg-emerald-50" : "text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50"}`}>
                     <RefreshCw size={14} />
                   </button>
                   <button onClick={() => openEdit(msg)} title="Sửa"
-                    className="p-1.5 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors">
+                    className="p-1.5 text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors">
                     <Pencil size={14} />
                   </button>
                   <button onClick={() => setConfirmDelId(msg.id)} title="Xóa"
@@ -1816,14 +1816,14 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
       {/* Confirm xóa lịch (thay confirm() native — đồng bộ pattern modal của app) */}
       {confirmDelId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-overlay-in" onClick={() => !deleting && setConfirmDelId(null)}>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-[340px] p-5 animate-modal-in" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-[340px] p-5 animate-modal-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center"><Trash2 className="w-4 h-4 text-rose-500" /></div>
-              <h3 className="font-bold text-slate-800 text-sm">Xóa lịch gửi?</h3>
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Xóa lịch gửi?</h3>
             </div>
             <p className="text-xs text-slate-500 mb-4">Bạn chắc chắn muốn xóa lịch gửi tin nhắn này? Thao tác không thể hoàn tác.</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelId(null)} disabled={deleting} className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Hủy</button>
+              <button onClick={() => setConfirmDelId(null)} disabled={deleting} className="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg disabled:opacity-50">Hủy</button>
               <button onClick={doDelete} disabled={deleting} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-50">
                 {deleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}Xóa
               </button>
