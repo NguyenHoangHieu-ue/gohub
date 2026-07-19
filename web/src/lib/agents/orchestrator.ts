@@ -3,7 +3,7 @@ import { AGENTS }                   from "./agents"
 import { buildToolContext }         from "./context"
 import { runBIAnalyst }             from "./bi-analyst"
 import { runDataExplorer }          from "./data-explorer"
-import { NOTICE_MULTI, isFailureText, guidanceFor, ensureAnswer } from "./graph"
+import { NOTICE_MULTI, isFailureText, guidanceFor, ensureAnswer, AGENT_EXAMPLES } from "./graph"
 import type { ExtractedParams }     from "./router"
 import type { AgentId, UserRole }   from "./types"
 
@@ -108,7 +108,11 @@ export async function runMulti(c: MultiCtx): Promise<string> {
       const agentName = AGENTS[agentId].name
       try {
         const toolCtx = await buildToolContext(agentId, c.params, c.refCache, c.isCost, c.lastMsg, c.channel)
-        const instr   = assembleInstruction(agentId, toolCtx, c.name, c.role, c.userSuffix ?? "", c.tempRule ?? "")
+        // FOCUS: câu ghép được nhiều agent xử lý → mỗi agent CHỈ lo phần chuyên môn của mình,
+        // tránh bị phân tâm bởi phần của agent khác (vd bi bị kéo sang catalog WM → hụt doanh thu).
+        const role = AGENT_EXAMPLES[agentId]?.role ?? "phần thuộc chuyên môn của bạn"
+        const focus = `\n\n━━━ LƯU Ý ĐA-AGENT ━━━\nCâu hỏi của user gồm NHIỀU phần do nhiều trợ lý xử lý. BẠN CHỈ tập trung trả lời phần thuộc chuyên môn: ${role}. Các phần KHÁC đã có trợ lý khác lo — BỎ QUA hoàn toàn, KHÔNG trả lời và KHÔNG nói "không có thông tin" cho phần ngoài chuyên môn của bạn.`
+        const instr   = assembleInstruction(agentId, toolCtx, c.name, c.role, c.userSuffix ?? "", (c.tempRule ?? "") + focus)
         const text    = await runOneAgent(agentId, instr, c.geminiHistory, c.lastMsg, c.role, c.isCost)
         return { agentName, text }
       } catch {
