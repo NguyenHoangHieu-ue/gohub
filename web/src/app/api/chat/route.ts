@@ -10,6 +10,7 @@ import { runBIAnalyst }                        from "@/lib/agents/bi-analyst"
 import { runDataExplorer }                     from "@/lib/agents/data-explorer"
 import { guardCheck, canViewCogs }             from "@/lib/agents/guardian"
 import { getChannelFromRole }                  from "@/lib/agents/tools"
+import { runMulti, NOTICE_MULTI, ensureAnswer, isFailureText, guidanceFor } from "@/lib/agents/orchestrator"
 import type { Message, UserRole }              from "@/lib/agents/types"
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
       guardCheck(lastMsg, role, department),
       canViewCogs(role),
     ])
-    const { agentId, agentName, params, needsClarification, clarificationQuestion } = routed
+    const { agentId, agentName, params, needsClarification, clarificationQuestion, agentIds, multi } = routed
     const agent = AGENTS[agentId]
 
     const encoderEarly = new TextEncoder()
@@ -64,20 +65,12 @@ export async function POST(req: NextRequest) {
 
     // Pre-execute tools, build context
     const channel = getChannelFromRole(role)
-    const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg, channel)
 
     // Quy tắc tạm thời 28/6–8/7/2026
     const _now = new Date()
     const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
       ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
       : ""
-
-    const systemInstruction = [
-      agent.systemPrompt,
-      toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
-      `\nNgười dùng: ${name} (vai trò: ${role})`,
-      _tempRule,
-    ].join("")
 
     const geminiHistory = history.map((m: Message) => ({
       role:  m.role === "user" ? "user" as const : "model" as const,
@@ -86,16 +79,49 @@ export async function POST(req: NextRequest) {
 
     const encoder = new TextEncoder()
 
+    // ── Đa-agent: câu chạm nhiều lĩnh vực → chạy N agent rồi tổng hợp ─────────────
+    // Báo user "đợi xíu" ngay, rồi trả câu tổng hợp (non-stream vì cần chờ đủ N agent).
+    if (multi) {
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            controller.enqueue(encoder.encode(`__AGENT__:${agentId}:${agentName}\n`))
+            controller.enqueue(encoder.encode(`${NOTICE_MULTI}\n\n`))
+            const text = await runMulti({
+              agentIds, params, refCache, isCost, role, name, lastMsg, geminiHistory, channel,
+              tempRule: _tempRule,
+            })
+            controller.enqueue(encoder.encode(text))
+            controller.close()
+          } catch (err: any) {
+            const msg = role === "admin" ? `Lỗi tổng hợp: ${err.message}` : guidanceFor(agentId)
+            controller.enqueue(encoder.encode(msg))
+            controller.close()
+          }
+        },
+      })
+      return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+    }
+
+    const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg, channel)
+
+    const systemInstruction = [
+      agent.systemPrompt,
+      toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
+      `\nNgười dùng: ${name} (vai trò: ${role})`,
+      _tempRule,
+    ].join("")
+
     // ── bi-analyst / data-explorer: function calling (non-streaming) ──
     if (agentId === "bi-analyst" || agentId === "data-explorer") {
       const stream = new ReadableStream({
         async start(controller) {
           try {
             controller.enqueue(encoder.encode(`__AGENT__:${agentId}:${agentName}\n`))
-            const text = agentId === "data-explorer"
+            const raw = agentId === "data-explorer"
               ? await runDataExplorer(systemInstruction, geminiHistory, lastMsg, role, isCost)
               : await runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
-            controller.enqueue(encoder.encode(text))
+            controller.enqueue(encoder.encode(ensureAnswer(raw, agentId)))
             controller.close()
           } catch (err: any) {
             const msg = role === "admin" ? `Lỗi ${agentId}: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
@@ -116,10 +142,13 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           controller.enqueue(encoder.encode(`__AGENT__:${agentId}:${agentName}\n`))
+          let acc = ""
           for await (const chunk of result.stream) {
             const text = chunk.text()
-            if (text) controller.enqueue(encoder.encode(text))
+            if (text) { acc += text; controller.enqueue(encoder.encode(text)) }
           }
+          // Đảm bảo có câu trả lời: nếu agent trả rỗng/thất bại → thêm hướng dẫn cách hỏi.
+          if (isFailureText(acc)) controller.enqueue(encoder.encode(`\n\n${guidanceFor(agentId)}`))
           controller.close()
         } catch (err: any) {
           const msg = role === "admin" ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
