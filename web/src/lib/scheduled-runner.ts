@@ -58,32 +58,6 @@ ${dataBlock}`
   return report
 }
 
-// Khớp 1 biểu thức cron 5 trường với thời điểm `d`. Hỗ trợ *, danh sách (a,b), khoảng (a-b), step (*/n hoặc a-b/n).
-// `d` nên là thời gian theo MÚI GIỜ MUỐN KHỚP (đọc qua getUTC* — caller tự shift sang ICT nếu cần).
-export function isCronDue(expr: string, d: Date): boolean {
-  const parts = (expr || "").trim().split(/\s+/)
-  if (parts.length !== 5) return false
-  const [min, hr, dom, mon, dow] = parts
-
-  const matchField = (field: string, val: number, lo0: number, hi0: number): boolean =>
-    field.split(",").some(part => {
-      if (part === "*") return true
-      if (part.includes("/")) {
-        const [range, stepStr] = part.split("/")
-        const step = parseInt(stepStr, 10) || 1
-        const [lo, hi] = range === "*" ? [lo0, hi0] : range.split("-").map(Number)
-        if (val < lo || val > (hi ?? lo)) return false
-        return (val - lo) % step === 0
-      }
-      if (part.includes("-")) { const [lo, hi] = part.split("-").map(Number); return val >= lo && val <= hi }
-      return parseInt(part, 10) === val
-    })
-
-  return (
-    matchField(min, d.getUTCMinutes(), 0, 59) &&
-    matchField(hr,  d.getUTCHours(),   0, 23) &&
-    matchField(dom, d.getUTCDate(),    1, 31) &&
-    matchField(mon, d.getUTCMonth() + 1, 1, 12) &&
-    matchField(dow, d.getUTCDay(),     0, 6)
-  )
-}
+// Khớp lịch cron (isCronDue) + đến-hạn-kể-từ-last_run (isDueSince) tách ở scheduled-cron.ts (leaf, thuần).
+// Re-export để các importer cũ (route cron) vẫn lấy được từ đây.
+export { isCronDue, isDueSince } from "./scheduled-cron"

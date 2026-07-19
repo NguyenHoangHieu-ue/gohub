@@ -1,0 +1,24 @@
+name: Fire Scheduled Lark Messages
+
+# Vercel Cron trên gói hiện tại chỉ chạy 1 lần/ngày → KHÔNG đủ cho message đặt giờ tùy ý
+# (08:01 daily, 09:00 thứ Hai, 08:00 ngày 15…). GitHub Actions hit endpoint mỗi 15' để
+# scheduler đến-hạn-thì-chạy (logic isDueSince catch-up + dedup qua last_run_at).
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
+  workflow_dispatch:           # cho phép bấm chạy tay từ GitHub UI
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit scheduled-messages cron endpoint
+        run: |
+          RESP=$(curl -s -w "\n%{http_code}" \
+            https://gohub-intel.vercel.app/api/cron/scheduled-messages \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          BODY=$(echo "$RESP" | head -n -1)
+          CODE=$(echo "$RESP" | tail -n 1)
+          echo "HTTP $CODE"
+          echo "$BODY"
+          test "$CODE" = "200"
