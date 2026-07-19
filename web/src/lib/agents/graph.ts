@@ -260,10 +260,13 @@ export const NOTICE_MULTI =
 
 // ─── Phát hiện câu trả lời RỖNG / THẤT BẠI ──────────────────────────────────────
 const FAILURE_RE = /hiếu đang fix|đang xử lý, vui lòng|hệ thống đang xử lý|không tìm thấy|không có dữ liệu|không có kết quả|no data|not found|lỗi (bi-analyst|data-explorer|hệ thống)/i
+// "HỨA sẽ truy vấn" mà không đưa số liệu (bi né chạy SQL) = thất bại, BẤT KỂ độ dài.
+const PUNT_RE = /chưa kịp|để (tôi|mình|hệ thống)[^.!?]{0,25}(truy vấn|quét)|phản hồi lại để[^.!?]{0,40}(truy vấn|quét)|chưa (thực hiện|tiến hành)[^.!?]{0,20}(truy vấn|câu lệnh)/i
 
 export function isFailureText(text: string): boolean {
   const t = (text || "").trim()
   if (t.length < 4) return true
+  if (PUNT_RE.test(t)) return true
   // Câu ngắn + chứa dấu hiệu thất bại → coi như không trả lời được.
   return t.length < 160 && FAILURE_RE.test(t)
 }

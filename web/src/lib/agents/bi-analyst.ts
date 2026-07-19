@@ -124,11 +124,15 @@ export async function runBIAnalyst(
 
   const chat = model.startChat({ history: geminiHistory })
   let result = await chat.sendMessage(lastMsg)
+  let anyToolCall = false
 
-  // Function calling loop — max 10 iterations (query so sánh nhiều kỳ / WoW cần nhiều lượt tool)
-  for (let i = 0; i < 10; i++) {
+  // Function calling loop — max 10 iterations (query so sánh nhiều kỳ / WoW cần nhiều lượt tool).
+  // Tách thành hàm để có thể CHẠY LẠI sau khi nudge (chống bi "hứa sẽ truy vấn" mà không gọi tool).
+  async function processToolCalls() {
+   for (let i = 0; i < 10; i++) {
     const calls = result.response.functionCalls()
     if (!calls || calls.length === 0) break
+    anyToolCall = true
 
     const parts: any[] = []
 
@@ -216,6 +220,20 @@ export async function runBIAnalyst(
     }
 
     result = await chat.sendMessage(parts)
+   }
+  }
+
+  await processToolCalls()
+
+  // Chống bi "HỨA sẽ truy vấn" mà KHÔNG gọi tool nào (né chạy SQL) → nudge buộc gọi executeSQL rồi chạy lại loop.
+  const PUNT_RE = /chưa kịp|để (tôi|mình|hệ thống)[^.!?]{0,25}(truy vấn|quét)|phản hồi lại để[^.!?]{0,40}(truy vấn|quét)|sẽ (tiến hành )?truy vấn|chưa (thực hiện|tiến hành)[^.!?]{0,20}(truy vấn|quét|câu lệnh)/i
+  if (!anyToolCall && PUNT_RE.test(result.response.text())) {
+    try {
+      result = await chat.sendMessage(
+        "Bạn CÓ sẵn công cụ executeSQL và ĐƯỢC PHÉP truy vấn gohub_dw NGAY BÂY GIỜ. TUYỆT ĐỐI KHÔNG hứa 'sẽ truy vấn' hay yêu cầu user phản hồi lại. HÃY gọi executeSQL ngay để lấy số liệu thật rồi trả lời hoàn chỉnh."
+      )
+      await processToolCalls()
+    } catch { /* giữ nguyên → xử lý ở tầng gọi */ }
   }
 
   // Fallback chống câu trả lời RỖNG: Gemini đôi khi kết thúc function-calling mà không sinh text
