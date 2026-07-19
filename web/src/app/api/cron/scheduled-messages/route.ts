@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { runScheduledMessage, isCronDue } from "@/lib/scheduled-runner"
+import { runScheduledMessage, isDueSince } from "@/lib/scheduled-runner"
 
-// Vercel Cron gọi endpoint này định kỳ (xem vercel.json). Tìm các scheduled message ĐANG active + ĐẾN GIỜ
-// (so cron_expression theo múi giờ Asia/Ho_Chi_Minh, UTC+7) rồi chạy. Vercel gửi Authorization: Bearer $CRON_SECRET.
+// Scheduler (GitHub Actions mỗi 15' + Vercel Cron backstop) gọi endpoint này định kỳ. Tìm các scheduled
+// message ĐANG active + ĐẾN HẠN kể từ lần chạy cuối (so cron_expression theo ICT/UTC+7, catch-up chịu được
+// scheduler chạy thưa/trễ) rồi chạy. Xác thực: Authorization: Bearer $CRON_SECRET.
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const due = (messages || []).filter(m => isCronDue(m.cron_expression, ict))
+  const due = (messages || []).filter(m => isDueSince(m.cron_expression, m.last_run_at, ict))
   const results: { id: string; name: string; ok: boolean; error?: string }[] = []
 
   for (const msg of due) {
