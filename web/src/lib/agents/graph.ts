@@ -84,7 +84,10 @@ const RE = {
   explainGroup: /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/,
   dataExplore: /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|liet ke.{0,12}(wiki|trang wiki|san pham|sku|listing|item|nuoc|vendor|ncc)|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|item|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/,
   usage:     /luong su dung|luong dung|muc (su )?dung|su dung data|data usage|3hk data usage|tieu thu data|usage.*3hk|3hk.*usage|thong ke.*data_usage_log|query.*data_usage/,
-  definiteBi: /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bso luong (ban|sim|esim|don|cai)\b|\btheo kho\b|\btrong kho\b|\btai kho\b|\bo kho\b|kho (ha noi|hn|hcm|da nang|tong|sai gon|tphcm|ho chi minh)|theo chi nhanh|trong chi nhanh|bao cao.{0,20}(theo (kho|kenh|thang|quy|nhan vien|nam)|doanh thu|doanh so|ban hang)|\bcontribution\b|ban[a-z0-9 ]{0,20}kenh nao|tren kenh nao|kenh nao ban|thuoc kenh nao|kenh ban nao|duoc ban (o|tren|tai|qua)|ban qua kenh|ban tren kenh|theo kenh (ban|nao)/,
+  // BI KHÔNG mơ hồ với gap — luôn ép bi kể cả khi câu nhắc vendor (WM/3HK) → cho phép multi gap+bi.
+  biStrong: /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bcontribution\b|\btheo kho\b|\btrong kho\b|\btai kho\b|\bo kho\b|kho (ha noi|hn|hcm|da nang|tong|sai gon|tphcm|ho chi minh)|theo chi nhanh|trong chi nhanh|bao cao.{0,20}(theo (kho|kenh|thang|quy|nhan vien|nam)|doanh thu|doanh so|ban hang)|ban[a-z0-9 ]{0,20}kenh nao|tren kenh nao|kenh nao ban|thuoc kenh nao|kenh ban nao|duoc ban (o|tren|tai|qua)|ban qua kenh|ban tren kenh|theo kenh (ban|nao)/,
+  // BI mơ hồ với gap ("bao nhiêu gói" có thể là gap "gói chưa tạo") — chỉ ép bi khi KHÔNG có tín hiệu gap.
+  biWeak: /\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bso luong (ban|sim|esim|don|cai)\b/,
   rankBi:    /ban chay nhat|ban nhieu nhat|mua nhieu nhat|mua nhieu|khach.{0,12}mua nhieu|top \d* ?(sku|san pham|kenh|nhan vien|khach)/,
   genericBi: /doanh thu|doanh so|don hang|kenh ban|nhan vien sales|fulfillment|target thang|revenue|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|top sku|san pham ban chay|strategic partner|klook|traveloka|thang nay bao nhieu|tuan nay|hom nay bao nhieu|so sanh thang|ban duoc bao nhieu|so luong ban|xuat ban|lich su ban|thong ke ban hang|bao nhieu don|so don hang|mua bao nhieu|ban hang tren kenh|kenh nao ban|ban tren kenh|hieu qua ban hang|san pham ban duoc|cm1|contribution margin/,
   gap:       /\bgap\b|ncc co\b|chua co\b|chua import|chua nhap|chua tao|chua duoc.{0,12}tao|worldmove co\b|wm co\b|3hk co\b|so sanh ncc|con cung cap|con goi\b|vendor co\b/,
@@ -112,7 +115,8 @@ const RULES: Rule[] = [
   { intent: "explain_group",   tier: 5, test: (t, f) => f.hasGroupCode && RE.explainGroup.test(t) },
   { intent: "data_explore",    tier: 5, test: (t, f) => RE.dataExplore.test(t) && !f.hasCode },
   { intent: "usage_3hk",       tier: 5, test: (t) => RE.usage.test(t) },
-  { intent: "bi_analytics",    tier: 5, test: (t) => RE.definiteBi.test(t) && !RE.gap.test(t) },
+  { intent: "bi_analytics",    tier: 5, test: (t) => RE.biStrong.test(t) },                    // doanh thu/revenue… — kể cả có vendor
+  { intent: "bi_analytics",    tier: 5, test: (t) => RE.biWeak.test(t) && !RE.gap.test(t) },   // bao nhiêu gói/số bán — cần tránh gap
 
   { intent: "gap_analysis",    tier: 4, test: (t) => RE.gap.test(t) },
   { intent: "product_lookup",  tier: 4, test: (_t, f) => f.hasCode },
@@ -209,6 +213,7 @@ export function scoreAndSelect(
   const productish = RE.productish.test(normText)   // "gói/sim/đi/list" → thật sự đòi sản phẩm
   const extraAgents: AgentId[] = []
   const seen = new Set<AgentId>([primary.agent])
+  const domainsCovered = new Set<string>([DOMAIN[primary.agent]])
   const secondaries = picks
     .filter(p => p.agent !== primary.agent && p.intent !== "greeting")
     .sort((a, b) => (b.tier - a.tier) || (rank(a.intent) - rank(b.intent)))
@@ -219,21 +224,27 @@ export function scoreAndSelect(
     // Mã đi kèm câu BI = FILTER cho BI, KHÔNG phải lookup riêng → bỏ.
     if (primary.agent === "bi-analyst" && s.intent === "product_lookup") continue
 
-    // Điều kiện đủ mạnh để coi là 1 chủ đề riêng:
-    const strong    = s.tier >= 4                                   // gap/code/bi/data/usage/explain-group
-    const productOk = s.intent === "product_search" && productish   // đòi sản phẩm RÕ RÀNG (không chỉ vì có nước)
-    const midOk     = s.tier === 3                                  // ncc / cogs / explain / bi-chung
-    if (!strong && !productOk && !midOk) continue
+    // Chỉ intent ĐỦ MẠNH mới đáng tách thành 1 chủ đề riêng (chạy thêm agent):
+    //   · tier ≥ 4  (gap / mã cụ thể / definite-BI / data-explore / usage / explain-group / rank)
+    //   · product_search KÈM từ đòi sản phẩm rõ ràng ("gói/sim/đi/list") — không chỉ vì có tên nước
+    //   · system_explain ("X là gì / giải thích") đứng riêng
+    // CỐ TÌNH loại tier-3 yếu (giá vốn / ncc / BI-chung) — thường là FILTER hoặc nằm trong phạm vi
+    // agent primary → tránh multi thừa (vd "doanh thu VÀ lợi nhuận" không kéo thêm tra-cuu).
+    const strong    = s.tier >= 4
+    const productOk = s.intent === "product_search" && productish
+    const explainOk = s.intent === "system_explain"
+    if (!strong && !productOk && !explainOk) continue
 
-    // Chỉ tổng hợp khi KHÁC domain (analytics + catalog + knowledge) — cùng domain
-    // để 1 agent xử lý, tránh chạy thừa.
-    if (DOMAIN[s.agent] === DOMAIN[primary.agent]) continue
+    // Mỗi DOMAIN (catalog / analytics / knowledge) chỉ lấy 1 agent — đa-agent = spanning
+    // các domain KHÁC nhau; 2 intent cùng domain để 1 agent xử lý (tránh chạy trùng).
+    if (domainsCovered.has(DOMAIN[s.agent])) continue
 
     // Cần liên từ để tách 2 chủ đề (trừ khi cả hai đều rất mạnh tier ≥ 5).
     if (!hasConj && !(s.tier >= 5 && primary.tier >= 5)) continue
 
     extraAgents.push(s.agent)
     seen.add(s.agent)
+    domainsCovered.add(DOMAIN[s.agent])
   }
 
   return { primary, extraAgents, fired: picks }

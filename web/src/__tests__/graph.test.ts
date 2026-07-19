@@ -63,25 +63,63 @@ describe("capability graph — routing xác định (không LLM)", () => {
   })
 })
 
-describe("capability graph — đa-agent", () => {
-  test("sản phẩm + doanh thu (khác domain, có liên từ) → multi", () => {
-    const r = pick("đi Nhật có gói eSIM nào và doanh thu tháng này bao nhiêu")
-    expect(r.extraAgents.length).toBeGreaterThanOrEqual(1)
-    const agents = [r.primary.agent, ...r.extraAgents]
-    expect(agents).toContain("bi-analyst")
-    expect(agents).toContain("tu-van")
+describe("capability graph — đa-agent (tune ngưỡng bằng câu thực tế)", () => {
+  const agentsOf = (m: string) => {
+    const r = pick(m)
+    return { primary: r.primary.agent as string, all: new Set<string>([r.primary.agent, ...r.extraAgents]), multi: r.extraAgents.length > 0 }
+  }
+
+  // ── PHẢI multi (câu chạm ≥2 domain khác nhau, có liên từ) ──
+  const MULTI: [string, string[]][] = [
+    ["đi Nhật có gói eSIM nào và doanh thu tháng này bao nhiêu?",        ["tu-van", "bi-analyst"]],
+    ["gói cho Hàn Quốc là gì và bán được bao nhiêu?",                    ["tu-van", "bi-analyst"]],
+    ["KYC là gì và doanh thu tháng này ra sao?",                         ["giai-dap", "bi-analyst"]],
+    ["WorldMove có gói nào cho Nhật và doanh thu vendor 3HK tháng này?", ["gap-analysis", "bi-analyst"]],
+    ["cho tôi gói đi Thái và đếm xem có bao nhiêu SKU Thái trong hệ thống", ["tu-van", "data-explorer"]],
+  ]
+
+  // ── KHÔNG multi (single-agent) — gồm các bẫy false-positive ──
+  const SINGLE: [string, string][] = [
+    ["đi Nhật có gói eSIM nào?",                              "tu-van"],
+    ["doanh thu tháng này bao nhiêu?",                        "bi-analyst"],
+    ["1CKORCUF01005 là mã gì?",                               "tra-cuu"],
+    ["KYC là gì?",                                            "giai-dap"],
+    ["WorldMove có gói nào cho Thái Lan?",                    "gap-analysis"],
+    ["giá vốn và giá bán của mã 1CJPNWM101001",              "tra-cuu"],  // cùng domain → 1 agent
+    ["doanh thu và lợi nhuận tháng này",                      "bi-analyst"], // "lợi nhuận" KHÔNG kéo tra-cuu
+    ["con 1CKORCUF01005 bán được bao nhiêu và trên kênh nào", "bi-analyst"], // mã = filter
+    ["doanh thu Nhật và Hàn tháng này",                       "bi-analyst"], // nước = filter
+    ["so sánh gói Nhật và Hàn",                               "tu-van"],     // cùng domain
+    ["top 5 kênh bán doanh thu cao nhất tháng này",           "bi-analyst"],
+  ]
+
+  test("MULTI: chạy đúng bộ agent kỳ vọng", () => {
+    const fails: string[] = []
+    for (const [q, want] of MULTI) {
+      const { all, multi } = agentsOf(q)
+      const ok = multi && want.every(a => all.has(a))
+      if (!ok) fails.push(`${q} → got {${[...all].join(",")}} muốn ⊇ {${want.join(",")}}`)
+    }
+    if (fails.length) console.log("❌ MULTI\n" + fails.join("\n"))
+    expect(fails).toEqual([])
   })
 
-  test("nước chỉ là FILTER cho BI (không đòi sản phẩm) → KHÔNG multi", () => {
-    const r = pick("doanh thu Nhật và Hàn tháng này")
-    expect(r.primary.agent).toBe("bi-analyst")
-    expect(r.extraAgents).toEqual([])
+  test("SINGLE: KHÔNG multi + đúng primary agent", () => {
+    const fails: string[] = []
+    for (const [q, want] of SINGLE) {
+      const { primary, multi } = agentsOf(q)
+      if (multi || primary !== want) fails.push(`${q} → primary=${primary} multi=${multi} (muốn ${want}, single)`)
+    }
+    if (fails.length) console.log("❌ SINGLE\n" + fails.join("\n"))
+    expect(fails).toEqual([])
   })
 
-  test("mã SKU + câu BI = filter, KHÔNG tách tra-cuu", () => {
-    const r = pick("con 1CKORCUF01005 bán được bao nhiêu và trên kênh nào")
-    expect(r.primary.agent).toBe("bi-analyst")
-    expect(r.extraAgents).not.toContain("tra-cuu")
+  test("mỗi domain chỉ 1 agent (không chạy trùng catalog)", () => {
+    // "WM có gói Nhật ... doanh thu 3HK" — dù có cả gap + product_search (đều catalog) → chỉ 1 catalog agent
+    const r = pick("WorldMove có gói nào cho Nhật và doanh thu vendor 3HK tháng này?")
+    const all = [r.primary.agent, ...r.extraAgents]
+    const catalog = all.filter(a => ["tu-van", "tra-cuu", "gap-analysis", "tao-template"].includes(a))
+    expect(catalog.length).toBeLessThanOrEqual(1)
   })
 })
 
