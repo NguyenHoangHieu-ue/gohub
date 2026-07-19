@@ -2,7 +2,7 @@
 import { classify } from "./classifier"
 import type { DataSource } from "./classifier"
 import { COUNTRIES_EXTRA } from "./countries-extra"
-import { scoreAndSelect } from "./graph"
+import { scoreAndSelect, hasConjunction } from "./graph"
 import type { SignalFlags } from "./graph"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
@@ -472,6 +472,36 @@ export function toFlags(params: ExtractedParams): SignalFlags {
 // Chạy song song với getRefCache() trong chat route → zero extra latency.
 export async function route(message: string, history: Message[], role: UserRole): Promise<RouteResult> {
   const params = extractParams(message)
+  const nrm    = normalizeText(message)
+
+  // ── FAST-PATH (không gọi LLM) ───────────────────────────────────────────────
+  // Bỏ qua Gemini classify khi tín hiệu đã XÁC ĐỊNH đủ mạnh VÀ câu không có liên
+  // từ ghép → tiết kiệm ~0.5-1.5s cho ~40-50% câu hỏi thường (tra mã, doanh thu,
+  // gap, usage, template…). An toàn vì kết quả TRÙNG KHỚP slow-path:
+  //   · phiếu LLM chỉ là tier-1 → không thể lật primary khi primary.tier ≥ 4;
+  //   · không có liên từ ⇒ LLM cũng không thể thêm agent phụ (đa-agent cần liên từ).
+  // Giữ slow-path (LLM) cho câu mơ hồ cần enrichment (country/sim/data_source) hoặc
+  // cần hỏi lại (tu-van/gap/template thiếu mục tiêu).
+  if (!hasConjunction(nrm)) {
+    const fast = scoreAndSelect(nrm, toFlags(params))   // KHÔNG kèm phiếu LLM
+    const fa   = fast.primary.agent
+    const needsTarget = fa === "tu-van" || fa === "gap-analysis" || fa === "tao-template"
+    const hasSearchSignal = !!(
+      params.country || params.region || params.groupCode ||
+      params.skuCodes?.length || params.productCodes?.length || params.listingCodes?.length ||
+      params.vendor || params.isUnlimited
+    )
+    // tier ≥ 5: tín hiệu không phụ thuộc enrichment (bi/usage/data/template/explain-group) → fast-path.
+    // tier = 4: chỉ fast-path khi đã có search-signal (mã/nước…) — loại rule rankBi (chỉ fire khi
+    //           KHÔNG có signal), tránh lệch slow-path do Gemini có thể thêm country làm rankBi tắt.
+    const strongEnough = fast.primary.tier >= 5 || (fast.primary.tier >= 4 && hasSearchSignal)
+    if (strongEnough && (!needsTarget || hasSearchSignal)) {
+      const fastIds = [fa, ...fast.extraAgents]
+      return { agentId: fa, agentName: AGENT_NAMES[fa], params, needsClarification: false, agentIds: fastIds, multi: fastIds.length > 1 }
+    }
+  }
+
+  // ── SLOW-PATH: câu mơ hồ → gọi Gemini classify (phân loại + enrichment) ──────
   const classified = await classify(message)
 
   // AI country/sim/data_source bổ sung cho params TRƯỚC khi dựng flags
@@ -479,7 +509,6 @@ export async function route(message: string, history: Message[], role: UserRole)
   if (classified.sim_type) params.simType = classified.sim_type
   if (!params.dataSource && classified.data_source) params.dataSource = classified.data_source
 
-  const nrm   = normalizeText(message)
   const flags = toFlags(params)
 
   // ── Chọn agent qua capability graph (deterministic) ─────────────────────────

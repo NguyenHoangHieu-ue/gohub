@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, ComposedChart, Area,
@@ -223,7 +223,7 @@ export default function BODReport() {
     <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
   )
 
-  const processedGroupMargins = (() => {
+  const processedGroupMargins = useMemo(() => {
     const businessGroups = ["B2B", "B2C", "Other"]
     const b2bRows = groupMargins.filter(r => r.group?.startsWith("B2B"))
     const b2bTotalSourceOfTruth = b2bRows.length > 0
@@ -265,7 +265,7 @@ export default function BODReport() {
       if (!row) return null
       return { ...row, subRows: [] as any[] }
     }).filter(Boolean) as any[]
-  })()
+  }, [groupMargins, strategicPerformance])
 
   const ComparisonBadge = ({ current, previous, label }: { current: number, previous?: number, label: string }) => {
     if (previous === undefined || previous === 0) return null

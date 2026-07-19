@@ -160,8 +160,9 @@ export async function GET(req: NextRequest) {
   try {
     const key = `b2c-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}`
     const payload = await cachedQuery(key, async () => {
-      const current = await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
-      if (comparisonType === "none") return current
+      if (comparisonType === "none") {
+        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
+      }
 
       const start = new Date(startDate); const end = new Date(endDate)
       let prevStart: Date, prevEnd: Date
@@ -173,7 +174,11 @@ export async function GET(req: NextRequest) {
         prevStart = new Date(start.getFullYear() - 1, start.getMonth(), start.getDate())
         prevEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
       }
-      const previous = await fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn)
+      // Kỳ hiện tại + kỳ trước độc lập → fetch song song
+      const [current, previous] = await Promise.all([
+        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn),
+        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn),
+      ])
       return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
     }, QUERY_TTL_MIN, noCache(req))
 

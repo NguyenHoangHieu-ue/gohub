@@ -435,6 +435,12 @@ export function B2CPerformance() {
     return summedCosts
   }, [performanceData, monthlyCosts, groupBy])
 
+  // Dữ liệu Pie "Channel Contribution" — memo hoá để không tạo mảng mới + ép Recharts vẽ lại mỗi render/hover
+  const channelContributionData = React.useMemo(
+    () => performanceData.filter(d => d.revenue > 0).slice(0, 8),
+    [performanceData]
+  )
+
   const displayedPerformanceData = showAllPerformance
     ? sortedPerformanceData
     : sortedPerformanceData.slice(0, 10)
@@ -995,7 +1001,7 @@ export function B2CPerformance() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={performanceData.filter(d => d.revenue > 0).slice(0, 8)}
+                    data={channelContributionData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}

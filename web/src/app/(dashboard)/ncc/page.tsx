@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
 import { Truck, Search, ChevronLeft, ChevronRight, RefreshCw, Globe, ChevronDown, X, Upload, CheckCircle2, AlertTriangle, Download, Loader2 } from "lucide-react"
-import * as XLSX from "xlsx"
 import type { ParsedWMItem, ChangedPriceItem, ParsedDatapoolItem } from "@/types/ncc-import"
 import { useToast } from "@/components/toast"
 import { EmptyTableRow } from "@/components/empty-state"
@@ -697,6 +696,7 @@ function WMTab({ role }: { role?: string }) {
         for (const c of cols) obj[c.label] = (p as any)[c.key] ?? ""
         return obj
       })
+      const XLSX = await import("xlsx")   // nạp động: chỉ tải xlsx khi user bấm export
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, "WM Catalog")

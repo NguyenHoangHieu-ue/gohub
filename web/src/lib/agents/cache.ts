@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-const TTL = 30 * 60 * 1000
+// Danh mục NCC/tham chiếu đổi tối đa 1 lần/ngày (sync.py) → TTL dài 2h.
+// Kết hợp Stale-While-Revalidate bên dưới nên hết hạn cũng KHÔNG làm chậm request.
+const TTL = 2 * 60 * 60 * 1000
 
 export interface RefCache {
   supportCountries: any[]
@@ -17,6 +19,7 @@ export interface RefCache {
 }
 
 let _cache: { data: RefCache; at: number } | null = null
+let _refreshing = false   // chặn nhiều refresh nền chạy trùng lúc cache hết hạn
 
 // Fetch tất cả rows vượt Supabase 1000-row cap
 async function fetchAllRows(table: string, select: string, filter?: { col: string; val: string }): Promise<any[]> {
@@ -34,7 +37,28 @@ async function fetchAllRows(table: string, select: string, filter?: { col: strin
 
 export async function getRefCache(): Promise<RefCache> {
   const now = Date.now()
+  // Còn tươi → trả ngay.
   if (_cache && now - _cache.at < TTL) return _cache.data
+
+  // Stale-While-Revalidate: đã có cache (dù hết hạn) → trả NGAY bản cũ cho request
+  // hiện tại + refresh nền (không chặn) → user không phải chờ 12 batch fetch lại.
+  if (_cache) {
+    if (!_refreshing) {
+      _refreshing = true
+      buildCache()
+        .catch(() => {/* refresh nền lỗi → tiếp tục phục vụ bản cũ */})
+        .finally(() => { _refreshing = false })
+    }
+    return _cache.data
+  }
+
+  // Cold start (chưa có cache) → buộc phải fetch đồng bộ.
+  return buildCache()
+}
+
+// Fetch toàn bộ ref data + dựng RefCache rồi ghi vào _cache. Dùng cho cold-start lẫn refresh nền.
+async function buildCache(): Promise<RefCache> {
+  const now = Date.now()
 
   // Fetch các bảng nhỏ song song — countries thêm continent + sub_region
   const [sc, ct, vd, hk, cats] = await Promise.all([

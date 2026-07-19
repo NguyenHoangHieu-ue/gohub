@@ -23,8 +23,9 @@ export async function GET(req: NextRequest) {
   try {
     const key = `bod-group-margin:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
     const payload = await cachedQuery(key, async () => {
-      const current = (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
-      if (comparisonType === "none") return current
+      if (comparisonType === "none") {
+        return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
+      }
 
       const s = new Date(startDate); const e = new Date(endDate)
       let prevStart: Date, prevEnd: Date
@@ -35,9 +36,13 @@ export async function GET(req: NextRequest) {
         prevStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
         prevEnd = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
       }
-      const previous = (await fetchBODGroupMarginData(
-        prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters
-      )).groups
+      // Kỳ hiện tại + kỳ trước độc lập → fetch song song
+      const [currentRes, previousRes] = await Promise.all([
+        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters),
+        fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters),
+      ])
+      const current = currentRes.groups
+      const previous = previousRes.groups
       return current.map(curr => {
         const prev = previous.find(p => p.group === curr.group)
         return { ...curr, prev_revenue: prev?.revenue || 0, prev_margin: prev?.margin || 0 }
