@@ -7,6 +7,7 @@ import { runBIAnalyst }         from "./bi-analyst"
 import { runDataExplorer }      from "./data-explorer"
 import { guardCheck, canViewCogs } from "./guardian"
 import { getChannelFromRole }   from "./tools"
+import { runMulti, ensureAnswer } from "./orchestrator"
 import type { Message, UserRole } from "./types"
 
 export interface AnswerResult {
@@ -34,7 +35,7 @@ export async function answerQuestion(
     guardCheck(lastMsg, role, department),
     canViewCogs(role),
   ])
-  const { agentId, agentName, params, needsClarification, clarificationQuestion } = routed
+  const { agentId, agentName, params, needsClarification, clarificationQuestion, agentIds, multi } = routed
   const agent = AGENTS[agentId]
 
   if (!guard.allowed) {
@@ -45,6 +46,21 @@ export async function answerQuestion(
   }
 
   const channel = getChannelFromRole(role)
+
+  const geminiHistoryEarly = history.map((m: Message) => ({
+    role:  m.role === "user" ? "user" as const : "model" as const,
+    parts: [{ text: m.content }],
+  }))
+
+  // Đa-agent → chạy N agent + tổng hợp
+  if (multi) {
+    const text = await runMulti({
+      agentIds, params, refCache, isCost, role, name, lastMsg,
+      geminiHistory: geminiHistoryEarly, channel,
+    })
+    return { kind: "agent", agentId, agentName, text }
+  }
+
   const toolCtx = await buildToolContext(agentId, params, refCache, isCost, lastMsg, channel)
 
   const systemInstruction = [
@@ -53,20 +69,15 @@ export async function answerQuestion(
     `\nNgười dùng: ${name} (vai trò: ${role})`,
   ].join("")
 
-  const geminiHistory = history.map((m: Message) => ({
-    role:  m.role === "user" ? "user" as const : "model" as const,
-    parts: [{ text: m.content }],
-  }))
-
   if (agentId === "bi-analyst" || agentId === "data-explorer") {
-    const text = agentId === "data-explorer"
-      ? await runDataExplorer(systemInstruction, geminiHistory, lastMsg, role, isCost)
-      : await runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
-    return { kind: "agent", agentId, agentName, text }
+    const raw = agentId === "data-explorer"
+      ? await runDataExplorer(systemInstruction, geminiHistoryEarly, lastMsg, role, isCost)
+      : await runBIAnalyst(systemInstruction, geminiHistoryEarly, lastMsg, role)
+    return { kind: "agent", agentId, agentName, text: ensureAnswer(raw, agentId) }
   }
 
   const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model  = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
-  const result = await model.startChat({ history: geminiHistory }).sendMessage(lastMsg)
-  return { kind: "agent", agentId, agentName, text: result.response.text() }
+  const result = await model.startChat({ history: geminiHistoryEarly }).sendMessage(lastMsg)
+  return { kind: "agent", agentId, agentName, text: ensureAnswer(result.response.text(), agentId) }
 }

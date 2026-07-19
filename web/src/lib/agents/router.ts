@@ -1,13 +1,15 @@
 ﻿import type { AgentId, UserRole, Message, RouterResult } from "./types"
-import { classify, intentToAgentId } from "./classifier"
+import { classify } from "./classifier"
 import type { DataSource } from "./classifier"
 import { COUNTRIES_EXTRA } from "./countries-extra"
+import { scoreAndSelect } from "./graph"
+import type { SignalFlags } from "./graph"
 
 // ─── Text normalization ───────────────────────────────────────────────────────
 
 // Chuẩn hóa text: bỏ dấu tiếng Việt, lowercase, chuẩn hóa space
 // "Hồng Kông" → "hong kong", "nhật bản" → "nhat ban"
-function normalizeText(s: string): string {
+export function normalizeText(s: string): string {
   return s
     .toLowerCase()
     .replace(/đ/g, "d")
@@ -442,149 +444,51 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "data-explorer": "Kho Dữ Liệu",
 }
 
-// Data Explorer — tín hiệu user muốn TRA/ĐẾM/LIỆT KÊ dữ liệu thô nhiều bảng (catalog/hệ thống).
-// Conservative: chỉ ép khi có động từ đếm/liệt kê + đối tượng dữ liệu, hoặc nhắc thẳng "kho dữ liệu".
-const DATA_EXPLORE_RE = /kho du lieu|tra du lieu|truy xuat du lieu|bang du lieu|liet ke bang|liet ke.{0,12}(wiki|trang wiki|san pham|sku|listing|item|nuoc|vendor|ncc)|(co )?bao nhieu (sku|san pham|listing|item|nuoc|quoc gia|vendor|ncc|wiki|user|nguoi dung|ban ghi|dong)|dem so (sku|san pham|listing|item|nuoc|vendor|ncc|user)|thong ke (catalog|san pham|sku|nuoc|vendor)|data explorer/
-
-// BI keywords: doanh thu, đơn hàng, kênh bán, nhân viên sales, fulfillment, báo cáo BI
-// + bán được bao nhiêu, số lượng bán, kênh nào, lịch sử bán hàng...
-const BI_RE = /doanh thu|doanh so|don hang|đơn hàng|kenh ban|kênh bán|nhan vien sales|nhân viên sales|fulfillment|target thang|target tháng|gpm2|bi analyst|bao cao bi|báo cáo bi|revenue|margin loi nhuan|gross profit|b2b b2c|b2b va b2c|hieu suat kenh|hiệu suất kênh|top sku|top san pham ban chay|san pham ban chay|sản phẩm bán chạy|du phong doanh thu|dự phóng doanh thu|strategic partner|klook|traveloka|thang nay bao nhieu|tháng này bao nhiêu|tuan nay|tuần này|hom nay bao nhieu|hôm nay bao nhiêu|so sanh thang|so sánh tháng|ban duoc bao nhieu|bán được bao nhiêu|so luong ban|số lượng bán|xuat ban|xuất bán|lich su ban|lịch sử bán|thong ke ban hang|thống kê bán hàng|trong bao nhieu ngay|trong bao nhiêu ngày|bao nhieu ngay qua|bao nhiêu ngày qua|bao nhieu don|bao nhiêu đơn|so don hang|số đơn hàng|doanh so ban|mua bao nhieu|mua được bao nhiêu|ban hang tren kenh|bán hàng trên kênh|kenh nao ban|kênh nào bán|ban tren kenh|bán trên kênh|hieu qua ban hang|hiệu quả bán hàng|san pham ban duoc|sản phẩm bán được|cm1|contribution margin/
-
-// Tín hiệu BI CHẮC CHẮN — luôn ép bi-analyst (kể cả khi có nước HOẶC mã SKU): nhân viên/doanh thu/đơn hàng/bán được...
-// (mã SKU khi đi kèm câu hỏi doanh số = FILTER cho BI query, KHÔNG phải chỉ tra cứu — vd "số bán của con X").
-const DEFINITE_BI_RE = /\bnhan vien\b|\bdoanh thu\b|\bdoanh so\b|\bfulfillment\b|\bgpm\b|\bdon hang\b|\bban duoc bao nhieu\b|\bso luong ban\b|\blich su ban hang\b|\bso don hang\b|\bso ban\b|\bban duoc\b|\bban chua\b|\bban bao nhieu\b|\bbao nhieu (sim|esim|don|cai|goi)\b|\bcm1\b|\bcogs\b|\bgross profit\b|\bmargin\b|\brevenue\b|\bprorata\b|units? sold|\bso luong (ban|sim|esim|don|cai)\b|\btheo kho\b|\btrong kho\b|\btai kho\b|\bo kho\b|kho (ha noi|hn|hcm|da nang|tong|sai gon|tphcm|ho chi minh)|theo chi nhanh|trong chi nhanh|bao cao.{0,20}(theo (kho|kenh|thang|quy|nhan vien|nam)|doanh thu|doanh so|ban hang)|\bcontribution\b|ban[a-z0-9 ]{0,20}kenh nao|tren kenh nao|kenh nao ban|thuoc kenh nao|kenh ban nao|duoc ban (o|tren|tai|qua)|ban qua kenh|ban tren kenh|theo kenh (ban|nao)/
-// Tín hiệu USAGE 3HK — ép bi-analyst (fact_data_usage), tránh nhầm sang gap-analysis khi nhắc "3HK".
-const USAGE_BI_RE = /luong su dung|luong dung|muc (su )?dung|su dung data|data usage|3hk data usage|tieu thu data|usage.*3hk|3hk.*usage|thong ke.*data_usage_log|query.*data_usage/
-// Tín hiệu BI dạng XẾP HẠNG — chỉ ép bi-analyst khi KHÔNG có mục tiêu sản phẩm (nước/khu vực/mã nhóm),
-// tránh nhầm "gói bán chạy nhất ở Nhật" (product) thành BI.
-const RANK_BI_RE = /ban chay nhat|ban nhieu nhat|mua nhieu nhat|mua nhieu|khach.{0,12}mua nhieu|top \d* ?(sku|san pham|kenh|nhan vien|khach)/
-
-// Tạo/xuất template — action mạnh, ép tao-template (hay bị nhắc WM/3HK → route nhầm gap-analysis).
-const TEMPLATE_RE = /\b(tao|xuat|tai|lam|generate)\b[^.!?]*template|template[^.!?]*\b(wm|3hk|wordmove|worldmove)\b|tao file excel|xuat file excel/
-// Từ khoá GAP thật sự (browse NCC / so sánh chưa có) — để phân biệt với hỏi SP GoHub theo nước.
-const GAP_KEYWORD_RE = /\bgap\b|ncc co\b|chua co\b|chua import|chua nhap|chua tao|chua duoc.{0,12}tao|worldmove co\b|wm co\b|3hk co\b|so sanh ncc|con cung cap|con goi\b|vendor co\b/
-// Giải thích mã nhóm: "AP2 gồm nước nào / AP2 là gì" → giai-dap (không phải product_search).
-const EXPLAIN_GROUP_RE = /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/
-
-function classifyAgent(msg: string, params: ExtractedParams, role: UserRole): AgentId {
-  const m    = msg.toLowerCase()
-  const norm = normalizeText(msg)
-
-  // BI questions — TRƯỚC tất cả rule khác (nhưng sau code lookup)
-  if (params.skuCodes?.length || params.productCodes?.length) return "tra-cuu"
-
-  if (BI_RE.test(norm) || BI_RE.test(m)) return "bi-analyst"
-
-  // NCC catalog (nhắc vendor WM/3HK/NCC) → gap-analysis là chủ sở hữu NCC (browse + gap)
-  if (params.dataSource === "ncc_catalog") return "gap-analysis"
-
-  if (/listing|item|gi[aá] b[aá]n|gi[aá] th[iị] tr[uư][oờ]ng|sales.channel|unitprice|h[uư][oớ]ng d[aã]n|k[íi]ch ho[aạ]t|apn|activation/.test(m)) return "tra-cuu"
-
-  // Template creation
-  if (/t[aạ]o template|t[aạ]o file|xu[aấ]t template|template wm|template 3hk|t[aạ]i template|generate template/.test(m))
-    return "tao-template"
-
-  // Gap analysis
-  if (/gap|ncc c[oó]|ch[uư]a c[oó]|ch[uư]a import|ch[uư]a nh[aậ]p|worldmove c[oó]|3hk c[oó]|so s[aá]nh ncc|ph[aâ]n t[ií]ch/.test(m))
-    return "gap-analysis"
-
-  // Pricing / COGS — gộp vào tra-cuu
-  if (/cogs|gi[aá] v[oố]n|gi[aá] nh[aậ]p|l[oợ]i nhu[aậ]n|t[yỷ] gi[aá]|chi ph[ií]/.test(m))
-    return "tra-cuu"
-
-  // System knowledge
-  if (/ngh[iĩ]a l[aà]|gi[aả]i th[ií]ch|c[aấ]u tr[uú]c|data policy|source type|kyc l[aà]|throttle l[aà]|vendor l[aà]|m[aã] sku|m[aã] n[uư][oớ]c|ký t[uự]/.test(m))
-    return "giai-dap"
-
-  // Product search — có criteria tìm kiếm (nước / khu vực / group code / vendor / unlimited)
-  if (params.country || params.region || params.groupCode || params.vendor || params.isUnlimited ||
-      /[đd]i |t[iì]m g[oó]i|c[oó] g[oó]i|[eE]sim|gói|list|li[eê]t k[eê]/.test(m))
-    return "tu-van"
-
-  return "giai-dap"
-}
-
-// Sync route — fallback / used internally
-function routeSync(message: string, role: UserRole): RouterResult & { params: ExtractedParams } {
-  const params  = extractParams(message)
-  const agentId = classifyAgent(message, params, role)
-  return { agentId, agentName: AGENT_NAMES[agentId], params }
-}
-
 export interface RouteResult extends RouterResult {
-  params:               ExtractedParams
-  needsClarification?:  boolean
+  params:                 ExtractedParams
+  needsClarification?:    boolean
   clarificationQuestion?: string
+  /** Toàn bộ agent cần chạy (primary trước). >1 phần tử ⇒ đa-agent + tổng hợp. */
+  agentIds:               AgentId[]
+  /** true khi cần chạy ≥2 agent rồi tổng hợp (orchestrator sẽ báo user "đợi xíu"). */
+  multi:                  boolean
 }
 
-// Async route — dùng Gemini classifier cho intent + nguồn dữ liệu + làm rõ
-// Chạy song song với getRefCache() trong chat route → zero extra latency
+// Xây SignalFlags xác định từ params (đầu vào cho capability graph)
+export function toFlags(params: ExtractedParams): SignalFlags {
+  return {
+    hasCode:      !!(params.skuCodes?.length || params.productCodes?.length || params.listingCodes?.length),
+    hasCountry:   !!(params.country || params.countries?.length),
+    hasRegion:    !!params.region,
+    hasGroupCode: !!params.groupCode,
+    hasVendorNcc: params.dataSource === "ncc_catalog" || !!params.vendor,
+    isUnlimited:  !!params.isUnlimited,
+  }
+}
+
+// Async route — PLANNER dùng capability graph (graph.ts) để chọn agent XÁC ĐỊNH.
+// Gemini classify chỉ là 1 phiếu tier-1 (tie-break khi không có tín hiệu mạnh) →
+// tín hiệu mạnh luôn thắng ⇒ cùng 1 câu luôn ra cùng agent (hết "lúc được lúc không").
+// Chạy song song với getRefCache() trong chat route → zero extra latency.
 export async function route(message: string, history: Message[], role: UserRole): Promise<RouteResult> {
   const params = extractParams(message)
-
   const classified = await classify(message)
 
-  // Dùng AI intent nếu confidence đủ cao, ngược lại fallback regex
-  let agentId: AgentId = classified.confidence >= 0.6
-    ? intentToAgentId(classified.intent)
-    : classifyAgent(message, params, role)
+  // AI country/sim/data_source bổ sung cho params TRƯỚC khi dựng flags
+  if (classified.confidence >= 0.7 && classified.country && !params.country) params.country = classified.country
+  if (classified.sim_type) params.simType = classified.sim_type
+  if (!params.dataSource && classified.data_source) params.dataSource = classified.data_source
 
-  // ── Override xác định (thắng classifier khi nó hay nhầm) ──
-  const nrm = normalizeText(message)
-  if (TEMPLATE_RE.test(nrm)) {
-    // Tạo/xuất template (kể cả khi nhắc WM/3HK → trước đây bị route nhầm gap-analysis)
-    agentId = "tao-template"
-  } else if (params.groupCode && EXPLAIN_GROUP_RE.test(nrm)) {
-    // "AP2 gồm nước nào / AP2 là gì" → giải thích, không phải tìm sản phẩm
-    agentId = "giai-dap"
-  } else if (DATA_EXPLORE_RE.test(nrm) && !params.skuCodes?.length && !params.productCodes?.length) {
-    // "có bao nhiêu SKU active / đếm sản phẩm theo vendor / tra dữ liệu bảng X" → truy xuất dữ liệu thô
-    agentId = "data-explorer"
-  } else if (agentId !== "bi-analyst" && agentId !== "data-explorer") {
-    // Override BI: câu doanh số/usage/nhân viên/top bán chạy hay bị nhầm sang product_search hoặc tra-cuu.
-    // ⭐ Cho phép override KỂ CẢ khi có mã SKU: "số bán của con X", "check X bán được không" = BI (mã = filter).
-    const hasProductTarget = !!(params.country || params.region || params.groupCode)
-    const hasCode = !!(params.skuCodes?.length || params.productCodes?.length)
-    // KHÔNG cướp câu NCC/gap có từ khoá gap RÕ RÀNG (vd "WorldMove có bao nhiêu gói CHƯA TẠO SKU" — 'bao nhiêu gói'
-    // khớp BI nhưng là catalog gap). Chỉ chặn khi có GAP_KEYWORD; KHÔNG chặn chỉ vì nhắc vendor
-    // (vd "3HK theo kho quý 2" là báo cáo doanh thu BI, không phải gap).
-    const isGapCtx = GAP_KEYWORD_RE.test(nrm)
-    if (!isGapCtx && (DEFINITE_BI_RE.test(nrm) || USAGE_BI_RE.test(nrm) || (RANK_BI_RE.test(nrm) && !hasProductTarget && !hasCode))) {
-      agentId = "bi-analyst"
-    }
-  }
+  const nrm   = normalizeText(message)
+  const flags = toFlags(params)
 
-  // Override: gap-analysis nhưng KHÔNG nhắc vendor (WM/3HK/NCC) + có nước + không có từ khoá gap
-  // → hỏi sản phẩm GoHub (vd "có sản phẩm nào ở cả Malaysia và Singapore") → tu-van.
-  if (agentId === "gap-analysis" && params.dataSource !== "ncc_catalog"
-      && (params.country || params.region) && !GAP_KEYWORD_RE.test(nrm)) {
-    agentId = "tu-van"
-  }
+  // ── Chọn agent qua capability graph (deterministic) ─────────────────────────
+  const g = scoreAndSelect(nrm, flags, { intent: classified.intent, confidence: classified.confidence })
+  const agentId  = g.primary.agent
+  const agentIds = [agentId, ...g.extraAgents]
+  const multi    = agentIds.length > 1
 
-  // Post-guard: câu hỏi CATALOG/GAP của NCC (có từ khoá gap + nhắc vendor NCC) lỡ thành bi-analyst
-  // (vd "WorldMove có bao nhiêu gói chưa tạo SKU") → chủ sở hữu đúng là gap-analysis, KHÔNG phải BI gohub_dw.
-  if (agentId === "bi-analyst" && GAP_KEYWORD_RE.test(nrm) && /worldmove|world move|\bwm\b|3hk|ncc|nha cung cap/.test(nrm)) {
-    agentId = "gap-analysis"
-  }
-
-  // AI country ghi đè regex nếu confidence cao VÀ regex không tìm được
-  if (classified.confidence >= 0.7 && classified.country && !params.country) {
-    params.country = classified.country
-  }
-
-  // AI sim_type
-  if (classified.sim_type) {
-    params.simType = classified.sim_type
-  }
-
-  // Nguồn dữ liệu: regex (nhắc vendor) thắng vì chắc chắn; nếu không có thì lấy từ AI
-  if (!params.dataSource && classified.data_source) {
-    params.dataSource = classified.data_source
-  }
-
-  // ── Bước hỏi lại (data-driven) ──────────────────────────────────────────────
-  // Chỉ hỏi lại khi KHÔNG có bất kỳ tín hiệu tìm kiếm nào (nước/khu vực/mã/vendor...)
-  // và intent thực sự cần thông tin đó để trả lời.
+  // ── Bước hỏi lại (data-driven) — giữ nguyên logic cũ ────────────────────────
   const hasSearchSignal = !!(
     params.country || params.region || params.groupCode ||
     params.skuCodes?.length || params.productCodes?.length || params.listingCodes?.length ||
@@ -594,6 +498,7 @@ export async function route(message: string, history: Message[], role: UserRole)
     agentId === "tu-van" || agentId === "gap-analysis" || agentId === "tao-template"
 
   const needsClarification =
+    !multi &&
     classified.confidence >= 0.6 &&
     classified.needs_clarification &&
     !hasSearchSignal &&
@@ -604,5 +509,5 @@ export async function route(message: string, history: Message[], role: UserRole)
        "Mình chưa rõ bạn cần gì 😊 Bạn cho mình biết: đi **nước/khu vực nào**, hoặc **mã sản phẩm** cụ thể nhé?")
     : undefined
 
-  return { agentId, agentName: AGENT_NAMES[agentId], params, needsClarification, clarificationQuestion }
+  return { agentId, agentName: AGENT_NAMES[agentId], params, needsClarification, clarificationQuestion, agentIds, multi }
 }

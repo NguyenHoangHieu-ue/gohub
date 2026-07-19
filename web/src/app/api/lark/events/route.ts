@@ -10,6 +10,7 @@ import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
 import { runDataExplorer }           from "@/lib/agents/data-explorer"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
+import { runMulti, NOTICE_MULTI, ensureAnswer } from "@/lib/agents/orchestrator"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
@@ -328,7 +329,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       guardCheck(userText, role, undefined, { onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true }),
       canViewCogs(role),
     ])
-    const { agentId, params, needsClarification, clarificationQuestion } = routed
+    const { agentId, params, needsClarification, clarificationQuestion, agentIds, multi } = routed
     const agent    = AGENTS[agentId]
 
     // Guardian: câu hỏi về nội bộ hệ thống → từ chối lịch sự ("hỏi Hiếu"), không gọi agent
@@ -350,13 +351,40 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     }
 
     const channel  = getChannelFromRole(role)
-    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText, channel)
 
     // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
     const _now = new Date()
     const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
       ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
       : ""
+
+    const larkHistory = history.map(m => ({
+      role:  m.role === "user" ? "user" as const : "model" as const,
+      parts: [{ text: m.content }],
+    }))
+
+    // ── Đa-agent: báo user "đợi xíu" rồi tổng hợp N agent về 1 câu ──────────────
+    if (multi) {
+      await replyLarkMessage(messageId, stripMarkdown(NOTICE_MULTI))
+      const merged = await runMulti({
+        agentIds, params, refCache, isCost, role, name: name || openId, lastMsg: userText,
+        geminiHistory: larkHistory, channel, userSuffix: ", kênh: Lark", tempRule: _tempRule,
+      })
+      const split = splitTextAndTable(merged)
+      const table = split ? parseMarkdownTable(split.tableText) : null
+      if (table) {
+        const preText = split!.preText ? stripMarkdown(split!.preText) : ""
+        await replyLarkTable(messageId, chatId, preText, table.headers, table.rows)
+      } else {
+        await replyLarkMessage(messageId, stripMarkdown(merged))
+      }
+      responseSent = true
+      saveLarkMessage(openId, threadId, "user",      userText)
+      saveLarkMessage(openId, threadId, "assistant", merged)
+      return
+    }
+
+    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText, channel)
 
     const systemInstruction = [
       agent.systemPrompt,
@@ -383,6 +411,9 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       const result = await model.startChat({ history: geminiHistory }).sendMessage(userText)
       response = result.response.text()
     }
+
+    // Đảm bảo có câu trả lời: rỗng/thất bại → gợi ý cách hỏi (từ capability graph)
+    response = ensureAnswer(response, agentId)
 
     // Nếu response có bảng → gửi card + xlsx, còn lại strip markdown
     const split = splitTextAndTable(response)

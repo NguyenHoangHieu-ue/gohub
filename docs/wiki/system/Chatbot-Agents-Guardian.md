@@ -5,7 +5,7 @@ department: tech
 tags: [chatbot, agent, guardian, rbac, permission, ai]
 aliases: ["Guardian", "Chatbot Agents", "Phân quyền chatbot", "Agent Routing"]
 created: 2026-06-21
-updated: 2026-06-25
+updated: 2026-07-19
 status: active
 ---
 
@@ -29,10 +29,20 @@ Chatbot GoHub dùng kiến trúc **multi-agent**: 1 router phân loại câu h�
 | **BI Analyst** (Bé Gấu Bi-Ai) | `bi-analyst` | Phân tích kinh doanh: doanh thu, đơn hàng, nhân viên, B2B/B2C, top SKU, traffic website, SEO | `executeSQL` → gohub_dw (GCP Postgres) · `queryGA4` → Google Analytics 4 · `queryGSC` → Search Console |
 | **Kho Dữ Liệu** (🗄️, s95) | `data-explorer` | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh | `executeSQL` gohub_dw + `querySupabase` (38 bảng catalog/config) + `listSupabaseTables` |
 
-### Router (định tuyến)
-- `web/src/lib/agents/router.ts`: `extractParams()` (nước/khu vực/mã/vendor...) + Gemini classifier (`classifier.ts`).
-- **Override xác định** (thắng classifier khi hay nhầm): tạo/xuất template → `tao-template`; mã nhóm + "là gì/gồm nước nào" → `giai-dap`; doanh thu/nhân viên/top bán chạy (không có nước) → `bi-analyst`.
-- **Bước hỏi lại**: câu quá mơ hồ (thiếu nước/khu vực/mã) → hỏi lại ngay, không gọi Gemini.
+### Router = Capability Graph (định tuyến XÁC ĐỊNH — s108)
+
+> **Vì sao đổi:** routing cũ dựa 1 call Gemini + chuỗi regex override đè nhau → CÙNG 1 câu lúc ra agent này, lúc ra agent khác ("lúc trả lời được, lúc không"). Nay dùng **đồ thị năng lực (capability graph)** làm hàm thuần, xác định.
+
+- `web/src/lib/agents/graph.ts` — **capability graph**: `signal → intent → agent` qua các *edge* có `tier` (độ mạnh) + `precedence` (tie-break). `scoreAndSelect()` chọn agent hoàn toàn từ tín hiệu deterministic (mã SKU / tên nước / từ khoá doanh thu…). **Gemini classifier chỉ là 1 phiếu tier-1** — chỉ thắng khi KHÔNG có tín hiệu mạnh → tín hiệu mạnh luôn quyết ⇒ cùng câu luôn ra cùng agent.
+- `tier`: 6 = template · 5 = tín hiệu xác định mạnh (definite-BI / usage / data-explore / explain-group) · 4 = mã cụ thể / gap / BI ranking · 3 = BI-chung / ncc / pricing / cogs / explain · 2 = tìm sản phẩm cơ bản / chào hỏi · 1 = phiếu LLM.
+- `web/src/lib/agents/router.ts`: `extractParams()` (nước/khu vực/mã/vendor…) → dựng `SignalFlags` → `scoreAndSelect()`. Trả thêm `agentIds[]` + `multi`.
+- **Bước hỏi lại**: câu quá mơ hồ (thiếu nước/khu vực/mã) → hỏi lại ngay, không gọi agent.
+
+### Orchestrator — đa-agent + tổng hợp + đảm bảo trả lời (s108)
+`web/src/lib/agents/orchestrator.ts`:
+- **Đa-agent**: câu chạm ≥2 chủ đề **khác domain** (catalog / analytics / knowledge) + có liên từ (vd *"đi Nhật có gói nào **và** doanh thu tháng này bao nhiêu"*) → chạy song song N agent (tối đa 3) rồi `synthesize()` (1 call Gemini) gộp thành 1 câu mạch lạc, giữ nguyên số/bảng. Có guard tránh false-positive (nước/mã đi kèm câu BI = FILTER, không tách agent riêng). Trước khi chờ, bot báo `NOTICE_MULTI` ("đợi mình một xíu…").
+- **ensureAnswer** (graph.ts): mọi đường ra được bọc — nếu agent trả rỗng / "không tìm thấy" / lỗi → thay bằng **gợi ý cách hỏi + 3 câu mẫu** đúng năng lực agent (`AGENT_EXAMPLES`). Mục tiêu: **luôn có câu trả lời**, không im lặng.
+- Wired vào `/api/chat` (giữ streaming cho single-agent, non-stream cho multi), `lark/events`, và `answer.ts`.
 
 ---
 
@@ -41,6 +51,8 @@ Chatbot GoHub dùng kiến trúc **multi-agent**: 1 router phân loại câu h�
 `web/src/lib/agents/guardian.ts` · `guardCheck(message, role, department, opts?)` → `{ allowed, reason, category }`.
 
 Chạy **song song** với router (zero thêm độ trễ). Nếu chặn → stream từ chối lịch sự (badge "Hạn chế quyền"), **không** gọi agent.
+
+> **XÁC ĐỊNH (s108):** phân loại nhạy cảm nay bằng **regex** (`web/src/lib/agents/guardian-classify.ts` · `classifySensitivity()`), **KHÔNG gọi Gemini** nữa → cùng câu luôn ra cùng category (hết flip allow/deny) + bớt 1 vòng LLM mỗi tin nhắn. Thứ tự ưu tiên (mức nhạy cảm cao nhất thắng): `injection/jailbreak → system_internal → margin_cogs → staff_hr → customer_pii → revenue_bi → product_catalog → general`. Có `RE_BIZ_PROC` để quy trình **nghiệp vụ** (KYC / tạo SKU / đọc mã / chính sách giá) KHÔNG bị nhầm thành system_internal. Đánh đổi: injection ngụy trang rất tinh vi có thể lọt so với LLM (bù lại: admin/creator bypass, policy nới, quyết định ổn định).
 
 ### 8 category + policy mặc định (role) — **NỚI TỐI ĐA (cập nhật s107)**
 
@@ -63,10 +75,10 @@ Chạy **song song** với router (zero thêm độ trễ). Nếu chặn → str
 
 - Policy lưu ở `app_settings.access_policy` (admin chỉnh qua **Admin → Cài đặt → Quyền hạn câu hỏi Chatbot**). Thiếu cấu hình → dùng default trên. ⚠️ Nếu đã lưu policy cũ, `loadPolicy` MERGE parsed đè DEFAULT theo TỪNG Ô → muốn áp bản NỚI mới hoàn toàn thì reset access_policy.
 - **admin/creator**: bỏ qua hẳn (không tốn call phân loại).
-- **FAIL-OPEN**: nếu phân loại lỗi / không chắc (confidence < 0.6) → cho qua, tránh chặn nhầm câu hợp lệ.
+- **FAIL-OPEN**: classifier deterministic luôn trả confidence ≥ 0.8 nên hầu như không rơi vào fail-open; nhưng nhánh (< 0.6 → cho qua) vẫn giữ để an toàn.
 
 ### Lark group
-Lark dùng trong group → không phân biệt được role (mọi người có thể là `standard`). Guardian ở Lark chạy chế độ riêng: `{ onlyCategories: ["system_internal"], ignoreRole: true }` — **chỉ chặn câu hỏi nội bộ hệ thống** (bot hoạt động thế nào / workflow / code / prompt / schema) → trả lời "bạn hỏi trực tiếp Hiếu nhé 😊". Nghiệp vụ (sản phẩm/doanh thu...) vẫn trả lời bình thường.
+Lark dùng trong group → không phân biệt được role (mọi người có thể là `standard`). Guardian ở Lark chạy chế độ riêng: `{ onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true }` — chặn câu hỏi **nội bộ hệ thống** (bot hoạt động thế nào / workflow / code / prompt / schema) **và PII khách hàng cụ thể** → trả lời "bạn hỏi trực tiếp Hiếu nhé 😊". Nghiệp vụ (sản phẩm/doanh thu...) vẫn trả lời bình thường.
 
 ### Tránh chồng chéo
 - `role_filters` (BI): lọc **row** dữ liệu trong SQL của BI Analyst theo role.
@@ -76,7 +88,8 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
-- Model `gemini-3.5-flash` là **thinking model**: phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
+- **Guardian không còn gọi Gemini** (s108) — phân loại nhạy cảm bằng regex. Routing classifier (`classifier.ts`) vẫn dùng Gemini nhưng chỉ là **phiếu tier-1** trong graph (không quyết một mình).
+- Model `gemini-3.5-flash` là **thinking model**: khi còn dùng cho classifier, phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
 - **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`. Câu hỏi BI dài (>10s) có thể bị Vercel Free timeout.
 - Liên quan: [[system/Second-Brain-Architecture]] · [[vendors/WM-WorldMove]] · [[vendors/3HK]]
 
