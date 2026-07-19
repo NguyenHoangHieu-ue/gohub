@@ -107,11 +107,14 @@ export async function GET(req: NextRequest) {
 
     // ── Costs (no day-ratio for non-strategic, matching intel) ──────────────────
     const months = startDate && endDate ? getMonthsInRange(startDate, endDate) : []
-    const channelCosts = await getChannelCostsForMonths(months)
-    const settingsMap  = await getCostSettingsForMonths(months)
-
+    // 3 nguồn chi phí độc lập → chạy song song thay vì 3 await nối tiếp (giảm critical path)
+    const [channelCosts, settingsMap, groupCostsRaw] = await Promise.all([
+      getChannelCostsForMonths(months),
+      getCostSettingsForMonths(months),
+      getGroupCostsForMonths(months),
+    ])
     // Group-level B2B costs — phân bổ theo tỷ lệ revenue từng channel
-    const groupCosts = await getGroupCostsForMonths(months) as Array<{ group_name: string; month: string; amount: string }>
+    const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
     const b2bGroupCosts = groupCosts.filter(c => c.group_name === "B2B")
     const totalB2BRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
     // Mỗi channel nhận phần group cost tỷ lệ với revenue (revenue share * total group cost)
@@ -122,6 +125,21 @@ export async function GET(req: NextRequest) {
         const ratio = getDaysInMonth(gc.month) > 0
           ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
         groupCostPerChannel[r.name] = (groupCostPerChannel[r.name] || 0) + parseFloat(gc.amount || "0") * ratio * share
+      }
+    }
+
+    // ── Index channelCosts một lần (O(M)) → tra cứu O(1) trong vòng lặp bên dưới,
+    //    đưa opCost từ O(N×M) về O(N+M) (thay vì .filter quét cả mảng cho mỗi channel×tháng) ──
+    type ChannelCost = typeof channelCosts[number]
+    const costByChannelMonth = new Map<string, ChannelCost[]>()  // khớp chính xác: `${channel}_${month}`
+    const subCostByBaseMonth = new Map<string, ChannelCost[]>()  // theo tiền tố: `${base}_${month}` cho kênh "Base - Sub"
+    for (const c of channelCosts) {
+      const exactKey = `${c.channel}_${c.month}`
+      const ex = costByChannelMonth.get(exactKey); if (ex) ex.push(c); else costByChannelMonth.set(exactKey, [c])
+      const sep = c.channel.indexOf(" - ")
+      if (sep >= 0) {
+        const subKey = `${c.channel.slice(0, sep)}_${c.month}`
+        const sc = subCostByBaseMonth.get(subKey); if (sc) sc.push(c); else subCostByBaseMonth.set(subKey, [c])
       }
     }
 
@@ -147,7 +165,7 @@ export async function GET(req: NextRequest) {
         const mode = settingsMap.get(`${r.name}_${mMonth}`) || "total"
 
         if (mode === "subchannels") {
-          channelCosts.filter(c => c.channel.startsWith(`${r.name} - `) && c.month === mMonth).forEach(c => {
+          (subCostByBaseMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
             const subName = c.channel.replace(`${r.name} - `, "")
             const subRev = r.sub_channel_breakdown[mMonth]?.[subName]?.revenue || 0
             COST_KEYS.forEach(key => {
@@ -160,7 +178,7 @@ export async function GET(req: NextRequest) {
             })
           })
         } else {
-          channelCosts.filter(c => c.channel === r.name && c.month === mMonth).forEach(c => {
+          (costByChannelMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
             const ratio = getDaysInMonth(mMonth) > 0
               ? getDaysInRange(startDate || "", endDate || "", mMonth) / getDaysInMonth(mMonth) : 0
             COST_KEYS.forEach(key => {

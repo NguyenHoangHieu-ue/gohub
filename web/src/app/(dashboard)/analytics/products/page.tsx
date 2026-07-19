@@ -9,7 +9,6 @@ import {
   ShoppingCart, LayoutDashboard, ChevronDown, Check, MapPin, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
-import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
@@ -135,6 +134,7 @@ export default function ProductPerformancePage() {
     try {
       const canvas = await domToCanvas(reportRef.current, { scale: 2, backgroundColor: "#f8fafc" })
       const imgData = canvas.toDataURL("image/png")
+      const { jsPDF } = await import("jspdf")   // nạp động: chỉ tải jspdf khi user xuất PDF
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width / 2, canvas.height / 2] })
       pdf.addImage(imgData, "PNG", 0, 0, canvas.width / 2, canvas.height / 2)
       pdf.save(`Product_Performance_Report_${startDate}_to_${endDate}.pdf`)

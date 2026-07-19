@@ -133,6 +133,13 @@ const RULES: Rule[] = [
   { intent: "greeting",        tier: 2, test: (t) => RE.greeting.test(t) },
 ]
 
+// Câu có liên từ ghép ("và", ",", "còn"…) → CÓ THỂ là đa-agent. Dùng cho fast-path
+// ở router: khi KHÔNG có liên từ, phiếu LLM (tier-1) không thể thêm agent phụ nên
+// kết quả graph không-LLM trùng khớp kết quả có-LLM ⇒ được phép bỏ qua Gemini.
+export function hasConjunction(normText: string): boolean {
+  return RE.conjunction.test(normText)
+}
+
 export interface GraphPick {
   intent: IntentId
   agent:  AgentId

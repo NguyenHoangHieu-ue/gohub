@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { Package, Search, ChevronLeft, ChevronRight, X, ChevronDown, Download, Loader2 } from "lucide-react"
-import * as XLSX from "xlsx"
 import { EmptyTableRow } from "@/components/empty-state"
 import { InfoTooltip } from "@/components/tooltip"
 
@@ -299,7 +298,8 @@ async function fetchAllPages(apiPath: string, params: URLSearchParams): Promise<
   return result
 }
 
-function downloadXlsx(data: any[], columns: { key: string; label: string }[], filename: string) {
+async function downloadXlsx(data: any[], columns: { key: string; label: string }[], filename: string) {
+  const XLSX = await import("xlsx")   // nạp động: chỉ tải xlsx khi user bấm export
   const rows = data.map(row => {
     const obj: Record<string, any> = {}
     for (const col of columns) {

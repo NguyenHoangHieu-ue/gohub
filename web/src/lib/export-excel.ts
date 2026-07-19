@@ -1,18 +1,20 @@
-import * as XLSX from "xlsx"
-
 // Helper xuất Excel (.xlsx) dùng chung cho các tab analytics.
 // Thay các hàm export CSV cũ. Xuất TẤT CẢ rows truyền vào (không giới hạn dòng).
+//
+// `xlsx` (~1MB) được nạp ĐỘNG bên trong từng hàm (chỉ khi user thật sự bấm export)
+// → không nằm trong bundle JS ban đầu của trang, cải thiện LCP/TBT.
 //
 // Dùng:
 //   exportToExcel(rows, [{label:"SKU",key:"sku"},{label:"Doanh thu",key:"revenue"}], "products_2026-07")
 //   exportRawRows(rows, "orders")   // rows đã là object phẳng, tự lấy header từ keys
 
-export function exportToExcel(
+export async function exportToExcel(
   rows: Record<string, unknown>[],
   columns: { label: string; key: string }[],
   filename: string,
   sheetName = "Data",
-): void {
+): Promise<void> {
+  const XLSX = await import("xlsx")
   const data = rows.map(row => {
     const obj: Record<string, unknown> = {}
     for (const c of columns) {
@@ -28,12 +30,13 @@ export function exportToExcel(
 }
 
 // Xuất từ headers + array-of-arrays (mỗi row là mảng ô). Cho bảng dựng sẵn dạng row array.
-export function exportAOA(
+export async function exportAOA(
   headers: string[],
   rows: (string | number)[][],
   filename: string,
   sheetName = "Data",
-): void {
+): Promise<void> {
+  const XLSX = await import("xlsx")
   const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
@@ -41,11 +44,12 @@ export function exportAOA(
 }
 
 // Xuất mảng object phẳng (header = union tất cả keys, theo thứ tự xuất hiện).
-export function exportRawRows(
+export async function exportRawRows(
   rows: Record<string, unknown>[],
   filename: string,
   sheetName = "Data",
-): void {
+): Promise<void> {
+  const XLSX = await import("xlsx")
   const ws = XLSX.utils.json_to_sheet(rows)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
