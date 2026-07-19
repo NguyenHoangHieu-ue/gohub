@@ -1,10 +1,7 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import {
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, ComposedChart, Area,
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, PieChart,
   ArrowUpRight, ArrowDownRight, Calendar, Filter, Download,
@@ -14,6 +11,11 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportAOA } from "@/lib/export-excel"
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu, chỉ tải phía client.
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const RevenueCompositeChart = dynamic(() => import("./bod-charts").then(m => m.RevenueCompositeChart), { ssr: false, loading: chartLoading })
+const MarginTrendChart      = dynamic(() => import("./bod-charts").then(m => m.MarginTrendChart),      { ssr: false, loading: chartLoading })
 
 // Port "y hệt" gohub-intel BODReport. Backend: bod-summary/bod-report/bod-group-margin/bod-channel-performance
 // (CM1 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
@@ -505,18 +507,7 @@ export default function BODReport() {
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => val.split("-").slice(1).join("/")} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={formatCompactNumber} />
-                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [formatCurrency(val), ""]} />
-                  <Legend iconType="circle" />
-                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-                  <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
-                  <Line type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <RevenueCompositeChart data={data} />
             )}
           </div>
         </div>
@@ -613,17 +604,7 @@ export default function BODReport() {
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => val.split("-").slice(1).join("/")} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => `${val}%`} />
-                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [`${(val || 0).toFixed(2)}%`, "Margin %"]} />
-                  <Legend iconType="circle" />
-                  <Line type="monotone" dataKey="margin_percent" name="Margin %" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="gpm2_percent" name="CM1 %" stroke="#ec4899" strokeWidth={3} dot={{ r: 4, fill: "#ec4899", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <MarginTrendChart data={data} />
             )}
           </div>
         </div>
