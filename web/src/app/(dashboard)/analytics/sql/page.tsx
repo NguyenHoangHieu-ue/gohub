@@ -1,26 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import {
   Database, Play, Download, Search, ChevronRight, ChevronDown,
   Copy, Check, AlertCircle, Loader2, Table as TableIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
+import { useRoleGuard } from "@/lib/use-role-guard"
 
 interface TableInfo { tableName: string; columns: { columnName: string; dataType: string }[] }
 
 export default function SqlExplorerPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (status === "authenticated" && !["admin","creator","bod"].includes(session?.user?.role ?? "")) router.push("/chatbot")
-  }, [status, session, router])
-
-  if (status !== "authenticated" || !["admin","creator","bod"].includes(session?.user?.role ?? "")) return null
+  // Role TƯƠI từ DB (JWT có thể stale) — khớp cách sidebar hiển thị tab.
+  const { ready } = useRoleGuard(["admin", "creator", "bod"])
+  if (!ready) return null
 
   return <SqlExplorer />
 }

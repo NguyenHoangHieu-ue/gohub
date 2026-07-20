@@ -12,6 +12,7 @@ import {
   searchNccWm, searchNcc3hk,
   getChannelPrices, getChannelTypes,
 } from "@/lib/agents/tools"
+import { getPartnerTiers } from "@/lib/analytics-helpers"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
   const usdVnd = fx["fx.usd_vnd"] ?? 26000
@@ -380,6 +381,24 @@ export async function buildToolContext(
       `=== DANH SÁCH VENDOR (${vendors.length}) ===`,
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
+
+    // Đối tác/kênh theo TIER (partner_tiers) — config nghiệp vụ (chỉ tên kênh + tier, không nhạy cảm).
+    // Inject khi câu hỏi nhắc đối tác chiến lược/tier/kênh để giai-dáp trả lời được "ai là strategic".
+    if (userMsg && /partner|strategic|chien luoc|chiến lược|doi tac|đối tác|\btier\b|kenh chien luoc|kênh chiến lược/i.test(userMsg)) {
+      try {
+        const tiers = await getPartnerTiers()
+        const lines = Object.entries(tiers)
+          .filter(([, names]) => Array.isArray(names) && names.length)
+          .map(([tier, names]) => `${tier} (${(names as string[]).length}): ${(names as string[]).join(", ")}`)
+        if (lines.length) {
+          sections.push(
+            `=== ĐỐI TÁC / KÊNH THEO TIER (partner tiers — cấu hình từ tab Settings) ===`,
+            `"Strategic" = đối tác/kênh chiến lược (B2B-Strategic). Đây là danh sách kênh phân loại theo tier, dùng để đọc báo cáo B2B.`,
+            ...lines,
+          )
+        }
+      } catch { /* config lỗi → bỏ qua, không chặn câu trả lời */ }
+    }
 
     // Inject ref_categories để bot hiểu mã nhóm hiển thị (CHM, STA, ASI...)
     const allCats = Object.values(ref.categoriesMap as Record<string, any>)

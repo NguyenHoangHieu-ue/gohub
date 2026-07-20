@@ -1,11 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
+import { useRoleGuard } from "@/lib/use-role-guard"
 
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
 // 3 mục: Partner Tiers (đối tác chiến lược) · Access Policy (Guardian) · Role Filters (lọc dòng BI theo role).
@@ -43,10 +42,8 @@ for (const cat of Object.keys(DEFAULT_POLICY)) {
 const FILTER_ROLES = CONFIGURABLE_ROLES
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot") }, [status, session, router])
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
+  const { ready } = useRoleGuard(["admin", "creator"])   // role tươi từ DB (không dùng JWT stale)
+  if (!ready) return null
   return <AnalyticsSettings />
 }
 

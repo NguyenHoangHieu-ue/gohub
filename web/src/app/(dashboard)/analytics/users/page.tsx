@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRoleGuard } from "@/lib/use-role-guard"
 import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Plus, Key, Lock, Edit3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
@@ -49,11 +49,10 @@ const WRITABLE_TAB_DEFS = [
 ]
 
 export default function UserManagementPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  useEffect(() => { if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot") }, [status, session, router])
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
-  return <UserAdmin currentUser={session.user.username} currentRole={session.user.role} />
+  const { data: session } = useSession()
+  const { ready, role } = useRoleGuard(["admin", "creator"])   // role tươi từ DB (không dùng JWT stale)
+  if (!ready) return null
+  return <UserAdmin currentUser={session!.user.username} currentRole={role!} />
 }
 
 function roleBadge(role: string) {

@@ -5,7 +5,7 @@ department: tech
 tags: [chatbot, agent, guardian, rbac, permission, ai]
 aliases: ["Guardian", "Chatbot Agents", "Phân quyền chatbot", "Agent Routing"]
 created: 2026-06-21
-updated: 2026-07-19
+updated: 2026-07-20
 status: active
 ---
 
@@ -112,3 +112,19 @@ Bộ E2E kiểm chất lượng **câu trả lời** (không chỉ routing), ch�
 - **Router**: `GAP_KEYWORD` thêm word-boundary (tránh `3hk co` khớp "3hk **co**ntribution"); chặn BI override cướp câu NCC/gap.
 
 ### Grade cuối (2026-07-18): 7/7 con đạt full — bi-analyst 13/13 · data-explorer 8/9(1 niche) · tu-van 7/7 · giai-dap 6/6 · tra-cuu 5/5 · gap-analysis 5/5 · tao-template 3/3.
+
+---
+
+## Cập nhật s110–s111 (2026-07-20)
+
+### Guardian: chỉ CHẶN CỨNG code/hệ thống (mọi role)
+- `guardCheck` đảo cấu trúc: phân loại TRƯỚC → nếu `system_internal` (code / build / prompt / schema / credential / kỹ thuật) → **deny cho MỌI vai trò, KỂ CẢ admin·creator** (muốn xem thì đọc repo, bot không tiết lộ nội bộ). Đây là giới hạn DUY NHẤT không phân quyền được.
+- Mọi category DỮ LIỆU khác (margin_cogs / staff_hr / customer_pii / revenue_bi / product…): admin·creator full quyền; role khác theo `app_settings.access_policy` → Hiếu tự phân quyền. `DEFAULT_POLICY.system_internal` set toàn `deny` (chỉ để hiển thị — bị chặn cứng trước khi đọc policy).
+- **Fix collision bỏ dấu**: "lương" (salary) ≡ "lượng" (quantity) = `luong` → bỏ bare `\bluong\b` trong `RE_HR`, chỉ nhận lương trong ngữ cảnh lương bổng. Trước đây "số **lượng** sản phẩm bán ra" bị chặn nhầm là nhân sự. Thêm "bán ra / số lượng bán" → `revenue_bi`; siết `ha tang` để không chặn nhầm "hạ tầng mạng".
+
+### giai-dap biết ĐỐI TÁC CHIẾN LƯỢC (partner tiers)
+- Câu hỏi "partner strategic gồm ai / X có phải strategic không" trước route về `giai-dap` (không có data) → "không có thông tin". Nay `buildToolContext` inject block **partner tiers** (từ `app_settings.partner_tiers` qua `getPartnerTiers()`) cho giai-dap, gated theo keyword (partner/strategic/tier/đối tác) để tránh token bloat. bi-analyst vốn đã có list này. → cả 2 agent trả lời được "Strategic = Momo, Klook, Traveloka, …".
+
+### Phân quyền TAB dùng ROLE TƯƠI (không JWT stale)
+- Bug: admin vừa được cấp quyền cho 1 tài khoản, nhưng tài khoản đó chưa re-login → JWT còn role CŨ. Sidebar hiển thị tab theo `dbRole` (fresh từ `/api/user/me`) nên THẤY tab, nhưng các trang admin-only (`admin`, `analytics/settings|users|sql|schema`) guard bằng `session.user.role` (JWT cũ) → click là đẩy về `/chatbot`.
+- Fix: hook `lib/use-role-guard.ts` (`useRoleGuard(allowed)`) fetch `/api/user/me` lấy role TƯƠI, dùng cho cả 5 trang → khớp sidebar, admin mới vào được ngay không cần logout/login. Tab dữ liệu (bod/channels…) vốn đã ổn vì `analytics/layout.tsx` (server) đã re-read DB theo username.
