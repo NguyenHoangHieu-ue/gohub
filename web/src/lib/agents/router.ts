@@ -328,8 +328,9 @@ export function extractParams(message: string): ExtractedParams {
     }
   }
 
-  // Tất cả SKU codes (13 ký tự)
-  const skuMatches = [...message.matchAll(/\b([A-Z0-9]{13})\b/gi)]
+  // Tất cả SKU codes (13 ký tự) — yêu cầu có ≥1 CHỮ SỐ để không nhầm từ tiếng Anh 13 ký tự
+  // toàn chữ ("notifications", "conversations") thành mã SKU (mã thật luôn có số, vd 1CKORCUF01005).
+  const skuMatches = [...message.matchAll(/\b(?=[A-Z0-9]*\d)([A-Z0-9]{13})\b/gi)]
   const skuCodes = [...new Set(skuMatches.map(m => m[1].toUpperCase()))].slice(0, MAX_CODES)
   if (skuCodes.length) {
     params.skuCodes = skuCodes
