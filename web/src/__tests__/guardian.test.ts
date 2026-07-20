@@ -57,6 +57,21 @@ describe("guardian classifier — nhóm nhạy cảm", () => {
   test("KHÔNG nhầm: sản phẩm bán nhiều nhất ≠ nhân viên", () => {
     expect(C("sản phẩm nào bán nhiều nhất?")).not.toBe("staff_hr")
   })
+
+  // ⚠️ Bỏ dấu tiếng Việt: "lương" (salary) ≡ "lượng" (quantity) = "luong". Trước đây bare
+  // \bluong\b chặn nhầm mọi câu chứa "số lượng / dung lượng / …" thành nhân sự (staff_hr).
+  test("KHÔNG nhầm: 'số lượng' (quantity) ≠ 'lương' (salary)", () => {
+    expect(C("tổng số lượng sản phẩm bán ra trong tuần trước")).not.toBe("staff_hr")
+    expect(C("tổng số lượng sản phẩm bán ra trong tuần trước")).toBe("revenue_bi")
+    expect(C("dung lượng data còn lại của gói")).not.toBe("staff_hr")
+    expect(C("lưu lượng sử dụng của các gói 3HK")).not.toBe("staff_hr")
+    expect(C("số lượng SKU active trong hệ thống")).not.toBe("staff_hr")
+  })
+  test("VẪN nhận đúng lương thật → staff_hr", () => {
+    expect(C("lương của nhân viên sales bao nhiêu?")).toBe("staff_hr")
+    expect(C("bảng lương tháng này")).toBe("staff_hr")
+    expect(C("mức lương của Nam")).toBe("staff_hr")
+  })
 })
 
 describe("guardian classifier — determinism", () => {

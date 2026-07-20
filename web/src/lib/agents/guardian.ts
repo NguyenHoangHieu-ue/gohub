@@ -12,11 +12,13 @@ import { classifySensitivity } from "./guardian-classify"
 //      quyết định allow / deny / dept theo role.
 //
 // Nguyên tắc (cập nhật): NỚI TỐI ĐA — hầu hết mọi người hỏi được MỌI THỨ về sản phẩm,
-// doanh thu, đơn hàng, kênh bán, khách hàng… CHỈ chặn 3 nhóm thật sự nhạy cảm:
+// doanh thu, đơn hàng, kênh bán, khách hàng… Guardian chỉ có 1 GIỚI HẠN CỨNG + phần còn lại
+// để Hiếu tự phân quyền:
 //   1) system_internal — code / cách hệ thống-chatbot được BUILD / quy trình kỹ thuật / credential / schema
-//      → chặn tất cả trừ admin·creator. Đây là GIỚI HẠN CHÍNH.
-//   2) margin_cogs — giá vốn / lợi nhuận (COGS/GP/CM1) → chỉ admin·creator·manager·bod.
-//   3) staff_hr — lương / hiệu suất nhân sự → chỉ admin·creator·manager·bod·hr.
+//      → CHẶN CỨNG MỌI VAI TRÒ, KỂ CẢ admin·creator (muốn xem thì tự đọc repo, bot không tiết lộ nội bộ).
+//        Đây là giới hạn DUY NHẤT không phân quyền được.
+//   2) Mọi category DỮ LIỆU khác (margin_cogs / staff_hr / customer_pii / revenue_bi / product…):
+//      admin·creator full quyền; các role khác theo policy (app_settings.access_policy) → Hiếu phân quyền.
 // Giá bán B2B vs B2C KHÔNG xử lý ở đây — scope qua getChannelFromRole (chỉ ảnh hưởng GIÁ BÁN sản phẩm).
 // PII khách hàng (tên/SĐT/email) đã che ở tầng prompt agent (chỉ trả mã KH) → category customer_pii để MỞ.
 // FAIL-OPEN: nếu phân loại lỗi / không chắc → cho qua (tránh chặn nhầm câu hợp lệ).
@@ -58,8 +60,10 @@ const DEFAULT_POLICY: Record<GuardCategory, Record<string, Decision>> = {
   margin_cogs:            { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
   // SIẾT — nhân sự / lương / hiệu suất NV: chỉ cấp quản lý + HR.
   staff_hr:               { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY, hr: "allow" },
-  // CHẶN CHÍNH — code / cách build hệ thống-chatbot / quy trình kỹ thuật / credential / schema: chỉ admin·creator.
-  system_internal:        { admin: "allow", creator: "allow", manager: "deny",  bod: "deny",  staff: "deny",  ...DEPT_DENY  },
+  // CHẶN CỨNG — code / build hệ thống-chatbot / quy trình kỹ thuật / credential / schema.
+  // ⚠️ Hàng policy này CHỈ để hiển thị/nhất quán: guardCheck chặn system_internal cho MỌI vai trò
+  // TRƯỚC khi đọc policy (kể cả admin·creator) → không phân quyền được, không thể override.
+  system_internal:        { admin: "deny", creator: "deny", manager: "deny",  bod: "deny",  staff: "deny",  ...DEPT_DENY  },
 }
 
 export const GUARD_CATEGORIES: GuardCategory[] = [
@@ -153,32 +157,36 @@ export async function guardCheck(
   const restrict   = opts?.onlyCategories
   const ignoreRole = opts?.ignoreRole ?? false
 
-  // admin / creator: toàn quyền → bỏ qua hẳn (tiết kiệm 1 call Gemini).
-  // KHÔNG áp khi ignoreRole (Lark group: không tin role nên vẫn phải kiểm).
-  if (!ignoreRole && (r === "admin" || r === "creator")) {
-    return { allowed: true, reason: "", category: "general" }
-  }
-
-  const policy = await loadPolicy()
-  const classified = classifySensitivity(message)   // XÁC ĐỊNH — không gọi LLM
-
-  // FAIL-OPEN: confidence thấp → cho qua (deterministic luôn ≥0.8 nên hầu như không xảy ra)
-  if (classified.confidence < 0.6) {
-    return { allowed: true, reason: "", category: classified.category }
-  }
-
+  // Phân loại XÁC ĐỊNH (regex, không LLM) TRƯỚC — cần biết category để xử lý system_internal
+  // ngay cả với admin/creator (họ cũng KHÔNG được hỏi bot về code/hệ thống).
+  const classified = classifySensitivity(message)
   const { category, target_department } = classified
 
-  // Giới hạn phạm vi kiểm (Lark chỉ chặn system_internal) — category khác luôn cho qua.
+  // Giới hạn phạm vi kiểm (VD Lark group chỉ chặn system_internal + customer_pii) — category
+  // ngoài danh sách luôn cho qua, KHÔNG áp cả chặn-cứng bên dưới.
   if (restrict && !restrict.includes(category)) {
     return { allowed: true, reason: "", category }
   }
 
-  // ignoreRole: chặn xác định bất kể vai trò khi câu thuộc category bị kiểm.
+  // ── CHẶN CỨNG: system_internal (code / cách build / prompt / schema / credential / kỹ thuật) ──
+  // Áp dụng cho MỌI vai trò — KỂ CẢ admin·creator. Đây là GIỚI HẠN DUY NHẤT không thể phân quyền:
+  // ai muốn xem code/hệ thống thì đọc trực tiếp repo, bot tuyệt đối không tiết lộ chuyện nội bộ.
+  if (category === "system_internal") {
+    return { allowed: false, reason: DENY_REASONS.system_internal, category }
+  }
+
+  // ignoreRole (Lark group, không tin role): các category bị kiểm còn lại (VD customer_pii) → chặn xác định.
   if (ignoreRole) {
     return { allowed: false, reason: DENY_REASONS[category], category }
   }
 
+  // ── DỮ LIỆU (mọi category KHÔNG phải system_internal) — Hiếu tự phân quyền qua policy ──
+  // admin / creator: toàn quyền với dữ liệu (cấp cao nhất).
+  if (r === "admin" || r === "creator") {
+    return { allowed: true, reason: "", category }
+  }
+
+  const policy = await loadPolicy()
   const decision: Decision = policy[category]?.[r] ?? DEFAULT_POLICY[category]?.[r] ?? "allow"
 
   if (decision === "allow") {

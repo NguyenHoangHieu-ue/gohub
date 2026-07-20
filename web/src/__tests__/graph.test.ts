@@ -27,6 +27,8 @@ const ROUTING: [string, string][] = [
   ["cho tôi biết số bán của con 1CKORCUF01005 từ đầu tháng đến nay", "bi-analyst"],
   ["sản phẩm 1CKORCUF01005 bán trên kênh nào", "bi-analyst"],
   ["cho tôi biết lượng sử dụng của các gói 3HK trong tháng 6 đi", "bi-analyst"],
+  ["tổng số lượng sản phẩm bán ra trong tuần trước", "bi-analyst"],
+  ["số lượng sản phẩm bán ra tháng này bao nhiêu", "bi-analyst"],
   // tra-cuu
   ["1EWORCBF01030 là mã gì vậy", "tra-cuu"],
   ["giá vốn của 1DTHATMF05010 và 1DTHATMF01507 là bao nhiêu", "tra-cuu"],
