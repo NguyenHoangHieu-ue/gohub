@@ -3,14 +3,14 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate, noCache } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const guard = analyticsGuard(req, session); if (guard) return guard
 
   const p = req.nextUrl.searchParams
   const startDate    = safeDate(p.get("startDate")) || "2025-01-01"

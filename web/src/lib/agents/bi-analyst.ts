@@ -4,9 +4,10 @@ import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 
-// Role data filter: admin không giới hạn; role khác lấy directive từ app_settings.role_filters
+// Role data filter: cấp quản lý (admin/creator/manager/bod) không giới hạn dữ liệu.
+// Các role khác (staff/dept) đọc directive từ app_settings.role_filters.
 export async function getRoleDataFilter(role?: string): Promise<string> {
-  if (!role || role === "admin") return ""
+  if (!role || ["admin", "creator", "manager", "bod"].includes(role)) return ""
   try {
     const { data } = await supabaseAdmin
       .from("app_settings").select("value").eq("key", "role_filters").maybeSingle()

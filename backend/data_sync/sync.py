@@ -5,6 +5,7 @@ Local: cd sync && python sync.py  (cần set env vars API_KEY, SUPABASE_URL, SUP
 """
 import os
 import dataclasses
+import concurrent.futures
 from datetime import datetime, timezone
 from supabase import create_client
 from gohub_api_clients import GohubClient
@@ -217,10 +218,20 @@ def main():
 
     new_sku_rows = []  # raw rows trước khi DROP_COLS
 
+    # Parallel fetch: 4 API calls không có FK dependency → chạy đồng thời
+    # Upsert vẫn theo đúng thứ tự FK: products → skus → listings → items
+    def _fetch(task):
+        tbl, fn, _pk = task
+        print(f"[{tbl}] Fetching...", flush=True)
+        rows = [dataclasses.asdict(r) for r in fn()]
+        print(f"[{tbl}] Fetched {len(rows):,} rows", flush=True)
+        return tbl, rows
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        fetched: dict[str, list[dict]] = dict(pool.map(_fetch, tasks))
+
     for table, fetch_fn, pk in tasks:
-        print(f"[{table}] Fetching...", flush=True)
-        records = fetch_fn()
-        rows = [dataclasses.asdict(r) for r in records]
+        rows = fetched[table]
 
         if table == "skus":
             new_sku_rows = rows  # save raw (có latest_cogs) để detect changes

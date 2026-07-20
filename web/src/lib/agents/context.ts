@@ -410,14 +410,15 @@ export async function buildToolContext(
       )
     }
 
-    // Inject TOÀN BỘ ref_support_countries — để bot biết mọi mã nhóm nước (AP2, EU1, RUS...)
+    // Compact: chỉ inject CODE=Tên — bỏ ISO list (giảm ~70% token).
+    // Khi params.groupCode trỏ mã cụ thể → section detail bên dưới handle đầy đủ.
     if ((ref.supportCountries as any[]).length) {
+      const compact = (ref.supportCountries as any[])
+        .map((s: any) => `${s.code}=${s.support_country ?? ""}`)
+        .join(" | ")
       sections.push(
-        `=== MÃ NHÓM NƯỚC HỖ TRỢ (${(ref.supportCountries as any[]).length}) — dùng làm country_group trong SKU ===`,
-        `Định dạng: MÃ = Tên nhóm | ISO codes`,
-        ...(ref.supportCountries as any[]).map((s: any) =>
-          `${s.code} = ${s.support_country ?? ""}${s.country_codes ? ` | ${s.country_codes}` : ""}`
-        )
+        `=== MÃ NHÓM NƯỚC HỖ TRỢ (${(ref.supportCountries as any[]).length}) — country_group trong SKU ===`,
+        compact
       )
     }
 

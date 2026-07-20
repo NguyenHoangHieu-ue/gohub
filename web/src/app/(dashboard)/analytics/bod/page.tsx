@@ -749,9 +749,9 @@ export default function BODReport() {
                           <td className="px-4 py-3 text-right font-bold text-emerald-600">{formatCurrency(row.margin)}</td>
                           <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.margin_percent > 20 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{(row.margin_percent || 0).toFixed(1)}%</span></td>
                           <td className="px-4 py-3 text-right font-bold text-indigo-600">{formatCurrency(row.gpm2)}</td>
-                          {projection && <td className="px-4 py-3 text-right font-bold text-blue-600 bg-blue-50/30">{formatCurrency(row.gpm2 * projection.factor)}</td>}
+                          {projection && <td className="px-4 py-3 text-right font-bold text-blue-600 bg-blue-50/30">{formatCurrency(row.margin * projection.factor - (row.margin - row.gpm2))}</td>}
                           <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.gpm2_percent > 15 ? "bg-indigo-50 text-indigo-600" : "bg-pink-50 text-pink-600"}`}>{(row.gpm2_percent || 0).toFixed(1)}%</span></td>
-                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">{(row.gpm2_percent || 0).toFixed(1)}%</span></td>}
+                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">{(row.revenue * projection.factor) > 0 ? ((row.margin * projection.factor - (row.margin - row.gpm2)) / (row.revenue * projection.factor) * 100).toFixed(1) : (row.gpm2_percent || 0).toFixed(1)}%</span></td>}
                         </tr>
                       ))}
                     </React.Fragment>

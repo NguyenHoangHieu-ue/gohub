@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   CartesianGrid, Tooltip, ResponsiveContainer,
   Area, Line, ComposedChart, XAxis, YAxis,
@@ -151,6 +151,10 @@ export default function ChannelPerformancePage() {
     const unitsChange = prevUnits > 0 ? ((projectedUnits - prevUnits) / prevUnits) * 100 : 0
     const aovChange = prevAOV > 0 ? ((projectedAOV - prevAOV) / prevAOV) * 100 : 0
 
+    // CM1 projection: opCost = fixed this month, chỉ GP mới scale theo factor
+    const fullMonthOpCost = (metrics.margin || 0) - (metrics.gpm2 || 0)
+    const projectedCm1 = (metrics.margin || 0) * factor - fullMonthOpCost
+
     return {
       factor,
       daysElapsed,
@@ -159,6 +163,7 @@ export default function ChannelPerformancePage() {
       orders: projectedOrders,
       units: projectedUnits,
       aov: projectedAOV,
+      cm1: projectedCm1,
       revenueChange,
       ordersChange,
       unitsChange,
@@ -166,7 +171,8 @@ export default function ChannelPerformancePage() {
     }
   }
 
-  const projection = getProjectionInfo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const projection = useMemo(getProjectionInfo, [metrics, startDate, endDate])
 
   const handleProductSort = (key: string) => {
     setProductSortConfig(prev => ({
@@ -244,8 +250,8 @@ export default function ChannelPerformancePage() {
         "Gross Profit 1": Math.round(row.margin || 0),
         "Dự phóng GP1": projection ? Math.round((row.margin || 0) * pf) : "",
         "Contribution Margin 1": Math.round(rowGpm2 || 0),
-        "Dự phóng CM1": projection ? Math.round((rowGpm2 || 0) * pf) : "",
-        "GPM 2 %": Number(rowGpm2Percent.toFixed(1)),
+        "Dự phóng CM1": projection ? Math.round((row.margin || 0) * pf - ((row.margin || 0) - (rowGpm2 || 0))) : "",
+        "CM1 %": Number(rowGpm2Percent.toFixed(1)),
       }
       if (comparisonType !== "none") {
         out[comparisonType === "previous_period" ? "%MoM" : "%YoY"] = Math.round(growth)
@@ -1259,7 +1265,7 @@ export default function ChannelPerformancePage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <MetricCard title="Total Revenue" value={formatCurrency(metrics?.revenue || 0)} change={metrics?.revenueChange || 0} icon={DollarSign} loading={loading} comparisonActive={comparisonType !== "none"} />
-        <MetricCard title="Gross Profit 1" value={formatCurrency(metrics?.margin || 0)} change={metrics?.marginChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
+        <MetricCard title="Gross Profit" value={formatCurrency(metrics?.margin || 0)} change={metrics?.marginChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Contribution Margin 1" value={formatCurrency(metrics?.gpm2 || 0)} change={metrics?.gpm2Change || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Total Orders" value={formatNumber(metrics?.orders || 0)} change={metrics?.ordersChange || 0} icon={ShoppingBag} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Units Sold" value={formatNumber(metrics?.units || 0)} change={metrics?.unitsChange || 0} icon={Package} loading={loading} comparisonActive={comparisonType !== "none"} />
@@ -1339,11 +1345,11 @@ export default function ChannelPerformancePage() {
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units Sold</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
                 <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit 1</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit</th>
                 <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contribution Margin 1</th>
                 <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GPM 2 %</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1 %</th>
                 {comparisonType !== "none" && (
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
                     {comparisonType === "previous_period" ? "%MoM" : "%YoY"}
@@ -1420,7 +1426,7 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(rowGpm2 || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((rowGpm2 || 0) * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor - ((row.margin || 0) - (rowGpm2 || 0))) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2Percent >= 0 ? "text-emerald-600" : "text-rose-600")}>{rowGpm2Percent.toFixed(1)}%</span>
                       </td>
@@ -1468,7 +1474,7 @@ export default function ChannelPerformancePage() {
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", (metrics?.gpm2 || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(metrics?.gpm2 || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.gpm2 || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency(projection.cm1) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", ((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100) >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100).toFixed(1)}%

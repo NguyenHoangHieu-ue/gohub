@@ -268,10 +268,7 @@ export default function ThreeHKDataUsagePage() {
       setLoading(true)
       setError(null)
       try {
-        await fetchTotals()
-        await fetchSKUTypeMetrics()
-        await fetchSKUMetrics()
-        await fetchRecords(1, true)
+        await Promise.all([fetchTotals(), fetchSKUTypeMetrics(), fetchSKUMetrics(), fetchRecords(1, true)])
         setSkuPage(1)
       } catch (err) {
         console.error("Error in batch data fetch:", err)

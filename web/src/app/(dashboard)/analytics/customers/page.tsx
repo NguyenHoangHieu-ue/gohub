@@ -79,11 +79,14 @@ export default function CustomerPerformancePage() {
     try {
       const reqBody = { startDate, endDate, dateColumn, period, customers: selectedCustomers }
 
-      const res = await fetch(`/api/analytics/customer/report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      })
+      const [res, tiersRes] = await Promise.all([
+        fetch(`/api/analytics/customer/report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody),
+        }),
+        fetch(`/api/config/partner-tiers`).catch(() => null),
+      ])
 
       if (!res.ok) throw new Error("Failed to fetch data")
 
@@ -97,13 +100,7 @@ export default function CustomerPerformancePage() {
       setProductData(data.products || [])
       setOrderData(data.orders || [])
 
-      try {
-        const configRes = await fetch(`/api/config/partner-tiers`)
-        if (configRes.ok) {
-          const tiers = await configRes.json()
-          setPartnerTiers(tiers)
-        }
-      } catch (err) {}
+      if (tiersRes?.ok) setPartnerTiers(await tiersRes.json())
     } catch (err: any) {
       console.error(err)
       setError("Hiếu đang fix, vui lòng đợi")

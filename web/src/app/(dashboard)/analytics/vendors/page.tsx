@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from "recharts"
@@ -67,21 +67,23 @@ export default function VendorPerformancePage() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
 
-  const filteredProducts = productPerformance
-    .filter(p => (p.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()))
-    .sort((a, b) => {
-      const aVal = sortConfig.key === "marginPercent"
-        ? (parseFloat(a.revenue) > 0 ? parseFloat(a.margin) / parseFloat(a.revenue) : 0)
-        : parseFloat(a[sortConfig.key] || 0)
-      const bVal = sortConfig.key === "marginPercent"
-        ? (parseFloat(b.revenue) > 0 ? parseFloat(b.margin) / parseFloat(b.revenue) : 0)
-        : parseFloat(b[sortConfig.key] || 0)
-
-      if (sortConfig.key === "sku") {
-        return sortConfig.direction === "asc" ? a.sku.localeCompare(b.sku) : b.sku.localeCompare(a.sku)
-      }
-      return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal
-    })
+  const filteredProducts = useMemo(() =>
+    productPerformance
+      .filter(p => (p.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()))
+      .sort((a, b) => {
+        const aVal = sortConfig.key === "marginPercent"
+          ? (parseFloat(a.revenue) > 0 ? parseFloat(a.margin) / parseFloat(a.revenue) : 0)
+          : parseFloat(a[sortConfig.key] || 0)
+        const bVal = sortConfig.key === "marginPercent"
+          ? (parseFloat(b.revenue) > 0 ? parseFloat(b.margin) / parseFloat(b.revenue) : 0)
+          : parseFloat(b[sortConfig.key] || 0)
+        if (sortConfig.key === "sku") {
+          return sortConfig.direction === "asc" ? a.sku.localeCompare(b.sku) : b.sku.localeCompare(a.sku)
+        }
+        return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal
+      }),
+    [productPerformance, searchTerm, sortConfig]
+  )
 
   const handleSort = (key: string) => {
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc" }))
@@ -199,7 +201,8 @@ export default function VendorPerformancePage() {
     }
   }
 
-  const projection = getProjectionInfo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const projection = useMemo(getProjectionInfo, [metrics, startDate, endDate, prevMonthMetrics])
 
   // Initial load: fetchData chỉ chạy 1 lần khi vendors được load lần đầu
   const initialLoadDone = React.useRef(false)
@@ -233,31 +236,19 @@ export default function VendorPerformancePage() {
 
       let prevDateFilter = ""
       let fPrevDateFilter = ""
-
       if (comparisonType === "previous_period") {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        const diffTime = Math.abs(end.getTime() - start.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-
-        const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - diffDays)
-        const prevEnd = new Date(end); prevEnd.setDate(prevEnd.getDate() - diffDays)
-
-        const prevStartDateStr = prevStart.toISOString().split("T")[0]
-        const prevEndDateStr = prevEnd.toISOString().split("T")[0]
-        prevDateFilter = `${dateCol}::date >= '${prevStartDateStr}' AND ${dateCol}::date <= '${prevEndDateStr}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${prevStartDateStr}' AND f.${dateCol}::date <= '${prevEndDateStr}'`
+        const start = new Date(startDate), end = new Date(endDate)
+        const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        const ps = new Date(start); ps.setDate(ps.getDate() - diffDays)
+        const pe = new Date(end); pe.setDate(pe.getDate() - diffDays)
+        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
+        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
       } else if (comparisonType === "previous_year") {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-
-        const prevStart = new Date(start); prevStart.setFullYear(prevStart.getFullYear() - 1)
-        const prevEnd = new Date(end); prevEnd.setFullYear(prevEnd.getFullYear() - 1)
-
-        const prevStartDateStr = prevStart.toISOString().split("T")[0]
-        const prevEndDateStr = prevEnd.toISOString().split("T")[0]
-        prevDateFilter = `${dateCol}::date >= '${prevStartDateStr}' AND ${dateCol}::date <= '${prevEndDateStr}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${prevStartDateStr}' AND f.${dateCol}::date <= '${prevEndDateStr}'`
+        const start = new Date(startDate), end = new Date(endDate)
+        const ps = new Date(start); ps.setFullYear(ps.getFullYear() - 1)
+        const pe = new Date(end); pe.setFullYear(pe.getFullYear() - 1)
+        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
+        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
       }
 
       let channelFilter = selectedChannel !== "All Channels"
@@ -266,86 +257,99 @@ export default function VendorPerformancePage() {
       let fChannelFilter = selectedChannel !== "All Channels"
         ? `AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${selectedChannel.replace(/'/g, "''")}')`
         : ""
-
       if (selectedChannelGroup !== "All Groups") {
-        const groupCond = `AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-        const fGroupCond = `AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-        channelFilter += ` ${groupCond}`
-        fChannelFilter += ` ${fGroupCond}`
+        channelFilter += ` AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
+        fChannelFilter += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
       }
 
       const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
       const vendorFilter = `TRIM(sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
       const fVendorFilter = `TRIM(f.sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
 
-      // 0. Total Revenue for ALL vendors (contribution)
+      // prev-month range for projection
+      const pmDate = new Date(startDate)
+      const pmStart = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth() - 1, 1))
+      const pmEnd   = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0))
+
+      // Build ALL SQL strings upfront
       const allVendorsSql = `SELECT SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${dateFilter} ${channelFilter}`
-      const allVendorsRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: allVendorsSql }) })
+      const summarySql    = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}`
+      const prevSummarySql = comparisonType !== "none"
+        ? `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}`
+        : null
+      const pmSql = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter}`
+      const trendSql = `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+      const prevTrendSql = comparisonType !== "none"
+        ? `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+        : null
+      const productsSql = `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY TRIM(sku) ORDER BY revenue DESC`
+      const prevProductsSql = comparisonType !== "none"
+        ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY TRIM(sku)`
+        : null
+      const prevChannelSql = comparisonType !== "none"
+        ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} GROUP BY s.channel_name`
+        : null
+
+      const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
+      const strategicUrl = `/api/analytics/b2b/strategic-performance?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&${vendorParams}`
+
+      // Helper: POST query or resolve null for optional prev-period queries
+      const q = (sql: string) => fetch("/api/analytics/query", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }),
+      })
+      const qOpt = (sql: string | null): Promise<Response | null> => sql ? q(sql) : Promise.resolve(null)
+
+      // Pre-fetch partner_tiers trước → cần để build channelSql CASE phân loại đúng B2B-Strategic
+      const tiersRaw = await fetch("/api/config/partner-tiers")
+      const tiersData: Record<string, string[]> = tiersRaw.ok ? await tiersRaw.json() : {}
+      setPartnerTiers(Object.keys(tiersData).length ? tiersData : { Strategic: [] })
+      const strategicNames: string[] = tiersData.Strategic || []
+      const strategicPat = strategicNames.length > 0
+        ? strategicNames.map((n: string) => `'%${n.replace(/'/g, "''").trim()}%'`).join(",")
+        : null
+      const bizGroupSQL = strategicPat
+        ? `CASE WHEN UPPER(s.group_name) = 'B2B' AND s.channel_name ILIKE ANY(ARRAY[${strategicPat}]::text[]) THEN 'B2B-Strategic' WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+        : `CASE WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+
+      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name) SELECT s.channel_name, SUM(f.${revCol}) as revenue, COUNT(DISTINCT f.order_code) as orders, SUM(f.${qtyCol}) as units_sold, SUM(f.${marginCol}) as margin, MAX(t.total_revenue) as total_channel_revenue, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '') WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name ORDER BY revenue DESC`
+
+      // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
+      const [
+        allVendorsRes, summaryRes, prevSummaryRes, pmRes,
+        trendRes, prevTrendRes, productsRes, prevProductsRes,
+        chanRes, strategicPerfRes, prevChanRes,
+      ] = await Promise.all([
+        q(allVendorsSql), q(summarySql), qOpt(prevSummarySql), q(pmSql),
+        q(trendSql), qOpt(prevTrendSql), q(productsSql), qOpt(prevProductsSql),
+        q(channelSql), fetch(strategicUrl), qOpt(prevChannelSql),
+      ])
+
+      // Process: allVendors
       if (allVendorsRes.ok) {
-        const allVendorsData = await allVendorsRes.json()
-        setAllVendorsTotalRevenue(parseFloat(allVendorsData[0]?.revenue || 0))
+        const d = await allVendorsRes.json()
+        setAllVendorsTotalRevenue(parseFloat(d[0]?.revenue || 0))
       }
 
-      // 1. Summary Metrics
-      const summarySql = `
-        SELECT
-          SUM(${revCol}) as revenue,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${qtyCol}) as units,
-          SUM(${marginCol}) as margin
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-      `
-
-      let currData: any = null
-      let prevData: any = null
-
-      if (comparisonType !== "none") {
-        const prevSummarySql = `
-          SELECT
-            SUM(${revCol}) as revenue,
-            COUNT(DISTINCT order_code) as orders,
-            SUM(${qtyCol}) as units,
-            SUM(${marginCol}) as margin
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-        `
-
-        const [currRes, prevRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: summarySql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevSummarySql }) }),
-        ])
-
-        if (!currRes.ok || !prevRes.ok) throw new Error("Failed to fetch summary metrics")
-        currData = (await currRes.json())[0]
-        prevData = (await prevRes.json())[0]
-      } else {
-        const currRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: summarySql }) })
-        if (!currRes.ok) throw new Error("Failed to fetch summary metrics")
-        currData = (await currRes.json())[0]
-      }
-
+      // Process: summary metrics
+      if (!summaryRes.ok) throw new Error("Failed to fetch summary metrics")
+      const currData = (await summaryRes.json())[0]
+      const prevData = prevSummaryRes ? (await (prevSummaryRes as Response).json())[0] : null
       if (currData) {
         const currentRev = parseFloat(currData.revenue || 0)
-        const prevRev = parseFloat(prevData?.revenue || 0)
-        const revChange = (comparisonType !== "none" && prevRev > 0) ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
-
+        const prevRev    = parseFloat(prevData?.revenue || 0)
+        const revChange  = (comparisonType !== "none" && prevRev > 0) ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
         const currentOrders = parseInt(currData.orders || 0)
-        const prevOrders = parseInt(prevData?.orders || 0)
-        const orderChange = (comparisonType !== "none" && prevOrders > 0) ? Math.round(((currentOrders - prevOrders) / prevOrders) * 100) : 0
-
+        const prevOrders    = parseInt(prevData?.orders || 0)
+        const orderChange   = (comparisonType !== "none" && prevOrders > 0) ? Math.round(((currentOrders - prevOrders) / prevOrders) * 100) : 0
         const currentAov = currentOrders > 0 ? currentRev / currentOrders : 0
-        const prevAov = prevOrders > 0 ? prevRev / prevOrders : 0
-        const aovChange = (comparisonType !== "none" && prevAov > 0) ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
-
+        const prevAov    = prevOrders > 0 ? prevRev / prevOrders : 0
+        const aovChange  = (comparisonType !== "none" && prevAov > 0) ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
         const currentMargin = parseFloat(currData.margin || 0)
-        const prevMargin = parseFloat(prevData?.margin || 0)
-        const marginChange = (comparisonType !== "none" && prevMargin > 0) ? Math.round(((currentMargin - prevMargin) / prevMargin) * 100) : 0
-
+        const prevMargin    = parseFloat(prevData?.margin || 0)
+        const marginChange  = (comparisonType !== "none" && prevMargin > 0) ? Math.round(((currentMargin - prevMargin) / prevMargin) * 100) : 0
         const currentUnits = parseInt(currData.units || 0)
-        const prevUnits = parseInt(prevData?.units || 0)
-        const unitChange = (comparisonType !== "none" && prevUnits > 0) ? Math.round(((currentUnits - prevUnits) / prevUnits) * 100) : 0
-
+        const prevUnits    = parseInt(prevData?.units || 0)
+        const unitChange   = (comparisonType !== "none" && prevUnits > 0) ? Math.round(((currentUnits - prevUnits) / prevUnits) * 100) : 0
         setMetrics({
           revenue: currentRev, revenueChange: revChange,
           orders: currentOrders, ordersChange: orderChange,
@@ -355,193 +359,59 @@ export default function VendorPerformancePage() {
         })
       }
 
-      // Full previous month metrics for projection
+      // Process: prevMonth (soft fail)
       try {
-        const date = new Date(startDate)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
-        const pmStart = formatDateToISO(prevMonthFirstDay)
-        const pmEnd = formatDateToISO(prevMonthLastDay)
-
-        const pmSql = `
-          SELECT
-            SUM(${revCol}) as revenue,
-            COUNT(DISTINCT order_code) as orders,
-            SUM(${qtyCol}) as units,
-            SUM(${marginCol}) as margin
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter}
-        `
-        const pmRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: pmSql }) })
         if (pmRes.ok) {
           const pmData = await pmRes.json()
           setPrevMonthMetrics({
             revenue: parseFloat(pmData[0]?.revenue || 0),
-            orders: parseInt(pmData[0]?.orders || 0),
-            units: parseInt(pmData[0]?.units || 0),
-            margin: parseFloat(pmData[0]?.margin || 0),
+            orders:  parseInt(pmData[0]?.orders || 0),
+            units:   parseInt(pmData[0]?.units || 0),
+            margin:  parseFloat(pmData[0]?.margin || 0),
           })
         }
-      } catch (e) {
-        console.error("Error fetching prev month metrics:", e)
-      }
+      } catch (e) { console.error("Error fetching prev month metrics:", e) }
 
-      // 2. Trend Data
-      const trendSql = `
-        SELECT
-          TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date,
-          SUM(${revCol}) as revenue
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-        GROUP BY ${dateCol}::date
-        ORDER BY ${dateCol}::date
-      `
-
-      if (comparisonType !== "none") {
-        const prevTrendSql = `
-          SELECT
-            TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date,
-            SUM(${revCol}) as revenue
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-          GROUP BY ${dateCol}::date
-          ORDER BY ${dateCol}::date
-        `
-
-        const [trendRes, prevTrendRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: trendSql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevTrendSql }) }),
-        ])
-
-        if (!trendRes.ok || !prevTrendRes.ok) throw new Error("Failed to fetch trend data")
-
-        const currTrend = await trendRes.json()
-        const prevTrend = await prevTrendRes.json()
-
-        const maxLength = Math.max(currTrend.length, prevTrend.length)
-        const combinedTrend = []
-        for (let i = 0; i < maxLength; i++) {
-          combinedTrend.push({
-            date: currTrend[i]?.date.split("-").slice(1).reverse().join("/") || prevTrend[i]?.date.split("-").slice(1).reverse().join("/"),
+      // Process: trend
+      if (!trendRes.ok) throw new Error("Failed to fetch trend data")
+      const currTrend = await trendRes.json()
+      if (prevTrendRes) {
+        const prevTrend = await (prevTrendRes as Response).json()
+        const maxLen = Math.max(currTrend.length, prevTrend.length)
+        const combined = []
+        for (let i = 0; i < maxLen; i++) {
+          combined.push({
+            date: (currTrend[i]?.date || prevTrend[i]?.date).split("-").slice(1).reverse().join("/"),
             revenue: parseFloat(currTrend[i]?.revenue || 0),
             prevRevenue: parseFloat(prevTrend[i]?.revenue || 0),
           })
         }
-        setTrendData(combinedTrend)
+        setTrendData(combined)
       } else {
-        const trendRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: trendSql }) })
-        if (!trendRes.ok) throw new Error("Failed to fetch trend data")
-        const trendDataRaw = await trendRes.json()
-        setTrendData(trendDataRaw.map((d: any) => ({
+        setTrendData(currTrend.map((d: any) => ({
           date: d.date.split("-").slice(1).reverse().join("/"),
           revenue: parseFloat(d.revenue || 0),
         })))
       }
 
-      // 3. Product Performance
-      const productsSql = `
-        SELECT
-          TRIM(sku) as sku,
-          SUM(${revCol}) as revenue,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${marginCol}) as margin
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-        GROUP BY TRIM(sku)
-        ORDER BY revenue DESC
-      `
-
-      if (comparisonType !== "none") {
-        const prevProductsSql = `
-          SELECT
-            TRIM(sku) as sku,
-            SUM(${revCol}) as revenue
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-          GROUP BY TRIM(sku)
-        `
-
-        const [prodRes, prevProdRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: productsSql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevProductsSql }) }),
-        ])
-
-        if (!prodRes.ok || !prevProdRes.ok) throw new Error("Failed to fetch product performance")
-
-        const currProds = await prodRes.json()
-        const prevProds = await prevProdRes.json()
-
+      // Process: products
+      if (!productsRes.ok) throw new Error("Failed to fetch product performance")
+      const currProds = await productsRes.json()
+      if (prevProductsRes) {
+        const prevProds = await (prevProductsRes as Response).json()
         const prevProdMap = prevProds.reduce((acc: any, p: any) => { acc[p.sku] = parseFloat(p.revenue || 0); return acc }, {})
-
         setProductPerformance(currProds.map((p: any) => ({ ...p, prevRevenue: prevProdMap[p.sku] || 0 })))
       } else {
-        const productsRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: productsSql }) })
-        if (!productsRes.ok) throw new Error("Failed to fetch product performance")
-        setProductPerformance(await productsRes.json())
+        setProductPerformance(currProds)
       }
 
-      // 4. Channel Distribution
-      const channelSql = `
-        WITH channel_totals AS (
-          SELECT
-            s.channel_name,
-            SUM(f.${revCol}) as total_revenue
-          FROM ${mainTable} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${fDateFilter} ${fChannelFilter}
-          GROUP BY s.channel_name
-        )
-        SELECT
-          s.channel_name,
-          SUM(f.${revCol}) as revenue,
-          COUNT(DISTINCT f.order_code) as orders,
-          SUM(f.${qtyCol}) as units_sold,
-          SUM(f.${marginCol}) as margin,
-          MAX(t.total_revenue) as total_channel_revenue,
-          CASE
-            WHEN s.channel_name IN ('Traveloka', 'Klook', 'Fayfay', 'Momo', 'Gohub Web (Partner)', 'Lazada', 'Shopee', 'Tiktok Shop') THEN 'B2B-Strategic'
-            WHEN s.channel_name IN ('VN-Wholesales', 'VN-B2B Portal', 'Global-Wholesales', 'Global-B2B Portal') THEN 'B2B-Non-Strategic'
-            ELSE 'B2C'
-          END as business_group
-        FROM ${mainTable} f
-        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-        LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '')
-        WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter}
-        GROUP BY s.channel_name
-        ORDER BY revenue DESC
-      `
-
-      const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
-      const queryParamsForB2B = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&${vendorParams}`
-      const [chanRes, tiersRes, strategicPerfRes] = await Promise.all([
-        fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: channelSql }) }),
-        fetch(`/api/config/partner-tiers`),
-        fetch(`/api/analytics/b2b/strategic-performance${queryParamsForB2B}`),
-      ])
-
+      // Process: channels + strategic (partner_tiers đã set từ pre-fetch)
       if (!chanRes.ok) throw new Error("Failed to fetch channel distribution")
       const currChans = await chanRes.json()
-
-      if (tiersRes.ok) setPartnerTiers(await tiersRes.json())
       if (strategicPerfRes.ok) setStrategicPerformance(await strategicPerfRes.json())
-
-      if (comparisonType !== "none") {
-        const prevChannelSql = `
-          SELECT
-            s.channel_name,
-            SUM(f.${revCol}) as revenue
-          FROM ${mainTable} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter}
-          GROUP BY s.channel_name
-        `
-
-        const prevChanRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevChannelSql }) })
-        if (!prevChanRes.ok) throw new Error("Failed to fetch previous channel distribution")
-
-        const prevChans = await prevChanRes.json()
+      if (prevChanRes) {
+        const prevChans = await (prevChanRes as Response).json()
         const prevChanMap = prevChans.reduce((acc: any, c: any) => { acc[c.channel_name] = parseFloat(c.revenue || 0); return acc }, {})
-
         setChannelDistribution(currChans.map((c: any) => ({ ...c, prevRevenue: prevChanMap[c.channel_name] || 0 })))
       } else {
         setChannelDistribution(currChans)

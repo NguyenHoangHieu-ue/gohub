@@ -377,19 +377,20 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         const sd = await (await fetch(`/api/config/ga4${qs}`)).json()
         const sites: { id: string; name: string }[] = sd.sites ?? []
         if (!sites.length) { setGa4([]); return }
-        const out: { name: string; cr: number; kpis: { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }; series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[] }[] = []
-        for (const s of sites) {
-          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=180${localPreview ? "&localPreview=1" : ""}`)
-          if (!r.ok) continue
-          const d = await r.json()
-          const series = monthlyRollup((d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })))
-          out.push({
-            name:   s.name,
-            cr:     d.kpis?.cr ?? 0,
-            kpis:   { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
-            series,
+        // GA4 properties độc lập → fetch song song thay vì tuần tự
+        const out = (await Promise.all(
+          sites.map(async (s) => {
+            const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=180${localPreview ? "&localPreview=1" : ""}`)
+            if (!r.ok) return null
+            const d = await r.json()
+            const series = monthlyRollup((d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })))
+            return {
+              name: s.name, cr: d.kpis?.cr ?? 0,
+              kpis: { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
+              series,
+            }
           })
-        }
+        )).filter((r): r is NonNullable<typeof r> => r !== null)
         setGa4(out)
       } catch { setGa4([]) }
     })()

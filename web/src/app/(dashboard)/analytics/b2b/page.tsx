@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart,
 } from "recharts"
@@ -167,7 +167,8 @@ export default function B2BPerformance() {
       const totalGPProjected = totalGPActual * (isProjectable ? projectionFactor : 1)
       const prevTotalGP = b2bPrevGP
       const totalGpm2Actual = b2bGpm2
-      const totalGpm2Projected = totalGpm2Actual * (isProjectable ? projectionFactor : 1)
+      const fullMonthB2BOpCost = totalGPActual - totalGpm2Actual
+      const totalGpm2Projected = isProjectable ? totalGPProjected - fullMonthB2BOpCost : totalGpm2Actual
       const prevTotalGpm2 = b2bPrevGpm2
 
       const kpis: any[] = [
@@ -200,6 +201,9 @@ export default function B2BPerformance() {
     if (config.direction === "asc") return a[config.key] > b[config.key] ? 1 : -1
     return a[config.key] < b[config.key] ? 1 : -1
   })
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nonStrategicMemo = useMemo(() => getFilteredOtherTiers(), [wholesaleCustomers, strategicPerformance, partnerTiers])
 
   const getFilteredOtherTiers = () => {
     const combined = [...wholesaleCustomers]
@@ -431,7 +435,7 @@ export default function B2BPerformance() {
                       const columns: { label: string; key: string }[] = [{ label: "Partner", key: "name" }, { label: "Tier", key: "tier" }, { label: "Revenue", key: "revenue" }]
                       if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
                       columns.push({ label: "Units", key: "units" }, { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                      const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
+                      const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
                       exportToCSV(exportData, "Strategic_Partners_Performance", columns)
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all font-bold text-[10px]">
                       <Download className="w-3 h-3" />Export
@@ -615,7 +619,7 @@ export default function B2BPerformance() {
                     const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
                     if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
                     columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                    const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
+                    const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
                     exportToCSV(exportData, "Other_Tiers_Customers", columns)
                   }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
                     <Download className="w-3 h-3" />CSV
@@ -634,7 +638,7 @@ export default function B2BPerformance() {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {(() => {
-                        const nonStrategic = getFilteredOtherTiers()
+                        const nonStrategic = nonStrategicMemo
                         const sorted = sortData(nonStrategic, wholesaleSort)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
