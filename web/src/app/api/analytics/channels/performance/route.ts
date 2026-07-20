@@ -62,6 +62,14 @@ export async function GET(req: NextRequest) {
     const months = monthsBetween(startDate || "", endDate || "")
     const { channelCosts, groupCosts } = await fetchCosts(months)
 
+    // Pre-compute revenue totals per business group → allocate group costs proportionally
+    const groupRevTotals: Record<string, number> = {}
+    rows.forEach(r => {
+      const g = r.group_name || ""
+      const k = g.startsWith("B2B") ? "B2B" : g.includes("B2C") ? "B2C" : g
+      groupRevTotals[k] = (groupRevTotals[k] || 0) + parseFloat(r.revenue || "0")
+    })
+
     return rows.map(r => {
       const rev  = parseFloat(r.revenue      || "0")
       const mar  = parseFloat(r.margin       || "0")
@@ -78,12 +86,13 @@ export async function GET(req: NextRequest) {
           if (v) opCost += v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100
         })
       })
-      // Op cost theo group (channel_group_costs: B2B / B2C — prorate theo ngày)
+      // Op cost theo group (channel_group_costs: B2B / B2C) — chia theo revenue share
       const tursoGroup = grp.startsWith("B2B") ? "B2B" : grp.includes("B2C") ? "B2C" : grp
+      const revShare = (groupRevTotals[tursoGroup] || 0) > 0 ? rev / groupRevTotals[tursoGroup] : 0
       groupCosts.filter(gc => gc.group_name === tursoGroup).forEach(gc => {
         const ratio = getDaysInMonth(gc.month) > 0
           ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
-        opCost += gc.amount * ratio
+        opCost += gc.amount * ratio * revShare
       })
 
       const gpm2 = mar - opCost

@@ -115,7 +115,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     const isCurrentMonth = end.getFullYear() === now.getFullYear() && end.getMonth() === now.getMonth()
     if (isCurrentMonth) {
       const totalDaysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-      const daysElapsed = end.getDate()
+      const daysElapsed = Math.max(1, Math.ceil((end.getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)
       const projectionRatio = daysElapsed > 0 ? totalDaysInMonth / daysElapsed : 1
       projected_revenue = revenue * projectionRatio
       projected_margin = margin * projectionRatio

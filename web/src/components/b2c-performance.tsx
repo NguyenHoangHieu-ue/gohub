@@ -359,22 +359,17 @@ export function B2CPerformance() {
     )
   }
 
-  const sortedPerformanceData = [...performanceData].sort((a, b) => {
+  const sortedPerformanceData = React.useMemo(() => [...performanceData].sort((a, b) => {
     const aValue = a[sortConfig.key]
     const bValue = b[sortConfig.key]
-
     if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortConfig.direction === "asc"
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue)
+      return sortConfig.direction === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
     }
-
     if (typeof aValue === "number" && typeof bValue === "number") {
       return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue
     }
-
     return 0
-  })
+  }), [performanceData, sortConfig])
 
   const totals = React.useMemo(() => {
     const sum = performanceData.reduce((acc, curr) => {
