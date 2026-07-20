@@ -202,9 +202,6 @@ export default function B2BPerformance() {
     return a[config.key] < b[config.key] ? 1 : -1
   })
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nonStrategicMemo = useMemo(() => getFilteredOtherTiers(), [wholesaleCustomers, strategicPerformance, partnerTiers])
-
   const getFilteredOtherTiers = () => {
     const combined = [...wholesaleCustomers]
     const tieredPartnersFound = Object.values(partnerTiers).flat()
@@ -277,6 +274,10 @@ export default function B2BPerformance() {
       })) : undefined,
     }))
   }
+
+  // nonStrategicMemo sau getFilteredOtherTiers (tránh temporal dead zone với const)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nonStrategicMemo = useMemo(() => getFilteredOtherTiers(), [wholesaleCustomers, strategicPerformance, partnerTiers])
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
