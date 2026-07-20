@@ -31,9 +31,11 @@ async function computeMonthlyKpis(month: string, companyCode: string) {
     SELECT
       SUM(f.fulfilled_revenue_amount_vnd) as revenue,
       SUM(f.gross_profit_vnd) as gp,
-      SUM(CASE WHEN LOWER(TRIM(d.vendor)) ILIKE '%3hkdatapool%' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
+      SUM(CASE WHEN TRIM(f.sku) IN (
+            SELECT DISTINCT TRIM(sku) FROM dim_sku
+            WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+          ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
     FROM fact_fulfillment_revenue f
-    LEFT JOIN dim_sku d ON TRIM(f.sku) = TRIM(d.sku)
     WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= '${endDate}'
       ${companyFilter}
   `)
