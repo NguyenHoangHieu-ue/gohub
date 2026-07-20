@@ -1,22 +1,16 @@
 "use client"
 
 import { Fragment, useEffect, useState, useCallback, useRef } from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Users, Plus, Key, Trash2, Save, Shield, Settings, FileSpreadsheet, Search, ChevronLeft, ChevronRight, ChevronDown, Gift, Pencil, X, Check, Lock, Clock, Play, RefreshCw, CheckSquare, Square, BookOpen, Eye } from "lucide-react"
 import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
+import { useRoleGuard } from "@/lib/use-role-guard"
 
 type Tab = "settings" | "template" | "promotions" | "scheduled"
 
 export default function AdminPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (status === "authenticated" && session?.user?.role !== "admin" && session?.user?.role !== "creator") router.push("/chatbot")
-  }, [status, session, router])
-
-  if (status !== "authenticated" || (session?.user?.role !== "admin" && session?.user?.role !== "creator")) return null
+  // Role TƯƠI từ DB (không dùng JWT stale) → admin vừa được cấp quyền vào được ngay, khỏi re-login.
+  const { ready } = useRoleGuard(["admin", "creator"])
+  if (!ready) return null
 
   return <AdminPanel />
 }

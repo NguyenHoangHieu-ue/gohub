@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRoleGuard } from "@/lib/use-role-guard"
 import { Plus, Trash2, Database, Save, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Table as TableIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -15,16 +15,11 @@ interface TableSchema { id: string; name: string; description: string; fields: F
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 
 export default function SchemaConfigPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { data: session } = useSession()
+  const { ready } = useRoleGuard(["admin", "creator"])   // role tươi từ DB (không dùng JWT stale)
+  if (!ready) return null
 
-  useEffect(() => {
-    if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role ?? "")) router.push("/chatbot")
-  }, [status, session, router])
-
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role ?? "")) return null
-
-  return <SchemaConfig email={session.user?.email || ""} />
+  return <SchemaConfig email={session?.user?.email || ""} />
 }
 
 function SchemaConfig({ email }: { email: string }) {
