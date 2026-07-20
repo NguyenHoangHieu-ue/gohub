@@ -49,21 +49,17 @@ const DEPT_DENY  = { b2b: "deny"  as Decision, b2c: "deny"  as Decision, saleb2c
 const DEPT_ALLOW = { b2b: "allow" as Decision, b2c: "allow" as Decision, saleb2c: "allow" as Decision, "ops-&-cs": "allow" as Decision, hr: "allow" as Decision, product: "allow" as Decision }
 const DEPT_DEPT  = { b2b: "dept"  as Decision, b2c: "dept"  as Decision, saleb2c: "dept"  as Decision, "ops-&-cs": "dept"  as Decision, hr: "dept"  as Decision, product: "dept"  as Decision }
 
+// MỌI dữ liệu kinh doanh đều mở — ai vào được web đều đã được cấp phép.
+// Chatbot chỉ có 1 giới hạn cứng: system_internal (code/build/credential/kỹ thuật).
 const DEFAULT_POLICY: Record<GuardCategory, Record<string, Decision>> = {
-  // MỞ cho mọi vai trò — sản phẩm, doanh thu/đơn/kênh, khách hàng (PII che ở prompt), tài liệu.
   product_catalog:        { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
   revenue_bi:             { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
   customer_pii:           { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
   internal_kb_other_dept: { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
   general:                { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
-  // SIẾT — giá vốn / lợi nhuận: chỉ cấp quản lý.
-  margin_cogs:            { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY  },
-  // SIẾT — nhân sự / lương / hiệu suất NV: chỉ cấp quản lý + HR.
-  staff_hr:               { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "deny",  ...DEPT_DENY, hr: "allow" },
-  // CHẶN CỨNG — code / build hệ thống-chatbot / quy trình kỹ thuật / credential / schema.
-  // ⚠️ Hàng policy này CHỈ để hiển thị/nhất quán: guardCheck chặn system_internal cho MỌI vai trò
-  // TRƯỚC khi đọc policy (kể cả admin·creator) → không phân quyền được, không thể override.
-  system_internal:        { admin: "deny", creator: "deny", manager: "deny",  bod: "deny",  staff: "deny",  ...DEPT_DENY  },
+  margin_cogs:            { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  staff_hr:               { admin: "allow", creator: "allow", manager: "allow", bod: "allow", staff: "allow", ...DEPT_ALLOW },
+  system_internal:        { admin: "deny",  creator: "deny",  manager: "deny",  bod: "deny",  staff: "deny",  ...DEPT_DENY  },
 }
 
 export const GUARD_CATEGORIES: GuardCategory[] = [
@@ -123,10 +119,23 @@ export function invalidatePolicyCache() { policyCache = null }
 
 // Kiểm tra role có quyền xem giá vốn (margin_cogs) không — dùng để set isCost trong context builder.
 export async function canViewCogs(role: string): Promise<boolean> {
-  if (role === "admin") return true   // admin luôn full quyền
+  if (role === "admin") return true
   const policy = await loadPolicy()
-  const decision = policy.margin_cogs?.[role] ?? "deny"
+  const decision = policy.margin_cogs?.[role] ?? "allow"   // DEFAULT mở — fallback allow
   return decision === "allow"
+}
+
+// Đọc hướng dẫn tùy chỉnh của admin cho chatbot (TTL 60s).
+let rulesCache: { text: string; ts: number } | null = null
+export async function getCustomRules(): Promise<string> {
+  if (rulesCache && Date.now() - rulesCache.ts < 60_000) return rulesCache.text
+  try {
+    const { data } = await supabaseAdmin
+      .from("app_settings").select("value").eq("key", "chatbot_custom_rules").maybeSingle()
+    const text = data?.value ? String(data.value) : ""
+    rulesCache = { text, ts: Date.now() }
+    return text
+  } catch { return "" }
 }
 
 // Phân loại nhạy cảm XÁC ĐỊNH (regex, không LLM) — tách ở guardian-classify.ts.
