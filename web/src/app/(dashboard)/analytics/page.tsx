@@ -1,15 +1,18 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
+import dynamic from "next/dynamic"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts"
 import {
-  ArrowUpRight, ArrowDownRight, Filter, Calendar, RefreshCw, TrendingUp, Target, ChevronDown, Shield, Building2,
+  ArrowUpRight, ArrowDownRight, Filter, Calendar, RefreshCw, TrendingUp, Target, ChevronDown, Shield, Building2, BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+
+const QuarterlyReport = dynamic(() => import("@/components/quarterly-report"), { ssr: false })
 
 // Port "y hệt" gohub-intel DashboardHome. Backend: kpis/revenue-chart/region-chart/performance-source/
 // performance-channel/recent-orders/targets-summary + b2b/strategic-performance + config/partner-tiers.
@@ -55,6 +58,7 @@ export default function DashboardHome() {
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [companyCode, setCompanyCode] = useState<string>("ALL")
   const [showFilters, setShowFilters] = useState(false)
+  const [showQuarterly, setShowQuarterly] = useState(false)
 
   const getProjectionInfo = () => {
     if (kpis.length < 4 || !startDate || !endDate) return null
@@ -247,6 +251,10 @@ export default function DashboardHome() {
           <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg border shadow-sm transition-colors", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
             <span className="text-xs lg:text-sm font-medium">Filters</span>
+          </button>
+          <button onClick={() => setShowQuarterly(true)} className="flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg border shadow-sm transition-colors bg-white border-slate-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-200 h-[42px]">
+            <BarChart3 className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs lg:text-sm font-medium whitespace-nowrap">Báo cáo Quý</span>
           </button>
         </div>
       </div>
@@ -566,7 +574,7 @@ export default function DashboardHome() {
         </div>
 
         {/* Performance by Channels */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="perf-channels">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">Performance by Channels</h3>
             <span className="text-[10px] font-bold text-slate-400 uppercase">Direct vs Affiliate</span>
@@ -634,6 +642,13 @@ export default function DashboardHome() {
           </div>
         </div>
       </div>
+
+      <QuarterlyReport
+        isOpen={showQuarterly}
+        onClose={() => setShowQuarterly(false)}
+        companyCode={companyCode}
+        dateColumn={dateColumn}
+      />
     </div>
   )
 }
