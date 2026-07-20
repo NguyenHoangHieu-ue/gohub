@@ -31,23 +31,33 @@ export function isCronDue(expr: string, d: Date): boolean {
 }
 
 // ĐẾN HẠN KỂ TỪ LẦN CHẠY CUỐI — bền hơn isCronDue (vốn đòi khớp ĐÚNG phút hiện tại,
-// nên chỉ hoạt động nếu scheduler chạy đúng từng phút). Scheduler thực tế chạy THƯA
-// (GitHub Actions mỗi 15' và có thể trễ), nên ta quét mọi phút trong cửa sổ (now-window, now]:
-// nếu CÓ 1 phút khớp cron_expression và phút đó SAU last_run → coi là đến hạn (catch-up, không gửi lại).
-//   · nowIct    : thời điểm hiện tại đã shift sang ICT (getUTC* đọc ra giờ VN).
-//   · lastRunAt : ISO string UTC từ DB (null nếu chưa chạy bao giờ).
-//   · windowMin : độ rộng cửa sổ bắt kịp (mặc định 120' — phủ trễ của GitHub Actions).
+// nên chỉ hoạt động nếu scheduler chạy đúng từng phút). Scheduler thực tế chạy RẤT THƯA:
+// GitHub Actions khai báo mỗi 15' nhưng bị throttle nặng (thực đo ~1 lần/giờ) và THƯỜNG
+// BỎ TRỐNG khung 00:00–10:00 UTC = 07:00–17:00 ICT — ĐÚNG khung giờ các báo cáo sáng
+// (Daily 08:01, Weekly T2 09:00, Monthly 15 08:00). Cửa sổ cũ 120' không phủ nổi khoảng
+// trống này → phút cron trôi qua mà không có lần quét nào gần → message MẤT LUÔN.
+//
+// Cách mới: quét mọi phút trong (floor, now]; nếu CÓ 1 phút khớp cron_expression → đến hạn.
+//   · Message ĐÃ từng chạy: floor = ngay SAU last_run (chặn gửi lại), nhưng giới hạn
+//     catch-up tối đa `catchupMin` (24h) — đủ để BẤT KỲ lần quét nào trong ngày cũng bắt
+//     kịp slot cron đã trôi qua, kể cả khi scheduler im lặng suốt buổi sáng. Dedup vẫn nhờ
+//     last_run_at (chỉ gửi 1 lần cho mỗi lần đến hạn, không spam các slot bị lỡ trước đó).
+//   · Message CHƯA chạy bao giờ (last_run null): chỉ nhìn lại `newGraceMin` (~2h) để tránh
+//     "bắn hồi tố" ngay khi vừa tạo message (không lôi lại slot của sáng nay).
+//   · nowIct: thời điểm hiện tại đã shift sang ICT (getUTC* đọc ra giờ VN).
+//   · lastRunAt: ISO string UTC từ DB (null nếu chưa chạy bao giờ).
 export function isDueSince(
   expr: string,
   lastRunAt: string | null,
   nowIct: Date,
-  windowMin = 120,
+  catchupMin = 1440,   // ĐÃ chạy: bắt kịp slot cron trong tối đa 24h qua (phủ scheduler thưa/trễ)
+  newGraceMin = 130,   // CHƯA chạy: chỉ bắt slot trong ~2h gần nhất (không hồi tố lúc vừa tạo)
 ): boolean {
   const nowMs  = nowIct.getTime()
-  const lastMs = lastRunAt ? new Date(lastRunAt).getTime() + 7 * 3600_000 : 0   // shift sang không gian ICT
-  // Bắt đầu SAU last_run (tránh gửi lại phút đã chạy) và không xa quá cửa sổ.
-  const startMs = Math.max(lastMs + 60_000, nowMs - windowMin * 60_000)
-  for (let t = Math.ceil(startMs / 60_000) * 60_000; t <= nowMs; t += 60_000) {
+  const floorMs = lastRunAt
+    ? Math.max(new Date(lastRunAt).getTime() + 7 * 3600_000 + 60_000, nowMs - catchupMin * 60_000)
+    : nowMs - newGraceMin * 60_000
+  for (let t = Math.ceil(floorMs / 60_000) * 60_000; t <= nowMs; t += 60_000) {
     if (isCronDue(expr, new Date(t))) return true
   }
   return false
