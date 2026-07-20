@@ -250,16 +250,12 @@ export function B2CPerformance() {
 
   const fetchCosts = async (month: string) => {
     try {
-      const res = await fetch(`/api/channel-costs?month=${month}`)
-      if (res.ok) {
-        const data = await res.json()
-        setMonthlyCosts(data)
-      }
-
-      const groupRes = await fetch(`/api/channel-group-costs?month=${month}&group=B2C`)
-      if (groupRes.ok) {
-        setGroupCosts(await groupRes.json())
-      }
+      const [res, groupRes] = await Promise.all([
+        fetch(`/api/channel-costs?month=${month}`),
+        fetch(`/api/channel-group-costs?month=${month}&group=B2C`),
+      ])
+      if (res.ok) setMonthlyCosts(await res.json())
+      if (groupRes.ok) setGroupCosts(await groupRes.json())
     } catch (err) {
       console.error("Error fetching costs:", err)
     }
@@ -291,38 +287,31 @@ export function B2CPerformance() {
         return res.json()
       }
 
-      const kpiData = await fetchJson(`/api/analytics/b2c/kpis?${queryParams.toString()}`)
-      const trendDataRes = await fetchJson(`/api/analytics/b2c/trend?${queryParams.toString()}&period=${period}`)
-      const perfData = await fetchJson(`/api/analytics/b2c/performance?${queryParams.toString()}&groupBy=${groupBy}`)
-      const lossData = await fetchJson(`/api/analytics/b2c/loss-skus?${queryParams.toString()}`)
+      // Build prevMonth params trước (chỉ tính ngày, không await)
+      const pmDate = new Date(startDate)
+      const prevQueryParams = new URLSearchParams()
+      prevQueryParams.append("startDate", formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth() - 1, 1)))
+      prevQueryParams.append("endDate", formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0)))
+      prevQueryParams.append("comparisonType", "none")
+      prevQueryParams.append("dateColumn", dateColumn)
+      selectedVendors.forEach(v => prevQueryParams.append("vendors", v))
+      selectedSubChannels.forEach(s => prevQueryParams.append("subChannels", s))
+      selectedProductTypes.forEach(t => prevQueryParams.append("productTypes", t))
+
+      // 5 query độc lập → bắn song song
+      const [kpiData, trendDataRes, perfData, lossData, prevKpiRes] = await Promise.all([
+        fetchJson(`/api/analytics/b2c/kpis?${queryParams.toString()}`),
+        fetchJson(`/api/analytics/b2c/trend?${queryParams.toString()}&period=${period}`),
+        fetchJson(`/api/analytics/b2c/performance?${queryParams.toString()}&groupBy=${groupBy}`),
+        fetchJson(`/api/analytics/b2c/loss-skus?${queryParams.toString()}`),
+        fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`).catch(() => null),
+      ])
 
       setKpis(kpiData)
       setTrendData(trendDataRes)
       setPerformanceData(perfData)
       setLossSkus(lossData)
-
-      // Fetch full previous month KPIs for projection comparison
-      try {
-        const date = new Date(startDate)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
-
-        const prevQueryParams = new URLSearchParams()
-        prevQueryParams.append("startDate", formatDateToISO(prevMonthFirstDay))
-        prevQueryParams.append("endDate", formatDateToISO(prevMonthLastDay))
-        prevQueryParams.append("comparisonType", "none")
-        prevQueryParams.append("dateColumn", dateColumn)
-        selectedVendors.forEach(v => prevQueryParams.append("vendors", v))
-        selectedSubChannels.forEach(s => prevQueryParams.append("subChannels", s))
-        selectedProductTypes.forEach(t => prevQueryParams.append("productTypes", t))
-
-        const prevKpiRes = await fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`)
-        if (prevKpiRes.ok) {
-          setPrevMonthKpis(await prevKpiRes.json())
-        }
-      } catch (e) {
-        console.error("Error fetching prev month KPIs:", e)
-      }
+      if (prevKpiRes && (prevKpiRes as Response).ok) setPrevMonthKpis(await (prevKpiRes as Response).json())
 
       // Fetch costs for the current month to show in breakdown
       const startMonth = startDate.slice(0, 7)
