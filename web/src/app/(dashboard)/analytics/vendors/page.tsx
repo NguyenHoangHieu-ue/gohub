@@ -286,7 +286,6 @@ export default function VendorPerformancePage() {
       const prevProductsSql = comparisonType !== "none"
         ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY TRIM(sku)`
         : null
-      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name) SELECT s.channel_name, SUM(f.${revCol}) as revenue, COUNT(DISTINCT f.order_code) as orders, SUM(f.${qtyCol}) as units_sold, SUM(f.${marginCol}) as margin, MAX(t.total_revenue) as total_channel_revenue, CASE WHEN s.channel_name IN ('Traveloka', 'Klook', 'Fayfay', 'Momo', 'Gohub Web (Partner)', 'Lazada', 'Shopee', 'Tiktok Shop') THEN 'B2B-Strategic' WHEN s.channel_name IN ('VN-Wholesales', 'VN-B2B Portal', 'Global-Wholesales', 'Global-B2B Portal') THEN 'B2B-Non-Strategic' ELSE 'B2C' END as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '') WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name ORDER BY revenue DESC`
       const prevChannelSql = comparisonType !== "none"
         ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} GROUP BY s.channel_name`
         : null
@@ -300,15 +299,29 @@ export default function VendorPerformancePage() {
       })
       const qOpt = (sql: string | null): Promise<Response | null> => sql ? q(sql) : Promise.resolve(null)
 
+      // Pre-fetch partner_tiers trước → cần để build channelSql CASE phân loại đúng B2B-Strategic
+      const tiersRaw = await fetch("/api/config/partner-tiers")
+      const tiersData: Record<string, string[]> = tiersRaw.ok ? await tiersRaw.json() : {}
+      setPartnerTiers(Object.keys(tiersData).length ? tiersData : { Strategic: [] })
+      const strategicNames: string[] = tiersData.Strategic || []
+      const strategicPat = strategicNames.length > 0
+        ? strategicNames.map((n: string) => `'%${n.replace(/'/g, "''").trim()}%'`).join(",")
+        : null
+      const bizGroupSQL = strategicPat
+        ? `CASE WHEN UPPER(s.group_name) = 'B2B' AND s.channel_name ILIKE ANY(ARRAY[${strategicPat}]::text[]) THEN 'B2B-Strategic' WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+        : `CASE WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+
+      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name) SELECT s.channel_name, SUM(f.${revCol}) as revenue, COUNT(DISTINCT f.order_code) as orders, SUM(f.${qtyCol}) as units_sold, SUM(f.${marginCol}) as margin, MAX(t.total_revenue) as total_channel_revenue, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '') WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name ORDER BY revenue DESC`
+
       // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
       const [
         allVendorsRes, summaryRes, prevSummaryRes, pmRes,
         trendRes, prevTrendRes, productsRes, prevProductsRes,
-        chanRes, tiersRes, strategicPerfRes, prevChanRes,
+        chanRes, strategicPerfRes, prevChanRes,
       ] = await Promise.all([
         q(allVendorsSql), q(summarySql), qOpt(prevSummarySql), q(pmSql),
         q(trendSql), qOpt(prevTrendSql), q(productsSql), qOpt(prevProductsSql),
-        q(channelSql), fetch("/api/config/partner-tiers"), fetch(strategicUrl), qOpt(prevChannelSql),
+        q(channelSql), fetch(strategicUrl), qOpt(prevChannelSql),
       ])
 
       // Process: allVendors
@@ -392,10 +405,9 @@ export default function VendorPerformancePage() {
         setProductPerformance(currProds)
       }
 
-      // Process: channels + tiers + strategic
+      // Process: channels + strategic (partner_tiers đã set từ pre-fetch)
       if (!chanRes.ok) throw new Error("Failed to fetch channel distribution")
       const currChans = await chanRes.json()
-      if (tiersRes.ok) setPartnerTiers(await tiersRes.json())
       if (strategicPerfRes.ok) setStrategicPerformance(await strategicPerfRes.json())
       if (prevChanRes) {
         const prevChans = await (prevChanRes as Response).json()

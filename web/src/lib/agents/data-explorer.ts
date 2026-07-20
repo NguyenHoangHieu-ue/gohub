@@ -71,7 +71,8 @@ const HEAVY_COL_RE = /embedding|vector/i
 
 function isPrivileged(role?: string) {
   const r = (role || "").toLowerCase()
-  return r === "admin" || r === "creator"
+  // admin/creator/manager/bod: toàn quyền truy cập dữ liệu (nhất quán với Guardian DEFAULT_POLICY)
+  return r === "admin" || r === "creator" || r === "manager" || r === "bod"
 }
 
 // ─── Tool declarations ───────────────────────────────────────────────────────
