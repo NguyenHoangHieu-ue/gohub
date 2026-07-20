@@ -42,9 +42,11 @@ export async function GET(req: NextRequest) {
           TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
           SUM(f.${source.revenueCol}) as revenue,
           SUM(f.${source.marginCol}) as gp,
-          SUM(CASE WHEN LOWER(TRIM(d.vendor)) ILIKE '%3hkdatapool%' THEN f.${source.revenueCol} ELSE 0 END) as hk3
+          SUM(CASE WHEN TRIM(f.sku) IN (
+                SELECT DISTINCT TRIM(sku) FROM dim_sku
+                WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+              ) THEN f.${source.revenueCol} ELSE 0 END) as hk3
         FROM ${source.mainTable} f
-        LEFT JOIN dim_sku d ON TRIM(f.sku) = TRIM(d.sku)
         WHERE f.${source.dateCol}::date >= '${startDate}'
           AND f.${source.dateCol}::date <= '${endDate}'
           ${companyFilter}
