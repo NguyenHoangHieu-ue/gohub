@@ -3,6 +3,7 @@ import { queryAnalytics }                 from "@/lib/analytics-db"
 import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
+import { getCustomRules }                 from "@/lib/agents/guardian"
 
 // Role data filter: cấp quản lý (admin/creator/manager/bod) không giới hạn dữ liệu.
 // Các role khác (staff/dept) đọc directive từ app_settings.role_filters.
@@ -89,11 +90,14 @@ export async function runBIAnalyst(
   lastMsg: string,
   role?: string
 ): Promise<string> {
-  // Role data filter (non-admin): chèn directive giới hạn dữ liệu vào prompt
-  const dataFilter = await getRoleDataFilter(role)
-  const finalInstruction = dataFilter
-    ? `${systemInstruction}\n\n━━━ GIỚI HẠN TRUY CẬP DỮ LIỆU (DATA ACCESS RESTRICTION) ━━━\nVai trò "${role}" CHỈ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm điều kiện này vào MỌI câu SQL (WHERE), không được bỏ qua:\n${dataFilter}`
+  // Role data filter + custom admin rules
+  const [dataFilter, customRules] = await Promise.all([getRoleDataFilter(role), getCustomRules()])
+  let finalInstruction = dataFilter
+    ? `${systemInstruction}\n\n━━━ GIỚI HẠN TRUY CẬP DỮ LIỆU ━━━\nVai trò "${role}" CHỈ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI SQL WHERE:\n${dataFilter}`
     : systemInstruction
+  if (customRules) {
+    finalInstruction += `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}`
+  }
 
   // Load GA4 sites + partner tiers để inject vào system prompt
   let ga4SiteList = ""

@@ -57,9 +57,12 @@ function AnalyticsSettings() {
   const [savedTiers,   setSavedTiers]   = useState<string>("{}")
   const [savedPolicy,  setSavedPolicy]  = useState<string>("{}")
   const [savedFilters, setSavedFilters] = useState<string>("{}")
-  const dirtyTiers   = JSON.stringify(tiers)   !== savedTiers
-  const dirtyPolicy  = JSON.stringify(policy)  !== savedPolicy
-  const dirtyFilters = JSON.stringify(filters) !== savedFilters
+  const [customRules, setCustomRules]   = useState<string>("")
+  const [savedCustomRules, setSavedCustomRules] = useState<string>("")
+  const dirtyTiers       = JSON.stringify(tiers)   !== savedTiers
+  const dirtyPolicy      = JSON.stringify(policy)  !== savedPolicy
+  const dirtyFilters     = JSON.stringify(filters) !== savedFilters
+  const dirtyCustomRules = customRules !== savedCustomRules
   const [availablePartners, setAvailablePartners] = useState<string[]>([])
   const [newTier, setNewTier] = useState("")
   const [addInputs, setAddInputs] = useState<Record<string, string>>({})
@@ -109,7 +112,7 @@ function AnalyticsSettings() {
   const fetchAll = async () => {
     setLoading(true)
     try {
-      const [t, p, f, ch, skuRule, cc, ict] = await Promise.all([
+      const [t, p, f, ch, skuRule, cc, ict, crRes] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
@@ -117,6 +120,7 @@ function AnalyticsSettings() {
         fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
         fetch("/api/config/item-channel-types").then(r => r.ok ? r.json() : { config: {}, allTypes: [] }).catch(() => ({ config: {}, allTypes: [] })),
+        fetch("/api/config/chatbot-rules").then(r => r.ok ? r.json() : { rules: "" }).catch(() => ({ rules: "" })),
       ])
       const parsedSkuRules = skuRule?.rules || []
       setSkuRules(parsedSkuRules)
@@ -136,6 +140,8 @@ function AnalyticsSettings() {
       setSavedPolicy(JSON.stringify(parsedPolicy))
       setSavedFilters(JSON.stringify(parsedFilters))
       setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
+      const cr = crRes?.rules ?? ""
+      setCustomRules(cr); setSavedCustomRules(cr)
     } finally {
       setLoading(false)
     }
@@ -333,33 +339,47 @@ function AnalyticsSettings() {
         </div>
       </div>
 
-      {/* Access Policy */}
+      {/* Guardian — simplified */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Sliders className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Chính sách truy cập Chatbot (Guardian)</h2></div>
-          <button onClick={() => savePost("policy", "/api/config/access-policy", fullPolicy())} disabled={saving === "policy" || !dirtyPolicy} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyPolicy ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
-            {saving === "policy" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-          </button>
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+          <Shield className="w-5 h-5 text-[#003B95]" />
+          <h2 className="font-bold text-slate-800">Chatbot Guardian</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead><tr className="bg-slate-50 text-slate-500 border-b border-slate-100"><th className="px-4 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Loại câu hỏi</th>{POLICY_ROLES.map(r => <th key={r} className="px-3 py-2 text-center text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">{ROLE_LABELS[r] ?? r}</th>)}<th className="px-3 py-2 text-center text-[9px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
-            <tbody className="divide-y divide-slate-50">
-              {CATEGORIES.map(cat => (
-                <tr key={cat.id} className="hover:bg-slate-50/30">
-                  <td className="px-4 py-2 text-xs font-medium text-slate-700">{cat.label}</td>
-                  {POLICY_ROLES.map(role => { const dec = getDecision(cat.id, role); return (
-                    <td key={role} className="px-3 py-2 text-center">
-                      <button onClick={() => cyclePolicy(cat.id, role)} className={cn("px-2 py-0.5 rounded text-[10px] font-bold transition-all", DECISION_STYLE[dec])}>{DECISION_LABEL[dec]}</button>
-                    </td>
-                  )})}
-                  <td className="px-3 py-2 text-center"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">Cho phép</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-6 space-y-4">
+          {/* Hard block info */}
+          <div className="flex items-start gap-3 bg-rose-50 border border-rose-100 rounded-xl p-4">
+            <Shield className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-rose-700">Chặn cứng mọi role (không phân quyền được)</p>
+              <p className="text-[11px] text-rose-600 mt-0.5">Câu hỏi về code / cách build hệ thống / credential / quy trình kỹ thuật nội bộ → chatbot từ chối, không tiết lộ.</p>
+            </div>
+          </div>
+          {/* Open policy info */}
+          <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <Shield className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-emerald-700">Mọi dữ liệu kinh doanh đều mở (mặc định)</p>
+              <p className="text-[11px] text-emerald-600 mt-0.5">Revenue, CM1, COGS, HR, KH, KB… — tất cả vai trò đều được hỏi. Dùng Role Filters bên dưới nếu muốn giới hạn SQL theo role cụ thể.</p>
+            </div>
+          </div>
+          {/* Custom rules */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hướng dẫn tùy chỉnh cho Chatbot (tùy chọn)</label>
+              <button onClick={() => savePost("custom-rules", "/api/config/chatbot-rules", { rules: customRules })} disabled={saving === "custom-rules" || !dirtyCustomRules} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50", dirtyCustomRules ? "bg-[#003B95] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+                {saving === "custom-rules" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
+              </button>
+            </div>
+            <textarea
+              value={customRules}
+              onChange={e => setCustomRules(e.target.value)}
+              rows={4}
+              placeholder={"Nhập hướng dẫn bổ sung cho chatbot (tiếng Việt hoặc tiếng Anh).\nVí dụ: \"Staff chỉ được xem doanh thu của kênh họ phụ trách.\"\nĐể trống = chatbot chạy theo mặc định."}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+            <p className="text-[11px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
+          </div>
         </div>
-        <p className="px-6 py-3 text-[11px] text-slate-400 border-t border-slate-50">Click để xoay vòng: Cho phép → Từ chối → Theo phòng ban. admin luôn toàn quyền.</p>
       </div>
 
       {/* Role Filters */}

@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from "recharts"
@@ -48,6 +48,7 @@ export default function DashboardHome() {
   const [targetProgress, setTargetProgress] = useState<{ totalTarget: number; proRataTarget: number; totalActual: number; progress: number; proRataProgress: number } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [monthlyKpis, setMonthlyKpis] = useState<{ summary: any[]; channels: any[] } | null>(null)
 
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
@@ -100,7 +101,7 @@ export default function DashboardHome() {
         return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
       }
 
-      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData] = await Promise.all([
+      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData] = await Promise.all([
         fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs"),
         fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue"),
         fetchJson(`/api/analytics/region-chart${queryParams}`, "Region"),
@@ -110,6 +111,7 @@ export default function DashboardHome() {
         fetchJson(`/api/analytics/targets-summary${queryParams}`, "Targets"),
         fetchJson(`/api/config/partner-tiers`, "Tiers"),
         fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic"),
+        fetchJson(`/api/analytics/monthly-kpis?companyCode=${companyCode}&dateColumn=${dateColumn}`, "Monthly").catch(() => null),
       ])
 
       setKpis(kpiData)
@@ -121,6 +123,7 @@ export default function DashboardHome() {
       setTargetProgress(targetData)
       setPartnerTiers(tiersData)
       setStrategicPerformance(strategicPerfData)
+      if (monthlyData) setMonthlyKpis(monthlyData)
 
       try {
         const date = new Date(startDate)
@@ -428,6 +431,80 @@ export default function DashboardHome() {
           </div>
         </div>
       </div>
+
+      {/* Monthly Metrics Table — metrics × months (Revenue / GP / CM1 / CM1% / 3HK / %3HK) */}
+      {monthlyKpis && monthlyKpis.summary.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="font-bold text-slate-800 text-sm">Monthly Performance Summary</h3>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />prorata = dự phóng nguyên tháng
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-4 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wider w-36">Metric</th>
+                  {monthlyKpis.summary.map(m => (
+                    <th key={m.month} className="px-4 py-2.5 text-right font-bold text-slate-600 whitespace-nowrap">
+                      <span>{m.label}/{m.year}</span>
+                      {m.isProjected && <span className="ml-1 text-[9px] text-blue-500 font-bold">(×{m.factor})</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {[
+                  { key: "revenue",     label: "Revenue",        fmt: (v: number) => formatCompactNumber(v), cls: "font-bold text-slate-900" },
+                  { key: "grossMargin", label: "Gross Profit",   fmt: (v: number) => formatCompactNumber(v), cls: "text-emerald-700" },
+                  { key: "cm1",         label: "CM1",            fmt: (v: number) => formatCompactNumber(v), cls: "text-indigo-700 font-bold" },
+                  { key: "cm1Pct",      label: "CM1 %",          fmt: (v: number) => `${v.toFixed(1)}%`,     cls: "text-indigo-600" },
+                  { key: "hk3Revenue",  label: "3HK Revenue",    fmt: (v: number) => formatCompactNumber(v), cls: "text-amber-700" },
+                  { key: "hk3Pct",      label: "3HK %",          fmt: (v: number) => `${v.toFixed(1)}%`,     cls: "text-amber-600" },
+                ].map(row => (
+                  <tr key={row.key} className="hover:bg-slate-50/40">
+                    <td className="px-4 py-2.5 font-semibold text-slate-600">{row.label}</td>
+                    {monthlyKpis.summary.map(m => {
+                      const val = m[row.key] as number
+                      const prev = monthlyKpis.summary[monthlyKpis.summary.indexOf(m) - 1]?.[row.key] as number | undefined
+                      const trend = prev != null && prev > 0 ? (val - prev) / prev : null
+                      return (
+                        <td key={m.month} className={cn("px-4 py-2.5 text-right", row.cls, m.isProjected && "bg-blue-50/30")}>
+                          <span>{row.fmt(val)}</span>
+                          {trend !== null && (
+                            <span className={cn("ml-1.5 text-[9px] font-bold", trend >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                              {trend >= 0 ? "▲" : "▼"}{Math.abs(trend * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+                {/* Strategic channels breakdown */}
+                {monthlyKpis.channels.length > 0 && (
+                  <>
+                    <tr className="bg-slate-50">
+                      <td colSpan={monthlyKpis.summary.length + 1} className="px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Strategic Channels</td>
+                    </tr>
+                    {monthlyKpis.channels.map(ch => (
+                      <tr key={ch.name} className="hover:bg-slate-50/40">
+                        <td className="px-4 py-2 text-slate-600 pl-6">{ch.name}</td>
+                        {ch.months.map((mData: any) => (
+                          <td key={mData.month} className={cn("px-4 py-2 text-right text-slate-500", monthlyKpis.summary.find(s => s.month === mData.month)?.isProjected && "bg-blue-50/30")}>
+                            {formatCompactNumber(mData.revenue)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Tables Row */}
       <div className="flex flex-col gap-6">

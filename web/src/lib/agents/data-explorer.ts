@@ -39,6 +39,7 @@ export const SUPABASE_TABLES: Record<string, string> = {
   kb_documents:           "Tài liệu KB đã upload",
   kb_chunks:              "Chunk + embedding KB (không trả embedding)",
   // Analytics config / cache (KHÔNG phải fact — fact ở gohub_dw)
+  analytics_monthly_kpis:        "Snapshot KPI tháng: revenue, gross_margin, op_cost, cm1, cm1_pct, hk3_revenue, hk3_pct — theo tháng (YYYY-MM) và company_code (ALL/VN/US). Dùng khi hỏi về CM1, doanh thu, GP tháng cụ thể.",
   analytics_channel_costs:       "Chi phí theo kênh (opCost) — cấu hình",
   analytics_channel_group_costs: "Chi phí theo nhóm kênh",
   analytics_target_planning:     "Kế hoạch target (planning)",
