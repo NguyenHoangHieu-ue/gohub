@@ -18,6 +18,9 @@
     },
     "src/app/api/cron/refresh-b2c-report/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/refresh-monthly-kpis/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -36,6 +39,10 @@
     {
       "path": "/api/cron/refresh-b2c-report",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-monthly-kpis",
+      "schedule": "0 0 * * *"
     }
   ]
 }
