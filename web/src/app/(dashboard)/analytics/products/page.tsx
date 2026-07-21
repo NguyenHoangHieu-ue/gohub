@@ -88,6 +88,7 @@ export default function ProductPerformancePage() {
   const [skuRule, setSkuRule] = useState({ startsWith: "E", codeLength: 3, useGohubVietnamRule: true, useGohubIncRule: true })
   const [countryMappings, setCountryMappings] = useState<Record<string, string>>({})
   const [selectedDestination, setSelectedDestination] = useState<string>("all")
+  const [availableDestinations, setAvailableDestinations] = useState<{ code: string; name: string }[]>([])
 
   const runQuery = async (sql: string) => {
     const res = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }) })
@@ -173,25 +174,54 @@ export default function ProductPerformancePage() {
     }
   }
 
+  // Canonical regionExpr — khớp 100% với getDestinationSQL trong analytics-helpers.ts.
+  // Dùng UPPER() để nhất quán với country_codes.code (uppercase).
+  const REGION_EXPR = `UPPER(CASE
+    WHEN f.sku ~ '^[1-6]'            THEN SUBSTRING(f.sku, 3, 3)
+    WHEN f.sku ~ '^E'               THEN SUBSTRING(f.sku, 2, 3)
+    WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(f.sku, 1, 3)
+    ELSE SUBSTRING(f.sku, 1, 3)
+  END)`
+
   const fetchInitialData = async () => {
     try {
-      const [skus, cats, vends, rule, countries] = await Promise.all([
+      const [skus, cats, vends, rule, countries, destRows] = await Promise.all([
         runQuery("SELECT DISTINCT sku FROM dim_sku ORDER BY sku"),
         runQuery("SELECT DISTINCT category_name FROM dim_sku WHERE category_name IS NOT NULL ORDER BY category_name"),
         runQuery("SELECT DISTINCT vendor FROM dim_sku WHERE vendor IS NOT NULL ORDER BY vendor"),
         fetch("/api/config/sku-destination-rule").then(r => r.json()),
         fetch("/api/config/country-codes").then(r => r.json()),
+        // Lấy distinct destination codes từ dim_sku (không alias f. — table trực tiếp)
+        runQuery(`SELECT DISTINCT UPPER(CASE
+          WHEN sku ~ '^[1-6]'            THEN SUBSTRING(sku, 3, 3)
+          WHEN sku ~ '^E'               THEN SUBSTRING(sku, 2, 3)
+          WHEN sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(sku, 1, 3)
+          ELSE SUBSTRING(sku, 1, 3)
+        END) as code FROM dim_sku WHERE sku IS NOT NULL AND LENGTH(sku) >= 3 ORDER BY 1`),
       ])
 
       setAvailableSkus(skus.map((s: any) => s.sku))
       setCategories(cats.map((c: any) => c.category_name))
       setVendors(vends.map((v: any) => v.vendor))
-      // Web rule = {prefix, codeLength, offset}; map prefix→startsWith
-      setSkuRule(prev => ({ ...prev, ...rule, startsWith: rule.prefix ?? prev.startsWith, codeLength: rule.codeLength ?? prev.codeLength }))
+      // Đọc rules[0] nếu có, fallback về default
+      const firstRule = rule?.rules?.[0]
+      if (firstRule) {
+        setSkuRule(prev => ({ ...prev, startsWith: firstRule.startsWith ?? prev.startsWith, codeLength: firstRule.codeLength ?? prev.codeLength }))
+      }
 
       const mapping: Record<string, string> = {}
-      if (Array.isArray(countries)) countries.forEach((c: any) => mapping[c.code] = c.country)
+      if (Array.isArray(countries)) countries.forEach((c: any) => { if (c.code) mapping[String(c.code).toUpperCase()] = c.country })
       setCountryMappings(mapping)
+
+      // Chỉ hiện destination có data thực trong dim_sku (tránh dropdown 330 nước)
+      const dests: { code: string; name: string }[] = []
+      if (Array.isArray(destRows)) {
+        destRows.forEach((d: any) => {
+          const code = String(d.code || "").toUpperCase()
+          if (code.length === 3) dests.push({ code, name: mapping[code] || code })
+        })
+      }
+      setAvailableDestinations(dests.sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err) {
       console.error("Error fetching initial data:", err)
     }
@@ -215,18 +245,8 @@ export default function ProductPerformancePage() {
         filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE vendor IN (${vendorList}))`
       }
 
-      const ruleToUse = {
-        startsWith: skuRule.startsWith || "E",
-        codeLength: skuRule.codeLength || 3,
-        useGohubVietnamRule: skuRule.useGohubVietnamRule !== false,
-        useGohubIncRule: skuRule.useGohubIncRule !== false,
-      }
-      const regionExpr = `TRIM(CASE
-        ${ruleToUse.useGohubVietnamRule ? "WHEN SUBSTRING(f.sku, 1, 1) BETWEEN '1' AND '6' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
-        ${ruleToUse.useGohubIncRule ? "WHEN SUBSTRING(f.sku, 1, 1) BETWEEN 'A' AND 'E' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
-        WHEN f.sku LIKE '${ruleToUse.startsWith}%' THEN SUBSTRING(f.sku FROM ${ruleToUse.startsWith.length + 1} FOR ${ruleToUse.codeLength})
-        ELSE SUBSTRING(f.sku FROM 1 FOR ${ruleToUse.codeLength})
-      END)`
+      // Dùng canonical REGION_EXPR (khai báo trong component, khớp getDestinationSQL)
+      const regionExpr = REGION_EXPR
       if (selectedDestination !== "all") filterSQL += ` AND ${regionExpr} = '${selectedDestination}'`
 
       if (selectedChannel !== "all") {
@@ -581,11 +601,13 @@ export default function ProductPerformancePage() {
 
             {/* Destination Filter */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Destination{availableDestinations.length > 0 && <span className="ml-1 text-slate-400 font-normal normal-case">({availableDestinations.length})</span>}
+              </label>
               <select value={selectedDestination} onChange={(e) => setSelectedDestination(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="all">All Destinations</option>
-                {Object.entries(countryMappings).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => (
+                {availableDestinations.map(({ code, name }) => (
                   <option key={code} value={code}>{name} ({code})</option>
                 ))}
               </select>
