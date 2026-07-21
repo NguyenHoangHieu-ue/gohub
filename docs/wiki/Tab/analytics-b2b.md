@@ -37,3 +37,4 @@ Hiệu suất kênh sỉ B2B: doanh thu/margin/units theo kênh & sub-channel, t
 - Danh sách Strategic partners cấu hình ở **Settings → Partner Tiers** (không hard-code).
 - Created mode → margin/CM1 = 0.
 - Phân quyền nền: Admin, Creator, BOD, Manager, Staff.
+- **Nút "Manage Costs"** (mở CostManagementModal): TẠM THỜI chỉ **creator** thấy (`dbRole === "creator"` qua `useDbRole()`). Các role khác không thấy nút. Muốn mở lại cho admin → sửa điều kiện ở `analytics/b2b/page.tsx`.

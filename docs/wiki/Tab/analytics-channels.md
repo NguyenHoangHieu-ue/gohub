@@ -48,3 +48,6 @@ ORDER BY c.group_name, c.revenue DESC;
 - `groupFilter` = `AND UPPER(s.group_name) = 'B2B'|'B2C'` khi lọc nhóm.
 - Created mode → margin = 0.
 - Khi gộp chi phí kênh, **lọc đúng nhóm kênh** để chi phí B2B không lẫn vào báo cáo B2C (bài học B2C Revenue & GP Trend — xem [[analytics-b2c]]).
+
+## 5. Phân quyền
+- **Nút "Manage Costs"** (CostManagementModal): TẠM THỜI chỉ **creator** thấy (`dbRole === "creator"` qua `useDbRole()` trong `analytics/channels/page.tsx`). Các role khác không thấy nút. Muốn mở lại cho admin → sửa điều kiện trong page.

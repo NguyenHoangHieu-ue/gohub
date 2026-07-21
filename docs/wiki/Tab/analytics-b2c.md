@@ -51,6 +51,7 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 ## 7. Phân quyền
 - Xem: **Admin, Creator, Manager, BOD, Staff**.
 - **Ẩn methodology + nút sửa ngân sách**: chỉ **Admin/Creator** (sửa giá trị thực hiện ở KPI/Target).
+- **Nút "Manage Costs"** (CostManagementModal trong `b2c-performance.tsx`): TẠM THỜI chỉ **creator** thấy (`dbRole === "creator"` qua `useDbRole()`). Muốn mở lại cho admin → sửa điều kiện trong component.
 
 ---
 

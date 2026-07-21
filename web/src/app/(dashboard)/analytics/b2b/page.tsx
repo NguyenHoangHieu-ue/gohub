@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { CostManagementModal } from "@/components/cost-management-modal"
 import { DatePresets } from "@/components/date-presets"
 import { exportToExcel } from "@/lib/export-excel"
+import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -58,6 +59,7 @@ export default function B2BPerformance() {
   const [showCostModal, setShowCostModal] = useState(false)
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, any>>({})
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
 
   const [combinedKpis, setCombinedKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<any[]>([])
@@ -301,9 +303,11 @@ export default function B2BPerformance() {
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
               <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
             </div>
-            <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
-              <Settings className="w-3.5 h-3.5" />Manage Costs
-            </button>
+            {dbRole === "creator" && (
+              <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
+                <Settings className="w-3.5 h-3.5" />Manage Costs
+              </button>
+            )}
             <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>

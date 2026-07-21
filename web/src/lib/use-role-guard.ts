@@ -28,3 +28,20 @@ export function useRoleGuard(allowed: string[], redirectTo = "/chatbot") {
 
   return { ready: status === "authenticated" && !!role && allowed.includes(role), role: role ?? undefined }
 }
+
+// Lấy role tươi từ DB nhưng KHÔNG redirect — dùng khi chỉ cần ẩn/hiện 1 phần UI
+// theo role (vd nút "Manage Costs" chỉ creator thấy). role=undefined khi đang tải.
+export function useDbRole(): string | undefined {
+  const { data: session, status } = useSession()
+  const [role, setRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/user/me", { cache: "no-store" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setRole(d?.role ?? session?.user?.role ?? "staff"))
+      .catch(() => setRole(session?.user?.role ?? "staff"))
+  }, [status, session])
+
+  return role ?? undefined
+}

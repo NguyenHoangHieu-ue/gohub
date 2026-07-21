@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "./cost-management-modal"
+import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
 // + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs. Bỏ motion/react (dùng div thường),
@@ -183,6 +184,7 @@ export function B2CPerformance() {
 
   // Cost Management State
   const [showCostModal, setShowCostModal] = useState(false)
+  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<any[]>([])
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -521,13 +523,15 @@ export function B2CPerformance() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => setShowCostModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm"
-            >
-              <Settings className="w-4 h-4" />
-              Manage Costs
-            </button>
+            {dbRole === "creator" && (
+              <button
+                onClick={() => setShowCostModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm"
+              >
+                <Settings className="w-4 h-4" />
+                Manage Costs
+              </button>
+            )}
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm shadow-lg shadow-blue-900/20"

@@ -15,6 +15,7 @@ import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analyti
 import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "@/components/cost-management-modal"
 import { exportRawRows } from "@/lib/export-excel"
+import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -109,6 +110,7 @@ export default function ChannelPerformancePage() {
   const [showProductTypeDropdown, setShowProductTypeDropdown] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [showCostModal, setShowCostModal] = useState(false)
+  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
   const [channelCostsMap, setChannelCostsMap] = useState<any>({})
   const [channelSettingsMap, setChannelSettingsMap] = useState<any>({})
   const [showTotalCostBreakdown, setShowTotalCostBreakdown] = useState(false)
@@ -978,13 +980,15 @@ export default function ChannelPerformancePage() {
             <span className="text-sm font-medium">Filters</span>
           </button>
 
-          <button
-            onClick={() => setShowCostModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm shadow-sm"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Manage Costs</span>
-          </button>
+          {dbRole === "creator" && (
+            <button
+              onClick={() => setShowCostModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm shadow-sm"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Manage Costs</span>
+            </button>
+          )}
 
           <button
             onClick={fetchChannelData}
