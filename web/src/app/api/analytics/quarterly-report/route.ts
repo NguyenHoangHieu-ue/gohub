@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const [groupRows, channelRows] = await Promise.all([
+      const [groupRows, channelRows, hk3Rows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           SELECT
             TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
@@ -94,6 +94,19 @@ export async function GET(req: NextRequest) {
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
           GROUP BY 1, 2, 3
           ORDER BY 1, 2, 3
+        `),
+        queryAnalytics<{ month: string; hk3: string }>(`
+          SELECT
+            TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+            SUM(CASE WHEN TRIM(f.sku) IN (
+              SELECT DISTINCT TRIM(sku) FROM dim_sku
+              WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+            ) THEN f.${source.revenueCol} ELSE 0 END) as hk3
+          FROM ${source.mainTable} f
+          WHERE f.${source.dateCol}::date >= '${qStartDate}'
+            AND f.${source.dateCol}::date <= '${qEndDate}'
+            ${companyFilter}
+          GROUP BY 1
         `),
       ])
 
@@ -155,10 +168,18 @@ export async function GET(req: NextRequest) {
         const totCC  = b2bCC  + b2cCC;  const totGC  = b2bGC  + b2cGC
         const totCm1 = b2bCm1 + b2cCm1
 
-        const row = (rev: number, gp: number, cc: number, gc: number, cm1: number) => ({
+        // 3HK revenue cho tháng (nhân factor nếu projected)
+        const hk3Act = parseFloat(hk3Rows.find(h => h.month === month)?.hk3 || "0")
+        const hk3Rev = r(hk3Act * factor)
+        const hk3Pct = pct(hk3Rev, totRev)
+
+        const row = (rev: number, gp: number, cc: number, gc: number, cm1: number, hk3: number = 0) => ({
           revenue: rev, gp, gpPct: pct(gp, rev),
           channelCost: cc, groupCost: gc,
           cm1, cm1Pct: pct(cm1, rev),
+          hk3Pct: pct(hk3, rev),
+          // Giá trị thực tế (trước projection) — dùng cho cột "Revenue" (actual)
+          actualRevenue: r(rev / (isProjected ? factor : 1)),
         })
 
         return {
@@ -167,7 +188,10 @@ export async function GET(req: NextRequest) {
           factor: isProjected ? Math.round(factor * 100) / 100 : 1,
           elapsed: mr.elapsed,
           dim: mr.dim,
-          total: row(totRev, totGp, totCC, totGC, totCm1),
+          hk3Pct,
+          hk3Rev,
+          actualHk3: r(hk3Act),
+          total: row(totRev, totGp, totCC, totGC, totCm1, hk3Rev),
           b2b:   row(b2bRev, b2bGp, b2bCC, b2bGC, b2bCm1),
           b2c:   row(b2cRev, b2cGp, b2cCC, b2cGC, b2cCm1),
         }
@@ -181,9 +205,20 @@ export async function GET(req: NextRequest) {
           channelCost: acc.channelCost + m.total.channelCost,
           groupCost: acc.groupCost + m.total.groupCost,
           cm1: acc.cm1 + m.total.cm1,
+          hk3Rev: (acc as any).hk3Rev + m.hk3Rev,
+          b2bRevenue: (acc as any).b2bRevenue + m.b2b.revenue,
+          b2bGp: (acc as any).b2bGp + m.b2b.gp,
+          b2bCC: (acc as any).b2bCC + m.b2b.channelCost,
+          b2bGC: (acc as any).b2bGC + m.b2b.groupCost,
+          b2bCm1: (acc as any).b2bCm1 + m.b2b.cm1,
+          b2cRevenue: (acc as any).b2cRevenue + m.b2c.revenue,
+          b2cGp: (acc as any).b2cGp + m.b2c.gp,
+          b2cCC: (acc as any).b2cCC + m.b2c.channelCost,
+          b2cGC: (acc as any).b2cGC + m.b2c.groupCost,
+          b2cCm1: (acc as any).b2cCm1 + m.b2c.cm1,
         }),
-        { revenue: 0, gp: 0, channelCost: 0, groupCost: 0, cm1: 0 },
-      )
+        { revenue: 0, gp: 0, channelCost: 0, groupCost: 0, cm1: 0, hk3Rev: 0, b2bRevenue: 0, b2bGp: 0, b2bCC: 0, b2bGC: 0, b2bCm1: 0, b2cRevenue: 0, b2cGp: 0, b2cCC: 0, b2cGC: 0, b2cCm1: 0 },
+      ) as any
       const quarterTotal = {
         revenue: qtotals.revenue,
         gp: qtotals.gp,
@@ -192,6 +227,9 @@ export async function GET(req: NextRequest) {
         groupCost: qtotals.groupCost,
         cm1: qtotals.cm1,
         cm1Pct: pct(qtotals.cm1, qtotals.revenue),
+        hk3Pct: pct(qtotals.hk3Rev, qtotals.revenue),
+        b2b: { revenue: qtotals.b2bRevenue, gp: qtotals.b2bGp, gpPct: pct(qtotals.b2bGp, qtotals.b2bRevenue), channelCost: qtotals.b2bCC, groupCost: qtotals.b2bGC, cm1: qtotals.b2bCm1, cm1Pct: pct(qtotals.b2bCm1, qtotals.b2bRevenue) },
+        b2c: { revenue: qtotals.b2cRevenue, gp: qtotals.b2cGp, gpPct: pct(qtotals.b2cGp, qtotals.b2cRevenue), channelCost: qtotals.b2cCC, groupCost: qtotals.b2cGC, cm1: qtotals.b2cCm1, cm1Pct: pct(qtotals.b2cCm1, qtotals.b2cRevenue) },
       }
 
       // Channel breakdown per business group

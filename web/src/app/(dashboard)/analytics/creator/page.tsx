@@ -17,6 +17,7 @@ const ALL_TABS = [
   { id: "countries",       label: "Reference" },
   { id: "info",            label: "Note (Notes/Files)" },
   { id: "dashboard",       label: "Analytics Dashboard" },
+  { id: "quarterly",       label: "Báo cáo Quý" },
   { id: "bod",             label: "BOD Report" },
   { id: "all-time",        label: "All-Time" },
   { id: "channels",        label: "Channels" },
