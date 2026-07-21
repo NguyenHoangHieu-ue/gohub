@@ -59,6 +59,8 @@ export default function ProductPerformancePage() {
   const [exporting, setExporting] = useState(false)
   const skuFullQueryRef = React.useRef<string>("")   // query SKU không LIMIT → export FULL
   const [exportingSku, setExportingSku] = useState(false)
+  const skuDropdownRef = React.useRef<HTMLDivElement>(null)
+  const vendorDropdownRef = React.useRef<HTMLDivElement>(null)
 
   // Filters
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -89,6 +91,16 @@ export default function ProductPerformancePage() {
   const [countryMappings, setCountryMappings] = useState<Record<string, string>>({})
   const [selectedDestination, setSelectedDestination] = useState<string>("all")
   const [availableDestinations, setAvailableDestinations] = useState<{ code: string; name: string }[]>([])
+
+  // Đóng custom dropdown khi click ra ngoài — ngăn Vendor/SKU dropdown che Destination select
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (skuDropdownRef.current && !skuDropdownRef.current.contains(e.target as Node)) setShowSkuDropdown(false)
+      if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(e.target as Node)) setShowVendorDropdown(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
   const runQuery = async (sql: string) => {
     const res = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }) })
@@ -185,43 +197,50 @@ export default function ProductPerformancePage() {
 
   const fetchInitialData = async () => {
     try {
-      const [skus, cats, vends, rule, countries, destRows] = await Promise.all([
+      // 5 fetch chính — nếu fail thì catch bên ngoài xử lý
+      const [skus, cats, vends, rule, countries] = await Promise.all([
         runQuery("SELECT DISTINCT sku FROM dim_sku ORDER BY sku"),
         runQuery("SELECT DISTINCT category_name FROM dim_sku WHERE category_name IS NOT NULL ORDER BY category_name"),
         runQuery("SELECT DISTINCT vendor FROM dim_sku WHERE vendor IS NOT NULL ORDER BY vendor"),
         fetch("/api/config/sku-destination-rule").then(r => r.json()),
         fetch("/api/config/country-codes").then(r => r.json()),
-        // Lấy distinct destination codes từ dim_sku (không alias f. — table trực tiếp)
-        runQuery(`SELECT DISTINCT UPPER(CASE
-          WHEN sku ~ '^[1-6]'            THEN SUBSTRING(sku, 3, 3)
-          WHEN sku ~ '^E'               THEN SUBSTRING(sku, 2, 3)
-          WHEN sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(sku, 1, 3)
-          ELSE SUBSTRING(sku, 1, 3)
-        END) as code FROM dim_sku WHERE sku IS NOT NULL AND LENGTH(sku) >= 3 ORDER BY 1`),
       ])
 
       setAvailableSkus(skus.map((s: any) => s.sku))
       setCategories(cats.map((c: any) => c.category_name))
       setVendors(vends.map((v: any) => v.vendor))
-      // Đọc rules[0] nếu có, fallback về default
       const firstRule = rule?.rules?.[0]
-      if (firstRule) {
-        setSkuRule(prev => ({ ...prev, startsWith: firstRule.startsWith ?? prev.startsWith, codeLength: firstRule.codeLength ?? prev.codeLength }))
-      }
+      if (firstRule) setSkuRule(prev => ({ ...prev, startsWith: firstRule.startsWith ?? prev.startsWith, codeLength: firstRule.codeLength ?? prev.codeLength }))
 
       const mapping: Record<string, string> = {}
       if (Array.isArray(countries)) countries.forEach((c: any) => { if (c.code) mapping[String(c.code).toUpperCase()] = c.country })
       setCountryMappings(mapping)
 
-      // Chỉ hiện destination có data thực trong dim_sku (tránh dropdown 330 nước)
-      const dests: { code: string; name: string }[] = []
-      if (Array.isArray(destRows)) {
-        destRows.forEach((d: any) => {
-          const code = String(d.code || "").toUpperCase()
-          if (code.length === 3) dests.push({ code, name: mapping[code] || code })
-        })
+      // Destination query RIÊNG — failure không break main init
+      try {
+        const destRows = await runQuery(
+          `SELECT DISTINCT UPPER(CASE
+            WHEN sku ~ '^[1-6]'            THEN SUBSTRING(sku, 3, 3)
+            WHEN sku ~ '^E'               THEN SUBSTRING(sku, 2, 3)
+            WHEN sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(sku, 1, 3)
+            ELSE SUBSTRING(sku, 1, 3)
+          END) as code FROM dim_sku WHERE sku IS NOT NULL AND LENGTH(sku) >= 3 ORDER BY 1`
+        )
+        const dests: { code: string; name: string }[] = []
+        if (Array.isArray(destRows)) {
+          destRows.forEach((d: any) => {
+            const code = String(d.code || "").toUpperCase()
+            if (code.length === 3) dests.push({ code, name: mapping[code] || code })
+          })
+        }
+        setAvailableDestinations(dests.sort((a, b) => a.name.localeCompare(b.name)))
+      } catch {
+        // Fallback: dùng toàn bộ country mappings nếu dim_sku query fail
+        const allDests = Object.entries(mapping)
+          .map(([code, name]) => ({ code, name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setAvailableDestinations(allDests)
       }
-      setAvailableDestinations(dests.sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err) {
       console.error("Error fetching initial data:", err)
     }
@@ -239,7 +258,7 @@ export default function ProductPerformancePage() {
 
       let filterSQL = `f.${dateCol}::date BETWEEN '${startDate}' AND '${endDate}'`
       if (selectedSkus.length > 0) filterSQL += ` AND f.sku IN (${selectedSkus.map(s => `'${s}'`).join(",")})`
-      if (selectedCategory !== "all") filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE category_name = '${selectedCategory}')`
+      if (selectedCategory !== "all") filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE category_name = '${selectedCategory.replace(/'/g, "''")}')`
       if (selectedVendors.length > 0) {
         const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
         filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE vendor IN (${vendorList}))`
@@ -498,7 +517,7 @@ export default function ProductPerformancePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* SKU Multi-select */}
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5 relative" ref={skuDropdownRef}>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select SKUs</label>
               <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowSkuDropdown(!showSkuDropdown)}>
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -544,7 +563,7 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Vendor Filter */}
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5 relative" ref={vendorDropdownRef}>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all font-medium h-[38px]" onClick={() => setShowVendorDropdown(!showVendorDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedVendors.length === 0 ? "All Vendors" : selectedVendors.length === 1 ? selectedVendors[0] : `${selectedVendors.length} Vendors`}</span>
