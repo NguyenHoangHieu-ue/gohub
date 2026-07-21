@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -201,7 +201,7 @@ function QuarterlyContent() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gohub & CM1 theo Quý</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Quarter Report</h1>
           <p className="text-sm text-slate-400 mt-0.5">Báo cáo hiệu suất doanh thu, lợi nhuận và CM1 theo quý</p>
         </div>
         {/* Quarter selector */}
@@ -329,7 +329,7 @@ function QuarterlyContent() {
                         <td className={cn("px-4 py-3 text-right font-black text-[14px]", m.total.cm1 >= 0 ? "text-amber-700" : "text-rose-600")}>{fc(actCm1)}</td>
                         <td className="px-4 py-3 text-right text-indigo-500 font-semibold">{m.isProjected ? fc(prCm1) : dash}</td>
                         <td className={cn("px-4 py-3 text-right font-bold", m.total.cm1 >= 0 ? "text-amber-600" : "text-rose-500")}>{pct(m.total.cm1Pct)}</td>
-                        <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct)}</td>
+                        <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                       </tr>
                       {/* B2B sub-row */}
                       <SubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} factor={m.factor} color="text-blue-700" />
@@ -360,10 +360,18 @@ function QuarterlyContent() {
                 </tr>
               </thead>
               <tbody>
-                <QtRow label={`B2B Quý (Thực tế)`} stats={qt.b2b} prRev={b2bPrRev} actRev={b2bActualRev} actCm1={b2bActualCm1} prCm1={b2bPrCm1} hk3Pct={b2bHk3Pct} bold />
-                {targets.b2bRev > 0 && <TargetRow label="↳ Target B2B" targetRev={targets.b2bRev} prRev={b2bPrRev} targetCm1={targets.b2bCm1} targetThk={targets.b2bThk} hk3Pct={b2bHk3Pct} />}
-                <QtRow label={`B2C Quý (Thực tế)`} stats={qt.b2c} prRev={b2cPrRev} actRev={b2cActualRev} actCm1={b2cActualCm1} prCm1={b2cPrCm1} hk3Pct={b2cHk3Pct} bold />
-                {targets.b2cRev > 0 && <TargetRow label="↳ Target B2C" targetRev={targets.b2cRev} prRev={b2cPrRev} targetCm1={targets.b2cCm1} targetThk={targets.b2cThk} hk3Pct={b2cHk3Pct} />}
+                {qt.b2b && (
+                  <>
+                    <QtRow label="B2B Quý (Thực tế)" stats={qt.b2b} prRev={b2bPrRev} actRev={b2bActualRev} actCm1={b2bActualCm1} prCm1={b2bPrCm1} hk3Pct={b2bHk3Pct} bold />
+                    {targets.b2bRev > 0 && <TargetRow label="↳ Target B2B" targetRev={targets.b2bRev} prRev={b2bPrRev} targetCm1={targets.b2bCm1} targetThk={targets.b2bThk} hk3Pct={b2bHk3Pct} />}
+                  </>
+                )}
+                {qt.b2c && (
+                  <>
+                    <QtRow label="B2C Quý (Thực tế)" stats={qt.b2c} prRev={b2cPrRev} actRev={b2cActualRev} actCm1={b2cActualCm1} prCm1={b2cPrCm1} hk3Pct={b2cHk3Pct} bold />
+                    {targets.b2cRev > 0 && <TargetRow label="↳ Target B2C" targetRev={targets.b2cRev} prRev={b2cPrRev} targetCm1={targets.b2cCm1} targetThk={targets.b2cThk} hk3Pct={b2cHk3Pct} />}
+                  </>
+                )}
                 <QtRow label={`Tổng ${selQ}-${selYear}`} stats={qt} prRev={totalPrRev} actRev={totalActualRev} actCm1={totalActualCm1} prCm1={totalPrCm1} hk3Pct={totalHk3Pct} bold highlight />
               </tbody>
             </table>
@@ -424,7 +432,7 @@ function SubRow({ label, stats, isProjected, factor, color }: { label: string; s
       <td className={cn("px-4 py-2 text-right font-bold", stats.cm1 >= 0 ? "text-amber-600" : "text-rose-500")}>{fc(actCm1)}</td>
       <td className="px-4 py-2 text-right text-indigo-400">{isProjected ? fc(prCm1) : <span className="text-slate-200">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-bold", stats.cm1 >= 0 ? "text-amber-500" : "text-rose-400")}>{pct(stats.cm1Pct)}</td>
-      <td className="px-4 py-2 text-right text-slate-400">{pct(stats.hk3Pct ?? 0)}</td>
+      <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
     </tr>
   )
 }

@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  const cacheKey = `qreport:${quarter}:${year}:${dateColumn}:${companyCode}:${todayStr}`
+  const cacheKey = `qreport_v3:${quarter}:${year}:${dateColumn}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

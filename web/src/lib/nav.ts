@@ -28,7 +28,7 @@ export const NAV_PRODUCT: NavDef[] = [
 export const ANALYTICS_GROUPS: NavGroup[] = [
   { label: "Overview", items: [
     { href: "/analytics",           label: "Dashboard",       icon: LayoutDashboard },
-    { href: "/analytics/quarterly", label: "Báo cáo Quý",    icon: BarChart3       },
+    { href: "/analytics/quarterly", label: "Quarter Report",  icon: BarChart3       },
     { href: "/analytics/bod",       label: "BOD Report",      icon: PieChart        },
     { href: "/analytics/all-time",  label: "All-Time Report", icon: BarChart3       },
   ]},
