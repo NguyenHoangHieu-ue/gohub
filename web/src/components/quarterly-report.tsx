@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
-import { X, BarChart3, RefreshCw, ChevronRight } from "lucide-react"
+import React, { useState, useCallback, useEffect } from "react"
+import { X, Download, TrendingUp, TrendingDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 
@@ -31,106 +31,59 @@ interface Props {
   companyCode?: string; dateColumn?: string
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const fc = formatCompactNumber
-const pctStr = (v: number) => `${v.toFixed(1)}%`
-const momCls = (v: number | null) => v == null ? "" : v >= 0 ? "text-emerald-600" : "text-rose-500"
-const momStr = (v: number | null) =>
-  v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`
+const pct = (v: number) => `${v.toFixed(1)}%`
 
-function MonthLabel({ month, isProjected, factor, elapsed, dim }: Pick<MonthSummary, "month" | "isProjected" | "factor" | "elapsed" | "dim">) {
-  const [, mo] = month.split("-")
+// ─── Mini charts ──────────────────────────────────────────────────────────────
+
+function MiniBarChart({ values }: { values: number[] }) {
+  const max = Math.max(...values, 1)
   return (
-    <span className="flex items-center gap-1.5">
-      <span>T{parseInt(mo)}</span>
-      {isProjected && (
-        <span className="text-[9px] font-bold text-blue-500 bg-blue-100 px-1 py-0.5 rounded">
-          {elapsed}/{dim}d · ×{factor}
-        </span>
-      )}
-    </span>
+    <div className="flex items-end gap-1 h-10 mt-2">
+      {values.map((v, i) => (
+        <div key={i} style={{ height: `${Math.max(20, (v / max) * 100)}%` }}
+          className={cn("flex-1 rounded-sm transition-all",
+            i === values.length - 1 ? "bg-blue-600" : "bg-blue-200")} />
+      ))}
+    </div>
   )
 }
 
-// ─── Channel detail table ─────────────────────────────────────────────────────
-
-function ChannelTable({ title, channels, months, projMap }: {
-  title: string; channels: Channel[]; months: string[]; projMap: Record<string, boolean>
-}) {
-  if (channels.length === 0) return null
+function Sparkline({ values, color = "#10b981" }: { values: number[]; color?: string }) {
+  if (values.length < 2) return null
+  const max = Math.max(...values, 1)
+  const min = Math.min(...values, 0)
+  const range = max - min || 1
+  const W = 100; const H = 36
+  const pts = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * W,
+    y: H - ((v - min) / range) * (H - 6) - 3,
+  }))
+  // Smooth curve via cubic bezier
+  let d = `M${pts[0].x},${pts[0].y}`
+  for (let i = 1; i < pts.length; i++) {
+    const cp = (pts[i].x + pts[i - 1].x) / 2
+    d += ` C${cp},${pts[i - 1].y} ${cp},${pts[i].y} ${pts[i].x},${pts[i].y}`
+  }
   return (
-    <section>
-      <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">{title}</h3>
-      <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-800 border-b border-slate-700">
-                <th className="px-4 py-2.5 text-left font-bold text-slate-200 sticky left-0 bg-slate-800 min-w-[160px] border-r border-slate-700">
-                  Kênh
-                </th>
-                {months.map(m => {
-                  const [y, mo] = m.split("-")
-                  return (
-                    <th key={m} colSpan={5}
-                      className={cn("px-3 py-2.5 text-center font-bold text-slate-200 border-l border-slate-700 whitespace-nowrap",
-                        projMap[m] && "bg-blue-900/40 text-blue-200")}>
-                      T{parseInt(mo)}/{y}
-                      {projMap[m] && <span className="ml-1 text-[9px] font-bold text-blue-300 bg-blue-800/50 px-1 py-0.5 rounded">(PR)</span>}
-                    </th>
-                  )
-                })}
-              </tr>
-              <tr className="bg-slate-700/60 border-b border-slate-700 text-[10px] text-slate-300">
-                <th className="px-4 py-1.5 sticky left-0 bg-slate-700/60 border-r border-slate-600" />
-                {months.map(m => (
-                  <React.Fragment key={m}>
-                    <th className="px-3 py-1.5 text-right border-l border-slate-600 whitespace-nowrap font-normal text-slate-400">Revenue</th>
-                    <th className="px-3 py-1.5 text-right whitespace-nowrap font-normal text-emerald-300">GP</th>
-                    <th className="px-3 py-1.5 text-right whitespace-nowrap font-normal text-amber-300">Ch.Cost</th>
-                    <th className="px-3 py-1.5 text-right whitespace-nowrap font-bold text-indigo-300">CM1</th>
-                    <th className="px-3 py-1.5 text-right whitespace-nowrap font-normal text-slate-400">%MoM</th>
-                  </React.Fragment>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {channels.map(ch => (
-                <tr key={ch.name} className="hover:bg-slate-50/40 transition-colors">
-                  <td className="px-4 py-2 font-medium text-slate-700 sticky left-0 bg-white border-r border-slate-100">
-                    {ch.name}
-                  </td>
-                  {months.map(m => {
-                    const d = ch.months.find(x => x.month === m)
-                    const isProj = projMap[m]
-                    const cellBase = cn("px-3 py-2 text-right", isProj && "bg-blue-50/20")
-                    if (!d || d.revenue === 0) {
-                      return (
-                        <React.Fragment key={m}>
-                          {[0, 1, 2, 3, 4].map(i => (
-                            <td key={i} className={cn(cellBase, "text-slate-200", i === 0 && "border-l border-slate-100")}>—</td>
-                          ))}
-                        </React.Fragment>
-                      )
-                    }
-                    return (
-                      <React.Fragment key={m}>
-                        <td className={cn(cellBase, "text-slate-700 font-medium border-l border-slate-100")}>{fc(d.revenue)}</td>
-                        <td className={cn(cellBase, "text-emerald-700")}>{fc(d.gp)}</td>
-                        <td className={cn(cellBase, "text-slate-500")}>{d.channelCost > 0 ? fc(d.channelCost) : "—"}</td>
-                        <td className={cn(cellBase, "font-bold", d.cm1 >= 0 ? "text-indigo-700" : "text-rose-600")}>{fc(d.cm1)}</td>
-                        <td className={cn(cellBase, "text-[10px] font-bold", momCls(d.momPct))}>{momStr(d.momPct)}</td>
-                      </React.Fragment>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-10 mt-2" preserveAspectRatio="none">
+      <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function RingProgress({ value, size = 60 }: { value: number; size?: number }) {
+  const r = (size - 8) / 2
+  const c = 2 * Math.PI * r
+  const offset = c - (Math.min(Math.max(value, 0), 100) / 100) * c
+  const color = value >= 100 ? "#10b981" : value >= 75 ? "#6366f1" : "#f59e0b"
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="6"
+        strokeDasharray={`${c}`} strokeDashoffset={`${offset}`} strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+    </svg>
   )
 }
 
@@ -138,14 +91,11 @@ function ChannelTable({ title, channels, months, projMap }: {
 
 export default function QuarterlyReport({ isOpen, onClose, companyCode = "ALL", dateColumn = "fulfiled_date" }: Props) {
   const today = new Date()
-  const defaultQ = `Q${Math.ceil((today.getMonth() + 1) / 3)}`
-  const [selQ, setSelQ] = useState(defaultQ)
+  const [selQ, setSelQ] = useState(`Q${Math.ceil((today.getMonth() + 1) / 3)}`)
   const [selYear, setSelYear] = useState(today.getFullYear())
   const [report, setReport] = useState<QReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
-  const [expandedQTotal, setExpandedQTotal] = useState(false)
 
   const fetchReport = useCallback(async () => {
     setLoading(true); setError(null)
@@ -153,10 +103,7 @@ export default function QuarterlyReport({ isOpen, onClose, companyCode = "ALL", 
       const url = `/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&dateColumn=${dateColumn}&companyCode=${companyCode}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const data: QReport = await res.json()
-      setReport(data)
-      // Auto-expand all months
-      setExpandedMonths(new Set(data.summary.map(m => m.month)))
+      setReport(await res.json())
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -164,263 +111,314 @@ export default function QuarterlyReport({ isOpen, onClose, companyCode = "ALL", 
     }
   }, [selQ, selYear, dateColumn, companyCode])
 
+  // Auto-fetch khi mở modal hoặc đổi quý/năm
+  useEffect(() => { if (isOpen) fetchReport() }, [isOpen, fetchReport])
+
   if (!isOpen) return null
 
   const years = [today.getFullYear(), today.getFullYear() - 1, today.getFullYear() - 2]
   const quarters = ["Q1", "Q2", "Q3", "Q4"]
-
-  const toggleMonth = (m: string) => setExpandedMonths(prev => {
-    const next = new Set(prev)
-    next.has(m) ? next.delete(m) : next.add(m)
-    return next
-  })
-
   const summary = report?.summary ?? []
-  const quarterTotal = report?.quarterTotal
-  const activeMonths = summary.map(m => m.month)
+  const qtotal  = report?.quarterTotal
   const projMap: Record<string, boolean> = Object.fromEntries(summary.map(m => [m.month, m.isProjected]))
 
-  // Stats row builder for summary table
-  const StatsRow = ({
-    d, label, indent = false, isProjected = false, bold = false,
-  }: { d: MonthStats; label: string; indent?: boolean; isProjected?: boolean; bold?: boolean }) => (
-    <tr className={cn("hover:bg-slate-50/30 transition-colors", isProjected && !indent && "bg-blue-50/30")}>
-      <td className={cn(
-        "px-4 py-2 sticky left-0 border-r border-slate-100 whitespace-nowrap",
-        isProjected && !indent ? "bg-blue-50/50" : "bg-white",
-        indent ? "pl-8 text-slate-400 text-[11px]" : bold ? "font-bold text-slate-800" : "text-slate-600",
-      )}>
-        {label}
-      </td>
-      <td className={cn("px-4 py-2 text-right", bold ? "font-bold text-slate-900" : "text-slate-700")}>{d.revenue > 0 ? fc(d.revenue) : "—"}</td>
-      <td className={cn("px-4 py-2 text-right", bold ? "font-bold text-emerald-700" : "text-emerald-600")}>{d.gp > 0 ? fc(d.gp) : "—"}</td>
-      <td className="px-4 py-2 text-right text-slate-500">{d.revenue > 0 ? pctStr(d.gpPct) : "—"}</td>
-      <td className="px-4 py-2 text-right text-slate-500">{d.channelCost > 0 ? fc(d.channelCost) : "—"}</td>
-      <td className="px-4 py-2 text-right text-slate-500">{d.groupCost > 0 ? fc(d.groupCost) : "—"}</td>
-      <td className={cn("px-4 py-2 text-right font-bold", d.cm1 >= 0 ? "text-indigo-700" : "text-rose-600")}>{d.revenue > 0 ? fc(d.cm1) : "—"}</td>
-      <td className={cn("px-4 py-2 text-right font-bold", d.cm1 >= 0 ? "text-indigo-600" : "text-rose-500")}>{d.revenue > 0 ? pctStr(d.cm1Pct) : "—"}</td>
-    </tr>
-  )
+  // KPI values từ quarter total
+  const revenues   = summary.map(m => m.total.revenue)
+  const gps        = summary.map(m => m.total.gp)
+  const cm1s       = summary.map(m => m.total.cm1)
+
+  // MoM change: last vs first month trong quý
+  const revMoM = revenues.length >= 2 && revenues[0] > 0
+    ? ((revenues[revenues.length - 1] - revenues[0]) / revenues[0]) * 100 : null
+  const gpMargin = qtotal && qtotal.revenue > 0 ? qtotal.gpPct : null
+
+  // Xuất Excel đơn giản
+  const exportExcel = () => {
+    if (!report) return
+    const rows = [
+      ["Tháng", "Revenue", "Gross Profit", "GP%", "CH. Cost", "CM1", "CM1%"],
+      ...summary.map(m => [
+        `T${parseInt(m.month.split("-")[1])}/${m.month.split("-")[0]}`,
+        m.total.revenue, m.total.gp, m.total.gpPct,
+        m.total.channelCost, m.total.cm1, m.total.cm1Pct,
+      ]),
+      qtotal ? ["TỔNG", qtotal.revenue, qtotal.gp, qtotal.gpPct, qtotal.channelCost, qtotal.cm1, qtotal.cm1Pct] : [],
+    ]
+    const csv = rows.map(r => r.join(",")).join("\n")
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }))
+    a.download = `quarterly-report-${selQ}-${selYear}.csv`
+    a.click()
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center overflow-y-auto py-6 px-3">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-[90rem]">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-[88rem]">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 to-slate-50">
+        <div className="flex items-start justify-between px-7 py-5 border-b border-slate-100">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Báo cáo CHT Theo Quý</h2>
+            <p className="text-sm text-slate-400 mt-0.5">Thống kê chi tiết doanh thu, lợi nhuận và hiệu suất theo kênh</p>
+          </div>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm shadow-indigo-200">
-              <BarChart3 className="w-4.5 h-4.5 text-white" />
+            {/* Quarter selector */}
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+              {quarters.map(q => (
+                <button key={q} onClick={() => setSelQ(q)}
+                  className={cn("px-4 py-1.5 text-sm font-semibold rounded-lg transition-all",
+                    selQ === q ? "bg-slate-800 text-white shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                  {q}
+                </button>
+              ))}
+              <div className="w-px h-5 bg-slate-300 mx-1" />
+              <select value={selYear} onChange={e => setSelYear(parseInt(e.target.value))}
+                className="px-3 py-1.5 text-sm font-semibold bg-transparent text-slate-700 outline-none cursor-pointer">
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">Báo cáo CM1 theo Quý</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Revenue · Gross Profit · Channel Cost · Group Cost · <span className="font-semibold text-indigo-500">CM1</span></p>
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
-        {/* ── Controls ── */}
-        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap gap-2.5 items-center">
-          <div className="flex gap-0.5 bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm">
-            {quarters.map(q => (
-              <button key={q} onClick={() => setSelQ(q)}
-                className={cn("px-3.5 py-1.5 text-xs font-bold rounded-md transition-all",
-                  selQ === q ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100")}>
-                {q}
-              </button>
-            ))}
-          </div>
-          <select value={selYear} onChange={e => setSelYear(parseInt(e.target.value))}
-            className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg text-slate-700 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer shadow-sm">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button onClick={fetchReport} disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-60 active:scale-95 shadow-sm shadow-indigo-200">
-            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
-            Xem báo cáo
-          </button>
-          {report && !loading && (
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              {selQ}-{selYear}
-              {summary.filter(m => m.isProjected).length > 0 && <span className="text-blue-400">(có pro-rata)</span>}
-              {companyCode !== "ALL" && <span className="font-medium text-slate-500">· {companyCode}</span>}
-            </span>
-          )}
-        </div>
+        <div className="p-6 space-y-6">
 
-        {/* ── Content ── */}
-        <div className="p-6 space-y-8">
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>
-          )}
-
-          {!report && !loading && !error && (
-            <div className="text-center py-16 text-slate-400">
-              <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">Chọn quý và bấm <span className="font-bold text-slate-500">Xem báo cáo</span></p>
-            </div>
-          )}
-
+          {/* ── Loading / Error ── */}
           {loading && (
-            <div className="text-center py-16">
-              <RefreshCw className="w-8 h-8 animate-spin mx-auto text-indigo-400 mb-3" />
-              <p className="text-sm text-slate-400">Đang tải dữ liệu quý {selQ}-{selYear}…</p>
+            <div className="flex items-center justify-center py-16 gap-3 text-slate-400">
+              <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm">Đang tải {selQ}-{selYear}…</span>
             </div>
           )}
+          {error && !loading && (
+            <div className="bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 text-sm text-rose-700">{error}</div>
+          )}
 
-          {/* ── Summary table ── */}
-          {!loading && summary.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Tổng hợp theo tháng</h3>
-                <span className="text-[10px] text-slate-400">· bấm hàng tháng để xem B2B / B2C</span>
+          {!loading && report && (
+            <>
+              {/* ── KPI Cards ── */}
+              <div className="grid grid-cols-3 gap-4">
+
+                {/* Revenue card */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Total Revenue</span>
+                    {revMoM != null && (
+                      <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1",
+                        revMoM >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600")}>
+                        {revMoM >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        {revMoM >= 0 ? "+" : ""}{revMoM.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-3xl font-black text-slate-900 mt-1">{qtotal ? fc(qtotal.revenue) : "—"}</p>
+                  <MiniBarChart values={revenues} />
+                </div>
+
+                {/* Gross Profit card */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Gross Profit</span>
+                    {gpMargin != null && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                        {pct(gpMargin)} Margin
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-3xl font-black text-emerald-700 mt-1">{qtotal ? fc(qtotal.gp) : "—"}</p>
+                  <Sparkline values={gps} color="#10b981" />
+                </div>
+
+                {/* CM1 card */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Net CM1</span>
+                    {qtotal && (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                        {pct(qtotal.cm1Pct)} CM1%
+                      </span>
+                    )}
+                  </div>
+                  <p className={cn("text-3xl font-black mt-1", qtotal && qtotal.cm1 >= 0 ? "text-indigo-700" : "text-rose-600")}>
+                    {qtotal ? fc(qtotal.cm1) : "—"}
+                  </p>
+                  <div className="flex items-end justify-between mt-2">
+                    <Sparkline values={cm1s} color="#6366f1" />
+                    {qtotal && (
+                      <div className="ml-3 flex-shrink-0">
+                        <div className="relative w-14 h-14">
+                          <RingProgress value={qtotal.cm1Pct * 4} size={56} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[10px] font-black text-indigo-700">{pct(qtotal.cm1Pct)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
+
+              {/* ── Summary Table ── */}
+              {summary.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+                    <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Tổng hợp theo tháng</h3>
+                    <button onClick={exportExcel}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                      <Download className="w-3.5 h-3.5" />Xuất Excel
+                    </button>
+                  </div>
+                  <table className="w-full text-sm border-collapse">
                     <thead>
-                      <tr className="bg-slate-800 text-[10px] font-bold text-slate-200 uppercase tracking-wider">
-                        <th className="px-4 py-3 text-left sticky left-0 bg-slate-800 min-w-[160px] border-r border-slate-700">Tháng</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-slate-300">Revenue</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-emerald-300">Gross Profit</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-slate-400">GP%</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-amber-300">Ch. Cost</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-orange-300">Group Cost</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-indigo-300 font-black">CM1</th>
-                        <th className="px-4 py-3 text-right whitespace-nowrap text-indigo-300 font-black">CM1%</th>
+                      <tr className="border-b border-slate-100 bg-slate-50/60">
+                        <th className="px-5 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest w-36">Tháng</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Revenue</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gross Profit</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">GP%</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ch. Cost</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">CM1</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">CM1%</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody>
                       {summary.map(m => {
-                        const expanded = expandedMonths.has(m.month)
                         const [y, mo] = m.month.split("-")
-                        const monthLabel = (
-                          <span className="flex items-center gap-1.5">
-                            <span className="font-bold">T{parseInt(mo)}/{y}</span>
-                            {m.isProjected && (
-                              <span className="text-[9px] font-bold text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded">
-                                {m.elapsed}/{m.dim}d ×{m.factor}
-                              </span>
-                            )}
-                          </span>
-                        )
                         return (
-                          <React.Fragment key={m.month}>
-                            {/* Month header row — clickable to expand */}
-                            <tr
-                              className={cn("cursor-pointer select-none border-t border-slate-100",
-                                m.isProjected ? "bg-blue-50/40 hover:bg-blue-50/70" : "bg-white hover:bg-slate-50/80")}
-                              onClick={() => toggleMonth(m.month)}
-                            >
-                              <td className={cn("px-4 py-3 sticky left-0 border-r border-slate-100",
-                                m.isProjected ? "bg-blue-50/50" : "bg-white")}>
-                                <div className="flex items-center gap-2">
-                                  <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
-                                  <span className="font-bold text-slate-800 text-[13px]">{monthLabel}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-slate-800">{fc(m.total.revenue)}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-emerald-700">{fc(m.total.gp)}</td>
-                              <td className="px-4 py-3 text-right text-slate-500 text-[11px]">{pctStr(m.total.gpPct)}</td>
-                              <td className="px-4 py-3 text-right text-amber-700 text-[11px]">{m.total.channelCost > 0 ? fc(m.total.channelCost) : <span className="text-slate-200">—</span>}</td>
-                              <td className="px-4 py-3 text-right text-orange-700 text-[11px]">{m.total.groupCost > 0 ? fc(m.total.groupCost) : <span className="text-slate-200">—</span>}</td>
-                              <td className={cn("px-4 py-3 text-right font-bold text-[14px]", m.total.cm1 >= 0 ? "text-indigo-700" : "text-rose-600")}>{fc(m.total.cm1)}</td>
-                              <td className={cn("px-4 py-3 text-right font-bold text-[12px]", m.total.cm1 >= 0 ? "text-indigo-600" : "text-rose-500")}>
-                                <span className={cn("px-1.5 py-0.5 rounded", m.total.cm1 >= 0 ? "bg-indigo-50" : "bg-rose-50")}>{pctStr(m.total.cm1Pct)}</span>
-                              </td>
-                            </tr>
-                            {expanded && (
-                              <>
-                                <StatsRow d={m.b2b} label="↳ B2B" indent isProjected={m.isProjected} />
-                                <StatsRow d={m.b2c} label="↳ B2C" indent isProjected={m.isProjected} />
-                              </>
-                            )}
-                          </React.Fragment>
+                          <tr key={m.month} className={cn("border-b border-slate-50 hover:bg-slate-50/60 transition-colors", m.isProjected && "bg-blue-50/20")}>
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800">T{parseInt(mo)}/{y}</span>
+                                {m.isProjected && (
+                                  <span className="text-[9px] font-bold text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded">
+                                    ×{m.factor}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5 text-right text-slate-700 font-medium">{fc(m.total.revenue)}</td>
+                            <td className="px-4 py-3.5 text-right font-semibold text-emerald-600">{fc(m.total.gp)}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-500 text-[12px]">{pct(m.total.gpPct)}</td>
+                            <td className="px-4 py-3.5 text-right font-medium text-rose-500">{m.total.channelCost > 0 ? fc(m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
+                            <td className="px-4 py-3.5 text-right font-bold text-indigo-700 text-[15px]">{fc(m.total.cm1)}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-500 text-[12px]">{pct(m.total.cm1Pct)}</td>
+                          </tr>
                         )
                       })}
 
-                      {/* Quarter total row */}
-                      {quarterTotal && summary.length > 1 && (
-                        <>
-                          <tr className="bg-indigo-700 cursor-pointer select-none hover:bg-indigo-600"
-                            onClick={() => setExpandedQTotal(v => !v)}>
-                            <td className="px-4 py-3 sticky left-0 bg-indigo-700 border-r border-indigo-600">
-                              <div className="flex items-center gap-2 font-bold text-white text-[11px] uppercase tracking-wider">
-                                <ChevronRight className={cn("w-3.5 h-3.5 text-indigo-200 transition-transform shrink-0", expandedQTotal && "rotate-90")} />
-                                Tổng {selQ}-{selYear}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-white">{fc(quarterTotal.revenue)}</td>
-                            <td className="px-4 py-3 text-right font-bold text-emerald-200">{fc(quarterTotal.gp)}</td>
-                            <td className="px-4 py-3 text-right text-indigo-200 text-[11px]">{pctStr(quarterTotal.gpPct)}</td>
-                            <td className="px-4 py-3 text-right text-amber-200 text-[11px]">{quarterTotal.channelCost > 0 ? fc(quarterTotal.channelCost) : "—"}</td>
-                            <td className="px-4 py-3 text-right text-orange-200 text-[11px]">{quarterTotal.groupCost > 0 ? fc(quarterTotal.groupCost) : "—"}</td>
-                            <td className={cn("px-4 py-3 text-right font-black text-[15px]", quarterTotal.cm1 >= 0 ? "text-yellow-200" : "text-rose-300")}>{fc(quarterTotal.cm1)}</td>
-                            <td className={cn("px-4 py-3 text-right font-bold text-[12px]", quarterTotal.cm1 >= 0 ? "text-yellow-200" : "text-rose-300")}>
-                              <span className="bg-white/10 px-1.5 py-0.5 rounded">{pctStr(quarterTotal.cm1Pct)}</span>
-                            </td>
-                          </tr>
-                          {expandedQTotal && (() => {
-                            const b2bTot = summary.reduce((a, m) => ({
-                              revenue: a.revenue + m.b2b.revenue, gp: a.gp + m.b2b.gp,
-                              channelCost: a.channelCost + m.b2b.channelCost, groupCost: a.groupCost + m.b2b.groupCost,
-                              cm1: a.cm1 + m.b2b.cm1,
-                            }), { revenue: 0, gp: 0, channelCost: 0, groupCost: 0, cm1: 0 })
-                            const b2cTot = summary.reduce((a, m) => ({
-                              revenue: a.revenue + m.b2c.revenue, gp: a.gp + m.b2c.gp,
-                              channelCost: a.channelCost + m.b2c.channelCost, groupCost: a.groupCost + m.b2c.groupCost,
-                              cm1: a.cm1 + m.b2c.cm1,
-                            }), { revenue: 0, gp: 0, channelCost: 0, groupCost: 0, cm1: 0 })
-                            const mk = (x: { revenue: number; gp: number; channelCost: number; groupCost: number; cm1: number }): MonthStats => ({
-                              ...x,
-                              gpPct: x.revenue > 0 ? Math.round(x.gp / x.revenue * 1000) / 10 : 0,
-                              cm1Pct: x.revenue > 0 ? Math.round(x.cm1 / x.revenue * 1000) / 10 : 0,
-                            })
-                            return (
-                              <>
-                                <StatsRow d={mk(b2bTot)} label="↳ B2B (cộng dồn)" indent />
-                                <StatsRow d={mk(b2cTot)} label="↳ B2C (cộng dồn)" indent />
-                              </>
-                            )
-                          })()}
-                        </>
+                      {/* Total row */}
+                      {qtotal && summary.length > 1 && (
+                        <tr className="bg-slate-50 border-t border-slate-200">
+                          <td className="px-5 py-4">
+                            <span className="font-bold text-indigo-700 text-[13px] uppercase tracking-wide">Tổng {selQ}-{selYear}</span>
+                          </td>
+                          <td className="px-4 py-4 text-right font-bold text-slate-800">{fc(qtotal.revenue)}</td>
+                          <td className="px-4 py-4 text-right font-bold text-emerald-700">{fc(qtotal.gp)}</td>
+                          <td className="px-4 py-4 text-right font-semibold text-slate-600">{pct(qtotal.gpPct)}</td>
+                          <td className="px-4 py-4 text-right font-semibold text-rose-600">{qtotal.channelCost > 0 ? fc(qtotal.channelCost) : "—"}</td>
+                          <td className="px-4 py-4 text-right font-black text-indigo-800 text-[16px]">{fc(qtotal.cm1)}</td>
+                          <td className="px-4 py-4 text-right font-bold text-indigo-700">{pct(qtotal.cm1Pct)}</td>
+                        </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            </section>
-          )}
+              )}
 
-          {/* ── Channel detail tables ── */}
-          {!loading && report && (
-            <>
-              <ChannelTable
-                title="CHI TIẾT B2B — THEO KÊNH × THÁNG (CỘT)"
-                channels={report.b2bChannels}
-                months={activeMonths}
-                projMap={projMap}
-              />
-              <ChannelTable
-                title="CHI TIẾT B2C — THEO KÊNH × THÁNG (CỘT)"
-                channels={report.b2cChannels}
-                months={activeMonths}
-                projMap={projMap}
-              />
+              {/* ── Channel sections ── */}
+              {(report.b2bChannels.length > 0 || report.b2cChannels.length > 0) && (
+                <div className="grid grid-cols-2 gap-4">
+
+                  {/* B2B top channels */}
+                  {report.b2bChannels.length > 0 && (
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Kênh B2B trọng yếu</h3>
+                        <span className="text-[10px] text-slate-400 font-medium">Top Performance</span>
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        {report.b2bChannels.slice(0, 6).map(ch => {
+                          const momPcts = ch.months.map(m => m.momPct).filter(v => v != null) as number[]
+                          const avgMom = momPcts.length > 0 ? momPcts.reduce((a, b) => a + b, 0) / momPcts.length : null
+                          return (
+                            <div key={ch.name} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-black text-indigo-600">{ch.name.slice(0, 2).toUpperCase()}</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-slate-800 text-sm truncate">{ch.name}</p>
+                                <p className="text-[10px] text-slate-400">B2B Network</p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="font-bold text-slate-800 text-sm">{fc(ch.totalRevenue)}</p>
+                                {avgMom != null && (
+                                  <p className={cn("text-[10px] font-semibold flex items-center justify-end gap-0.5",
+                                    avgMom >= 0 ? "text-emerald-600" : "text-rose-500")}>
+                                    {avgMom >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                    {avgMom >= 0 ? "+" : ""}{avgMom.toFixed(1)}%
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B2C channels */}
+                  {report.b2cChannels.length > 0 && (
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+                        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Ma trận hiệu quả kênh B2C</h3>
+                        <div className="flex items-center gap-3 text-[10px] text-slate-400 font-medium">
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Revenue</span>
+                          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />GP</span>
+                        </div>
+                      </div>
+                      <div className="px-5 py-3 space-y-2">
+                        {report.b2cChannels.slice(0, 6).map(ch => {
+                          const totalGp = ch.months.reduce((s, m) => s + m.gp, 0)
+                          const gpRatio = ch.totalRevenue > 0 ? (totalGp / ch.totalRevenue) * 100 : 0
+                          const maxRev  = Math.max(...report.b2cChannels.map(c => c.totalRevenue), 1)
+                          const revBar  = (ch.totalRevenue / maxRev) * 100
+                          const gpBar   = Math.min((totalGp / maxRev) * 100, revBar)
+                          return (
+                            <div key={ch.name}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-slate-700 truncate max-w-[60%]">{ch.name}</span>
+                                <div className="flex items-center gap-2 text-[11px]">
+                                  <span className="text-slate-500">{fc(ch.totalRevenue)}</span>
+                                  <span className={cn("font-semibold", gpRatio >= 25 ? "text-emerald-600" : "text-slate-400")}>{pct(gpRatio)}</span>
+                                </div>
+                              </div>
+                              <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
+                                <div className="absolute inset-y-0 left-0 bg-blue-200 rounded-full" style={{ width: `${revBar}%` }} />
+                                <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" style={{ width: `${gpBar}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* Empty */}
+              {summary.length === 0 && (
+                <div className="text-center py-10 text-slate-400 text-sm">Chưa có dữ liệu cho {selQ}-{selYear}.</div>
+              )}
             </>
           )}
 
-          {/* No data */}
-          {!loading && report && summary.length === 0 && (
-            <div className="text-center py-12 text-slate-400">
-              <p className="text-sm">Chưa có dữ liệu cho {selQ}-{selYear}.</p>
-            </div>
+          {/* Prompt to select */}
+          {!loading && !report && !error && (
+            <div className="text-center py-16 text-slate-400 text-sm">Đang tải dữ liệu…</div>
           )}
+
         </div>
       </div>
     </div>
