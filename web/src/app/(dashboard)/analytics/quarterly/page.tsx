@@ -203,12 +203,12 @@ function QuarterlyContent() {
   const totalHk3Pct    = qt?.hk3Pct ?? 0
 
   return (
-    <div className="p-6 space-y-5 bg-slate-50 min-h-screen">
+    <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Quarter Report</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Quarter Report</h1>
           <p className="text-sm text-slate-400 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -248,7 +248,7 @@ function QuarterlyContent() {
       {/* ── Target inputs ── */}
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-slate-700">Target {selQ}-{selYear}</h2>
+          <h2 className="text-lg font-bold text-slate-900">Target {selQ}-{selYear}</h2>
           <button onClick={saveTargets} disabled={saving}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all">
             <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu Target"}
@@ -296,8 +296,8 @@ function QuarterlyContent() {
       {/* ── Monthly summary table ── */}
       {!loading && summary.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-            <h2 className="text-sm font-semibold text-slate-700">Tổng hợp theo Tháng</h2>
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+            <h2 className="text-lg font-bold text-slate-900">Tổng hợp theo Tháng</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse">
@@ -344,8 +344,8 @@ function QuarterlyContent() {
       {/* ── Quarter total vs target ── */}
       {!loading && qt && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-            <h2 className="text-sm font-semibold text-slate-700">Tổng hợp cả Quý — So sánh với Target</h2>
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+            <h2 className="text-lg font-bold text-slate-900">Tổng hợp cả Quý — So sánh với Target</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse">
@@ -475,8 +475,8 @@ function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
         <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
+          <Icon className="w-5 h-5 text-slate-400" />
+          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
         </div>
         <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform", expanded && "rotate-90")} />
       </button>

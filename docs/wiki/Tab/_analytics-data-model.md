@@ -33,7 +33,7 @@ status: active
 |---|---|---|
 | `dim_order_source` | Kênh bán | `code`, `channel_name`, `group_name` (B2B/B2C), `sub_group_name` (Websites/Mobile-App/Social…), `sapo_name` |
 | `dim_sku` | Sản phẩm/SKU | `sku`, `vendor`, `category_name`, `type_of_sim` |
-| `dim_customer` | Khách hàng | `code`, `name` |
+| `dim_customer` | Khách hàng | `code` (UNIQUE, khoá join), `name`. Từ 2026-07-21 thêm 12 cột (`sapocustomerid`, `organization`, `organization_code`, `customer_group_code`, `portal_type`, `invoice_subject_type`, `recon_cycle`, `price_list_code`, `currency_code`, `sales_pic_code`, `payment_term_code`, `status`) — hiện đa số NULL. Report chỉ dùng `code`+`name`; join `TRIM(customer_code)=TRIM(code)` khớp 100%, `code` không trùng nên KHÔNG nhân dòng. |
 | `dim_staff` | Nhân viên | `code`, `name` |
 | `dim_location` | Chi nhánh (KHÔNG phải nước!) | `location_id`, `location_name` |
 

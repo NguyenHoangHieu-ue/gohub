@@ -54,7 +54,7 @@ Nhất quán với `gohub-report/gohub.py` (`save_quarter_targets` / `cm1_quarte
 ## 5. Gotchas
 - Đổi cache key khi thêm field mới vào `quarterly-report` (đã từng crash do cache cũ thiếu `hk3Pct`/`qt.b2b` → guard `?? 0` + `{qt.b2b && …}`). Hiện tại `qreport_v3`.
 - Target lưu Turso (KHÔNG Supabase) để đồng bộ với script Python `gohub-report`.
-- UI style: basic — chỉ dùng slate + blue (CM1) + green/red (status). Header bảng `bg-slate-800`.
+- UI style: chỉ dùng slate + blue (CM1) + green/red (status). Header bảng `bg-slate-800`. Từ 2026-07-21 canh cho ĐỒNG BỘ với các tab analytics khác: wrapper `p-4 lg:p-8 space-y-8 max-w-7xl mx-auto` (bỏ nền xám `bg-slate-50`), tiêu đề trang `text-2xl font-bold`, tiêu đề nhóm ("Tổng hợp theo Tháng", "Tổng hợp cả Quý — So sánh với Target", Target, pivot) `text-lg font-bold text-slate-900` (in đậm + to hơn, thay `text-sm font-semibold text-slate-700` cũ).
 
 ## 6. Phân quyền
 - Xem tab: **admin, creator, bod, b2b, b2c, staff** (`useRoleGuard`). Default permissions: b2b/b2c có `quarterly`.

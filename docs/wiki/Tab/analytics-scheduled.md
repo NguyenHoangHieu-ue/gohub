@@ -55,6 +55,13 @@ Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong
 > **Timeout**: cron route cấu hình `maxDuration: 60` trong `web/vercel.json`; nút "Test ngay" (`[id]/route.ts`)
 > set `export const maxDuration = 60` inline (route này không nằm trong vercel.json).
 
+### C. Chống gửi TRÙNG & đúng slot (`scheduled-cron.ts` + `scheduled-runner.ts`)
+Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/15 * * * *` + Vercel Cron `0 0 * * *` (backstop 1 lần/ngày).
+- **Đến hạn**: `getMatchedSlotMs(cron, last_run_at, nowIct)` quét từng phút trong cửa sổ catch-up (24h kể từ `last_run_at`, hoặc 130' nếu chưa chạy lần nào) → trả **slot time muộn nhất** khớp cron. Catch-up 24h để phủ trường hợp scheduler bỏ trống khung sáng / Vercel chỉ chạy 1 lần/ngày.
+- **`last_run_at` ghi theo SLOT time (không phải execution time)** → lần quét sau `floor = slot + 1'` nên KHÔNG bắt lại slot cũ.
+- ⚠️ **Fix 2026-07-21 — báo cáo chạy 3-4 lần/ngày giờ ngẫu nhiên**: gốc là GitHub Actions hay fire dồn/muộn thành cụm; nhiều lần gọi ĐỒNG THỜI cùng đọc `last_run_at` cũ → đều thấy đến hạn → cùng gửi. Sửa bằng **ATOMIC CLAIM** trong cron route: trước khi gửi, `UPDATE last_run_at = slot WHERE id = ? AND last_run_at = <giá trị cũ>` (null-safe qua `.is`); Postgres khoá dòng nên **chỉ 1 lần gọi chiếm được slot**, các lần còn lại update 0 dòng → `skipped`, không gửi. Runner chạy với `noUpdateLastRun: true` (route đã tự ghi khi claim). Gửi **lỗi thật** → release (trả `last_run_at` về cũ) để tick sau thử lại. "Giờ ngẫu nhiên" = độ trễ vốn có của GitHub Actions free tier (gửi trong ~1h sau slot), nay chỉ còn **1 lần/slot**.
+- Nút "Test ngay" gọi runner với `noUpdateLastRun: true` → KHÔNG đụng lịch tự động.
+
 ---
 
 ## 3. Phân Quyền
