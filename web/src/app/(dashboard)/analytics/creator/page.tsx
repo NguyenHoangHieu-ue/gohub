@@ -36,7 +36,11 @@ const ALL_TABS = [
   { id: "sql",             label: "SQL Explorer" },
   { id: "scheduled",       label: "Scheduled Messages" },
   { id: "admin",           label: "Admin (Product)" },
+  { id: "api-database",    label: "API & Database (Devtools)" },
 ]
+
+// Tab mặc định ẨN cho tất cả role (default-deny) — creator phải bật để cấp quyền
+const DEFAULT_HIDDEN_TABS = ["api-database"]
 
 const ROLES_TO_MANAGE = ALL_ROLES.filter(r => r !== "creator") // creator không bị ẩn tab của chính mình
 
@@ -78,8 +82,17 @@ function CreatorSettings() {
       fetch("/api/config/tab-visibility").then(r => r.ok ? r.json() : {}),
       fetch("/api/config/creator-status").then(r => r.ok ? r.json() : null),
     ]).then(([vis, cs]) => {
-      setVisibility(vis || {})
-      setSavedSnap(JSON.stringify(vis || {}))
+      const raw = vis || {} as Record<string, string[]>
+      // Nếu config chưa từng được save (trống hoàn toàn), khởi tạo DEFAULT_HIDDEN_TABS cho mọi role
+      const isFirstTime = Object.keys(raw).length === 0
+      const loaded: Record<string, string[]> = { ...raw }
+      if (isFirstTime) {
+        for (const role of ROLES_TO_MANAGE) {
+          loaded[role] = [...DEFAULT_HIDDEN_TABS]
+        }
+      }
+      setVisibility(loaded)
+      setSavedSnap(JSON.stringify(loaded))
       setCreatorInfo(cs)
     }).finally(() => setLoading(false))
   }, [])
@@ -170,8 +183,10 @@ function CreatorSettings() {
               </tbody>
             </table>
           </div>
-          <p className="px-6 py-3 text-[11px] text-slate-400 border-t border-slate-100">
-            <span className="inline-flex items-center gap-1 text-rose-500"><EyeOff className="w-3 h-3" />Đỏ = ẩn với role đó</span> · <span className="text-slate-400">Trắng = hiển thị bình thường</span>
+          <p className="px-6 py-3 text-[11px] text-slate-400 border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1 text-rose-500"><EyeOff className="w-3 h-3" />Đỏ = ẩn với role đó</span>
+            <span>Trắng = hiển thị bình thường</span>
+            <span className="text-amber-600 font-medium">⚠️ "API & Database" ẩn theo mặc định — bật để cấp quyền cho role tương ứng</span>
           </p>
         </div>
       )}

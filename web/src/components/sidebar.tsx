@@ -399,6 +399,9 @@ export function Sidebar() {
             {(isAdminUser || isCreatorUser) && MANAGEMENT_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
+            {isAdminUser && !hiddenTabs.has("api-database") && (
+              <NavRow href="/analytics/creator/devtools" label="API & Database" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed accent="brand" />
+            )}
             {isCreatorUser && CREATOR_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
@@ -444,6 +447,10 @@ export function Sidebar() {
                     {MANAGEMENT_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
                     ))}
+                    {/* API & Database: chỉ hiện cho admin khi creator đã cấp quyền (không ẩn trong hiddenTabs) */}
+                    {isAdminUser && !hiddenTabs.has("api-database") && (
+                      <NavRow href="/analytics/creator/devtools" label="API & Database" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed={false} accent="brand" />
+                    )}
                   </div>
                 )}
                 {analystOpen && isCreatorUser && (

@@ -22,17 +22,38 @@ export async function GET(req: NextRequest) {
   const source = getAnalyticsSource(dateColumn)
 
   const today = new Date()
-  // Hiển thị 3 tháng: tháng trước tháng trước, tháng trước, tháng hiện tại
-  const months = [-2, -1, 0].map(off => {
-    const d = new Date(today.getFullYear(), today.getMonth() + off, 1)
-    return getMonthStr(d)
-  })
+  const startDateParam = req.nextUrl.searchParams.get("startDate")
+  const endDateParam   = req.nextUrl.searchParams.get("endDate")
 
-  const startDate = months[0] + "-01"
-  const endDate   = today.toISOString().split("T")[0]
+  // Nếu có filter từ Dashboard, dùng đúng khoảng ngày đó; không thì mặc định 3 tháng gần nhất
+  let months: string[]
+  let startDate: string
+  let endDate: string
+
+  if (startDateParam && endDateParam) {
+    startDate = startDateParam
+    endDate   = endDateParam
+    // Liệt kê các tháng (YYYY-MM) trong khoảng filter
+    months = []
+    const cur = new Date(startDateParam + "T00:00:00")
+    cur.setDate(1) // đầu tháng
+    const last = new Date(endDateParam + "T00:00:00")
+    while (cur <= last) {
+      months.push(getMonthStr(cur))
+      cur.setMonth(cur.getMonth() + 1)
+    }
+    if (months.length === 0) months = [getMonthStr(new Date(startDateParam + "T00:00:00"))]
+  } else {
+    months = [-2, -1, 0].map(off => {
+      const d = new Date(today.getFullYear(), today.getMonth() + off, 1)
+      return getMonthStr(d)
+    })
+    startDate = months[0] + "-01"
+    endDate   = today.toISOString().split("T")[0]
+  }
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
 
-  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${endDate}`
+  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${startDate}:${endDate}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

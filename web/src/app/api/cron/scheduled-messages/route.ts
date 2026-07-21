@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { runScheduledMessage, isDueSince } from "@/lib/scheduled-runner"
+import { runScheduledMessage, getMatchedSlotMs } from "@/lib/scheduled-runner"
 
 // Scheduler (GitHub Actions mỗi 15' + Vercel Cron backstop) gọi endpoint này định kỳ. Tìm các scheduled
 // message ĐANG active + ĐẾN HẠN kể từ lần chạy cuối (so cron_expression theo ICT/UTC+7, catch-up chịu được
@@ -25,12 +25,16 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const due = (messages || []).filter(m => isDueSince(m.cron_expression, m.last_run_at, ict))
+  const dueList = (messages || []).map(m => {
+    const slotMs = getMatchedSlotMs(m.cron_expression, m.last_run_at, ict)
+    return slotMs != null ? { msg: m, slotMs } : null
+  }).filter(Boolean) as { msg: any; slotMs: number }[]
+
   const results: { id: string; name: string; ok: boolean; error?: string }[] = []
 
-  for (const msg of due) {
+  for (const { msg, slotMs } of dueList) {
     try {
-      await runScheduledMessage(msg)
+      await runScheduledMessage(msg, { slotMs })
       results.push({ id: msg.id, name: msg.name, ok: true })
     } catch (err: any) {
       results.push({ id: msg.id, name: msg.name, ok: false, error: err.message })

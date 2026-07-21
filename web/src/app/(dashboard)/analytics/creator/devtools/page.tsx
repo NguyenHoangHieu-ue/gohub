@@ -12,7 +12,7 @@ export default function CreatorDevToolsPage() {
   const router = useRouter()
   const [freshRole, setFreshRole] = useState<string | null>(null)
 
-  // Lấy role mới nhất từ DB (JWT có thể cũ). CHỈ creator được vào.
+  // Lấy role mới nhất từ DB + kiểm tra tab-visibility cho admin.
   useEffect(() => {
     if (status !== "authenticated") return
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
@@ -21,10 +21,24 @@ export default function CreatorDevToolsPage() {
   }, [status, session])
 
   useEffect(() => {
-    if (freshRole && freshRole !== "creator") router.push("/chatbot")
+    if (!freshRole) return
+    if (freshRole === "creator") return  // creator luôn được vào
+    if (freshRole === "admin") {
+      // Admin được vào nếu creator đã cấp quyền (api-database không ẩn trong config)
+      fetch("/api/config/tab-visibility")
+        .then(r => r.ok ? r.json() : {})
+        .then(vis => {
+          const adminHidden: string[] = (vis as Record<string, string[]>)["admin"] ?? ["api-database"]
+          if (adminHidden.includes("api-database")) router.push("/chatbot")
+        })
+        .catch(() => router.push("/chatbot"))
+      return
+    }
+    router.push("/chatbot")
   }, [freshRole, router])
 
-  if (status !== "authenticated" || freshRole !== "creator") return null
+  if (status !== "authenticated" || !freshRole) return null
+  if (!["creator", "admin"].includes(freshRole)) return null
   return <DevTools />
 }
 

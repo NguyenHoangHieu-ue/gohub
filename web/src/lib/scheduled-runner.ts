@@ -7,7 +7,14 @@ import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 // Chạy 1 scheduled message: số liệu TÍNH SẴN trong code (scheduled-report-data) → BI Analyst chỉ FORMAT,
 // render thành Lark interactive card (header + bảng) rồi gửi (webhook hoặc bot API) → cập nhật last_run_at.
 // Dùng chung cho nút Test (admin/scheduled-messages/[id] POST) và cron runner (/api/cron/scheduled-messages).
-export async function runScheduledMessage(msg: any): Promise<string> {
+// slotMs: shifted ICT epoch của slot đã khớp (từ getMatchedSlotMs). Nếu truyền vào,
+//   last_run_at được ghi là slot time (không phải execution time) → chặn double-fire.
+// noUpdateLastRun: true khi gọi từ Test button — không cập nhật last_run_at để không
+//   can thiệp vào lịch tự động.
+export async function runScheduledMessage(
+  msg: any,
+  options?: { slotMs?: number; noUpdateLastRun?: boolean },
+): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
   // Số liệu được TÍNH SẴN trong code (SQL cố định, đúng định nghĩa Dashboard, tách thị trường VN/US/Tổng).
@@ -54,10 +61,17 @@ ${dataBlock}`
     await sendLarkCardToChat(data.value, card)
   }
 
-  await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: new Date().toISOString() }).eq("id", msg.id)
+  if (!options?.noUpdateLastRun) {
+    // Ghi slot time (không phải execution time) để dedup chính xác cho lần quét tiếp theo.
+    const slotMs = options?.slotMs
+    const lastRunIso = slotMs != null
+      ? new Date(slotMs - 7 * 3600_000).toISOString()  // convert ICT-shifted → UTC
+      : new Date().toISOString()
+    await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: lastRunIso }).eq("id", msg.id)
+  }
   return report
 }
 
 // Khớp lịch cron (isCronDue) + đến-hạn-kể-từ-last_run (isDueSince) tách ở scheduled-cron.ts (leaf, thuần).
 // Re-export để các importer cũ (route cron) vẫn lấy được từ đây.
-export { isCronDue, isDueSince } from "./scheduled-cron"
+export { isCronDue, isDueSince, getMatchedSlotMs } from "./scheduled-cron"

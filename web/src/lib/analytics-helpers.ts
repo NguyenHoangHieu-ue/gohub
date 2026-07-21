@@ -331,9 +331,10 @@ export async function getPartnerTiers(): Promise<Record<string, string[]>> {
 
 export async function getStrategicPartnersList(): Promise<string> {
   const tiers = await getPartnerTiers()
-  const strategic: string[] = (tiers["Strategic"] || Object.values(tiers).flat()) as string[]
-  return strategic.length > 0
-    ? strategic.map((c: string) => `'%${c.replace(/'/g, "''").trim()}%'`).join(",")
+  // Dùng TẤT CẢ partners từ mọi tier (nhất quán với Dashboard và b2b/strategic-performance)
+  const all: string[] = Object.values(tiers).flat() as string[]
+  return all.length > 0
+    ? all.map((c: string) => `'%${c.replace(/'/g, "''").trim()}%'`).join(",")
     : "''"
 }
 
