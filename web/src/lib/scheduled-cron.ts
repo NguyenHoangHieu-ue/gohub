@@ -30,35 +30,43 @@ export function isCronDue(expr: string, d: Date): boolean {
   )
 }
 
-// ĐẾN HẠN KỂ TỪ LẦN CHẠY CUỐI — bền hơn isCronDue (vốn đòi khớp ĐÚNG phút hiện tại,
-// nên chỉ hoạt động nếu scheduler chạy đúng từng phút). Scheduler thực tế chạy RẤT THƯA:
-// GitHub Actions khai báo mỗi 15' nhưng bị throttle nặng (thực đo ~1 lần/giờ) và THƯỜNG
-// BỎ TRỐNG khung 00:00–10:00 UTC = 07:00–17:00 ICT — ĐÚNG khung giờ các báo cáo sáng
-// (Daily 08:01, Weekly T2 09:00, Monthly 15 08:00). Cửa sổ cũ 120' không phủ nổi khoảng
-// trống này → phút cron trôi qua mà không có lần quét nào gần → message MẤT LUÔN.
+// ĐẾN HẠN KỂ TỪ LẦN CHẠY CUỐI — quét mọi phút trong cửa sổ catch-up, trả về
+// THỜI ĐIỂM SLOT khớp cuối cùng (shifted ICT epoch) hoặc null nếu không có.
 //
-// Cách mới: quét mọi phút trong (floor, now]; nếu CÓ 1 phút khớp cron_expression → đến hạn.
-//   · Message ĐÃ từng chạy: floor = ngay SAU last_run (chặn gửi lại), nhưng giới hạn
-//     catch-up tối đa `catchupMin` (24h) — đủ để BẤT KỲ lần quét nào trong ngày cũng bắt
-//     kịp slot cron đã trôi qua, kể cả khi scheduler im lặng suốt buổi sáng. Dedup vẫn nhờ
-//     last_run_at (chỉ gửi 1 lần cho mỗi lần đến hạn, không spam các slot bị lỡ trước đó).
-//   · Message CHƯA chạy bao giờ (last_run null): chỉ nhìn lại `newGraceMin` (~2h) để tránh
-//     "bắn hồi tố" ngay khi vừa tạo message (không lôi lại slot của sáng nay).
-//   · nowIct: thời điểm hiện tại đã shift sang ICT (getUTC* đọc ra giờ VN).
-//   · lastRunAt: ISO string UTC từ DB (null nếu chưa chạy bao giờ).
-export function isDueSince(
+// Dùng slot time thay execution time để lưu last_run_at: ngăn double-fire
+// khi Test + auto cron đều chạy trong cùng ngày. (Test không cập nhật last_run_at —
+// xem scheduled-runner.ts — nên không tạo conflict nữa.)
+//
+//   · Message ĐÃ chạy: floor = ngay SAU last_run_slot (chặn gửi lại slot cũ),
+//     giới hạn catch-up tối đa `catchupMin` (25h) để phủ Vercel cron 1 lần/ngày.
+//   · Message CHƯA chạy (last_run null): chỉ nhìn lại `newGraceMin` (~2h).
+//   · nowIct: đã shift +7h (getUTC* đọc ra giờ VN).
+//   · lastRunAt: ISO UTC string ghi nhận SLOT time (không phải execution time).
+export function getMatchedSlotMs(
   expr: string,
   lastRunAt: string | null,
   nowIct: Date,
-  catchupMin = 1440,   // ĐÃ chạy: bắt kịp slot cron trong tối đa 24h qua (phủ scheduler thưa/trễ)
-  newGraceMin = 130,   // CHƯA chạy: chỉ bắt slot trong ~2h gần nhất (không hồi tố lúc vừa tạo)
-): boolean {
+  catchupMin = 1440,   // 24h — đủ phủ Vercel cron 1 lần/ngày khi scheduler bỏ trống sáng
+  newGraceMin = 130,
+): number | null {
   const nowMs  = nowIct.getTime()
   const floorMs = lastRunAt
     ? Math.max(new Date(lastRunAt).getTime() + 7 * 3600_000 + 60_000, nowMs - catchupMin * 60_000)
     : nowMs - newGraceMin * 60_000
+  let matched: number | null = null
   for (let t = Math.ceil(floorMs / 60_000) * 60_000; t <= nowMs; t += 60_000) {
-    if (isCronDue(expr, new Date(t))) return true
+    if (isCronDue(expr, new Date(t))) matched = t  // giữ slot muộn nhất trong cửa sổ
   }
-  return false
+  return matched
+}
+
+// Backward-compat wrapper (dùng cho test và các importer cũ).
+export function isDueSince(
+  expr: string,
+  lastRunAt: string | null,
+  nowIct: Date,
+  catchupMin = 1440,
+  newGraceMin = 130,
+): boolean {
+  return getMatchedSlotMs(expr, lastRunAt, nowIct, catchupMin, newGraceMin) !== null
 }

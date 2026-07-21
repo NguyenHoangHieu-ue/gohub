@@ -115,7 +115,7 @@ export default function DashboardHome() {
         fetchJson(`/api/analytics/targets-summary${queryParams}`, "Targets"),
         fetchJson(`/api/config/partner-tiers`, "Tiers"),
         fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic"),
-        fetchJson(`/api/analytics/monthly-kpis?companyCode=${companyCode}&dateColumn=${dateColumn}`, "Monthly").catch(() => null),
+        fetchJson(`/api/analytics/monthly-kpis?companyCode=${companyCode}&dateColumn=${dateColumn}&startDate=${startDate}&endDate=${endDate}`, "Monthly").catch(() => null),
       ])
 
       setKpis(kpiData)
@@ -444,7 +444,7 @@ export default function DashboardHome() {
       {monthlyKpis && monthlyKpis.summary.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-bold text-slate-800 text-sm">Monthly Performance Summary</h3>
+            <h3 className="font-bold text-slate-800 text-sm">Performance Summary ({startDate.slice(0,7)} → {endDate.slice(0,7)})</h3>
             <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
               <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />prorata = dự phóng nguyên tháng
             </div>

@@ -79,7 +79,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error || !msg) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   try {
-    const finalText = await runScheduledMessage(msg)
+    // noUpdateLastRun: test run không ảnh hưởng lịch tự động (last_run_at giữ nguyên)
+    const finalText = await runScheduledMessage(msg, { noUpdateLastRun: true })
     return NextResponse.json({ ok: true, message: "Đã gửi", preview: finalText.slice(0, 200) })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
