@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -148,6 +148,9 @@ function QuarterlyContent() {
   const [tgtInputs, setTgtInputs] = useState({ b2bRev: "", b2bCm1: "", b2bThk: "", b2cRev: "", b2cCm1: "", b2cThk: "" })
   const [expandB2B, setExpandB2B] = useState(true)
   const [expandB2C, setExpandB2C] = useState(false)
+  const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
+  const [b2bTiers, setB2bTiers]   = useState<any>(null)
+  const [b2bTiersLoading, setB2bTiersLoading] = useState(false)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -173,7 +176,16 @@ function QuarterlyContent() {
     } catch {}
   }, [selQ, selYear])
 
+  const fetchB2BTiers = useCallback(async () => {
+    setB2bTiersLoading(true)
+    try {
+      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&region=${b2bRegion}&companyCode=ALL`)
+      if (res.ok) setB2bTiers(await res.json())
+    } catch {} finally { setB2bTiersLoading(false) }
+  }, [selQ, selYear, b2bRegion])
+
   useEffect(() => { fetchReport(); loadTargets() }, [fetchReport, loadTargets])
+  useEffect(() => { fetchB2BTiers() }, [fetchB2BTiers])
 
   const saveTargets = async () => {
     const t: Targets = { b2bRev: parseFmt(tgtInputs.b2bRev), b2bCm1: parseFmt(tgtInputs.b2bCm1), b2bThk: parseFloat(tgtInputs.b2bThk) || 0, b2cRev: parseFmt(tgtInputs.b2cRev), b2cCm1: parseFmt(tgtInputs.b2cCm1), b2cThk: parseFloat(tgtInputs.b2cThk) || 0 }
@@ -433,12 +445,18 @@ function QuarterlyContent() {
         </div>
       )}
 
-      {/* ── Channel pivot tables ── */}
-      {!loading && report && report.b2bChannels.length > 0 && (
-        <PivotTable title="B2B — Chi tiết theo Kênh × Tháng" icon={Building2}
-          channels={report.b2bChannels} months={activeMonths}
-          expanded={expandB2B} onToggle={() => setExpandB2B(v => !v)} />
-      )}
+      {/* ── B2B tier breakdown (replaces channel pivot for B2B) ── */}
+      <B2BTierSection
+        b2bTiers={b2bTiers}
+        loading={b2bTiersLoading}
+        months={activeMonths}
+        region={b2bRegion}
+        onRegionChange={r => setB2bRegion(r as "ALL" | "VN" | "US")}
+        expanded={expandB2B}
+        onToggle={() => setExpandB2B(v => !v)}
+      />
+
+      {/* ── B2C channel pivot ── */}
       {!loading && report && report.b2cChannels.length > 0 && (
         <PivotTable title="B2C — Chi tiết theo Kênh × Tháng" icon={ShoppingBag}
           channels={report.b2cChannels} months={activeMonths}
@@ -520,6 +538,203 @@ function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act
       <td className={cn("px-4 py-2 text-right", prCls(cm1ActPct))}>{targetCm1 > 0 ? `Đạt TT: ${pct(cm1ActPct)}` : "—"}</td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
     </tr>
+  )
+}
+
+// ─── B2B Tier Section ─────────────────────────────────────────────────────────
+
+const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
+  Strategic: { bg: "bg-amber-50", text: "text-amber-800", badge: "bg-amber-100 text-amber-700" },
+  VIP:       { bg: "bg-purple-50", text: "text-purple-800", badge: "bg-purple-100 text-purple-700" },
+  Gold:      { bg: "bg-yellow-50", text: "text-yellow-800", badge: "bg-yellow-100 text-yellow-700" },
+  Silver:    { bg: "bg-slate-50", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" },
+}
+
+function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, expanded, onToggle }:
+  { b2bTiers: any; loading: boolean; months: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void }) {
+  const [selectedTier, setSelectedTier] = useState<string | null>(null)
+  const [custSearch, setCustSearch] = useState("")
+  const tiers: any[] = b2bTiers?.tiers ?? []
+
+  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
+  const colCount = SUB.length
+
+  const selectedTierData = tiers.find((t: any) => t.tier === selectedTier)
+  const filteredCustomers = (selectedTierData?.customers ?? []).filter((c: any) =>
+    !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
+  )
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
+        <div className="flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-slate-400" />
+          <h2 className="text-lg font-bold text-slate-900">B2B — Chi tiết theo Phân khúc (Hàng) × Tháng (Cột)</h2>
+        </div>
+        <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
+          {/* Region filter */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
+            {(["ALL", "VN", "US"] as const).map(r => (
+              <button key={r} onClick={() => onRegionChange(r)}
+                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                  region === r ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50")}>
+                {r}
+              </button>
+            ))}
+          </div>
+          {loading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
+          <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform", expanded && "rotate-90")} />
+        </div>
+      </button>
+
+      {expanded && (
+        <div>
+          {/* Tier pivot table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
+              <thead>
+                <tr className="bg-slate-800">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-slate-800 border-r border-slate-700 min-w-[160px]">Phân khúc</th>
+                  {months.map(m => {
+                    const [y, mo] = m.split("-")
+                    const tierMonth = tiers[0]?.months.find((x: any) => x.month === m)
+                    const isPr = tierMonth?.isProjected ?? false
+                    return (
+                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-slate-700 whitespace-nowrap">
+                        T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
+                      </th>
+                    )
+                  })}
+                </tr>
+                <tr className="bg-slate-700 text-[9px] text-slate-400 uppercase">
+                  <th className="px-4 py-1.5 sticky left-0 bg-slate-700 border-r border-slate-600" />
+                  {months.flatMap(m => SUB.map((h, i) => (
+                    <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-slate-600", h === "CM1" && "text-blue-300")}>
+                      {h}
+                    </th>
+                  )))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
+                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu phân khúc...
+                  </td></tr>
+                )}
+                {!loading && tiers.length === 0 && (
+                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B tier cho {region !== "ALL" ? region + " " : ""}kỳ này.</td></tr>
+                )}
+                {!loading && tiers.map((tier: any, ri: number) => {
+                  const colors = TIER_COLORS[tier.tier] || TIER_COLORS.Strategic
+                  const isSel = selectedTier === tier.tier
+                  return (
+                    <tr key={tier.tier}
+                      onClick={() => setSelectedTier(isSel ? null : tier.tier)}
+                      className={cn("border-b border-slate-100 cursor-pointer transition-colors",
+                        ri % 2 === 0 ? "bg-white" : "bg-slate-50/40",
+                        isSel && "ring-1 ring-inset ring-amber-400",
+                        "hover:bg-blue-50/30")}>
+                      <td className="px-4 py-2.5 sticky left-0 border-r border-slate-100 font-bold" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                        <div className="flex items-center gap-2">
+                          {isSel ? <ChevronDown className="w-3.5 h-3.5 text-amber-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                          <span className={cn("text-xs font-bold", colors.text)}>{tier.tier}</span>
+                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
+                        </div>
+                      </td>
+                      {months.flatMap((m: string) => {
+                        const d = tier.months.find((x: any) => x.month === m)
+                        if (!d?.hasData) {
+                          return SUB.map((_: string, i: number) => (
+                            <td key={`${m}-${i}`} className={cn("px-2 py-2.5 text-right text-slate-300", i === 0 && "border-l border-slate-100")}>—</td>
+                          ))
+                        }
+                        const momCls = d.momPct == null ? "text-slate-300" : d.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                        return [
+                          <td key="rev" className="px-2 py-2.5 text-right text-slate-700 tabular-nums border-l border-slate-100">{fc(d.revenue)}</td>,
+                          <td key="gm"  className="px-2 py-2.5 text-right text-slate-600 tabular-nums">{fc(d.gm)}</td>,
+                          <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? fc(d.cc) : "—"}</td>,
+                          <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", cm1Color(d.cm1))}>{fc(d.cm1)}</td>,
+                          <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
+                          <td key="mom" className={cn("px-2 py-2.5 text-right", momCls)}>
+                            {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
+                          </td>,
+                          <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
+                        ]
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Customer detail panel */}
+          {selectedTierData && (
+            <div className="border-t border-slate-200 p-5 space-y-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-slate-500" />
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                    Khách hàng phân khúc: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
+                  </h3>
+                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{selectedTierData.customerCount} khách hàng</span>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text" placeholder="Tìm tên, mã KH..."
+                    value={custSearch} onChange={e => setCustSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 w-56"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-slate-100">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>
+                      <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%MoM</th>
+                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCustomers.map((c: any, i: number) => {
+                      const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                      return (
+                        <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
+                          <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>
+                          <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
+                          <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
+                          <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
+                          <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
+                          <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{c.cc > 0 ? fc(c.cc) : "—"}</td>
+                          <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
+                          <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
+                          <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
+                          <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
+                        </tr>
+                      )
+                    })}
+                    {filteredCustomers.length === 0 && (
+                      <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                        {custSearch ? `Không tìm thấy khách hàng khớp "${custSearch}"` : "Không có khách hàng"}
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

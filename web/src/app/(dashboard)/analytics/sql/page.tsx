@@ -37,14 +37,14 @@ function SqlExplorer() {
       .catch(() => {})
   }, [])
 
-  const run = async () => {
-    if (!query.trim()) return
+  const runQuery = async (sql: string) => {
+    if (!sql.trim()) return
     setLoading(true); setFeedback(null)
     try {
       const res = await fetch("/api/admin/sql-query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: sql }),
       })
       const d = await res.json()
       if (!res.ok) { setFeedback({ ok: false, msg: d.error }); setResults([]); setColumns([]) }
@@ -56,6 +56,8 @@ function SqlExplorer() {
       setLoading(false)
     }
   }
+
+  const run = () => runQuery(query)
 
   const exportCsv = () => {
     // Xuất TẤT CẢ dòng kết quả query ra Excel (theo đúng thứ tự cột).
@@ -95,14 +97,27 @@ function SqlExplorer() {
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {filteredSchema.map(t => (
             <div key={t.tableName} className="rounded-lg overflow-hidden">
-              <button onClick={() => toggleTable(t.tableName)}
-                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-left">
-                {expanded.has(t.tableName)
-                  ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                  : <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
-                <TableIcon className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                <span className="text-xs font-medium text-slate-700 truncate">{t.tableName}</span>
-              </button>
+              <div className="flex items-center gap-1 hover:bg-slate-50 transition-colors">
+                {/* Arrow: toggle expand only */}
+                <button onClick={() => toggleTable(t.tableName)}
+                  className="p-2 flex-shrink-0 text-slate-400 hover:text-slate-600">
+                  {expanded.has(t.tableName)
+                    ? <ChevronDown className="w-3.5 h-3.5" />
+                    : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+                {/* Table name: click → SELECT * LIMIT 50 + run */}
+                <button
+                  onClick={() => {
+                    const q = `SELECT * FROM ${t.tableName} LIMIT 50;`
+                    setQuery(q)
+                    runQuery(q)
+                  }}
+                  title={`Preview: SELECT * FROM ${t.tableName} LIMIT 50`}
+                  className="flex items-center gap-1.5 flex-1 py-2 pr-3 text-left">
+                  <TableIcon className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-slate-700 truncate">{t.tableName}</span>
+                </button>
+              </div>
               {expanded.has(t.tableName) && (
                 <div className="ml-8 border-l border-slate-100 mb-1">
                   {t.columns.map(c => (

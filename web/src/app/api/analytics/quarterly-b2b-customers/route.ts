@@ -1,0 +1,349 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { queryAnalytics } from "@/lib/analytics-db"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+
+// Tier & region classification từ dim_customer.price_list_name + currency_code
+// Spec: không có Strategic/VIP/Silver/Gold thì xếp vào Strategic (default)
+const EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
+
+function classifyTier(priceListName: string | null): string {
+  if (!priceListName) return "Strategic"
+  const p = priceListName.toUpperCase()
+  if (p.includes("STRATEGIC")) return "Strategic"
+  if (p.includes("VIP")) return "VIP"
+  if (p.includes("GOLD")) return "Gold"
+  if (p.includes("SILVER")) return "Silver"
+  return "Strategic"  // default per spec
+}
+
+function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
+  const p = (priceListName || "").toUpperCase()
+  const c = (currencyCode || "").toUpperCase()
+  if (p.includes(" US") || p.startsWith("US ") || c === "USD") return "US"
+  if (p.includes(" VN") || p.startsWith("VN ") || c === "VND") return "VN"
+  return "VN"
+}
+
+function getQuarterMonths(quarter: string, year: number): string[] {
+  const q = parseInt(quarter.replace("Q", ""))
+  const start = (q - 1) * 3 + 1
+  return [0, 1, 2].map(i => {
+    const m = start + i
+    return `${year}-${String(m).padStart(2, "0")}`
+  })
+}
+
+const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+
+function computeChannelCostForCustomer(
+  channelCosts: any[], channel: string, month: string,
+  customerRevenue: number, channelTotalRevenue: number,
+  startD: string, endD: string
+): number {
+  let cost = 0
+  const dim = getDaysInMonth(month)
+  const ratio = dim > 0 ? getDaysInRange(startD, endD, month) / dim : 0
+
+  channelCosts.filter(c => c.channel === channel && c.month === month).forEach(c => {
+    let maxPct = 0
+    COST_KEYS.forEach(key => {
+      const v = (c as any)[key]
+      if (!v) return
+      if (v.type === "amount") {
+        // Amount cost: pro-rate by customer revenue fraction within channel
+        const fraction = channelTotalRevenue > 0 ? customerRevenue / channelTotalRevenue : 0
+        cost += (v.value || 0) * ratio * fraction
+      } else {
+        // Percent cost: apply directly to customer revenue (max of all pct types)
+        maxPct = Math.max(maxPct, v.value || 0)
+      }
+    })
+    cost += customerRevenue * maxPct / 100
+  })
+  return cost
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const guard = analyticsGuard(req, session)
+  if (guard) return guard
+
+  const { searchParams } = req.nextUrl
+  const today = new Date()
+  const year = parseInt(searchParams.get("year") || String(today.getFullYear()))
+  const quarter = searchParams.get("quarter") || `Q${Math.ceil((today.getMonth() + 1) / 3)}`
+  const regionFilter = searchParams.get("region") || "ALL"  // ALL | VN | US
+  const companyCode = searchParams.get("companyCode") || "ALL"
+
+  const months = getQuarterMonths(quarter, year)
+  const todayStr = today.toISOString().split("T")[0]
+  const qStartDate = `${months[0]}-01`
+  const lastMonthEndDate = new Date(parseInt(months[2].split("-")[0]), parseInt(months[2].split("-")[1]), 0)
+  const qEndDate = lastMonthEndDate < today ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
+
+  if (new Date(qStartDate) > today) {
+    return NextResponse.json({ quarter, year, months, tiers: [] }, { headers: CACHE_HEADERS })
+  }
+
+  const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
+  const cacheKey = `qb2b_v1:${quarter}:${year}:${regionFilter}:${companyCode}:${todayStr}`
+
+  try {
+    const data = await cachedQuery(cacheKey, async () => {
+      // Prior month (for MoM calculation)
+      const [py, pm0] = [parseInt(months[0].split("-")[0]), parseInt(months[0].split("-")[1])]
+      const priorMonth = pm0 === 1
+        ? `${py - 1}-12`
+        : `${py}-${String(pm0 - 1).padStart(2, "0")}`
+      const priorStart = `${priorMonth}-01`
+      const priorEnd = new Date(parseInt(priorMonth.split("-")[0]), parseInt(priorMonth.split("-")[1]), 0)
+        .toISOString().split("T")[0]
+
+      const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+
+      // Main query: customer-level revenue breakdown by month
+      const [customerRows, priorRows, channelTotals] = await Promise.all([
+        queryAnalytics<{
+          month: string; customer_code: string; customer_name: string
+          price_list_name: string | null; currency_code: string | null; channel_name: string
+          revenue: string; gm: string; hk3: string
+        }>(`
+          SELECT
+            TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
+            TRIM(f.customer_code) as customer_code,
+            COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
+            c.price_list_name,
+            c.currency_code,
+            COALESCE(TRIM(s.channel_name), '') as channel_name,
+            SUM(f.fulfilled_revenue_amount_vnd) as revenue,
+            SUM(f.gross_profit_vnd) as gm,
+            SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)),' ','') = '3HKDATAPOOL'
+                THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_sku sk ON f.sku = sk.sku
+          WHERE f.created_date::date >= '${qStartDate}'
+            AND f.created_date::date <= '${qEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+          GROUP BY 1, 2, 3, 4, 5, 6
+          ORDER BY 1, 2
+        `),
+        // Prior month data for MoM
+        queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
+          SELECT
+            TRIM(f.customer_code) as customer_code,
+            SUM(f.gross_profit_vnd) as gm,
+            SUM(f.fulfilled_revenue_amount_vnd) as revenue
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          WHERE f.created_date::date >= '${priorStart}'
+            AND f.created_date::date <= '${priorEnd}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+          GROUP BY 1
+        `),
+        // Channel total revenue per month (for amount-cost pro-rating)
+        queryAnalytics<{ month: string; channel_name: string; total_revenue: string }>(`
+          SELECT
+            TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
+            COALESCE(TRIM(s.channel_name), '') as channel_name,
+            SUM(f.fulfilled_revenue_amount_vnd) as total_revenue
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.created_date::date >= '${qStartDate}'
+            AND f.created_date::date <= '${qEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+          GROUP BY 1, 2
+        `),
+      ])
+
+      const { channelCosts } = await fetchCosts(months)
+
+      // Prior month map for MoM
+      const priorMap = new Map<string, { gm: number; revenue: number }>()
+      priorRows.forEach(r => {
+        priorMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
+      })
+
+      // Channel total revenue map for amount-cost pro-rating
+      const channelTotalMap = new Map<string, number>()
+      channelTotals.forEach(r => {
+        channelTotalMap.set(`${r.month}_${r.channel_name}`, parseFloat(r.total_revenue || "0"))
+      })
+
+      // Month metadata (for pro-rata)
+      const monthMeta = months.map(m => {
+        const mStart = `${m}-01`
+        const mEndDate = new Date(parseInt(m.split("-")[0]), parseInt(m.split("-")[1]), 0)
+        const mEnd = mEndDate.toISOString().split("T")[0]
+        const actualEnd = mEnd < todayStr ? mEnd : todayStr
+        const dim = getDaysInMonth(m)
+        const isFuture = new Date(mStart) > today
+        const isCurrent = !isFuture && mEndDate >= today
+        const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
+        const isProjected = isCurrent && elapsed > 0 && elapsed < dim
+        const factor = isProjected ? dim / elapsed : 1
+        return { month: m, mStart, actualEnd, isProjected, factor }
+      })
+
+      // Aggregate customer data
+      interface CustomerAgg {
+        code: string; name: string; priceListName: string | null; currencyCode: string | null
+        tier: string; region: string
+        months: Map<string, { revenue: number; gm: number; cc: number; hk3: number }>
+      }
+      const customerMap = new Map<string, CustomerAgg>()
+
+      customerRows.forEach(row => {
+        const code = row.customer_code
+        if (!customerMap.has(code)) {
+          const pln = row.price_list_name
+          const cur = row.currency_code
+          customerMap.set(code, {
+            code, name: row.customer_name,
+            priceListName: pln, currencyCode: cur,
+            tier: classifyTier(pln),
+            region: classifyRegion(pln, cur),
+            months: new Map(),
+          })
+        }
+        const cust = customerMap.get(code)!
+        const mr = monthMeta.find(m => m.month === row.month)
+        if (!mr) return
+        const { mStart, actualEnd, isProjected, factor } = mr
+
+        const revAct = parseFloat(row.revenue || "0")
+        const gmAct  = parseFloat(row.gm   || "0")
+        const hk3Act = parseFloat(row.hk3  || "0")
+        const channelTotal = channelTotalMap.get(`${row.month}_${row.channel_name}`) || revAct
+        const ccAct = computeChannelCostForCustomer(channelCosts, row.channel_name, row.month, revAct, channelTotal, mStart, actualEnd)
+
+        const existing = cust.months.get(row.month)
+        if (existing) {
+          existing.revenue += revAct * factor
+          existing.gm      += gmAct  * factor
+          existing.cc      += isProjected ? ccAct * factor : ccAct
+          existing.hk3     += hk3Act * factor
+        } else {
+          cust.months.set(row.month, {
+            revenue: revAct * factor,
+            gm:      gmAct  * factor,
+            cc:      isProjected ? ccAct * factor : ccAct,
+            hk3:     hk3Act * factor,
+          })
+        }
+      })
+
+      // Apply region filter
+      const customers = Array.from(customerMap.values()).filter(c => {
+        if (regionFilter === "ALL") return true
+        return c.region === regionFilter
+      })
+
+      const pct = (n: number, d: number) => d > 0 ? Math.round(n / d * 1000) / 10 : 0
+      const r2 = (n: number) => Math.round(n)
+
+      // Build customer summaries
+      const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+      const tierMap = new Map<string, {
+        tier: string
+        custList: {
+          code: string; name: string; region: string; priceListName: string | null
+          revenue: number; gm: number; gmPct: number; cc: number; cm1: number
+          cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
+        }[]
+        monthAgg: Map<string, { revenue: number; gm: number; cc: number; cm1: number; hk3: number }>
+      }>()
+
+      TIER_ORDER.forEach(tier => tierMap.set(tier, { tier, custList: [], monthAgg: new Map() }))
+
+      customers.forEach(cust => {
+        const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
+        let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
+
+        months.forEach(m => {
+          const md = cust.months.get(m)
+          if (!md) return
+          totRev  += md.revenue
+          totGm   += md.gm
+          totCc   += md.cc
+          totHk3  += md.hk3
+
+          const ta = tier.monthAgg.get(m) || { revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 }
+          ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += md.cc
+          ta.cm1 += md.gm - md.cc; ta.hk3 += md.hk3
+          tier.monthAgg.set(m, ta)
+        })
+
+        const totCm1 = totGm - totCc
+        const prior = priorMap.get(cust.code)
+        const priorCm1 = prior ? prior.gm - 0 : null  // prior CC unknown, use GM as approx
+        const momPct = priorCm1 && priorCm1 !== 0 ? Math.round((totCm1 - priorCm1) / Math.abs(priorCm1) * 1000) / 10 : null
+
+        tier.custList.push({
+          code: cust.code, name: cust.name,
+          region: cust.region, priceListName: cust.priceListName,
+          revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
+          cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
+          momPct,
+          hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+        })
+      })
+
+      // Build tier output
+      const tiers = TIER_ORDER.map(tierName => {
+        const tier = tierMap.get(tierName)!
+        const custList = tier.custList.sort((a, b) => b.revenue - a.revenue)
+
+        const monthRows = months.map(m => {
+          const ma = tier.monthAgg.get(m)
+          if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
+          // MoM at tier level: compare to prior month within quarter
+          const prevIdx = months.indexOf(m) - 1
+          const prevMa = prevIdx >= 0 ? tier.monthAgg.get(months[prevIdx]) : null
+          const momPct = prevMa && prevMa.cm1 !== 0
+            ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
+            : null
+          return {
+            month: m, hasData: true,
+            revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
+            cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
+            momPct, hk3Pct: pct(ma.hk3, ma.revenue),
+          }
+        })
+
+        const totRev = tier.custList.reduce((s, c) => s + c.revenue, 0)
+        const totGm  = tier.custList.reduce((s, c) => s + c.gm, 0)
+        const totCc  = tier.custList.reduce((s, c) => s + c.cc, 0)
+        const totCm1 = tier.custList.reduce((s, c) => s + c.cm1, 0)
+        const totHk3 = tier.custList.reduce((s, c) => s + c.hk3Rev, 0)
+
+        return {
+          tier: tierName,
+          totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
+          totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
+          totalHk3Pct: pct(totHk3, totRev),
+          months: monthRows,
+          customers: custList,
+          customerCount: custList.length,
+        }
+      }).filter(t => t.totalRevenue > 0)
+
+      return { quarter, year, months, tiers }
+    }, QUERY_TTL_MIN)
+
+    return NextResponse.json(data, { headers: CACHE_HEADERS })
+  } catch (err: any) {
+    console.error("[quarterly-b2b-customers]", err.message)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
