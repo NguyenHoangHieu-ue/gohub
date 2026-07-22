@@ -248,12 +248,14 @@ function QuarterlyContent() {
   const totThkPct  = totRevAct > 0 ? (b2bThkAct + b2cThkAct) / totRevAct * 100 : 0
   // ──────────────────────────────────────────────────────────────────────────
 
-  // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, hôm nay))
+  // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, HÔM QUA)).
+  // Mốc = hôm qua vì gohub_dw ETL theo ngày, hôm nay chưa đủ dữ liệu.
   const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+  const asOf = new Date(today); asOf.setDate(asOf.getDate() - 1)
   const qNum = parseInt(selQ.replace("Q", "")) || 1
   const periodStart   = new Date(selYear, (qNum - 1) * 3, 1)
   const periodQEnd    = new Date(selYear, (qNum - 1) * 3 + 3, 0)   // ngày cuối quý
-  const periodThrough = periodQEnd < today ? periodQEnd : today    // cắt tại hôm nay nếu quý đang chạy
+  const periodThrough = periodQEnd < asOf ? periodQEnd : (asOf < periodStart ? periodStart : asOf)
   const isFutureQ     = periodStart > today
   const isCurrentQ    = !isFutureQ && periodThrough < periodQEnd
 
@@ -270,7 +272,7 @@ function QuarterlyContent() {
               <CalendarDays className="w-3.5 h-3.5 text-[#003B95]" />
               <span className="text-slate-600">Dữ liệu tính:{" "}
                 <b className="text-slate-800 tabular-nums">{fmtD(periodStart)} → {fmtD(periodThrough)}</b>
-                {isCurrentQ && <span className="text-[#003B95] font-medium"> (đến hôm nay)</span>}
+                {isCurrentQ && <span className="text-[#003B95] font-medium"> (đến hôm qua)</span>}
               </span>
               {report && report.quarter_days > 0 && (
                 <span className="text-slate-400 tabular-nums">· {report.elapsed_days}/{report.quarter_days} ngày</span>

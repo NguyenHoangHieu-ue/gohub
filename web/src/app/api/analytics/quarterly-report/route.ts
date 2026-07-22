@@ -60,12 +60,16 @@ export async function GET(req: NextRequest) {
   const GP_COL = "gross_profit_vnd"
 
   const months = getQuarterMonths(quarter, year)
-  const todayStr = today.toISOString().split("T")[0]
+  // Mốc dữ liệu = HÔM QUA (trước ngày hiện tại 1 ngày): gohub_dw ETL cập nhật theo ngày,
+  // hôm nay chưa đủ dữ liệu → chốt tới hết hôm qua cho khớp số đối chiếu.
+  const asOf = new Date(today)
+  asOf.setDate(asOf.getDate() - 1)
+  const todayStr = asOf.toISOString().split("T")[0]  // "as-of" = hôm qua (dùng làm mốc cắt dữ liệu)
 
   const qStartDate = `${months[0]}-01`
   const lastMonth = months[2]
   const lastMonthEndDate = new Date(parseInt(lastMonth.split("-")[0]), parseInt(lastMonth.split("-")[1]), 0)
-  const qEndDate = lastMonthEndDate < today ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
+  const qEndDate = lastMonthEndDate < asOf ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
 
   if (new Date(qStartDate) > today) {
     return NextResponse.json({ quarter, year, months, summary: [], b2bChannels: [], b2cChannels: [], elapsed_days: 0, quarter_days: 0 }, { headers: CACHE_HEADERS })
@@ -74,7 +78,8 @@ export async function GET(req: NextRequest) {
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   // v5: actual fields + per-group 3HK + elapsed_days/quarter_days + computeSummary support
   // v7: loại 3 KH tổng hợp CHỈ ở nhánh B2B (giữ B2C — v6 loại toàn cục làm mất sạch B2C)
-  const cacheKey = `qreport_v7:${quarter}:${year}:${companyCode}:${todayStr}`
+  // v8: mốc dữ liệu chốt tới HÔM QUA (asOf = today-1)
+  const cacheKey = `qreport_v8:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -146,8 +151,8 @@ export async function GET(req: NextRequest) {
         const mEnd = mEndDate.toISOString().split("T")[0]
         const actualEnd = mEnd < todayStr ? mEnd : todayStr
         const dim = getDaysInMonth(m)
-        const isFuture = new Date(mStart) > today
-        const isCurrent = !isFuture && mEndDate >= today
+        const isFuture = new Date(mStart) > asOf
+        const isCurrent = !isFuture && mEndDate >= asOf
         const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
         const isProjected = isCurrent && elapsed > 0 && elapsed < dim
         const factor = isProjected ? dim / elapsed : 1

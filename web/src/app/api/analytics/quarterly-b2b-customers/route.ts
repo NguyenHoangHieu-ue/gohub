@@ -79,10 +79,13 @@ export async function GET(req: NextRequest) {
   const companyCode = searchParams.get("companyCode") || "ALL"
 
   const months = getQuarterMonths(quarter, year)
-  const todayStr = today.toISOString().split("T")[0]
+  // Mốc dữ liệu = HÔM QUA (trước hiện tại 1 ngày) — nhất quán với quarterly-report.
+  const asOf = new Date(today)
+  asOf.setDate(asOf.getDate() - 1)
+  const todayStr = asOf.toISOString().split("T")[0]
   const qStartDate = `${months[0]}-01`
   const lastMonthEndDate = new Date(parseInt(months[2].split("-")[0]), parseInt(months[2].split("-")[1]), 0)
-  const qEndDate = lastMonthEndDate < today ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
+  const qEndDate = lastMonthEndDate < asOf ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
 
   if (new Date(qStartDate) > today) {
     return NextResponse.json({ quarter, year, months, tiers: [] }, { headers: CACHE_HEADERS })
@@ -91,7 +94,7 @@ export async function GET(req: NextRequest) {
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc. Bump v2 vì shape đổi (thêm byRegion).
   void regionFilter
-  const cacheKey = `qb2b_v2:${quarter}:${year}:${companyCode}:${todayStr}`
+  const cacheKey = `qb2b_v3:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -189,8 +192,8 @@ export async function GET(req: NextRequest) {
         const mEnd = mEndDate.toISOString().split("T")[0]
         const actualEnd = mEnd < todayStr ? mEnd : todayStr
         const dim = getDaysInMonth(m)
-        const isFuture = new Date(mStart) > today
-        const isCurrent = !isFuture && mEndDate >= today
+        const isFuture = new Date(mStart) > asOf
+        const isCurrent = !isFuture && mEndDate >= asOf
         const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
         const isProjected = isCurrent && elapsed > 0 && elapsed < dim
         const factor = isProjected ? dim / elapsed : 1
