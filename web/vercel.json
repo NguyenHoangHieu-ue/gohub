@@ -13,9 +13,6 @@
     "src/app/api/admin/sync-lark-tickets/route.ts": {
       "maxDuration": 60
     },
-    "src/app/api/admin/sync-dim-customer/route.ts": {
-      "maxDuration": 60
-    },
     "src/app/api/cron/prewarm-analytics/route.ts": {
       "maxDuration": 60
     },

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics, queryAnalyticsOne } from "@/lib/analytics-db"
 import { getPartnerTiers } from "@/lib/analytics-helpers"
-import { lookupCustomers } from "@/lib/customer-cache"
+import { getDimCustomerCols } from "@/lib/dim-schema"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
   const offset      = (page - 1) * pageSize
 
   try {
+    // Probe dim_customer schema để dùng đúng tên cột (đề phòng đổi cấu trúc)
+    const { codeCol: custCodeCol, nameCol: custNameCol } = await getDimCustomerCols()
+
     const params: unknown[] = []
     let where = "WHERE 1=1"
 
@@ -102,11 +105,12 @@ export async function GET(req: NextRequest) {
                 s.name as order_source,
                 ${locationCol},
                 COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unknown') as staff_name,
-                NULLIF(TRIM(f.customer_code), '') as customer_name
+                COALESCE(c.${custNameCol}, NULLIF(TRIM(f.customer_code), ''), 'Unknown') as customer_name
          FROM ${mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          ${locationJoin}
          LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
          LEFT JOIN dim_sku v ON f.sku = v.sku
          ${where}
          ORDER BY f.${dateCol}::date DESC
@@ -115,18 +119,8 @@ export async function GET(req: NextRequest) {
       )
     ])
 
-    // Enrich customer_name từ Supabase cache (thay vì JOIN dim_customer trong gohub_dw)
-    const customerCodes = Array.from(new Set(
-      dataRows.map((r: any) => r.customer_name).filter(Boolean)
-    ))
-    const custMap = await lookupCustomers(customerCodes)
-    const enrichedOrders = dataRows.map((r: any) => ({
-      ...r,
-      customer_name: custMap.get(r.customer_name)?.name || r.customer_name || "Unknown",
-    }))
-
     return NextResponse.json({
-      orders: enrichedOrders,
+      orders: dataRows,
       total: parseInt(summaryRow?.count || "0"),
       summary: {
         totalRevenue: parseFloat(summaryRow?.total_revenue || "0"),

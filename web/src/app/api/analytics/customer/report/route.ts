@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource } from "@/lib/analytics-helpers"
-import { getAllCustomers } from "@/lib/customer-cache"
+import { getDimCustomerCols } from "@/lib/dim-schema"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -19,15 +19,14 @@ export async function POST(req: NextRequest) {
   try {
     const source = getAnalyticsSource(dateColumn)
 
-    // Resolve customer names → codes từ Supabase cache (không JOIN gohub_dw)
-    const custCacheMap = await getAllCustomers()
-    const searchNames = new Set(customers.map((c: string) => String(c).trim().toLowerCase()))
-    const codeRows: { code: string; name: string }[] = []
-    custCacheMap.forEach((entry) => {
-      if (entry.name && searchNames.has(entry.name.toLowerCase())) {
-        codeRows.push({ code: entry.code, name: entry.name })
-      }
-    })
+    // Probe dim_customer schema để dùng đúng tên cột
+    const { codeCol: custCodeCol, nameCol: custNameCol } = await getDimCustomerCols()
+
+    // Resolve customer names → codes
+    const customerNames = customers.map((c: string) => `'${String(c).trim().replace(/'/g, "''")}'`).join(",")
+    const codeRows = await queryAnalytics<{ code: string; name: string }>(
+      `SELECT TRIM(${custCodeCol}::text) as code, TRIM(${custNameCol}::text) as name FROM dim_customer WHERE TRIM(${custNameCol}::text) IN (${customerNames})`
+    )
 
     const codeToName = new Map<string, string>()
     codeRows.forEach(r => { if (r.code) codeToName.set(r.code, r.name) })

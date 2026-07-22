@@ -70,8 +70,6 @@ function AnalyticsSettings() {
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [flushing, setFlushing] = useState(false)
-  const [syncingDimCustomer, setSyncingDimCustomer] = useState(false)
-  const [dimCustomerStatus, setDimCustomerStatus] = useState<{ cacheRows: number; lastSynced: string | null; dwRows: number } | null>(null)
   const [skuRules, setSkuRules] = useState<{ startsWith: string; codeLength: number; description: string }[]>([])
   const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
   const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
@@ -108,54 +106,8 @@ function AnalyticsSettings() {
       const r = await fetch("/api/analytics/db-status")
       setDb(r.ok ? await r.json() : { error: "Không tải được tình trạng database" })
     } catch { setDb({ error: "Lỗi kết nối" }) } finally { setDbLoading(false) }
-    // Cũng load dim_customer cache status
-    try {
-      const r = await fetch("/api/admin/sync-dim-customer")
-      if (r.ok) setDimCustomerStatus(await r.json())
-    } catch {}
   }
 
-  const syncDimCustomer = async () => {
-    setSyncingDimCustomer(true)
-    notify(true, "Đang sync khách hàng — bấm xong đợi khoảng 30-60s...")
-    let totalSynced = 0
-    let page = 0
-    let meta: any = {}
-    try {
-      while (true) {
-        const body = { page, ...meta }
-        const r = await fetch("/api/admin/sync-dim-customer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        })
-        let d: any
-        try { d = await r.json() } catch {
-          const text = await r.text().catch(() => "(empty)")
-          notify(false, `HTTP ${r.status} — ${text.slice(0, 300)}`)
-          return
-        }
-        if (!r.ok || !d?.ok) {
-          notify(false, `Lỗi page ${page}: ${d?.error || JSON.stringify(d)}`)
-          return
-        }
-        totalSynced += d.synced || 0
-        // Lưu metadata để truyền sang page tiếp theo
-        if (d.codeCol) meta = { codeCol: d.codeCol, nameCol: d.nameCol, selectCols: d.selectCols }
-        if (d.done || !d.hasMore) {
-          const total = d.total || totalSynced
-          notify(true, `Sync xong: ${totalSynced}${total ? `/${total}` : ""} khách hàng → Supabase`)
-          setDimCustomerStatus({ cacheRows: totalSynced, lastSynced: new Date().toISOString(), dwRows: total || totalSynced })
-          break
-        }
-        page++
-        // Notify progress mỗi page
-        notify(true, `Sync page ${page}: đã xử lý ${totalSynced} KH...`)
-      }
-    } catch (e: any) {
-      notify(false, `Lỗi fetch: ${e.message}`)
-    } finally { setSyncingDimCustomer(false) }
-  }
   const fmtTime = (s?: string | null) => s ? new Date(s).toLocaleString("vi-VN") : "—"
 
   const fetchAll = async () => {
@@ -269,9 +221,6 @@ function AnalyticsSettings() {
             <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
               {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync Costs"}
             </button>
-            <button onClick={syncDimCustomer} disabled={syncingDimCustomer} className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700 disabled:opacity-50" title="Pull dim_customer từ gohub_dw → Supabase cache (giải quyết vấn đề dữ liệu khách hàng)">
-              {syncingDimCustomer ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync KH (dim)"}
-            </button>
             <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
               {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiểm tra"}
             </button>
@@ -336,34 +285,6 @@ function AnalyticsSettings() {
                     </div>
                   </div>
                 )}
-
-                {/* dim_customer Supabase cache status */}
-                <div className={cn("border rounded-lg p-3", dimCustomerStatus ? (dimCustomerStatus.cacheRows === 0 ? "border-rose-200 bg-rose-50/30" : "border-violet-100 bg-violet-50/30") : "border-slate-100 bg-slate-50/40")}>
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div>
-                      <p className="font-bold text-xs" style={{ color: dimCustomerStatus?.cacheRows === 0 ? "#b71c1c" : "#5b21b6" }}>
-                        dim_customer → Supabase Cache (dùng bởi Orders, Chatbot, B2B Report)
-                      </p>
-                      {dimCustomerStatus ? (
-                        <p className="text-slate-500 text-xs mt-0.5">
-                          Cache: <span className="font-bold">{dimCustomerStatus.cacheRows.toLocaleString("vi-VN")}</span> KH
-                          {" "}&nbsp;|&nbsp; gohub_dw: <span className="font-bold">{dimCustomerStatus.dwRows.toLocaleString("vi-VN")}</span> KH
-                          {dimCustomerStatus.cacheRows < dimCustomerStatus.dwRows && (
-                            <span className="ml-2 text-amber-600 font-bold">⚠ Cache lệch với gohub_dw — bấm Sync KH</span>
-                          )}
-                          {dimCustomerStatus.lastSynced && (
-                            <span className="ml-2 text-slate-400">· sync lúc {fmtTime(dimCustomerStatus.lastSynced)}</span>
-                          )}
-                        </p>
-                      ) : (
-                        <p className="text-slate-400 text-xs mt-0.5">Bấm &quot;Kiểm tra&quot; để xem trạng thái · Bấm &quot;Sync KH (dim)&quot; để đồng bộ</p>
-                      )}
-                    </div>
-                    {dimCustomerStatus && dimCustomerStatus.cacheRows === 0 && (
-                      <span className="text-[10px] font-bold text-rose-600 bg-rose-100 px-2 py-1 rounded">Cache rỗng — cần Sync ngay!</span>
-                    )}
-                  </div>
-                </div>
 
                 {/* Supabase products */}
                 {db.products && (
