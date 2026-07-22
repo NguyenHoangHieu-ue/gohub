@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -248,6 +248,15 @@ function QuarterlyContent() {
   const totThkPct  = totRevAct > 0 ? (b2bThkAct + b2cThkAct) / totRevAct * 100 : 0
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, hôm nay))
+  const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+  const qNum = parseInt(selQ.replace("Q", "")) || 1
+  const periodStart   = new Date(selYear, (qNum - 1) * 3, 1)
+  const periodQEnd    = new Date(selYear, (qNum - 1) * 3 + 3, 0)   // ngày cuối quý
+  const periodThrough = periodQEnd < today ? periodQEnd : today    // cắt tại hôm nay nếu quý đang chạy
+  const isFutureQ     = periodStart > today
+  const isCurrentQ    = !isFutureQ && periodThrough < periodQEnd
+
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
 
@@ -256,6 +265,18 @@ function QuarterlyContent() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Quarter Report</h1>
           <p className="text-sm text-slate-400 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
+          {!isFutureQ && (
+            <p className="text-[13px] mt-1.5 flex items-center gap-1.5 flex-wrap">
+              <CalendarDays className="w-3.5 h-3.5 text-[#003B95]" />
+              <span className="text-slate-600">Dữ liệu tính:{" "}
+                <b className="text-slate-800 tabular-nums">{fmtD(periodStart)} → {fmtD(periodThrough)}</b>
+                {isCurrentQ && <span className="text-[#003B95] font-medium"> (đến hôm nay)</span>}
+              </span>
+              {report && report.quarter_days > 0 && (
+                <span className="text-slate-400 tabular-nums">· {report.elapsed_days}/{report.quarter_days} ngày</span>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
