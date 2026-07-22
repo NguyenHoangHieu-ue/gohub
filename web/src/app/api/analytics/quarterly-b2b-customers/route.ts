@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { getAllCustomers } from "@/lib/customer-cache"
 
 // Tier & region classification từ dim_customer.price_list_name + currency_code
 // Spec: không có Strategic/VIP/Silver/Gold thì xếp vào Strategic (default)
@@ -102,21 +103,24 @@ export async function GET(req: NextRequest) {
       const priorEnd = new Date(parseInt(priorMonth.split("-")[0]), parseInt(priorMonth.split("-")[1]), 0)
         .toISOString().split("T")[0]
 
-      const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+      // Load Supabase customer cache — không JOIN dim_customer trong gohub_dw
+      const customerCacheMap = await getAllCustomers()
+      const EXCLUDED_SET = new Set(EXCLUDED_CUSTOMERS.map(n => n.toLowerCase()))
+      const excludedCodes = new Set(
+        Array.from(customerCacheMap.values())
+          .filter(c => c.name && EXCLUDED_SET.has(c.name.toLowerCase()))
+          .map(c => c.code)
+      )
 
-      // Main query: customer-level revenue breakdown by month
+      // Main query: customer-level revenue từ gohub_dw (KHÔNG JOIN dim_customer)
       const [customerRows, priorRows, channelTotals] = await Promise.all([
         queryAnalytics<{
-          month: string; customer_code: string; customer_name: string
-          price_list_name: string | null; currency_code: string | null; channel_name: string
+          month: string; customer_code: string; channel_name: string
           revenue: string; gm: string; hk3: string
         }>(`
           SELECT
             TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
             TRIM(f.customer_code) as customer_code,
-            COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
-            c.price_list_name,
-            c.currency_code,
             COALESCE(TRIM(s.channel_name), '') as channel_name,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue,
             SUM(f.gross_profit_vnd) as gm,
@@ -124,17 +128,16 @@ export async function GET(req: NextRequest) {
                 THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           LEFT JOIN dim_sku sk ON f.sku = sk.sku
           WHERE f.created_date::date >= '${qStartDate}'
             AND f.created_date::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
-          GROUP BY 1, 2, 3, 4, 5, 6
+            AND TRIM(f.customer_code) != ''
+          GROUP BY 1, 2, 3
           ORDER BY 1, 2
         `),
-        // Prior month data for MoM
+        // Prior month data for MoM (không JOIN dim_customer)
         queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
           SELECT
             TRIM(f.customer_code) as customer_code,
@@ -142,12 +145,11 @@ export async function GET(req: NextRequest) {
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           WHERE f.created_date::date >= '${priorStart}'
             AND f.created_date::date <= '${priorEnd}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+            AND TRIM(f.customer_code) != ''
           GROUP BY 1
         `),
         // Channel total revenue per month (for amount-cost pro-rating)
@@ -195,7 +197,7 @@ export async function GET(req: NextRequest) {
         return { month: m, mStart, actualEnd, isProjected, factor }
       })
 
-      // Aggregate customer data
+      // Aggregate customer data — enrich từ Supabase cache, không cần gohub_dw dim JOIN
       interface CustomerAgg {
         code: string; name: string; priceListName: string | null; currencyCode: string | null
         tier: string; region: string
@@ -205,11 +207,21 @@ export async function GET(req: NextRequest) {
 
       customerRows.forEach(row => {
         const code = row.customer_code
+        // Bỏ qua customer bị exclude
+        if (excludedCodes.has(code)) return
+
         if (!customerMap.has(code)) {
-          const pln = row.price_list_name
-          const cur = row.currency_code
+          // Lấy metadata từ Supabase cache (không từ gohub_dw JOIN)
+          const cached = customerCacheMap.get(code)
+          const pln = cached?.price_list_name ?? null
+          const cur = cached?.currency_code ?? null
+          const name = cached?.name ?? code  // fallback: hiện code nếu chưa sync cache
+
+          // Bỏ qua nếu tên trong cache thuộc excluded list
+          if (name && EXCLUDED_SET.has(name.toLowerCase())) return
+
           customerMap.set(code, {
-            code, name: row.customer_name,
+            code, name,
             priceListName: pln, currencyCode: cur,
             tier: classifyTier(pln),
             region: classifyRegion(pln, cur),

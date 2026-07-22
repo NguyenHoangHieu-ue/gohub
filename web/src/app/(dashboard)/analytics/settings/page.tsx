@@ -70,6 +70,8 @@ function AnalyticsSettings() {
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [flushing, setFlushing] = useState(false)
+  const [syncingDimCustomer, setSyncingDimCustomer] = useState(false)
+  const [dimCustomerStatus, setDimCustomerStatus] = useState<{ cacheRows: number; lastSynced: string | null; dwRows: number } | null>(null)
   const [skuRules, setSkuRules] = useState<{ startsWith: string; codeLength: number; description: string }[]>([])
   const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
   const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
@@ -106,6 +108,25 @@ function AnalyticsSettings() {
       const r = await fetch("/api/analytics/db-status")
       setDb(r.ok ? await r.json() : { error: "Không tải được tình trạng database" })
     } catch { setDb({ error: "Lỗi kết nối" }) } finally { setDbLoading(false) }
+    // Cũng load dim_customer cache status
+    try {
+      const r = await fetch("/api/admin/sync-dim-customer")
+      if (r.ok) setDimCustomerStatus(await r.json())
+    } catch {}
+  }
+
+  const syncDimCustomer = async () => {
+    setSyncingDimCustomer(true)
+    try {
+      const r = await fetch("/api/admin/sync-dim-customer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
+      const d = await r.json()
+      if (d.ok) {
+        notify(true, `Sync OK: ${d.synced}/${d.total} khách hàng → Supabase cache`)
+        setDimCustomerStatus({ cacheRows: d.synced, lastSynced: new Date().toISOString(), dwRows: d.total })
+      } else {
+        notify(false, d.error || "Sync thất bại")
+      }
+    } catch { notify(false, "Lỗi kết nối") } finally { setSyncingDimCustomer(false) }
   }
   const fmtTime = (s?: string | null) => s ? new Date(s).toLocaleString("vi-VN") : "—"
 
@@ -213,15 +234,18 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Database className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
-          <span className="flex items-center gap-2">
-            <button onClick={flushCache} disabled={flushing} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 disabled:opacity-50" title="Xoá L2 Supabase cache — lần tải tiếp lấy dữ liệu mới từ gohub_dw">
+          <span className="flex items-center gap-2 flex-wrap justify-end">
+            <button onClick={flushCache} disabled={flushing} className="flex items-center gap-2 px-3 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 disabled:opacity-50" title="Xoá L2 Supabase cache — lần tải tiếp lấy dữ liệu mới từ gohub_dw">
               {flushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Xoá Cache"}
             </button>
-            <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
-              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync sang Supabase"}
+            <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync Costs"}
             </button>
-            <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-4 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
-              {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiem tra"}
+            <button onClick={syncDimCustomer} disabled={syncingDimCustomer} className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700 disabled:opacity-50" title="Pull dim_customer từ gohub_dw → Supabase cache (giải quyết vấn đề dữ liệu khách hàng)">
+              {syncingDimCustomer ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync KH (dim)"}
+            </button>
+            <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+              {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiểm tra"}
             </button>
           </span>
         </div>
@@ -284,6 +308,34 @@ function AnalyticsSettings() {
                     </div>
                   </div>
                 )}
+
+                {/* dim_customer Supabase cache status */}
+                <div className={cn("border rounded-lg p-3", dimCustomerStatus ? (dimCustomerStatus.cacheRows === 0 ? "border-rose-200 bg-rose-50/30" : "border-violet-100 bg-violet-50/30") : "border-slate-100 bg-slate-50/40")}>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="font-bold text-xs" style={{ color: dimCustomerStatus?.cacheRows === 0 ? "#b71c1c" : "#5b21b6" }}>
+                        dim_customer → Supabase Cache (dùng bởi Orders, Chatbot, B2B Report)
+                      </p>
+                      {dimCustomerStatus ? (
+                        <p className="text-slate-500 text-xs mt-0.5">
+                          Cache: <span className="font-bold">{dimCustomerStatus.cacheRows.toLocaleString("vi-VN")}</span> KH
+                          {" "}&nbsp;|&nbsp; gohub_dw: <span className="font-bold">{dimCustomerStatus.dwRows.toLocaleString("vi-VN")}</span> KH
+                          {dimCustomerStatus.cacheRows < dimCustomerStatus.dwRows && (
+                            <span className="ml-2 text-amber-600 font-bold">⚠ Cache lệch với gohub_dw — bấm Sync KH</span>
+                          )}
+                          {dimCustomerStatus.lastSynced && (
+                            <span className="ml-2 text-slate-400">· sync lúc {fmtTime(dimCustomerStatus.lastSynced)}</span>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="text-slate-400 text-xs mt-0.5">Bấm &quot;Kiểm tra&quot; để xem trạng thái · Bấm &quot;Sync KH (dim)&quot; để đồng bộ</p>
+                      )}
+                    </div>
+                    {dimCustomerStatus && dimCustomerStatus.cacheRows === 0 && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-100 px-2 py-1 rounded">Cache rỗng — cần Sync ngay!</span>
+                    )}
+                  </div>
+                </div>
 
                 {/* Supabase products */}
                 {db.products && (
