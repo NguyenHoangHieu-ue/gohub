@@ -44,6 +44,8 @@ export default function DashboardHome() {
   const [performanceChannel, setPerformanceChannel] = useState<PerformanceRow[]>([])
   const [strategicPerformance, setStrategicPerformance] = useState<any[]>([])
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  const [b2bTierData, setB2bTierData] = useState<any>(null)
+  const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [targetProgress, setTargetProgress] = useState<{ totalTarget: number; proRataTarget: number; totalActual: number; progress: number; proRataProgress: number } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -100,7 +102,7 @@ export default function DashboardHome() {
         return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
       }
 
-      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData] = await Promise.all([
+      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData, tierPerfData] = await Promise.all([
         fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs"),
         fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue"),
         fetchJson(`/api/analytics/region-chart${queryParams}`, "Region"),
@@ -111,6 +113,7 @@ export default function DashboardHome() {
         fetchJson(`/api/config/partner-tiers`, "Tiers"),
         fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic"),
         fetchJson(`/api/analytics/monthly-kpis?companyCode=${companyCode}&dateColumn=${dateColumn}&startDate=${startDate}&endDate=${endDate}`, "Monthly").catch(() => null),
+        fetchJson(`/api/analytics/b2b/tier-performance${queryParams}`, "B2B Tiers").catch(() => null),
       ])
 
       setKpis(kpiData)
@@ -123,6 +126,7 @@ export default function DashboardHome() {
       setPartnerTiers(tiersData)
       setStrategicPerformance(strategicPerfData)
       if (monthlyData) setMonthlyKpis(monthlyData)
+      if (tierPerfData) setB2bTierData(tierPerfData)
 
       try {
         const date = new Date(startDate)
@@ -499,6 +503,73 @@ export default function DashboardHome() {
                     ))}
                   </>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* B2B Tier Breakdown — phân khúc theo price_list_name (Strategic/VIP/Gold/Silver) + filter VN/US */}
+      {b2bTierData && b2bTierData.tiers?.length > 0 && !isLoading && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[#003B95]" />
+              <h3 className="font-bold text-slate-800 text-sm">B2B Theo Phân khúc Khách hàng</h3>
+              <span className="text-[10px] text-slate-400">(theo price_list_name từ dim_customer)</span>
+            </div>
+            {/* Region filter — customer-level, tương tự Quarter Report */}
+            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+              {(["ALL", "VN", "US"] as const).map(r => (
+                <button key={r} onClick={() => setB2bRegion(r)}
+                  className={cn("px-3 py-1 text-[11px] font-bold rounded-md transition-all",
+                    b2bRegion === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-white")}>
+                  {r === "ALL" ? "ALL" : r === "VN" ? "🇻🇳 VN" : "🇺🇸 US"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-bold text-slate-500 uppercase tracking-wider">Phân khúc</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">Revenue</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">Gross Profit</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">GM%</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">Đơn hàng</th>
+                  <th className="px-4 py-2.5 text-right font-bold text-slate-500 uppercase tracking-wider">SKU</th>
+                  {projection && <th className="px-4 py-2.5 text-right font-bold text-blue-500 uppercase tracking-wider">Dự phóng</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(b2bTierData.tiers as any[]).map((tier: any, i: number) => {
+                  const d = b2bRegion === "ALL"
+                    ? { totalRevenue: tier.totalRevenue, totalGp: tier.totalGp, totalGpPct: tier.totalGpPct, totalOrders: tier.totalOrders, totalUnits: tier.totalUnits }
+                    : (tier.byRegion?.[b2bRegion] ?? { totalRevenue: 0, totalGp: 0, totalGpPct: 0, totalOrders: 0, totalUnits: 0 })
+                  if (d.totalRevenue === 0 && d.totalOrders === 0) return null
+                  const TIER_COLORS: Record<string, string> = {
+                    Strategic: "bg-[#003B95] text-white",
+                    VIP:       "bg-purple-600 text-white",
+                    Gold:      "bg-yellow-500 text-white",
+                    Silver:    "bg-slate-400 text-white",
+                  }
+                  return (
+                    <tr key={tier.tier} className={cn("hover:bg-slate-50/40 transition-colors", i % 2 === 0 ? "bg-white" : "bg-slate-50/20")}>
+                      <td className="px-4 py-3">
+                        <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", TIER_COLORS[tier.tier] || "bg-slate-200 text-slate-700")}>
+                          {tier.tier}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{formatCurrency(d.totalRevenue)}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700 tabular-nums">{formatCurrency(d.totalGp)}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">{d.totalGpPct.toFixed(1)}%</td>
+                      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{formatNumber(d.totalOrders)}</td>
+                      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{formatNumber(d.totalUnits)}</td>
+                      {projection && <td className="px-4 py-3 text-right text-blue-600 font-medium tabular-nums">{formatCurrency(d.totalRevenue * projection.factor)}</td>}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

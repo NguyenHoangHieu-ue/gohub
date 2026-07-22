@@ -38,7 +38,8 @@ const EMPTY_TARGETS: Targets = { b2bRev: 0, b2bCm1: 0, b2bThk: 0, b2cRev: 0, b2c
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fc  = formatCompactNumber
+// Hiển thị số đầy đủ với dấu phân cách hàng nghìn (vi-VN: dấu chấm)
+const fc  = (n: number) => Math.round(n).toLocaleString("vi-VN")
 const pct = (v: number) => `${v.toFixed(1)}%`
 
 function parseFmt(s: string): number { return parseFloat(s.replace(/[^\d.-]/g, "")) || 0 }
@@ -98,11 +99,17 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR Revenue</div>
-          <div className="font-bold text-slate-800 tabular-nums">{fc(prRev)}</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prRev)}</span>
+            {target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prRev >= target ? "text-green-600" : prRev / target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prRev / target * 100)}</span>}
+          </div>
         </div>
         <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR CM1</div>
-          <div className="font-bold text-slate-800 tabular-nums">{fc(prCm1)}</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prCm1)}</span>
+            {cm1Target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prCm1 >= cm1Target ? "text-green-600" : prCm1 / cm1Target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prCm1 / cm1Target * 100)}</span>}
+          </div>
         </div>
         <div className="rounded-lg px-2.5 py-1.5 border" style={{ background: `${accent}0d`, borderColor: `${accent}26` }}>
           <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: accent }}>CM1 Thực tế</div>
