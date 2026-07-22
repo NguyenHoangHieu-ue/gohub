@@ -13,6 +13,7 @@ import { invalidateDimCustomerCache } from "@/lib/dim-schema"
 const BATCH_SIZE = 500
 
 export async function POST(req: NextRequest) {
+  try {
   const session = await getServerSession(authOptions)
   if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -146,8 +147,13 @@ export async function POST(req: NextRequest) {
       message: `Sync OK: ${synced}/${dwRows.length} khách hàng → Supabase`,
     })
   } catch (e: any) {
-    console.error("[sync-dim-customer]", e.message)
+    console.error("[sync-dim-customer inner]", e.message)
     return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+  // Outer try-catch: bắt lỗi module load / auth để luôn trả JSON, không HTML
+  } catch (e: any) {
+    console.error("[sync-dim-customer outer]", e.message)
+    return NextResponse.json({ error: "Server error: " + (e.message || "unknown") }, { status: 500 })
   }
 }
 
