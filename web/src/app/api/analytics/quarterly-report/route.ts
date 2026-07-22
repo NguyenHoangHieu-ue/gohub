@@ -7,6 +7,10 @@ import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
+// KH tổng hợp không phải partner thật — loại khỏi B2B/B2C để khớp bảng Nhóm (quarterly-b2b-customers)
+const EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
+const EXCLUDE_CUST_SQL = `AND COALESCE(c.name, '') NOT IN (${EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")})`
+
 function getQuarterMonths(quarter: string, year: number): string[] {
   const q = parseInt(quarter.replace("Q", ""))
   const start = (q - 1) * 3 + 1
@@ -68,7 +72,8 @@ export async function GET(req: NextRequest) {
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   // v5: actual fields + per-group 3HK + elapsed_days/quarter_days + computeSummary support
-  const cacheKey = `qreport_v5:${quarter}:${year}:${companyCode}:${todayStr}`
+  // v6: loại B2C Customer US/VN + B2B Ops khỏi B2B/B2C/total (khớp bảng Nhóm)
+  const cacheKey = `qreport_v6:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -81,10 +86,12 @@ export async function GET(req: NextRequest) {
             SUM(f.${GP_COL}) as gp
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           WHERE f.${DATE_COL}::date >= '${qStartDate}'
             AND f.${DATE_COL}::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
+            ${EXCLUDE_CUST_SQL}
           GROUP BY 1, 2
           ORDER BY 1, 2
         `),
@@ -101,11 +108,13 @@ export async function GET(req: NextRequest) {
             ) THEN f.${REV_COL} ELSE 0 END) as hk3
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           WHERE f.${DATE_COL}::date >= '${qStartDate}'
             AND f.${DATE_COL}::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
+            ${EXCLUDE_CUST_SQL}
           GROUP BY 1, 2, 3
           ORDER BY 1, 2, 3
         `),
@@ -117,9 +126,11 @@ export async function GET(req: NextRequest) {
               WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
             ) THEN f.${REV_COL} ELSE 0 END) as hk3
           FROM ${MAIN_TABLE} f
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           WHERE f.${DATE_COL}::date >= '${qStartDate}'
             AND f.${DATE_COL}::date <= '${qEndDate}'
             ${companyFilter}
+            ${EXCLUDE_CUST_SQL}
           GROUP BY 1
         `),
       ])
