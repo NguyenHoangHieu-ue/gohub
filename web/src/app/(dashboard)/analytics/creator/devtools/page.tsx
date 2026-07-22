@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight } from "lucide-react"
+import { Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight, GitBranch } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DataLineageMap } from "@/components/data-lineage-map"
 
 // Creator-only: bộ công cụ kiểm thử API nội bộ + duyệt toàn bộ database Supabase.
 export default function CreatorDevToolsPage() {
@@ -43,7 +44,7 @@ export default function CreatorDevToolsPage() {
 }
 
 function DevTools() {
-  const [tab, setTab] = useState<"api" | "db">("api")
+  const [tab, setTab] = useState<"api" | "db" | "lineage">("api")
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1400px] mx-auto">
@@ -64,9 +65,12 @@ function DevTools() {
         <button onClick={() => setTab("db")} className={cn("flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-md transition-all", tab === "db" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
           <Database className="w-4 h-4" />Database
         </button>
+        <button onClick={() => setTab("lineage")} className={cn("flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-md transition-all", tab === "lineage" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+          <GitBranch className="w-4 h-4" />Data Map
+        </button>
       </div>
 
-      {tab === "api" ? <ApiTester /> : <DbBrowser />}
+      {tab === "api" ? <ApiTester /> : tab === "db" ? <DbBrowser /> : <DataLineageMap />}
     </div>
   )
 }
