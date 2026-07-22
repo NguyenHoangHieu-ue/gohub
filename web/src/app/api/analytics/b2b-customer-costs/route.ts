@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     let saved = 0
-    for (const r of upsertRows) {
+    const saveRow = async (r: any) => {
       await tursoQuery(
         `INSERT INTO b2b_customer_cost_monthly (id, month, customer_code, cost_type, cost_value, cost_lines, updated_by, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -76,6 +76,20 @@ export async function POST(req: NextRequest) {
            updated_at   = excluded.updated_at`,
         [r.id, r.month, r.customer_code, r.cost_type, r.cost_value, r.cost_lines, r.updated_by, r.updated_at],
       )
+    }
+
+    for (const r of upsertRows) {
+      try {
+        await saveRow(r)
+      } catch (err: any) {
+        // Nếu schema cũ trên Turso gây lỗi constraint (vd: thiếu/thừa cột cũ), recreate bảng & retry
+        if (err?.message?.includes("SQLITE_CONSTRAINT") || err?.message?.includes("no such column")) {
+          await ensureB2bCostTable(true)
+          await saveRow(r)
+        } else {
+          throw err
+        }
+      }
       saved++
     }
 

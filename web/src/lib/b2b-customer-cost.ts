@@ -59,8 +59,11 @@ export async function fetchCustomerCosts(months: string[]): Promise<Map<string, 
   return map
 }
 
-/** Tạo bảng b2b_customer_cost_monthly nếu chưa có (gọi 1 lần từ API init). */
-export async function ensureB2bCostTable(): Promise<void> {
+/** Tạo bảng b2b_customer_cost_monthly nếu chưa có (gọi 1 lần từ API init). Nếu force=true thì drop và tạo mới. */
+export async function ensureB2bCostTable(force = false): Promise<void> {
+  if (force) {
+    await tursoQuery(`DROP TABLE IF EXISTS b2b_customer_cost_monthly`)
+  }
   await tursoQuery(`
     CREATE TABLE IF NOT EXISTS b2b_customer_cost_monthly (
       id            TEXT PRIMARY KEY,
