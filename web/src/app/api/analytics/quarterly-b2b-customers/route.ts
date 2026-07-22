@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
-import { fetchCustomerCosts, calcRecordCost } from "@/lib/b2b-customer-cost"
+import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 
 // Tier & region classification từ dim_customer.price_list_name + currency_code
 // Spec: không có Strategic/VIP/Silver/Gold thì xếp vào Strategic (default)
@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
   // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc.
   void regionFilter
   const refresh = searchParams.get("refresh") === "1"  // bypass cache sau khi lưu chi phí
-  // v4: chi phí kênh nhập tay per-KH/tháng (b2b_customer_cost_monthly) thay pro-rate
-  const cacheKey = `qb2b_v4:${quarter}:${year}:${companyCode}:${todayStr}`
+  // v5: fix amount cost không nhân factor (amount cố định, chỉ percent mới scale theo projected revenue)
+  const cacheKey = `qb2b_v5:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -239,9 +239,10 @@ export async function GET(req: NextRequest) {
 
         months.forEach(m => {
           const md = cust.months.get(m)
-          // Chi phí nhập tay của KH cho tháng m (Turso). % tính trên doanh thu RAW, rồi scale theo factor.
           const rec = costMap.get(`${m}_${cust.code}`)
-          const monthCost = md ? calcRecordCost(rec, md.rawRevenue) * md.factor : 0
+          // amount cost: không nhân factor (người dùng nhập bao nhiêu hiện bấy nhiêu).
+          // percent cost: áp dụng trên projected revenue (rawRevenue × factor).
+          const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0
           monthsCost[m] = {
             cost_lines: rec?.cost_lines ?? "[]",
             cost_type:  rec?.cost_type  ?? "amount",

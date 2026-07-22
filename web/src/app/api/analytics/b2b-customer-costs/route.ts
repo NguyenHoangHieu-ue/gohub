@@ -94,13 +94,14 @@ export async function POST(req: NextRequest) {
       saved++
     }
 
-    // Xoá cache L1+L2 cho tất cả key qb2b_v4 của các quý bị ảnh hưởng.
-    // Thiếu bước này → cache L2 (Supabase, TTL 12h) trả data cũ dù Turso đã lưu mới.
+    // Xoá cache L1+L2 cho tất cả key qb2b_v5 của các quý bị ảnh hưởng.
+    // PHẢI await: nếu không await, serverless có thể terminate trước khi Supabase delete hoàn thành
+    // → L2 vẫn còn data cũ → page refresh trả về data trống dù Turso đã lưu đúng.
     const affectedPrefixes = [...new Set(rows.map(r => {
       const [y, m] = r.month.split("-")
-      return `qb2b_v4:Q${Math.ceil(parseInt(m) / 3)}:${y}:`
+      return `qb2b_v5:Q${Math.ceil(parseInt(m) / 3)}:${y}:`
     }))]
-    flushAnalyticsCacheByPrefixes(affectedPrefixes).catch(() => { /* non-fatal */ })
+    await flushAnalyticsCacheByPrefixes(affectedPrefixes).catch(() => { /* non-fatal */ })
 
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {

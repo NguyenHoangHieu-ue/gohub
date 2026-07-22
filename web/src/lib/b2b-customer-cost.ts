@@ -10,10 +10,25 @@ export interface CostRecord {
   cost_lines: string   // JSON string (đồng bộ với reference gohub.py)
 }
 
-/** Tính tổng chi phí của 1 record theo doanh thu raw của tháng (mirror _calc_record_cost). */
+/** Tính tổng chi phí của 1 record theo doanh thu raw (không có factor — dùng cho tháng đã hoàn thành). */
 export function calcRecordCost(rec: CostRecord | undefined, rawRevenue: number): number {
+  return calcRecordCostProjected(rec, rawRevenue, 1)
+}
+
+/**
+ * Tính chi phí với pro-rata projection:
+ * - amount (tiền cố định): KHÔNG nhân factor — người dùng nhập bao nhiêu hiện bấy nhiêu.
+ * - percent: áp dụng trên projected revenue (= rawRevenue × factor).
+ *
+ * Lý do: cost loại "amount" là chi phí đã phát sinh/cam kết cả tháng nên không scale theo ngày đã trôi qua.
+ * Cost loại "percent" (vd: 5% hoa hồng) cần ước tính cả tháng nên dùng projected revenue làm base.
+ */
+export function calcRecordCostProjected(
+  rec: CostRecord | undefined,
+  rawRevenue: number,
+  factor: number,
+): number {
   if (!rec) return 0
-  // Ưu tiên cost_lines
   if (rec.cost_lines) {
     try {
       const lines: CostLine[] = typeof rec.cost_lines === "string" ? JSON.parse(rec.cost_lines) : (rec.cost_lines as any)
@@ -21,15 +36,14 @@ export function calcRecordCost(rec: CostRecord | undefined, rawRevenue: number):
         let tot = 0
         for (const l of lines) {
           const val = Number(l?.value) || 0
-          tot += l?.type === "percent" ? (val / 100) * rawRevenue : val
+          tot += l?.type === "percent" ? (val / 100) * rawRevenue * factor : val
         }
         return tot
       }
     } catch { /* fallthrough */ }
   }
-  // Fallback: cột đơn cost_type/cost_value
   const cval = Number(rec.cost_value) || 0
-  return rec.cost_type === "percent" ? (cval / 100) * rawRevenue : cval
+  return rec.cost_type === "percent" ? (cval / 100) * rawRevenue * factor : cval
 }
 
 /** Đọc toàn bộ chi phí KH của các tháng trong quý → Map key `${month}_${code}`. */
