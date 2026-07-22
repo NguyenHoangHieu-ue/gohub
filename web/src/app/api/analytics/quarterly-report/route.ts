@@ -63,12 +63,12 @@ export async function GET(req: NextRequest) {
   const qEndDate = lastMonthEndDate < today ? lastMonthEndDate.toISOString().split("T")[0] : todayStr
 
   if (new Date(qStartDate) > today) {
-    return NextResponse.json({ quarter, year, months, summary: [], b2bChannels: [], b2cChannels: [] }, { headers: CACHE_HEADERS })
+    return NextResponse.json({ quarter, year, months, summary: [], b2bChannels: [], b2cChannels: [], elapsed_days: 0, quarter_days: 0 }, { headers: CACHE_HEADERS })
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  // v4: dùng created_date + fix percent-cost MAX + group-cost scale
-  const cacheKey = `qreport_v4:${quarter}:${year}:${companyCode}:${todayStr}`
+  // v5: actual fields + per-group 3HK + elapsed_days/quarter_days + computeSummary support
+  const cacheKey = `qreport_v5:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -88,13 +88,17 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2
           ORDER BY 1, 2
         `),
-        queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string }>(`
+        queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string; hk3: string }>(`
           SELECT
             TO_CHAR(f.${DATE_COL}::date, 'YYYY-MM') as month,
             UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
             TRIM(s.channel_name) as channel,
             SUM(f.${REV_COL}) as revenue,
-            SUM(f.${GP_COL}) as gp
+            SUM(f.${GP_COL}) as gp,
+            SUM(CASE WHEN TRIM(f.sku) IN (
+              SELECT DISTINCT TRIM(sku) FROM dim_sku
+              WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+            ) THEN f.${REV_COL} ELSE 0 END) as hk3
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           WHERE f.${DATE_COL}::date >= '${qStartDate}'
@@ -152,13 +156,15 @@ export async function GET(req: NextRequest) {
         const b2cRevAct = parseFloat(b2cR?.revenue  || "0")
         const b2cGpAct  = parseFloat(b2cR?.gp       || "0")
 
-        // Channel costs summed per business group
+        // Channel costs + per-group 3HK (from channelRows which now has hk3)
         let b2bCCAct = 0, b2cCCAct = 0
+        let b2bHk3Act = 0, b2cHk3Act = 0
         channelRows.filter(row => row.month === month).forEach(row => {
           const rev = parseFloat(row.revenue || "0")
           const cc = computeChannelCost(channelCosts, row.channel, month, rev, mStart, actualEnd)
-          if (row.bg === "B2B") b2bCCAct += cc
-          else b2cCCAct += cc
+          const hk3 = parseFloat(row.hk3 || "0")
+          if (row.bg === "B2B") { b2bCCAct += cc; b2bHk3Act += hk3 }
+          else { b2cCCAct += cc; b2cHk3Act += hk3 }
         })
 
         // Group-level costs: nhất quán với gohub-report/gohub.py — scale theo factor (cùng với GP, CC)
@@ -175,22 +181,36 @@ export async function GET(req: NextRequest) {
         const b2bCm1 = b2bGp - b2bCC - b2bGC
         const b2cCm1 = b2cGp - b2cCC - b2cGC
 
+        // Actual CM1 (before factor)
+        const b2bCm1Act = b2bGpAct - b2bCCAct - b2bGCBudget
+        const b2cCm1Act = b2cGpAct - b2cCCAct - b2cGCBudget
+
         const totRev = b2bRev + b2cRev; const totGp = b2bGp + b2cGp
         const totCC  = b2bCC  + b2cCC;  const totGC  = b2bGC  + b2cGC
         const totCm1 = b2bCm1 + b2cCm1
 
-        // 3HK revenue cho tháng (nhân factor nếu projected)
+        // 3HK revenue (total from hk3Rows, per-group from channelRows)
         const hk3Act = parseFloat(hk3Rows.find(h => h.month === month)?.hk3 || "0")
         const hk3Rev = r(hk3Act * factor)
+        const b2bHk3Rev = r(b2bHk3Act * factor)
+        const b2cHk3Rev = r(b2cHk3Act * factor)
         const hk3Pct = pct(hk3Rev, totRev)
 
-        const row = (rev: number, gp: number, cc: number, gc: number, cm1: number, hk3: number = 0) => ({
+        // row() returns projected values + actual values (for computeSummary in frontend)
+        const row = (
+          rev: number, gp: number, cc: number, gc: number, cm1: number, hk3: number,
+          revAct: number, gpAct: number, ccAct: number, gcAct: number, cm1ActVal: number, hk3ActVal: number
+        ) => ({
           revenue: rev, gp, gpPct: pct(gp, rev),
           channelCost: cc, groupCost: gc,
           cm1, cm1Pct: pct(cm1, rev),
           hk3Pct: pct(hk3, rev),
-          // Giá trị thực tế (trước projection) — dùng cho cột "Revenue" (actual)
-          actualRevenue: r(rev / (isProjected ? factor : 1)),
+          actualRevenue: r(isProjected ? revAct : rev),
+          actualGp:      r(isProjected ? gpAct  : gp),
+          actualCc:      r(isProjected ? ccAct  : cc),
+          actualGc:      r(isProjected ? gcAct  : gc),
+          actualCm1:     r(isProjected ? cm1ActVal : cm1),
+          actualHk3:     r(isProjected ? hk3ActVal : hk3),
         })
 
         return {
@@ -202,13 +222,17 @@ export async function GET(req: NextRequest) {
           hk3Pct,
           hk3Rev,
           actualHk3: r(hk3Act),
-          total: row(totRev, totGp, totCC, totGC, totCm1, hk3Rev),
-          b2b:   row(b2bRev, b2bGp, b2bCC, b2bGC, b2bCm1),
-          b2c:   row(b2cRev, b2cGp, b2cCC, b2cGC, b2cCm1),
+          total: row(totRev, totGp, totCC, totGC, totCm1, hk3Rev,
+                     b2bRevAct + b2cRevAct, b2bGpAct + b2cGpAct, b2bCCAct + b2cCCAct,
+                     b2bGCBudget + b2cGCBudget, b2bCm1Act + b2cCm1Act, hk3Act),
+          b2b: row(b2bRev, b2bGp, b2bCC, b2bGC, b2bCm1, b2bHk3Rev,
+                   b2bRevAct, b2bGpAct, b2bCCAct, b2bGCBudget, b2bCm1Act, b2bHk3Act),
+          b2c: row(b2cRev, b2cGp, b2cCC, b2cGC, b2cCm1, b2cHk3Rev,
+                   b2cRevAct, b2cGpAct, b2cCCAct, b2cGCBudget, b2cCm1Act, b2cHk3Act),
         }
       })
 
-      // Quarter totals (sum of all non-projected months + projected for current)
+      // Quarter totals (kept for backward compat — frontend now uses computeSummary)
       const qtotals = summary.reduce(
         (acc, m) => ({
           revenue: acc.revenue + m.total.revenue,
@@ -253,13 +277,16 @@ export async function GET(req: NextRequest) {
             const rowData = channelRows.find(r => r.channel === ch && r.month === month && r.bg === bg)
             const revAct = parseFloat(rowData?.revenue || "0")
             const gpAct  = parseFloat(rowData?.gp      || "0")
+            const hk3Act = parseFloat(rowData?.hk3     || "0")
             const ccAct  = rowData ? computeChannelCost(channelCosts, ch, month, revAct, mStart, actualEnd) : 0
             const rev = r(revAct * factor)
             const gp  = r(gpAct  * factor)
+            const hk3 = r(hk3Act * factor)
             const cc  = r(isProjected ? ccAct * factor : ccAct)
             const cm1 = gp - cc
             totalRevenue += rev
-            return { month, revenue: rev, gp, channelCost: cc, cm1, cm1Pct: pct(cm1, rev), _i: i }
+            return { month, revenue: rev, gp, channelCost: cc, cm1, cm1Pct: pct(cm1, rev),
+                     three_hk_rev: hk3, three_hk_pct: pct(hk3, rev), _i: i }
           })
           const withMom = chMonths.map((m, i) => {
             const prev = chMonths[i - 1]
@@ -275,12 +302,18 @@ export async function GET(req: NextRequest) {
           .sort((a, b) => b.totalRevenue - a.totalRevenue)
       }
 
+      // elapsed_days và quarter_days cho frontend computeSummary() (theo reference gohub.html)
+      const elapsed_days = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) => s + mr.elapsed, 0)
+      const quarter_days = monthMeta.reduce((s, mr) => s + mr.dim, 0)
+
       return {
         quarter, year, months,
         summary,
         quarterTotal,
         b2bChannels: buildChannels("B2B"),
         b2cChannels: buildChannels("B2C"),
+        elapsed_days,
+        quarter_days,
       }
     }, QUERY_TTL_MIN)
 

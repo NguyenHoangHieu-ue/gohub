@@ -11,20 +11,26 @@ import { useRoleGuard } from "@/lib/use-role-guard"
 interface MonthStats {
   revenue: number; gp: number; gpPct: number
   channelCost: number; groupCost: number; cm1: number; cm1Pct: number
-  hk3Pct?: number; actualRevenue?: number
+  hk3Pct?: number
+  actualRevenue?: number; actualGp?: number; actualCc?: number; actualGc?: number; actualCm1?: number; actualHk3?: number
 }
 interface MonthSummary {
   month: string; isProjected: boolean; factor: number; elapsed: number; dim: number
   hk3Pct: number; hk3Rev: number; actualHk3: number
   total: MonthStats; b2b: MonthStats; b2c: MonthStats
 }
-interface ChannelMonth { month: string; revenue: number; gp: number; channelCost: number; cm1: number; cm1Pct: number; momPct: number | null }
+interface ChannelMonth {
+  month: string; revenue: number; gp: number
+  channelCost: number; cm1: number; cm1Pct: number; momPct: number | null
+  three_hk_rev?: number; three_hk_pct?: number
+}
 interface Channel { name: string; totalRevenue: number; months: ChannelMonth[] }
 interface QReport {
   quarter: string; year: number; months: string[]
   summary: MonthSummary[]
   quarterTotal: MonthStats & { hk3Pct: number; b2b: MonthStats; b2c: MonthStats }
   b2bChannels: Channel[]; b2cChannels: Channel[]
+  elapsed_days: number; quarter_days: number
 }
 interface Targets { b2bRev: number; b2bCm1: number; b2bThk: number; b2cRev: number; b2cCm1: number; b2cThk: number }
 
@@ -38,7 +44,6 @@ const pct = (v: number) => `${v.toFixed(1)}%`
 function parseFmt(s: string): number { return parseFloat(s.replace(/[^\d.-]/g, "")) || 0 }
 function fmtInput(n: number): string { return n > 0 ? Math.round(n).toLocaleString("vi-VN") : "" }
 
-// Màu đơn giản: xanh lá = tốt, đỏ = xấu, slate = trung tính
 const cm1Color  = (v: number) => v >= 0 ? "text-blue-700" : "text-red-600"
 const momColor  = (v: number | null) => v == null ? "text-slate-400" : v >= 0 ? "text-green-600" : "text-red-500"
 const prColor   = "text-slate-500"
@@ -65,7 +70,6 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, h
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5">
-      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Icon className="w-4 h-4 text-slate-400" />
@@ -75,7 +79,6 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, h
       </div>
       <ProgressBar value={actual} target={target} />
 
-      {/* Values */}
       <div className="mt-3 space-y-1.5 text-[12px]">
         <div className="flex justify-between">
           <span className="text-slate-400">Thực tế</span>
@@ -110,8 +113,8 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, h
 
 // ─── Table header row ─────────────────────────────────────────────────────────
 
-const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Ch. Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
-const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Ch. Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
+const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
+const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
 
 function TableHead({ cols }: { cols: string[] }) {
   return (
@@ -151,7 +154,7 @@ function QuarterlyContent() {
   const fetchReport = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&dateColumn=fulfiled_date&companyCode=ALL`)
+      const res = await fetch(`/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&companyCode=ALL`)
       if (!res.ok) throw new Error(`${res.status}`)
       setReport(await res.json())
     } catch (e: any) { notify(false, `Lỗi tải dữ liệu: ${e.message}`) }
@@ -188,19 +191,49 @@ function QuarterlyContent() {
   const qt       = report?.quarterTotal
   const activeMonths = summary.map(m => m.month)
 
-  const totalActualRev = summary.reduce((s, m) => s + (m.total.actualRevenue ?? m.total.revenue), 0)
-  const totalPrRev     = summary.reduce((s, m) => s + m.total.revenue, 0)
-  const b2bActualRev   = summary.reduce((s, m) => s + (m.b2b.actualRevenue ?? m.b2b.revenue), 0)
-  const b2bPrRev       = summary.reduce((s, m) => s + m.b2b.revenue, 0)
-  const b2cActualRev   = summary.reduce((s, m) => s + (m.b2c.actualRevenue ?? m.b2c.revenue), 0)
-  const b2cPrRev       = summary.reduce((s, m) => s + m.b2c.revenue, 0)
-  const totalActualCm1 = summary.reduce((s, m) => s + (m.total.actualRevenue != null && m.isProjected ? m.total.cm1 / m.factor : m.total.cm1), 0)
-  const totalPrCm1     = qt?.cm1 ?? 0
-  const b2bActualCm1   = qt?.b2b?.cm1 ?? 0
-  const b2bPrCm1       = qt?.b2b?.cm1 ?? 0
-  const b2cActualCm1   = qt?.b2c?.cm1 ?? 0
-  const b2cPrCm1       = qt?.b2c?.cm1 ?? 0
-  const totalHk3Pct    = qt?.hk3Pct ?? 0
+  // ── Reference computeSummary() logic (gohub.html) ─────────────────────────
+  // qFactor = quarter_days / elapsed_days — dùng để project từ thực tế → cả quý
+  const qElapsed = report?.elapsed_days ?? 0
+  const qTotal   = report?.quarter_days ?? 92
+  const qFactor  = qElapsed > 0 ? qTotal / qElapsed : 1
+
+  // rev_act = sum projected monthly (reference "Actual" trong KPI cards)
+  // rev_raw = sum actual monthly (reference "Revenue" trong bảng quý)
+  const b2bRevAct  = summary.reduce((s, m) => s + m.b2b.revenue, 0)
+  const b2bRevRaw  = summary.reduce((s, m) => s + (m.b2b.actualRevenue ?? m.b2b.revenue), 0)
+  const b2bGmRaw   = summary.reduce((s, m) => s + (m.b2b.actualGp ?? m.b2b.gp), 0)
+  const b2bCcRaw   = summary.reduce((s, m) => s + (m.b2b.actualCc ?? m.b2b.channelCost), 0)
+  const b2bGcRaw   = summary.reduce((s, m) => s + (m.b2b.actualGc ?? m.b2b.groupCost), 0)
+  const b2bCm1Raw  = summary.reduce((s, m) => s + (m.b2b.actualCm1 ?? m.b2b.cm1), 0)
+  const b2bCm1Act  = summary.reduce((s, m) => s + m.b2b.cm1, 0)
+  const b2bThkAct  = summary.reduce((s, m) => s + (m.b2b.actualHk3 ?? 0), 0)
+  const b2bRevPr   = b2bRevRaw * qFactor
+  const b2bCm1Pr   = b2bCm1Raw * qFactor
+  const b2bThkPct  = b2bRevAct > 0 ? b2bThkAct / b2bRevAct * 100 : 0
+
+  const b2cRevAct  = summary.reduce((s, m) => s + m.b2c.revenue, 0)
+  const b2cRevRaw  = summary.reduce((s, m) => s + (m.b2c.actualRevenue ?? m.b2c.revenue), 0)
+  const b2cGmRaw   = summary.reduce((s, m) => s + (m.b2c.actualGp ?? m.b2c.gp), 0)
+  const b2cCcRaw   = summary.reduce((s, m) => s + (m.b2c.actualCc ?? m.b2c.channelCost), 0)
+  const b2cGcRaw   = summary.reduce((s, m) => s + (m.b2c.actualGc ?? m.b2c.groupCost), 0)
+  const b2cCm1Raw  = summary.reduce((s, m) => s + (m.b2c.actualCm1 ?? m.b2c.cm1), 0)
+  const b2cCm1Act  = summary.reduce((s, m) => s + m.b2c.cm1, 0)
+  const b2cThkAct  = summary.reduce((s, m) => s + (m.b2c.actualHk3 ?? 0), 0)
+  const b2cRevPr   = b2cRevRaw * qFactor
+  const b2cCm1Pr   = b2cCm1Raw * qFactor
+  const b2cThkPct  = b2cRevAct > 0 ? b2cThkAct / b2cRevAct * 100 : 0
+
+  const totRevAct  = b2bRevAct + b2cRevAct
+  const totRevRaw  = b2bRevRaw + b2cRevRaw
+  const totGmRaw   = b2bGmRaw + b2cGmRaw
+  const totCcRaw   = b2bCcRaw + b2cCcRaw
+  const totGcRaw   = b2bGcRaw + b2cGcRaw
+  const totCm1Raw  = b2bCm1Raw + b2cCm1Raw
+  const totCm1Act  = b2bCm1Act + b2cCm1Act
+  const totRevPr   = totRevRaw * qFactor
+  const totCm1Pr   = totCm1Raw * qFactor
+  const totThkPct  = totRevAct > 0 ? (b2bThkAct + b2cThkAct) / totRevAct * 100 : 0
+  // ──────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
@@ -212,7 +245,6 @@ function QuarterlyContent() {
           <p className="text-sm text-slate-400 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Quarter pills */}
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {quarters.map(q => (
               <button key={q} onClick={() => setSelQ(q)}
@@ -279,17 +311,17 @@ function QuarterlyContent() {
       {report && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard label="B2B" icon={Building2}
-            actual={b2bActualRev} prRev={b2bPrRev} target={targets.b2bRev}
-            cm1Actual={b2bActualCm1} prCm1={b2bPrCm1} cm1Target={targets.b2bCm1}
-            hk3Pct={0} hk3Target={targets.b2bThk} />
+            actual={b2bRevAct} prRev={b2bRevPr} target={targets.b2bRev}
+            cm1Actual={b2bCm1Act} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
+            hk3Pct={b2bThkPct} hk3Target={targets.b2bThk} />
           <KpiCard label="B2C" icon={ShoppingBag}
-            actual={b2cActualRev} prRev={b2cPrRev} target={targets.b2cRev}
-            cm1Actual={b2cActualCm1} prCm1={b2cPrCm1} cm1Target={targets.b2cCm1}
-            hk3Pct={0} hk3Target={targets.b2cThk} />
+            actual={b2cRevAct} prRev={b2cRevPr} target={targets.b2cRev}
+            cm1Actual={b2cCm1Act} prCm1={b2cCm1Pr} cm1Target={targets.b2cCm1}
+            hk3Pct={b2cThkPct} hk3Target={targets.b2cThk} />
           <KpiCard label="Tổng" icon={TrendingUp}
-            actual={totalActualRev} prRev={totalPrRev} target={targets.b2bRev + targets.b2cRev}
-            cm1Actual={totalActualCm1} prCm1={totalPrCm1} cm1Target={targets.b2bCm1 + targets.b2cCm1}
-            hk3Pct={totalHk3Pct} hk3Target={0} />
+            actual={totRevAct} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
+            cm1Actual={totCm1Act} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
+            hk3Pct={totThkPct} hk3Target={0} />
         </div>
       )}
 
@@ -306,32 +338,27 @@ function QuarterlyContent() {
                 {summary.map(m => {
                   const [y, mo] = m.month.split("-")
                   const label  = `T${parseInt(mo)}/${y}`
-                  const actRev = m.total.actualRevenue ?? m.total.revenue
-                  const prRev  = m.total.revenue
-                  const actCm1 = m.isProjected ? m.total.cm1 / m.factor : m.total.cm1
                   return (
                     <React.Fragment key={m.month}>
-                      {/* Month total */}
+                      {/* Revenue = projected (g.revenue), PR Rev = "—", CM1 = projected, PR CM1 = "—" */}
                       <tr className={cn("border-b border-slate-100", m.isProjected ? "bg-blue-50/30" : "bg-white hover:bg-slate-50")}>
                         <td className="px-4 py-3 font-semibold text-slate-800">
                           {label}
                           {m.isProjected && <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR ×{m.factor}</span>}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
-                        <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{m.isProjected ? fc(prRev) : <span className="text-slate-300">—</span>}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(m.total.revenue)}</td>
+                        <td className="px-4 py-3 text-right"><span className="text-slate-300">—</span></td>
                         <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.gp)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.total.gpPct)}</td>
                         <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
                         <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.groupCost > 0 ? fc(m.total.groupCost) : <span className="text-slate-300">—</span>}</td>
-                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.cm1))}>{fc(actCm1)}</td>
-                        <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{m.isProjected ? fc(prRev) : <span className="text-slate-300">—</span>}</td>
+                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.cm1))}>{fc(m.total.cm1)}</td>
+                        <td className="px-4 py-3 text-right"><span className="text-slate-300">—</span></td>
                         <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                       </tr>
-                      {/* B2B sub-row */}
-                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} factor={m.factor} />
-                      {/* B2C sub-row */}
-                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} factor={m.factor} />
+                      <MonthSubRow label="B2B" stats={m.b2b} />
+                      <MonthSubRow label="B2C" stats={m.b2c} />
                     </React.Fragment>
                   )
                 })}
@@ -353,29 +380,52 @@ function QuarterlyContent() {
               <tbody>
                 {qt.b2b && (
                   <>
-                    <QtSummaryRow label="B2B (Thực tế)" stats={qt.b2b} prRev={b2bPrRev} actRev={b2bActualRev} actCm1={b2bActualCm1} prCm1={b2bPrCm1} hk3Pct={0} />
-                    {targets.b2bRev > 0 && <QtTargetRow label="↳ Target B2B" targetRev={targets.b2bRev} prRev={b2bPrRev} targetCm1={targets.b2bCm1} targetThk={targets.b2bThk} hk3Pct={0} />}
+                    <QtSummaryRow
+                      label="B2B (Thực tế)"
+                      actRev={b2bRevRaw} prRev={b2bRevPr}
+                      gmRaw={b2bGmRaw} ccRaw={b2bCcRaw} gcRaw={b2bGcRaw}
+                      cm1Raw={b2bCm1Raw} prCm1={b2bCm1Pr}
+                      hk3Pct={b2bThkPct}
+                    />
+                    {targets.b2bRev > 0 && (
+                      <QtTargetRow
+                        label="↳ Target B2B"
+                        targetRev={targets.b2bRev} revPr={b2bRevPr} revAct={b2bRevAct}
+                        targetCm1={targets.b2bCm1} cm1Pr={b2bCm1Pr} cm1Act={b2bCm1Act}
+                      />
+                    )}
                   </>
                 )}
                 {qt.b2c && (
                   <>
-                    <QtSummaryRow label="B2C (Thực tế)" stats={qt.b2c} prRev={b2cPrRev} actRev={b2cActualRev} actCm1={b2cActualCm1} prCm1={b2cPrCm1} hk3Pct={0} />
-                    {targets.b2cRev > 0 && <QtTargetRow label="↳ Target B2C" targetRev={targets.b2cRev} prRev={b2cPrRev} targetCm1={targets.b2cCm1} targetThk={targets.b2cThk} hk3Pct={0} />}
+                    <QtSummaryRow
+                      label="B2C (Thực tế)"
+                      actRev={b2cRevRaw} prRev={b2cRevPr}
+                      gmRaw={b2cGmRaw} ccRaw={b2cCcRaw} gcRaw={b2cGcRaw}
+                      cm1Raw={b2cCm1Raw} prCm1={b2cCm1Pr}
+                      hk3Pct={b2cThkPct}
+                    />
+                    {targets.b2cRev > 0 && (
+                      <QtTargetRow
+                        label="↳ Target B2C"
+                        targetRev={targets.b2cRev} revPr={b2cRevPr} revAct={b2cRevAct}
+                        targetCm1={targets.b2cCm1} cm1Pr={b2cCm1Pr} cm1Act={b2cCm1Act}
+                      />
+                    )}
                   </>
                 )}
-                {/* Grand total row */}
                 <tr className="bg-slate-800 text-white">
                   <td className="px-4 py-3 font-bold text-white">Tổng {selQ}-{selYear}</td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums">{fc(totalActualRev)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totalPrRev)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fc(qt.gp)}</td>
-                  <td className="px-4 py-3 text-right text-slate-300">{pct(qt.gpPct)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{qt.channelCost > 0 ? fc(qt.channelCost) : "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{qt.groupCost > 0 ? fc(qt.groupCost) : "—"}</td>
-                  <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", qt.cm1 >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totalActualCm1)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totalPrCm1)}</td>
-                  <td className={cn("px-4 py-3 text-right font-bold", qt.cm1 >= 0 ? "text-blue-300" : "text-red-300")}>{pct(qt.cm1Pct)}</td>
-                  <td className="px-4 py-3 text-right text-slate-300">{pct(totalHk3Pct)}</td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fc(totGmRaw)}</td>
+                  <td className="px-4 py-3 text-right text-slate-300">{totRevRaw > 0 ? pct(totGmRaw / totRevRaw * 100) : "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{totCcRaw > 0 ? fc(totCcRaw) : "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{totGcRaw > 0 ? fc(totGcRaw) : "—"}</td>
+                  <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totCm1Raw)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
+                  <td className={cn("px-4 py-3 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-slate-300">{pct(totThkPct)}</td>
                 </tr>
               </tbody>
             </table>
@@ -403,65 +453,72 @@ function QuarterlyContent() {
 }
 
 // ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
+// Revenue = projected (g.revenue), PR Rev = "—", CM1 = projected (g.cm1), PR CM1 = "—"
 
-function MonthSubRow({ label, stats, isProjected, factor }:
-  { label: string; stats: MonthStats; isProjected: boolean; factor: number }) {
-  const actRev = stats.actualRevenue ?? stats.revenue
-  const actCm1 = isProjected ? stats.cm1 / factor : stats.cm1
+function MonthSubRow({ label, stats }: { label: string; stats: MonthStats }) {
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
-      <td className={cn("px-4 py-2 text-right tabular-nums", prColor)}>{isProjected ? fc(stats.revenue) : <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(stats.revenue)}</td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300">—</span></td>
       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(stats.gp)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{stats.channelCost > 0 ? fc(stats.channelCost) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{stats.groupCost > 0 ? fc(stats.groupCost) : <span className="text-slate-300">—</span>}</td>
-      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(stats.cm1))}>{fc(actCm1)}</td>
-      <td className={cn("px-4 py-2 text-right tabular-nums", prColor)}>{isProjected ? fc(stats.cm1) : <span className="text-slate-300">—</span>}</td>
+      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(stats.cm1))}>{fc(stats.cm1)}</td>
+      <td className="px-4 py-2 text-right"><span className="text-slate-300">—</span></td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
     </tr>
   )
 }
 
-// ─── Quarter summary row ──────────────────────────────────────────────────────
+// ─── Quarter summary row — actual (raw) values ────────────────────────────────
 
-function QtSummaryRow({ label, stats, prRev, actRev, actCm1, prCm1, hk3Pct }:
-  { label: string; stats: MonthStats; prRev: number; actRev: number; actCm1: number; prCm1: number; hk3Pct: number }) {
+function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct }:
+  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number }) {
+  const gmPct  = actRev > 0 ? gmRaw  / actRev * 100 : 0
+  const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
   return (
     <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[12px]">
       <td className="px-4 py-3 font-semibold text-slate-800">{label}</td>
       <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
       <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{fc(prRev)}</td>
-      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(stats.gp)}</td>
-      <td className="px-4 py-3 text-right text-slate-500">{pct(stats.gpPct)}</td>
-      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{stats.channelCost > 0 ? fc(stats.channelCost) : "—"}</td>
-      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{stats.groupCost > 0 ? fc(stats.groupCost) : "—"}</td>
-      <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(stats.cm1))}>{fc(actCm1)}</td>
+      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(gmRaw)}</td>
+      <td className="px-4 py-3 text-right text-slate-500">{pct(gmPct)}</td>
+      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{ccRaw > 0 ? fc(ccRaw) : "—"}</td>
+      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{gcRaw > 0 ? fc(gcRaw) : "—"}</td>
+      <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
       <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
-      <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
+      <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
       <td className="px-4 py-3 text-right text-slate-500">{pct(hk3Pct)}</td>
     </tr>
   )
 }
 
 // ─── Quarter target row ───────────────────────────────────────────────────────
+// Layout: label | target_rev | Đạt PR (rev_pr/tgt) | Đạt TT (rev_act/tgt) | — | — | — | target_cm1 | Đạt PR (cm1_pr/tgt) | Đạt TT (cm1_act/tgt) | —
 
-function QtTargetRow({ label, targetRev, prRev, targetCm1, targetThk, hk3Pct }:
-  { label: string; targetRev: number; prRev: number; targetCm1: number; targetThk: number; hk3Pct: number }) {
-  const prPct = targetRev > 0 ? (prRev / targetRev) * 100 : 0
-  const pctCls = prPct >= 100 ? "text-green-600 font-semibold" : prPct >= 75 ? "text-blue-600 font-semibold" : "text-red-500 font-semibold"
+function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act }:
+  { label: string; targetRev: number; revPr: number; revAct: number; targetCm1: number; cm1Pr: number; cm1Act: number }) {
+  const revPrPct  = targetRev > 0 ? revPr  / targetRev * 100 : 0
+  const revActPct = targetRev > 0 ? revAct / targetRev * 100 : 0
+  const cm1PrPct  = targetCm1 > 0 ? cm1Pr  / targetCm1 * 100 : 0
+  const cm1ActPct = targetCm1 > 0 ? cm1Act / targetCm1 * 100 : 0
+  const prCls  = (p: number) => p >= 100 ? "text-green-600 font-semibold" : p >= 75 ? "text-blue-600 font-semibold" : "text-red-500 font-semibold"
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px] text-slate-500">
       <td className="px-4 py-2 pl-9 italic">{label}</td>
       <td className="px-4 py-2 text-right tabular-nums">{fc(targetRev)}</td>
-      <td className={cn("px-4 py-2 text-right", pctCls)}>Đạt PR: {pct(prPct)}</td>
-      <td className="px-4 py-2 text-right" colSpan={4}>—</td>
+      <td className={cn("px-4 py-2 text-right", prCls(revPrPct))}>Đạt PR: {pct(revPrPct)}</td>
+      <td className={cn("px-4 py-2 text-right", prCls(revActPct))}>Đạt TT: {pct(revActPct)}</td>
+      <td className="px-4 py-2 text-right text-slate-300">—</td>
+      <td className="px-4 py-2 text-right text-slate-300">—</td>
+      <td className="px-4 py-2 text-right text-slate-300">—</td>
       <td className="px-4 py-2 text-right tabular-nums">{targetCm1 > 0 ? fc(targetCm1) : "—"}</td>
-      <td className="px-4 py-2 text-right" />
-      <td className="px-4 py-2 text-right">{targetCm1 > 0 && targetRev > 0 ? pct((targetCm1 / targetRev) * 100) : "—"}</td>
-      <td className="px-4 py-2 text-right">{targetThk > 0 ? `Tgt ${pct(targetThk)}` : "—"}</td>
+      <td className={cn("px-4 py-2 text-right", prCls(cm1PrPct))}>{targetCm1 > 0 ? `Đạt PR: ${pct(cm1PrPct)}` : "—"}</td>
+      <td className={cn("px-4 py-2 text-right", prCls(cm1ActPct))}>{targetCm1 > 0 ? `Đạt TT: ${pct(cm1ActPct)}` : "—"}</td>
+      <td className="px-4 py-2 text-right text-slate-300">—</td>
     </tr>
   )
 }
@@ -470,7 +527,8 @@ function QtTargetRow({ label, targetRev, prRev, targetCm1, targetThk, hk3Pct }:
 
 function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
   { title: string; icon: React.ElementType; channels: Channel[]; months: string[]; expanded: boolean; onToggle: () => void }) {
-  const SUB = ["Revenue", "GP", "Ch.Cost", "CM1", "%CM1", "%MoM"]
+  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
+  const colCount = SUB.length
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
@@ -482,14 +540,14 @@ function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
       </button>
       {expanded && (
         <div className="overflow-x-auto">
-          <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * 6 * 72)}px` }}>
+          <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
             <thead>
               <tr className="bg-slate-800">
                 <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-slate-800 border-r border-slate-700 min-w-[160px]">Kênh</th>
                 {months.map(m => {
                   const [y, mo] = m.split("-")
                   return (
-                    <th key={m} colSpan={6} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-slate-700 whitespace-nowrap">
+                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-slate-700 whitespace-nowrap">
                       T{parseInt(mo)}/{y}
                     </th>
                   )
@@ -517,12 +575,15 @@ function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
                     }
                     return [
                       <td key="rev" className="px-2 py-2.5 text-right text-slate-700 tabular-nums border-l border-slate-100">{fc(d.revenue)}</td>,
-                      <td key="gp"  className="px-2 py-2.5 text-right text-slate-600 tabular-nums">{fc(d.gp)}</td>,
+                      <td key="gm"  className="px-2 py-2.5 text-right text-slate-600 tabular-nums">{fc(d.gp)}</td>,
                       <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.channelCost > 0 ? fc(d.channelCost) : "—"}</td>,
                       <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", cm1Color(d.cm1))}>{fc(d.cm1)}</td>,
                       <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                       <td key="mom" className={cn("px-2 py-2.5 text-right font-medium", momColor(d.momPct))}>
                         {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
+                      </td>,
+                      <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">
+                        {d.three_hk_pct != null ? pct(d.three_hk_pct) : "—"}
                       </td>,
                     ]
                   })}
