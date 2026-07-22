@@ -89,7 +89,9 @@ export async function GET(req: NextRequest) {
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  const cacheKey = `qb2b_v1:${quarter}:${year}:${regionFilter}:${companyCode}:${todayStr}`
+  // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc. Bump v2 vì shape đổi (thêm byRegion).
+  void regionFilter
+  const cacheKey = `qb2b_v2:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -243,31 +245,36 @@ export async function GET(req: NextRequest) {
         }
       })
 
-      // Apply region filter
-      const customers = Array.from(customerMap.values()).filter(c => {
-        if (regionFilter === "ALL") return true
-        return c.region === regionFilter
-      })
+      // KHÔNG lọc region ở server nữa — trả về đủ cả VN+US, client tự lọc/tách (filter tức thì, hết bug cache).
+      const customers = Array.from(customerMap.values())
 
       const pct = (n: number, d: number) => d > 0 ? Math.round(n / d * 1000) / 10 : 0
       const r2 = (n: number) => Math.round(n)
 
       // Build customer summaries
       const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+      type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number }
+      const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
+      interface CustRow {
+        code: string; name: string; region: string; priceListName: string | null
+        revenue: number; gm: number; gmPct: number; cc: number; cm1: number
+        cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
+      }
       const tierMap = new Map<string, {
         tier: string
-        custList: {
-          code: string; name: string; region: string; priceListName: string | null
-          revenue: number; gm: number; gmPct: number; cc: number; cm1: number
-          cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
-        }[]
-        monthAgg: Map<string, { revenue: number; gm: number; cc: number; cm1: number; hk3: number }>
+        custList: CustRow[]
+        monthAgg: Map<string, MAgg>                              // ALL region
+        monthAggR: { VN: Map<string, MAgg>; US: Map<string, MAgg> }  // theo region
       }>()
 
-      TIER_ORDER.forEach(tier => tierMap.set(tier, { tier, custList: [], monthAgg: new Map() }))
+      TIER_ORDER.forEach(tier => tierMap.set(tier, {
+        tier, custList: [], monthAgg: new Map(),
+        monthAggR: { VN: new Map(), US: new Map() },
+      }))
 
       customers.forEach(cust => {
         const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
+        const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
         let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
 
         months.forEach(m => {
@@ -278,10 +285,14 @@ export async function GET(req: NextRequest) {
           totCc   += md.cc
           totHk3  += md.hk3
 
-          const ta = tier.monthAgg.get(m) || { revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 }
-          ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += md.cc
-          ta.cm1 += md.gm - md.cc; ta.hk3 += md.hk3
-          tier.monthAgg.set(m, ta)
+          const acc = (map: Map<string, MAgg>) => {
+            const ta = map.get(m) || emptyMAgg()
+            ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += md.cc
+            ta.cm1 += md.gm - md.cc; ta.hk3 += md.hk3
+            map.set(m, ta)
+          }
+          acc(tier.monthAgg)              // ALL
+          acc(tier.monthAggR[reg])        // region
         })
 
         const totCm1 = totGm - totCc
@@ -291,7 +302,7 @@ export async function GET(req: NextRequest) {
 
         tier.custList.push({
           code: cust.code, name: cust.name,
-          region: cust.region, priceListName: cust.priceListName,
+          region: reg, priceListName: cust.priceListName,
           revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
           cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
           momPct,
@@ -299,42 +310,53 @@ export async function GET(req: NextRequest) {
         })
       })
 
-      // Build tier output
-      const tiers = TIER_ORDER.map(tierName => {
-        const tier = tierMap.get(tierName)!
-        const custList = tier.custList.sort((a, b) => b.revenue - a.revenue)
-
-        const monthRows = months.map(m => {
-          const ma = tier.monthAgg.get(m)
-          if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
-          // MoM at tier level: compare to prior month within quarter
-          const prevIdx = months.indexOf(m) - 1
-          const prevMa = prevIdx >= 0 ? tier.monthAgg.get(months[prevIdx]) : null
-          const momPct = prevMa && prevMa.cm1 !== 0
-            ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
-            : null
-          return {
-            month: m, hasData: true,
-            revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
-            cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
-            momPct, hk3Pct: pct(ma.hk3, ma.revenue),
-          }
-        })
-
-        const totRev = tier.custList.reduce((s, c) => s + c.revenue, 0)
-        const totGm  = tier.custList.reduce((s, c) => s + c.gm, 0)
-        const totCc  = tier.custList.reduce((s, c) => s + c.cc, 0)
-        const totCm1 = tier.custList.reduce((s, c) => s + c.cm1, 0)
-        const totHk3 = tier.custList.reduce((s, c) => s + c.hk3Rev, 0)
-
+      // helper: dựng month rows từ 1 map agg (dùng chung cho ALL/VN/US)
+      const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m, idx) => {
+        const ma = agg.get(m)
+        if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
+        const prevMa = idx > 0 ? agg.get(months[idx - 1]) : null
+        const momPct = prevMa && prevMa.cm1 !== 0
+          ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
+          : null
         return {
-          tier: tierName,
+          month: m, hasData: true,
+          revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
+          cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
+          momPct, hk3Pct: pct(ma.hk3, ma.revenue),
+        }
+      })
+
+      // helper: tổng từ 1 danh sách customer
+      const buildTotals = (custs: CustRow[]) => {
+        const totRev = custs.reduce((s, c) => s + c.revenue, 0)
+        const totGm  = custs.reduce((s, c) => s + c.gm, 0)
+        const totCc  = custs.reduce((s, c) => s + c.cc, 0)
+        const totCm1 = custs.reduce((s, c) => s + c.cm1, 0)
+        const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
+        return {
           totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
           totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
           totalHk3Pct: pct(totHk3, totRev),
-          months: monthRows,
+        }
+      }
+
+      // Build tier output — kèm breakdown theo region VN/US
+      const tiers = TIER_ORDER.map(tierName => {
+        const tier = tierMap.get(tierName)!
+        const custList = tier.custList.sort((a, b) => b.revenue - a.revenue)
+        const vnCusts = custList.filter(c => c.region === "VN")
+        const usCusts = custList.filter(c => c.region === "US")
+
+        return {
+          tier: tierName,
+          ...buildTotals(custList),
+          months: buildMonthRows(tier.monthAgg),
           customers: custList,
           customerCount: custList.length,
+          byRegion: {
+            VN: { ...buildTotals(vnCusts), months: buildMonthRows(tier.monthAggR.VN), customers: vnCusts, customerCount: vnCusts.length },
+            US: { ...buildTotals(usCusts), months: buildMonthRows(tier.monthAggR.US), customers: usCusts, customerCount: usCusts.length },
+          },
         }
       }).filter(t => t.totalRevenue > 0)
 

@@ -179,10 +179,11 @@ function QuarterlyContent() {
   const fetchB2BTiers = useCallback(async () => {
     setB2bTiersLoading(true)
     try {
-      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&region=${b2bRegion}&companyCode=ALL`)
+      // Không truyền region — server trả đủ VN+US, filter ALL/VN/US xử lý client-side (tức thì, không re-fetch)
+      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&companyCode=ALL`)
       if (res.ok) setB2bTiers(await res.json())
     } catch {} finally { setB2bTiersLoading(false) }
-  }, [selQ, selYear, b2bRegion])
+  }, [selQ, selYear])
 
   useEffect(() => { fetchReport(); loadTargets() }, [fetchReport, loadTargets])
   useEffect(() => { fetchB2BTiers() }, [fetchB2BTiers])
@@ -550,26 +551,36 @@ const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> =
   Silver:    { bg: "bg-slate-50", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" },
 }
 
+const REGION_META: Record<string, { flag: string; label: string }> = {
+  VN: { flag: "🇻🇳", label: "Việt Nam (VND)" },
+  US: { flag: "🇺🇸", label: "Quốc tế (USD)" },
+}
+
 function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, expanded, onToggle }:
   { b2bTiers: any; loading: boolean; months: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
-  const tiers: any[] = b2bTiers?.tiers ?? []
+  const allTiers: any[] = b2bTiers?.tiers ?? []
 
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
   const colCount = SUB.length
 
-  const selectedTierData = tiers.find((t: any) => t.tier === selectedTier)
-  const filteredCustomers = (selectedTierData?.customers ?? []).filter((c: any) =>
-    !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
-  )
+  // Lấy view theo region hiện tại: ALL → dùng tổng tier; VN/US → dùng byRegion
+  const pickView = (t: any) => (region === "ALL" ? t : { ...t, ...(t.byRegion?.[region] ?? {}) })
+  // Chỉ hiện nhóm có dữ liệu ở region đang chọn
+  const tiers = allTiers.filter((t: any) => (region === "ALL" ? t.totalRevenue > 0 : (t.byRegion?.[region]?.totalRevenue ?? 0) > 0))
+
+  const selectedTierData = allTiers.find((t: any) => t.tier === selectedTier)
+  // Các region cần hiển thị trong panel chi tiết
+  const regionsToShow: ("VN" | "US")[] = region === "ALL" ? ["VN", "US"] : [region as "VN" | "US"]
+  const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-slate-400" />
-          <h2 className="text-lg font-bold text-slate-900">B2B — Chi tiết theo Phân khúc (Hàng) × Tháng (Cột)</h2>
+          <h2 className="text-lg font-bold text-slate-900">B2B — Chi tiết theo Nhóm (Hàng) × Tháng (Cột)</h2>
         </div>
         <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
           {/* Region filter */}
@@ -578,7 +589,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
               <button key={r} onClick={() => onRegionChange(r)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
                   region === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
-                {r}
+                {r === "ALL" ? "ALL" : `${REGION_META[r].flag} ${r}`}
               </button>
             ))}
           </div>
@@ -594,10 +605,10 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
             <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#003B95]">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Phân khúc</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Nhóm</th>
                   {months.map(m => {
                     const [y, mo] = m.split("-")
-                    const tierMonth = tiers[0]?.months.find((x: any) => x.month === m)
+                    const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
                     return (
                       <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
@@ -618,18 +629,19 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
               <tbody>
                 {loading && (
                   <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
-                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu phân khúc...
+                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu nhóm...
                   </td></tr>
                 )}
                 {!loading && tiers.length === 0 && (
-                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B tier cho {region !== "ALL" ? region + " " : ""}kỳ này.</td></tr>
+                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
                 )}
-                {!loading && tiers.map((tier: any, ri: number) => {
-                  const colors = TIER_COLORS[tier.tier] || TIER_COLORS.Strategic
-                  const isSel = selectedTier === tier.tier
+                {!loading && tiers.map((tierRaw: any, ri: number) => {
+                  const tier = pickView(tierRaw)
+                  const colors = TIER_COLORS[tierRaw.tier] || TIER_COLORS.Strategic
+                  const isSel = selectedTier === tierRaw.tier
                   return (
-                    <tr key={tier.tier}
-                      onClick={() => setSelectedTier(isSel ? null : tier.tier)}
+                    <tr key={tierRaw.tier}
+                      onClick={() => setSelectedTier(isSel ? null : tierRaw.tier)}
                       className={cn("border-b border-slate-100 cursor-pointer transition-colors",
                         ri % 2 === 0 ? "bg-white" : "bg-slate-50/40",
                         isSel && "ring-1 ring-inset ring-[#003B95]",
@@ -637,7 +649,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                       <td className="px-4 py-2.5 sticky left-0 border-r border-slate-100 font-bold" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                         <div className="flex items-center gap-2">
                           {isSel ? <ChevronDown className="w-3.5 h-3.5 text-[#003B95]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
-                          <span className={cn("text-xs font-bold", colors.text)}>{tier.tier}</span>
+                          <span className={cn("text-xs font-bold", colors.text)}>{tierRaw.tier}</span>
                           <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
                       </td>
@@ -668,68 +680,87 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
             </table>
           </div>
 
-          {/* Customer detail panel */}
+          {/* Customer detail panel — tách theo region VN / US */}
           {selectedTierData && (
-            <div className="border-t border-slate-200 p-5 space-y-3">
+            <div className="border-t border-slate-200 p-5 space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-slate-500" />
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                    Khách hàng phân khúc: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
+                    Khách hàng nhóm: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
                   </h3>
-                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{selectedTierData.customerCount} khách hàng</span>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type="text" placeholder="Tìm tên, mã KH..."
                     value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 w-56"
+                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
                   />
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-lg border border-slate-100">
-                <table className="w-full text-[11px] border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100">
-                      <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%MoM</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCustomers.map((c: any, i: number) => {
-                      const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
-                      return (
-                        <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
-                          <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>
-                          <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
-                          <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
-                          <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
-                          <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
-                          <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{c.cc > 0 ? fc(c.cc) : "—"}</td>
-                          <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
-                          <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
-                          <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
-                          <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
-                        </tr>
-                      )
-                    })}
-                    {filteredCustomers.length === 0 && (
-                      <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400 italic text-xs">
-                        {custSearch ? `Không tìm thấy khách hàng khớp "${custSearch}"` : "Không có khách hàng"}
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+
+              {regionsToShow.map(reg => {
+                const rd = selectedTierData.byRegion?.[reg]
+                const custs = (rd?.customers ?? []).filter(matchSearch)
+                if (!rd || (rd.customerCount ?? 0) === 0) return null
+                return (
+                  <div key={reg} className="space-y-2">
+                    {/* Region sub-header */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base">{REGION_META[reg].flag}</span>
+                      <span className="text-xs font-bold text-[#003B95] uppercase tracking-wide">{reg} — {REGION_META[reg].label}</span>
+                      <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rd.customerCount} KH</span>
+                      <span className="text-[10px] text-slate-400">Revenue {fc(rd.totalRevenue)} · CM1 <span className={cm1Color(rd.totalCm1)}>{fc(rd.totalCm1)}</span> ({pct(rd.totalCm1Pct)})</span>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-slate-100">
+                      <table className="w-full text-[11px] border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%MoM</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {custs.map((c: any, i: number) => {
+                            const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                            return (
+                              <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
+                                <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>
+                                <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
+                                <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
+                                <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
+                                <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
+                                <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{c.cc > 0 ? fc(c.cc) : "—"}</td>
+                                <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
+                                <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
+                                <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
+                                <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
+                              </tr>
+                            )
+                          })}
+                          {custs.length === 0 && (
+                            <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                              {custSearch ? `Không tìm thấy KH khớp "${custSearch}"` : "Không có khách hàng"}
+                            </td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
+              {regionsToShow.every(reg => (selectedTierData.byRegion?.[reg]?.customerCount ?? 0) === 0) && (
+                <p className="text-center text-slate-400 italic text-xs py-4">Nhóm này không có khách hàng ở {region !== "ALL" ? region : "khu vực nào"}.</p>
+              )}
             </div>
           )}
         </div>
