@@ -742,6 +742,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                           <tr className="bg-slate-100">
                             <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>
                             <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Bảng giá</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
@@ -759,6 +760,11 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                               <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
                                 <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>
                                 <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  {c.priceListName
+                                    ? <span className="text-[10px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded" title={c.priceListName}>{c.priceListName}</span>
+                                    : <span className="text-slate-300">—</span>}
+                                </td>
                                 <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
                                 <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
@@ -771,7 +777,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                             )
                           })}
                           {custs.length === 0 && (
-                            <tr><td colSpan={10} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                            <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-400 italic text-xs">
                               {custSearch ? `Không tìm thấy KH khớp "${custSearch}"` : "Không có khách hàng"}
                             </td></tr>
                           )}
