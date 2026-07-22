@@ -189,34 +189,48 @@ function ApiTester() {
 }
 
 function DbBrowser() {
-  const [tables, setTables] = useState<string[]>([])
-  const [filter, setFilter] = useState("")
-  const [selected, setSelected] = useState<string | null>(null)
-  const [tablesErr, setTablesErr] = useState<string | null>(null)
+  const [source, setSource]           = useState<"supabase" | "turso">("supabase")
+  const [tables, setTables]           = useState<string[]>([])
+  const [filter, setFilter]           = useState("")
+  const [selected, setSelected]       = useState<string | null>(null)
+  const [tablesErr, setTablesErr]     = useState<string | null>(null)
   const [loadingTables, setLoadingTables] = useState(true)
 
-  // Đọc OpenAPI live nên bấm "Làm mới" là thấy ngay bảng mới thêm trong Supabase.
   const loadTables = useCallback(() => {
-    setLoadingTables(true); setTablesErr(null)
-    fetch("/api/config/db/tables").then(async r => {
+    setLoadingTables(true); setTablesErr(null); setSelected(null)
+    const url = source === "turso" ? "/api/config/db/turso-tables" : "/api/config/db/tables"
+    fetch(url).then(async r => {
       const d = await r.json()
       if (!r.ok) { setTablesErr(d?.error || "Không tải được danh sách bảng"); return }
       setTables(d.tables || [])
     }).catch(e => setTablesErr(e.message)).finally(() => setLoadingTables(false))
-  }, [])
+  }, [source])
   useEffect(() => { loadTables() }, [loadTables])
 
   const filtered = tables.filter(t => t.toLowerCase().includes(filter.toLowerCase()))
 
+  const sourceBtn = (s: "supabase" | "turso", label: string, color: string) => (
+    <button onClick={() => setSource(s)}
+      className={cn("px-3 py-1 text-[11px] font-bold rounded-md transition-all",
+        source === s ? `${color} text-white shadow-sm` : "text-slate-500 hover:bg-slate-100")}>
+      {label}
+    </button>
+  )
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[640px]">
-        <div className="p-3 border-b border-slate-100">
+        <div className="p-3 border-b border-slate-100 space-y-2">
+          {/* Source selector */}
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            {sourceBtn("supabase", "Supabase", "bg-emerald-500")}
+            {sourceBtn("turso", "Turso", "bg-sky-500")}
+          </div>
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
             <Search className="w-3.5 h-3.5 text-slate-400" />
             <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Tìm bảng..." className="flex-1 bg-transparent text-sm outline-none" />
           </div>
-          <div className="flex items-center justify-between mt-1.5 px-1">
+          <div className="flex items-center justify-between px-1">
             <p className="text-[10px] text-slate-400">{tables.length} bảng</p>
             <button onClick={loadTables} disabled={loadingTables} className="flex items-center gap-1 text-[10px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50">
               <RefreshCw className={cn("w-3 h-3", loadingTables && "animate-spin")} />Làm mới
@@ -228,6 +242,8 @@ function DbBrowser() {
             <div className="flex justify-center py-10"><RefreshCw className="w-5 h-5 text-amber-500 animate-spin" /></div>
           ) : tablesErr ? (
             <p className="p-4 text-xs text-rose-600">{tablesErr}</p>
+          ) : filtered.length === 0 ? (
+            <p className="p-4 text-xs text-slate-400 text-center italic">Không có bảng nào.</p>
           ) : (
             filtered.map(t => (
               <button key={t} onClick={() => setSelected(t)} className={cn("w-full text-left px-4 py-2 text-xs font-mono border-l-2 transition-colors truncate", selected === t ? "bg-amber-50 border-amber-500 text-amber-700 font-bold" : "border-transparent text-slate-600 hover:bg-slate-50")}>
@@ -239,11 +255,13 @@ function DbBrowser() {
       </div>
 
       <div className="min-w-0">
-        {selected ? <TableView name={selected} /> : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-16 text-center text-sm text-slate-400">
-            Chọn 1 bảng bên trái để xem dữ liệu.
-          </div>
-        )}
+        {selected
+          ? <TableView name={selected} source={source} />
+          : (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-16 text-center text-sm text-slate-400">
+              Chọn 1 bảng bên trái để xem dữ liệu.
+            </div>
+          )}
       </div>
     </div>
   )
@@ -251,7 +269,7 @@ function DbBrowser() {
 
 const PAGE_SIZE = 50
 
-function TableView({ name }: { name: string }) {
+function TableView({ name, source }: { name: string; source: "supabase" | "turso" }) {
   const [rows, setRows] = useState<Record<string, any>[]>([])
   const [columns, setColumns] = useState<string[]>([])
   const [count, setCount] = useState(0)
@@ -261,15 +279,17 @@ function TableView({ name }: { name: string }) {
 
   const load = useCallback((off: number) => {
     setLoading(true); setErr(null)
-    fetch(`/api/config/db/table?name=${encodeURIComponent(name)}&limit=${PAGE_SIZE}&offset=${off}`).then(async r => {
+    const endpoint = source === "turso"
+      ? `/api/config/db/turso-table?name=${encodeURIComponent(name)}&limit=${PAGE_SIZE}&offset=${off}`
+      : `/api/config/db/table?name=${encodeURIComponent(name)}&limit=${PAGE_SIZE}&offset=${off}`
+    fetch(endpoint).then(async r => {
       const d = await r.json()
       if (!r.ok) { setErr(d?.error || "Không tải được dữ liệu"); setRows([]); setColumns([]); return }
       setRows(d.rows || [])
       setColumns(d.columns || [])
-      // count chỉ trả ở trang đầu (offset 0); các trang sau giữ nguyên count đã có.
       if (off === 0) setCount(d.count || 0)
     }).catch(e => setErr(e.message)).finally(() => setLoading(false))
-  }, [name])
+  }, [name, source])
 
   useEffect(() => { setOffset(0); load(0) }, [name, load])
 
@@ -280,8 +300,11 @@ function TableView({ name }: { name: string }) {
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-amber-500" />
+          <Database className={cn("w-4 h-4", source === "turso" ? "text-sky-500" : "text-emerald-500")} />
           <span className="font-mono font-bold text-slate-800 text-sm">{name}</span>
+          <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", source === "turso" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700")}>
+            {source === "turso" ? "Turso" : "Supabase"}
+          </span>
           <span className="text-xs text-slate-400">{count.toLocaleString()} dòng</span>
         </div>
         <div className="flex items-center gap-2">

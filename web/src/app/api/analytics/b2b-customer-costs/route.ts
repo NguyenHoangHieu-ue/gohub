@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
+import { flushAnalyticsCacheByPrefixes } from "@/lib/analytics-helpers"
 
 // Lưu chi phí kênh nhập tay cho từng KH B2B theo tháng (batch upsert) — Turso.
 // Body: { costs: [{ month, customer_code, cost_type, cost_value, cost_lines }] }
@@ -93,8 +94,17 @@ export async function POST(req: NextRequest) {
       saved++
     }
 
+    // Xoá cache L1+L2 cho tất cả key qb2b_v4 của các quý bị ảnh hưởng.
+    // Thiếu bước này → cache L2 (Supabase, TTL 12h) trả data cũ dù Turso đã lưu mới.
+    const affectedPrefixes = [...new Set(rows.map(r => {
+      const [y, m] = r.month.split("-")
+      return `qb2b_v4:Q${Math.ceil(parseInt(m) / 3)}:${y}:`
+    }))]
+    flushAnalyticsCacheByPrefixes(affectedPrefixes).catch(() => { /* non-fatal */ })
+
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
+    console.error("[b2b-customer-costs POST]", e.message)
     return NextResponse.json({ error: e.message ?? "Unknown error" }, { status: 500 })
   }
 }

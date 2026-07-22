@@ -869,7 +869,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
         <div>
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + quarterMonths.length * colCount * 72)}px` }}>
+            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (quarterMonths.length + 1) * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#003B95]">
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Nhóm</th>
@@ -883,6 +883,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       </th>
                     )
                   })}
+                  <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a4a9e] whitespace-nowrap bg-[#1e3a8a]">
+                    Tổng Quý
+                  </th>
                 </tr>
                 <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
@@ -891,16 +894,21 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       {h}
                     </th>
                   )))}
+                  {SUB.map((h, i) => (
+                    <th key={`qt-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#162d74]", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={1 + quarterMonths.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
+                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
                     <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu nhóm...
                   </td></tr>
                 )}
                 {!loading && tiers.length === 0 && (
-                  <tr><td colSpan={1 + quarterMonths.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
+                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
                 )}
                 {!loading && tiers.map((tierRaw: any, ri: number) => {
                   const tier = pickView(tierRaw)
@@ -940,6 +948,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
                         ]
                       })}
+                      {/* Tổng Quý */}
+                      <td className="px-2 py-2.5 text-right font-semibold text-slate-700 tabular-nums border-l border-blue-200 bg-blue-50/60">{fc(tier.totalRevenue)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-600 tabular-nums bg-blue-50/60">{fc(tier.totalGm)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{tier.totalCc > 0 ? fc(tier.totalCc) : "—"}</td>
+                      <td className={cn("px-2 py-2.5 text-right font-bold tabular-nums bg-blue-50/60", cm1Color(tier.totalCm1))}>{fc(tier.totalCm1)}</td>
+                      <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(tier.totalCm1))}>{pct(tier.totalCm1Pct)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60">{pct(tier.totalHk3Pct)}</td>
                     </tr>
                   )
                 })}
