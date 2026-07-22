@@ -226,24 +226,66 @@ function AnalyticsSettings() {
           </span>
         </div>
         {db && (
-          <div className="p-6 text-sm">
+          <div className="p-6 text-sm space-y-5">
             {db.error ? <p className="text-rose-600">{db.error}</p> : (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-400">Kiểm tra lúc {fmtTime(db.checkedAt)}</p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {(db.warehouse || []).map((w: any) => (
-                    <div key={w.table} className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
-                      <p className="font-bold text-slate-700 text-xs truncate" title={w.table}>{w.table}</p>
-                      {w.error ? <p className="text-rose-500 text-xs mt-1">{w.error}</p> : (
-                        <>
-                          <p className="text-slate-500 text-xs mt-1">{w.rows.toLocaleString("vi-VN")} dòng</p>
-                          <p className="text-slate-500 text-xs">Dữ liệu mới nhất: <span className="font-medium text-slate-700">{w.latest ? w.latest.slice(0, 10) : "—"}</span></p>
-                          {w.lastLoaded && <p className="text-slate-400 text-[11px]">ETL nạp: {fmtTime(w.lastLoaded)}</p>}
-                        </>
-                      )}
-                    </div>
-                  ))}
+              <>
+                <p className="text-xs text-slate-400">Kiểm tra lúc {fmtTime(db.checkedAt)} · Bấm Kiểm tra lại để refresh schema cache dim_customer</p>
+
+                {/* Fact tables */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Fact Tables (gohub_dw)</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {(db.warehouse || []).map((w: any) => (
+                      <div key={w.table} className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
+                        <p className="font-bold text-slate-700 text-xs truncate" title={w.table}>{w.table}</p>
+                        {w.error ? <p className="text-rose-500 text-xs mt-1">{w.error}</p> : (
+                          <>
+                            <p className="text-slate-500 text-xs mt-1">{w.rows.toLocaleString("vi-VN")} dòng</p>
+                            <p className="text-slate-500 text-xs">Mới nhất: <span className="font-medium text-slate-700">{w.latest ? w.latest.slice(0, 10) : "—"}</span></p>
+                            {w.lastLoaded && <p className="text-slate-400 text-[11px]">ETL: {fmtTime(w.lastLoaded)}</p>}
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Dim + reference tables */}
+                {db.dims && db.dims.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Dim &amp; Reference Tables (gohub_dw)</p>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {(db.dims as any[]).map((d: any) => (
+                        <div key={d.table} className={cn("border rounded-lg p-3", d.error ? "border-rose-200 bg-rose-50/30" : d.rows === 0 ? "border-amber-200 bg-amber-50/30" : "border-slate-100 bg-slate-50/40")}>
+                          <p className="font-bold text-slate-700 text-xs truncate" title={d.table}>{d.table}</p>
+                          {d.error ? (
+                            <p className="text-rose-500 text-xs mt-1">{d.error}</p>
+                          ) : (
+                            <>
+                              <p className={cn("text-xs mt-1 font-medium", d.rows === 0 ? "text-amber-600" : "text-slate-500")}>
+                                {d.rows.toLocaleString("vi-VN")} dòng
+                              </p>
+                              {d.columns && d.columns.length > 0 && (
+                                <div className="mt-1.5 flex flex-wrap gap-0.5">
+                                  {(d.columns as { name: string; type: string }[]).slice(0, 6).map((col) => (
+                                    <span key={col.name} className="text-[9px] bg-slate-200 text-slate-600 px-1 py-0.5 rounded font-mono" title={col.type}>
+                                      {col.name}
+                                    </span>
+                                  ))}
+                                  {d.columns.length > 6 && (
+                                    <span className="text-[9px] text-slate-400">+{d.columns.length - 6}</span>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Supabase products */}
                 {db.products && (
                   <div className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
                     <p className="font-bold text-slate-700 text-xs">Sản phẩm (Supabase sku_catalog)</p>
@@ -252,6 +294,8 @@ function AnalyticsSettings() {
                     )}
                   </div>
                 )}
+
+                {/* Query cache */}
                 {db.cache != null && (
                   <div className="border border-amber-100 rounded-lg p-3 bg-amber-50/40">
                     <p className="font-bold text-amber-700 text-xs">Query Cache (Supabase L2 · TTL 10 phút)</p>
@@ -261,11 +305,11 @@ function AnalyticsSettings() {
                     </p>
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         )}
-        {!db && <div className="px-6 py-4 text-xs text-slate-400">Bấm “Kiểm tra” để xem kho dữ liệu (gohub_dw) còn cập nhật không và lần sync sản phẩm gần nhất.</div>}
+        {!db && <div className="px-6 py-4 text-xs text-slate-400">Bấm "Kiểm tra" để xem toàn bộ kho dữ liệu gohub_dw (fact + dim + reference) và trạng thái sync.</div>}
       </div>
 
       {/* Channel & Customer Tiers (Partner Tiers) — gộp từ Admin sang đây (s82) */}

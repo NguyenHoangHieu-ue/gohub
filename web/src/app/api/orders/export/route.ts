@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getPartnerTiers } from "@/lib/analytics-helpers"
+import { getDimCustomerCols } from "@/lib/dim-schema"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
   const quantityCol = isSales ? "quantity" : "fulfilled_quantity"
 
   try {
+    const { codeCol: custCodeCol, nameCol: custNameCol } = await getDimCustomerCols()
     const params: unknown[] = [startDate, endDate]
     let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2`
 
@@ -121,12 +123,12 @@ export async function GET(req: NextRequest) {
               s.name as order_source,
               ${locationCol},
               COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unknown') as staff,
-              COALESCE(c.name, NULLIF(TRIM(f.customer_code), ''), 'Unknown') as customer
+              COALESCE(c.${custNameCol}, NULLIF(TRIM(f.customer_code), ''), 'Unknown') as customer
        FROM ${mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        ${locationJoin}
        LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-       LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
+       LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
        LEFT JOIN dim_sku v ON f.sku = v.sku
        ${where}
        ORDER BY f.${dateCol}::date DESC`,

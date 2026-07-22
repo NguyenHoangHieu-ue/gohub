@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource } from "@/lib/analytics-helpers"
+import { getDimCustomerCols } from "@/lib/dim-schema"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,10 +19,13 @@ export async function POST(req: NextRequest) {
   try {
     const source = getAnalyticsSource(dateColumn)
 
+    // Probe dim_customer schema để dùng đúng tên cột
+    const { codeCol: custCodeCol, nameCol: custNameCol } = await getDimCustomerCols()
+
     // Resolve customer names → codes
     const customerNames = customers.map((c: string) => `'${String(c).trim().replace(/'/g, "''")}'`).join(",")
     const codeRows = await queryAnalytics<{ code: string; name: string }>(
-      `SELECT TRIM(code) as code, TRIM(name) as name FROM dim_customer WHERE TRIM(name) IN (${customerNames})`
+      `SELECT TRIM(${custCodeCol}::text) as code, TRIM(${custNameCol}::text) as name FROM dim_customer WHERE TRIM(${custNameCol}::text) IN (${customerNames})`
     )
 
     const codeToName = new Map<string, string>()
