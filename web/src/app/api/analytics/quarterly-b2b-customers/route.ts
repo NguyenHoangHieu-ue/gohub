@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
-import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { fetchCustomerCosts, calcRecordCost } from "@/lib/b2b-customer-cost"
 
 // Tier & region classification từ dim_customer.price_list_name + currency_code
 // Spec: không có Strategic/VIP/Silver/Gold thì xếp vào Strategic (default)
@@ -36,36 +37,6 @@ function getQuarterMonths(quarter: string, year: number): string[] {
   })
 }
 
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
-
-function computeChannelCostForCustomer(
-  channelCosts: any[], channel: string, month: string,
-  customerRevenue: number, channelTotalRevenue: number,
-  startD: string, endD: string
-): number {
-  let cost = 0
-  const dim = getDaysInMonth(month)
-  const ratio = dim > 0 ? getDaysInRange(startD, endD, month) / dim : 0
-
-  channelCosts.filter(c => c.channel === channel && c.month === month).forEach(c => {
-    let maxPct = 0
-    COST_KEYS.forEach(key => {
-      const v = (c as any)[key]
-      if (!v) return
-      if (v.type === "amount") {
-        // Amount cost: pro-rate by customer revenue fraction within channel
-        const fraction = channelTotalRevenue > 0 ? customerRevenue / channelTotalRevenue : 0
-        cost += (v.value || 0) * ratio * fraction
-      } else {
-        // Percent cost: apply directly to customer revenue (max of all pct types)
-        maxPct = Math.max(maxPct, v.value || 0)
-      }
-    })
-    cost += customerRevenue * maxPct / 100
-  })
-  return cost
-}
-
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const guard = analyticsGuard(req, session)
@@ -92,9 +63,11 @@ export async function GET(req: NextRequest) {
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc. Bump v2 vì shape đổi (thêm byRegion).
+  // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc.
   void regionFilter
-  const cacheKey = `qb2b_v3:${quarter}:${year}:${companyCode}:${todayStr}`
+  const refresh = searchParams.get("refresh") === "1"  // bypass cache sau khi lưu chi phí
+  // v4: chi phí kênh nhập tay per-KH/tháng (b2b_customer_cost_monthly) thay pro-rate
+  const cacheKey = `qb2b_v4:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -109,8 +82,11 @@ export async function GET(req: NextRequest) {
 
       const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
 
+      // Chi phí kênh nhập tay per-KH/tháng (Supabase b2b_customer_cost_monthly)
+      const costMap = await fetchCustomerCosts(months)
+
       // Main query: customer-level revenue breakdown by month
-      const [customerRows, priorRows, channelTotals] = await Promise.all([
+      const [customerRows, priorRows] = await Promise.all([
         queryAnalytics<{
           month: string; customer_code: string; customer_name: string
           price_list_name: string | null; currency_code: string | null; channel_name: string
@@ -155,34 +131,12 @@ export async function GET(req: NextRequest) {
             AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
           GROUP BY 1
         `),
-        // Channel total revenue per month (for amount-cost pro-rating)
-        queryAnalytics<{ month: string; channel_name: string; total_revenue: string }>(`
-          SELECT
-            TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
-            COALESCE(TRIM(s.channel_name), '') as channel_name,
-            SUM(f.fulfilled_revenue_amount_vnd) as total_revenue
-          FROM fact_fulfillment_revenue f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.created_date::date >= '${qStartDate}'
-            AND f.created_date::date <= '${qEndDate}'
-            ${companyFilter}
-            AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-          GROUP BY 1, 2
-        `),
       ])
-
-      const { channelCosts } = await fetchCosts(months)
 
       // Prior month map for MoM
       const priorMap = new Map<string, { gm: number; revenue: number }>()
       priorRows.forEach(r => {
         priorMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
-      })
-
-      // Channel total revenue map for amount-cost pro-rating
-      const channelTotalMap = new Map<string, number>()
-      channelTotals.forEach(r => {
-        channelTotalMap.set(`${r.month}_${r.channel_name}`, parseFloat(r.total_revenue || "0"))
       })
 
       // Month metadata (for pro-rata)
@@ -200,11 +154,12 @@ export async function GET(req: NextRequest) {
         return { month: m, mStart, actualEnd, isProjected, factor }
       })
 
-      // Aggregate customer data
+      // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue (để tính cost % trên doanh thu gốc) + factor.
+      interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; factor: number }
       interface CustomerAgg {
         code: string; name: string; priceListName: string | null; currencyCode: string | null
         tier: string; region: string
-        months: Map<string, { revenue: number; gm: number; cc: number; hk3: number }>
+        months: Map<string, CustMonth>
       }
       const customerMap = new Map<string, CustomerAgg>()
 
@@ -224,26 +179,25 @@ export async function GET(req: NextRequest) {
         const cust = customerMap.get(code)!
         const mr = monthMeta.find(m => m.month === row.month)
         if (!mr) return
-        const { mStart, actualEnd, isProjected, factor } = mr
+        const { factor } = mr
 
         const revAct = parseFloat(row.revenue || "0")
         const gmAct  = parseFloat(row.gm   || "0")
         const hk3Act = parseFloat(row.hk3  || "0")
-        const channelTotal = channelTotalMap.get(`${row.month}_${row.channel_name}`) || revAct
-        const ccAct = computeChannelCostForCustomer(channelCosts, row.channel_name, row.month, revAct, channelTotal, mStart, actualEnd)
 
         const existing = cust.months.get(row.month)
         if (existing) {
-          existing.revenue += revAct * factor
-          existing.gm      += gmAct  * factor
-          existing.cc      += isProjected ? ccAct * factor : ccAct
-          existing.hk3     += hk3Act * factor
+          existing.revenue    += revAct * factor
+          existing.gm         += gmAct  * factor
+          existing.hk3        += hk3Act * factor
+          existing.rawRevenue += revAct
         } else {
           cust.months.set(row.month, {
-            revenue: revAct * factor,
-            gm:      gmAct  * factor,
-            cc:      isProjected ? ccAct * factor : ccAct,
-            hk3:     hk3Act * factor,
+            revenue:    revAct * factor,
+            gm:         gmAct  * factor,
+            hk3:        hk3Act * factor,
+            rawRevenue: revAct,
+            factor,
           })
         }
       })
@@ -258,10 +212,12 @@ export async function GET(req: NextRequest) {
       const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
       type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number }
       const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
+      interface CustMonthCost { cost_lines: string; cost_type: string; cost_value: number; revenue: number }
       interface CustRow {
         code: string; name: string; region: string; priceListName: string | null
         revenue: number; gm: number; gmPct: number; cc: number; cm1: number
         cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
+        monthsCost: Record<string, CustMonthCost>
       }
       const tierMap = new Map<string, {
         tier: string
@@ -279,19 +235,29 @@ export async function GET(req: NextRequest) {
         const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
         const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
         let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
+        const monthsCost: Record<string, CustMonthCost> = {}
 
         months.forEach(m => {
           const md = cust.months.get(m)
+          // Chi phí nhập tay của KH cho tháng m (Supabase). % tính trên doanh thu RAW, rồi scale theo factor.
+          const rec = costMap.get(`${m}_${cust.code}`)
+          const monthCost = md ? calcRecordCost(rec, md.rawRevenue) * md.factor : 0
+          monthsCost[m] = {
+            cost_lines: rec?.cost_lines ?? "[]",
+            cost_type:  rec?.cost_type  ?? "amount",
+            cost_value: rec?.cost_value ?? 0,
+            revenue:    md ? r2(md.revenue) : 0,
+          }
           if (!md) return
-          totRev  += md.revenue
-          totGm   += md.gm
-          totCc   += md.cc
-          totHk3  += md.hk3
+          totRev += md.revenue
+          totGm  += md.gm
+          totCc  += monthCost
+          totHk3 += md.hk3
 
           const acc = (map: Map<string, MAgg>) => {
             const ta = map.get(m) || emptyMAgg()
-            ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += md.cc
-            ta.cm1 += md.gm - md.cc; ta.hk3 += md.hk3
+            ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += monthCost
+            ta.cm1 += md.gm - monthCost; ta.hk3 += md.hk3
             map.set(m, ta)
           }
           acc(tier.monthAgg)              // ALL
@@ -310,6 +276,7 @@ export async function GET(req: NextRequest) {
           cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
           momPct,
           hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+          monthsCost,
         })
       })
 
@@ -364,7 +331,7 @@ export async function GET(req: NextRequest) {
       }).filter(t => t.totalRevenue > 0)
 
       return { quarter, year, months, tiers }
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, refresh)
 
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err: any) {

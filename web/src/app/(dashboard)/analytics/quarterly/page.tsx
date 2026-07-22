@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -151,8 +151,16 @@ function QuarterlyContent() {
   const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
   const [b2bTiers, setB2bTiers]   = useState<any>(null)
   const [b2bTiersLoading, setB2bTiersLoading] = useState(false)
+  const [canEditCost, setCanEditCost] = useState(false)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  // Quyền sửa chi phí KH (admin/creator)
+  useEffect(() => {
+    fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.role && ["admin", "creator"].includes(d.role)) setCanEditCost(true)
+    }).catch(() => {})
+  }, [])
 
   const fetchReport = useCallback(async () => {
     setLoading(true)
@@ -176,11 +184,11 @@ function QuarterlyContent() {
     } catch {}
   }, [selQ, selYear])
 
-  const fetchB2BTiers = useCallback(async () => {
+  const fetchB2BTiers = useCallback(async (refresh = false) => {
     setB2bTiersLoading(true)
     try {
       // Không truyền region — server trả đủ VN+US, filter ALL/VN/US xử lý client-side (tức thì, không re-fetch)
-      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&companyCode=ALL`)
+      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&companyCode=ALL${refresh ? "&refresh=1" : ""}`)
       if (res.ok) setB2bTiers(await res.json())
     } catch {} finally { setB2bTiersLoading(false) }
   }, [selQ, selYear])
@@ -478,6 +486,9 @@ function QuarterlyContent() {
         onRegionChange={r => setB2bRegion(r as "ALL" | "VN" | "US")}
         expanded={expandB2B}
         onToggle={() => setExpandB2B(v => !v)}
+        canEditCost={canEditCost}
+        onSaved={() => fetchB2BTiers(true)}
+        notify={notify}
       />
 
       {/* ── B2C channel pivot ── */}
@@ -579,10 +590,36 @@ const REGION_META: Record<string, { flag: string; label: string }> = {
   US: { flag: "🇺🇸", label: "Quốc tế (USD)" },
 }
 
-function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, expanded, onToggle }:
-  { b2bTiers: any; loading: boolean; months: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void }) {
+// ── Chi phí kênh nhập tay per-KH/tháng ──
+interface CostLine { label: string; type: "amount" | "percent"; value: number }
+function parseCostLines(str?: string): CostLine[] {
+  if (!str) return []
+  try {
+    const arr = JSON.parse(str)
+    if (Array.isArray(arr)) return arr.map((l: any) => ({ label: String(l?.label ?? ""), type: l?.type === "percent" ? "percent" : "amount", value: Number(l?.value) || 0 }))
+  } catch {}
+  return []
+}
+// Nhãn hiển thị ô chi phí: "1.000.000đ + 5%"
+function costLabel(lines: CostLine[]): string {
+  let amt = 0, pct = 0
+  lines.forEach(l => { if (l.type === "percent") pct += Number(l.value) || 0; else amt += Number(l.value) || 0 })
+  const parts: string[] = []
+  if (amt > 0) parts.push(Math.round(amt).toLocaleString("vi-VN") + "đ")
+  if (pct > 0) parts.push(pct.toFixed(1) + "%")
+  return parts.length ? parts.join(" + ") : "0đ"
+}
+const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
+
+function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, expanded, onToggle, canEditCost, onSaved, notify }:
+  { b2bTiers: any; loading: boolean; months: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
+    canEditCost?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
+  const [editMode, setEditMode] = useState(false)
+  const [costCust, setCostCust] = useState<any | null>(null)          // KH đang mở modal chi phí
+  const [modalLines, setModalLines] = useState<Record<string, CostLine[]>>({})  // {month: lines[]}
+  const [savingCost, setSavingCost] = useState(false)
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
@@ -597,6 +634,44 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
   // Các region cần hiển thị trong panel chi tiết
   const regionsToShow: ("VN" | "US")[] = region === "ALL" ? ["VN", "US"] : [region as "VN" | "US"]
   const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
+
+  // ── Chi phí KH: mở/sửa/lưu ──
+  const openCostModal = (c: any) => {
+    const lines: Record<string, CostLine[]> = {}
+    months.forEach(m => { lines[m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
+    setModalLines(lines)
+    setCostCust(c)
+  }
+  const closeCostModal = () => { setCostCust(null); setModalLines({}) }
+  const setLine = (m: string, idx: number, patch: Partial<CostLine>) =>
+    setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).map((l, i) => i === idx ? { ...l, ...patch } : l) }))
+  const addLine = (m: string) => setModalLines(prev => ({ ...prev, [m]: [...(prev[m] || []), { label: "", type: "amount", value: 0 }] }))
+  const removeLine = (m: string, idx: number) => setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).filter((_, i) => i !== idx) }))
+
+  const saveCost = async () => {
+    if (!costCust) return
+    setSavingCost(true)
+    try {
+      const costs = months.map(m => ({
+        month: m, customer_code: costCust.code,
+        cost_lines: JSON.stringify((modalLines[m] || []).filter(l => (Number(l.value) || 0) !== 0 || l.label)),
+      }))
+      const res = await fetch("/api/analytics/b2b-customer-costs", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ costs }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d?.ok) {
+        notify?.(true, `Đã lưu chi phí cho ${costCust.name}`)
+        closeCostModal()
+        onSaved?.()
+      } else {
+        notify?.(false, d?.error || "Lưu chi phí thất bại")
+      }
+    } catch (e: any) {
+      notify?.(false, "Lỗi kết nối khi lưu chi phí")
+    } finally { setSavingCost(false) }
+  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -713,15 +788,30 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                     Khách hàng nhóm: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
                   </h3>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text" placeholder="Tìm tên, mã KH..."
-                    value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
-                  />
+                <div className="flex items-center gap-2">
+                  {canEditCost && (
+                    <button
+                      onClick={() => setEditMode(v => !v)}
+                      className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
+                        editMode ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-[#003B95] border-[#003B95]/30 hover:bg-blue-50")}>
+                      <Pencil className="w-3.5 h-3.5" />{editMode ? "Đang sửa chi phí" : "Sửa chi tiết"}
+                    </button>
+                  )}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text" placeholder="Tìm tên, mã KH..."
+                      value={custSearch} onChange={e => setCustSearch(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
+                    />
+                  </div>
                 </div>
               </div>
+              {editMode && (
+                <p className="text-[11px] text-[#003B95] bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                  💡 Bấm vào ô <b>Ch.Cost</b> của từng khách hàng để nhập chi phí kênh theo tháng (nhiều dòng: số tiền hoặc %). CM1 = Gross Margin − Chi phí.
+                </p>
+              )}
 
               {regionsToShow.map(reg => {
                 const rd = selectedTierData.byRegion?.[reg]
@@ -768,7 +858,15 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                                 <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
                                 <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
-                                <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{c.cc > 0 ? fc(c.cc) : "—"}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {editMode && canEditCost
+                                    ? <button onClick={() => openCostModal(c)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 transition-colors"
+                                        title="Nhập chi phí kênh theo tháng">
+                                        <Pencil className="w-3 h-3" />{c.cc > 0 ? fc(c.cc) : "0"}
+                                      </button>
+                                    : <span className="text-slate-500">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
+                                </td>
                                 <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
                                 <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
                                 <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
@@ -792,6 +890,63 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Modal nhập chi phí kênh per-KH/tháng ── */}
+      {costCust && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={closeCostModal}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#003B95]">{costCust.name}</span></h3>
+                <p className="text-[11px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}</p>
+              </div>
+              <button onClick={closeCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {months.map(m => {
+                const lines = modalLines[m] || []
+                const rev = costCust.monthsCost?.[m]?.revenue ?? 0
+                const total = lines.reduce((s, l) => s + (l.type === "percent" ? (Number(l.value) || 0) / 100 * rev : (Number(l.value) || 0)), 0)
+                return (
+                  <div key={m} className="border border-slate-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-700">{mLabel(m)} <span className="text-slate-400 font-normal">· Revenue {fc(rev)}</span></span>
+                      <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm dòng</button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {lines.length === 0 && <p className="text-[11px] text-slate-400 italic">Chưa có chi phí. Bấm "Thêm dòng".</p>}
+                      {lines.map((l, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <input value={l.label} onChange={e => setLine(m, idx, { label: e.target.value })} placeholder="Ghi chú (vd: Phí sàn)"
+                            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                          <select value={l.type} onChange={e => setLine(m, idx, { type: e.target.value as "amount" | "percent" })}
+                            className="px-1.5 py-1 text-xs border border-slate-200 rounded bg-white focus:outline-none">
+                            <option value="amount">đ</option>
+                            <option value="percent">%</option>
+                          </select>
+                          <input type="number" value={l.value || ""} onChange={e => setLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
+                            className="w-28 px-2 py-1 text-xs text-right tabular-nums border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                          <button onClick={() => removeLine(m, idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[11px]">
+                      Chi phí tháng: <span className="font-bold text-slate-800 tabular-nums">{fc(total)}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
+              <button onClick={closeCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Hủy</button>
+              <button onClick={saveCost} disabled={savingCost}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#003B95] rounded-lg hover:bg-[#00337f] disabled:opacity-50">
+                {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu chi phí
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
