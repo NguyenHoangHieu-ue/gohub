@@ -119,14 +119,25 @@ function AnalyticsSettings() {
     setSyncingDimCustomer(true)
     try {
       const r = await fetch("/api/admin/sync-dim-customer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
-      const d = await r.json()
-      if (d.ok) {
-        notify(true, `Sync OK: ${d.synced}/${d.total} khách hàng → Supabase cache`)
+      let d: any = null
+      try {
+        d = await r.json()
+      } catch {
+        // Response không phải JSON — lấy text để hiển thị lỗi rõ hơn
+        const text = await r.text().catch(() => "(no response body)")
+        notify(false, `HTTP ${r.status} — ${text.slice(0, 200)}`)
+        setSyncingDimCustomer(false)
+        return
+      }
+      if (d?.ok) {
+        notify(true, `Sync OK: ${d.synced}/${d.total} khách hàng → Supabase cache (columns: ${d.columns?.join(", ") || "?"})`)
         setDimCustomerStatus({ cacheRows: d.synced, lastSynced: new Date().toISOString(), dwRows: d.total })
       } else {
-        notify(false, d.error || "Sync thất bại")
+        notify(false, `Sync lỗi: ${d?.error || JSON.stringify(d)}`)
       }
-    } catch { notify(false, "Lỗi kết nối") } finally { setSyncingDimCustomer(false) }
+    } catch (e: any) {
+      notify(false, `Lỗi fetch: ${e.message}`)
+    } finally { setSyncingDimCustomer(false) }
   }
   const fmtTime = (s?: string | null) => s ? new Date(s).toLocaleString("vi-VN") : "—"
 

@@ -41,6 +41,12 @@ export async function POST(req: NextRequest) {
 
   // --- Full sync ---
   try {
+    // 0. Test kết nối gohub_dw trước
+    const connTest = await queryAnalytics<{ ok: number }>("SELECT 1 AS ok").catch((e: any) => ({ error: e.message }))
+    if ("error" in connTest) {
+      return NextResponse.json({ error: `Không kết nối được gohub_dw: ${(connTest as any).error}` }, { status: 503 })
+    }
+
     // 1. Probe thực tế dim_customer schema (schema-agnostic)
     const schemaCols = await queryAnalytics<{ column_name: string; data_type: string }>(
       `SELECT column_name, data_type
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
        ORDER BY ordinal_position`
     )
     if (schemaCols.length === 0) {
-      return NextResponse.json({ error: "dim_customer không tồn tại hoặc không có cột" }, { status: 400 })
+      return NextResponse.json({ error: "dim_customer không tồn tại hoặc không có cột nào trong information_schema" }, { status: 400 })
     }
 
     const colNames = schemaCols.map(r => r.column_name)
