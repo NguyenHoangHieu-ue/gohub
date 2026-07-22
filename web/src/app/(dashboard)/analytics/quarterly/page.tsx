@@ -118,7 +118,7 @@ const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", 
 
 function TableHead({ cols }: { cols: string[] }) {
   return (
-    <tr className="bg-slate-800">
+    <tr className="bg-[#003B95]">
       {cols.map((h, i) => (
         <th key={h} className={cn("px-4 py-2.5 text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap", i === 0 ? "text-left" : "text-right")}>
           {h}
@@ -260,7 +260,7 @@ function QuarterlyContent() {
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {quarters.map(q => (
               <button key={q} onClick={() => setSelQ(q)}
-                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all", selQ === q ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50")}>
+                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all", selQ === q ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {q}
               </button>
             ))}
@@ -271,7 +271,7 @@ function QuarterlyContent() {
             </select>
           </div>
           <button onClick={fetchReport} disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] hover:bg-[#00337f] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
             {loading ? "Đang tải…" : "Xem báo cáo"}
           </button>
@@ -294,7 +294,7 @@ function QuarterlyContent() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-900">Target {selQ}-{selYear}</h2>
           <button onClick={saveTargets} disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] hover:bg-[#00337f] disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all">
             <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu Target"}
           </button>
         </div>
@@ -426,7 +426,7 @@ function QuarterlyContent() {
                     )}
                   </>
                 )}
-                <tr className="bg-slate-800 text-white">
+                <tr className="bg-[#003B95] text-white">
                   <td className="px-4 py-3 font-bold text-white">Tổng {selQ}-{selYear}</td>
                   <td className="px-4 py-3 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
@@ -544,7 +544,7 @@ function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act
 // ─── B2B Tier Section ─────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
-  Strategic: { bg: "bg-amber-50", text: "text-amber-800", badge: "bg-amber-100 text-amber-700" },
+  Strategic: { bg: "bg-blue-50", text: "text-[#003B95]", badge: "bg-blue-100 text-[#003B95]" },
   VIP:       { bg: "bg-purple-50", text: "text-purple-800", badge: "bg-purple-100 text-purple-700" },
   Gold:      { bg: "bg-yellow-50", text: "text-yellow-800", badge: "bg-yellow-100 text-yellow-700" },
   Silver:    { bg: "bg-slate-50", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" },
@@ -577,7 +577,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
             {(["ALL", "VN", "US"] as const).map(r => (
               <button key={r} onClick={() => onRegionChange(r)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
-                  region === r ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-50")}>
+                  region === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {r}
               </button>
             ))}
@@ -593,23 +593,23 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
               <thead>
-                <tr className="bg-slate-800">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-slate-800 border-r border-slate-700 min-w-[160px]">Phân khúc</th>
+                <tr className="bg-[#003B95]">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Phân khúc</th>
                   {months.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = tiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
                     return (
-                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-slate-700 whitespace-nowrap">
+                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
                         T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
                       </th>
                     )
                   })}
                 </tr>
-                <tr className="bg-slate-700 text-[9px] text-slate-400 uppercase">
-                  <th className="px-4 py-1.5 sticky left-0 bg-slate-700 border-r border-slate-600" />
+                <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
+                  <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
                   {months.flatMap(m => SUB.map((h, i) => (
-                    <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-slate-600", h === "CM1" && "text-blue-300")}>
+                    <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
                       {h}
                     </th>
                   )))}
@@ -632,11 +632,11 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                       onClick={() => setSelectedTier(isSel ? null : tier.tier)}
                       className={cn("border-b border-slate-100 cursor-pointer transition-colors",
                         ri % 2 === 0 ? "bg-white" : "bg-slate-50/40",
-                        isSel && "ring-1 ring-inset ring-amber-400",
+                        isSel && "ring-1 ring-inset ring-[#003B95]",
                         "hover:bg-blue-50/30")}>
                       <td className="px-4 py-2.5 sticky left-0 border-r border-slate-100 font-bold" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                         <div className="flex items-center gap-2">
-                          {isSel ? <ChevronDown className="w-3.5 h-3.5 text-amber-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                          {isSel ? <ChevronDown className="w-3.5 h-3.5 text-[#003B95]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                           <span className={cn("text-xs font-bold", colors.text)}>{tier.tier}</span>
                           <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
@@ -757,21 +757,21 @@ function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
         <div className="overflow-x-auto">
           <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
             <thead>
-              <tr className="bg-slate-800">
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-slate-800 border-r border-slate-700 min-w-[160px]">Kênh</th>
+              <tr className="bg-[#003B95]">
+                <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Kênh</th>
                 {months.map(m => {
                   const [y, mo] = m.split("-")
                   return (
-                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-slate-700 whitespace-nowrap">
+                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
                       T{parseInt(mo)}/{y}
                     </th>
                   )
                 })}
               </tr>
-              <tr className="bg-slate-700 text-[9px] text-slate-400 uppercase">
-                <th className="px-4 py-1.5 sticky left-0 bg-slate-700 border-r border-slate-600" />
+              <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
+                <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
                 {months.flatMap(m => SUB.map((h, i) => (
-                  <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-slate-600", h === "CM1" && "text-blue-300")}>
+                  <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
                     {h}
                   </th>
                 )))}
