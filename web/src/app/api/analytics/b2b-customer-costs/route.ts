@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { supabaseAdmin } from "@/lib/supabase"
+import { tursoQuery } from "@/lib/turso"
+import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 
-// Lưu chi phí kênh nhập tay cho từng KH B2B theo tháng (batch upsert).
+// Lưu chi phí kênh nhập tay cho từng KH B2B theo tháng (batch upsert) — Turso.
 // Body: { costs: [{ month, customer_code, cost_type, cost_value, cost_lines }] }
 
 export async function POST(req: NextRequest) {
@@ -24,13 +25,13 @@ export async function POST(req: NextRequest) {
       const month = String(c.month || "").trim()
       const code = String(c.customer_code || "").trim()
       if (!month || !code) return null
-      // cost_lines lưu dạng JSON string cho đồng bộ; chuẩn hoá value/type
+      // cost_lines lưu JSON string; chuẩn hoá value/type
       let lines: any[] = []
       try { lines = typeof c.cost_lines === "string" ? JSON.parse(c.cost_lines) : (Array.isArray(c.cost_lines) ? c.cost_lines : []) } catch { lines = [] }
       const cleanLines = lines
         .map((l: any) => ({ label: String(l?.label ?? ""), type: l?.type === "percent" ? "percent" : "amount", value: Number(l?.value) || 0 }))
         .filter((l: any) => l.value !== 0 || l.label)
-      // cost_type/cost_value gộp: nếu có percent → percent (tổng %), else amount (tổng đ)
+      // cost_type/cost_value gộp
       const hasPct = cleanLines.some((l: any) => l.type === "percent")
       const cost_type = hasPct ? "percent" : "amount"
       const cost_value = hasPct
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
         month, customer_code: code,
         cost_type, cost_value,
         cost_lines: JSON.stringify(cleanLines),
+        hasLines: cleanLines.length > 0,
         updated_by: updatedBy,
         updated_at: now,
       }
@@ -49,14 +51,35 @@ export async function POST(req: NextRequest) {
     if (rows.length === 0)
       return NextResponse.json({ error: "Dòng chi phí không hợp lệ" }, { status: 400 })
 
-    const { error } = await supabaseAdmin
-      .from("b2b_customer_cost_monthly")
-      .upsert(rows, { onConflict: "id" })
+    // Đảm bảo bảng tồn tại trên Turso
+    await ensureB2bCostTable()
 
-    if (error)
-      return NextResponse.json({ error: `Lưu thất bại: ${error.message}` }, { status: 500 })
+    const deleteRows = rows.filter(r => !r.hasLines)
+    const upsertRows = rows.filter(r => r.hasLines)
 
-    return NextResponse.json({ ok: true, saved: rows.length })
+    let deleted = 0
+    for (const r of deleteRows) {
+      await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [r.id])
+      deleted++
+    }
+
+    let saved = 0
+    for (const r of upsertRows) {
+      await tursoQuery(
+        `INSERT INTO b2b_customer_cost_monthly (id, month, customer_code, cost_type, cost_value, cost_lines, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           cost_type    = excluded.cost_type,
+           cost_value   = excluded.cost_value,
+           cost_lines   = excluded.cost_lines,
+           updated_by   = excluded.updated_by,
+           updated_at   = excluded.updated_at`,
+        [r.id, r.month, r.customer_code, r.cost_type, r.cost_value, r.cost_lines, r.updated_by, r.updated_at],
+      )
+      saved++
+    }
+
+    return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Unknown error" }, { status: 500 })
   }

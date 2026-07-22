@@ -625,6 +625,7 @@ const REGION_META: Record<string, { flag: string; label: string }> = {
 
 // ── Chi phí kênh nhập tay per-KH/tháng ──
 interface CostLine { label: string; type: "amount" | "percent"; value: number }
+type CustomerCostEdits = Record<string, Record<string, CostLine[]>>
 function parseCostLines(str?: string): CostLine[] {
   if (!str) return []
   try {
@@ -642,6 +643,12 @@ function costLabel(lines: CostLine[]): string {
   if (pct > 0) parts.push(pct.toFixed(1) + "%")
   return parts.length ? parts.join(" + ") : "0đ"
 }
+function cloneCostLines(lines: CostLine[]): CostLine[] {
+  return lines.map(l => ({ label: l.label, type: l.type, value: Number(l.value) || 0 }))
+}
+function lineTotal(lines: CostLine[], revenue: number): number {
+  return lines.reduce((s, l) => s + (l.type === "percent" ? ((Number(l.value) || 0) / 100) * revenue : (Number(l.value) || 0)), 0)
+}
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
 function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify }:
@@ -651,7 +658,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
   const [costCust, setCostCust] = useState<any | null>(null)          // KH đang mở modal chi phí
-  const [modalLines, setModalLines] = useState<Record<string, CostLine[]>>({})  // {month: lines[]}
+  const [costEdits, setCostEdits] = useState<CustomerCostEdits>({})
   const [costSnapshot, setCostSnapshot] = useState<string>("")       // JSON snapshot để so dirty
   const [savingCost, setSavingCost] = useState(false)
   // 3 tháng của quý (kể cả tháng chưa có dữ liệu) cho modal chi phí
@@ -672,36 +679,94 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
 
   // ── Chi phí KH: mở/sửa/lưu ──
+  const buildCostEditState = (): CustomerCostEdits => {
+    const edits: CustomerCostEdits = {}
+    allTiers.forEach((tier: any) => {
+      ;(tier.customers ?? []).forEach((c: any) => {
+        if (!c?.code || edits[c.code]) return
+        edits[c.code] = {}
+        quarterMonths.forEach(m => { edits[c.code][m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
+      })
+    })
+    return edits
+  }
+  const startCostEdit = () => {
+    const edits = buildCostEditState()
+    setCostEdits(edits)
+    setCostSnapshot(JSON.stringify(edits))
+    setEditMode(true)
+  }
+  const closeCostModal = () => { setCostCust(null) }
+  const cancelCostEdit = () => {
+    closeCostModal()
+    setCostEdits({})
+    setCostSnapshot("")
+    setEditMode(false)
+  }
   const openCostModal = (c: any) => {
-    const lines: Record<string, CostLine[]> = {}
-    quarterMonths.forEach(m => { lines[m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
-    setModalLines(lines)
-    setCostSnapshot(JSON.stringify(lines))
+    if (!editMode) return
+    setCostEdits(prev => {
+      if (prev[c.code]) return prev
+      const lines: Record<string, CostLine[]> = {}
+      quarterMonths.forEach(m => { lines[m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
+      return { ...prev, [c.code]: lines }
+    })
     setCostCust(c)
   }
-  const closeCostModal = () => { setCostCust(null); setModalLines({}); setCostSnapshot("") }
   const setLine = (m: string, idx: number, patch: Partial<CostLine>) =>
-    setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).map((l, i) => i === idx ? { ...l, ...patch } : l) }))
-  const addLine = (m: string) => setModalLines(prev => ({ ...prev, [m]: [...(prev[m] || []), { label: "", type: "amount", value: 0 }] }))
-  const removeLine = (m: string, idx: number) => setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).filter((_, i) => i !== idx) }))
-  const costDirty = costCust != null && JSON.stringify(modalLines) !== costSnapshot
+    costCust && setCostEdits(prev => ({
+      ...prev,
+      [costCust.code]: {
+        ...(prev[costCust.code] || {}),
+        [m]: (prev[costCust.code]?.[m] || []).map((l, i) => i === idx ? { ...l, ...patch } : l),
+      },
+    }))
+  const addLine = (m: string) => costCust && setCostEdits(prev => ({
+    ...prev,
+    [costCust.code]: {
+      ...(prev[costCust.code] || {}),
+      [m]: [...(prev[costCust.code]?.[m] || []), { label: "", type: "amount", value: 0 }],
+    },
+  }))
+  const removeLine = (m: string, idx: number) => costCust && setCostEdits(prev => ({
+    ...prev,
+    [costCust.code]: {
+      ...(prev[costCust.code] || {}),
+      [m]: (prev[costCust.code]?.[m] || []).filter((_, i) => i !== idx),
+    },
+  }))
+  const costDirty = editMode && JSON.stringify(costEdits) !== costSnapshot
+  const editedLines = (c: any, m: string) => costEdits[c.code]?.[m] ?? parseCostLines(c.monthsCost?.[m]?.cost_lines)
+  const editedCustomerCost = (c: any) => quarterMonths.reduce((s, m) => s + lineTotal(editedLines(c, m), c.monthsCost?.[m]?.revenue ?? 0), 0)
 
   const saveCost = async () => {
-    if (!costCust) return
+    if (!costDirty) return
     setSavingCost(true)
     try {
-      const costs = quarterMonths.map(m => ({
-        month: m, customer_code: costCust.code,
-        cost_lines: JSON.stringify((modalLines[m] || []).filter(l => (Number(l.value) || 0) !== 0 || l.label)),
-      }))
+      const baseline = costSnapshot ? JSON.parse(costSnapshot) as CustomerCostEdits : {}
+      const costs: { month: string; customer_code: string; cost_lines: string }[] = []
+      Object.entries(costEdits).forEach(([code, monthsMap]) => {
+        quarterMonths.forEach(m => {
+          const current = cloneCostLines(monthsMap[m] || [])
+          const prev = cloneCostLines(baseline[code]?.[m] || [])
+          if (JSON.stringify(current) !== JSON.stringify(prev)) {
+            costs.push({
+              month: m,
+              customer_code: code,
+              cost_lines: JSON.stringify(current.filter(l => (Number(l.value) || 0) !== 0 || l.label.trim())),
+            })
+          }
+        })
+      })
+      if (costs.length === 0) { cancelCostEdit(); return }
       const res = await fetch("/api/analytics/b2b-customer-costs", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ costs }),
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok && d?.ok) {
-        notify?.(true, `Đã lưu chi phí cho ${costCust.name}`)
-        closeCostModal()
+        notify?.(true, "Đã lưu chi phí B2B")
+        cancelCostEdit()
         onSaved?.()
       } else {
         notify?.(false, d?.error || "Lưu chi phí thất bại")
@@ -828,12 +893,29 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                 </div>
                 <div className="flex items-center gap-2">
                   {canEditCost && (
-                    <button
-                      onClick={() => setEditMode(v => !v)}
-                      className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
-                        editMode ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-[#003B95] border-[#003B95]/30 hover:bg-blue-50")}>
-                      <Pencil className="w-3.5 h-3.5" />{editMode ? "Đang sửa chi phí" : "Sửa chi tiết"}
-                    </button>
+                    editMode ? (
+                      <>
+                        <button
+                          onClick={saveCost}
+                          disabled={savingCost || !costDirty}
+                          className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
+                            costDirty && !savingCost ? "bg-[#003B95] text-white border-[#003B95] hover:bg-[#00337f]" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed")}>
+                          {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+                        </button>
+                        <button
+                          onClick={cancelCostEdit}
+                          disabled={savingCost}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                          <X className="w-3.5 h-3.5" />Hủy
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={startCostEdit}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#003B95]/30 bg-white text-[#003B95] hover:bg-blue-50 transition-all">
+                        <Pencil className="w-3.5 h-3.5" />Sửa chi tiết
+                      </button>
+                    )
                   )}
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -903,7 +985,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                     ? <button onClick={() => openCostModal(c)}
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 transition-colors"
                                         title="Nhập chi phí kênh theo tháng">
-                                        <Pencil className="w-3 h-3" />{c.cc > 0 ? fc(c.cc) : "0"}
+                                        <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
                                       </button>
                                     : <span className="text-slate-500">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                 </td>
@@ -947,10 +1029,10 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
             <div className="p-5 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {quarterMonths.map(m => {
-                  const lines = modalLines[m] || []
+                  const lines = costEdits[costCust.code]?.[m] || []
                   const rev = costCust.monthsCost?.[m]?.revenue ?? 0
                   const hasData = rev > 0 || lines.length > 0
-                  const total = lines.reduce((s, l) => s + (l.type === "percent" ? (Number(l.value) || 0) / 100 * rev : (Number(l.value) || 0)), 0)
+                  const total = lineTotal(lines, rev)
                   return (
                     <div key={m} className={cn("border rounded-lg p-3 flex flex-col", hasData ? "border-slate-200" : "border-dashed border-slate-200 bg-slate-50/50")}>
                       <div className="flex items-center justify-between mb-2">
@@ -993,12 +1075,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
-              <button onClick={closeCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Hủy</button>
-              <button onClick={saveCost} disabled={savingCost || !costDirty}
-                className={cn("flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all",
-                  costDirty && !savingCost ? "text-white bg-[#003B95] hover:bg-[#00337f]" : "text-slate-400 bg-slate-100 cursor-not-allowed")}>
-                {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu chi phí
-              </button>
+              <span className="mr-auto text-[11px] text-slate-400">Thay đổi sẽ được lưu khi bấm Lưu ở thanh chi tiết.</span>
+              <button onClick={closeCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Xong</button>
             </div>
           </div>
         </div>

@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 
       const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
 
-      // Chi phí kênh nhập tay per-KH/tháng (Supabase b2b_customer_cost_monthly)
+      // Chi phí kênh nhập tay per-KH/tháng (Turso b2b_customer_cost_monthly)
       const costMap = await fetchCustomerCosts(months)
 
       // Main query: customer-level revenue breakdown by month
@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
 
         months.forEach(m => {
           const md = cust.months.get(m)
-          // Chi phí nhập tay của KH cho tháng m (Supabase). % tính trên doanh thu RAW, rồi scale theo factor.
+          // Chi phí nhập tay của KH cho tháng m (Turso). % tính trên doanh thu RAW, rồi scale theo factor.
           const rec = costMap.get(`${m}_${cust.code}`)
           const monthCost = md ? calcRecordCost(rec, md.rawRevenue) * md.factor : 0
           monthsCost[m] = {
