@@ -266,8 +266,8 @@ export async function GET(req: NextRequest) {
 
         const totCm1 = totGm - totCc
         const prior = priorMap.get(cust.code)
-        const priorCm1 = prior ? prior.gm - 0 : null  // prior CC unknown, use GM as approx
-        const momPct = priorCm1 && priorCm1 !== 0 ? Math.round((totCm1 - priorCm1) / Math.abs(priorCm1) * 1000) / 10 : null
+        const priorGm = prior?.gm ?? null  // compare GM vs GM (prior channel cost unknown)
+        const momPct = priorGm && priorGm !== 0 ? Math.round((totGm - priorGm) / Math.abs(priorGm) * 1000) / 10 : null
 
         tier.custList.push({
           code: cust.code, name: cust.name,
