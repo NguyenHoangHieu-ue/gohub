@@ -117,23 +117,40 @@ function AnalyticsSettings() {
 
   const syncDimCustomer = async () => {
     setSyncingDimCustomer(true)
+    notify(true, "Đang sync khách hàng — bấm xong đợi khoảng 30-60s...")
+    let totalSynced = 0
+    let page = 0
+    let meta: any = {}
     try {
-      const r = await fetch("/api/admin/sync-dim-customer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
-      let d: any = null
-      try {
-        d = await r.json()
-      } catch {
-        // Response không phải JSON — lấy text để hiển thị lỗi rõ hơn
-        const text = await r.text().catch(() => "(no response body)")
-        notify(false, `HTTP ${r.status} — ${text.slice(0, 200)}`)
-        setSyncingDimCustomer(false)
-        return
-      }
-      if (d?.ok) {
-        notify(true, `Sync OK: ${d.synced}/${d.total} khách hàng → Supabase cache (columns: ${d.columns?.join(", ") || "?"})`)
-        setDimCustomerStatus({ cacheRows: d.synced, lastSynced: new Date().toISOString(), dwRows: d.total })
-      } else {
-        notify(false, `Sync lỗi: ${d?.error || JSON.stringify(d)}`)
+      while (true) {
+        const body = { page, ...meta }
+        const r = await fetch("/api/admin/sync-dim-customer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        let d: any
+        try { d = await r.json() } catch {
+          const text = await r.text().catch(() => "(empty)")
+          notify(false, `HTTP ${r.status} — ${text.slice(0, 300)}`)
+          return
+        }
+        if (!r.ok || !d?.ok) {
+          notify(false, `Lỗi page ${page}: ${d?.error || JSON.stringify(d)}`)
+          return
+        }
+        totalSynced += d.synced || 0
+        // Lưu metadata để truyền sang page tiếp theo
+        if (d.codeCol) meta = { codeCol: d.codeCol, nameCol: d.nameCol, selectCols: d.selectCols }
+        if (d.done || !d.hasMore) {
+          const total = d.total || totalSynced
+          notify(true, `Sync xong: ${totalSynced}${total ? `/${total}` : ""} khách hàng → Supabase`)
+          setDimCustomerStatus({ cacheRows: totalSynced, lastSynced: new Date().toISOString(), dwRows: total || totalSynced })
+          break
+        }
+        page++
+        // Notify progress mỗi page
+        notify(true, `Sync page ${page}: đã xử lý ${totalSynced} KH...`)
       }
     } catch (e: any) {
       notify(false, `Lỗi fetch: ${e.message}`)
