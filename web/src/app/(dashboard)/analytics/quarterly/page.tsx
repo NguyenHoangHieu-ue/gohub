@@ -62,50 +62,56 @@ function ProgressBar({ value, target }: { value: number; target: number }) {
 
 // ─── KPI Progress Card ────────────────────────────────────────────────────────
 
-function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, hk3Pct, hk3Target }:
-  { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Target: number }) {
+function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, hk3Pct, hk3Target, expectedPct = 0, accent = "#003B95" }:
+  { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Target: number; expectedPct?: number; accent?: string }) {
   const progress   = target > 0 ? (actual / target) * 100 : 0
-  const prProgress = target > 0 ? (prRev / target) * 100 : 0
-  const pctColor   = progress >= 100 ? "text-green-600" : progress >= 75 ? "text-blue-600" : "text-slate-600"
+  // Xanh nếu đạt/vượt kỳ vọng pro-rata, amber nếu dưới, xanh lá nếu ≥100%
+  const pctColor   = progress >= 100 ? "text-green-600" : (expectedPct > 0 ? progress >= expectedPct : progress >= 75) ? "text-[#003B95]" : "text-amber-600"
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">{label} Revenue</span>
-        </div>
-        <span className={cn("text-2xl font-bold tabular-nums", pctColor)}>{pct(progress)}</span>
-      </div>
-      <ProgressBar value={actual} target={target} />
-
-      <div className="mt-3 space-y-1.5 text-[12px]">
-        <div className="flex justify-between">
-          <span className="text-slate-400">Thực tế</span>
-          <span className="font-semibold text-slate-800 tabular-nums">{fc(actual)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">Target</span>
-          <span className="text-slate-500 tabular-nums">{target > 0 ? fc(target) : "—"}</span>
-        </div>
-        <div className="flex justify-between border-t border-slate-100 pt-1.5">
-          <span className="text-slate-400">PR Rev</span>
-          <span className={cn("tabular-nums font-medium", pctColor)}>{fc(prRev)} <span className="text-[11px]">({pct(prProgress)})</span></span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">CM1</span>
-          <span className={cn("font-semibold tabular-nums", cm1Color(cm1Actual))}>{fc(cm1Actual)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-slate-400">PR CM1</span>
-          <span className="text-slate-500 tabular-nums">{fc(prCm1)}</span>
-        </div>
-        {hk3Target > 0 && (
-          <div className="flex justify-between border-t border-slate-100 pt-1.5">
-            <span className="text-slate-400">3HK%</span>
-            <span className="text-slate-700 tabular-nums">{pct(hk3Pct)} / Tgt {pct(hk3Target)}</span>
+    <div className="relative bg-white border border-slate-200 rounded-xl p-5 overflow-hidden shadow-sm">
+      {/* accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: accent }} />
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: `${accent}1a` }}>
+            <Icon className="w-4 h-4" style={{ color: accent }} />
           </div>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-tight">{label}<br /><span className="text-slate-400 font-semibold">Rev Progress</span></span>
+        </div>
+        <span className={cn("text-3xl font-extrabold tabular-nums", pctColor)}>{pct(progress)}</span>
+      </div>
+
+      {/* progress bar + marker kỳ vọng pro-rata */}
+      <div className="relative h-2.5 bg-slate-100 rounded-full mb-1.5">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(Math.max(progress, 0), 100)}%`, background: accent }} />
+        {expectedPct > 0 && (
+          <div className="absolute -top-1 -bottom-1 w-[2px] bg-slate-700 rounded" style={{ left: `${Math.min(expectedPct, 100)}%` }} title={`Kỳ vọng pro-rata: ${pct(expectedPct)}`} />
         )}
+      </div>
+      <div className="flex justify-between text-[11px] mb-3">
+        <span className="text-slate-400">Actual <b className="text-slate-800 tabular-nums ml-0.5">{fc(actual)}</b></span>
+        <span className="text-slate-400">Target <b className="text-slate-800 tabular-nums ml-0.5">{target > 0 ? fc(target) : "—"}</b></span>
+      </div>
+
+      {/* nhóm số liệu nổi bật */}
+      <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR Revenue</div>
+          <div className="font-bold text-slate-800 tabular-nums">{fc(prRev)}</div>
+        </div>
+        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR CM1</div>
+          <div className="font-bold text-slate-800 tabular-nums">{fc(prCm1)}</div>
+        </div>
+        <div className="rounded-lg px-2.5 py-1.5 border" style={{ background: `${accent}0d`, borderColor: `${accent}26` }}>
+          <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: accent }}>CM1 Thực tế</div>
+          <div className={cn("font-bold tabular-nums", cm1Color(cm1Actual))}>{fc(cm1Actual)}</div>
+        </div>
+        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
+          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">3HK%{hk3Target > 0 ? ` / ${pct(hk3Target)}` : ""}</div>
+          <div className="font-bold text-slate-800 tabular-nums">{pct(hk3Pct)}</div>
+        </div>
       </div>
     </div>
   )
@@ -151,16 +157,20 @@ function QuarterlyContent() {
   const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
   const [b2bTiers, setB2bTiers]   = useState<any>(null)
   const [b2bTiersLoading, setB2bTiersLoading] = useState(false)
-  const [canEditCost, setCanEditCost] = useState(false)
+  const [userRole, setUserRole] = useState<string>("")
+  const [editTarget, setEditTarget] = useState(false)
+  const [tgtSnapshot, setTgtSnapshot] = useState<Record<string, string> | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
-  // Quyền sửa chi phí KH (admin/creator)
+  // Role: quyền sửa chi phí/target (admin/creator) + cột nhạy cảm chỉ creator
   useEffect(() => {
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
-      if (d?.role && ["admin", "creator"].includes(d.role)) setCanEditCost(true)
+      if (d?.role) setUserRole(String(d.role))
     }).catch(() => {})
   }, [])
+  const canEditCost = ["admin", "creator"].includes(userRole)
+  const isCreator   = userRole === "creator"
 
   const fetchReport = useCallback(async () => {
     setLoading(true)
@@ -201,10 +211,13 @@ function QuarterlyContent() {
     setSaving(true)
     try {
       const res = await fetch("/api/analytics/quarterly-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quarter: selQ, year: selYear, targets: t }) })
-      if (res.ok) { setTargets(t); notify(true, "Đã lưu target") } else notify(false, "Lưu thất bại")
+      if (res.ok) { setTargets(t); setEditTarget(false); setTgtSnapshot({ ...tgtInputs }); notify(true, "Đã lưu target") } else notify(false, "Lưu thất bại")
     } catch { notify(false, "Lỗi kết nối") }
     finally { setSaving(false) }
   }
+  const startEditTarget  = () => { setTgtSnapshot({ ...tgtInputs }); setEditTarget(true) }
+  const cancelEditTarget = () => { if (tgtSnapshot) setTgtInputs(tgtSnapshot as any); setEditTarget(false) }
+  const targetDirty = editTarget && tgtSnapshot != null && JSON.stringify(tgtInputs) !== JSON.stringify(tgtSnapshot)
 
   const years   = [today.getFullYear(), today.getFullYear() - 1, today.getFullYear() - 2]
   const quarters = ["Q1", "Q2", "Q3", "Q4"]
@@ -217,6 +230,7 @@ function QuarterlyContent() {
   const qElapsed = report?.elapsed_days ?? 0
   const qTotal   = report?.quarter_days ?? 92
   const qFactor  = qElapsed > 0 ? qTotal / qElapsed : 1
+  const expectedPct = qTotal > 0 ? qElapsed / qTotal * 100 : 0  // kỳ vọng pro-rata cho marker KPI
 
   // rev_act = sum projected monthly (reference "Actual" trong KPI cards)
   // rev_raw = sum actual monthly (reference "Revenue" trong bảng quý)
@@ -325,10 +339,24 @@ function QuarterlyContent() {
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-900">Target {selQ}-{selYear}</h2>
-          <button onClick={saveTargets} disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] hover:bg-[#00337f] disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all">
-            <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu Target"}
-          </button>
+          {canEditCost && (
+            editTarget ? (
+              <div className="flex items-center gap-2">
+                <button onClick={cancelEditTarget}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all">Hủy</button>
+                <button onClick={saveTargets} disabled={saving || !targetDirty}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                    targetDirty && !saving ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                  <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu"}
+                </button>
+              </div>
+            ) : (
+              <button onClick={startEditTarget}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#003B95] border border-[#003B95]/30 hover:bg-blue-50 text-xs font-semibold rounded-lg transition-all">
+                <Pencil className="w-3.5 h-3.5" />Sửa target
+              </button>
+            )
+          )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
@@ -342,9 +370,12 @@ function QuarterlyContent() {
             <div key={f.id} className="space-y-1">
               <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">{f.label}</label>
               <input
-                type="text" value={(tgtInputs as any)[f.id]}
+                type="text" value={(tgtInputs as any)[f.id]} disabled={!editTarget}
                 onChange={e => setTgtInputs(prev => ({ ...prev, [f.id]: e.target.value }))}
-                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 focus:ring-1 focus:ring-slate-300 outline-none text-slate-800 font-semibold text-sm font-mono rounded-lg px-3 py-2 transition-colors"
+                className={cn("w-full border outline-none font-semibold text-sm font-mono rounded-lg px-3 py-2 transition-colors",
+                  editTarget
+                    ? "bg-white border-[#003B95]/40 focus:border-[#003B95] focus:ring-1 focus:ring-[#003B95]/30 text-slate-800"
+                    : "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed")}
               />
             </div>
           ))}
@@ -354,15 +385,15 @@ function QuarterlyContent() {
       {/* ── KPI Progress cards ── */}
       {report && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <KpiCard label="B2B" icon={Building2}
+          <KpiCard label="B2B" icon={Building2} accent="#003B95" expectedPct={expectedPct}
             actual={b2bRevAct} prRev={b2bRevPr} target={targets.b2bRev}
             cm1Actual={b2bCm1Act} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
             hk3Pct={b2bThkPct} hk3Target={targets.b2bThk} />
-          <KpiCard label="B2C" icon={ShoppingBag}
+          <KpiCard label="B2C" icon={ShoppingBag} accent="#0ea5e9" expectedPct={expectedPct}
             actual={b2cRevAct} prRev={b2cRevPr} target={targets.b2cRev}
             cm1Actual={b2cCm1Act} prCm1={b2cCm1Pr} cm1Target={targets.b2cCm1}
             hk3Pct={b2cThkPct} hk3Target={targets.b2cThk} />
-          <KpiCard label="Tổng" icon={TrendingUp}
+          <KpiCard label="Tổng" icon={TrendingUp} accent="#1e3a8a" expectedPct={expectedPct}
             actual={totRevAct} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
             cm1Actual={totCm1Act} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
             hk3Pct={totThkPct} hk3Target={0} />
@@ -482,11 +513,13 @@ function QuarterlyContent() {
         b2bTiers={b2bTiers}
         loading={b2bTiersLoading}
         months={activeMonths}
+        allMonths={report?.months ?? activeMonths}
         region={b2bRegion}
         onRegionChange={r => setB2bRegion(r as "ALL" | "VN" | "US")}
         expanded={expandB2B}
         onToggle={() => setExpandB2B(v => !v)}
         canEditCost={canEditCost}
+        isCreator={isCreator}
         onSaved={() => fetchB2BTiers(true)}
         notify={notify}
       />
@@ -611,15 +644,18 @@ function costLabel(lines: CostLine[]): string {
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
-function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, expanded, onToggle, canEditCost, onSaved, notify }:
-  { b2bTiers: any; loading: boolean; months: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void }) {
+function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify }:
+  { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
   const [costCust, setCostCust] = useState<any | null>(null)          // KH đang mở modal chi phí
   const [modalLines, setModalLines] = useState<Record<string, CostLine[]>>({})  // {month: lines[]}
+  const [costSnapshot, setCostSnapshot] = useState<string>("")       // JSON snapshot để so dirty
   const [savingCost, setSavingCost] = useState(false)
+  // 3 tháng của quý (kể cả tháng chưa có dữ liệu) cho modal chi phí
+  const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
@@ -638,21 +674,23 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
   // ── Chi phí KH: mở/sửa/lưu ──
   const openCostModal = (c: any) => {
     const lines: Record<string, CostLine[]> = {}
-    months.forEach(m => { lines[m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
+    quarterMonths.forEach(m => { lines[m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
     setModalLines(lines)
+    setCostSnapshot(JSON.stringify(lines))
     setCostCust(c)
   }
-  const closeCostModal = () => { setCostCust(null); setModalLines({}) }
+  const closeCostModal = () => { setCostCust(null); setModalLines({}); setCostSnapshot("") }
   const setLine = (m: string, idx: number, patch: Partial<CostLine>) =>
     setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).map((l, i) => i === idx ? { ...l, ...patch } : l) }))
   const addLine = (m: string) => setModalLines(prev => ({ ...prev, [m]: [...(prev[m] || []), { label: "", type: "amount", value: 0 }] }))
   const removeLine = (m: string, idx: number) => setModalLines(prev => ({ ...prev, [m]: (prev[m] || []).filter((_, i) => i !== idx) }))
+  const costDirty = costCust != null && JSON.stringify(modalLines) !== costSnapshot
 
   const saveCost = async () => {
     if (!costCust) return
     setSavingCost(true)
     try {
-      const costs = months.map(m => ({
+      const costs = quarterMonths.map(m => ({
         month: m, customer_code: costCust.code,
         cost_lines: JSON.stringify((modalLines[m] || []).filter(l => (Number(l.value) || 0) !== 0 || l.label)),
       }))
@@ -830,9 +868,9 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                       <table className="w-full text-[11px] border-collapse">
                         <thead>
                           <tr className="bg-slate-100">
-                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>
+                            {isCreator && <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>}
                             <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Bảng giá</th>
+                            {isCreator && <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Bảng giá</th>}
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
@@ -848,13 +886,15 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                             const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             return (
                               <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
-                                <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>
+                                {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>}
                                 <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
-                                <td className="px-3 py-2 whitespace-nowrap">
-                                  {c.priceListName
-                                    ? <span className="text-[10px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded" title={c.priceListName}>{c.priceListName}</span>
-                                    : <span className="text-slate-300">—</span>}
-                                </td>
+                                {isCreator && (
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    {c.priceListName
+                                      ? <span className="text-[10px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded" title={c.priceListName}>{c.priceListName}</span>
+                                      : <span className="text-slate-300">—</span>}
+                                  </td>
+                                )}
                                 <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
                                 <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
@@ -875,7 +915,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
                             )
                           })}
                           {custs.length === 0 && (
-                            <tr><td colSpan={11} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                            <tr><td colSpan={9 + (isCreator ? 2 : 0)} className="px-3 py-6 text-center text-slate-400 italic text-xs">
                               {custSearch ? `Không tìm thấy KH khớp "${custSearch}"` : "Không có khách hàng"}
                             </td></tr>
                           )}
@@ -896,7 +936,7 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
       {/* ── Modal nhập chi phí kênh per-KH/tháng ── */}
       {costCust && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={closeCostModal}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#003B95]">{costCust.name}</span></h3>
@@ -904,45 +944,59 @@ function B2BTierSection({ b2bTiers, loading, months, region, onRegionChange, exp
               </div>
               <button onClick={closeCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-4 overflow-y-auto">
-              {months.map(m => {
-                const lines = modalLines[m] || []
-                const rev = costCust.monthsCost?.[m]?.revenue ?? 0
-                const total = lines.reduce((s, l) => s + (l.type === "percent" ? (Number(l.value) || 0) / 100 * rev : (Number(l.value) || 0)), 0)
-                return (
-                  <div key={m} className="border border-slate-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-slate-700">{mLabel(m)} <span className="text-slate-400 font-normal">· Revenue {fc(rev)}</span></span>
-                      <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm dòng</button>
-                    </div>
-                    <div className="space-y-1.5">
-                      {lines.length === 0 && <p className="text-[11px] text-slate-400 italic">Chưa có chi phí. Bấm "Thêm dòng".</p>}
-                      {lines.map((l, idx) => (
-                        <div key={idx} className="flex items-center gap-1.5">
-                          <input value={l.label} onChange={e => setLine(m, idx, { label: e.target.value })} placeholder="Ghi chú (vd: Phí sàn)"
-                            className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
-                          <select value={l.type} onChange={e => setLine(m, idx, { type: e.target.value as "amount" | "percent" })}
-                            className="px-1.5 py-1 text-xs border border-slate-200 rounded bg-white focus:outline-none">
-                            <option value="amount">đ</option>
-                            <option value="percent">%</option>
-                          </select>
-                          <input type="number" value={l.value || ""} onChange={e => setLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
-                            className="w-28 px-2 py-1 text-xs text-right tabular-nums border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
-                          <button onClick={() => removeLine(m, idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+            <div className="p-5 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {quarterMonths.map(m => {
+                  const lines = modalLines[m] || []
+                  const rev = costCust.monthsCost?.[m]?.revenue ?? 0
+                  const hasData = rev > 0 || lines.length > 0
+                  const total = lines.reduce((s, l) => s + (l.type === "percent" ? (Number(l.value) || 0) / 100 * rev : (Number(l.value) || 0)), 0)
+                  return (
+                    <div key={m} className={cn("border rounded-lg p-3 flex flex-col", hasData ? "border-slate-200" : "border-dashed border-slate-200 bg-slate-50/50")}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-700">{mLabel(m)}</span>
+                        {hasData && <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>}
+                      </div>
+                      {!hasData ? (
+                        <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                          <span className="text-2xl text-slate-300 font-bold">—</span>
+                          <span className="text-[10px] text-slate-400 mt-1">Chưa có dữ liệu</span>
                         </div>
-                      ))}
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-slate-400 mb-1.5">Revenue {fc(rev)}</p>
+                          <div className="space-y-1.5 flex-1">
+                            {lines.length === 0 && <p className="text-[11px] text-slate-400 italic">Chưa nhập. Bấm "Thêm".</p>}
+                            {lines.map((l, idx) => (
+                              <div key={idx} className="flex items-center gap-1">
+                                <input value={l.label} onChange={e => setLine(m, idx, { label: e.target.value })} placeholder="Ghi chú"
+                                  className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                <select value={l.type} onChange={e => setLine(m, idx, { type: e.target.value as "amount" | "percent" })}
+                                  className="px-1 py-1 text-[11px] border border-slate-200 rounded bg-white focus:outline-none">
+                                  <option value="amount">đ</option>
+                                  <option value="percent">%</option>
+                                </select>
+                                <input type="number" value={l.value || ""} onChange={e => setLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
+                                  className="w-16 px-1.5 py-1 text-[11px] text-right tabular-nums border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                <button onClick={() => removeLine(m, idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[11px]">
+                            Tổng: <span className="font-bold text-slate-800 tabular-nums">{fc(total)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[11px]">
-                      Chi phí tháng: <span className="font-bold text-slate-800 tabular-nums">{fc(total)}</span>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
               <button onClick={closeCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Hủy</button>
-              <button onClick={saveCost} disabled={savingCost}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#003B95] rounded-lg hover:bg-[#00337f] disabled:opacity-50">
+              <button onClick={saveCost} disabled={savingCost || !costDirty}
+                className={cn("flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all",
+                  costDirty && !savingCost ? "text-white bg-[#003B95] hover:bg-[#00337f]" : "text-slate-400 bg-slate-100 cursor-not-allowed")}>
                 {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu chi phí
               </button>
             </div>
