@@ -84,8 +84,9 @@ export async function GET(req: NextRequest) {
   const rawCacheKey = `qreport_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    // ── Phần 1: cache gohub_dw rows ─────────────────────────────────────────────
-    const rawData = await cachedQuery(rawCacheKey, async () => {
+    // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs chạy SONG SONG ────────────
+    const [rawData, { channelCosts, groupCosts }] = await Promise.all([
+      cachedQuery(rawCacheKey, async () => {
       const [groupRows, channelRows, hk3Rows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           SELECT
@@ -149,10 +150,9 @@ export async function GET(req: NextRequest) {
       ])
 
       return { groupRows, channelRows, hk3Rows }
-    }, QUERY_TTL_MIN, refresh)
-
-    // ── Phần 2: Supabase costs — luôn fresh (NGOÀI cache) ────────────────────────
-    const { channelCosts, groupCosts } = await fetchCosts(months)
+    }, QUERY_TTL_MIN, refresh),
+    fetchCosts(months),  // Supabase costs — chạy song song với gohub_dw query
+    ])
 
     // ── Phần 3: Compute ────────────────────────────────────────────────────────
     const { groupRows, channelRows, hk3Rows } = rawData
