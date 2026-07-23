@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
   const safeCode = customerCode.replace(/'/g, "''")
 
   const dateExpr = groupBy === "day"
-    ? `TO_CHAR(f.created_date::date, 'YYYY-MM-DD') as period`
-    : `TO_CHAR(f.created_date::date, 'YYYY-MM') as period`
+    ? `TO_CHAR(f.fulfiled_date::date, 'YYYY-MM-DD') as period`
+    : `TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as period`
 
   try {
     const rows = await queryAnalytics<{
@@ -53,8 +53,8 @@ export async function GET(req: NextRequest) {
         SUM(f.gross_profit_vnd) as gp
       FROM fact_fulfillment_revenue f
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      WHERE f.created_date::date >= '${qStart}'
-        AND f.created_date::date <= '${qEnd}'
+      WHERE f.fulfiled_date::date >= '${qStart}'
+        AND f.fulfiled_date::date <= '${qEnd}'
         AND TRIM(f.customer_code) = '${safeCode}'
       GROUP BY 1, 2
       ORDER BY 1 DESC, 3 DESC

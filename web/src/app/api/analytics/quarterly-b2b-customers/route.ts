@@ -66,8 +66,8 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevYear, prevQ * 3, 0).toISOString().split("T")[0]
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  // v3: thay priorRows (1 tháng) bằng prevQuarterRows (cả quý trước) để tính QoQ
-  const rawCacheKey = `qb2b_raw_v3:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  // v4: đổi created_date → fulfiled_date để đồng nhất với B2B Performance
+  const rawCacheKey = `qb2b_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
     // ── Phần 1 + 2: gohub_dw (cache) và Turso costs chạy SONG SONG ────────────────
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
           revenue: string; gm: string; hk3: string
         }>(`
           SELECT
-            TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
+            TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
             TRIM(f.customer_code) as customer_code,
             COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
             c.price_list_name, c.currency_code,
@@ -98,8 +98,8 @@ export async function GET(req: NextRequest) {
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
           LEFT JOIN dim_sku sk ON f.sku = sk.sku
-          WHERE f.created_date::date >= '${qStartDate}'
-            AND f.created_date::date <= '${qEndDate}'
+          WHERE f.fulfiled_date::date >= '${qStartDate}'
+            AND f.fulfiled_date::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
             ${exclFilter}
@@ -113,8 +113,8 @@ export async function GET(req: NextRequest) {
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-          WHERE f.created_date::date >= '${prevQStartDate}'
-            AND f.created_date::date <= '${prevQEndDate}'
+          WHERE f.fulfiled_date::date >= '${prevQStartDate}'
+            AND f.fulfiled_date::date <= '${prevQEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
             ${exclFilter}

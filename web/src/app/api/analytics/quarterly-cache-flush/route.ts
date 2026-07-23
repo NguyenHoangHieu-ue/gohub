@@ -8,6 +8,6 @@ export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  await flushAnalyticsCacheByPrefixes(["qreport_raw_v1:", "qb2b_raw_v2:"]).catch(() => {})
+  await flushAnalyticsCacheByPrefixes(["qreport_raw_v3:", "qb2b_raw_v4:", "qreport_raw_v2:", "qreport_raw_v1:", "qb2b_raw_v3:", "qb2b_raw_v2:"]).catch(() => {})
   return NextResponse.json({ ok: true })
 }
