@@ -77,6 +77,8 @@ export async function GET(req: NextRequest) {
   // Load settings (excluded customers) — dynamic, không cache hoặc re-fetch mỗi request
   const { excludedCustomers } = await fetchQuarterlySettings()
   const EXCLUDE_CUST_SQL = makeExcludeSql(excludedCustomers)
+  // Loại KH có bảng giá chứa "INACTIVE" (vd: "[INACTIVE] Sponsor") khỏi mọi tổng B2B/B2C
+  const INACTIVE_FILTER = "AND UPPER(COALESCE(c.price_list_name, '')) NOT LIKE '%INACTIVE%'"
 
   // v9: dynamic exclusion (hash trong key), fetchCosts NGOÀI cache → Supabase costs luôn fresh
   const rawCacheKey = `qreport_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
@@ -99,6 +101,7 @@ export async function GET(req: NextRequest) {
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
             ${EXCLUDE_CUST_SQL}
+            ${INACTIVE_FILTER}
           GROUP BY 1, 2
           ORDER BY 1, 2
         `),
@@ -122,6 +125,7 @@ export async function GET(req: NextRequest) {
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
             ${EXCLUDE_CUST_SQL}
+            ${INACTIVE_FILTER}
           GROUP BY 1, 2, 3
           ORDER BY 1, 2, 3
         `),
@@ -139,6 +143,7 @@ export async function GET(req: NextRequest) {
             AND f.${DATE_COL}::date <= '${qEndDate}'
             ${companyFilter}
             ${EXCLUDE_CUST_SQL}
+            ${INACTIVE_FILTER}
           GROUP BY 1
         `),
       ])
