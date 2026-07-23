@@ -850,13 +850,34 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
-  const [costCust, setCostCust] = useState<any | null>(null)          // KH đang mở modal chi phí
+  const [costCust, setCostCust] = useState<any | null>(null)
   const [costEdits, setCostEdits] = useState<CustomerCostEdits>({})
-  const [costSnapshot, setCostSnapshot] = useState<string>("")       // JSON snapshot để so dirty
+  const [costSnapshot, setCostSnapshot] = useState<string>("")
   const [savingCost, setSavingCost] = useState(false)
-  // 3 tháng của quý (kể cả tháng chưa có dữ liệu) cho modal chi phí
+
+  // ── Per-customer expand + target ──
+  const [expandedCusts, setExpandedCusts] = useState<Set<string>>(new Set())
+  const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number }>>({})
+  const [editingTargetCode, setEditingTargetCode] = useState<string | null>(null)
+  const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string }>>({})
+  const [savingTargetCode, setSavingTargetCode] = useState<string | null>(null)
+
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
   const allTiers: any[] = b2bTiers?.tiers ?? []
+
+  // Load customer targets khi đổi quý
+  useEffect(() => {
+    if (!quarterLabel) return
+    const parts = quarterLabel.split("-")  // "Q3-2026"
+    if (parts.length !== 2) return
+    setExpandedCusts(new Set())
+    setEditingTargetCode(null)
+    setCustomerTargets({})
+    fetch(`/api/analytics/b2b-customer-targets?quarter=${parts[0]}&year=${parts[1]}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.targets) setCustomerTargets(d.targets) })
+      .catch(() => {})
+  }, [quarterLabel])
 
   // Ref để đọc editMode trong useEffect mà không cần capture closure
   const editModeRef = React.useRef(false)
@@ -932,6 +953,36 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     editModeRef.current = false
     setEditMode(false)
   }
+  // ── Per-customer target save ──
+  const startEditTarget = (c: any) => {
+    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
+    setTargetInputs(prev => ({ ...prev, [c.code]: { cm1: fmtInput(tgt.cm1), thk: tgt.thk > 0 ? tgt.thk.toString() : "" } }))
+    setEditingTargetCode(c.code)
+  }
+  const cancelEditTarget = () => { setEditingTargetCode(null) }
+  const saveTarget = async (c: any) => {
+    if (!quarterLabel) return
+    const parts = quarterLabel.split("-")
+    if (parts.length !== 2) return
+    const inp = targetInputs[c.code] ?? { cm1: "", thk: "" }
+    const cm1Val = parseFmt(inp.cm1)
+    const thkVal = parseFloat(inp.thk) || 0
+    setSavingTargetCode(c.code)
+    try {
+      const res = await fetch("/api/analytics/b2b-customer-targets", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d?.ok) {
+        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal } }))
+        setEditingTargetCode(null)
+        notify?.(true, `Đã lưu target KH ${c.name}`)
+      } else notify?.(false, d?.error || "Lưu thất bại")
+    } catch { notify?.(false, "Lỗi kết nối") }
+    finally { setSavingTargetCode(null) }
+  }
+
   const openCostModal = (c: any) => {
     if (!editMode) return
     setCostEdits(prev => {
@@ -1232,48 +1283,160 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                         </thead>
                         <tbody>
                           {custs.map((c: any, i: number) => {
+                            const isExpanded = expandedCusts.has(c.code)
+                            const toggleExpand = () => setExpandedCusts(prev => { const s = new Set(prev); s.has(c.code) ? s.delete(c.code) : s.add(c.code); return s })
                             const qoqCls = c.qoqPct == null ? "text-slate-300" : c.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
-                            // Stacked PR/Actual cho quý đang chạy (hasProjected = true từ API)
                             const hp = c.hasProjected === true
-                            const dualKH = (pr: number, act: number | undefined, cls = "text-slate-700") => hp && act != null ? (
-                              <div className="flex flex-col items-end leading-snug">
-                                <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                                <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
-                              </div>
-                            ) : <span className={cn("tabular-nums", cls)}>{fc(pr)}</span>
+                            // Main row: Actual values
+                            const actRev = hp ? (c.actualRevenue ?? c.revenue) : c.revenue
+                            const actGm  = hp ? (c.actualGm  ?? c.gm)  : c.gm
+                            const actCc  = hp ? (c.actualCc  ?? c.cc)  : c.cc
+                            const actCm1 = hp ? (c.actualCm1 ?? c.cm1) : c.cm1
+                            const actGmPct  = actRev > 0 ? actGm  / actRev * 100 : 0
+                            const actCm1Pct = actRev > 0 ? actCm1 / actRev * 100 : 0
+                            // Target
+                            const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
+                            const isEditingTgt = editingTargetCode === c.code
+                            const isSavingTgt  = savingTargetCode  === c.code
+                            const colSpanAll = 9 + (isCreator ? 2 : 0)
                             return (
-                              <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
-                                {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>}
-                                <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>
-                                  {c.name}
-                                  {editMode && dirtyCodes.has(c.code) && (
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 ml-1.5 align-middle" title="Có thay đổi chưa lưu" />
-                                  )}
-                                </td>
-                                {isCreator && (
-                                  <td className="px-3 py-2 whitespace-nowrap">
-                                    {c.priceListName
-                                      ? <span className="text-[10px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded" title={c.priceListName}>{c.priceListName}</span>
-                                      : <span className="text-slate-300">—</span>}
+                              <React.Fragment key={c.code}>
+                                {/* ── Main row: Actual values ── */}
+                                <tr className={cn("border-t border-slate-50 cursor-pointer", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/10")}>
+                                  {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>}
+                                  <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px]" onClick={toggleExpand}>
+                                    <div className="flex items-center gap-1.5">
+                                      <ChevronRight className={cn("w-3 h-3 text-slate-400 flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
+                                      <span className="truncate" title={c.name}>{c.name}</span>
+                                      {editMode && dirtyCodes.has(c.code) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+                                    </div>
                                   </td>
+                                  {isCreator && (
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      {c.priceListName ? <span className="text-[10px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
+                                    </td>
+                                  )}
+                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold">{fck(actRev)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fck(actGm)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-500">{pct(actGmPct)}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums">
+                                    {editMode && canEditCost
+                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100" title="Nhập chi phí">
+                                          <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fck(editedCustomerCost(c)) : "0"}
+                                        </button>
+                                      : <span className="text-slate-500">{actCc > 0 ? fck(actCc) : "—"}</span>}
+                                  </td>
+                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>{fck(actCm1)}</td>
+                                  <td className={cn("px-3 py-2 text-right", cm1Color(actCm1))}>{pct(actCm1Pct)}</td>
+                                  <td className={cn("px-3 py-2 text-right", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
+                                  <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
+                                </tr>
+
+                                {/* ── Sub-row: Pro-rata + Target & Progress ── */}
+                                {isExpanded && (
+                                  <tr className="border-t border-blue-100">
+                                    <td colSpan={colSpanAll} className="p-0">
+                                      <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 grid grid-cols-2 gap-6">
+
+                                        {/* ── Left: Pro-rata ── */}
+                                        <div>
+                                          <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-2">Pro-rata (Projected)</p>
+                                          {hp ? (
+                                            <div className="space-y-1 text-[11px]">
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-slate-500">Revenue</span>
+                                                <span className="text-blue-700 font-semibold tabular-nums">{fc(c.revenue)}</span>
+                                              </div>
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-slate-500">Gross Margin</span>
+                                                <span className="text-blue-700 tabular-nums">{fc(c.gm)} <span className="text-blue-400">({pct(c.gm > 0 && c.revenue > 0 ? c.gm / c.revenue * 100 : 0)})</span></span>
+                                              </div>
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-slate-500">Ch.Cost</span>
+                                                <span className="text-slate-600 tabular-nums">{c.cc > 0 ? fc(c.cc) : "—"}</span>
+                                              </div>
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-slate-500">CM1</span>
+                                                <span className={cn("font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)} <span className="font-normal">({pct(c.cm1Pct)})</span></span>
+                                              </div>
+                                              <div className="flex justify-between gap-4">
+                                                <span className="text-slate-500">3HK%</span>
+                                                <span className="text-slate-600 tabular-nums">{pct(c.hk3Pct)}</span>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <p className="text-[11px] text-slate-400 italic">Quý đã hoàn thành — Actual = Pro-rata</p>
+                                          )}
+                                        </div>
+
+                                        {/* ── Right: Target & Progress ── */}
+                                        <div>
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
+                                            {canEditCost && !isEditingTgt && (
+                                              <button onClick={() => startEditTarget(c)}
+                                                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#003B95] border border-[#003B95]/30 bg-white hover:bg-blue-50 rounded-md transition-all">
+                                                <Pencil className="w-2.5 h-2.5" />Sửa target
+                                              </button>
+                                            )}
+                                            {isEditingTgt && (
+                                              <div className="flex items-center gap-1.5 ml-auto">
+                                                <button onClick={() => saveTarget(c)} disabled={isSavingTgt}
+                                                  className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md transition-all",
+                                                    !isSavingTgt ? "bg-[#003B95] text-white hover:bg-[#00337f]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+                                                  {isSavingTgt ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}Lưu
+                                                </button>
+                                                <button onClick={cancelEditTarget} disabled={isSavingTgt}
+                                                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-md">
+                                                  <X className="w-2.5 h-2.5" />Hủy
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="space-y-2 text-[11px]">
+                                            {/* CM1 Target */}
+                                            <div className="flex items-center justify-between gap-3">
+                                              <span className="text-slate-500 flex-shrink-0">CM1 Target</span>
+                                              {isEditingTgt ? (
+                                                <input type="text" value={targetInputs[c.code]?.cm1 ?? ""}
+                                                  onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), cm1: e.target.value } }))}
+                                                  placeholder="VD: 500.000.000"
+                                                  className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                              ) : tgt.cm1 > 0 ? (
+                                                <span className="tabular-nums text-right">
+                                                  <b className="text-slate-700">{fc(tgt.cm1)}</b>
+                                                  {" · "}
+                                                  <span className={cn("font-semibold", actCm1 >= tgt.cm1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                    {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)} đạt
+                                                  </span>
+                                                </span>
+                                              ) : <span className="text-slate-300">Chưa đặt target</span>}
+                                            </div>
+                                            {/* 3HK% Target */}
+                                            <div className="flex items-center justify-between gap-3">
+                                              <span className="text-slate-500 flex-shrink-0">3HK% Target</span>
+                                              {isEditingTgt ? (
+                                                <input type="number" min="0" max="100" step="0.1" value={targetInputs[c.code]?.thk ?? ""}
+                                                  onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), thk: e.target.value } }))}
+                                                  placeholder="VD: 70.0"
+                                                  className="w-24 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                              ) : tgt.thk > 0 ? (
+                                                <span className="tabular-nums text-right">
+                                                  <b className="text-slate-700">{pct(tgt.thk)}</b>
+                                                  {" · Actual "}
+                                                  <span className={cn("font-semibold", c.hk3Pct >= tgt.thk ? "text-green-600" : "text-amber-600")}>
+                                                    {pct(c.hk3Pct)}
+                                                  </span>
+                                                </span>
+                                              ) : <span className="text-slate-300">Chưa đặt target</span>}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
                                 )}
-                                <td className="px-3 py-2 text-right">{dualKH(c.revenue, c.actualRevenue, "text-slate-700")}</td>
-                                <td className="px-3 py-2 text-right">{dualKH(c.gm, c.actualGm, "text-slate-600")}</td>
-                                <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums">
-                                  {editMode && canEditCost
-                                    ? <button onClick={() => openCostModal(c)}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 transition-colors"
-                                        title="Nhập chi phí kênh theo tháng">
-                                        <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
-                                      </button>
-                                    : <span>{c.cc > 0 ? dualKH(c.cc, c.actualCc, "text-slate-500") : "—"}</span>}
-                                </td>
-                                <td className={cn("px-3 py-2 text-right font-semibold", cm1Color(c.cm1))}>{dualKH(c.cm1, c.actualCm1, cm1Color(c.cm1))}</td>
-                                <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
-                                <td className={cn("px-3 py-2 text-right", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
-                                <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
-                              </tr>
+                              </React.Fragment>
                             )
                           })}
                           {custs.length === 0 && (
