@@ -159,6 +159,8 @@ export async function GET(req: NextRequest) {
     const customerMap = new Map<string, CustomerAgg>()
 
     customerRows.forEach(row => {
+      // Bỏ KH có bảng giá chứa "INACTIVE" (vd: "[INACTIVE] Sponsor")
+      if (row.price_list_name?.toUpperCase().includes("INACTIVE")) return
       const code = row.customer_code
       if (!customerMap.has(code)) {
         const pln = row.price_list_name
