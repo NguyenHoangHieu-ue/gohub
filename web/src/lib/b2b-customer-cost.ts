@@ -1,7 +1,9 @@
 // Chi phí kênh nhập tay cho từng khách hàng B2B theo tháng (Quarter Report › Chi tiết B2B).
-// Lưu ở Turso (gohub-intel). cost_lines = [{label,type,value}].
+// Primary store: Turso (gohub-intel). Fallback: Supabase (legacy, data cũ trước khi migrate sang Turso).
+// cost_lines = [{label,type,value}].
 
 import { tursoQuery } from "@/lib/turso"
+import { supabaseAdmin } from "@/lib/supabase"
 
 export interface CostLine { label?: string; type: "amount" | "percent"; value: number }
 export interface CostRecord {
@@ -46,30 +48,42 @@ export function calcRecordCostProjected(
   return rec.cost_type === "percent" ? (cval / 100) * rawRevenue * factor : cval
 }
 
-/** Đọc toàn bộ chi phí KH của các tháng trong quý → Map key `${month}_${code}`. */
+/** Đọc toàn bộ chi phí KH của các tháng trong quý → Map key `${month}_${code}`.
+ *  Primary: Turso. Fallback: Supabase (legacy — data lưu trước khi migrate sang Turso).
+ */
 export async function fetchCustomerCosts(months: string[]): Promise<Map<string, CostRecord>> {
   const map = new Map<string, CostRecord>()
   if (months.length === 0) return map
+
+  const parseRow = (r: { month: string; customer_code: string; cost_type?: string | null; cost_value?: number | null; cost_lines?: unknown }) => {
+    map.set(`${r.month}_${r.customer_code}`, {
+      cost_type:  (r.cost_type  as string) ?? "amount",
+      cost_value: Number(r.cost_value) || 0,
+      cost_lines: typeof r.cost_lines === "string" ? r.cost_lines : JSON.stringify(r.cost_lines ?? []),
+    })
+  }
+
+  // 1. Turso (primary — data Q3+)
   try {
-    // Turso: dùng IN với placeholders (mỗi tháng 1 arg)
     const placeholders = months.map(() => "?").join(", ")
-    const rows = await tursoQuery<{
-      month: string; customer_code: string
-      cost_type: string | null; cost_value: number | null; cost_lines: string | null
-    }>(
+    const rows = await tursoQuery<{ month: string; customer_code: string; cost_type: string | null; cost_value: number | null; cost_lines: string | null }>(
       `SELECT month, customer_code, cost_type, cost_value, cost_lines
-       FROM b2b_customer_cost_monthly
-       WHERE month IN (${placeholders})`,
+       FROM b2b_customer_cost_monthly WHERE month IN (${placeholders})`,
       months,
     )
-    rows.forEach((r) => {
-      map.set(`${r.month}_${r.customer_code}`, {
-        cost_type:  r.cost_type  ?? "amount",
-        cost_value: Number(r.cost_value) || 0,
-        cost_lines: typeof r.cost_lines === "string" ? r.cost_lines : JSON.stringify(r.cost_lines ?? []),
-      })
-    })
-  } catch { /* bảng chưa tạo → trả rỗng */ }
+    rows.forEach(parseRow)
+    if (map.size > 0) return map  // Turso có data → xong
+  } catch { /* bảng chưa tạo hoặc Turso chưa cấu hình */ }
+
+  // 2. Supabase fallback (legacy — data Q2 lưu trước khi migrate sang Turso)
+  try {
+    const { data } = await supabaseAdmin
+      .from("b2b_customer_cost_monthly")
+      .select("month, customer_code, cost_type, cost_value, cost_lines")
+      .in("month", months)
+    ;(data ?? []).forEach(parseRow)
+  } catch { /* bảng đã bị drop (v22) hoặc không tồn tại */ }
+
   return map
 }
 
