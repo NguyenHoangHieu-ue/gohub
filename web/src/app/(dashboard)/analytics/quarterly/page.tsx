@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -38,7 +38,8 @@ const EMPTY_TARGETS: Targets = { b2bRev: 0, b2bCm1: 0, b2bThk: 0, b2cRev: 0, b2c
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fc  = formatCompactNumber
+// Hiển thị số đầy đủ với dấu phân cách hàng nghìn (vi-VN: dấu chấm)
+const fc  = (n: number) => Math.round(n).toLocaleString("vi-VN")
 const pct = (v: number) => `${v.toFixed(1)}%`
 
 function parseFmt(s: string): number { return parseFloat(s.replace(/[^\d.-]/g, "")) || 0 }
@@ -62,7 +63,7 @@ function ProgressBar({ value, target }: { value: number; target: number }) {
 
 // ─── KPI Progress Card ────────────────────────────────────────────────────────
 
-function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, hk3Pct, hk3Target, expectedPct = 0, accent = "#003B95" }:
+function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Target, expectedPct = 0, accent = "#003B95" }:
   { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Target: number; expectedPct?: number; accent?: string }) {
   const progress   = target > 0 ? (actual / target) * 100 : 0
   // Xanh nếu đạt/vượt kỳ vọng pro-rata, amber nếu dưới, xanh lá nếu ≥100%
@@ -98,11 +99,17 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, h
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR Revenue</div>
-          <div className="font-bold text-slate-800 tabular-nums">{fc(prRev)}</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prRev)}</span>
+            {target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prRev >= target ? "text-green-600" : prRev / target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prRev / target * 100)}</span>}
+          </div>
         </div>
         <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR CM1</div>
-          <div className="font-bold text-slate-800 tabular-nums">{fc(prCm1)}</div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prCm1)}</span>
+            {cm1Target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prCm1 >= cm1Target ? "text-green-600" : prCm1 / cm1Target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prCm1 / cm1Target * 100)}</span>}
+          </div>
         </div>
         <div className="rounded-lg px-2.5 py-1.5 border" style={{ background: `${accent}0d`, borderColor: `${accent}26` }}>
           <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: accent }}>CM1 Thực tế</div>
@@ -113,6 +120,20 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, h
           <div className="font-bold text-slate-800 tabular-nums">{pct(hk3Pct)}</div>
         </div>
       </div>
+      {cm1Target > 0 && (
+        <div className="mt-2 pt-2 border-t border-slate-100">
+          <div className="flex justify-between text-[10px] mb-1">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">CM1 vs Target</span>
+            <span className={cn("font-bold tabular-nums", cm1Actual >= cm1Target ? "text-green-600" : cm1Actual / cm1Target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+              {pct(cm1Actual / cm1Target * 100)}
+            </span>
+          </div>
+          <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(Math.max(cm1Actual / cm1Target * 100, 0), 100)}%`, background: accent }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -195,6 +216,7 @@ function QuarterlyContent() {
   }, [selQ, selYear])
 
   const fetchB2BTiers = useCallback(async (refresh = false) => {
+    if (!refresh) setB2bTiers(null)
     setB2bTiersLoading(true)
     try {
       // Không truyền region — server trả đủ VN+US, filter ALL/VN/US xử lý client-side (tức thì, không re-fetch)
@@ -244,7 +266,7 @@ function QuarterlyContent() {
   const b2bThkAct  = summary.reduce((s, m) => s + (m.b2b.actualHk3 ?? 0), 0)
   const b2bRevPr   = b2bRevRaw * qFactor
   const b2bCm1Pr   = b2bCm1Raw * qFactor
-  const b2bThkPct  = b2bRevAct > 0 ? b2bThkAct / b2bRevAct * 100 : 0
+  const b2bThkPct  = b2bRevRaw > 0 ? b2bThkAct / b2bRevRaw * 100 : 0
 
   const b2cRevAct  = summary.reduce((s, m) => s + m.b2c.revenue, 0)
   const b2cRevRaw  = summary.reduce((s, m) => s + (m.b2c.actualRevenue ?? m.b2c.revenue), 0)
@@ -256,7 +278,7 @@ function QuarterlyContent() {
   const b2cThkAct  = summary.reduce((s, m) => s + (m.b2c.actualHk3 ?? 0), 0)
   const b2cRevPr   = b2cRevRaw * qFactor
   const b2cCm1Pr   = b2cCm1Raw * qFactor
-  const b2cThkPct  = b2cRevAct > 0 ? b2cThkAct / b2cRevAct * 100 : 0
+  const b2cThkPct  = b2cRevRaw > 0 ? b2cThkAct / b2cRevRaw * 100 : 0
 
   const totRevAct  = b2bRevAct + b2cRevAct
   const totRevRaw  = b2bRevRaw + b2cRevRaw
@@ -267,7 +289,7 @@ function QuarterlyContent() {
   const totCm1Act  = b2bCm1Act + b2cCm1Act
   const totRevPr   = totRevRaw * qFactor
   const totCm1Pr   = totCm1Raw * qFactor
-  const totThkPct  = totRevAct > 0 ? (b2bThkAct + b2cThkAct) / totRevAct * 100 : 0
+  const totThkPct  = totRevRaw > 0 ? (b2bThkAct + b2cThkAct) / totRevRaw * 100 : 0
   // ──────────────────────────────────────────────────────────────────────────
 
   // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, HÔM QUA)).
@@ -383,8 +405,8 @@ function QuarterlyContent() {
       </div>
 
       {/* ── KPI Progress cards ── */}
-      {report && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {report && (
+        <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity", loading && "opacity-50 pointer-events-none")}>
           <KpiCard label="B2B" icon={Building2} accent="#003B95" expectedPct={expectedPct}
             actual={b2bRevAct} prRev={b2bRevPr} target={targets.b2bRev}
             cm1Actual={b2bCm1Act} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
@@ -401,8 +423,8 @@ function QuarterlyContent() {
       )}
 
       {/* ── Monthly summary table ── */}
-      {!loading && summary.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      {summary.length > 0 && (
+        <div className={cn("bg-white border border-slate-200 rounded-xl overflow-hidden transition-opacity", loading && "opacity-50 pointer-events-none")}>
           <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp theo Tháng</h2>
           </div>
@@ -444,8 +466,8 @@ function QuarterlyContent() {
       )}
 
       {/* ── Quarter total vs target ── */}
-      {!loading && qt && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+      {qt && (
+        <div className={cn("bg-white border border-slate-200 rounded-xl overflow-hidden transition-opacity", loading && "opacity-50 pointer-events-none")}>
           <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp cả Quý — So sánh với Target</h2>
           </div>
@@ -522,13 +544,16 @@ function QuarterlyContent() {
         isCreator={isCreator}
         onSaved={() => fetchB2BTiers(true)}
         notify={notify}
+        quarterLabel={`${selQ}-${selYear}`}
       />
 
       {/* ── B2C channel pivot ── */}
-      {!loading && report && report.b2cChannels.length > 0 && (
+      {report && report.b2cChannels.length > 0 && (
+        <div className={cn("transition-opacity", loading && "opacity-50 pointer-events-none")}>
         <PivotTable title="B2C — Chi tiết theo Kênh × Tháng" icon={ShoppingBag}
           channels={report.b2cChannels} months={activeMonths}
           expanded={expandB2C} onToggle={() => setExpandB2C(v => !v)} />
+        </div>
       )}
 
       {!loading && summary.length === 0 && report && (
@@ -591,19 +616,36 @@ function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act
   const revActPct = targetRev > 0 ? revAct / targetRev * 100 : 0
   const cm1PrPct  = targetCm1 > 0 ? cm1Pr  / targetCm1 * 100 : 0
   const cm1ActPct = targetCm1 > 0 ? cm1Act / targetCm1 * 100 : 0
-  const prCls  = (p: number) => p >= 100 ? "text-green-600 font-semibold" : p >= 75 ? "text-blue-600 font-semibold" : "text-red-500 font-semibold"
+  const badge = (p: number) => (
+    <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
+      p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-red-50 text-red-500")}>
+      {pct(p)}
+    </span>
+  )
   return (
-    <tr className="border-b border-slate-100 bg-slate-50 text-[11px] text-slate-500">
-      <td className="px-4 py-2 pl-9 italic">{label}</td>
-      <td className="px-4 py-2 text-right tabular-nums">{fc(targetRev)}</td>
-      <td className={cn("px-4 py-2 text-right", prCls(revPrPct))}>Đạt PR: {pct(revPrPct)}</td>
-      <td className={cn("px-4 py-2 text-right", prCls(revActPct))}>Đạt TT: {pct(revActPct)}</td>
+    <tr className="border-b border-dashed border-blue-100 bg-blue-50/20 text-[11px] text-slate-600">
+      <td className="px-4 py-2 pl-9 italic text-slate-500">{label}</td>
+      {/* Cols 1-3 (Revenue, PR Rev, Gross Margin): hiện nhóm Revenue target */}
+      <td colSpan={3} className="px-4 py-2">
+        <div className="flex items-center gap-2 justify-end flex-wrap">
+          <span className="text-slate-500 tabular-nums">Rev target: <b className="text-slate-700">{fc(targetRev)}</b></span>
+          <span className="text-slate-400">PR {badge(revPrPct)}</span>
+          <span className="text-slate-400">TT {badge(revActPct)}</span>
+        </div>
+      </td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
-      <td className="px-4 py-2 text-right tabular-nums">{targetCm1 > 0 ? fc(targetCm1) : "—"}</td>
-      <td className={cn("px-4 py-2 text-right", prCls(cm1PrPct))}>{targetCm1 > 0 ? `Đạt PR: ${pct(cm1PrPct)}` : "—"}</td>
-      <td className={cn("px-4 py-2 text-right", prCls(cm1ActPct))}>{targetCm1 > 0 ? `Đạt TT: ${pct(cm1ActPct)}` : "—"}</td>
+      {/* Cols 7-9 (CM1, PR CM1, CM1%): hiện nhóm CM1 target */}
+      <td colSpan={3} className="px-4 py-2">
+        {targetCm1 > 0 ? (
+          <div className="flex items-center gap-2 justify-end flex-wrap">
+            <span className="text-slate-500 tabular-nums">CM1 target: <b className="text-slate-700">{fc(targetCm1)}</b></span>
+            <span className="text-slate-400">PR {badge(cm1PrPct)}</span>
+            <span className="text-slate-400">TT {badge(cm1ActPct)}</span>
+          </div>
+        ) : <span className="text-slate-300 float-right">—</span>}
+      </td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
     </tr>
   )
@@ -651,9 +693,9 @@ function lineTotal(lines: CostLine[], revenue: number): number {
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
-function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify }:
+function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void }) {
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
@@ -739,6 +781,17 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const editedLines = (c: any, m: string) => costEdits[c.code]?.[m] ?? parseCostLines(c.monthsCost?.[m]?.cost_lines)
   const editedCustomerCost = (c: any) => quarterMonths.reduce((s, m) => s + lineTotal(editedLines(c, m), c.monthsCost?.[m]?.revenue ?? 0), 0)
 
+  // C4: tập mã KH có thay đổi chưa lưu
+  const dirtyCodes = useMemo(() => {
+    if (!editMode || !costSnapshot) return new Set<string>()
+    try {
+      const snap = JSON.parse(costSnapshot) as CustomerCostEdits
+      return new Set(Object.keys(costEdits).filter(code =>
+        JSON.stringify(costEdits[code]) !== JSON.stringify(snap[code] ?? {})
+      ))
+    } catch { return new Set<string>() }
+  }, [costEdits, costSnapshot, editMode])
+
   const saveCost = async () => {
     if (!costDirty) return
     setSavingCost(true)
@@ -794,6 +847,26 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
               </button>
             ))}
           </div>
+          {canEditCost && (
+            editMode ? (
+              <>
+                <button onClick={saveCost} disabled={savingCost || !costDirty}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
+                    costDirty && !savingCost ? "bg-[#003B95] text-white border-[#003B95] hover:bg-[#00337f]" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed")}>
+                  {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+                </button>
+                <button onClick={cancelCostEdit} disabled={savingCost}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                  <X className="w-3.5 h-3.5" />Hủy
+                </button>
+              </>
+            ) : (
+              <button onClick={() => { if (!expanded) onToggle(); startCostEdit() }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#003B95]/30 bg-white text-[#003B95] hover:bg-blue-50 transition-all">
+                <Pencil className="w-3.5 h-3.5" />Sửa chi tiết
+              </button>
+            )
+          )}
           {loading && <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />}
           <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform", expanded && "rotate-90")} />
         </div>
@@ -803,11 +876,11 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
         <div>
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
+            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (quarterMonths.length + 1) * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#003B95]">
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Nhóm</th>
-                  {months.map(m => {
+                  {quarterMonths.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
@@ -817,24 +890,32 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       </th>
                     )
                   })}
+                  <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a4a9e] whitespace-nowrap bg-[#1e3a8a]">
+                    Tổng Quý
+                  </th>
                 </tr>
                 <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
-                  {months.flatMap(m => SUB.map((h, i) => (
+                  {quarterMonths.flatMap(m => SUB.map((h, i) => (
                     <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
                       {h}
                     </th>
                   )))}
+                  {SUB.map((h, i) => (
+                    <th key={`qt-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#162d74]", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
+                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
                     <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu nhóm...
                   </td></tr>
                 )}
                 {!loading && tiers.length === 0 && (
-                  <tr><td colSpan={1 + months.length * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
+                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
                 )}
                 {!loading && tiers.map((tierRaw: any, ri: number) => {
                   const tier = pickView(tierRaw)
@@ -854,7 +935,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
                       </td>
-                      {months.flatMap((m: string) => {
+                      {quarterMonths.flatMap((m: string) => {
                         const d = tier.months.find((x: any) => x.month === m)
                         if (!d?.hasData) {
                           return SUB.map((_: string, i: number) => (
@@ -874,6 +955,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
                         ]
                       })}
+                      {/* Tổng Quý */}
+                      <td className="px-2 py-2.5 text-right font-semibold text-slate-700 tabular-nums border-l border-blue-200 bg-blue-50/60">{fc(tier.totalRevenue)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-600 tabular-nums bg-blue-50/60">{fc(tier.totalGm)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{tier.totalCc > 0 ? fc(tier.totalCc) : "—"}</td>
+                      <td className={cn("px-2 py-2.5 text-right font-bold tabular-nums bg-blue-50/60", cm1Color(tier.totalCm1))}>{fc(tier.totalCm1)}</td>
+                      <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(tier.totalCm1))}>{pct(tier.totalCm1Pct)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60">{pct(tier.totalHk3Pct)}</td>
                     </tr>
                   )
                 })}
@@ -891,40 +980,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                     Khách hàng nhóm: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
                   </h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  {canEditCost && (
-                    editMode ? (
-                      <>
-                        <button
-                          onClick={saveCost}
-                          disabled={savingCost || !costDirty}
-                          className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
-                            costDirty && !savingCost ? "bg-[#003B95] text-white border-[#003B95] hover:bg-[#00337f]" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed")}>
-                          {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-                        </button>
-                        <button
-                          onClick={cancelCostEdit}
-                          disabled={savingCost}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                          <X className="w-3.5 h-3.5" />Hủy
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={startCostEdit}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#003B95]/30 bg-white text-[#003B95] hover:bg-blue-50 transition-all">
-                        <Pencil className="w-3.5 h-3.5" />Sửa chi tiết
-                      </button>
-                    )
-                  )}
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text" placeholder="Tìm tên, mã KH..."
-                      value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
-                    />
-                  </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text" placeholder="Tìm tên, mã KH..."
+                    value={custSearch} onChange={e => setCustSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
+                  />
                 </div>
               </div>
               {editMode && (
@@ -959,7 +1021,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%MoM</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%MoM (GM)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
                           </tr>
                         </thead>
@@ -969,7 +1031,12 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             return (
                               <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
                                 {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>}
-                                <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>{c.name}</td>
+                                <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px] truncate" title={c.name}>
+                                  {c.name}
+                                  {editMode && dirtyCodes.has(c.code) && (
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 ml-1.5 align-middle" title="Có thay đổi chưa lưu" />
+                                  )}
+                                </td>
                                 {isCreator && (
                                   <td className="px-3 py-2 whitespace-nowrap">
                                     {c.priceListName
@@ -1022,7 +1089,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#003B95]">{costCust.name}</span></h3>
-                <p className="text-[11px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}</p>
+                <p className="text-[11px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}{quarterLabel ? ` · ${quarterLabel}` : ""}</p>
               </div>
               <button onClick={closeCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
             </div>
@@ -1037,7 +1104,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                     <div key={m} className={cn("border rounded-lg p-3 flex flex-col", hasData ? "border-slate-200" : "border-dashed border-slate-200 bg-slate-50/50")}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-700">{mLabel(m)}</span>
-                        {hasData && <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>}
+                        <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>
                       </div>
                       {!hasData ? (
                         <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">

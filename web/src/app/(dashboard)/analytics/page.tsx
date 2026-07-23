@@ -44,6 +44,8 @@ export default function DashboardHome() {
   const [performanceChannel, setPerformanceChannel] = useState<PerformanceRow[]>([])
   const [strategicPerformance, setStrategicPerformance] = useState<any[]>([])
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  const [b2bTierData, setB2bTierData] = useState<any>(null)
+  const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [targetProgress, setTargetProgress] = useState<{ totalTarget: number; proRataTarget: number; totalActual: number; progress: number; proRataProgress: number } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -100,7 +102,7 @@ export default function DashboardHome() {
         return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
       }
 
-      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData] = await Promise.all([
+      const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData, tierPerfData] = await Promise.all([
         fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs"),
         fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue"),
         fetchJson(`/api/analytics/region-chart${queryParams}`, "Region"),
@@ -111,6 +113,7 @@ export default function DashboardHome() {
         fetchJson(`/api/config/partner-tiers`, "Tiers"),
         fetchJson(`/api/analytics/b2b/strategic-performance${queryParams}`, "Strategic"),
         fetchJson(`/api/analytics/monthly-kpis?companyCode=${companyCode}&dateColumn=${dateColumn}&startDate=${startDate}&endDate=${endDate}`, "Monthly").catch(() => null),
+        fetchJson(`/api/analytics/b2b/tier-performance${queryParams}`, "B2B Tiers").catch(() => null),
       ])
 
       setKpis(kpiData)
@@ -123,6 +126,7 @@ export default function DashboardHome() {
       setPartnerTiers(tiersData)
       setStrategicPerformance(strategicPerfData)
       if (monthlyData) setMonthlyKpis(monthlyData)
+      if (tierPerfData) setB2bTierData(tierPerfData)
 
       try {
         const date = new Date(startDate)
@@ -564,17 +568,28 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        {/* Performance by Channels */}
+        {/* Performance by Channels — B2B theo tier price_list_name + B2C theo kênh */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="perf-channels">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
             <h3 className="font-bold text-slate-800">Performance by Channels</h3>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Direct vs Affiliate</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">B2B:</span>
+              <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                {(["ALL", "VN", "US"] as const).map(r => (
+                  <button key={r} onClick={() => setB2bRegion(r)}
+                    className={cn("px-2.5 py-1 text-[10px] font-bold rounded-md transition-all",
+                      b2bRegion === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-white")}>
+                    {r === "ALL" ? "ALL" : r === "VN" ? "🇻🇳 VN" : "🇺🇸 US"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-500 font-medium">
                 <tr>
-                  <th className="px-4 py-3">Channel</th>
+                  <th className="px-4 py-3">Channel / Phân khúc</th>
                   <th className="px-4 py-3 text-right">Total Order</th>
                   <th className="px-4 py-3 text-right">Unit Sold</th>
                   <th className="px-4 py-3 text-right">Gross Revenue</th>
@@ -584,49 +599,85 @@ export default function DashboardHome() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
-                  Array(2).fill(0).map((_, i) => (
+                  Array(4).fill(0).map((_, i) => (
                     <tr key={i}>{Array(6).fill(0).map((_, j) => <td key={j} className="px-4 py-3 text-right"><Skeleton className={cn("h-4", j === 0 ? "w-24" : "w-16 ml-auto")} /></td>)}</tr>
                   ))
                 ) : (
-                  groupedPerformanceChannel.map((groupData) => {
-                    const groupTotalRev = groupData.items.reduce((sum, item) => sum + item.grossRevenue, 0)
-                    const groupTotalOrders = groupData.items.reduce((sum, item) => sum + item.totalOrder, 0)
-                    const groupTotalUnits = groupData.items.reduce((sum, item) => sum + item.unitSold, 0)
-                    const displayGroupNames: Record<string, string> = { "B2B-Strategic": "Strategic Partners", "B2B-Non-Strategic": "Other Partners (Non-Strategic)", "B2C": "B2C Channels" }
-                    return (
-                      <React.Fragment key={groupData.group}>
-                        <tr className={cn("group/header", groupData.group === "B2B-Strategic" ? "bg-indigo-50/50" : groupData.group === "B2B-Non-Strategic" ? "bg-slate-50" : "bg-slate-100/80")}>
-                          <td colSpan={1} className="px-4 py-2 font-bold text-slate-800 text-[10px] uppercase tracking-widest">
-                            <div className="flex items-center gap-2">
-                              {groupData.group === "B2B-Strategic" && <Shield className="w-3.5 h-3.5 text-indigo-600" />}
-                              {groupData.group === "B2B-Non-Strategic" && <Building2 className="w-3.5 h-3.5 text-slate-500" />}
-                              {displayGroupNames[groupData.group] || groupData.group}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(groupTotalOrders)}</td>
-                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(groupTotalUnits)}</td>
-                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(groupTotalRev)}</td>
-                          <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(groupTotalRev * projection.factor) : "-"}</td>
-                          <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-400">SUBTOTAL</td>
-                        </tr>
-                        {groupData.items.map((row) => (
-                          <tr key={`${groupData.group}-${row.group}`} className="hover:bg-slate-50 transition-colors group">
-                            <td className="px-4 py-3 font-medium text-slate-700 pl-8 border-l-2 border-transparent group-hover:border-blue-400">
-                              <div className="flex flex-col">
-                                <span className="text-sm">{row.group}</span>
-                                {(row as any).tier && <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tight">{(row as any).tier}</span>}
-                              </div>
+                  <>
+                    {/* ── B2B: tier breakdown từ price_list_name ── */}
+                    {b2bTierData && (() => {
+                      const TIER_CLR: Record<string, { badge: string; row: string }> = {
+                        Strategic: { badge: "bg-[#003B95] text-white",  row: "bg-[#003B95]/5" },
+                        VIP:       { badge: "bg-purple-600 text-white", row: "bg-purple-50/40" },
+                        Gold:      { badge: "bg-yellow-500 text-white", row: "bg-yellow-50/40" },
+                        Silver:    { badge: "bg-slate-400 text-white",  row: "bg-slate-50/60" },
+                      }
+                      const pick = (t: any) => b2bRegion === "ALL"
+                        ? { rev: t.totalRevenue, orders: t.totalOrders, units: t.totalUnits }
+                        : { rev: t.byRegion?.[b2bRegion]?.totalRevenue ?? 0, orders: t.byRegion?.[b2bRegion]?.totalOrders ?? 0, units: t.byRegion?.[b2bRegion]?.totalUnits ?? 0 }
+                      const tot = (b2bTierData.tiers as any[]).reduce((a: any, t: any) => { const d = pick(t); return { rev: a.rev+d.rev, orders: a.orders+d.orders, units: a.units+d.units } }, { rev: 0, orders: 0, units: 0 })
+                      return (
+                        <>
+                          <tr className="bg-[#003B95]/10">
+                            <td className="px-4 py-2 font-bold text-[#003B95] text-[10px] uppercase tracking-widest">
+                              <div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />B2B — Phân khúc{b2bRegion !== "ALL" && ` (${b2bRegion})`}</div>
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
-                            <td className="px-4 py-3 text-right text-blue-600/70 font-medium">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
-                            <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(tot.orders)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(tot.units)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(tot.rev)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(tot.rev * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-[10px] text-slate-400">SUBTOTAL</td>
                           </tr>
-                        ))}
-                      </React.Fragment>
-                    )
-                  })
+                          {(b2bTierData.tiers as any[]).map((tier: any) => {
+                            const d = pick(tier)
+                            if (d.rev === 0 && d.orders === 0) return null
+                            const clr = TIER_CLR[tier.tier] || TIER_CLR.Strategic
+                            return (
+                              <tr key={tier.tier} className={cn("hover:brightness-95 transition-colors border-l-4 border-[#003B95]/20", clr.row)}>
+                                <td className="px-4 py-3 pl-10">
+                                  <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", clr.badge)}>{tier.tier}</span>
+                                </td>
+                                <td className="px-4 py-3 text-right text-slate-600">{formatNumber(d.orders)}</td>
+                                <td className="px-4 py-3 text-right text-slate-600">{formatNumber(d.units)}</td>
+                                <td className="px-4 py-3 text-right font-medium text-slate-700">{formatCurrency(d.rev)}</td>
+                                <td className="px-4 py-3 text-right text-blue-600/70 font-medium">{projection ? formatCurrency(d.rev * projection.factor) : "-"}</td>
+                                <td className="px-4 py-3 text-right text-slate-300">—</td>
+                              </tr>
+                            )
+                          })}
+                        </>
+                      )
+                    })()}
+
+                    {/* ── B2C: kênh từ performance-channel ── */}
+                    {groupedPerformanceChannel.filter(g => g.group === "B2C").map(groupData => {
+                      const gRev = groupData.items.reduce((s, i) => s + i.grossRevenue, 0)
+                      const gOrd = groupData.items.reduce((s, i) => s + i.totalOrder, 0)
+                      const gUnt = groupData.items.reduce((s, i) => s + i.unitSold, 0)
+                      return (
+                        <React.Fragment key="B2C">
+                          <tr className="bg-slate-100/80">
+                            <td className="px-4 py-2 font-bold text-slate-800 text-[10px] uppercase tracking-widest">B2C Channels</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gOrd)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gUnt)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(gRev)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(gRev * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-[10px] text-slate-400">SUBTOTAL</td>
+                          </tr>
+                          {groupData.items.map(row => (
+                            <tr key={row.group} className="hover:bg-slate-50 transition-colors group">
+                              <td className="px-4 py-3 font-medium text-slate-700 pl-8 border-l-2 border-transparent group-hover:border-blue-400">{row.group}</td>
+                              <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
+                              <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.unitSold)}</td>
+                              <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(row.grossRevenue)}</td>
+                              <td className="px-4 py-3 text-right text-blue-600/70 font-medium">{projection ? formatCurrency(row.grossRevenue * projection.factor) : "-"}</td>
+                              <td className={cn("px-4 py-3 text-right font-bold", row.mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{row.mom > 0 ? "+" : ""}{(row.mom || 0).toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      )
+                    })}
+                  </>
                 )}
               </tbody>
             </table>
