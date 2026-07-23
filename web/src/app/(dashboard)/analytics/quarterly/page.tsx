@@ -31,7 +31,7 @@ interface QReport {
   quarter: string; year: number; months: string[]
   summary: MonthSummary[]
   quarterTotal: MonthStats & { hk3Pct: number; b2b: MonthStats; b2c: MonthStats }
-  prevQuarterTotals?: { b2bRevenue: number; b2bGp: number; b2cRevenue: number; b2cGp: number }
+  prevQuarterTotals?: { b2bRevenue: number; b2bGp: number; b2bCm1: number; b2cRevenue: number; b2cGp: number; b2cCm1: number }
   b2bChannels: Channel[]; b2cChannels: Channel[]
   elapsed_days: number; quarter_days: number
 }
@@ -147,7 +147,7 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
 // ─── Table header row ─────────────────────────────────────────────────────────
 
 const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
-const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%", "%QoQ"]
+const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%", "%QoQ(CM1)"]
 
 function TableHead({ cols }: { cols: string[] }) {
   return (
@@ -340,13 +340,13 @@ function QuarterlyContent() {
   const totCm1Pr   = totCm1Raw * qFactor
   const totThkPct  = totRevRaw > 0 ? (b2bThkAct + b2cThkAct) / totRevRaw * 100 : 0
 
-  // QoQ: so sánh pro-rata quý này vs thực tế quý trước (dựa vào Revenue)
+  // QoQ(CM1): so sánh CM1 pro-rata quý này vs CM1 thực tế quý trước
   const pqt = report?.prevQuarterTotals
   const qoq = (prVal: number, prevVal: number | undefined) =>
     prevVal && prevVal !== 0 ? Math.round((prVal - prevVal) / Math.abs(prevVal) * 1000) / 10 : null
-  const b2bQoQ = qoq(b2bRevPr, pqt?.b2bRevenue)
-  const b2cQoQ = qoq(b2cRevPr, pqt?.b2cRevenue)
-  const totQoQ = qoq(totRevPr, (pqt?.b2bRevenue ?? 0) + (pqt?.b2cRevenue ?? 0))
+  const b2bQoQ = qoq(b2bCm1Pr, pqt?.b2bCm1)
+  const b2cQoQ = qoq(b2cCm1Pr, pqt?.b2cCm1)
+  const totQoQ = qoq(totCm1Pr, (pqt?.b2bCm1 ?? 0) + (pqt?.b2cCm1 ?? 0))
   // ──────────────────────────────────────────────────────────────────────────
 
   // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, HÔM QUA)).
@@ -937,7 +937,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b2bTiers])
 
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ", "3HK%"]
+  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK%"]
   const colCount = SUB.length
 
   // Lấy view theo region hiện tại: ALL → dùng tổng tier; VN/US → dùng byRegion
@@ -1298,7 +1298,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (GM)</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (CM1)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
                           </tr>
                         </thead>
