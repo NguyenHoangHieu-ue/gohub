@@ -296,9 +296,9 @@ export function Sidebar() {
   const analyticsGroups = (() => {
     let groups = ANALYTICS_GROUPS
     if (effectiveRole !== "admin" && effectiveRole !== "creator") {
-      // Treat empty array [] same as "not configured" → fall back to code defaults
-      const dbPerms = rolePerms?.[effectiveRole]
-      const baseline = (dbPerms && dbPerms.length > 0) ? dbPerms : (ANALYTICS_DEFAULTS[effectiveRole] ?? [])
+      // Union code defaults + DB: DB có thể thêm tab, nhưng code defaults luôn được giữ
+      const dbPerms = rolePerms?.[effectiveRole] ?? []
+      const baseline = [...new Set([...(ANALYTICS_DEFAULTS[effectiveRole] ?? []), ...dbPerms])]
       const granted = new Set([...baseline, ...(allowedAnalytics ?? [])])
       groups = ANALYTICS_GROUPS
         .map(group => ({
