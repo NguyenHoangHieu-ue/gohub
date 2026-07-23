@@ -2,15 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
-
-// KH tổng hợp không phải partner B2B thật — CHỈ loại khỏi nhánh B2B (khớp bảng Nhóm quarterly-b2b-customers).
-// LƯU Ý: "B2C Customer VN/US" là KH tổng hợp HỢP LỆ của B2C → PHẢI giữ ở nhánh B2C (nếu loại toàn cục sẽ mất sạch B2C).
-const EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
-const EXCLUDE_CUST_SQL = `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND COALESCE(c.name, '') IN (${EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")}))`
 
 function getQuarterMonths(quarter: string, year: number): string[] {
   const q = parseInt(quarter.replace("Q", ""))
@@ -76,13 +72,18 @@ export async function GET(req: NextRequest) {
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  // v5: actual fields + per-group 3HK + elapsed_days/quarter_days + computeSummary support
-  // v7: loại 3 KH tổng hợp CHỈ ở nhánh B2B (giữ B2C — v6 loại toàn cục làm mất sạch B2C)
-  // v8: mốc dữ liệu chốt tới HÔM QUA (asOf = today-1)
-  const cacheKey = `qreport_v8:${quarter}:${year}:${companyCode}:${todayStr}`
+  const refresh = noCache(req)
+
+  // Load settings (excluded customers) — dynamic, không cache hoặc re-fetch mỗi request
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const EXCLUDE_CUST_SQL = makeExcludeSql(excludedCustomers)
+
+  // v9: dynamic exclusion (hash trong key), fetchCosts NGOÀI cache → Supabase costs luôn fresh
+  const rawCacheKey = `qreport_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    const data = await cachedQuery(cacheKey, async () => {
+    // ── Phần 1: cache gohub_dw rows ─────────────────────────────────────────────
+    const rawData = await cachedQuery(rawCacheKey, async () => {
       const [groupRows, channelRows, hk3Rows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           SELECT
@@ -142,10 +143,17 @@ export async function GET(req: NextRequest) {
         `),
       ])
 
-      const { channelCosts, groupCosts } = await fetchCosts(months)
+      return { groupRows, channelRows, hk3Rows }
+    }, QUERY_TTL_MIN, refresh)
 
-      // Metadata per month: projection factor, date ranges
-      const monthMeta = months.map(m => {
+    // ── Phần 2: Supabase costs — luôn fresh (NGOÀI cache) ────────────────────────
+    const { channelCosts, groupCosts } = await fetchCosts(months)
+
+    // ── Phần 3: Compute ────────────────────────────────────────────────────────
+    const { groupRows, channelRows, hk3Rows } = rawData
+
+    // Metadata per month: projection factor, date ranges
+    const monthMeta = months.map(m => {
         const mStart = `${m}-01`
         const mEndDate = new Date(parseInt(m.split("-")[0]), parseInt(m.split("-")[1]), 0)
         const mEnd = mEndDate.toISOString().split("T")[0]
@@ -327,18 +335,15 @@ export async function GET(req: NextRequest) {
       const elapsed_days = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) => s + mr.elapsed, 0)
       const quarter_days = monthMeta.reduce((s, mr) => s + mr.dim, 0)
 
-      return {
-        quarter, year, months,
-        summary,
-        quarterTotal,
-        b2bChannels: buildChannels("B2B"),
-        b2cChannels: buildChannels("B2C"),
-        elapsed_days,
-        quarter_days,
-      }
-    }, QUERY_TTL_MIN)
-
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json({
+      quarter, year, months,
+      summary,
+      quarterTotal,
+      b2bChannels: buildChannels("B2B"),
+      b2cChannels: buildChannels("B2C"),
+      elapsed_days,
+      quarter_days,
+    }, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[quarterly-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
