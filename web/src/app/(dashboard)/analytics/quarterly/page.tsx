@@ -1352,14 +1352,45 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   const qm: string[] = quarterMonths
                                   const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
                                   // Metrics rows: label | T1 | T2 | T3 | Tổng Quý
+                                  // Tháng projected → 2 dòng: "Pr. xxx" (pro-rata xanh) + "Act. xxx" (actual đậm)
                                   type MRow = { label: string; vals: (m: any) => React.ReactNode; tot: React.ReactNode }
+                                  const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
+                                    <div className="flex items-baseline justify-end gap-1 leading-snug">
+                                      <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
+                                      <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{val}</span>
+                                    </div>
+                                  )
+                                  const actLine = (val: React.ReactNode, cls = "text-slate-700") => (
+                                    <div className="flex items-baseline justify-end gap-1 leading-snug">
+                                      <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">Act.</span>
+                                      <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{val}</span>
+                                    </div>
+                                  )
                                   const mRows: MRow[] = [
-                                    { label: "Revenue",  vals: (m: any) => m ? (m.isProjected ? <><span className={cn("tabular-nums font-semibold text-[11px] text-blue-700")}>{fck(m.revenue)}<sup className="text-[8px] text-blue-400 ml-0.5">PR</sup></span><br/><span className="text-[10px] text-blue-600 font-semibold tabular-nums">{fck(m.actualRevenue ?? m.revenue)}<sup className="text-[8px] text-blue-400 ml-0.5">Act</sup></span></> : <span className="tabular-nums text-slate-700 text-[11px] font-semibold">{fck(m.revenue)}</span>) : <span className="text-slate-200">—</span>, tot: <span className={cn("tabular-nums font-semibold text-[11px]", hp ? "text-blue-700" : "text-slate-700")}>{hp ? <>{fck(c.revenue)}<sup className="text-[8px] text-blue-400 ml-0.5">PR</sup><br/><span className="text-[10px] text-blue-600">{fck(actRev)}<sup className="text-[8px] text-blue-400 ml-0.5">Act</sup></span></> : fck(actRev)}</span> },
-                                    { label: "GM",       vals: (m: any) => m ? (m.isProjected ? <><span className="tabular-nums text-[11px] text-blue-700">{fck(m.gm)}<sup className="text-[8px] text-blue-400 ml-0.5">PR</sup></span><br/><span className="text-[10px] text-blue-600 tabular-nums">{fck(m.actualGm ?? m.gm)}<sup className="text-[8px] text-blue-400 ml-0.5">Act</sup></span></> : <span className="tabular-nums text-slate-600 text-[11px]">{fck(m.gm)}</span>) : <span className="text-slate-200">—</span>, tot: <span className={cn("tabular-nums text-[11px]", hp ? "text-blue-700" : "text-slate-600")}>{fck(hp ? c.gm : actGm)}</span> },
-                                    { label: "Ch.Cost",  vals: (m: any) => m && m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[11px]">{fck(m.cc)}</span> : <span className="text-slate-200">—</span>, tot: <span className="tabular-nums text-slate-500 text-[11px]">{actCc > 0 ? fck(actCc) : "—"}</span> },
-                                    { label: "CM1",      vals: (m: any) => m ? (m.isProjected ? <><span className={cn("tabular-nums font-semibold text-[11px]", cm1Color(m.cm1))}>{fck(m.cm1)}<sup className="text-[8px] text-blue-400 ml-0.5">PR</sup></span><br/><span className={cn("text-[10px] tabular-nums text-blue-600 font-semibold")}>{fck(m.actualCm1 ?? m.cm1)}<sup className="text-[8px] text-blue-400 ml-0.5">Act</sup></span></> : <span className={cn("tabular-nums font-semibold text-[11px]", cm1Color(m.cm1))}>{fck(m.cm1)}</span>) : <span className="text-slate-200">—</span>, tot: <span className={cn("tabular-nums font-semibold text-[11px]", cm1Color(actCm1))}>{fck(actCm1)}</span> },
-                                    { label: "CM1%",     vals: (m: any) => m ? <span className={cn("text-[11px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span> : <span className="text-slate-200">—</span>, tot: <span className={cn("text-[11px]", cm1Color(actCm1))}>{pct(actCm1Pct)}</span> },
-                                    { label: "3HK%",     vals: (m: any) => m ? <span className="tabular-nums text-slate-500 text-[11px]">{pct(m.hk3Pct)}</span> : <span className="text-slate-200">—</span>, tot: <span className="tabular-nums text-slate-500 text-[11px]">{pct(c.hk3Pct)}</span> },
+                                    { label: "Revenue",
+                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
+                                        ? <>{prLine(fck(m.revenue))}{actLine(fck(m.actualRevenue ?? m.revenue))}</>
+                                        : <span className="tabular-nums text-slate-700 text-[11px] font-semibold">{fck(m.revenue)}</span>,
+                                      tot: hp ? <>{prLine(fck(c.revenue))}{actLine(fck(actRev))}</> : <span className="tabular-nums text-slate-700 text-[11px] font-semibold">{fck(actRev)}</span> },
+                                    { label: "G.Margin",
+                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
+                                        ? <>{prLine(fck(m.gm), "text-blue-700")}{actLine(fck(m.actualGm ?? m.gm), "text-slate-600")}</>
+                                        : <span className="tabular-nums text-slate-600 text-[11px]">{fck(m.gm)}</span>,
+                                      tot: hp ? <>{prLine(fck(c.gm), "text-blue-700")}{actLine(fck(actGm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[11px]">{fck(actGm)}</span> },
+                                    { label: "Ch.Cost",
+                                      vals: (m: any) => m && m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[11px]">{fck(m.cc)}</span> : <span className="text-slate-200">—</span>,
+                                      tot: <span className="tabular-nums text-slate-500 text-[11px]">{actCc > 0 ? fck(actCc) : "—"}</span> },
+                                    { label: "CM1",
+                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
+                                        ? <>{prLine(fck(m.cm1), cm1Color(m.cm1))}{actLine(fck(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
+                                        : <span className={cn("tabular-nums font-semibold text-[11px]", cm1Color(m.cm1))}>{fck(m.cm1)}</span>,
+                                      tot: hp ? <>{prLine(fck(c.cm1), cm1Color(c.cm1))}{actLine(fck(actCm1), cm1Color(actCm1))}</> : <span className={cn("tabular-nums font-semibold text-[11px]", cm1Color(actCm1))}>{fck(actCm1)}</span> },
+                                    { label: "CM1%",
+                                      vals: (m: any) => m ? <span className={cn("text-[11px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span> : <span className="text-slate-200">—</span>,
+                                      tot: <span className={cn("text-[11px]", cm1Color(actCm1))}>{pct(actCm1Pct)}</span> },
+                                    { label: "3HK%",
+                                      vals: (m: any) => m ? <span className="tabular-nums text-slate-500 text-[11px]">{pct(m.hk3Pct)}</span> : <span className="text-slate-200">—</span>,
+                                      tot: <span className="tabular-nums text-slate-500 text-[11px]">{pct(c.hk3Pct)}</span> },
                                   ]
                                   // Creator orders explorer state
                                   const gb = ordersGroupBy[c.code] ?? "month"
