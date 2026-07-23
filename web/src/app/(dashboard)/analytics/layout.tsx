@@ -37,9 +37,10 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   let roleMatrix: Record<string, string[]> = DEFAULT_ROLE_PERMISSIONS
   try { if (rp?.value) roleMatrix = JSON.parse(rp.value) } catch {}
 
-  // Treat empty array [] same as "not configured" → fall back to code defaults
-  const dbPerms = roleMatrix[dbRole]
-  const baseline = (dbPerms && dbPerms.length > 0) ? dbPerms : (DEFAULT_ROLE_PERMISSIONS[dbRole] ?? [])
+  // Union code defaults + DB: DB có thể thêm tab, nhưng code defaults luôn được giữ
+  // (tránh tình trạng DB cũ không có tab mới → bị block dù code đã thêm vào defaults).
+  const dbPerms = roleMatrix[dbRole] ?? []
+  const baseline = [...new Set([...(DEFAULT_ROLE_PERMISSIONS[dbRole] ?? []), ...dbPerms])]
   const extra    = profile?.allowed_analytics
     ? profile.allowed_analytics.split(",").map((s: string) => s.trim()).filter(Boolean)
     : []

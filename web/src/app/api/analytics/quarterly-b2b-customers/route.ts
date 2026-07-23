@@ -66,11 +66,13 @@ export async function GET(req: NextRequest) {
   // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc.
   void regionFilter
   const refresh = searchParams.get("refresh") === "1"  // bypass cache sau khi lưu chi phí
-  // v5: fix amount cost không nhân factor (amount cố định, chỉ percent mới scale theo projected revenue)
-  const cacheKey = `qb2b_v5:${quarter}:${year}:${companyCode}:${todayStr}`
+  // v6: fetchCustomerCosts (Turso) được gọi NGOÀI cachedQuery → luôn fresh khi user lưu chi phí.
+  // Cache chỉ giữ dữ liệu gohub_dw (customerRows + priorRows) — không đổi khi lưu chi phí.
+  const rawCacheKey = `qb2b_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}`
 
   try {
-    const data = await cachedQuery(cacheKey, async () => {
+    // ── Phần 1: cache gohub_dw (customerRows + priorRows) ────────────────────────
+    const rawData = await cachedQuery(rawCacheKey, async () => {
       // Prior month (for MoM calculation)
       const [py, pm0] = [parseInt(months[0].split("-")[0]), parseInt(months[0].split("-")[1])]
       const priorMonth = pm0 === 1
@@ -81,9 +83,6 @@ export async function GET(req: NextRequest) {
         .toISOString().split("T")[0]
 
       const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
-
-      // Chi phí kênh nhập tay per-KH/tháng (Turso b2b_customer_cost_monthly)
-      const costMap = await fetchCustomerCosts(months)
 
       // Main query: customer-level revenue breakdown by month
       const [customerRows, priorRows] = await Promise.all([
@@ -133,208 +132,213 @@ export async function GET(req: NextRequest) {
         `),
       ])
 
-      // Prior month map for MoM
-      const priorMap = new Map<string, { gm: number; revenue: number }>()
-      priorRows.forEach(r => {
-        priorMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
-      })
-
-      // Month metadata (for pro-rata)
-      const monthMeta = months.map(m => {
-        const mStart = `${m}-01`
-        const mEndDate = new Date(parseInt(m.split("-")[0]), parseInt(m.split("-")[1]), 0)
-        const mEnd = mEndDate.toISOString().split("T")[0]
-        const actualEnd = mEnd < todayStr ? mEnd : todayStr
-        const dim = getDaysInMonth(m)
-        const isFuture = new Date(mStart) > asOf
-        const isCurrent = !isFuture && mEndDate >= asOf
-        const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
-        const isProjected = isCurrent && elapsed > 0 && elapsed < dim
-        const factor = isProjected ? dim / elapsed : 1
-        return { month: m, mStart, actualEnd, isProjected, factor }
-      })
-
-      // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue (để tính cost % trên doanh thu gốc) + factor.
-      interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; factor: number }
-      interface CustomerAgg {
-        code: string; name: string; priceListName: string | null; currencyCode: string | null
-        tier: string; region: string
-        months: Map<string, CustMonth>
-      }
-      const customerMap = new Map<string, CustomerAgg>()
-
-      customerRows.forEach(row => {
-        const code = row.customer_code
-        if (!customerMap.has(code)) {
-          const pln = row.price_list_name
-          const cur = row.currency_code
-          customerMap.set(code, {
-            code, name: row.customer_name,
-            priceListName: pln, currencyCode: cur,
-            tier: classifyTier(pln),
-            region: classifyRegion(pln, cur),
-            months: new Map(),
-          })
-        }
-        const cust = customerMap.get(code)!
-        const mr = monthMeta.find(m => m.month === row.month)
-        if (!mr) return
-        const { factor } = mr
-
-        const revAct = parseFloat(row.revenue || "0")
-        const gmAct  = parseFloat(row.gm   || "0")
-        const hk3Act = parseFloat(row.hk3  || "0")
-
-        const existing = cust.months.get(row.month)
-        if (existing) {
-          existing.revenue    += revAct * factor
-          existing.gm         += gmAct  * factor
-          existing.hk3        += hk3Act * factor
-          existing.rawRevenue += revAct
-        } else {
-          cust.months.set(row.month, {
-            revenue:    revAct * factor,
-            gm:         gmAct  * factor,
-            hk3:        hk3Act * factor,
-            rawRevenue: revAct,
-            factor,
-          })
-        }
-      })
-
-      // KHÔNG lọc region ở server nữa — trả về đủ cả VN+US, client tự lọc/tách (filter tức thì, hết bug cache).
-      const customers = Array.from(customerMap.values())
-
-      const pct = (n: number, d: number) => d > 0 ? Math.round(n / d * 1000) / 10 : 0
-      const r2 = (n: number) => Math.round(n)
-
-      // Build customer summaries
-      const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
-      type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number }
-      const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
-      interface CustMonthCost { cost_lines: string; cost_type: string; cost_value: number; revenue: number }
-      interface CustRow {
-        code: string; name: string; region: string; priceListName: string | null
-        revenue: number; gm: number; gmPct: number; cc: number; cm1: number
-        cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
-        monthsCost: Record<string, CustMonthCost>
-      }
-      const tierMap = new Map<string, {
-        tier: string
-        custList: CustRow[]
-        monthAgg: Map<string, MAgg>                              // ALL region
-        monthAggR: { VN: Map<string, MAgg>; US: Map<string, MAgg> }  // theo region
-      }>()
-
-      TIER_ORDER.forEach(tier => tierMap.set(tier, {
-        tier, custList: [], monthAgg: new Map(),
-        monthAggR: { VN: new Map(), US: new Map() },
-      }))
-
-      customers.forEach(cust => {
-        const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
-        const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
-        let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
-        const monthsCost: Record<string, CustMonthCost> = {}
-
-        months.forEach(m => {
-          const md = cust.months.get(m)
-          const rec = costMap.get(`${m}_${cust.code}`)
-          // amount cost: không nhân factor (người dùng nhập bao nhiêu hiện bấy nhiêu).
-          // percent cost: áp dụng trên projected revenue (rawRevenue × factor).
-          const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0
-          monthsCost[m] = {
-            cost_lines: rec?.cost_lines ?? "[]",
-            cost_type:  rec?.cost_type  ?? "amount",
-            cost_value: rec?.cost_value ?? 0,
-            revenue:    md ? r2(md.revenue) : 0,
-          }
-          if (!md) return
-          totRev += md.revenue
-          totGm  += md.gm
-          totCc  += monthCost
-          totHk3 += md.hk3
-
-          const acc = (map: Map<string, MAgg>) => {
-            const ta = map.get(m) || emptyMAgg()
-            ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += monthCost
-            ta.cm1 += md.gm - monthCost; ta.hk3 += md.hk3
-            map.set(m, ta)
-          }
-          acc(tier.monthAgg)              // ALL
-          acc(tier.monthAggR[reg])        // region
-        })
-
-        const totCm1 = totGm - totCc
-        const prior = priorMap.get(cust.code)
-        const priorGm = prior?.gm ?? null  // compare GM vs GM (prior channel cost unknown)
-        const momPct = priorGm && priorGm !== 0 ? Math.round((totGm - priorGm) / Math.abs(priorGm) * 1000) / 10 : null
-
-        tier.custList.push({
-          code: cust.code, name: cust.name,
-          region: reg, priceListName: cust.priceListName,
-          revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
-          cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
-          momPct,
-          hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
-          monthsCost,
-        })
-      })
-
-      // helper: dựng month rows từ 1 map agg (dùng chung cho ALL/VN/US)
-      const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m, idx) => {
-        const ma = agg.get(m)
-        if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
-        const prevMa = idx > 0 ? agg.get(months[idx - 1]) : null
-        const momPct = prevMa && prevMa.cm1 !== 0
-          ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
-          : null
-        return {
-          month: m, hasData: true,
-          revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
-          cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
-          momPct, hk3Pct: pct(ma.hk3, ma.revenue),
-        }
-      })
-
-      // helper: tổng từ 1 danh sách customer
-      const buildTotals = (custs: CustRow[]) => {
-        const totRev = custs.reduce((s, c) => s + c.revenue, 0)
-        const totGm  = custs.reduce((s, c) => s + c.gm, 0)
-        const totCc  = custs.reduce((s, c) => s + c.cc, 0)
-        const totCm1 = custs.reduce((s, c) => s + c.cm1, 0)
-        const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
-        return {
-          totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
-          totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
-          totalHk3Pct: pct(totHk3, totRev),
-        }
-      }
-
-      // Build tier output — kèm breakdown theo region VN/US
-      const tiers = TIER_ORDER.map(tierName => {
-        const tier = tierMap.get(tierName)!
-        const custList = tier.custList.sort((a, b) => b.revenue - a.revenue)
-        const vnCusts = custList.filter(c => c.region === "VN")
-        const usCusts = custList.filter(c => c.region === "US")
-
-        return {
-          tier: tierName,
-          ...buildTotals(custList),
-          months: buildMonthRows(tier.monthAgg),
-          customers: custList,
-          customerCount: custList.length,
-          byRegion: {
-            VN: { ...buildTotals(vnCusts), months: buildMonthRows(tier.monthAggR.VN), customers: vnCusts, customerCount: vnCusts.length },
-            US: { ...buildTotals(usCusts), months: buildMonthRows(tier.monthAggR.US), customers: usCusts, customerCount: usCusts.length },
-          },
-        }
-      }).filter(t => t.totalRevenue > 0)
-
-      return { quarter, year, months, tiers }
+      return { customerRows, priorRows }
     }, QUERY_TTL_MIN, refresh)
 
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    // ── Phần 2: Turso costs — luôn fresh (NGOÀI cache) ───────────────────────────
+    const costMap = await fetchCustomerCosts(months)
+
+    // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
+    const { customerRows, priorRows } = rawData
+
+    // Prior month map for MoM
+    const priorMap = new Map<string, { gm: number; revenue: number }>()
+    priorRows.forEach(r => {
+      priorMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
+    })
+
+    // Month metadata (for pro-rata)
+    const monthMeta = months.map(m => {
+      const mStart = `${m}-01`
+      const mEndDate = new Date(parseInt(m.split("-")[0]), parseInt(m.split("-")[1]), 0)
+      const mEnd = mEndDate.toISOString().split("T")[0]
+      const actualEnd = mEnd < todayStr ? mEnd : todayStr
+      const dim = getDaysInMonth(m)
+      const isFuture = new Date(mStart) > asOf
+      const isCurrent = !isFuture && mEndDate >= asOf
+      const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
+      const isProjected = isCurrent && elapsed > 0 && elapsed < dim
+      const factor = isProjected ? dim / elapsed : 1
+      return { month: m, mStart, actualEnd, isProjected, factor }
+    })
+
+    // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue (để tính cost % trên doanh thu gốc) + factor.
+    interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; factor: number }
+    interface CustomerAgg {
+      code: string; name: string; priceListName: string | null; currencyCode: string | null
+      tier: string; region: string
+      months: Map<string, CustMonth>
+    }
+    const customerMap = new Map<string, CustomerAgg>()
+
+    customerRows.forEach(row => {
+      const code = row.customer_code
+      if (!customerMap.has(code)) {
+        const pln = row.price_list_name
+        const cur = row.currency_code
+        customerMap.set(code, {
+          code, name: row.customer_name,
+          priceListName: pln, currencyCode: cur,
+          tier: classifyTier(pln),
+          region: classifyRegion(pln, cur),
+          months: new Map(),
+        })
+      }
+      const cust = customerMap.get(code)!
+      const mr = monthMeta.find(m => m.month === row.month)
+      if (!mr) return
+      const { factor } = mr
+
+      const revAct = parseFloat(row.revenue || "0")
+      const gmAct  = parseFloat(row.gm   || "0")
+      const hk3Act = parseFloat(row.hk3  || "0")
+
+      const existing = cust.months.get(row.month)
+      if (existing) {
+        existing.revenue    += revAct * factor
+        existing.gm         += gmAct  * factor
+        existing.hk3        += hk3Act * factor
+        existing.rawRevenue += revAct
+      } else {
+        cust.months.set(row.month, {
+          revenue:    revAct * factor,
+          gm:         gmAct  * factor,
+          hk3:        hk3Act * factor,
+          rawRevenue: revAct,
+          factor,
+        })
+      }
+    })
+
+    const customers = Array.from(customerMap.values())
+
+    const pct = (n: number, d: number) => d > 0 ? Math.round(n / d * 1000) / 10 : 0
+    const r2 = (n: number) => Math.round(n)
+
+    // Build customer summaries
+    const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+    type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number }
+    const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
+    interface CustMonthCost { cost_lines: string; cost_type: string; cost_value: number; revenue: number }
+    interface CustRow {
+      code: string; name: string; region: string; priceListName: string | null
+      revenue: number; gm: number; gmPct: number; cc: number; cm1: number
+      cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
+      monthsCost: Record<string, CustMonthCost>
+    }
+    const tierMap = new Map<string, {
+      tier: string
+      custList: CustRow[]
+      monthAgg: Map<string, MAgg>
+      monthAggR: { VN: Map<string, MAgg>; US: Map<string, MAgg> }
+    }>()
+
+    TIER_ORDER.forEach(tier => tierMap.set(tier, {
+      tier, custList: [], monthAgg: new Map(),
+      monthAggR: { VN: new Map(), US: new Map() },
+    }))
+
+    customers.forEach(cust => {
+      const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
+      const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
+      let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
+      const monthsCost: Record<string, CustMonthCost> = {}
+
+      months.forEach(m => {
+        const md = cust.months.get(m)
+        const rec = costMap.get(`${m}_${cust.code}`)
+        // amount cost: không nhân factor (người dùng nhập bao nhiêu hiện bấy nhiêu).
+        // percent cost: áp dụng trên projected revenue (rawRevenue × factor).
+        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0
+        monthsCost[m] = {
+          cost_lines: rec?.cost_lines ?? "[]",
+          cost_type:  rec?.cost_type  ?? "amount",
+          cost_value: rec?.cost_value ?? 0,
+          revenue:    md ? r2(md.revenue) : 0,
+        }
+        if (!md) return
+        totRev += md.revenue
+        totGm  += md.gm
+        totCc  += monthCost
+        totHk3 += md.hk3
+
+        const acc = (map: Map<string, MAgg>) => {
+          const ta = map.get(m) || emptyMAgg()
+          ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += monthCost
+          ta.cm1 += md.gm - monthCost; ta.hk3 += md.hk3
+          map.set(m, ta)
+        }
+        acc(tier.monthAgg)
+        acc(tier.monthAggR[reg])
+      })
+
+      const totCm1 = totGm - totCc
+      const prior = priorMap.get(cust.code)
+      const priorGm = prior?.gm ?? null
+      const momPct = priorGm && priorGm !== 0 ? Math.round((totGm - priorGm) / Math.abs(priorGm) * 1000) / 10 : null
+
+      tier.custList.push({
+        code: cust.code, name: cust.name,
+        region: reg, priceListName: cust.priceListName,
+        revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
+        cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
+        momPct,
+        hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+        monthsCost,
+      })
+    })
+
+    // helper: dựng month rows từ 1 map agg
+    const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m, idx) => {
+      const ma = agg.get(m)
+      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
+      const prevMa = idx > 0 ? agg.get(months[idx - 1]) : null
+      const momPct = prevMa && prevMa.cm1 !== 0
+        ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
+        : null
+      return {
+        month: m, hasData: true,
+        revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
+        cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
+        momPct, hk3Pct: pct(ma.hk3, ma.revenue),
+      }
+    })
+
+    // helper: tổng từ 1 danh sách customer
+    const buildTotals = (custs: CustRow[]) => {
+      const totRev = custs.reduce((s, c) => s + c.revenue, 0)
+      const totGm  = custs.reduce((s, c) => s + c.gm, 0)
+      const totCc  = custs.reduce((s, c) => s + c.cc, 0)
+      const totCm1 = custs.reduce((s, c) => s + c.cm1, 0)
+      const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
+      return {
+        totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
+        totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
+        totalHk3Pct: pct(totHk3, totRev),
+      }
+    }
+
+    // Build tier output — kèm breakdown theo region VN/US
+    const tiers = TIER_ORDER.map(tierName => {
+      const tier = tierMap.get(tierName)!
+      const custList = tier.custList.sort((a, b) => b.revenue - a.revenue)
+      const vnCusts = custList.filter(c => c.region === "VN")
+      const usCusts = custList.filter(c => c.region === "US")
+
+      return {
+        tier: tierName,
+        ...buildTotals(custList),
+        months: buildMonthRows(tier.monthAgg),
+        customers: custList,
+        customerCount: custList.length,
+        byRegion: {
+          VN: { ...buildTotals(vnCusts), months: buildMonthRows(tier.monthAggR.VN), customers: vnCusts, customerCount: vnCusts.length },
+          US: { ...buildTotals(usCusts), months: buildMonthRows(tier.monthAggR.US), customers: usCusts, customerCount: usCusts.length },
+        },
+      }
+    }).filter(t => t.totalRevenue > 0)
+
+    return NextResponse.json({ quarter, year, months, tiers }, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[quarterly-b2b-customers]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

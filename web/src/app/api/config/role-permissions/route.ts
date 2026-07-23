@@ -15,12 +15,12 @@ export async function GET() {
     .from("app_settings").select("value").eq("key", "role_permissions").maybeSingle()
   let saved: Record<string, string[]> = {}
   try { if (data?.value) saved = JSON.parse(data.value) } catch {}
-  // DB value OVERRIDE defaults — cho phép admin thu hẹp quyền thực sự.
-  // Role không có trong DB → dùng defaults (fill gaps). Role có trong DB → dùng DB chính xác.
+  // Union code defaults + DB: code defaults luôn có, DB có thể thêm tab extra.
+  // Tránh tình trạng DB cũ (lưu trước khi thêm tab mới) block toàn bộ user.
   const perms: Record<string, string[]> = {}
   for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-    const dbIds = saved[role]
-    perms[role] = (dbIds && dbIds.length > 0) ? dbIds : defaults
+    const dbIds = saved[role] ?? []
+    perms[role] = [...new Set([...defaults, ...dbIds])]
   }
   return NextResponse.json(perms)
 }
