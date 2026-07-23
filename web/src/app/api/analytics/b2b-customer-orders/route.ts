@@ -12,8 +12,7 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const guard = analyticsGuard(req, session)
   if (guard) return guard
-  if (session?.user?.role !== "creator")
-    return NextResponse.json({ error: "Forbidden — creator only" }, { status: 403 })
+  // Cho phép tất cả user đã đăng nhập xem chi tiết số liệu
 
   const { searchParams } = req.nextUrl
   const customerCode = searchParams.get("customer_code") || ""

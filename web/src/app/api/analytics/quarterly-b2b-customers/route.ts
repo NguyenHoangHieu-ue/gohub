@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
-import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
+import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
@@ -57,21 +57,22 @@ export async function GET(req: NextRequest) {
   const { excludedCustomers, tierKeywords } = await fetchQuarterlySettings()
   const classifyTier = makeClassifyTier(tierKeywords)
 
-  // Previous quarter dates (dùng để tính QoQ)
+  // Previous quarter dates + months (dùng để tính QoQ bằng CM1)
   const q = parseInt(quarter.replace("Q", ""))
   const prevQ = q === 1 ? 4 : q - 1
   const prevYear = q === 1 ? year - 1 : year
   const prevQFirstMonth = (prevQ - 1) * 3 + 1
   const prevQStartDate = `${prevYear}-${String(prevQFirstMonth).padStart(2, "0")}-01`
   const prevQEndDate = new Date(prevYear, prevQ * 3, 0).toISOString().split("T")[0]
+  const prevQMonths = [0, 1, 2].map(i => `${prevYear}-${String(prevQFirstMonth + i).padStart(2, "0")}`)
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   // v4: đổi created_date → fulfiled_date để đồng nhất với B2B Performance
   const rawCacheKey = `qb2b_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    // ── Phần 1 + 2: gohub_dw (cache) và Turso costs chạy SONG SONG ────────────────
-    const [rawData, costMap] = await Promise.all([
+    // ── Phần 1+2+3: gohub_dw (cache), current costs, prev quarter costs — SONG SONG ──
+    const [rawData, costMap, prevCostMap] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
       // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
       const exclFilter = excludedCustomers.length > 0
@@ -124,16 +125,28 @@ export async function GET(req: NextRequest) {
 
       return { customerRows, prevQuarterRows }
     }, QUERY_TTL_MIN, refresh),
-    fetchCustomerCosts(months),  // Turso costs — chạy song song với gohub_dw query
+    fetchCustomerCosts(months),          // current quarter Turso costs
+    fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
   ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
     const { customerRows, prevQuarterRows } = rawData
 
-    // Previous quarter map for QoQ (so sánh quý này pro-rata vs quý trước thực tế)
+    // Previous quarter: GP map và CM1 map (QoQ so sánh bằng CM1 = GP - CH.Cost quý trước)
     const prevQuarterMap = new Map<string, { gm: number; revenue: number }>()
+    const prevCm1Map    = new Map<string, number>()
     prevQuarterRows.forEach((r: any) => {
-      prevQuarterMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
+      const code = r.customer_code
+      const prevGm  = parseFloat(r.gm  || "0")
+      const prevRev = parseFloat(r.revenue || "0")
+      prevQuarterMap.set(code, { gm: prevGm, revenue: prevRev })
+      // Tính CM1 quý trước = GP − CH.Cost (Turso), phân bổ revenue đều 3 tháng
+      let prevCost = 0
+      prevQMonths.forEach(m => {
+        const rec = prevCostMap.get(`${m}_${code}`)
+        if (rec) prevCost += calcRecordCost(rec, prevRev / 3)
+      })
+      prevCm1Map.set(code, prevGm - prevCost)
     })
 
     // Month metadata (for pro-rata)
@@ -281,9 +294,9 @@ export async function GET(req: NextRequest) {
 
       const totCm1 = totGm - totCc
       const hasProjected = monthMeta.some(mr => mr.isProjected)
-      // QoQ: so sánh totGm (projected cả quý) vs quý trước thực tế
-      const prevGm = prevQuarterMap.get(cust.code)?.gm ?? null
-      const qoqPct = prevGm && prevGm !== 0 ? Math.round((totGm - prevGm) / Math.abs(prevGm) * 1000) / 10 : null
+      // QoQ: so sánh CM1 (projected cả quý) vs CM1 thực tế quý trước
+      const prevCm1 = prevCm1Map.get(cust.code) ?? null
+      const qoqPct = prevCm1 !== null && prevCm1 !== 0 ? Math.round((totCm1 - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
 
       tier.custList.push({
         code: cust.code, name: cust.name,
@@ -326,8 +339,9 @@ export async function GET(req: NextRequest) {
       const totCc   = custs.reduce((s, c) => s + c.cc, 0)
       const totCm1  = custs.reduce((s, c) => s + c.cm1, 0)
       const totHk3  = custs.reduce((s, c) => s + c.hk3Rev, 0)
-      const prevGm  = custs.reduce((s, c) => s + (prevQuarterMap.get(c.code)?.gm ?? 0), 0)
-      const qoqPct  = prevGm !== 0 ? Math.round((totGm - prevGm) / Math.abs(prevGm) * 1000) / 10 : null
+      // QoQ tier: so sánh CM1 (nhất quán với per-customer QoQ)
+      const prevTotCm1 = custs.reduce((s, c) => s + (prevCm1Map.get(c.code) ?? 0), 0)
+      const qoqPct  = prevTotCm1 !== 0 ? Math.round((totCm1 - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),

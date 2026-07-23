@@ -38,9 +38,16 @@ interface DistributionData {
 
 interface CustomerRow {
   name: string
+  code: string
+  tier: string
   revenue: number
   margin: number
   margin_percent: number
+  cm1: number
+  cm1_pct: number
+  channel_cost: number
+  hk3_rev: number
+  hk3_pct: number
   orders: number
   units: number
   last_order: string
@@ -597,18 +604,21 @@ export default function CustomerPerformancePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white border-b border-slate-100">
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Units</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">AOV</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tier</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GM%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">3HK%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {performanceData.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-8 py-20 text-center">
+                        <td colSpan={9} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <Users className="w-8 h-8 text-slate-200" />
                             <p className="text-sm font-bold text-slate-400">No customer data found for this period</p>
@@ -620,45 +630,39 @@ export default function CustomerPerformancePage() {
                       .slice((custPage - 1) * PAGE_ROWS, custPage * PAGE_ROWS)
                       .map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">
-                              {row.name.charAt(0)}
-                            </div>
-                            <span className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{row.name}</span>
-                          </div>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-bold text-slate-700 truncate max-w-[180px] block">{row.name}</span>
                         </td>
-                        <td className="px-8 py-5 text-right">
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-[#003B95]">{row.tier ?? "—"}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
                           <span className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(row.revenue)}</span>
                         </td>
-                        <td className="px-8 py-5 text-right">
-                          <span className={cn(
-                            "text-sm font-bold tabular-nums",
-                            row.margin >= 0 ? "text-emerald-600" : "text-rose-600"
-                          )}>{formatCurrency(row.margin)}</span>
+                        <td className="px-6 py-4 text-right">
+                          <span className={cn("text-sm font-bold tabular-nums", row.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.margin)}</span>
                         </td>
-                        <td className="px-8 py-5 text-right text-sm font-bold text-slate-400 tabular-nums">
-                          {row.units}
+                        <td className="px-6 py-4 text-right text-xs font-bold text-slate-400">
+                          {row.margin_percent.toFixed(1)}%
                         </td>
-                        <td className="px-8 py-5 text-right text-sm font-bold text-slate-600 tabular-nums">
+                        <td className="px-6 py-4 text-right">
+                          <span className={cn("text-sm font-bold tabular-nums", row.cm1 >= 0 ? "text-blue-700" : "text-rose-600")}>{formatCurrency(row.cm1)}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-bold">
+                          <span className={cn(row.cm1_pct >= 0 ? "text-blue-600" : "text-rose-500")}>{row.cm1_pct.toFixed(1)}%</span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-bold text-slate-500">
+                          {row.hk3_pct.toFixed(1)}%
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-slate-600 tabular-nums">
                           {row.orders}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md">
-                            {formatCompact(row.revenue / row.orders).replace("₫", "VND")}
-                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <Pager
-                page={custPage}
-                total={performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name)).length}
-                onPage={setCustPage}
-                label="khách"
-              />
+              <Pager page={custPage} total={performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name)).length} onPage={setCustPage} label="khách" />
             </div>
           </div>
         )}

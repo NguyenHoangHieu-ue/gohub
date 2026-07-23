@@ -1472,12 +1472,21 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), cm1: e.target.value } }))}
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.cm1 > 0 ? (
-                                                    <span className="tabular-nums text-right">
-                                                      <b className="text-slate-700">{fc(tgt.cm1)}</b>{" · "}
-                                                      <span className={cn("font-semibold", actCm1 >= tgt.cm1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                        {pct(actCm1 / tgt.cm1 * 100)} đạt
-                                                      </span>
-                                                    </span>
+                                                    <div className="text-right space-y-0.5">
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target: {fc(tgt.cm1)}</div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Dự kiến:</span>
+                                                        <span className={cn("font-bold tabular-nums", cPrCm1 >= tgt.cm1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {fc(cPrCm1)} ({pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)})
+                                                        </span>
+                                                      </div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Tiến độ TT:</span>
+                                                        <span className={cn("font-bold tabular-nums", actCm1 >= tgt.cm1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {fc(actCm1)} ({pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)})
+                                                        </span>
+                                                      </div>
+                                                    </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
                                                 </div>
                                                 <div className="flex items-center justify-between gap-3">
@@ -1487,20 +1496,26 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), thk: e.target.value } }))}
                                                       className="w-24 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.thk > 0 ? (
-                                                    <span className="text-right">
-                                                      <b className="text-slate-700">{pct(tgt.thk)}</b>{" · Actual "}
-                                                      <span className={cn("font-semibold", c.hk3Pct >= tgt.thk ? "text-green-600" : "text-amber-600")}>{pct(c.hk3Pct)}</span>
-                                                    </span>
+                                                    <div className="text-right space-y-0.5">
+                                                      <div className="text-slate-600 font-semibold text-[10px]">Target: {pct(tgt.thk)}</div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Dự kiến:</span>
+                                                        <span className={cn("font-bold", c.hk3Pct >= tgt.thk ? "text-green-600" : "text-amber-600")}>{pct(c.hk3Pct)}</span>
+                                                      </div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Tiến độ TT:</span>
+                                                        <span className={cn("font-bold", actCm1 >= 0 ? "text-slate-600" : "text-red-500")}>{pct(c.hk3Pct)}</span>
+                                                      </div>
+                                                    </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
                                                 </div>
                                               </div>
                                             </div>
 
-                                            {/* Creator: Orders Explorer */}
-                                            {isCreator && (
-                                              <div>
-                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Chi tiết kênh (Creator)</p>
+                                            {/* Chi tiết số liệu — tất cả roles */}
+                                            <div>
+                                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Chi tiết số liệu</p>
                                                   <div className="flex items-center gap-1 ml-auto">
                                                     <button onClick={() => { setOrdersGroupBy(prev => ({ ...prev, [c.code]: "month" })); loadOrders(c, "month") }}
                                                       className={cn("px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", (ordersGroupBy[c.code] ?? "month") === "month" ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
@@ -1515,7 +1530,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                 {!od ? (
                                                   <button onClick={() => loadOrders(c, "month")}
                                                     className="text-[11px] text-purple-700 font-semibold hover:underline">
-                                                    Tải chi tiết kênh →
+                                                    Tải số liệu →
                                                   </button>
                                                 ) : od.loading ? (
                                                   <div className="flex items-center gap-1 text-[11px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" />Đang tải…</div>
@@ -1540,8 +1555,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                             <td className="px-2 py-0.5 tabular-nums text-slate-500 whitespace-nowrap">{r.period}</td>
                                                             <td className="px-2 py-0.5 text-slate-700 max-w-[120px] truncate">{r.channel}</td>
                                                             <td className="px-2 py-0.5 text-right tabular-nums text-slate-600">{r.orders.toLocaleString("vi-VN")}</td>
-                                                            <td className="px-2 py-0.5 text-right tabular-nums text-slate-700 font-semibold">{fck(r.revenue)}</td>
-                                                            <td className={cn("px-2 py-0.5 text-right tabular-nums font-semibold", r.gp >= 0 ? "text-blue-700" : "text-red-500")}>{fck(r.gp)}</td>
+                                                            <td className="px-2 py-0.5 text-right tabular-nums text-slate-700 font-semibold">{fc(r.revenue)}</td>
+                                                            <td className={cn("px-2 py-0.5 text-right tabular-nums font-semibold", r.gp >= 0 ? "text-blue-700" : "text-red-500")}>{fc(r.gp)}</td>
                                                             <td className="px-2 py-0.5 text-right text-slate-500">{r.revenue > 0 ? pct(r.gp / r.revenue * 100) : "—"}</td>
                                                           </tr>
                                                         ))}
@@ -1549,8 +1564,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                     </table>
                                                   </div>
                                                 )}
-                                              </div>
-                                            )}
+                                            </div>
                                           </div>
                                         </div>
                                       </td>
