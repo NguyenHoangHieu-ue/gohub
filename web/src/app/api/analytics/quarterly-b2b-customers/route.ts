@@ -57,25 +57,28 @@ export async function GET(req: NextRequest) {
   const { excludedCustomers, tierKeywords } = await fetchQuarterlySettings()
   const classifyTier = makeClassifyTier(tierKeywords)
 
+  // Previous quarter dates (dùng để tính QoQ)
+  const q = parseInt(quarter.replace("Q", ""))
+  const prevQ = q === 1 ? 4 : q - 1
+  const prevYear = q === 1 ? year - 1 : year
+  const prevQFirstMonth = (prevQ - 1) * 3 + 1
+  const prevQStartDate = `${prevYear}-${String(prevQFirstMonth).padStart(2, "0")}-01`
+  const prevQEndDate = new Date(prevYear, prevQ * 3, 0).toISOString().split("T")[0]
+
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  const rawCacheKey = `qb2b_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  // v3: thay priorRows (1 tháng) bằng prevQuarterRows (cả quý trước) để tính QoQ
+  const rawCacheKey = `qb2b_raw_v3:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
     // ── Phần 1 + 2: gohub_dw (cache) và Turso costs chạy SONG SONG ────────────────
     const [rawData, costMap] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-      const [py, pm0] = [parseInt(months[0].split("-")[0]), parseInt(months[0].split("-")[1])]
-      const priorMonth = pm0 === 1 ? `${py - 1}-12` : `${py}-${String(pm0 - 1).padStart(2, "0")}`
-      const priorStart = `${priorMonth}-01`
-      const priorEnd = new Date(parseInt(priorMonth.split("-")[0]), parseInt(priorMonth.split("-")[1]), 0)
-        .toISOString().split("T")[0]
-
       // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
       const exclFilter = excludedCustomers.length > 0
         ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
         : ""
 
-      const [customerRows, priorRows] = await Promise.all([
+      const [customerRows, prevQuarterRows] = await Promise.all([
         queryAnalytics<{
           month: string; customer_code: string; customer_name: string
           price_list_name: string | null; currency_code: string | null; channel_name: string
@@ -110,8 +113,8 @@ export async function GET(req: NextRequest) {
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-          WHERE f.created_date::date >= '${priorStart}'
-            AND f.created_date::date <= '${priorEnd}'
+          WHERE f.created_date::date >= '${prevQStartDate}'
+            AND f.created_date::date <= '${prevQEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
             ${exclFilter}
@@ -119,18 +122,18 @@ export async function GET(req: NextRequest) {
         `),
       ])
 
-      return { customerRows, priorRows }
+      return { customerRows, prevQuarterRows }
     }, QUERY_TTL_MIN, refresh),
     fetchCustomerCosts(months),  // Turso costs — chạy song song với gohub_dw query
   ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
-    const { customerRows, priorRows } = rawData
+    const { customerRows, prevQuarterRows } = rawData
 
-    // Prior month map for MoM
-    const priorMap = new Map<string, { gm: number; revenue: number }>()
-    priorRows.forEach(r => {
-      priorMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
+    // Previous quarter map for QoQ (so sánh quý này pro-rata vs quý trước thực tế)
+    const prevQuarterMap = new Map<string, { gm: number; revenue: number }>()
+    prevQuarterRows.forEach((r: any) => {
+      prevQuarterMap.set(r.customer_code, { gm: parseFloat(r.gm || "0"), revenue: parseFloat(r.revenue || "0") })
     })
 
     // Month metadata (for pro-rata)
@@ -209,7 +212,7 @@ export async function GET(req: NextRequest) {
     interface CustRow {
       code: string; name: string; region: string; priceListName: string | null
       revenue: number; gm: number; gmPct: number; cc: number; cm1: number
-      cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
+      cm1Pct: number; qoqPct: number | null; hk3Rev: number; hk3Pct: number
       monthsCost: Record<string, CustMonthCost>
       // Actual YTD (dùng để so sánh với projected khi quý đang chạy)
       hasProjected: boolean
@@ -262,16 +265,16 @@ export async function GET(req: NextRequest) {
 
       const totCm1 = totGm - totCc
       const hasProjected = monthMeta.some(mr => mr.isProjected)
-      const prior = priorMap.get(cust.code)
-      const priorGm = prior?.gm ?? null
-      const momPct = priorGm && priorGm !== 0 ? Math.round((totGm - priorGm) / Math.abs(priorGm) * 1000) / 10 : null
+      // QoQ: so sánh totGm (projected cả quý) vs quý trước thực tế
+      const prevGm = prevQuarterMap.get(cust.code)?.gm ?? null
+      const qoqPct = prevGm && prevGm !== 0 ? Math.round((totGm - prevGm) / Math.abs(prevGm) * 1000) / 10 : null
 
       tier.custList.push({
         code: cust.code, name: cust.name,
         region: reg, priceListName: cust.priceListName,
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
         cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
-        momPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+        qoqPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
         monthsCost,
         hasProjected,
         actualRevenue: r2(totActRev), actualGm: r2(totActGm),
@@ -280,21 +283,17 @@ export async function GET(req: NextRequest) {
     })
 
     // helper: dựng month rows từ 1 map agg — projected values + actual values cho tháng hiện tại
-    const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m, idx) => {
+    // QoQ là metric quý-level, không có ý nghĩa per-month → các tháng không có qoqPct
+    const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m) => {
       const ma = agg.get(m)
       const meta = monthMeta.find(x => x.month === m)
       const isProjected = meta?.isProjected ?? false
-      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false, isProjected }
-      const prevMa = idx > 0 ? agg.get(months[idx - 1]) : null
-      const momPct = prevMa && prevMa.cm1 !== 0
-        ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
-        : null
+      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, hk3Pct: 0, hasData: false, isProjected }
       return {
         month: m, hasData: true, isProjected,
         revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
         cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
-        momPct, hk3Pct: pct(ma.hk3, ma.revenue),
-        // Actual YTD (chỉ có ý nghĩa khi isProjected = true; tháng đã hoàn thành thì actual == projected)
+        hk3Pct: pct(ma.hk3, ma.revenue),
         ...(isProjected && {
           actualRevenue: r2(ma.rawRevenue),
           actualGm: r2(ma.rawGm),
@@ -304,17 +303,19 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // helper: tổng từ 1 danh sách customer
+    // helper: tổng từ 1 danh sách customer + QoQ% (so sánh projected GM quý này vs GM thực tế quý trước)
     const buildTotals = (custs: CustRow[]) => {
-      const totRev = custs.reduce((s, c) => s + c.revenue, 0)
-      const totGm  = custs.reduce((s, c) => s + c.gm, 0)
-      const totCc  = custs.reduce((s, c) => s + c.cc, 0)
-      const totCm1 = custs.reduce((s, c) => s + c.cm1, 0)
-      const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
+      const totRev  = custs.reduce((s, c) => s + c.revenue, 0)
+      const totGm   = custs.reduce((s, c) => s + c.gm, 0)
+      const totCc   = custs.reduce((s, c) => s + c.cc, 0)
+      const totCm1  = custs.reduce((s, c) => s + c.cm1, 0)
+      const totHk3  = custs.reduce((s, c) => s + c.hk3Rev, 0)
+      const prevGm  = custs.reduce((s, c) => s + (prevQuarterMap.get(c.code)?.gm ?? 0), 0)
+      const qoqPct  = prevGm !== 0 ? Math.round((totGm - prevGm) / Math.abs(prevGm) * 1000) / 10 : null
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
-        totalHk3Pct: pct(totHk3, totRev),
+        totalHk3Pct: pct(totHk3, totRev), qoqPct,
       }
     }
 
