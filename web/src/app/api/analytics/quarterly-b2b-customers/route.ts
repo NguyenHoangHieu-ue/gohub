@@ -2,23 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
-
-// Tier & region classification từ dim_customer.price_list_name + currency_code
-// Spec: không có Strategic/VIP/Silver/Gold thì xếp vào Strategic (default)
-const EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
-
-function classifyTier(priceListName: string | null): string {
-  if (!priceListName) return "Strategic"
-  const p = priceListName.toUpperCase()
-  if (p.includes("STRATEGIC")) return "Strategic"
-  if (p.includes("VIP")) return "VIP"
-  if (p.includes("GOLD")) return "Gold"
-  if (p.includes("SILVER")) return "Silver"
-  return "Strategic"  // default per spec
-}
+import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
   const p = (priceListName || "").toUpperCase()
@@ -63,28 +50,31 @@ export async function GET(req: NextRequest) {
   }
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  // Region KHÔNG còn trong key — server trả full VN+US, client tự lọc.
   void regionFilter
-  const refresh = searchParams.get("refresh") === "1"  // bypass cache sau khi lưu chi phí
-  // v6: fetchCustomerCosts (Turso) được gọi NGOÀI cachedQuery → luôn fresh khi user lưu chi phí.
-  // Cache chỉ giữ dữ liệu gohub_dw (customerRows + priorRows) — không đổi khi lưu chi phí.
-  const rawCacheKey = `qb2b_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}`
+  const refresh = noCache(req) || searchParams.get("refresh") === "1"
+
+  // Load settings (dynamic tier + exclusion) — luôn fresh mỗi request
+  const { excludedCustomers, tierKeywords } = await fetchQuarterlySettings()
+  const classifyTier = makeClassifyTier(tierKeywords)
+  const EXCLUDE_CUST_SQL_B2B = makeExcludeSql(excludedCustomers)
+
+  // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
+  const rawCacheKey = `qb2b_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
     // ── Phần 1: cache gohub_dw (customerRows + priorRows) ────────────────────────
     const rawData = await cachedQuery(rawCacheKey, async () => {
-      // Prior month (for MoM calculation)
       const [py, pm0] = [parseInt(months[0].split("-")[0]), parseInt(months[0].split("-")[1])]
-      const priorMonth = pm0 === 1
-        ? `${py - 1}-12`
-        : `${py}-${String(pm0 - 1).padStart(2, "0")}`
+      const priorMonth = pm0 === 1 ? `${py - 1}-12` : `${py}-${String(pm0 - 1).padStart(2, "0")}`
       const priorStart = `${priorMonth}-01`
       const priorEnd = new Date(parseInt(priorMonth.split("-")[0]), parseInt(priorMonth.split("-")[1]), 0)
         .toISOString().split("T")[0]
 
-      const excludeList = EXCLUDED_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+      // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
+      const exclFilter = excludedCustomers.length > 0
+        ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
+        : ""
 
-      // Main query: customer-level revenue breakdown by month
       const [customerRows, priorRows] = await Promise.all([
         queryAnalytics<{
           month: string; customer_code: string; customer_name: string
@@ -95,8 +85,7 @@ export async function GET(req: NextRequest) {
             TO_CHAR(f.created_date::date, 'YYYY-MM') as month,
             TRIM(f.customer_code) as customer_code,
             COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
-            c.price_list_name,
-            c.currency_code,
+            c.price_list_name, c.currency_code,
             COALESCE(TRIM(s.channel_name), '') as channel_name,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue,
             SUM(f.gross_profit_vnd) as gm,
@@ -110,14 +99,12 @@ export async function GET(req: NextRequest) {
             AND f.created_date::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+            ${exclFilter}
           GROUP BY 1, 2, 3, 4, 5, 6
           ORDER BY 1, 2
         `),
-        // Prior month data for MoM
         queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
-          SELECT
-            TRIM(f.customer_code) as customer_code,
+          SELECT TRIM(f.customer_code) as customer_code,
             SUM(f.gross_profit_vnd) as gm,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
           FROM fact_fulfillment_revenue f
@@ -127,7 +114,7 @@ export async function GET(req: NextRequest) {
             AND f.created_date::date <= '${priorEnd}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-            AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+            ${exclFilter}
           GROUP BY 1
         `),
       ])
@@ -223,6 +210,9 @@ export async function GET(req: NextRequest) {
       revenue: number; gm: number; gmPct: number; cc: number; cm1: number
       cm1Pct: number; momPct: number | null; hk3Rev: number; hk3Pct: number
       monthsCost: Record<string, CustMonthCost>
+      // Actual YTD (dùng để so sánh với projected khi quý đang chạy)
+      hasProjected: boolean
+      actualRevenue: number; actualGm: number; actualCc: number; actualCm1: number
     }
     const tierMap = new Map<string, {
       tier: string
@@ -240,15 +230,14 @@ export async function GET(req: NextRequest) {
       const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
       const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
       let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
+      let totActRev = 0, totActGm = 0, totActCc = 0  // actual YTD (không nhân factor)
       const monthsCost: Record<string, CustMonthCost> = {}
 
       months.forEach(m => {
         const md = cust.months.get(m)
         const rec = costMap.get(`${m}_${cust.code}`)
-        // amount cost: không nhân factor (người dùng nhập bao nhiêu hiện bấy nhiêu).
-        // percent cost: áp dụng trên projected revenue (rawRevenue × factor).
         const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0  // projected
-        const rawCc     = md ? calcRecordCostProjected(rec, md.rawRevenue, 1) : 0           // actual (factor=1)
+        const rawCc     = md ? calcRecordCostProjected(rec, md.rawRevenue, 1) : 0           // actual
         monthsCost[m] = {
           cost_lines: rec?.cost_lines ?? "[]",
           cost_type:  rec?.cost_type  ?? "amount",
@@ -256,10 +245,8 @@ export async function GET(req: NextRequest) {
           revenue:    md ? r2(md.revenue) : 0,
         }
         if (!md) return
-        totRev += md.revenue
-        totGm  += md.gm
-        totCc  += monthCost
-        totHk3 += md.hk3
+        totRev += md.revenue; totGm += md.gm; totCc += monthCost; totHk3 += md.hk3
+        totActRev += md.rawRevenue; totActGm += md.rawGm; totActCc += rawCc
 
         const acc = (map: Map<string, MAgg>) => {
           const ta = map.get(m) || emptyMAgg()
@@ -273,6 +260,7 @@ export async function GET(req: NextRequest) {
       })
 
       const totCm1 = totGm - totCc
+      const hasProjected = monthMeta.some(mr => mr.isProjected)
       const prior = priorMap.get(cust.code)
       const priorGm = prior?.gm ?? null
       const momPct = priorGm && priorGm !== 0 ? Math.round((totGm - priorGm) / Math.abs(priorGm) * 1000) / 10 : null
@@ -282,9 +270,11 @@ export async function GET(req: NextRequest) {
         region: reg, priceListName: cust.priceListName,
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
         cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
-        momPct,
-        hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+        momPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
         monthsCost,
+        hasProjected,
+        actualRevenue: r2(totActRev), actualGm: r2(totActGm),
+        actualCc: r2(totActCc), actualCm1: r2(totActGm - totActCc),
       })
     })
 

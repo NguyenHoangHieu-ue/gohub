@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2 } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -195,13 +195,49 @@ function QuarterlyContent() {
       if (d?.role) setUserRole(String(d.role))
     }).catch(() => {})
   }, [])
-  const canEditCost = ["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(userRole)
-  const isCreator   = userRole === "creator"
+  const canEditCost  = ["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(userRole)
+  const isCreator    = userRole === "creator"
+  const canEditSettings = ["admin", "creator"].includes(userRole)
 
-  const fetchReport = useCallback(async () => {
+  // ── Settings (tier keywords + excluded customers) — chỉ admin/creator ──
+  const [qSettings, setQSettings] = useState<{ excludedCustomers: string[]; tierKeywords: Record<string, string[]> } | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settingsDirty, setSettingsDirty] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [newExcluded, setNewExcluded] = useState("")
+
+  useEffect(() => {
+    if (!canEditSettings) return
+    fetch("/api/analytics/quarterly-settings").then(r => r.ok ? r.json() : null).then(d => {
+      if (d) setQSettings(d)
+    }).catch(() => {})
+  }, [canEditSettings])
+
+  const saveSettings = async () => {
+    if (!qSettings) return
+    setSavingSettings(true)
+    try {
+      const res = await fetch("/api/analytics/quarterly-settings", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(qSettings),
+      })
+      if (res.ok) {
+        setSettingsDirty(false)
+        notify(true, "Đã lưu cài đặt. Bấm \"Tải lại\" để áp dụng.")
+      } else notify(false, "Lưu thất bại")
+    } catch { notify(false, "Lỗi kết nối") }
+    finally { setSavingSettings(false) }
+  }
+
+  const updateSettings = (patch: Partial<typeof qSettings>) => {
+    setQSettings(prev => prev ? { ...prev, ...patch } : null)
+    setSettingsDirty(true)
+  }
+
+  const fetchReport = useCallback(async (refresh = false) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&companyCode=ALL`)
+      const res = await fetch(`/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&companyCode=ALL${refresh ? "&nocache=1" : ""}`)
       if (!res.ok) throw new Error(`${res.status}`)
       setReport(await res.json())
     } catch (e: any) { notify(false, `Lỗi tải dữ liệu: ${e.message}`) }
@@ -229,6 +265,11 @@ function QuarterlyContent() {
       if (res.ok) setB2bTiers(await res.json())
     } catch {} finally { setB2bTiersLoading(false) }
   }, [selQ, selYear])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchReport(true), fetchB2BTiers(true)])
+    notify(true, "Đã tải lại dữ liệu mới nhất từ database")
+  }, [fetchReport, fetchB2BTiers])
 
   useEffect(() => { fetchReport(); loadTargets() }, [fetchReport, loadTargets])
   useEffect(() => { fetchB2BTiers() }, [fetchB2BTiers])
@@ -343,11 +384,25 @@ function QuarterlyContent() {
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <button onClick={fetchReport} disabled={loading}
+          <button onClick={() => fetchReport()} disabled={loading}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] hover:bg-[#00337f] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
             {loading ? "Đang tải…" : "Xem báo cáo"}
           </button>
+          <button onClick={refreshAll} disabled={loading || b2bTiersLoading}
+            title="Xóa cache cũ và tải lại dữ liệu mới nhất từ database"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
+            <RefreshCw className={cn("w-3.5 h-3.5", (loading || b2bTiersLoading) && "animate-spin")} />
+            Tải lại mới
+          </button>
+          {canEditSettings && (
+            <button onClick={() => setShowSettings(v => !v)}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 border text-xs font-semibold rounded-lg transition-all",
+                showSettings ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+              <Settings2 className="w-3.5 h-3.5" />
+              Cài đặt
+            </button>
+          )}
           {summary.some(m => m.isProjected) && (
             <span className="text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">
               Pro-rata tháng hiện tại
@@ -359,6 +414,80 @@ function QuarterlyContent() {
       {msg && (
         <div className={cn("px-4 py-2.5 rounded-lg text-sm", msg.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700")}>
           {msg.text}
+        </div>
+      )}
+
+      {/* ── Settings panel (admin/creator only) ── */}
+      {canEditSettings && showSettings && qSettings && (
+        <div className="bg-slate-900 text-slate-100 border border-slate-700 rounded-xl p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-100">Cài đặt Quarter Report</h2>
+            <div className="flex items-center gap-2">
+              <button onClick={saveSettings} disabled={savingSettings || !settingsDirty}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  settingsDirty && !savingSettings ? "bg-green-500 hover:bg-green-400 text-white" : "bg-slate-700 text-slate-500 cursor-not-allowed")}>
+                <Save className="w-3.5 h-3.5" />{savingSettings ? "Đang lưu…" : "Lưu cài đặt"}
+              </button>
+            </div>
+          </div>
+
+          {/* Excluded customers */}
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">KH bị loại khỏi báo cáo B2B</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {qSettings.excludedCustomers.map(name => (
+                <span key={name} className="flex items-center gap-1 bg-red-900/40 text-red-300 border border-red-700/50 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                  {name}
+                  <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== name) })}
+                    className="hover:text-red-100 ml-0.5"><X className="w-3 h-3" /></button>
+                </span>
+              ))}
+              {qSettings.excludedCustomers.length === 0 && <span className="text-slate-500 text-xs italic">Chưa có KH nào bị loại</span>}
+            </div>
+            <div className="flex gap-2">
+              <input value={newExcluded} onChange={e => setNewExcluded(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
+                placeholder="Tên KH cần loại (Enter để thêm)"
+                className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-400 placeholder-slate-500" />
+              <button onClick={() => { if (newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
+                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition-all">
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tier keywords */}
+          <div>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phân loại tầng KH (từ khóa trong Bảng giá)</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {["Strategic", "VIP", "Gold", "Silver"].map(tier => (
+                <div key={tier} className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                  <p className="text-[11px] font-bold text-slate-300 mb-1.5">{tier}</p>
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {(qSettings.tierKeywords[tier] ?? []).map(kw => (
+                      <span key={kw} className="flex items-center gap-0.5 bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                        {kw}
+                        <button onClick={() => updateSettings({ tierKeywords: { ...qSettings.tierKeywords, [tier]: qSettings.tierKeywords[tier].filter(k => k !== kw) } })}
+                          className="hover:text-white"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    ))}
+                  </div>
+                  <input placeholder="+ từ khóa"
+                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-slate-400 placeholder-slate-600"
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        const val = (e.target as HTMLInputElement).value.trim().toUpperCase()
+                        if (val) {
+                          updateSettings({ tierKeywords: { ...qSettings.tierKeywords, [tier]: [...(qSettings.tierKeywords[tier] ?? []), val] } })
+                          ;(e.target as HTMLInputElement).value = ""
+                        }
+                      }
+                    }} />
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">* Strategic = mặc định khi không khớp từ khóa nào. Sau khi lưu, bấm "Tải lại mới" để áp dụng.</p>
+          </div>
         </div>
       )}
 
@@ -1056,6 +1185,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                         <tbody>
                           {custs.map((c: any, i: number) => {
                             const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                            // Stacked PR/Actual cho quý đang chạy (hasProjected = true từ API)
+                            const hp = c.hasProjected === true
+                            const dualKH = (pr: number, act: number | undefined, cls = "text-slate-700") => hp && act != null ? (
+                              <div className="flex flex-col items-end leading-snug">
+                                <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
+                                <span className="tabular-nums text-[10px] text-slate-400">TT {fck(act)}</span>
+                              </div>
+                            ) : <span className={cn("tabular-nums", cls)}>{fc(pr)}</span>
                             return (
                               <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/20")}>
                                 {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{c.code}</td>}
@@ -1072,8 +1209,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       : <span className="text-slate-300">—</span>}
                                   </td>
                                 )}
-                                <td className="px-3 py-2 text-right text-slate-700 tabular-nums">{fc(c.revenue)}</td>
-                                <td className="px-3 py-2 text-right text-slate-600 tabular-nums">{fc(c.gm)}</td>
+                                <td className="px-3 py-2 text-right">{dualKH(c.revenue, c.actualRevenue, "text-slate-700")}</td>
+                                <td className="px-3 py-2 text-right">{dualKH(c.gm, c.actualGm, "text-slate-600")}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.gmPct)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">
                                   {editMode && canEditCost
@@ -1082,9 +1219,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         title="Nhập chi phí kênh theo tháng">
                                         <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
                                       </button>
-                                    : <span className="text-slate-500">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
+                                    : <span>{c.cc > 0 ? dualKH(c.cc, c.actualCc, "text-slate-500") : "—"}</span>}
                                 </td>
-                                <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
+                                <td className={cn("px-3 py-2 text-right font-semibold", cm1Color(c.cm1))}>{dualKH(c.cm1, c.actualCm1, cm1Color(c.cm1))}</td>
                                 <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
                                 <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
