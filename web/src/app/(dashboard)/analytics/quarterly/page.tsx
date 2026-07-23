@@ -1496,19 +1496,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), thk: e.target.value } }))}
                                                       className="w-24 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.thk > 0 ? (
-                                                    <div className="text-right space-y-0.5">
-                                                      <div className="text-slate-600 font-semibold text-[10px]">Target: {pct(tgt.thk)}</div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
-                                                        <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", c.hk3Pct / tgt.thk >= 1 ? "text-green-600" : "text-amber-600")}>
-                                                          {pct(tgt.thk > 0 ? c.hk3Pct / tgt.thk * 100 : 0)}
-                                                        </span>
+                                                    <div className="text-right space-y-0.5 text-[10px]">
+                                                      <div className="flex gap-2 justify-end">
+                                                        <span className="text-slate-400">Target:</span>
+                                                        <span className="font-semibold text-slate-700">{pct(tgt.thk)}</span>
                                                       </div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
-                                                        <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", c.hk3Pct / tgt.thk >= 1 ? "text-green-600" : "text-amber-600")}>
-                                                          {pct(tgt.thk > 0 ? c.hk3Pct / tgt.thk * 100 : 0)}
-                                                        </span>
+                                                      <div className="flex gap-2 justify-end">
+                                                        <span className="text-slate-400">Actual:</span>
+                                                        <span className={cn("font-bold", c.hk3Pct >= tgt.thk ? "text-green-600" : "text-amber-600")}>{pct(c.hk3Pct)}</span>
                                                       </div>
                                                     </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
