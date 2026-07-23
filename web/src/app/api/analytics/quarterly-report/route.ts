@@ -87,16 +87,16 @@ export async function GET(req: NextRequest) {
   const prevQFirst = (prevQNum - 1) * 3 + 1
   const prevQStartDate = `${prevQYear}-${String(prevQFirst).padStart(2, "0")}-01`
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
+  const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
-  // v2: thêm prevGroupRows cho QoQ, dynamic exclusion trong cache key
-  // v3: đổi created_date → fulfiled_date để đồng nhất với B2B/B2C Performance
-  const rawCacheKey = `qreport_raw_v3:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  // v4: thêm prevChannelRows + fetchCosts(prevQMonths) để tính CM1 quý trước cho QoQ
+  const rawCacheKey = `qreport_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs chạy SONG SONG ────────────
-    const [rawData, { channelCosts, groupCosts }] = await Promise.all([
+    // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs (hiện tại + quý trước) chạy SONG SONG ──
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-      const [groupRows, channelRows, hk3Rows, prevGroupRows] = await Promise.all([
+      const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           SELECT
             TO_CHAR(f.${DATE_COL}::date, 'YYYY-MM') as month,
@@ -170,15 +170,35 @@ export async function GET(req: NextRequest) {
             ${INACTIVE_FILTER}
           GROUP BY 1
         `),
+        queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string }>(`
+          SELECT
+            TO_CHAR(f.${DATE_COL}::date, 'YYYY-MM') as month,
+            UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
+            TRIM(s.channel_name) as channel,
+            SUM(f.${REV_COL}) as revenue,
+            SUM(f.${GP_COL}) as gp
+          FROM ${MAIN_TABLE} f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          WHERE f.${DATE_COL}::date >= '${prevQStartDate}'
+            AND f.${DATE_COL}::date <= '${prevQEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
+            AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
+            ${EXCLUDE_CUST_SQL}
+            ${INACTIVE_FILTER}
+          GROUP BY 1, 2, 3
+        `),
       ])
 
-      return { groupRows, channelRows, hk3Rows, prevGroupRows }
+      return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows }
     }, QUERY_TTL_MIN, refresh),
-    fetchCosts(months),  // Supabase costs — chạy song song với gohub_dw query
+    fetchCosts(months),       // Supabase costs hiện tại
+    fetchCosts(prevQMonths),  // Supabase costs quý trước (cho CM1 QoQ)
     ])
 
     // ── Phần 3: Compute ────────────────────────────────────────────────────────
-    const { groupRows, channelRows, hk3Rows, prevGroupRows } = rawData
+    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows } = rawData
 
     // Metadata per month: projection factor, date ranges
     const monthMeta = months.map(m => {
@@ -363,14 +383,33 @@ export async function GET(req: NextRequest) {
       const elapsed_days = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) => s + mr.elapsed, 0)
       const quarter_days = monthMeta.reduce((s, mr) => s + mr.dim, 0)
 
-    // Tổng quý trước cho QoQ
+    // Tổng quý trước cho QoQ (CM1 = GP - channel cost - group cost)
     const prevB2B = (prevGroupRows as any[]).find((row: any) => row.bg === "B2B")
     const prevB2C = (prevGroupRows as any[]).find((row: any) => row.bg === "B2C")
+
+    // Tính CM1 quý trước từ prevChannelRows + prevGroupCosts (quý trước đã hoàn chỉnh, không cần pro-rata)
+    let prevB2BCm1 = 0, prevB2CCm1 = 0
+    ;(prevChannelRows as any[]).forEach((row: any) => {
+      const mStart = `${row.month}-01`
+      const mEnd = new Date(parseInt(row.month.split("-")[0]), parseInt(row.month.split("-")[1]), 0).toISOString().split("T")[0]
+      const rev = parseFloat(row.revenue || "0")
+      const gp  = parseFloat(row.gp      || "0")
+      const cc  = computeChannelCost(prevChannelCosts, row.channel, row.month, rev, mStart, mEnd)
+      if (row.bg === "B2B") prevB2BCm1 += gp - cc
+      else                  prevB2CCm1 += gp - cc
+    })
+    prevQMonths.forEach(m => {
+      prevB2BCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2B" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
+      prevB2CCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2C" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
+    })
+
     const prevQuarterTotals = {
       b2bRevenue: Math.round(parseFloat(prevB2B?.revenue || "0")),
       b2bGp:      Math.round(parseFloat(prevB2B?.gp      || "0")),
+      b2bCm1:     Math.round(prevB2BCm1),
       b2cRevenue: Math.round(parseFloat(prevB2C?.revenue  || "0")),
       b2cGp:      Math.round(parseFloat(prevB2C?.gp       || "0")),
+      b2cCm1:     Math.round(prevB2CCm1),
     }
 
     return NextResponse.json({
