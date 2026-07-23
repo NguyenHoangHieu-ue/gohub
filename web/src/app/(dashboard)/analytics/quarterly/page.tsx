@@ -419,38 +419,36 @@ function QuarterlyContent() {
 
       {/* ── Settings panel (admin/creator only) ── */}
       {canEditSettings && showSettings && qSettings && (
-        <div className="bg-slate-900 text-slate-100 border border-slate-700 rounded-xl p-5 space-y-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-100">Cài đặt Quarter Report</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={saveSettings} disabled={savingSettings || !settingsDirty}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  settingsDirty && !savingSettings ? "bg-green-500 hover:bg-green-400 text-white" : "bg-slate-700 text-slate-500 cursor-not-allowed")}>
-                <Save className="w-3.5 h-3.5" />{savingSettings ? "Đang lưu…" : "Lưu cài đặt"}
-              </button>
-            </div>
+            <h2 className="text-sm font-bold text-slate-800">Cài đặt Quarter Report</h2>
+            <button onClick={saveSettings} disabled={savingSettings || !settingsDirty}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                settingsDirty && !savingSettings ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+              <Save className="w-3.5 h-3.5" />{savingSettings ? "Đang lưu…" : "Lưu cài đặt"}
+            </button>
           </div>
 
           {/* Excluded customers */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">KH bị loại khỏi báo cáo B2B</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {qSettings.excludedCustomers.map(name => (
-                <span key={name} className="flex items-center gap-1 bg-red-900/40 text-red-300 border border-red-700/50 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                <span key={name} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
                   {name}
                   <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== name) })}
-                    className="hover:text-red-100 ml-0.5"><X className="w-3 h-3" /></button>
+                    className="hover:text-red-900 ml-0.5"><X className="w-3 h-3" /></button>
                 </span>
               ))}
-              {qSettings.excludedCustomers.length === 0 && <span className="text-slate-500 text-xs italic">Chưa có KH nào bị loại</span>}
+              {qSettings.excludedCustomers.length === 0 && <span className="text-slate-400 text-xs italic">Chưa có KH nào bị loại</span>}
             </div>
             <div className="flex gap-2">
               <input value={newExcluded} onChange={e => setNewExcluded(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
                 placeholder="Tên KH cần loại (Enter để thêm)"
-                className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-400 placeholder-slate-500" />
+                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
               <button onClick={() => { if (newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
-                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition-all">
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all border border-slate-200">
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -458,22 +456,22 @@ function QuarterlyContent() {
 
           {/* Tier keywords */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phân loại tầng KH (từ khóa trong Bảng giá)</p>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Phân loại tầng KH (từ khóa trong Bảng giá)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {["Strategic", "VIP", "Gold", "Silver"].map(tier => (
-                <div key={tier} className="bg-slate-800 rounded-lg p-3 border border-slate-700">
-                  <p className="text-[11px] font-bold text-slate-300 mb-1.5">{tier}</p>
+                <div key={tier} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-700 mb-1.5">{tier}</p>
                   <div className="flex flex-wrap gap-1 mb-1.5">
                     {(qSettings.tierKeywords[tier] ?? []).map(kw => (
-                      <span key={kw} className="flex items-center gap-0.5 bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">
+                      <span key={kw} className="flex items-center gap-0.5 bg-white text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-medium">
                         {kw}
                         <button onClick={() => updateSettings({ tierKeywords: { ...qSettings.tierKeywords, [tier]: qSettings.tierKeywords[tier].filter(k => k !== kw) } })}
-                          className="hover:text-white"><X className="w-2.5 h-2.5" /></button>
+                          className="hover:text-red-500 ml-0.5"><X className="w-2.5 h-2.5" /></button>
                       </span>
                     ))}
                   </div>
-                  <input placeholder="+ từ khóa"
-                    className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-slate-400 placeholder-slate-600"
+                  <input placeholder="+ từ khóa (Enter)"
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400"
                     onKeyDown={e => {
                       if (e.key === "Enter") {
                         const val = (e.target as HTMLInputElement).value.trim().toUpperCase()
@@ -486,7 +484,7 @@ function QuarterlyContent() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-slate-500 mt-1.5">* Strategic = mặc định khi không khớp từ khóa nào. Sau khi lưu, bấm "Tải lại mới" để áp dụng.</p>
+            <p className="text-[10px] text-slate-400 mt-1.5">* Strategic = mặc định khi không khớp từ khóa nào. Sau khi lưu, bấm "Tải lại mới" để áp dụng.</p>
           </div>
         </div>
       )}
