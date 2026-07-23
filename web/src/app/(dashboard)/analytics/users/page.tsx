@@ -15,7 +15,7 @@ import { AddUserForm, ChangePasswordForm, SystemPermissionsMatrix, type AdminUse
 // Mô hình quyền: role baseline (Role × Report) ∪ per-user allowed_analytics (cộng dồn, deny-by-default).
 
 const REPORTS: { id: string; label: string }[] = [
-  { id: "dashboard", label: "Dashboard" }, { id: "bod", label: "BOD Report" }, { id: "all-time", label: "All-Time" },
+  { id: "dashboard", label: "Dashboard" }, { id: "quarterly", label: "Quarter Report" }, { id: "bod", label: "BOD Report" }, { id: "all-time", label: "All-Time" },
   { id: "channels", label: "Channels" }, { id: "b2b", label: "B2B" }, { id: "b2c", label: "B2C" },
   { id: "website", label: "Website" }, { id: "staff", label: "Staff" }, { id: "customers", label: "Customers" },
   { id: "vendors", label: "Vendors" }, { id: "orders", label: "Orders" }, { id: "fulfillment", label: "Fulfillment" },

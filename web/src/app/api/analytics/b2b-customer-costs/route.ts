@@ -10,7 +10,7 @@ import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !["admin", "creator"].includes(session.user.role))
+    if (!session || !["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(session.user.role))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const body = await req.json().catch(() => ({}))
