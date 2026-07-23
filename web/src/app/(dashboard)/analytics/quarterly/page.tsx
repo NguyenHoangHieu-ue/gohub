@@ -1476,14 +1476,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target: {fc(tgt.cm1)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold tabular-nums", cPrCm1 >= tgt.cm1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {fc(cPrCm1)} ({pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)})
+                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold tabular-nums", actCm1 >= tgt.cm1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {fc(actCm1)} ({pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)})
+                                                        <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
                                                     </div>
@@ -1500,11 +1500,15 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       <div className="text-slate-600 font-semibold text-[10px]">Target: {pct(tgt.thk)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", c.hk3Pct >= tgt.thk ? "text-green-600" : "text-amber-600")}>{pct(c.hk3Pct)}</span>
+                                                        <span className={cn("font-bold", c.hk3Pct / tgt.thk >= 1 ? "text-green-600" : "text-amber-600")}>
+                                                          {pct(tgt.thk > 0 ? c.hk3Pct / tgt.thk * 100 : 0)}
+                                                        </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", actCm1 >= 0 ? "text-slate-600" : "text-red-500")}>{pct(c.hk3Pct)}</span>
+                                                        <span className={cn("font-bold", c.hk3Pct / tgt.thk >= 1 ? "text-green-600" : "text-amber-600")}>
+                                                          {pct(tgt.thk > 0 ? c.hk3Pct / tgt.thk * 100 : 0)}
+                                                        </span>
                                                       </div>
                                                     </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
