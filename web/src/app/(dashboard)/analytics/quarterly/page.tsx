@@ -1071,7 +1071,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                   const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
                     <div className="flex flex-col items-end leading-snug">
                       <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                      <span className="tabular-nums text-[10px] text-slate-400">TT {fck(act)}</span>
+                      <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
                     </div>
                   ) : <span className={cn("tabular-nums", cls)}>{fc(pr)}</span>
 
@@ -1188,7 +1188,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const dualKH = (pr: number, act: number | undefined, cls = "text-slate-700") => hp && act != null ? (
                               <div className="flex flex-col items-end leading-snug">
                                 <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                                <span className="tabular-nums text-[10px] text-slate-400">TT {fck(act)}</span>
+                                <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
                               </div>
                             ) : <span className={cn("tabular-nums", cls)}>{fc(pr)}</span>
                             return (
@@ -1374,7 +1374,7 @@ function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
                     const dualC = (prVal: number, actVal: number | undefined, cls = "text-slate-700") => actVal != null ? (
                       <div className="flex flex-col items-end leading-snug">
                         <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(prVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                        <span className="tabular-nums text-[10px] text-slate-400">TT {fck(actVal)}</span>
+                        <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(actVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
                       </div>
                     ) : <span className={cn("tabular-nums", cls)}>{fc(prVal)}</span>
                     return [
