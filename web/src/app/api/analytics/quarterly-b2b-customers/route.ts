@@ -56,14 +56,14 @@ export async function GET(req: NextRequest) {
   // Load settings (dynamic tier + exclusion) — luôn fresh mỗi request
   const { excludedCustomers, tierKeywords } = await fetchQuarterlySettings()
   const classifyTier = makeClassifyTier(tierKeywords)
-  const EXCLUDE_CUST_SQL_B2B = makeExcludeSql(excludedCustomers)
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   const rawCacheKey = `qb2b_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    // ── Phần 1: cache gohub_dw (customerRows + priorRows) ────────────────────────
-    const rawData = await cachedQuery(rawCacheKey, async () => {
+    // ── Phần 1 + 2: gohub_dw (cache) và Turso costs chạy SONG SONG ────────────────
+    const [rawData, costMap] = await Promise.all([
+      cachedQuery(rawCacheKey, async () => {
       const [py, pm0] = [parseInt(months[0].split("-")[0]), parseInt(months[0].split("-")[1])]
       const priorMonth = pm0 === 1 ? `${py - 1}-12` : `${py}-${String(pm0 - 1).padStart(2, "0")}`
       const priorStart = `${priorMonth}-01`
@@ -120,10 +120,9 @@ export async function GET(req: NextRequest) {
       ])
 
       return { customerRows, priorRows }
-    }, QUERY_TTL_MIN, refresh)
-
-    // ── Phần 2: Turso costs — luôn fresh (NGOÀI cache) ───────────────────────────
-    const costMap = await fetchCustomerCosts(months)
+    }, QUERY_TTL_MIN, refresh),
+    fetchCustomerCosts(months),  // Turso costs — chạy song song với gohub_dw query
+  ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
     const { customerRows, priorRows } = rawData
