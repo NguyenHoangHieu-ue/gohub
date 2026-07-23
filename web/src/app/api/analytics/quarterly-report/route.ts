@@ -304,7 +304,10 @@ export async function GET(req: NextRequest) {
             const cm1 = gp - cc
             totalRevenue += rev
             return { month, revenue: rev, gp, channelCost: cc, cm1, cm1Pct: pct(cm1, rev),
-                     three_hk_rev: hk3, three_hk_pct: pct(hk3, rev), _i: i }
+                     three_hk_rev: hk3, three_hk_pct: pct(hk3, rev),
+                     isProjected,
+                     ...(isProjected && { actualRevenue: r(revAct), actualGp: r(gpAct), actualCc: r(ccAct), actualCm1: r(gpAct - ccAct) }),
+                     _i: i }
           })
           const withMom = chMonths.map((m, i) => {
             const prev = chMonths[i - 1]

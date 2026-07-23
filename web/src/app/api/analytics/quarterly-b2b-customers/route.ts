@@ -162,8 +162,8 @@ export async function GET(req: NextRequest) {
       return { month: m, mStart, actualEnd, isProjected, factor }
     })
 
-    // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue (để tính cost % trên doanh thu gốc) + factor.
-    interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; factor: number }
+    // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue/rawGm (actual, để tính actual vs PR).
+    interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; factor: number }
     interface CustomerAgg {
       code: string; name: string; priceListName: string | null; currencyCode: string | null
       tier: string; region: string
@@ -199,13 +199,11 @@ export async function GET(req: NextRequest) {
         existing.gm         += gmAct  * factor
         existing.hk3        += hk3Act * factor
         existing.rawRevenue += revAct
+        existing.rawGm      += gmAct
       } else {
         cust.months.set(row.month, {
-          revenue:    revAct * factor,
-          gm:         gmAct  * factor,
-          hk3:        hk3Act * factor,
-          rawRevenue: revAct,
-          factor,
+          revenue: revAct * factor, gm: gmAct * factor, hk3: hk3Act * factor,
+          rawRevenue: revAct, rawGm: gmAct, factor,
         })
       }
     })
@@ -217,8 +215,8 @@ export async function GET(req: NextRequest) {
 
     // Build customer summaries
     const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
-    type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number }
-    const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
+    type MAgg = { revenue: number; gm: number; cc: number; cm1: number; hk3: number; rawRevenue: number; rawGm: number; rawCc: number }
+    const emptyMAgg = (): MAgg => ({ revenue: 0, gm: 0, cc: 0, cm1: 0, hk3: 0, rawRevenue: 0, rawGm: 0, rawCc: 0 })
     interface CustMonthCost { cost_lines: string; cost_type: string; cost_value: number; revenue: number }
     interface CustRow {
       code: string; name: string; region: string; priceListName: string | null
@@ -249,7 +247,8 @@ export async function GET(req: NextRequest) {
         const rec = costMap.get(`${m}_${cust.code}`)
         // amount cost: không nhân factor (người dùng nhập bao nhiêu hiện bấy nhiêu).
         // percent cost: áp dụng trên projected revenue (rawRevenue × factor).
-        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0
+        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0  // projected
+        const rawCc     = md ? calcRecordCostProjected(rec, md.rawRevenue, 1) : 0           // actual (factor=1)
         monthsCost[m] = {
           cost_lines: rec?.cost_lines ?? "[]",
           cost_type:  rec?.cost_type  ?? "amount",
@@ -266,6 +265,7 @@ export async function GET(req: NextRequest) {
           const ta = map.get(m) || emptyMAgg()
           ta.revenue += md.revenue; ta.gm += md.gm; ta.cc += monthCost
           ta.cm1 += md.gm - monthCost; ta.hk3 += md.hk3
+          ta.rawRevenue += md.rawRevenue; ta.rawGm += md.rawGm; ta.rawCc += rawCc
           map.set(m, ta)
         }
         acc(tier.monthAgg)
@@ -288,19 +288,28 @@ export async function GET(req: NextRequest) {
       })
     })
 
-    // helper: dựng month rows từ 1 map agg
+    // helper: dựng month rows từ 1 map agg — projected values + actual values cho tháng hiện tại
     const buildMonthRows = (agg: Map<string, MAgg>) => months.map((m, idx) => {
       const ma = agg.get(m)
-      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false }
+      const meta = monthMeta.find(x => x.month === m)
+      const isProjected = meta?.isProjected ?? false
+      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, momPct: null, hk3Pct: 0, hasData: false, isProjected }
       const prevMa = idx > 0 ? agg.get(months[idx - 1]) : null
       const momPct = prevMa && prevMa.cm1 !== 0
         ? Math.round((ma.cm1 - prevMa.cm1) / Math.abs(prevMa.cm1) * 1000) / 10
         : null
       return {
-        month: m, hasData: true,
+        month: m, hasData: true, isProjected,
         revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
         cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
         momPct, hk3Pct: pct(ma.hk3, ma.revenue),
+        // Actual YTD (chỉ có ý nghĩa khi isProjected = true; tháng đã hoàn thành thì actual == projected)
+        ...(isProjected && {
+          actualRevenue: r2(ma.rawRevenue),
+          actualGm: r2(ma.rawGm),
+          actualCc: r2(ma.rawCc),
+          actualCm1: r2(ma.rawGm - ma.rawCc),
+        }),
       }
     })
 
