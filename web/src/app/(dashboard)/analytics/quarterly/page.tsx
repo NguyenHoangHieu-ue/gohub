@@ -802,13 +802,13 @@ const REGION_META: Record<string, { flag: string; label: string }> = {
 // ── Chi phí kênh nhập tay per-KH/tháng ──
 interface CostLine { label: string; type: "amount" | "percent"; value: number }
 type CustomerCostEdits = Record<string, Record<string, CostLine[]>>
-function parseCostLines(str?: string): CostLine[] {
-  if (!str) return []
-  try {
-    const arr = JSON.parse(str)
-    if (Array.isArray(arr)) return arr.map((l: any) => ({ label: String(l?.label ?? ""), type: l?.type === "percent" ? "percent" : "amount", value: Number(l?.value) || 0 }))
-  } catch {}
-  return []
+function parseCostLines(raw?: string | null | unknown[]): CostLine[] {
+  if (!raw) return []
+  // Xử lý cả 2 trường hợp: JSON string (Turso) và array đã parse (Supabase JSONB)
+  const arr: any[] = Array.isArray(raw)
+    ? raw
+    : (() => { try { const p = JSON.parse(raw as string); return Array.isArray(p) ? p : [] } catch { return [] } })()
+  return arr.map((l: any) => ({ label: String(l?.label ?? ""), type: l?.type === "percent" ? "percent" : "amount", value: Number(l?.value) || 0 }))
 }
 // Nhãn hiển thị ô chi phí: "1.000.000đ + 5%"
 function costLabel(lines: CostLine[]): string {
@@ -841,9 +841,47 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
-  // Reset edit state khi đổi quarter (b2bTiers thay đổi) — tránh costEdits cũ của quý trước còn sót
+  // Ref để đọc editMode trong useEffect mà không cần capture closure
+  const editModeRef = React.useRef(false)
+  const prevMonthsKey = React.useRef("")
+
+  // Helper: build costEdits từ danh sách tiers (dùng cả khi start edit lẫn khi rebuild sau refresh)
+  const buildEditsFromTiers = (tiers: any[], qMonths: string[]): CustomerCostEdits => {
+    const edits: CustomerCostEdits = {}
+    tiers.forEach((tier: any) => {
+      ;(tier.customers ?? []).forEach((c: any) => {
+        if (!c?.code || edits[c.code]) return
+        edits[c.code] = {}
+        qMonths.forEach(m => { edits[c.code][m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
+      })
+    })
+    return edits
+  }
+
+  // Khi b2bTiers thay đổi:
+  // - Đổi quarter → reset toàn bộ edit state
+  // - Cùng quarter nhưng data refresh (sau lưu CH.Cost) → rebuild costEdits từ data mới, giữ editMode
   useEffect(() => {
-    setCostCust(null); setCostEdits({}); setCostSnapshot(""); setEditMode(false)
+    if (!b2bTiers) return
+    const monthsKey = (b2bTiers.months ?? []).join(",")
+    const sameQuarter = monthsKey === prevMonthsKey.current && prevMonthsKey.current !== ""
+    prevMonthsKey.current = monthsKey
+
+    if (!sameQuarter) {
+      // Đổi quarter → reset hết
+      setCostCust(null); setCostEdits({}); setCostSnapshot("")
+      editModeRef.current = false
+      setEditMode(false)
+    } else if (editModeRef.current) {
+      // Cùng quarter, data refresh khi đang trong edit mode → rebuild từ data mới, giữ edit mode
+      setCostCust(null)
+      const qMonths = (b2bTiers.months ?? allMonths ?? months) as string[]
+      const newEdits = buildEditsFromTiers(b2bTiers.tiers ?? [], qMonths)
+      setCostEdits(newEdits)
+      setCostSnapshot(JSON.stringify(newEdits))
+      // Không reset editMode → user tiếp tục edit được
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b2bTiers])
 
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
@@ -860,21 +898,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
 
   // ── Chi phí KH: mở/sửa/lưu ──
-  const buildCostEditState = (): CustomerCostEdits => {
-    const edits: CustomerCostEdits = {}
-    allTiers.forEach((tier: any) => {
-      ;(tier.customers ?? []).forEach((c: any) => {
-        if (!c?.code || edits[c.code]) return
-        edits[c.code] = {}
-        quarterMonths.forEach(m => { edits[c.code][m] = parseCostLines(c.monthsCost?.[m]?.cost_lines) })
-      })
-    })
-    return edits
-  }
+  const buildCostEditState = () => buildEditsFromTiers(allTiers, quarterMonths)
+
   const startCostEdit = () => {
     const edits = buildCostEditState()
     setCostEdits(edits)
     setCostSnapshot(JSON.stringify(edits))
+    editModeRef.current = true
     setEditMode(true)
   }
   const closeCostModal = () => { setCostCust(null) }
@@ -882,6 +912,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     closeCostModal()
     setCostEdits({})
     setCostSnapshot("")
+    editModeRef.current = false
     setEditMode(false)
   }
   const openCostModal = (c: any) => {
@@ -957,8 +988,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok && d?.ok) {
-        notify?.(true, "Đã lưu chi phí B2B")
-        cancelCostEdit()
+        notify?.(true, "Đã lưu chi phí B2B — đang cập nhật dữ liệu…")
+        closeCostModal()  // Chỉ đóng modal, GIỮ edit mode
+        // onSaved = refreshAll: flush cache + fetch mới → useEffect rebuilds costEdits, user tiếp tục edit
         onSaved?.()
       } else {
         notify?.(false, d?.error || "Lưu chi phí thất bại")
