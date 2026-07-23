@@ -48,9 +48,9 @@ export async function GET(req: NextRequest) {
   const quarter = searchParams.get("quarter") || `Q${Math.ceil((today.getMonth() + 1) / 3)}`
   const companyCode = searchParams.get("companyCode") || "ALL"
 
-  // Luôn dùng fact_fulfillment_revenue + created_date — nhất quán với gohub-report/gohub.py cm1_report().
-  // Không dùng getAnalyticsSource(dateColumn): hàm đó map created_date→fact_sales_revenue (không có GP).
-  const DATE_COL = "created_date"
+  // Dùng fact_fulfillment_revenue + fulfiled_date — nhất quán với B2B/B2C Performance (cùng date semantics).
+  // fulfiled_date = ngày hoàn thành đơn hàng (revenue recognition). created_date → fact_sales_revenue (không có GP).
+  const DATE_COL = "fulfiled_date"
   const MAIN_TABLE = "fact_fulfillment_revenue"
   const REV_COL = "fulfilled_revenue_amount_vnd"
   const GP_COL = "gross_profit_vnd"
@@ -89,7 +89,8 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
 
   // v2: thêm prevGroupRows cho QoQ, dynamic exclusion trong cache key
-  const rawCacheKey = `qreport_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  // v3: đổi created_date → fulfiled_date để đồng nhất với B2B/B2C Performance
+  const rawCacheKey = `qreport_raw_v3:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
     // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs chạy SONG SONG ────────────
