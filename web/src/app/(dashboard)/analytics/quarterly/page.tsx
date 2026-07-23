@@ -31,6 +31,7 @@ interface QReport {
   quarter: string; year: number; months: string[]
   summary: MonthSummary[]
   quarterTotal: MonthStats & { hk3Pct: number; b2b: MonthStats; b2c: MonthStats }
+  prevQuarterTotals?: { b2bRevenue: number; b2bGp: number; b2cRevenue: number; b2cGp: number }
   b2bChannels: Channel[]; b2cChannels: Channel[]
   elapsed_days: number; quarter_days: number
 }
@@ -146,7 +147,7 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
 // ─── Table header row ─────────────────────────────────────────────────────────
 
 const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
-const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
+const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%", "%QoQ"]
 
 function TableHead({ cols }: { cols: string[] }) {
   return (
@@ -338,6 +339,14 @@ function QuarterlyContent() {
   const totRevPr   = totRevRaw * qFactor
   const totCm1Pr   = totCm1Raw * qFactor
   const totThkPct  = totRevRaw > 0 ? (b2bThkAct + b2cThkAct) / totRevRaw * 100 : 0
+
+  // QoQ: so sánh pro-rata quý này vs thực tế quý trước (dựa vào Revenue)
+  const pqt = report?.prevQuarterTotals
+  const qoq = (prVal: number, prevVal: number | undefined) =>
+    prevVal && prevVal !== 0 ? Math.round((prVal - prevVal) / Math.abs(prevVal) * 1000) / 10 : null
+  const b2bQoQ = qoq(b2bRevPr, pqt?.b2bRevenue)
+  const b2cQoQ = qoq(b2cRevPr, pqt?.b2cRevenue)
+  const totQoQ = qoq(totRevPr, (pqt?.b2bRevenue ?? 0) + (pqt?.b2cRevenue ?? 0))
   // ──────────────────────────────────────────────────────────────────────────
 
   // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, HÔM QUA)).
@@ -616,7 +625,7 @@ function QuarterlyContent() {
                       actRev={b2bRevRaw} prRev={b2bRevPr}
                       gmRaw={b2bGmRaw} ccRaw={b2bCcRaw} gcRaw={b2bGcRaw}
                       cm1Raw={b2bCm1Raw} prCm1={b2bCm1Pr}
-                      hk3Pct={b2bThkPct}
+                      hk3Pct={b2bThkPct} qoqPct={b2bQoQ}
                     />
                     {targets.b2bRev > 0 && (
                       <QtTargetRow
@@ -634,7 +643,7 @@ function QuarterlyContent() {
                       actRev={b2cRevRaw} prRev={b2cRevPr}
                       gmRaw={b2cGmRaw} ccRaw={b2cCcRaw} gcRaw={b2cGcRaw}
                       cm1Raw={b2cCm1Raw} prCm1={b2cCm1Pr}
-                      hk3Pct={b2cThkPct}
+                      hk3Pct={b2cThkPct} qoqPct={b2cQoQ}
                     />
                     {targets.b2cRev > 0 && (
                       <QtTargetRow
@@ -657,6 +666,9 @@ function QuarterlyContent() {
                   <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
                   <td className={cn("px-4 py-3 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
                   <td className="px-4 py-3 text-right text-slate-300">{pct(totThkPct)}</td>
+                  <td className={cn("px-4 py-3 text-right font-bold tabular-nums", totQoQ == null ? "text-slate-400" : totQoQ >= 0 ? "text-green-300" : "text-red-300")}>
+                    {totQoQ != null ? `${totQoQ >= 0 ? "+" : ""}${totQoQ.toFixed(1)}%` : "—"}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -720,10 +732,11 @@ function MonthSubRow({ label, stats }: { label: string; stats: MonthStats }) {
 
 // ─── Quarter summary row — actual (raw) values ────────────────────────────────
 
-function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct }:
-  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number }) {
+function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct, qoqPct }:
+  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number; qoqPct?: number | null }) {
   const gmPct  = actRev > 0 ? gmRaw  / actRev * 100 : 0
   const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
+  const qoqCls = qoqPct == null ? "text-slate-300" : qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
   return (
     <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[12px]">
       <td className="px-4 py-3 font-semibold text-slate-800">{label}</td>
@@ -737,6 +750,9 @@ function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1
       <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
       <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
       <td className="px-4 py-3 text-right text-slate-500">{pct(hk3Pct)}</td>
+      <td className={cn("px-4 py-3 text-right tabular-nums", qoqCls)}>
+        {qoqPct != null ? `${qoqPct >= 0 ? "+" : ""}${qoqPct.toFixed(1)}%` : "—"}
+      </td>
     </tr>
   )
 }
@@ -780,6 +796,7 @@ function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act
           </div>
         ) : <span className="text-slate-300 float-right">—</span>}
       </td>
+      <td className="px-4 py-2 text-right text-slate-300">—</td>
       <td className="px-4 py-2 text-right text-slate-300">—</td>
     </tr>
   )
@@ -884,7 +901,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b2bTiers])
 
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
+  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ", "3HK%"]
   const colCount = SUB.length
 
   // Lấy view theo region hiện tại: ALL → dùng tổng tier; VN/US → dùng byRegion
@@ -1130,7 +1147,6 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <td key={`${m}-${i}`} className={cn("px-2 py-2.5 text-right text-slate-300", i === 0 && "border-l border-slate-100")}>—</td>
                           ))
                         }
-                        const momCls = d.momPct == null ? "text-slate-300" : d.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                         const pr = d.isProjected  // tháng đang chạy → hiện cả actual + PR
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
@@ -1138,9 +1154,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (pr && d.actualCc != null ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.cc)) : "—"}</td>,
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
-                          <td key="mom" className={cn("px-2 py-2.5 text-right", momCls)}>
-                            {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
-                          </td>,
+                          <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
                         ]
                       })}
@@ -1150,7 +1164,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{tier.totalCc > 0 ? (hasProjectedMonth ? dual(tier.totalCc, qActCc, "text-slate-500") : fc(tier.totalCc)) : "—"}</td>
                       <td className={cn("px-2 py-2.5 text-right font-bold bg-blue-50/60", cm1Color(tier.totalCm1))}>{dual(tier.totalCm1, hasProjectedMonth ? qActCm1 : undefined, cm1Color(tier.totalCm1))}</td>
                       <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(tier.totalCm1))}>{pct(tier.totalCm1Pct)}</td>
-                      <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
+                      <td className={cn("px-2 py-2.5 text-right font-semibold tabular-nums bg-blue-50/60", tier.qoqPct == null ? "text-slate-300" : tier.qoqPct >= 0 ? "text-green-600" : "text-red-500")}>
+                        {tier.qoqPct != null ? `${tier.qoqPct >= 0 ? "+" : ""}${tier.qoqPct.toFixed(1)}%` : "—"}
+                      </td>
                       <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60">{pct(tier.totalHk3Pct)}</td>
                     </tr>
                   )
@@ -1210,13 +1226,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%MoM (GM)</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (GM)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
                           </tr>
                         </thead>
                         <tbody>
                           {custs.map((c: any, i: number) => {
-                            const momCls = c.momPct == null ? "text-slate-300" : c.momPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                            const qoqCls = c.qoqPct == null ? "text-slate-300" : c.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             // Stacked PR/Actual cho quý đang chạy (hasProjected = true từ API)
                             const hp = c.hasProjected === true
                             const dualKH = (pr: number, act: number | undefined, cls = "text-slate-700") => hp && act != null ? (
@@ -1255,7 +1271,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                 </td>
                                 <td className={cn("px-3 py-2 text-right font-semibold", cm1Color(c.cm1))}>{dualKH(c.cm1, c.actualCm1, cm1Color(c.cm1))}</td>
                                 <td className={cn("px-3 py-2 text-right", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
-                                <td className={cn("px-3 py-2 text-right", momCls)}>{c.momPct != null ? `${c.momPct >= 0 ? "+" : ""}${c.momPct.toFixed(1)}%` : "—"}</td>
+                                <td className={cn("px-3 py-2 text-right", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
                                 <td className="px-3 py-2 text-right text-slate-500">{pct(c.hk3Pct)}</td>
                               </tr>
                             )
