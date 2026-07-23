@@ -17,11 +17,12 @@ export async function GET(req: NextRequest) {
     let sql: string
     const params: unknown[] = []
 
+    // Chỉ hiện B2B customers (có price_list_name) — B2C cá nhân (354k rows, CUZN...) loại ra
     if (!q) {
-      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' LIMIT 50`
+      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' AND price_list_name IS NOT NULL ORDER BY ${nameCol} LIMIT 50`
     } else {
       params.push(`%${q}%`)
-      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' AND ${nameCol} ILIKE $1 LIMIT 100`
+      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' AND price_list_name IS NOT NULL AND ${nameCol} ILIKE $1 ORDER BY ${nameCol} LIMIT 100`
     }
 
     const rows = await queryAnalytics<{ name: string }>(sql, params)
