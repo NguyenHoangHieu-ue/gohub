@@ -267,6 +267,8 @@ function QuarterlyContent() {
   }, [selQ, selYear])
 
   const refreshAll = useCallback(async () => {
+    // Xóa L2 Supabase cache quarterly trước, sau đó fetch fresh
+    await fetch("/api/analytics/quarterly-cache-flush", { method: "POST" }).catch(() => {})
     await Promise.all([fetchReport(true), fetchB2BTiers(true)])
     notify(true, "Đã tải lại dữ liệu mới nhất từ database")
   }, [fetchReport, fetchB2BTiers])
@@ -279,7 +281,7 @@ function QuarterlyContent() {
     setSaving(true)
     try {
       const res = await fetch("/api/analytics/quarterly-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quarter: selQ, year: selYear, targets: t }) })
-      if (res.ok) { setTargets(t); setEditTarget(false); setTgtSnapshot({ ...tgtInputs }); notify(true, "Đã lưu target") } else notify(false, "Lưu thất bại")
+      if (res.ok) { setTargets(t); setEditTarget(false); setTgtSnapshot({ ...tgtInputs }); notify(true, "Đã lưu target — đang tải lại…"); refreshAll() } else notify(false, "Lưu thất bại")
     } catch { notify(false, "Lỗi kết nối") }
     finally { setSaving(false) }
   }
@@ -674,7 +676,7 @@ function QuarterlyContent() {
         onToggle={() => setExpandB2B(v => !v)}
         canEditCost={canEditCost}
         isCreator={isCreator}
-        onSaved={() => fetchB2BTiers(true)}
+        onSaved={refreshAll}
         notify={notify}
         quarterLabel={`${selQ}-${selYear}`}
       />
