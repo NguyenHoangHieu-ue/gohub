@@ -49,91 +49,90 @@ const cm1Color  = (v: number) => v >= 0 ? "text-blue-700" : "text-red-600"
 const momColor  = (v: number | null) => v == null ? "text-slate-400" : v >= 0 ? "text-green-600" : "text-red-500"
 const prColor   = "text-slate-500"
 
-// ─── Progress bar ─────────────────────────────────────────────────────────────
-
-function ProgressBar({ value, target }: { value: number; target: number }) {
-  const ratio = target > 0 ? Math.min((value / target) * 100, 100) : 0
-  const fill = ratio >= 100 ? "bg-green-500" : ratio >= 75 ? "bg-blue-500" : "bg-slate-400"
-  return (
-    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-      <div className={cn("h-full rounded-full transition-all duration-500", fill)} style={{ width: `${ratio}%` }} />
-    </div>
-  )
-}
-
-// ─── KPI Progress Card ────────────────────────────────────────────────────────
+// ─── KPI Progress Card — big % = PR CM1/Target, 3-row table (Rev/CM1/3HK) ────
 
 function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Target, expectedPct = 0, accent = "#003B95" }:
   { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Target: number; expectedPct?: number; accent?: string }) {
-  const progress   = target > 0 ? (actual / target) * 100 : 0
-  // Xanh nếu đạt/vượt kỳ vọng pro-rata, amber nếu dưới, xanh lá nếu ≥100%
-  const pctColor   = progress >= 100 ? "text-green-600" : (expectedPct > 0 ? progress >= expectedPct : progress >= 75) ? "text-[#003B95]" : "text-amber-600"
+
+  const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
+  const revPrPct = target    > 0 ? (prRev / target)    * 100 : 0
+
+  const colorFor = (p: number) =>
+    p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-[#003B95]" : "text-amber-600"
+
+  const badge = (p: number) => (
+    <span className={cn("px-1 py-0.5 rounded text-[10px] font-bold tabular-nums",
+      p >= 100 ? "bg-green-100 text-green-700"
+               : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-blue-100 text-[#003B95]"
+               : "bg-amber-50 text-amber-600")}>
+      {pct(p)}
+    </span>
+  )
 
   return (
     <div className="relative bg-white border border-slate-200 rounded-xl p-5 overflow-hidden shadow-sm">
-      {/* accent bar */}
       <div className="absolute top-0 left-0 right-0 h-1" style={{ background: accent }} />
-      <div className="flex items-center justify-between mb-3">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: `${accent}1a` }}>
             <Icon className="w-4 h-4" style={{ color: accent }} />
           </div>
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-tight">{label}<br /><span className="text-slate-400 font-semibold">Rev Progress</span></span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-tight">
+            {label}<br /><span className="text-slate-400 font-semibold">CM1 Progress</span>
+          </span>
         </div>
-        <span className={cn("text-3xl font-extrabold tabular-nums", pctColor)}>{pct(progress)}</span>
+        <span className={cn("text-3xl font-extrabold tabular-nums", colorFor(cm1PrPct))}>
+          {cm1Target > 0 ? pct(cm1PrPct) : "—"}
+        </span>
       </div>
 
-      {/* progress bar + marker kỳ vọng pro-rata */}
-      <div className="relative h-2.5 bg-slate-100 rounded-full mb-1.5">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(Math.max(progress, 0), 100)}%`, background: accent }} />
+      {/* Progress bar: PR CM1 / Target CM1 */}
+      <div className="relative h-2 bg-slate-100 rounded-full mb-3">
+        <div className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(Math.max(cm1PrPct, 0), 100)}%`, background: accent }} />
         {expectedPct > 0 && (
-          <div className="absolute -top-1 -bottom-1 w-[2px] bg-slate-700 rounded" style={{ left: `${Math.min(expectedPct, 100)}%` }} title={`Kỳ vọng pro-rata: ${pct(expectedPct)}`} />
+          <div className="absolute -top-1 -bottom-1 w-[2px] bg-slate-700 rounded"
+            style={{ left: `${Math.min(expectedPct, 100)}%` }}
+            title={`Kỳ vọng pro-rata: ${pct(expectedPct)}`} />
         )}
       </div>
-      <div className="flex justify-between text-[11px] mb-3">
-        <span className="text-slate-400">Actual <b className="text-slate-800 tabular-nums ml-0.5">{fc(actual)}</b></span>
-        <span className="text-slate-400">Target <b className="text-slate-800 tabular-nums ml-0.5">{target > 0 ? fc(target) : "—"}</b></span>
-      </div>
 
-      {/* nhóm số liệu nổi bật */}
-      <div className="grid grid-cols-2 gap-2 text-[11px]">
-        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR Revenue</div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prRev)}</span>
-            {target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prRev >= target ? "text-green-600" : prRev / target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prRev / target * 100)}</span>}
-          </div>
+      {/* Table: metric | Actual | Pro-rata | Target | % */}
+      <div className="text-[11px]">
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_40px] gap-x-1 mb-1 pb-1 border-b border-slate-100">
+          <span />
+          <span className="text-right text-[9px] font-bold text-slate-400 uppercase tracking-wider">Actual</span>
+          <span className="text-right text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pro-rata</span>
+          <span className="text-right text-[9px] font-bold text-slate-400 uppercase tracking-wider">Target Q</span>
+          <span className="text-right text-[9px] font-bold text-slate-400 uppercase tracking-wider">%</span>
         </div>
-        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">PR CM1</div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-bold text-slate-800 tabular-nums text-[11px]">{fc(prCm1)}</span>
-            {cm1Target > 0 && <span className={cn("text-[10px] font-bold tabular-nums", prCm1 >= cm1Target ? "text-green-600" : prCm1 / cm1Target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>{pct(prCm1 / cm1Target * 100)}</span>}
-          </div>
+        {/* Revenue row */}
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_40px] gap-x-1 py-1 border-b border-slate-50 items-center">
+          <span className="text-[9px] font-bold text-slate-400 uppercase">Rev</span>
+          <span className="text-right text-slate-700 font-semibold tabular-nums truncate">{fc(actual)}</span>
+          <span className="text-right text-slate-600 tabular-nums truncate">{fc(prRev)}</span>
+          <span className="text-right text-slate-500 tabular-nums truncate">{target > 0 ? fc(target) : "—"}</span>
+          <span className="text-right">{target > 0 ? badge(revPrPct) : <span className="text-slate-300">—</span>}</span>
         </div>
-        <div className="rounded-lg px-2.5 py-1.5 border" style={{ background: `${accent}0d`, borderColor: `${accent}26` }}>
-          <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: accent }}>CM1 Thực tế</div>
-          <div className={cn("font-bold tabular-nums", cm1Color(cm1Actual))}>{fc(cm1Actual)}</div>
+        {/* CM1 row */}
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_40px] gap-x-1 py-1 border-b border-slate-50 items-center">
+          <span className="text-[9px] font-bold text-slate-400 uppercase">CM1</span>
+          <span className={cn("text-right font-semibold tabular-nums truncate", cm1Color(cm1Actual))}>{fc(cm1Actual)}</span>
+          <span className={cn("text-right tabular-nums truncate", cm1Color(prCm1))}>{fc(prCm1)}</span>
+          <span className="text-right text-slate-500 tabular-nums truncate">{cm1Target > 0 ? fc(cm1Target) : "—"}</span>
+          <span className="text-right">{cm1Target > 0 ? badge(cm1PrPct) : <span className="text-slate-300">—</span>}</span>
         </div>
-        <div className="rounded-lg px-2.5 py-1.5 bg-slate-50 border border-slate-100">
-          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">3HK%{hk3Target > 0 ? ` / ${pct(hk3Target)}` : ""}</div>
-          <div className="font-bold text-slate-800 tabular-nums">{pct(hk3Pct)}</div>
+        {/* 3HK% row */}
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_40px] gap-x-1 py-1 items-center">
+          <span className="text-[9px] font-bold text-slate-400 uppercase">3HK%</span>
+          <span className="text-right text-slate-700 font-semibold tabular-nums">{pct(hk3Pct)}</span>
+          <span className="text-right text-slate-300 text-[10px]">—</span>
+          <span className="text-right text-slate-500 tabular-nums">{hk3Target > 0 ? pct(hk3Target) : "—"}</span>
+          <span className="text-right text-slate-300 text-[10px]">—</span>
         </div>
       </div>
-      {cm1Target > 0 && (
-        <div className="mt-2 pt-2 border-t border-slate-100">
-          <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">CM1 vs Target</span>
-            <span className={cn("font-bold tabular-nums", cm1Actual >= cm1Target ? "text-green-600" : cm1Actual / cm1Target >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-              {pct(cm1Actual / cm1Target * 100)}
-            </span>
-          </div>
-          <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(Math.max(cm1Actual / cm1Target * 100, 0), 100)}%`, background: accent }} />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -190,7 +189,7 @@ function QuarterlyContent() {
       if (d?.role) setUserRole(String(d.role))
     }).catch(() => {})
   }, [])
-  const canEditCost = ["admin", "creator"].includes(userRole)
+  const canEditCost = ["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(userRole)
   const isCreator   = userRole === "creator"
 
   const fetchReport = useCallback(async () => {
@@ -408,16 +407,16 @@ function QuarterlyContent() {
       {report && (
         <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity", loading && "opacity-50 pointer-events-none")}>
           <KpiCard label="B2B" icon={Building2} accent="#003B95" expectedPct={expectedPct}
-            actual={b2bRevAct} prRev={b2bRevPr} target={targets.b2bRev}
-            cm1Actual={b2bCm1Act} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
+            actual={b2bRevRaw} prRev={b2bRevPr} target={targets.b2bRev}
+            cm1Actual={b2bCm1Raw} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
             hk3Pct={b2bThkPct} hk3Target={targets.b2bThk} />
           <KpiCard label="B2C" icon={ShoppingBag} accent="#0ea5e9" expectedPct={expectedPct}
-            actual={b2cRevAct} prRev={b2cRevPr} target={targets.b2cRev}
-            cm1Actual={b2cCm1Act} prCm1={b2cCm1Pr} cm1Target={targets.b2cCm1}
+            actual={b2cRevRaw} prRev={b2cRevPr} target={targets.b2cRev}
+            cm1Actual={b2cCm1Raw} prCm1={b2cCm1Pr} cm1Target={targets.b2cCm1}
             hk3Pct={b2cThkPct} hk3Target={targets.b2cThk} />
           <KpiCard label="Tổng" icon={TrendingUp} accent="#1e3a8a" expectedPct={expectedPct}
-            actual={totRevAct} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
-            cm1Actual={totCm1Act} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
+            actual={totRevRaw} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
+            cm1Actual={totCm1Raw} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
             hk3Pct={totThkPct} hk3Target={0} />
         </div>
       )}
@@ -706,6 +705,11 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   // 3 tháng của quý (kể cả tháng chưa có dữ liệu) cho modal chi phí
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
   const allTiers: any[] = b2bTiers?.tiers ?? []
+
+  // Reset edit state khi đổi quarter (b2bTiers thay đổi) — tránh costEdits cũ của quý trước còn sót
+  useEffect(() => {
+    setCostCust(null); setCostEdits({}); setCostSnapshot(""); setEditMode(false)
+  }, [b2bTiers])
 
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
   const colCount = SUB.length
