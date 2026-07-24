@@ -580,25 +580,25 @@ function QuarterlyContent() {
                   const label  = `T${parseInt(mo)}/${y}`
                   return (
                     <React.Fragment key={m.month}>
-                      {/* Revenue = projected (g.revenue), PR Rev = "—", CM1 = projected, PR CM1 = "—" */}
+                      {/* Revenue/GM/CM1 = actual; PR Rev/PR CM1 = monthly projected (chỉ tháng đang chạy) */}
                       <tr className={cn("border-b border-slate-100", m.isProjected ? "bg-blue-50/30" : "bg-white hover:bg-slate-50")}>
                         <td className="px-4 py-3 font-semibold text-slate-800">
                           {label}
                           {m.isProjected && <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR ×{m.factor}</span>}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(m.total.revenue)}</td>
-                        <td className="px-4 py-3 text-right"><span className="text-slate-300">—</span></td>
-                        <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.gp)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(m.total.actualRevenue ?? m.total.revenue)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-500">{m.isProjected ? fc(m.total.revenue) : <span className="text-slate-300">—</span>}</td>
+                        <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.actualGp ?? m.total.gp)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.total.gpPct)}</td>
-                        <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
-                        <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.groupCost > 0 ? fc(m.total.groupCost) : <span className="text-slate-300">—</span>}</td>
-                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.cm1))}>{fc(m.total.cm1)}</td>
-                        <td className="px-4 py-3 text-right"><span className="text-slate-300">—</span></td>
+                        <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.actualCc ?? m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
+                        <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.groupCost > 0 ? fc(m.total.actualGc ?? m.total.groupCost) : <span className="text-slate-300">—</span>}</td>
+                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.actualCm1 ?? m.total.cm1))}>{fc(m.total.actualCm1 ?? m.total.cm1)}</td>
+                        <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(m.total.cm1))}>{m.isProjected ? fc(m.total.cm1) : <span className="text-slate-300">—</span>}</td>
                         <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                       </tr>
-                      <MonthSubRow label="B2B" stats={m.b2b} />
-                      <MonthSubRow label="B2C" stats={m.b2c} />
+                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} />
+                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} />
                     </React.Fragment>
                   )
                 })}
@@ -711,20 +711,23 @@ function QuarterlyContent() {
 }
 
 // ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
-// Revenue = projected (g.revenue), PR Rev = "—", CM1 = projected (g.cm1), PR CM1 = "—"
-
-function MonthSubRow({ label, stats }: { label: string; stats: MonthStats }) {
+function MonthSubRow({ label, stats, isProjected }: { label: string; stats: MonthStats; isProjected?: boolean }) {
+  const actRev = stats.actualRevenue ?? stats.revenue
+  const actGp  = stats.actualGp     ?? stats.gp
+  const actCc  = stats.actualCc     ?? stats.channelCost
+  const actGc  = stats.actualGc     ?? stats.groupCost
+  const actCm1 = stats.actualCm1    ?? stats.cm1
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(stats.revenue)}</td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300">—</span></td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(stats.gp)}</td>
+      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
+      <td className="px-4 py-2 text-right tabular-nums text-slate-400">{isProjected ? fc(stats.revenue) : <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actGp)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
-      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{stats.channelCost > 0 ? fc(stats.channelCost) : <span className="text-slate-300">—</span>}</td>
-      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{stats.groupCost > 0 ? fc(stats.groupCost) : <span className="text-slate-300">—</span>}</td>
-      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(stats.cm1))}>{fc(stats.cm1)}</td>
-      <td className="px-4 py-2 text-right"><span className="text-slate-300">—</span></td>
+      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actCc > 0 ? fc(actCc) : <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actGc > 0 ? fc(actGc) : <span className="text-slate-300">—</span>}</td>
+      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>{fc(actCm1)}</td>
+      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(stats.cm1))}>{isProjected ? fc(stats.cm1) : <span className="text-slate-300">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
     </tr>
