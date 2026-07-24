@@ -60,7 +60,7 @@ Nhất quán với `gohub-report/gohub.py` (`save_quarter_targets` / `cm1_quarte
 - **CM1 = Gross Profit − Channel Cost − Group Cost**.
 - **Pro-rata (PR)**: tháng hiện tại → `factor = dim / elapsed`; cột tháng hiện tại hiện cả **Actual** (số thực) và **PR** (projected, stacked).
 - **3HK%** = revenue SP vendor `3HKDATAPOOL` / total revenue.
-- **%QoQ(CM1)** (cập nhật 2026-07-24): `(CM1 projected quý này − CM1 thực tế quý trước) / |CM1 quý trước|`. Áp dụng thống nhất ở tất cả 3 vị trí: bảng Tổng Quý (B2B/B2C/Tổng), tier pivot, customer detail. CM1 quý trước = GP − channel cost − group cost (tính từ prevChannelRows + Supabase costs). Cache key API `v3 → v4`.
+- **%QoQ(CM1)** (cập nhật 2026-07-24): `(CM1 monthly pro-rata quý này − CM1 thực tế quý trước) / |CM1 quý trước|`. Áp dụng thống nhất ở tất cả 3 vị trí: bảng Tổng Quý (B2B/B2C/Tổng), tier pivot, customer detail. **Monthly pro-rata** = Σ cm1 từng tháng (tháng hiện tại × `dim/elapsed`, tháng tương lai = 0) — KHÔNG dùng quarter-level factor (`qTotal/qElapsed`). CM1 quý trước = GP − channel cost − group cost (prevChannelRows + Supabase costs). Fix 2026-07-24: Tổng Quý trước dùng quarter-level (inflate QoQ đầu quý), nay đồng bộ sang monthly. Cache key API `v3 → v4`.
 - **INACTIVE filter**: KH có `price_list_name` chứa "INACTIVE" bị loại khỏi mọi tổng B2B.
 
 ## 5. Cài đặt động (admin/creator)
