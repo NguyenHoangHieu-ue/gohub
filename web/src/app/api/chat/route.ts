@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
 
     // ── other agents: streaming ──
     const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model  = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
+    const model  = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction })
     const result = await model.startChat({ history: geminiHistory }).sendMessageStream(lastMsg)
 
     const stream = new ReadableStream({

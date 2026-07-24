@@ -69,7 +69,7 @@ OUTPUT FORMAT (chính xác):
 export async function analyzeMrpDocument(text: string, docName: string): Promise<MrpPlan> {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.5-flash",
+    model: "gemini-2.5-flash",
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       temperature:      0.1,
