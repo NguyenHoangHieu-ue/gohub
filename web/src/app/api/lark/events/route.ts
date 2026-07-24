@@ -407,7 +407,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     } else {
       // Call Gemini (non-streaming for Lark)
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-      const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
+      const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", systemInstruction })
       const result = await model.startChat({ history: geminiHistory }).sendMessage(userText)
       response = result.response.text()
     }

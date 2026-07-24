@@ -161,8 +161,14 @@ export async function GET(req: NextRequest) {
       const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
       const isProjected = isCurrent && elapsed > 0 && elapsed < dim
       const factor = isProjected ? dim / elapsed : 1
-      return { month: m, mStart, actualEnd, isProjected, factor }
+      return { month: m, mStart, actualEnd, isProjected, factor, elapsed }
     })
+
+    // Quarter-level factor — dùng cho %QoQ tier (nhất quán với Tổng Quý)
+    const elapsedQDays  = monthMeta.reduce((s, mr) => s + mr.elapsed, 0)
+    const quarterQDays  = monthMeta.reduce((s, mr) => s + getDaysInMonth(mr.month), 0)
+    const qFactor       = elapsedQDays > 0 ? quarterQDays / elapsedQDays : 1
+    const hasProjected  = monthMeta.some(mr => mr.isProjected)
 
     // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue/rawGm (actual, để tính actual vs PR).
     interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; factor: number }
@@ -332,16 +338,18 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // helper: tổng từ 1 danh sách customer + QoQ% (so sánh projected GM quý này vs GM thực tế quý trước)
+    // helper: tổng từ 1 danh sách customer + QoQ% (PR CM1 quý này vs CM1 thực tế quý trước)
     const buildTotals = (custs: CustRow[]) => {
-      const totRev  = custs.reduce((s, c) => s + c.revenue, 0)
-      const totGm   = custs.reduce((s, c) => s + c.gm, 0)
-      const totCc   = custs.reduce((s, c) => s + c.cc, 0)
-      const totCm1  = custs.reduce((s, c) => s + c.cm1, 0)
-      const totHk3  = custs.reduce((s, c) => s + c.hk3Rev, 0)
-      // QoQ tier: so sánh CM1 (nhất quán với per-customer QoQ)
+      const totRev     = custs.reduce((s, c) => s + c.revenue, 0)
+      const totGm      = custs.reduce((s, c) => s + c.gm, 0)
+      const totCc      = custs.reduce((s, c) => s + c.cc, 0)
+      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0)
+      const totHk3     = custs.reduce((s, c) => s + c.hk3Rev, 0)
+      // QoQ tier: dùng PR CM1 quarter-level (nhất quán với bảng Tổng Quý)
+      const totActCm1  = custs.reduce((s, c) => s + c.actualCm1, 0)
+      const totCm1Pr   = hasProjected ? Math.round(totActCm1 * qFactor) : totCm1
       const prevTotCm1 = custs.reduce((s, c) => s + (prevCm1Map.get(c.code) ?? 0), 0)
-      const qoqPct  = prevTotCm1 !== 0 ? Math.round((totCm1 - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
+      const qoqPct     = prevTotCm1 !== 0 ? Math.round((totCm1Pr - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
