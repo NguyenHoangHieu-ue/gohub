@@ -1476,8 +1476,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target: {fc(tgt.cm1)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", c.cm1 / tgt.cm1 >= 1 ? "text-green-600" : c.cm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {pct(tgt.cm1 > 0 ? c.cm1 / tgt.cm1 * 100 : 0)}
+                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
