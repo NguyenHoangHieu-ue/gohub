@@ -344,9 +344,9 @@ function QuarterlyContent() {
   const pqt = report?.prevQuarterTotals
   const qoq = (prVal: number, prevVal: number | undefined) =>
     prevVal && prevVal !== 0 ? Math.round((prVal - prevVal) / Math.abs(prevVal) * 1000) / 10 : null
-  const b2bQoQ = qoq(b2bCm1Act, pqt?.b2bCm1)
-  const b2cQoQ = qoq(b2cCm1Act, pqt?.b2cCm1)
-  const totQoQ = qoq(totCm1Act, (pqt?.b2bCm1 ?? 0) + (pqt?.b2cCm1 ?? 0))
+  const b2bQoQ = qoq(b2bCm1Pr, pqt?.b2bCm1)
+  const b2cQoQ = qoq(b2cCm1Pr, pqt?.b2cCm1)
+  const totQoQ = qoq(totCm1Pr, (pqt?.b2bCm1 ?? 0) + (pqt?.b2cCm1 ?? 0))
   // ──────────────────────────────────────────────────────────────────────────
 
   // Khoảng ngày dữ liệu đang được tính (khớp API: đầu quý → min(cuối quý, HÔM QUA)).
