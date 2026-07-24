@@ -120,7 +120,7 @@ export async function runBIAnalyst(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
     // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
