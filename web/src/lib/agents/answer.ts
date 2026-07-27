@@ -77,7 +77,7 @@ export async function answerQuestion(
   }
 
   const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  const model  = genAI.getGenerativeModel({ model: "gemini-3.6-flash", systemInstruction })
+  const model  = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction })
   const result = await model.startChat({ history: geminiHistoryEarly }).sendMessage(lastMsg)
   return { kind: "agent", agentId, agentName, text: ensureAnswer(result.response.text(), agentId) }
 }
