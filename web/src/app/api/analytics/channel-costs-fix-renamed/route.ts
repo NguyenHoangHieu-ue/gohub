@@ -15,8 +15,9 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   // 1. Tìm tất cả channels trong gohub_dw có liên quan
-  const dwChannels = await queryAnalytics<{ code: string; channel_name: string; group_name: string; sub_group_name: string }>(
+  const dwChannels = await queryAnalytics<{ code: string; channel_name: string; sapo_name: string; group_name: string; sub_group_name: string }>(
     `SELECT DISTINCT TRIM(code) as code, TRIM(channel_name) as channel_name,
+            TRIM(COALESCE(sapo_name,'')) as sapo_name,
             TRIM(COALESCE(group_name,'')) as group_name,
             TRIM(COALESCE(sub_group_name,'')) as sub_group_name
      FROM dim_order_source
@@ -24,8 +25,11 @@ export async function GET() {
        AND (LOWER(channel_name) LIKE '%shopee%'
          OR LOWER(channel_name) LIKE '%tiktok%'
          OR LOWER(channel_name) LIKE '%lazada%'
-         OR LOWER(channel_name) LIKE '%ecom%')
-     ORDER BY channel_name`
+         OR LOWER(channel_name) LIKE '%ecom%'
+         OR LOWER(sapo_name) LIKE '%shopee%'
+         OR LOWER(sapo_name) LIKE '%tiktok%'
+         OR LOWER(sapo_name) LIKE '%lazada%')
+     ORDER BY channel_name, code`
   )
 
   // 2. Tìm records trong analytics_channel_costs có liên quan
