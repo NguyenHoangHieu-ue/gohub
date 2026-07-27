@@ -215,12 +215,32 @@ export async function runBIAnalyst(
       try {
         console.log(`[BI] SQL: ${sql.substring(0, 120)}`)
         const rows = await queryAnalytics(sql)
-        // Limit to 100 rows to avoid token overflow
         const limited = rows.slice(0, 100)
-        parts.push({ functionResponse: { name: "executeSQL", response: { result: limited, rowCount: rows.length } } })
+        const response: any = { result: limited, rowCount: rows.length }
+        // Self-correction hint: 0 rows → suggest broadening filters
+        if (rows.length === 0) {
+          response.hint = "Query returned 0 rows. Before concluding 'no data': (1) verify fulfiled_date::DATE cast and date range, (2) try ILIKE instead of =, (3) remove one filter at a time to narrow the cause, (4) run SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue to check latest available date."
+        }
+        // Sanity check: flag suspicious numbers
+        const firstRow = limited[0] as any
+        if (firstRow) {
+          const vals = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v))))
+          const nums = vals.map(v => Number(v))
+          if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) {
+            response.warning = "Some revenue values are negative — this may indicate a data issue or incorrect aggregation. Please verify the query logic."
+          }
+          if (nums.some(n => n > 1e13)) {
+            response.warning = "Some values appear unusually large (>10 trillion VND). Check for missing JOIN conditions causing row multiplication."
+          }
+        }
+        parts.push({ functionResponse: { name: "executeSQL", response } })
       } catch (err: any) {
         console.error("[BI] SQL error:", err.message)
-        parts.push({ functionResponse: { name: "executeSQL", response: { error: err.message } } })
+        // Self-correction: return error + fix guidance so model can retry
+        parts.push({ functionResponse: { name: "executeSQL", response: {
+          error: err.message,
+          fix_hint: "Fix the SQL error above and call executeSQL again immediately with corrected SQL. Common causes: wrong column name, missing cast (::DATE), invalid alias reference in GROUP BY, or wrong table name. Do NOT ask the user to retry — fix and retry yourself.",
+        } } })
       }
     }
 
@@ -235,22 +255,22 @@ export async function runBIAnalyst(
   if (!anyToolCall && PUNT_RE.test(result.response.text())) {
     try {
       result = await chat.sendMessage(
-        "Bạn CÓ sẵn công cụ executeSQL và ĐƯỢC PHÉP truy vấn gohub_dw NGAY BÂY GIỜ. TUYỆT ĐỐI KHÔNG hứa 'sẽ truy vấn' hay yêu cầu user phản hồi lại. HÃY gọi executeSQL ngay để lấy số liệu thật rồi trả lời hoàn chỉnh."
+        "You HAVE the executeSQL tool and ARE PERMITTED to query gohub_dw RIGHT NOW. DO NOT promise 'I will query' or ask the user to follow up. CALL executeSQL immediately to get real data and return a complete answer."
       )
       await processToolCalls()
-    } catch { /* giữ nguyên → xử lý ở tầng gọi */ }
+    } catch { /* keep as-is → handled at caller level */ }
   }
 
-  // Fallback chống câu trả lời RỖNG: Gemini đôi khi kết thúc function-calling mà không sinh text
-  // (nhất là query so sánh nhiều kỳ / WoW). Nudge 1 lượt để buộc tổng hợp kết quả đã truy vấn.
+  // Guard against empty text: Gemini sometimes ends function-calling without generating text
+  // (especially for multi-period / WoW comparisons). Nudge once to force synthesis.
   let text = result.response.text()
   if (!text.trim()) {
     try {
       const followup = await chat.sendMessage(
-        "Dựa TRÊN kết quả các truy vấn đã chạy ở trên, hãy viết câu trả lời hoàn chỉnh bằng tiếng Việt cho user (kèm số liệu, bảng markdown nếu cần). KHÔNG gọi thêm tool."
+        "Based on the query results above, write a complete answer in Vietnamese for the user (include numbers, markdown table if needed). DO NOT call any more tools."
       )
       text = followup.response.text()
-    } catch { /* giữ text rỗng → xử lý ở tầng gọi */ }
+    } catch { /* keep empty text → handled at caller level */ }
   }
   return text
 }
