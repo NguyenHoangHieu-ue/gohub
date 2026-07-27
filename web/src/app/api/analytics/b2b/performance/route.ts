@@ -226,7 +226,12 @@ export async function GET(req: NextRequest) {
       })).sort((a, b) => b.revenue - a.revenue)
 
       return {
-        name: r.name, channel: r.channel, revenue, margin, units: r.units,
+        name: r.name, channel: r.channel,
+        sub_group_name:  r.sub_group_name  || "",
+        customer_code:   r.customer_code   || undefined,
+        price_list_name: r.price_list_name || undefined,
+        currency_code:   r.currency_code   || undefined,
+        revenue, margin, units: r.units,
         margin_percent: revenue > 0 ? (margin / revenue) * 100 : 0,
         gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
         sub_channels,

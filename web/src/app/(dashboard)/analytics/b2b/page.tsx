@@ -72,6 +72,10 @@ export default function B2BPerformance() {
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
   const [tierSearch, setTierSearch] = useState("")
+  // Tier keywords từ quarterly-settings (giống Q.Report) — mặc định Strategic/VIP/Gold/Silver
+  const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
+    Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
+  })
 
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
@@ -132,13 +136,15 @@ export default function B2BPerformance() {
       if (fresh) queryParams.append("nocache", "1")
       const nc = fresh ? "&nocache=1" : ""
 
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData] = await Promise.all([
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
+        // Load tier keywords từ quarterly-settings (giống Quarter Report)
+        fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -148,6 +154,7 @@ export default function B2BPerformance() {
       const safeFeeChannels = Array.isArray(feeChannels) ? feeChannels : []
 
       setPartnerTiers(tiersData)
+      if (quarterlySettings?.tierKeywords) setTierKeywords(quarterlySettings.tierKeywords)
       setWholesaleCustomers(safeB2BPerfCustomer)
       setStrategicPerformance(safeStrategicPerf)
       setTrendData(safeTrend)
@@ -674,17 +681,18 @@ export default function B2BPerformance() {
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
                         const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
 
-                        // Group by price_list_name tier (Strategic/VIP/Gold/Silver) — giống Quarter Report
+                        // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
                         const classifyTier = (pln?: string): string => {
                           if (!pln) return "Strategic"
                           const p = pln.toUpperCase()
-                          if (p.includes("STRATEGIC")) return "Strategic"
-                          if (p.includes("VIP"))       return "VIP"
-                          if (p.includes("GOLD"))      return "Gold"
-                          if (p.includes("SILVER"))    return "Silver"
+                          for (const [tier, keywords] of Object.entries(tierKeywords)) {
+                            if ((keywords as string[]).some(kw => p.includes(kw.toUpperCase()))) return tier
+                          }
                           return "Strategic"   // default như Quarter Report
                         }
-                        const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+                        const TIER_ORDER = Object.keys(tierKeywords).length > 0
+                          ? Object.keys(tierKeywords)
+                          : ["Strategic", "VIP", "Gold", "Silver"]
                         const hasTierInfo = sorted.some(r => r.price_list_name)
                         const groups = new Map<string, PerformanceData[]>()
                         sorted.forEach(row => {
