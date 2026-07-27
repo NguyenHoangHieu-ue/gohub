@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   if (channel) {
     params.push(channel); where += ` AND TRIM(s.channel_name) = $${params.length}`
   } else if (channelGroup && channelGroup !== "All") {
-    params.push(channelGroup); where += ` AND s.group_name = $${params.length}`
+    params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
 
   try {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         f.customer_code,
         COALESCE(dc.name, f.customer_code) AS customer_name,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN sk.vendor = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         COUNT(DISTINCT f.order_code) AS order_count
       FROM ${mainTable} f
       LEFT JOIN dim_customer dc ON f.customer_code = dc.code

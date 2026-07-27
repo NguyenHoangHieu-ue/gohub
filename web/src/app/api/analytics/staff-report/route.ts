@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (channel) {
     params.push(channel); where += ` AND TRIM(s.channel_name) = $${params.length}`
   } else if (channelGroup && channelGroup !== "All") {
-    params.push(channelGroup); where += ` AND s.group_name = $${params.length}`
+    params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
 
   try {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') AS staff_name,
         TRIM(f.staff_code) AS staff_code,
         SUM(f.${revCol}) AS total_revenue,
-        SUM(CASE WHEN sk.vendor = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         COUNT(DISTINCT f.customer_code) AS customer_count,
         COUNT(DISTINCT f.${orderCol}) AS total_orders
       FROM ${mainTable} f
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         TRIM(f.staff_code) AS staff_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN sk.vendor = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue
       FROM ${mainTable} f
       LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
