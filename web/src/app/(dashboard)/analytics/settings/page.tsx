@@ -70,6 +70,8 @@ function AnalyticsSettings() {
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [flushing, setFlushing] = useState(false)
+  const [syncingB2B, setSyncingB2B] = useState(false)
+  const [b2bCacheInfo, setB2bCacheInfo] = useState<{ cached_count: number; last_synced_at: string | null } | null>(null)
   const [skuRules, setSkuRules] = useState<{ startsWith: string; codeLength: number; description: string }[]>([])
   const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
   const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
@@ -89,6 +91,24 @@ function AnalyticsSettings() {
       const d = await r.json()
       notify(!!d.ok, d.ok ? ("Sync OK: " + d.synced + " dong (" + d.months + " thang)") : (d.error || "Sync that bai"))
     } catch (e) { notify(false, "Loi ket noi") } finally { setSyncing(false) }
+  }
+
+  const syncB2BCustomers = async () => {
+    setSyncingB2B(true)
+    try {
+      const r = await fetch("/api/analytics/sync-b2b-customers", { method: "POST" })
+      const d = await r.json()
+      if (d.error) { notify(false, d.error); return }
+      notify(true, d.message || `Đã sync ${d.synced} B2B customers`)
+      setB2bCacheInfo({ cached_count: d.synced, last_synced_at: d.synced_at })
+    } catch (e) { notify(false, "Lỗi kết nối") } finally { setSyncingB2B(false) }
+  }
+
+  const fetchB2BCacheInfo = async () => {
+    try {
+      const r = await fetch("/api/analytics/sync-b2b-customers")
+      if (r.ok) setB2bCacheInfo(await r.json())
+    } catch {}
   }
 
   const flushCache = async () => {
@@ -112,6 +132,7 @@ function AnalyticsSettings() {
 
   const fetchAll = async () => {
     setLoading(true)
+    fetchB2BCacheInfo()  // parallel, non-blocking
     try {
       const [t, p, f, ch, skuRule, cc, ict, crRes] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
@@ -220,6 +241,11 @@ function AnalyticsSettings() {
             </button>
             <button onClick={syncTursoCosts} disabled={syncing} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
               {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Sync Costs"}
+            </button>
+            <button onClick={syncB2BCustomers} disabled={syncingB2B} title={b2bCacheInfo ? `Cache: ${b2bCacheInfo.cached_count} KH · Cập nhật: ${b2bCacheInfo.last_synced_at ? new Date(b2bCacheInfo.last_synced_at).toLocaleString("vi-VN") : "chưa có"}` : "Sync danh sách B2B customers vào Supabase"} className="flex items-center gap-2 px-3 py-2 bg-blue-700 text-white rounded-xl text-xs font-bold hover:bg-blue-800 disabled:opacity-50">
+              {syncingB2B ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+              {"Sync B2B KH"}
+              {b2bCacheInfo && <span className="ml-1 bg-blue-500/50 px-1.5 py-0.5 rounded text-[10px]">{b2bCacheInfo.cached_count}</span>}
             </button>
             <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
               {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiểm tra"}
