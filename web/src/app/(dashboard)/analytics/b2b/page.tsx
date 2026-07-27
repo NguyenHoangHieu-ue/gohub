@@ -617,8 +617,8 @@ export default function B2BPerformance() {
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-blue-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">Other Tiers Customers</h2>
-                      <p className="text-xs text-slate-500 font-medium">Performance by individual non-strategic customers.</p>
+                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">B2B Tier Performance</h2>
+                      <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá KH: Strategic · VIP · Gold · Silver</p>
                     </div>
                   </div>
                   <button onClick={() => {
