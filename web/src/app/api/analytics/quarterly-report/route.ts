@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
             TO_CHAR(f.${DATE_COL}::date, 'YYYY-MM') as month,
             UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
             TRIM(s.channel_name) as channel,
-            TRIM(s.code) as source_code,
+            MIN(TRIM(s.code)) as source_code,
             SUM(f.${REV_COL}) as revenue,
             SUM(f.${GP_COL}) as gp,
             SUM(CASE WHEN TRIM(f.sku) IN (
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
             ${EXCLUDE_CUST_SQL}
             ${INACTIVE_FILTER}
-          GROUP BY 1, 2, 3, 4
+          GROUP BY 1, 2, 3
           ORDER BY 1, 2, 3
         `),
         queryAnalytics<{ month: string; hk3: string }>(`

@@ -7,7 +7,7 @@ import {
 import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
-  Calendar, Download, ChevronDown, Globe,
+  Calendar, Download, ChevronDown, Globe, Search, X,
   ArrowUpDown, ShoppingBag, Settings, Check, Zap, Building2, Shield, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
@@ -71,6 +71,7 @@ export default function B2BPerformance() {
   const [channelsWithPlatformFee, setChannelsWithPlatformFee] = useState<string[]>([])
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
+  const [tierSearch, setTierSearch] = useState("")
 
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
@@ -618,19 +619,36 @@ export default function B2BPerformance() {
                     <div className="p-2.5 bg-blue-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">B2B Tier Performance</h2>
-                      <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá KH: Strategic · VIP · Gold · Silver</p>
+                      <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá: Strategic · VIP · Gold · Silver</p>
                     </div>
                   </div>
-                  <button onClick={() => {
-                    const nonStrategic = getFilteredOtherTiers()
-                    const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
-                    if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
-                    columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                    const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
-                    exportToCSV(exportData, "Other_Tiers_Customers", columns)
-                  }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                    <Download className="w-3 h-3" />CSV
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm khách hàng..."
+                        value={tierSearch}
+                        onChange={e => setTierSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500 w-48"
+                      />
+                      {tierSearch && (
+                        <button onClick={() => setTierSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <button onClick={() => {
+                      const nonStrategic = getFilteredOtherTiers()
+                      const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
+                      if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
+                      columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
+                      const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
+                      exportToCSV(exportData, "B2B_Tier_Performance", columns)
+                    }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
+                      <Download className="w-3 h-3" />CSV
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
@@ -646,7 +664,12 @@ export default function B2BPerformance() {
                     <tbody className="divide-y divide-slate-50">
                       {(() => {
                         const nonStrategic = nonStrategicMemo
-                        const sorted = sortData(nonStrategic, wholesaleSort)
+                        const searchLow = tierSearch.toLowerCase().trim()
+                        const sorted = sortData(
+                          searchLow ? nonStrategic.filter(r => r.name.toLowerCase().includes(searchLow)) : nonStrategic,
+                          wholesaleSort
+                        )
+                        // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
                         const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0

@@ -3,6 +3,76 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
+import { supabaseAdmin } from "@/lib/supabase"
+
+// GET /api/analytics/b2b-customer-costs?month=YYYY-MM&customer_code=XXX
+// Đọc costs từ Turso (và fallback Supabase nếu cần) — dùng để admin xem dữ liệu hiện tại.
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session || !["admin", "creator", "bod"].includes(session.user.role))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const month = req.nextUrl.searchParams.get("month") || ""
+  const customerCode = req.nextUrl.searchParams.get("customer_code") || ""
+
+  try {
+    await ensureB2bCostTable()
+
+    let sql = "SELECT id, month, customer_code, cost_type, cost_value, cost_lines, updated_by, updated_at FROM b2b_customer_cost_monthly WHERE 1=1"
+    const params: string[] = []
+    if (month) { sql += " AND month = ?"; params.push(month) }
+    if (customerCode) { sql += " AND customer_code = ?"; params.push(customerCode) }
+    sql += " ORDER BY month DESC, customer_code LIMIT 500"
+
+    const rows = await tursoQuery<{
+      id: string; month: string; customer_code: string
+      cost_type: string; cost_value: number; cost_lines: string
+      updated_by: string; updated_at: string
+    }>(sql, params)
+
+    // Enrich với customer_name từ b2b_customers_cache (Supabase) nếu có
+    const codes = [...new Set(rows.map(r => r.customer_code))]
+    let nameMap: Record<string, string> = {}
+    if (codes.length > 0) {
+      const { data } = await supabaseAdmin
+        .from("b2b_customers_cache")
+        .select("customer_code, customer_name")
+        .in("customer_code", codes)
+      for (const r of data || []) nameMap[r.customer_code] = r.customer_name
+    }
+
+    return NextResponse.json({
+      rows: rows.map(r => ({
+        ...r,
+        customer_name: nameMap[r.customer_code] || r.customer_code,
+        cost_lines_parsed: (() => { try { return JSON.parse(r.cost_lines) } catch { return [] } })(),
+      })),
+      total: rows.length,
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
+
+// DELETE /api/analytics/b2b-customer-costs?id=<id>  → xóa 1 record cụ thể
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session || !["admin", "creator"].includes(session.user.role))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const id = req.nextUrl.searchParams.get("id") || ""
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
+
+  try {
+    await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [id])
+    return NextResponse.json({ ok: true, deleted: id })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
+
+// POST /api/analytics/b2b-customer-costs?repair=1  → reconcile stale records
+// POST /api/analytics/b2b-customer-costs  → upsert costs (existing behavior)
 
 // Lưu chi phí kênh nhập tay cho từng KH B2B theo tháng (batch upsert) — Turso.
 // Body: { costs: [{ month, customer_code, cost_type, cost_value, cost_lines }] }
@@ -12,6 +82,28 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session || !["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(session.user.role))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    // Repair mode: đọc tất cả records, cross-check với b2b_customers_cache, báo stale records
+    if (req.nextUrl.searchParams.get("repair") === "1") {
+      await ensureB2bCostTable()
+      const allRows = await tursoQuery<{ id: string; month: string; customer_code: string; cost_value: number }>(
+        "SELECT id, month, customer_code, cost_value FROM b2b_customer_cost_monthly ORDER BY month DESC LIMIT 1000"
+      )
+      const codes = [...new Set(allRows.map(r => r.customer_code))]
+      const { data: cached } = await supabaseAdmin
+        .from("b2b_customers_cache")
+        .select("customer_code")
+        .in("customer_code", codes)
+      const validCodes = new Set((cached || []).map((r: any) => r.customer_code))
+      const stale = allRows.filter(r => !validCodes.has(r.customer_code))
+      return NextResponse.json({
+        total_records: allRows.length,
+        valid_records: allRows.length - stale.length,
+        stale_records: stale.length,
+        stale: stale,
+        note: "Stale = customer_code không còn trong b2b_customers_cache. Dùng DELETE endpoint để xóa từng record nếu cần.",
+      })
+    }
 
     const body = await req.json().catch(() => ({}))
     const costs: any[] = Array.isArray(body?.costs) ? body.costs : []
