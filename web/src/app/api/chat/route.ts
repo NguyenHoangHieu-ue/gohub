@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(text))
             controller.close()
           } catch (err: any) {
-            const msg = role === "admin" ? `Lỗi tổng hợp: ${err.message}` : guidanceFor(agentId)
+            const isPriv = role === "admin" || role === "creator"
+            const msg = isPriv ? `Lỗi tổng hợp: ${err.message}` : guidanceFor(agentId)
             controller.enqueue(encoder.encode(msg))
             controller.close()
           }
@@ -124,7 +125,8 @@ export async function POST(req: NextRequest) {
             controller.enqueue(encoder.encode(ensureAnswer(raw, agentId)))
             controller.close()
           } catch (err: any) {
-            const msg = role === "admin" ? `Lỗi ${agentId}: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+            const isPriv = role === "admin" || role === "creator"
+            const msg = isPriv ? `Lỗi ${agentId}: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
             controller.enqueue(encoder.encode(msg))
             controller.close()
           }
@@ -151,7 +153,7 @@ export async function POST(req: NextRequest) {
           if (isFailureText(acc)) controller.enqueue(encoder.encode(`\n\n${guidanceFor(agentId)}`))
           controller.close()
         } catch (err: any) {
-          const msg = role === "admin" ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+          const msg = (role === "admin" || role === "creator") ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
           controller.enqueue(encoder.encode(msg))
           controller.close()
         }

@@ -467,7 +467,7 @@ export default function ChatbotPage() {
       }
 
     } catch (e: any) {
-      const errMsg = userRole === "admin" ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+      const errMsg = (userRole === "admin" || userRole === "creator") ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
       if (streamStarted) {
         setMessages(prev => {
           const u = [...prev]
