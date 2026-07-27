@@ -51,13 +51,16 @@ export async function GET(req: NextRequest) {
 
     const rows = await queryAnalytics<Record<string, string>>(
       `WITH b2b_raw AS (
-         SELECT f.*, TRIM(s.channel_name) as channel_name, TRIM(s.sapo_name) as sub_channel
+         SELECT f.*, TRIM(s.channel_name) as channel_name, TRIM(s.sapo_name) as sub_channel,
+                TRIM(COALESCE(s.sub_group_name, '')) as sub_group_name, TRIM(s.code) as source_code
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE UPPER(s.group_name) = 'B2B' AND ${filter}
        )
        SELECT ${selectClause},
               MAX(f.channel_name) as channel,
+              MAX(f.sub_group_name) as sub_group_name,
+              MAX(f.source_code) as source_code,
               ${needsSubChannel ? "sub_channel," : "NULL as sub_channel,"}
               TO_CHAR(f.${source.dateCol}::DATE, 'YYYY-MM') as month,
               SUM(f.${source.revenueCol}) as revenue,
@@ -70,7 +73,8 @@ export async function GET(req: NextRequest) {
 
     // ── Aggregate in JS (name → totals + monthly + sub-channel breakdown) ───────
     type Item = {
-      name: string; channel: string; revenue: number; margin: number; units: number
+      name: string; channel: string; sub_group_name: string; source_code: string
+      revenue: number; margin: number; units: number
       monthly_data: Array<{ month: string; revenue: number; margin: number; units: number }>
       sub_channel_breakdown: Record<string, Record<string, { revenue: number; margin: number; units: number }>>
     }
@@ -78,7 +82,12 @@ export async function GET(req: NextRequest) {
     rows.forEach(r => {
       const key = r.name
       if (!aggregated.has(key)) {
-        aggregated.set(key, { name: key, channel: r.channel, revenue: 0, margin: 0, units: 0, monthly_data: [], sub_channel_breakdown: {} })
+        aggregated.set(key, {
+          name: key, channel: r.channel,
+          sub_group_name: r.sub_group_name || "",
+          source_code: r.source_code || "",
+          revenue: 0, margin: 0, units: 0, monthly_data: [], sub_channel_breakdown: {},
+        })
       }
       const item = aggregated.get(key)!
       const revenue = parseFloat(r.revenue || "0")

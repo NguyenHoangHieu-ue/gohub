@@ -26,19 +26,38 @@ export function monthsBetween(startDate: string, endDate: string) {
 }
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
-interface ChannelCost { channel: string; month: string; ads: any; platformFee: any; sponsorProducts: any; media: any }
+interface ChannelCost {
+  channel: string; month: string
+  source_code?: string  // dim_order_source.code — ổn định khi channel đổi tên
+  ads: any; platformFee: any; sponsorProducts: any; media: any
+}
 
 export async function fetchCosts(months: string[]): Promise<{ channelCosts: ChannelCost[]; groupCosts: any[] }> {
   if (months.length === 0) return { channelCosts: [], groupCosts: [] }
   const [{ data: ccData }, { data: gcData }] = await Promise.all([
-    supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
+    supabaseAdmin.from("analytics_channel_costs").select("channel, month, source_code, ads, platform_fee, sponsor_products, media").in("month", months),
     supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
   ])
   const channelCosts = (ccData || []).map((r: any) => ({
-    channel: r.channel, month: String(r.month),
+    channel: r.channel, month: String(r.month), source_code: r.source_code || undefined,
     ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
   }))
   return { channelCosts, groupCosts: (gcData || []).map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
+}
+
+/** Match channel cost bằng source_code (ưu tiên) hoặc channel name (fallback).
+ *  Dùng khi channel bị rename trong gohub_dw nhưng cost đã lưu với source_code cũ → vẫn match được.
+ */
+export function matchChannelCost(
+  channelCosts: ChannelCost[], channel: string, month: string, sourceCode?: string
+): ChannelCost[] {
+  return channelCosts.filter(c => {
+    if (c.month !== month) return false
+    // Ưu tiên source_code (ổn định)
+    if (sourceCode && c.source_code) return c.source_code === sourceCode
+    // Fallback: name match (backward compat với record không có source_code)
+    return c.channel === channel
+  })
 }
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const

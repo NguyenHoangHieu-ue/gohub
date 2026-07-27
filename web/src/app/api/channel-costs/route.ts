@@ -52,25 +52,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { channel, month, ads, platformFee, sponsorProducts, media, updatedBy } = await req.json()
+  const { channel, month, ads, platformFee, sponsorProducts, media, updatedBy, sourceCode } = await req.json()
   if (!channel || !month) return NextResponse.json({ error: "Channel and month are required" }, { status: 400 })
 
   try {
+    const upsertData: any = {
+      channel,
+      month,
+      ads:              JSON.stringify(ads || {}),
+      platform_fee:     JSON.stringify(platformFee || {}),
+      sponsor_products: JSON.stringify(sponsorProducts || {}),
+      media:            JSON.stringify(media || {}),
+      updated_by:       updatedBy || session.user?.name || "system",
+      updated_at:       new Date().toISOString(),
+    }
+    // source_code = dim_order_source.code (ổn định, không đổi khi rename channel)
+    if (sourceCode) upsertData.source_code = sourceCode
+
     const { error } = await supabaseAdmin
       .from("analytics_channel_costs")
-      .upsert(
-        {
-          channel,
-          month,
-          ads:              JSON.stringify(ads || {}),
-          platform_fee:     JSON.stringify(platformFee || {}),
-          sponsor_products: JSON.stringify(sponsorProducts || {}),
-          media:            JSON.stringify(media || {}),
-          updated_by:       updatedBy || session.user?.name || "system",
-          updated_at:       new Date().toISOString(),
-        },
-        { onConflict: "channel,month", ignoreDuplicates: false }
-      )
+      .upsert(upsertData, { onConflict: "channel,month", ignoreDuplicates: false })
     if (error) throw new Error(error.message)
     // Cost thay đổi → xoá cache analytics (KPI CM1/opCost cache 12h theo ngày, không theo cost).
     await flushAnalyticsCache().catch(() => {})

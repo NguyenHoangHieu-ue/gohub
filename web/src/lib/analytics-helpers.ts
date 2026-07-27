@@ -262,9 +262,10 @@ export function getDateFilter(
 ): string {
   const sd = safeDate(startDate)
   const ed = safeDate(endDate)
+  // Clamp endDate tới CURRENT_DATE - 1: gohub_dw ETL chạy 08h mỗi ngày, hôm nay chưa đủ data.
   let filter = sd && ed
-    ? `f.${dateColumn}::date BETWEEN '${sd}' AND '${ed}'`
-    : `f.${dateColumn}::date >= NOW()::date - INTERVAL '${defaultInterval}'`
+    ? `f.${dateColumn}::date BETWEEN '${sd}' AND LEAST('${ed}'::date, CURRENT_DATE - 1)`
+    : `f.${dateColumn}::date >= NOW()::date - INTERVAL '${defaultInterval}' AND f.${dateColumn}::date <= CURRENT_DATE - 1`
   const cc = safeCompanyCode(companyCode)
   if (cc !== "ALL") {
     filter += ` AND f.company_code = '${cc}'`

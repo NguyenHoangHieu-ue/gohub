@@ -42,7 +42,8 @@ interface KPI {
   isPositive: boolean; isCurrency?: boolean; icon?: React.ReactNode
 }
 interface PerformanceData {
-  name: string; channel?: string; revenue: number; margin: number; margin_percent: number
+  name: string; channel?: string; sub_group_name?: string; source_code?: string
+  revenue: number; margin: number; margin_percent: number
   gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
 }
@@ -648,9 +649,17 @@ export default function B2BPerformance() {
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
                         const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
-                        return (
-                          <>
-                            {sorted.map((row, idx) => {
+
+                        // Group by sub_group_name (from dim_order_source)
+                        const hasGroups = sorted.some(r => r.sub_group_name)
+                        const groups = new Map<string, PerformanceData[]>()
+                        sorted.forEach(row => {
+                          const grp = row.sub_group_name || (hasGroups ? "Khác" : "__flat__")
+                          if (!groups.has(grp)) groups.set(grp, [])
+                          groups.get(grp)!.push(row)
+                        })
+
+                        const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
                               const costs = monthlyCosts[row.name]
                               return (
@@ -733,6 +742,35 @@ export default function B2BPerformance() {
                                       </td>
                                     </tr>
                                   )}
+                                </React.Fragment>
+                              )
+                        }
+
+                        return (
+                          <>
+                            {Array.from(groups.entries()).map(([grpName, grpRows]) => {
+                              if (grpName === "__flat__") {
+                                // No sub_group_name data — render flat (backward compat)
+                                return grpRows.map((row, idx) => renderRow(row, idx))
+                              }
+                              const gT = grpRows.reduce((a, c) => ({ revenue: a.revenue + c.revenue, units: a.units + c.units, margin: a.margin + c.margin, gpm2: a.gpm2 + c.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
+                              return (
+                                <React.Fragment key={grpName}>
+                                  {/* Group header */}
+                                  <tr className="bg-blue-50/40 border-y border-blue-100">
+                                    <td colSpan={7} className="px-8 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">{grpName}</td>
+                                  </tr>
+                                  {grpRows.map((row, idx) => renderRow(row, idx))}
+                                  {/* Group total */}
+                                  <tr className="bg-blue-50/20 border-t border-blue-100">
+                                    <td className="px-8 py-2.5 text-[10px] font-black text-blue-700 uppercase tracking-wider pl-10">↳ Tổng {grpName}</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-black text-slate-800">{formatCurrency(Math.round(gT.revenue)).replace("₫","VND")}</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{formatNumber(Math.round(gT.units))}</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-black text-emerald-700">{formatCurrency(Math.round(gT.margin)).replace("₫","VND")}</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{gT.revenue > 0 ? ((gT.margin/gT.revenue)*100).toFixed(1) : "0.0"}%</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-black text-indigo-700">{formatCurrency(Math.round(gT.gpm2)).replace("₫","VND")}</td>
+                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{gT.revenue > 0 ? ((gT.gpm2/gT.revenue)*100).toFixed(1) : "0.0"}%</td>
+                                  </tr>
                                 </React.Fragment>
                               )
                             })}

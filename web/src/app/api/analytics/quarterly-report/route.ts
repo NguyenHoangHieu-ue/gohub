@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
-import { fetchCosts, getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -20,13 +20,14 @@ function getQuarterMonths(quarter: string, year: number): string[] {
 function computeChannelCost(
   channelCosts: any[], channel: string, month: string,
   revenue: number, startD: string, endD: string,
+  sourceCode?: string,
 ): number {
-  // Consistent với gohub-report/gohub.py: amount costs được cộng dồn; percent costs chỉ lấy MAX
-  // (không phải sum) vì chúng thường là phí loại trừ nhau (platform_fee XOR ads XOR …).
+  // Consistent với gohub-report/gohub.py: amount costs được cộng dồn; percent costs chỉ lấy MAX.
+  // Dùng matchChannelCost: ưu tiên source_code (ổn định khi rename) → fallback channel name.
   let amtCost = 0, maxPct = 0
   const dim = getDaysInMonth(month)
   const ratio = dim > 0 ? getDaysInRange(startD, endD, month) / dim : 0
-  channelCosts.filter(c => c.channel === channel && c.month === month).forEach(c => {
+  matchChannelCost(channelCosts, channel, month, sourceCode).forEach(c => {
     COST_KEYS.forEach(key => {
       const v = (c as any)[key]
       if (!v) return
@@ -115,11 +116,12 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2
           ORDER BY 1, 2
         `),
-        queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string; hk3: string }>(`
+        queryAnalytics<{ month: string; bg: string; channel: string; source_code: string; revenue: string; gp: string; hk3: string }>(`
           SELECT
             TO_CHAR(f.${DATE_COL}::date, 'YYYY-MM') as month,
             UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
             TRIM(s.channel_name) as channel,
+            TRIM(s.code) as source_code,
             SUM(f.${REV_COL}) as revenue,
             SUM(f.${GP_COL}) as gp,
             SUM(CASE WHEN TRIM(f.sku) IN (
@@ -136,7 +138,7 @@ export async function GET(req: NextRequest) {
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
             ${EXCLUDE_CUST_SQL}
             ${INACTIVE_FILTER}
-          GROUP BY 1, 2, 3
+          GROUP BY 1, 2, 3, 4
           ORDER BY 1, 2, 3
         `),
         queryAnalytics<{ month: string; hk3: string }>(`
@@ -235,7 +237,7 @@ export async function GET(req: NextRequest) {
         let b2bHk3Act = 0, b2cHk3Act = 0
         channelRows.filter(row => row.month === month).forEach(row => {
           const rev = parseFloat(row.revenue || "0")
-          const cc = computeChannelCost(channelCosts, row.channel, month, rev, mStart, actualEnd)
+          const cc = computeChannelCost(channelCosts, row.channel, month, rev, mStart, actualEnd, row.source_code)
           const hk3 = parseFloat(row.hk3 || "0")
           if (row.bg === "B2B") { b2bCCAct += cc; b2bHk3Act += hk3 }
           else { b2cCCAct += cc; b2cHk3Act += hk3 }
@@ -352,7 +354,7 @@ export async function GET(req: NextRequest) {
             const revAct = parseFloat(rowData?.revenue || "0")
             const gpAct  = parseFloat(rowData?.gp      || "0")
             const hk3Act = parseFloat(rowData?.hk3     || "0")
-            const ccAct  = rowData ? computeChannelCost(channelCosts, ch, month, revAct, mStart, actualEnd) : 0
+            const ccAct  = rowData ? computeChannelCost(channelCosts, ch, month, revAct, mStart, actualEnd, rowData.source_code) : 0
             const rev = r(revAct * factor)
             const gp  = r(gpAct  * factor)
             const hk3 = r(hk3Act * factor)

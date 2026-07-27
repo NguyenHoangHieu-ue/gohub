@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const data = await cachedQuery(cacheKey, async () => {
       const strategicList = await getStrategicPartnersList()
 
-      let whereClause = `WHERE f.fulfiled_date >= '${startDate}' AND f.fulfiled_date <= '${endDate}'`
+      let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1)`
 
       if (channelGroup) {
         const grp = channelGroup.toUpperCase().replace(/'/g, "''")
