@@ -165,13 +165,15 @@ export async function GET(req: NextRequest) {
         const mode = settingsMap.get(`${r.name}_${mMonth}`) || "total"
 
         if (mode === "subchannels") {
-          (subCostByBaseMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
+          const subRatio = getDaysInMonth(mMonth) > 0
+            ? getDaysInRange(startDate || "", endDate || "", mMonth) / getDaysInMonth(mMonth) : 0
+          ;(subCostByBaseMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
             const subName = c.channel.replace(`${r.name} - `, "")
             const subRev = r.sub_channel_breakdown[mMonth]?.[subName]?.revenue || 0
             COST_KEYS.forEach(key => {
               const cv = c[key]
               if (cv) {
-                const amount = cv.type === "amount" ? (cv.value || 0) : (subRev * (cv.value || 0)) / 100
+                const amount = cv.type === "amount" ? (cv.value || 0) * subRatio : (subRev * (cv.value || 0)) / 100
                 gpm2 -= amount
                 if (subChannelPerformance[subName]) subChannelPerformance[subName].gpm2 -= amount
               }

@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       FROM ${mainTable} f
       LEFT JOIN dim_customer dc ON f.customer_code = dc.code
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON f.sku = sk.sku_code
+      LEFT JOIN dim_sku sk ON f.sku = sk.sku
       ${where}
       GROUP BY f.customer_code, COALESCE(dc.name, f.customer_code)
       ORDER BY revenue DESC

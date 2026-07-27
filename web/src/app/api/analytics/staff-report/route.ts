@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       FROM ${mainTable} f
       LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON f.sku = sk.sku_code
+      LEFT JOIN dim_sku sk ON f.sku = sk.sku
       ${where}
       GROUP BY COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV'), TRIM(f.staff_code)
       ORDER BY total_revenue DESC
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       FROM ${mainTable} f
       LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON f.sku = sk.sku_code
+      LEFT JOIN dim_sku sk ON f.sku = sk.sku
       ${where}
       GROUP BY TRIM(f.staff_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
       ORDER BY staff_code, month

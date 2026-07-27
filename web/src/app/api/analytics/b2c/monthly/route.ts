@@ -403,14 +403,37 @@ export async function GET(req: NextRequest) {
       ? { leads: Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>, leadsByChannel: [] as { label: string; byMonth: Record<string, number> }[] }
       : await loadLeads()
 
+    // BUG1 FIX: Phân bổ Group Cost B2C vào CM1 theo revenue-share per channel
+    const profitByChannelFinal: typeof data.profitByChannel = {}
+    for (const month of months) {
+      const gc = spend[month] || 0
+      const channelData = data.profitByChannel?.[month] || {}
+      if (!gc) { profitByChannelFinal[month] = channelData; continue }
+      const ratio = month === currentMonth ? elapsedDays / totalDays : 1
+      const gcThisMonth = gc * ratio
+      const totalRev = Object.values(channelData).reduce((s, c) => s + (c as any).revenue, 0)
+      profitByChannelFinal[month] = {}
+      for (const [ch, cell] of Object.entries(channelData)) {
+        const c = cell as any
+        const share = totalRev > 0 ? c.revenue / totalRev : 0
+        const gcShare = gcThisMonth * share
+        profitByChannelFinal[month][ch] = {
+          ...c,
+          opCost: c.opCost + gcShare,
+          cm1: c.grossProfit - (c.opCost + gcShare),
+        }
+      }
+    }
+
     return NextResponse.json(
       {
         months, currentMonth, elapsedDays, totalDays,
         targets, budget, spend, leads, leadsByChannel,
-        dataAsOf: windowEnd,  // ngày T-1 khi live, hôm nay khi cron
+        dataAsOf: windowEnd,
         isLive: forceRefresh,
         refreshTimestamp: new Date().toISOString(),
-        ...data
+        ...data,
+        profitByChannel: profitByChannelFinal,
       },
       { headers: CACHE_HEADERS }
     )
