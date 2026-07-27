@@ -6,102 +6,173 @@ import { tursoQuery } from "@/lib/turso"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 
-// DELETE: Xóa records tạo nhầm (customer_code chứa ký tự < > là placeholder chưa điền)
+// ─── DELETE: Xóa records tạo nhầm (customer_code chứa ký tự < > là placeholder) ──────────────
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   await ensureB2bCostTable()
-
-  // Tìm tất cả records có customer_code chứa < hoặc > (placeholder chưa điền)
   const wrongRecords = await tursoQuery<{ id: string; customer_code: string; month: string }>(
     `SELECT id, customer_code, month FROM b2b_customer_cost_monthly
      WHERE customer_code LIKE '%<%' OR customer_code LIKE '%>%'`
   )
-
-  if (wrongRecords.length === 0) {
+  if (wrongRecords.length === 0)
     return NextResponse.json({ deleted: 0, message: "Không có records sai để xóa" })
-  }
 
   const deleted: string[] = []
   for (const r of wrongRecords) {
     await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [r.id])
     deleted.push(r.id)
   }
-
   return NextResponse.json({ deleted: deleted.length, ids: deleted })
 }
 
-// GET: Tìm real customer_code cho Shopee/TikTok/Lazada trong gohub_dw dim_customer
-//      bằng cách query b2b_customers_cache (Supabase) hoặc trực tiếp dim_customer
-// POST: Tạo Turso records mới với real customer_code (copy từ virtual records)
-//       Body: { mappings: [{ virtual_code: "B2BCustomerVnShopee", real_code: "XXXX", months: ["2026-04",...] }] }
-
-export async function GET() {
+// ─── GET: Chẩn đoán + auto-suggest mapping cho stale codes ─────────────────────────────────────
+// ?autofix=1 → tự động migrate những case có 1 match chắc chắn (không cần confirm)
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  try {
-    // 1. Lấy virtual records từ Turso
-    await ensureB2bCostTable()
-    const virtualRecords = await tursoQuery<{
-      id: string; month: string; customer_code: string; cost_type: string; cost_value: number; cost_lines: string
-    }>(
-      `SELECT id, month, customer_code, cost_type, cost_value, cost_lines
-       FROM b2b_customer_cost_monthly
-       WHERE customer_code LIKE 'B2BCustomer%'
-       ORDER BY month, customer_code`
-    )
+  const autofix = req.nextUrl.searchParams.get("autofix") === "1"
 
-    // 2. Search b2b_customers_cache (Supabase) cho Shopee/TikTok/Lazada/Ecom
-    const patterns = ["shopee", "tiktok", "lazada", "ecom", "shopeepay"]
-    const { data: cacheData } = await supabaseAdmin
-      .from("b2b_customers_cache")
-      .select("customer_code, customer_name, price_list_name, total_revenue")
-      .or(patterns.map(p => `customer_name.ilike.%${p}%`).join(","))
-      .order("total_revenue", { ascending: false })
-      .limit(30)
+  await ensureB2bCostTable()
 
-    // 3. Cũng tìm trong dim_customer (gohub_dw) để có thêm option
-    const dwCustomers = await queryAnalytics<{ code: string; name: string; price_list_name: string }>(
-      `SELECT DISTINCT TRIM(code::text) as code, COALESCE(name,'') as name, COALESCE(price_list_name,'') as price_list_name
-       FROM dim_customer
-       WHERE LOWER(COALESCE(name,'')) SIMILAR TO '%(shopee|tiktok|lazada|ecom)%'
-       ORDER BY name
-       LIMIT 20`
-    )
+  // 1. Lấy tất cả unique customer_code trong Turso
+  const tursoRows = await tursoQuery<{ customer_code: string; months: string; total_months: number }>(
+    `SELECT customer_code,
+            GROUP_CONCAT(month, ',') as months,
+            COUNT(*) as total_months
+     FROM b2b_customer_cost_monthly
+     WHERE customer_code NOT LIKE '%<%' AND customer_code NOT LIKE '%>%'
+     GROUP BY customer_code
+     ORDER BY customer_code`
+  )
+  const tursoCodes = tursoRows.map(r => r.customer_code)
 
-    return NextResponse.json({
-      virtual_records: virtualRecords,
-      cache_matches: cacheData || [],
-      dw_matches: dwCustomers,
-      instructions: [
-        "1. Tìm real_code cho từng virtual customer (B2BCustomerVnShopee/TikTok/Lazada) trong cache_matches hoặc dw_matches",
-        "2. Gọi POST với body: { mappings: [{ virtual_code, real_code, months }] }",
-        "3. Hệ thống sẽ copy cost data sang real_code mới (không xóa virtual records)"
-      ]
+  // 2. Lấy b2b_customers_cache — customers có revenue thật
+  const { data: cacheAll } = await supabaseAdmin
+    .from("b2b_customers_cache")
+    .select("customer_code, customer_name, price_list_name, total_revenue")
+    .order("total_revenue", { ascending: false })
+    .limit(500)
+  const cache = cacheAll || []
+  const cacheByCode = new Map(cache.map(r => [r.customer_code, r]))
+
+  // 3. Phân loại: stale (không có trong cache hoặc revenue=0) vs ok
+  const stale: Array<{
+    customer_code: string; months: string[]; suggestions: typeof cache
+  }> = []
+  const ok: string[] = []
+
+  for (const r of tursoRows) {
+    const cached = cacheByCode.get(r.customer_code)
+    if (cached && cached.total_revenue > 0) {
+      ok.push(r.customer_code); continue
+    }
+
+    // Stale: tìm suggestions bằng name similarity
+    // Lấy tên từ dim_customer nếu có
+    let displayName = r.customer_code
+    try {
+      const rows = await queryAnalytics<{ name: string }>(
+        `SELECT COALESCE(name,'') as name FROM dim_customer WHERE code = $1 LIMIT 1`,
+        [r.customer_code]
+      )
+      if (rows[0]?.name) displayName = rows[0].name
+    } catch {}
+
+    // Tìm candidates: score bằng word overlap giữa displayName và customer_name trong cache
+    const words = displayName.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2)
+    const scored = cache
+      .filter(c => c.total_revenue > 0)
+      .map(c => {
+        const cn = c.customer_name.toLowerCase()
+        const matchCount = words.filter(w => cn.includes(w)).length
+        return { ...c, score: matchCount }
+      })
+      .filter(c => c.score > 0)
+      .sort((a, b) => b.score - a.score || b.total_revenue - a.total_revenue)
+      .slice(0, 3)
+
+    stale.push({
+      customer_code: r.customer_code,
+      months: r.months.split(","),
+      suggestions: scored,
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
   }
+
+  // 4. Nếu autofix=1: tự migrate những stale có đúng 1 suggestion score >= 1
+  const autofixed: Array<{ from: string; to: string; created: string[] }> = []
+  if (autofix) {
+    const now = new Date().toISOString()
+    const updatedBy = session.user.email || session.user.name || "autofix"
+    for (const s of stale) {
+      if (s.suggestions.length !== 1) continue // bỏ qua nếu ambiguous hoặc không có match
+      const realCode = s.suggestions[0].customer_code
+      const created: string[] = []
+
+      // Lấy cost data từ Turso cho customer_code này
+      const virtualRows = await tursoQuery<{
+        id: string; month: string; cost_type: string; cost_value: number; cost_lines: string
+      }>(
+        `SELECT id, month, cost_type, cost_value, cost_lines
+         FROM b2b_customer_cost_monthly
+         WHERE customer_code = ?`,
+        [s.customer_code]
+      )
+      for (const row of virtualRows) {
+        const newId = `${row.month}_${realCode}`
+        const existing = await tursoQuery<{ id: string }>(
+          "SELECT id FROM b2b_customer_cost_monthly WHERE id = ?", [newId]
+        )
+        if (existing.length > 0) continue
+        await tursoQuery(
+          `INSERT INTO b2b_customer_cost_monthly
+             (id, month, customer_code, cost_type, cost_value, cost_lines, updated_by, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [newId, row.month, realCode, row.cost_type, row.cost_value, row.cost_lines, updatedBy, now]
+        )
+        created.push(newId)
+      }
+      if (created.length > 0) autofixed.push({ from: s.customer_code, to: realCode, created })
+    }
+  }
+
+  return NextResponse.json({
+    summary: { total_codes: tursoCodes.length, ok: ok.length, stale: stale.length },
+    stale_codes: stale.map(s => ({
+      customer_code: s.customer_code,
+      months: s.months,
+      suggestions: s.suggestions.map(c => ({
+        customer_code: c.customer_code,
+        customer_name: c.customer_name,
+        price_list_name: c.price_list_name,
+        total_revenue: c.total_revenue,
+      })),
+      auto_migrate: s.suggestions.length === 1 ? "YES (1 confident match)" : `MANUAL (${s.suggestions.length} candidates)`,
+    })),
+    ...(autofix ? { autofixed } : {}),
+    tip: autofix
+      ? "Autofix completed. Với stale codes có >1 candidate, gọi POST để map thủ công."
+      : "Gọi GET?autofix=1 để tự động migrate những case có 1 match chắc chắn. POST để map thủ công.",
+  })
 }
 
+// ─── POST: Map thủ công virtual→real hoặc autofix tất cả ───────────────────────────────────────
+// Body: { mappings: [{ virtual_code, real_code, months? }] }
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || !["admin", "creator"].includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const { mappings } = await req.json() as {
-    mappings: Array<{
-      virtual_code: string   // e.g. "B2BCustomerVnShopee"
-      real_code: string      // e.g. "wHWSYmE541" (từ dim_customer)
-      months?: string[]      // nếu không có → copy tất cả months của virtual_code
-    }>
-  }
-  if (!Array.isArray(mappings) || mappings.length === 0)
-    return NextResponse.json({ error: "mappings required" }, { status: 400 })
+  const body = await req.json().catch(() => ({}))
+  const mappings: Array<{ virtual_code: string; real_code: string; months?: string[] }> =
+    Array.isArray(body?.mappings) ? body.mappings : []
+
+  if (mappings.length === 0)
+    return NextResponse.json({ error: "mappings required: [{ virtual_code, real_code, months? }]" }, { status: 400 })
 
   await ensureB2bCostTable()
   const now = new Date().toISOString()
@@ -110,32 +181,24 @@ export async function POST(req: NextRequest) {
   const skipped: string[] = []
 
   for (const m of mappings) {
-    // Lấy tất cả records của virtual_code
     const whereMonths = m.months && m.months.length > 0
-      ? `AND month IN (${m.months.map(() => "?").join(",")})`
-      : ""
+      ? `AND month IN (${m.months.map(() => "?").join(",")})` : ""
     const params = m.months && m.months.length > 0 ? [m.virtual_code, ...m.months] : [m.virtual_code]
+
     const virtualRows = await tursoQuery<{
-      id: string; month: string; customer_code: string; cost_type: string; cost_value: number; cost_lines: string
+      id: string; month: string; cost_type: string; cost_value: number; cost_lines: string
     }>(
-      `SELECT id, month, customer_code, cost_type, cost_value, cost_lines
+      `SELECT id, month, cost_type, cost_value, cost_lines
        FROM b2b_customer_cost_monthly
        WHERE customer_code = ? ${whereMonths}`,
       params
     )
-
     for (const row of virtualRows) {
       const newId = `${row.month}_${m.real_code}`
-      // Kiểm tra đã tồn tại chưa
       const existing = await tursoQuery<{ id: string }>(
-        "SELECT id FROM b2b_customer_cost_monthly WHERE id = ?",
-        [newId]
+        "SELECT id FROM b2b_customer_cost_monthly WHERE id = ?", [newId]
       )
-      if (existing.length > 0) {
-        skipped.push(newId)
-        continue
-      }
-      // Insert record mới với real_code
+      if (existing.length > 0) { skipped.push(newId); continue }
       await tursoQuery(
         `INSERT INTO b2b_customer_cost_monthly
            (id, month, customer_code, cost_type, cost_value, cost_lines, updated_by, updated_at)
@@ -147,8 +210,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    created,
-    skipped,
-    note: "Virtual records (B2BCustomerVn*) được giữ nguyên. Records mới với real_code đã được tạo."
+    created, skipped,
+    note: "Virtual records giữ nguyên. Records mới với real_code đã được tạo.",
   })
 }
