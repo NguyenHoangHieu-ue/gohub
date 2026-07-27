@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     } else if (groupBy === "sku") {
       selectClause = "f.sku as name"
     } else if (groupBy === "customer") {
-      selectClause = "COALESCE(c.name, NULLIF(NULLIF(TRIM(f.customer_code), ''), 'NaN'), 'Chưa xác định') as name"
+      selectClause = "COALESCE(c.name, NULLIF(NULLIF(TRIM(f.customer_code), ''), 'NaN'), 'Chưa xác định') as name, TRIM(f.customer_code) as customer_code"
       joinClause = "LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)"
     } else if (groupBy === "staff") {
       selectClause = "COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') as name"
@@ -58,34 +58,50 @@ export async function GET(req: NextRequest) {
          WHERE UPPER(s.group_name) = 'B2B' AND ${filter}
        )
        SELECT ${selectClause},
-              MAX(f.channel_name) as channel,
-              MAX(f.sub_group_name) as sub_group_name,
-              MAX(f.source_code) as source_code,
+              MAX(f.channel_name)    as channel,
+              MAX(f.sub_group_name)  as sub_group_name,
+              MAX(f.source_code)     as source_code,
+              ${groupBy === "customer" ? "MAX(c.price_list_name) as price_list_name, MAX(c.currency_code) as currency_code," : ""}
               ${needsSubChannel ? "sub_channel," : "NULL as sub_channel,"}
               TO_CHAR(f.${source.dateCol}::DATE, 'YYYY-MM') as month,
               SUM(f.${source.revenueCol}) as revenue,
-              SUM(f.${source.marginCol}) as margin,
+              SUM(f.${source.marginCol})  as margin,
               SUM(f.${source.quantityCol}) as units
        FROM b2b_raw f
        ${joinClause}
-       GROUP BY 1, 3, 4`
+       GROUP BY ${
+         groupBy === "customer"
+           ? "COALESCE(c.name, NULLIF(NULLIF(TRIM(f.customer_code),''),'NaN'),'Chưa xác định'), TRIM(f.customer_code), sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
+           : groupBy === "vendor"
+           ? "v.vendor, sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
+           : groupBy === "sku"
+           ? "f.sku, sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
+           : groupBy === "staff"
+           ? "COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code),''),'NaN'),'Chưa gán NV'), sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
+           : "f.channel_name, sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
+       }`
     )
 
     // ── Aggregate in JS (name → totals + monthly + sub-channel breakdown) ───────
     type Item = {
       name: string; channel: string; sub_group_name: string; source_code: string
+      customer_code?: string; price_list_name?: string; currency_code?: string
       revenue: number; margin: number; units: number
       monthly_data: Array<{ month: string; revenue: number; margin: number; units: number }>
       sub_channel_breakdown: Record<string, Record<string, { revenue: number; margin: number; units: number }>>
     }
+    // For customer groupBy, key = customer_code (unique); otherwise key = name
     const aggregated = new Map<string, Item>()
     rows.forEach(r => {
-      const key = r.name
+      const key = groupBy === "customer" ? (r.customer_code || r.name) : r.name
       if (!aggregated.has(key)) {
         aggregated.set(key, {
-          name: key, channel: r.channel,
+          name: r.name, channel: r.channel,
           sub_group_name: r.sub_group_name || "",
           source_code: r.source_code || "",
+          customer_code:   r.customer_code   || undefined,
+          price_list_name: r.price_list_name || undefined,
+          currency_code:   r.currency_code   || undefined,
           revenue: 0, margin: 0, units: 0, monthly_data: [], sub_channel_breakdown: {},
         })
       }

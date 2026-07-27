@@ -43,6 +43,7 @@ interface KPI {
 }
 interface PerformanceData {
   name: string; channel?: string; sub_group_name?: string; source_code?: string
+  customer_code?: string; price_list_name?: string; currency_code?: string
   revenue: number; margin: number; margin_percent: number
   gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
@@ -650,14 +651,32 @@ export default function B2BPerformance() {
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
                         const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
 
-                        // Group by sub_group_name (from dim_order_source)
-                        const hasGroups = sorted.some(r => r.sub_group_name)
+                        // Group by price_list_name tier (Strategic/VIP/Gold/Silver) — giống Quarter Report
+                        const classifyTier = (pln?: string): string => {
+                          if (!pln) return "Strategic"
+                          const p = pln.toUpperCase()
+                          if (p.includes("STRATEGIC")) return "Strategic"
+                          if (p.includes("VIP"))       return "VIP"
+                          if (p.includes("GOLD"))      return "Gold"
+                          if (p.includes("SILVER"))    return "Silver"
+                          return "Strategic"   // default như Quarter Report
+                        }
+                        const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+                        const hasTierInfo = sorted.some(r => r.price_list_name)
                         const groups = new Map<string, PerformanceData[]>()
                         sorted.forEach(row => {
-                          const grp = row.sub_group_name || (hasGroups ? "Khác" : "__flat__")
+                          const grp = hasTierInfo
+                            ? classifyTier(row.price_list_name)
+                            : (row.sub_group_name || "__flat__")
                           if (!groups.has(grp)) groups.set(grp, [])
                           groups.get(grp)!.push(row)
                         })
+                        // Sort tiers theo thứ tự chuẩn
+                        const sortedGroups = new Map<string, PerformanceData[]>()
+                        const tierKeys = hasTierInfo
+                          ? [...TIER_ORDER.filter(t => groups.has(t)), ...Array.from(groups.keys()).filter(k => !TIER_ORDER.includes(k))]
+                          : Array.from(groups.keys())
+                        tierKeys.forEach(k => { if (groups.has(k)) sortedGroups.set(k, groups.get(k)!) })
 
                         const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
@@ -748,7 +767,7 @@ export default function B2BPerformance() {
 
                         return (
                           <>
-                            {Array.from(groups.entries()).map(([grpName, grpRows]) => {
+                            {Array.from(sortedGroups.entries()).map(([grpName, grpRows]) => {
                               if (grpName === "__flat__") {
                                 // No sub_group_name data — render flat (backward compat)
                                 return grpRows.map((row, idx) => renderRow(row, idx))
