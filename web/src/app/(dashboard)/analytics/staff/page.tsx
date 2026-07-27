@@ -1,629 +1,488 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { formatCompactNumber, formatCurrency } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
-import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
+import { Users, Calendar, Filter, Download, Search, ChevronDown, ChevronRight, TrendingUp, RefreshCw } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
-import { Pager, PAGE_ROWS } from "@/components/pager"
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, Cell,
+} from "recharts"
 
-interface StaffMetric {
-  staff_name: string
-  staff_code: string
-  total_orders: string
-  total_units: string
-  total_revenue: string
+interface StaffRow {
+  staff_name:     string
+  staff_code:     string
+  total_revenue:  number
+  hk3_revenue:    number
+  customer_count: number
+  total_orders:   number
+  monthly:        { month: string; revenue: number; hk3_revenue: number }[]
 }
 
-interface Order {
-  order_code: string
-  company_code: string
-  fulfiled_date: string
-  product_name: string
-  sku: string
-  fulfilled_quantity: number
-  fulfilled_revenue_amount_vnd: number
-  channel_name: string
-  staff_name: string
+interface CustomerRow {
+  customer_code: string
   customer_name: string
-  order_source: string
+  revenue:       number
+  hk3_revenue:   number
+  order_count:   number
+}
+
+const COLORS = ["#003B95","#0052CC","#0065FF","#2684FF","#4C9AFF","#B3D4FF"]
+const HK3_COLOR = "#F97316"
+
+function fck(n: number) { return formatCompactNumber(n) }
+
+function MiniSparkline({ data }: { data: StaffRow["monthly"] }) {
+  if (!data.length) return <span className="text-slate-300 text-xs">–</span>
+  const max = Math.max(...data.map(d => d.revenue), 1)
+  return (
+    <div className="flex items-end gap-[2px] h-6">
+      {data.map(d => (
+        <div key={d.month} className="flex flex-col gap-[1px] items-center">
+          <div
+            className="w-2 rounded-sm bg-blue-400 opacity-80"
+            style={{ height: `${Math.max(2, (d.revenue / max) * 20)}px` }}
+            title={`${d.month}: ${fck(d.revenue)}`}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs">
+      <p className="font-black text-slate-700 mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }} className="font-bold">
+          {p.name}: {fck(p.value)}
+        </p>
+      ))}
+    </div>
+  )
 }
 
 export default function StaffPerformancePage() {
-  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
+  const [startDate, setStartDate]   = useState<string>(() => getDefaultDateRange().startDate)
+  const [endDate, setEndDate]       = useState<string>(() => getDefaultDateRange().endDate)
   const [channelGroup, setChannelGroup] = useState<"All" | "B2B" | "B2C">("All")
   const [selectedChannel, setSelectedChannel] = useState("")
-  const [companyCode, setCompanyCode] = useState<string>("ALL")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [staffSearchTerm, setStaffSearchTerm] = useState("")
-  const [selectedStaff, setSelectedStaff] = useState<string[]>([])
-  const [staffList, setStaffList] = useState<{ code: string; name: string }[]>([])
-  const [staffMetrics, setStaffMetrics] = useState<StaffMetric[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [channels, setChannels] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
-  const [page, setPage] = useState(1)
-  const [totalOrdersCount, setTotalOrdersCount] = useState(0)
-  const [leaderPage, setLeaderPage] = useState(1)
-  useEffect(() => { setLeaderPage(1) }, [staffMetrics])
+  const [companyCode, setCompanyCode] = useState<"ALL" | "VN" | "US">("ALL")
+  const [viewMode, setViewMode]     = useState<"fulfilled" | "created">("fulfilled")
+  const [channels, setChannels]     = useState<string[]>([])
+  const [staffData, setStaffData]   = useState<StaffRow[]>([])
+  const [loading, setLoading]       = useState(true)
 
-  useEffect(() => {
-    fetchChannels()
-    fetchStaffList()
-    fetchPerformance()
-    fetchRecentOrders()
-  }, [viewMode, page])
+  // Expanded staff + customer data
+  const [expandedStaff, setExpandedStaff] = useState<string | null>(null)
+  const [customers, setCustomers]          = useState<CustomerRow[]>([])
+  const [customersLoading, setCustomersLoading] = useState(false)
 
-  const fetchStaffList = async () => {
+  // Chart view: "staff" = compare all staff | "customer" = compare customers of selected staff
+  const [chartView, setChartView] = useState<"staff" | "customer">("staff")
+
+  const fetchChannels = useCallback(async () => {
     try {
-      const params = new URLSearchParams({
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        dataSource: viewMode,
-      })
-      const response = await fetch(`/api/staff-list?${params}`)
-      if (response.ok) {
-        setStaffList(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching staff list:", err)
-    }
-  }
+      const p = new URLSearchParams({ channelGroup: channelGroup === "All" ? "" : channelGroup })
+      const r = await fetch(`/api/channels?${p}`)
+      if (r.ok) setChannels(await r.json())
+    } catch {}
+  }, [channelGroup])
 
-  const fetchChannels = async () => {
-    try {
-      const params = new URLSearchParams({
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-      })
-      const response = await fetch(`/api/channels?${params}`)
-      if (response.ok) {
-        const channels = await response.json()
-        setChannels(channels)
-      }
-    } catch (err) {
-      console.error("Error fetching channels:", err)
-    }
-  }
-
-  const fetchPerformance = async () => {
+  const fetchStaff = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
+      const p = new URLSearchParams({
+        startDate, endDate, dataSource: viewMode,
         channelGroup: channelGroup === "All" ? "" : channelGroup,
         channel: selectedChannel,
         companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
       })
-      const response = await fetch(`/api/staff-performance?${params}`)
-      if (response.ok) {
-        setStaffMetrics(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching staff performance:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+      const r = await fetch(`/api/analytics/staff-report?${p}`)
+      if (r.ok) setStaffData(await r.json())
+    } catch {}
+    finally { setLoading(false) }
+  }, [startDate, endDate, viewMode, channelGroup, selectedChannel, companyCode])
 
-  const fetchRecentOrders = async () => {
+  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => { fetchStaff() }, [])
+
+  const handleApply = () => { fetchChannels(); fetchStaff() }
+
+  const toggleExpand = async (staffCode: string) => {
+    if (expandedStaff === staffCode) {
+      setExpandedStaff(null); setCustomers([]); setChartView("staff"); return
+    }
+    setExpandedStaff(staffCode); setCustomers([]); setCustomersLoading(true); setChartView("customer")
     try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
+      const p = new URLSearchParams({
+        staffCode, startDate, endDate, dataSource: viewMode,
         channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
-        page: page.toString(),
-        pageSize: "10",
+        channel: selectedChannel, companyCode,
       })
-      const response = await fetch(`/api/orders?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data.orders)
-        setTotalOrdersCount(data.total)
-      }
-    } catch (err) {
-      console.error("Error fetching recent orders:", err)
-    }
+      const r = await fetch(`/api/analytics/staff-report/customers?${p}`)
+      if (r.ok) setCustomers(await r.json())
+    } catch {} finally { setCustomersLoading(false) }
   }
 
-  const handleExportTransactions = async () => {
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
-      })
-      const response = await fetch(`/api/orders/export?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        const rows = data.map((item: any) => ({
-          "Order ID": item.order_id || "",
-          "Company": item.company_code || "",
-          "Date": item.date?.split("T")[0] || "",
-          "Staff": item.staff || "",
-          "Customer": item.customer_name || item.customer || "",
-          "Channel": item.channel || "",
-          "Order Source": item.order_source || "",
-          "Product": item.product_name || "",
-          "SKU": item.sku || "",
-          "Qty": item.fulfilled_quantity || 0,
-          "Revenue": item.revenue || 0,
-        }))
-        exportRawRows(rows, `Recent_Transactions_${startDate}_to_${endDate}`, "Transactions")
-      }
-    } catch (err) {
-      console.error("Export failed:", err)
-    }
+  const handleExport = () => {
+    const rows = staffData.map((s, i) => ({
+      Rank: i + 1,
+      "Staff Code": s.staff_code,
+      "Staff Name": s.staff_name,
+      "Total Revenue": s.total_revenue,
+      "3HK Revenue": s.hk3_revenue,
+      "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue) * 100).toFixed(1) : 0,
+      "Customers": s.customer_count,
+      "Orders": s.total_orders,
+    }))
+    exportRawRows(rows, `Staff_Report_${startDate}_to_${endDate}`, "Staff")
   }
 
-  const handleExportSummary = () => {
-    try {
-      const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
-      const rows = staffMetrics.map((staff, idx) => {
-        const revValue = parseFloat(staff.total_revenue)
-        const ordValue = parseInt(staff.total_orders)
-        const contribution = totalRevenue > 0 ? Number(((revValue / totalRevenue) * 100).toFixed(2)) : 0
-        const aov = ordValue > 0 ? Number((revValue / ordValue).toFixed(2)) : 0
-        return {
-          "Rank": idx + 1,
-          "Staff Code": staff.staff_code,
-          "Staff Name": staff.staff_name,
-          "Orders": ordValue,
-          "Units": staff.total_units,
-          "Revenue (VND)": revValue,
-          "Avg Order Value": aov,
-          "Contribution %": contribution,
-        }
-      })
-      exportRawRows(rows, `Staff_Performance_Summary_${startDate}_to_${endDate}`, "Staff")
-    } catch (err) {
-      console.error("Export summary failed:", err)
-    }
-  }
+  const totalRevenue = staffData.reduce((s, r) => s + r.total_revenue, 0)
+  const totalHk3     = staffData.reduce((s, r) => s + r.hk3_revenue, 0)
+  const totalOrders  = staffData.reduce((s, r) => s + r.total_orders, 0)
+  const totalCustomers = staffData.reduce((s, r) => s + r.customer_count, 0)
 
-  const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
-  const totalUnits = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_units), 0)
-  const totalOrders = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_orders), 0)
+  // Chart data
+  const staffChartData = staffData.slice(0, 12).map(s => ({
+    name: s.staff_name.length > 12 ? s.staff_name.slice(0, 12) + "…" : s.staff_name,
+    "Tổng Rev": s.total_revenue,
+    "3HK Rev":  s.hk3_revenue,
+  }))
+
+  const custChartData = customers.slice(0, 15).map(c => ({
+    name: (c.customer_name || c.customer_code).length > 14
+      ? (c.customer_name || c.customer_code).slice(0, 14) + "…"
+      : (c.customer_name || c.customer_code),
+    "Tổng Rev": c.revenue,
+    "3HK Rev":  c.hk3_revenue,
+  }))
+
+  const activeChartData = chartView === "customer" && custChartData.length ? custChartData : staffChartData
+  const chartTitle = chartView === "customer"
+    ? `Breakdown KH — ${staffData.find(s => s.staff_code === expandedStaff)?.staff_name || ""}`
+    : "So sánh doanh thu Sales"
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4 lg:gap-6">
-          <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 rotate-3 transform group-hover:rotate-0 transition-transform">
-            <Users className="w-6 h-6 lg:w-8 lg:h-8" />
+    <div className="p-4 lg:p-8 space-y-6 max-w-[1600px] mx-auto pb-24 lg:pb-8 animate-in fade-in duration-500">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 rotate-3">
+            <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
+            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
             <div className="flex items-center gap-2">
-              <p className="text-sm lg:text-lg text-slate-500 font-medium italic">Ranking and tracking our sales team's execution</p>
+              <p className="text-sm text-slate-500 font-medium italic">Doanh thu & KH theo từng sales</p>
               <SourceBadge source="admin" />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
-            <button
-              onClick={() => setViewMode("fulfilled")}
-              className={cn(
-                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
-                viewMode === "fulfilled" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Fulfilled
-            </button>
-            <button
-              onClick={() => setViewMode("created")}
-              className={cn(
-                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
-                viewMode === "created" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Created
-            </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Fulfilled / Created toggle */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            {(["fulfilled","created"] as const).map(m => (
+              <button key={m} onClick={() => setViewMode(m)}
+                className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  viewMode === m ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                {m === "fulfilled" ? "Fulfilled" : "Created"}
+              </button>
+            ))}
           </div>
 
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+          {/* Date range */}
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
-            />
-            <span className="text-slate-300 font-bold">→</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
-            />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
+            <span className="text-slate-300">→</span>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
-          <button
-            onClick={() => {
-              fetchChannels()
-              fetchStaffList()
-              fetchPerformance()
-              fetchRecentOrders()
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm"
-          >
-            Apply Filters
+          <button onClick={handleApply}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm">
+            Áp dụng
           </button>
         </div>
       </div>
 
-      {/* Filters Summary */}
-      <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-2 pr-4 border-r border-slate-100">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Filters:</span>
-        </div>
-
+      {/* ── Filters ── */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <Filter className="w-4 h-4 text-slate-400 shrink-0" />
         <div className="flex gap-2">
-          {["All", "B2B", "B2C"].map((group) => (
-            <button
-              key={group}
-              onClick={() => { setChannelGroup(group as any); setSelectedChannel("") }}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold transition-all border",
-                channelGroup === group
-                  ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
-                  : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
-              )}
-            >
-              {group}
+          {(["All","B2B","B2C"] as const).map(g => (
+            <button key={g} onClick={() => { setChannelGroup(g); setSelectedChannel("") }}
+              className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
+                channelGroup === g
+                  ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                  : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+              {g}
             </button>
           ))}
         </div>
-
-        <select
-          value={selectedChannel}
-          onChange={(e) => setSelectedChannel(e.target.value)}
-          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-        >
+        <select value={selectedChannel} onChange={e => setSelectedChannel(e.target.value)}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1 focus:ring-blue-500">
           <option value="">All Channels</option>
           {channels.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-
-        <select
-          value={companyCode}
-          onChange={(e) => setCompanyCode(e.target.value)}
-          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-        >
+        <select value={companyCode} onChange={e => setCompanyCode(e.target.value as any)}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1 focus:ring-blue-500">
           <option value="ALL">All Companies</option>
           <option value="VN">VN</option>
           <option value="US">US</option>
         </select>
-
-        <div className="relative">
-          <button
-            onClick={() => {
-              const el = document.getElementById("staff-dropdown")
-              if (el) el.classList.toggle("hidden")
-            }}
-            className="flex items-center justify-between w-48 bg-slate-50 border border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <span>
-              {selectedStaff.length === 0 ? "All Staff" :
-               selectedStaff.length === 1 ? staffList.find(s => s.code === selectedStaff[0])?.name || selectedStaff[0] :
-               `${selectedStaff.length} Staff Selected`}
-            </span>
-            <Filter className="w-3 h-3 ml-2 text-slate-400" />
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs font-bold text-slate-400">
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+            {loading ? "Loading…" : `${staffData.length} sales`}
+          </div>
+          <button onClick={handleExport}
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+            <Download className="w-3.5 h-3.5" /> Export
           </button>
-
-          <div id="staff-dropdown" className="hidden absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-80 overflow-auto p-2">
-            <div className="sticky top-0 bg-white pb-2 border-b border-slate-50 mb-2 space-y-2 z-10">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search staff..."
-                  value={staffSearchTerm}
-                  onChange={(e) => setStaffSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <button
-                onClick={() => setSelectedStaff([])}
-                className="w-full text-left px-3 py-1.5 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                Clear Selection
-              </button>
-            </div>
-            <div className="space-y-1">
-              {staffList
-                .filter(s =>
-                  (s.name || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase()) ||
-                  (s.code || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase())
-                )
-                .map(s => (
-                  <label key={s.code} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group">
-                  <input
-                    type="checkbox"
-                    checked={selectedStaff.includes(s.code)}
-                    onChange={() => {
-                      if (selectedStaff.includes(s.code)) {
-                        setSelectedStaff(selectedStaff.filter(code => code !== s.code))
-                      } else {
-                        setSelectedStaff([...selectedStaff, s.code])
-                      }
-                    }}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900">{s.name}</span>
-                    <span className="text-[9px] font-medium text-slate-400">{s.code}</span>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by Order, Staff Name / Code..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-1.5 bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500"
-          />
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-4">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Orders</p>
-            <h3 className="text-3xl font-black text-slate-900">{totalOrders.toLocaleString()}</h3>
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Tổng Revenue", value: fck(totalRevenue), color: "blue" },
+          { label: "3HK Revenue",  value: fck(totalHk3),     color: "orange" },
+          { label: "Sales",        value: staffData.length,   color: "emerald" },
+          { label: "Khách hàng",   value: totalCustomers,     color: "purple" },
+        ].map(card => (
+          <div key={card.label} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{card.label}</p>
+            <p className={cn("text-2xl font-black",
+              card.color === "blue"    && "text-blue-700",
+              card.color === "orange"  && "text-orange-600",
+              card.color === "emerald" && "text-emerald-600",
+              card.color === "purple"  && "text-purple-600",
+            )}>{typeof card.value === "number" ? card.value.toLocaleString() : card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Bar Chart ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">{chartTitle}</h3>
+            {chartView === "customer" && (
+              <button onClick={() => { setChartView("staff"); setExpandedStaff(null); setCustomers([]) }}
+                className="text-xs text-blue-600 font-bold hover:underline mt-0.5">
+                ← Về tổng hợp sales
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600 inline-block" /> Tổng Rev</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block" /> 3HK Rev</span>
           </div>
         </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 mb-4">
-              <Package className="w-6 h-6" />
+        <div className="p-4" style={{ height: 240 }}>
+          {activeChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={activeChartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={60} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="Tổng Rev" fill="#003B95" radius={[4,4,0,0]} maxBarSize={40}>
+                  {activeChartData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Bar>
+                <Bar dataKey="3HK Rev" fill={HK3_COLOR} radius={[4,4,0,0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+              {loading ? "Đang tải…" : "Không có dữ liệu"}
             </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Units Sold</p>
-            <h3 className="text-3xl font-black text-slate-900">{totalUnits.toLocaleString()}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group md:col-span-2">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-50 rounded-full -mr-24 -mt-24 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 mb-4">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Revenue (VND)</p>
-            <h3 className="text-3xl lg:text-4xl font-black text-slate-900">
-              {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalRevenue)}
-            </h3>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Main Tables */}
-      <div className="grid grid-cols-1 gap-8">
-        {/* Performance Leaderboard */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Staff Performance Summary</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Key metrics by team member</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
-                {loading ? "Refreshing..." : "Live Data"}
-              </div>
-              <button
-                onClick={handleExportSummary}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Xuất bảng này ra Excel"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export
-              </button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff Name</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue (VND)</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Avg Order Value</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contr. %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {staffMetrics.slice((leaderPage - 1) * PAGE_ROWS, leaderPage * PAGE_ROWS).map((staff, i) => {
-                  const idx = (leaderPage - 1) * PAGE_ROWS + i
-                  const revValue = parseFloat(staff.total_revenue)
-                  const ordValue = parseInt(staff.total_orders)
-                  const contribution = (revValue / totalRevenue) * 100
-                  const aov = ordValue > 0 ? revValue / ordValue : 0
+      {/* ── Leaderboard Table ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-black text-slate-900">Chi tiết từng Sales</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Click vào hàng để xem breakdown theo KH</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider w-10">#</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Sales</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Tổng Revenue</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">3HK Revenue</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">3HK %</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Khách hàng</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Đơn</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Trend</th>
+                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contr.%</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {staffData.map((s, i) => {
+                const hk3Pct = s.total_revenue > 0 ? (s.hk3_revenue / s.total_revenue) * 100 : 0
+                const contPct = totalRevenue > 0 ? (s.total_revenue / totalRevenue) * 100 : 0
+                const isExpanded = expandedStaff === s.staff_code
 
-                  return (
-                    <tr key={staff.staff_code} className="hover:bg-slate-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <span className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs",
-                          idx === 0 ? "bg-amber-100 text-amber-700 shadow-sm border border-amber-200" :
-                          idx === 1 ? "bg-slate-100 text-slate-700 border border-slate-200" :
-                          idx === 2 ? "bg-orange-50 text-orange-700 border border-orange-100" :
-                          "text-slate-400"
-                        )}>
-                          {idx + 1}
-                        </span>
+                return (
+                  <React.Fragment key={s.staff_code}>
+                    <tr
+                      onClick={() => toggleExpand(s.staff_code)}
+                      className={cn(
+                        "cursor-pointer transition-colors group",
+                        isExpanded ? "bg-blue-50 border-l-2 border-l-blue-600" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <td className="px-4 py-3">
+                        <span className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
+                          i === 0 ? "bg-amber-100 text-amber-700 border border-amber-200" :
+                          i === 1 ? "bg-slate-100 text-slate-600 border border-slate-200" :
+                          i === 2 ? "bg-orange-50 text-orange-600 border border-orange-100" :
+                          "text-slate-400 text-[11px]"
+                        )}>{i + 1}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{staff.staff_name}</span>
-                          <span className="text-xs text-slate-500 font-bold">{staff.staff_code}</span>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {isExpanded
+                            ? <ChevronDown className="w-4 h-4 text-blue-600 shrink-0" />
+                            : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-blue-500" />
+                          }
+                          <div>
+                            <p className={cn("text-sm font-black", isExpanded ? "text-blue-700" : "text-slate-900")}>{s.staff_name}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">{s.staff_code}</p>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-bold text-slate-600">{ordValue.toLocaleString()}</span>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-black text-slate-900">{fck(s.total_revenue)}</span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-bold text-slate-600">{parseInt(staff.total_units).toLocaleString()}</span>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-bold text-orange-600">{fck(s.hk3_revenue)}</span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-black text-slate-900">
-                          {new Intl.NumberFormat("vi-VN").format(revValue)}
-                        </span>
+                      <td className="px-4 py-3 text-right">
+                        <span className={cn("text-xs font-black px-2 py-0.5 rounded-full",
+                          hk3Pct >= 50 ? "bg-orange-100 text-orange-700" :
+                          hk3Pct >= 20 ? "bg-amber-50 text-amber-700" :
+                          "text-slate-500"
+                        )}>{hk3Pct.toFixed(1)}%</span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-xs font-bold text-slate-500">
-                          {new Intl.NumberFormat("vi-VN").format(Math.round(aov))}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full"
-                              style={{ width: `${contribution}%` }}
-                            />
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
+                      <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contPct}%` }} />
                           </div>
-                          <span className="text-xs font-black text-blue-600 w-10 text-right">{contribution.toFixed(1)}%</span>
+                          <span className="text-xs font-black text-blue-600 w-10 text-right">{contPct.toFixed(1)}%</span>
                         </div>
                       </td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pager page={leaderPage} total={staffMetrics.length} onPage={setLeaderPage} label="nhân viên" />
-        </div>
 
-        {/* Transaction Detail Table */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Recent Transactions</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Detailed log of sales activity</p>
-            </div>
+                    {/* ── Customer Expand Row ── */}
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={9} className="px-0 py-0">
+                          <div className="bg-blue-50/60 border-b border-blue-100 px-6 py-4">
+                            {customersLoading ? (
+                              <div className="text-xs text-slate-400 py-4 text-center">Đang tải KH…</div>
+                            ) : customers.length === 0 ? (
+                              <div className="text-xs text-slate-400 py-4 text-center">Không có dữ liệu KH</div>
+                            ) : (
+                              <>
+                                <p className="text-xs font-black text-blue-700 mb-3 uppercase tracking-wider">
+                                  Breakdown {customers.length} khách hàng — {s.staff_name}
+                                </p>
+                                <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white">
+                                  <table className="w-full text-left border-collapse">
+                                    <thead>
+                                      <tr className="bg-blue-50 border-b border-blue-100">
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider">#</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider">Khách hàng</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">Revenue</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">3HK Rev</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">3HK %</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">Đơn</th>
+                                        <th className="px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider text-right">% of Sales</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-blue-50">
+                                      {customers.map((c, ci) => {
+                                        const h3p = c.revenue > 0 ? (c.hk3_revenue / c.revenue) * 100 : 0
+                                        const ofSales = s.total_revenue > 0 ? (c.revenue / s.total_revenue) * 100 : 0
+                                        return (
+                                          <tr key={c.customer_code} className="hover:bg-blue-50/40 transition-colors">
+                                            <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
+                                            <td className="px-4 py-2">
+                                              <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
+                                              <p className="text-[9px] text-slate-400">{c.customer_code}</p>
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-xs font-black text-slate-900">{fck(c.revenue)}</td>
+                                            <td className="px-4 py-2 text-right text-xs font-bold text-orange-600">{fck(c.hk3_revenue)}</td>
+                                            <td className="px-4 py-2 text-right">
+                                              <span className={cn("text-[10px] font-black",
+                                                h3p >= 50 ? "text-orange-600" : "text-slate-400")}>{h3p.toFixed(1)}%</span>
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-xs font-bold text-slate-500">{c.order_count}</td>
+                                            <td className="px-4 py-2 text-right">
+                                              <div className="flex items-center justify-end gap-1.5">
+                                                <div className="w-12 h-1 bg-blue-100 rounded-full overflow-hidden">
+                                                  <div className="h-full bg-blue-400 rounded-full" style={{ width: `${ofSales}%` }} />
+                                                </div>
+                                                <span className="text-[10px] font-black text-blue-600">{ofSales.toFixed(1)}%</span>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleExportTransactions}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Xuất chi tiết giao dịch ra Excel"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export
-              </button>
-              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                <span className="text-xs font-bold text-slate-500">Page {page}</span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                    disabled={page === 1}
-                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage(prev => prev + 1)}
-                    disabled={orders.length < 10}
-                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Company</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+              {/* Total row */}
+              {staffData.length > 0 && (
+                <tr className="bg-slate-50 border-t-2 border-slate-200">
+                  <td colSpan={2} className="px-4 py-3 text-xs font-black text-slate-700 uppercase tracking-wider">Tổng cộng</td>
+                  <td className="px-4 py-3 text-right text-sm font-black text-slate-900">{fck(totalRevenue)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-orange-600">{fck(totalHk3)}</td>
+                  <td className="px-4 py-3 text-right text-xs font-black text-orange-600">
+                    {totalRevenue > 0 ? ((totalHk3 / totalRevenue) * 100).toFixed(1) : 0}%
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{totalCustomers}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{totalOrders.toLocaleString()}</td>
+                  <td colSpan={2} />
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orders.map((order, idx) => (
-                  <tr key={`${order.order_code}-${idx}`} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
-                      {new Date(order.fulfiled_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-black text-slate-900">
-                      {order.order_code}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-600">
-                      {order.company_code}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-slate-600">
-                      {order.staff_name}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-600">
-                      {order.customer_name}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-700">{order.product_name}</span>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{order.sku}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
-                      {order.order_source}
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-600">
-                      {order.fulfilled_quantity}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-black text-blue-600">
-                        {new Intl.NumberFormat("vi-VN").format(order.fulfilled_revenue_amount_vnd)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

@@ -208,11 +208,11 @@ export async function runDataExplorer(
 
   const finalInstruction = [
     systemInstruction,
-    `\n\n━━━ DANH MỤC BẢNG SUPABASE (querySupabase) ━━━\n${tableCatalog}`,
+    `\n\n━━━ SUPABASE TABLE CATALOG (querySupabase) ━━━\n${tableCatalog}`,
     dataFilter
-      ? `\n\n━━━ GIỚI HẠN DỮ LIỆU (role "${role}") ━━━\nMỌI SQL gohub_dw PHẢI thêm điều kiện WHERE sau, không được bỏ:\n${dataFilter}`
+      ? `\n\n━━━ DATA ACCESS RESTRICTION (role "${role}") ━━━\nALL gohub_dw SQL MUST include the following WHERE condition — do not omit:\n${dataFilter}`
       : "",
-    !isCost && !priv ? `\n\n⚠️ Role hiện tại KHÔNG được xem giá vốn (COGS/cost). Không trả về cột giá vốn dù user hỏi.` : "",
+    !isCost && !priv ? `\n\n⚠️ Current role CANNOT view COGS/cost columns. Do not return cost columns even if user requests them.` : "",
   ].join("")
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
@@ -247,11 +247,11 @@ export async function runDataExplorer(
         const sql = ((call.args as any)?.sql as string) || ""
         const norm = sql.trim().toLowerCase()
         if (!norm.startsWith("select") && !norm.startsWith("with")) {
-          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Chỉ cho phép SELECT / WITH." } } })
+          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT / WITH queries are allowed." } } })
           continue
         }
         if (sql.includes(";") && sql.split(";").filter((s) => s.trim()).length > 1) {
-          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Không cho phép nhiều câu lệnh." } } })
+          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements are not allowed." } } })
           continue
         }
         try {
@@ -270,15 +270,15 @@ export async function runDataExplorer(
     result = await chat.sendMessage(parts)
   }
 
-  // Fallback chống câu trả lời RỖNG (Gemini kết thúc tool-calling mà không sinh text).
+  // Guard against empty text — Gemini sometimes ends tool-calling without generating output text.
   let text = result.response.text()
   if (!text.trim()) {
     try {
       const followup = await chat.sendMessage(
-        "Dựa TRÊN kết quả các truy vấn đã chạy ở trên, hãy viết câu trả lời hoàn chỉnh bằng tiếng Việt cho user (kèm bảng markdown nếu cần). KHÔNG gọi thêm tool."
+        "Based on the query results above, write a complete answer in Vietnamese for the user (include a markdown table if needed). DO NOT call any more tools."
       )
       text = followup.response.text()
-    } catch { /* giữ rỗng */ }
+    } catch { /* keep empty */ }
   }
   return text
 }

@@ -31,8 +31,8 @@ export function assembleInstruction(
   const agent = AGENTS[agentId]
   return [
     agent.systemPrompt,
-    toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
-    `\nNgười dùng: ${name} (vai trò: ${role}${userSuffix})`,
+    toolCtx ? `\n\n=== SYSTEM DATA ===\n${toolCtx}` : "",
+    `\nUser: ${name} (role: ${role}${userSuffix})`,
     tempRule,
   ].join("")
 }
@@ -58,15 +58,15 @@ export async function runOneAgent(
 }
 
 // ─── Tổng hợp nhiều câu trả lời agent thành 1 ───────────────────────────────────
-const SYNTH_SYSTEM = `Bạn là bộ TỔNG HỢP câu trả lời của chatbot nội bộ GoHub (Sim/eSim).
-Bạn nhận CÂU HỎI của user và nhiều PHẦN trả lời từ các trợ lý chuyên môn khác nhau.
-Nhiệm vụ: gộp thành 1 câu trả lời DUY NHẤT, mạch lạc, tiếng Việt, thân thiện.
-QUY TẮC:
-- Giữ nguyên số liệu/bảng/mã sản phẩm từ các phần (KHÔNG bịa thêm, KHÔNG sửa số).
-- Sắp xếp theo mạch câu hỏi; chia mục rõ ràng bằng tiêu đề đậm nếu có nhiều khía cạnh.
-- Bỏ phần rỗng / trùng lặp / "không tìm thấy" nếu phần khác đã trả lời.
-- Nếu TẤT CẢ các phần đều không có thông tin → nói thật là chưa có dữ liệu và gợi ý user hỏi lại cụ thể hơn.
-- Ngắn gọn, đi thẳng vào việc, không lặp lại câu hỏi.`
+const SYNTH_SYSTEM = `You are a synthesis engine for GoHub's internal chatbot (Sim/eSim management).
+You receive the USER'S QUESTION and multiple partial answers from different specialist agents.
+Task: merge into ONE coherent, friendly answer in Vietnamese.
+RULES:
+- Keep all numbers, tables, and product codes from the parts exactly as-is (NO fabrication, NO editing numbers).
+- Organize by the question's flow; use bold headings if covering multiple aspects.
+- Drop empty/duplicate/"not found" parts if another part already answered.
+- If ALL parts have no useful information → honestly say no data is available and suggest how to rephrase.
+- Keep it concise and direct — do not repeat the question.`
 
 export async function synthesize(
   question: string,
@@ -111,7 +111,7 @@ export async function runMulti(c: MultiCtx): Promise<string> {
         // FOCUS: câu ghép được nhiều agent xử lý → mỗi agent CHỈ lo phần chuyên môn của mình,
         // tránh bị phân tâm bởi phần của agent khác (vd bi bị kéo sang catalog WM → hụt doanh thu).
         const role = AGENT_EXAMPLES[agentId]?.role ?? "phần thuộc chuyên môn của bạn"
-        const focus = `\n\n━━━ LƯU Ý ĐA-AGENT ━━━\nCâu hỏi của user gồm NHIỀU phần do nhiều trợ lý xử lý. BẠN CHỈ tập trung trả lời phần thuộc chuyên môn: ${role}. Các phần KHÁC đã có trợ lý khác lo — BỎ QUA hoàn toàn, KHÔNG trả lời và KHÔNG nói "không có thông tin" cho phần ngoài chuyên môn của bạn.`
+        const focus = `\n\n━━━ MULTI-AGENT NOTE ━━━\nThe user's question has MULTIPLE parts handled by different specialist agents. YOU focus ONLY on your domain: ${role}. Other parts are handled by other agents — IGNORE them completely, do NOT respond to them and do NOT say "no information" for topics outside your specialty.`
         const instr   = assembleInstruction(agentId, toolCtx, c.name, c.role, c.userSuffix ?? "", (c.tempRule ?? "") + focus)
         const text    = await runOneAgent(agentId, instr, c.geminiHistory, c.lastMsg, c.role, c.isCost)
         return { agentName, text }
