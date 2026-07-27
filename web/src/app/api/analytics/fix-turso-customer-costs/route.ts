@@ -6,6 +6,33 @@ import { tursoQuery } from "@/lib/turso"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 
+// DELETE: Xóa records tạo nhầm (customer_code chứa ký tự < > là placeholder chưa điền)
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session || !["admin", "creator"].includes(session.user.role))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  await ensureB2bCostTable()
+
+  // Tìm tất cả records có customer_code chứa < hoặc > (placeholder chưa điền)
+  const wrongRecords = await tursoQuery<{ id: string; customer_code: string; month: string }>(
+    `SELECT id, customer_code, month FROM b2b_customer_cost_monthly
+     WHERE customer_code LIKE '%<%' OR customer_code LIKE '%>%'`
+  )
+
+  if (wrongRecords.length === 0) {
+    return NextResponse.json({ deleted: 0, message: "Không có records sai để xóa" })
+  }
+
+  const deleted: string[] = []
+  for (const r of wrongRecords) {
+    await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [r.id])
+    deleted.push(r.id)
+  }
+
+  return NextResponse.json({ deleted: deleted.length, ids: deleted })
+}
+
 // GET: Tìm real customer_code cho Shopee/TikTok/Lazada trong gohub_dw dim_customer
 //      bằng cách query b2b_customers_cache (Supabase) hoặc trực tiếp dim_customer
 // POST: Tạo Turso records mới với real customer_code (copy từ virtual records)
