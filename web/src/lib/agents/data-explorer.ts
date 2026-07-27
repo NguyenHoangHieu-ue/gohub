@@ -217,29 +217,40 @@ export async function runDataExplorer(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     systemInstruction: finalInstruction,
     tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl] }],
     generationConfig: { temperature: 0 },
   })
 
-  const chat = model.startChat({ history: geminiHistory })
-  let result = await chat.sendMessage(lastMsg)
+  // Build contents manually — send function responses as role "user" (gemini-3.6-flash format)
+  const contents: any[] = [
+    ...geminiHistory,
+    { role: "user", parts: [{ text: lastMsg }] },
+  ]
+
+  let genResult = await model.generateContent({ contents })
+
+  function appendModelContent() {
+    const content = genResult.response.candidates?.[0]?.content
+    if (content) contents.push(content)
+  }
+  appendModelContent()
 
   for (let i = 0; i < 10; i++) {
-    const calls = result.response.functionCalls()
+    const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
-    const parts: any[] = []
+    const fnParts: any[] = []
 
     for (const call of calls) {
       if (call.name === "listSupabaseTables") {
-        parts.push({ functionResponse: { name: call.name, response: { tables: visibleTables } } })
+        fnParts.push({ functionResponse: { name: call.name, response: { tables: visibleTables } } })
         continue
       }
 
       if (call.name === "querySupabase") {
         const resp = await runQuerySupabase(call.args, role || "staff", isCost)
-        parts.push({ functionResponse: { name: "querySupabase", response: resp } })
+        fnParts.push({ functionResponse: { name: "querySupabase", response: resp } })
         continue
       }
 
@@ -247,37 +258,39 @@ export async function runDataExplorer(
         const sql = ((call.args as any)?.sql as string) || ""
         const norm = sql.trim().toLowerCase()
         if (!norm.startsWith("select") && !norm.startsWith("with")) {
-          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT / WITH queries are allowed." } } })
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT / WITH queries are allowed." } } })
           continue
         }
         if (sql.includes(";") && sql.split(";").filter((s) => s.trim()).length > 1) {
-          parts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements are not allowed." } } })
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements are not allowed." } } })
           continue
         }
         try {
           console.log(`[DataExplorer] SQL: ${sql.substring(0, 120)}`)
           const rows = await queryAnalytics(sql)
-          parts.push({ functionResponse: { name: "executeSQL", response: { result: rows.slice(0, 100), rowCount: rows.length } } })
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { result: rows.slice(0, 100), rowCount: rows.length } } })
         } catch (err: any) {
-          parts.push({ functionResponse: { name: "executeSQL", response: { error: err.message } } })
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: err.message } } })
         }
         continue
       }
 
-      parts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
+      fnParts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
     }
 
-    result = await chat.sendMessage(parts)
+    // Send function responses as role "user" — required by gemini-3.6-flash
+    contents.push({ role: "user", parts: fnParts })
+    genResult = await model.generateContent({ contents })
+    appendModelContent()
   }
 
-  // Guard against empty text — Gemini sometimes ends tool-calling without generating output text.
-  let text = result.response.text()
+  // Guard against empty text after function calling loop ends without generating output text.
+  let text = genResult.response.text()
   if (!text.trim()) {
     try {
-      const followup = await chat.sendMessage(
-        "Based on the query results above, write a complete answer in Vietnamese for the user (include a markdown table if needed). DO NOT call any more tools."
-      )
-      text = followup.response.text()
+      contents.push({ role: "user", parts: [{ text: "Based on the query results above, write a complete answer in Vietnamese for the user (include a markdown table if needed). DO NOT call any more tools." }] })
+      genResult = await model.generateContent({ contents })
+      text = genResult.response.text()
     } catch { /* keep empty */ }
   }
   return text

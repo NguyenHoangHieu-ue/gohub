@@ -120,157 +120,164 @@ export async function runBIAnalyst(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
-    // temperature 0 → SQL ổn định, bám số liệu, hạn chế bịa (quan trọng cho báo cáo tài chính)
     generationConfig: { temperature: 0 },
   })
 
-  const chat = model.startChat({ history: geminiHistory })
-  let result = await chat.sendMessage(lastMsg)
+  // Build conversation contents manually — bypass SDK chat API which sends role "function"
+  // (not supported by gemini-3.6-flash). We send function responses as role "user" instead.
+  const contents: any[] = [
+    ...geminiHistory,
+    { role: "user", parts: [{ text: lastMsg }] },
+  ]
+
+  let genResult = await model.generateContent({ contents })
   let anyToolCall = false
 
-  // Function calling loop — max 10 iterations (query so sánh nhiều kỳ / WoW cần nhiều lượt tool).
-  // Tách thành hàm để có thể CHẠY LẠI sau khi nudge (chống bi "hứa sẽ truy vấn" mà không gọi tool).
+  // Append model response to history so subsequent calls see the full context.
+  function appendModelContent() {
+    const content = genResult.response.candidates?.[0]?.content
+    if (content) contents.push(content)
+  }
+  appendModelContent()
+
+  // Function calling loop — max 10 iterations.
   async function processToolCalls() {
-   for (let i = 0; i < 10; i++) {
-    const calls = result.response.functionCalls()
-    if (!calls || calls.length === 0) break
-    anyToolCall = true
+    for (let i = 0; i < 10; i++) {
+      const calls = genResult.response.functionCalls()
+      if (!calls || calls.length === 0) break
+      anyToolCall = true
 
-    const parts: any[] = []
+      const fnParts: any[] = []
 
-    for (const call of calls) {
-      if (call.name === "queryGA4") {
-        try {
-          const a = call.args as any
-          const report = await runGA4Report({
-            siteId: a.siteId, startDate: a.startDate, endDate: a.endDate,
-            metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50,
-          })
-          const rows = (report.rows || []).slice(0, 50).map(r => ({
-            dimensions: r.dimensionValues?.map((d: any) => d.value),
-            metrics: r.metricValues?.map((m: any) => m.value),
-          }))
-          parts.push({ functionResponse: { name: "queryGA4", response: { rows, rowCount: report.rowCount } } })
-        } catch (e: any) {
-          parts.push({ functionResponse: { name: "queryGA4", response: { error: e.message } } })
-        }
-        continue
-      }
-
-      if (call.name === "queryGSC") {
-        try {
-          const a = call.args as any
-          const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
-          parts.push({ functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 50) } } })
-        } catch (e: any) {
-          parts.push({ functionResponse: { name: "queryGSC", response: { error: e.message } } })
-        }
-        continue
-      }
-
-      if (call.name === "queryProduct") {
-        try {
-          const a = call.args as any
-          const code: string = (a.sku_code || a.product_code || "").trim().toUpperCase()
-          let result: any = null
-          if (code.length === 13) {
-            const { data } = await supabaseAdmin.from("skus")
-              .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
-              .eq("sku_code", code).maybeSingle()
-            result = data
-          } else if (code.length === 8) {
-            const { data } = await supabaseAdmin.from("products")
-              .select("product_code,status,tenant,sim_esim,product_type,country_group,vendor")
-              .eq("product_code", code).maybeSingle()
-            result = data
+      for (const call of calls) {
+        if (call.name === "queryGA4") {
+          try {
+            const a = call.args as any
+            const report = await runGA4Report({
+              siteId: a.siteId, startDate: a.startDate, endDate: a.endDate,
+              metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50,
+            })
+            const rows = (report.rows || []).slice(0, 50).map(r => ({
+              dimensions: r.dimensionValues?.map((d: any) => d.value),
+              metrics:    r.metricValues?.map((m: any) => m.value),
+            }))
+            fnParts.push({ functionResponse: { name: "queryGA4", response: { rows, rowCount: report.rowCount } } })
+          } catch (e: any) {
+            fnParts.push({ functionResponse: { name: "queryGA4", response: { error: e.message } } })
           }
-          parts.push({ functionResponse: { name: "queryProduct", response: result ?? { error: "Không tìm thấy sản phẩm" } } })
-        } catch (e: any) {
-          parts.push({ functionResponse: { name: "queryProduct", response: { error: e.message } } })
+          continue
         }
-        continue
-      }
 
-      if (call.name !== "executeSQL") {
-        parts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
-        continue
-      }
-
-      const sql = (call.args as any)?.sql as string || ""
-      const normalizedSql = sql.trim().toLowerCase()
-
-      // Security: only SELECT / WITH
-      if (!normalizedSql.startsWith("select") && !normalizedSql.startsWith("with")) {
-        parts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT and WITH queries are allowed." } } })
-        continue
-      }
-      if (sql.includes(";") && sql.split(";").filter((s: string) => s.trim()).length > 1) {
-        parts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements are not allowed." } } })
-        continue
-      }
-
-      try {
-        console.log(`[BI] SQL: ${sql.substring(0, 120)}`)
-        const rows = await queryAnalytics(sql)
-        const limited = rows.slice(0, 100)
-        const response: any = { result: limited, rowCount: rows.length }
-        // Self-correction hint: 0 rows → suggest broadening filters
-        if (rows.length === 0) {
-          response.hint = "Query returned 0 rows. Before concluding 'no data': (1) verify fulfiled_date::DATE cast and date range, (2) try ILIKE instead of =, (3) remove one filter at a time to narrow the cause, (4) run SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue to check latest available date."
-        }
-        // Sanity check: flag suspicious numbers
-        const firstRow = limited[0] as any
-        if (firstRow) {
-          const vals = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v))))
-          const nums = vals.map(v => Number(v))
-          if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) {
-            response.warning = "Some revenue values are negative — this may indicate a data issue or incorrect aggregation. Please verify the query logic."
+        if (call.name === "queryGSC") {
+          try {
+            const a = call.args as any
+            const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
+            fnParts.push({ functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 50) } } })
+          } catch (e: any) {
+            fnParts.push({ functionResponse: { name: "queryGSC", response: { error: e.message } } })
           }
-          if (nums.some(n => n > 1e13)) {
-            response.warning = "Some values appear unusually large (>10 trillion VND). Check for missing JOIN conditions causing row multiplication."
-          }
+          continue
         }
-        parts.push({ functionResponse: { name: "executeSQL", response } })
-      } catch (err: any) {
-        console.error("[BI] SQL error:", err.message)
-        // Self-correction: return error + fix guidance so model can retry
-        parts.push({ functionResponse: { name: "executeSQL", response: {
-          error: err.message,
-          fix_hint: "Fix the SQL error above and call executeSQL again immediately with corrected SQL. Common causes: wrong column name, missing cast (::DATE), invalid alias reference in GROUP BY, or wrong table name. Do NOT ask the user to retry — fix and retry yourself.",
-        } } })
+
+        if (call.name === "queryProduct") {
+          try {
+            const a = call.args as any
+            const code: string = (a.sku_code || a.product_code || "").trim().toUpperCase()
+            let prodResult: any = null
+            if (code.length === 13) {
+              const { data } = await supabaseAdmin.from("skus")
+                .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+                .eq("sku_code", code).maybeSingle()
+              prodResult = data
+            } else if (code.length === 8) {
+              const { data } = await supabaseAdmin.from("products")
+                .select("product_code,status,tenant,sim_esim,product_type,country_group,vendor")
+                .eq("product_code", code).maybeSingle()
+              prodResult = data
+            }
+            fnParts.push({ functionResponse: { name: "queryProduct", response: prodResult ?? { error: "Không tìm thấy sản phẩm" } } })
+          } catch (e: any) {
+            fnParts.push({ functionResponse: { name: "queryProduct", response: { error: e.message } } })
+          }
+          continue
+        }
+
+        if (call.name !== "executeSQL") {
+          fnParts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
+          continue
+        }
+
+        const sql = (call.args as any)?.sql as string || ""
+        const normalizedSql = sql.trim().toLowerCase()
+
+        if (!normalizedSql.startsWith("select") && !normalizedSql.startsWith("with")) {
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT and WITH queries are allowed." } } })
+          continue
+        }
+        if (sql.includes(";") && sql.split(";").filter((s: string) => s.trim()).length > 1) {
+          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements are not allowed." } } })
+          continue
+        }
+
+        try {
+          console.log(`[BI] SQL: ${sql.substring(0, 120)}`)
+          const rows = await queryAnalytics(sql)
+          const limited = rows.slice(0, 100)
+          const response: any = { result: limited, rowCount: rows.length }
+          if (rows.length === 0) {
+            response.hint = "Query returned 0 rows. Before concluding 'no data': (1) verify fulfiled_date::DATE cast and date range, (2) try ILIKE instead of =, (3) remove one filter at a time to narrow the cause, (4) run SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue to check latest available date."
+          }
+          const firstRow = limited[0] as any
+          if (firstRow) {
+            const nums = Object.values(firstRow)
+              .filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v))))
+              .map(v => Number(v))
+            if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue")))
+              response.warning = "Some revenue values are negative — this may indicate a data issue or incorrect aggregation. Please verify the query logic."
+            if (nums.some(n => n > 1e13))
+              response.warning = "Some values appear unusually large (>10 trillion VND). Check for missing JOIN conditions causing row multiplication."
+          }
+          fnParts.push({ functionResponse: { name: "executeSQL", response } })
+        } catch (err: any) {
+          console.error("[BI] SQL error:", err.message)
+          fnParts.push({ functionResponse: { name: "executeSQL", response: {
+            error: err.message,
+            fix_hint: "Fix the SQL error above and call executeSQL again immediately. Common causes: wrong column name, missing ::DATE cast, invalid alias in GROUP BY, wrong table name.",
+          } } })
+        }
       }
+
+      // Send function responses as role "user" — required by gemini-3.6-flash (not "function")
+      contents.push({ role: "user", parts: fnParts })
+      genResult = await model.generateContent({ contents })
+      appendModelContent()
     }
-
-    result = await chat.sendMessage(parts)
-   }
   }
 
   await processToolCalls()
 
-  // Chống bi "HỨA sẽ truy vấn" mà KHÔNG gọi tool nào (né chạy SQL) → nudge buộc gọi executeSQL rồi chạy lại loop.
+  // Nudge if model promised to query but never called a tool (Vietnamese punt patterns).
   const PUNT_RE = /chưa kịp|để (tôi|mình|hệ thống)[^.!?]{0,25}(truy vấn|quét)|phản hồi lại để[^.!?]{0,40}(truy vấn|quét)|sẽ (tiến hành )?truy vấn|chưa (thực hiện|tiến hành)[^.!?]{0,20}(truy vấn|quét|câu lệnh)/i
-  if (!anyToolCall && PUNT_RE.test(result.response.text())) {
+  if (!anyToolCall && PUNT_RE.test(genResult.response.text())) {
     try {
-      result = await chat.sendMessage(
-        "You HAVE the executeSQL tool and ARE PERMITTED to query gohub_dw RIGHT NOW. DO NOT promise 'I will query' or ask the user to follow up. CALL executeSQL immediately to get real data and return a complete answer."
-      )
+      contents.push({ role: "user", parts: [{ text: "You HAVE the executeSQL tool and ARE PERMITTED to query gohub_dw RIGHT NOW. DO NOT promise 'I will query' or ask the user to follow up. CALL executeSQL immediately to get real data and return a complete answer." }] })
+      genResult = await model.generateContent({ contents })
+      appendModelContent()
       await processToolCalls()
-    } catch { /* keep as-is → handled at caller level */ }
+    } catch { /* keep as-is */ }
   }
 
-  // Guard against empty text: Gemini sometimes ends function-calling without generating text
-  // (especially for multi-period / WoW comparisons). Nudge once to force synthesis.
-  let text = result.response.text()
+  // Guard against empty text after function calling loop ends without generating output.
+  let text = genResult.response.text()
   if (!text.trim()) {
     try {
-      const followup = await chat.sendMessage(
-        "Based on the query results above, write a complete answer in Vietnamese for the user (include numbers, markdown table if needed). DO NOT call any more tools."
-      )
-      text = followup.response.text()
-    } catch { /* keep empty text → handled at caller level */ }
+      contents.push({ role: "user", parts: [{ text: "Based on the query results above, write a complete answer in Vietnamese for the user (include numbers, markdown table if needed). DO NOT call any more tools." }] })
+      genResult = await model.generateContent({ contents })
+      text = genResult.response.text()
+    } catch { /* keep empty */ }
   }
   return text
 }
