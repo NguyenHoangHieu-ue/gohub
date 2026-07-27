@@ -97,7 +97,7 @@ const FALLBACK: ClassifyResult = { intent: "system_explain", needs_clarification
 export async function classify(message: string): Promise<ClassifyResult> {
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature:     0,
