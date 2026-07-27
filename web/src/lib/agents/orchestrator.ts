@@ -52,7 +52,7 @@ export async function runOneAgent(
     return runBIAnalyst(systemInstruction, geminiHistory, lastMsg, role)
 
   const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  const model  = genAI.getGenerativeModel({ model: "gemini-3.6-flash", systemInstruction })
+  const model  = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction })
   const result = await model.startChat({ history: geminiHistory }).sendMessage(lastMsg)
   return result.response.text()
 }
@@ -78,7 +78,7 @@ export async function synthesize(
 
   const body = usable.map(s => `### Phần từ ${s.agentName}\n${s.text}`).join("\n\n")
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", systemInstruction: SYNTH_SYSTEM })
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction: SYNTH_SYSTEM })
   const prompt = `CÂU HỎI CỦA USER:\n${question}\n\nCÁC PHẦN TRẢ LỜI:\n${body}\n\n→ Hãy tổng hợp thành 1 câu trả lời hoàn chỉnh.`
   const result = await model.startChat({ history: [] }).sendMessage(prompt)
   return result.response.text()
