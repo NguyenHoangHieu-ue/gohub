@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY)
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } as any,
     })
     const prompt = `Dựa trên tên bảng SQL "${tableName}" và các trường: ${fields.map((f: any) => `${f.name} (${f.type})`).join(", ")}, hãy tạo mô tả ngắn gọn hữu ích cho bảng và từng trường bằng tiếng Việt. Trả về JSON dạng {"tableDescription": string, "fields": { "<tên trường>": string }}.`
