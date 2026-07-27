@@ -76,6 +76,13 @@ export default function B2BPerformance() {
   const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
     Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
   })
+  // Collapse/expand per tier — mặc định mở hết
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<string>>(new Set())
+  const toggleTier = (tier: string) => setCollapsedTiers(prev => {
+    const next = new Set(prev)
+    if (next.has(tier)) next.delete(tier); else next.add(tier)
+    return next
+  })
 
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
@@ -661,9 +668,9 @@ export default function B2BPerformance() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50">
-                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [keyof PerformanceData, string][]).map(([key, label], i) => (
-                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => setWholesaleSort({ key, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
-                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}<SortIcon sort={wholesaleSort} column={key} /></div>
+                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["__ch_cost__", "CH.Cost"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [string, string][]).map(([key, label], i) => (
+                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => key !== "__ch_cost__" && setWholesaleSort({ key: key as keyof PerformanceData, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
+                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}{key !== "__ch_cost__" && <SortIcon sort={wholesaleSort} column={key} />}</div>
                           </th>
                         ))}
                       </tr>
@@ -739,6 +746,11 @@ export default function B2BPerformance() {
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.margin_percent.toFixed(1)}%</span></td>
                                     <td className="px-8 py-4 text-right">
+                                      <span className={cn("text-sm font-bold tracking-tight", (row.margin - row.gpm2) >= 0 ? "text-amber-600" : "text-rose-500")}>
+                                        {formatCurrency(Math.round(row.margin - row.gpm2)).replace("₫","VND")}
+                                      </span>
+                                    </td>
+                                    <td className="px-8 py-4 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className={cn("text-sm font-bold tracking-tight", row.gpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.gpm2).replace("₫", "VND")}</span>
                                         {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(row.gpm2 * projectionFactor).replace("₫", "")}</span>}
@@ -748,7 +760,7 @@ export default function B2BPerformance() {
                                   </tr>
                                   {isExpanded && (
                                     <tr className="bg-slate-50/80">
-                                      <td colSpan={7} className="px-8 py-3">
+                                      <td colSpan={8} className="px-8 py-3">
                                         <div className="space-y-4">
                                           {row.sub_channels && row.sub_channels.length > 0 && (
                                             <div className="bg-white/60 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -806,28 +818,28 @@ export default function B2BPerformance() {
                                 // No sub_group_name data — render flat (backward compat)
                                 return grpRows.map((row, idx) => renderRow(row, idx))
                               }
-                              const gT = grpRows.reduce((a, c) => ({ revenue: a.revenue + c.revenue, units: a.units + c.units, margin: a.margin + c.margin, gpm2: a.gpm2 + c.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                               return (
                                 <React.Fragment key={grpName}>
-                                  {/* Group header */}
-                                  <tr className="bg-blue-50/40 border-y border-blue-100">
-                                    <td colSpan={7} className="px-8 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">{grpName}</td>
+                                  {/* Tier header — click để collapse/expand */}
+                                  <tr
+                                    className="bg-blue-600 border-y border-blue-700 cursor-pointer select-none hover:bg-blue-700 transition-colors"
+                                    onClick={() => toggleTier(grpName)}
+                                  >
+                                    <td colSpan={8} className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-white">
+                                      <div className="flex items-center gap-2">
+                                        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform shrink-0", collapsedTiers.has(grpName) && "-rotate-90")} />
+                                        {grpName}
+                                        <span className="ml-2 bg-white/20 px-2 py-0.5 rounded text-[10px]">{grpRows.length} KH</span>
+                                      </div>
+                                    </td>
                                   </tr>
-                                  {grpRows.map((row, idx) => renderRow(row, idx))}
-                                  {/* Group total */}
-                                  <tr className="bg-blue-50/20 border-t border-blue-100">
-                                    <td className="px-8 py-2.5 text-[10px] font-black text-blue-700 uppercase tracking-wider pl-10">↳ Tổng {grpName}</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-black text-slate-800">{formatCurrency(Math.round(gT.revenue)).replace("₫","VND")}</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{formatNumber(Math.round(gT.units))}</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-black text-emerald-700">{formatCurrency(Math.round(gT.margin)).replace("₫","VND")}</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{gT.revenue > 0 ? ((gT.margin/gT.revenue)*100).toFixed(1) : "0.0"}%</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-black text-indigo-700">{formatCurrency(Math.round(gT.gpm2)).replace("₫","VND")}</td>
-                                    <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-600">{gT.revenue > 0 ? ((gT.gpm2/gT.revenue)*100).toFixed(1) : "0.0"}%</td>
-                                  </tr>
+                                  {/* Customer rows — ẩn khi collapsed */}
+                                  {!collapsedTiers.has(grpName) && grpRows.map((row, idx) => renderRow(row, idx))}
                                 </React.Fragment>
                               )
                             })}
-                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200 italic">
+                            {/* TOTAL OTHERS — tổng tất cả KH sau filter/search */}
+                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                               <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL OTHERS</td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
@@ -843,6 +855,9 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{margin_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm font-black text-amber-600">
+                                {formatCurrency(Math.round(totals.margin - totals.gpm2)).replace("₫","VND")}
+                              </td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totals.gpm2)).replace("₫", "VND")}</span>
