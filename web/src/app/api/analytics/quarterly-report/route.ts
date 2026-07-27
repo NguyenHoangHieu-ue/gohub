@@ -91,7 +91,8 @@ export async function GET(req: NextRequest) {
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
   // v4: thêm prevChannelRows + fetchCosts(prevQMonths) để tính CM1 quý trước cho QoQ
-  const rawCacheKey = `qreport_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  // v5: fix GROUP BY split bug (source_code removed from GROUP BY) + matchChannelCost prefix fix
+  const rawCacheKey = `qreport_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
     // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs (hiện tại + quý trước) chạy SONG SONG ──

@@ -45,19 +45,35 @@ export async function fetchCosts(months: string[]): Promise<{ channelCosts: Chan
   return { channelCosts, groupCosts: (gcData || []).map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
 }
 
-/** Match channel cost bằng source_code (ưu tiên) hoặc channel name (fallback).
- *  Dùng khi channel bị rename trong gohub_dw nhưng cost đã lưu với source_code cũ → vẫn match được.
+/** Match channel cost — permanent fix cho channel rename.
+ *
+ * Thứ tự ưu tiên:
+ * 1. Sub-channel prefix: tìm tất cả record "Channel - *" cho tháng đó
+ *    → nếu có → dùng CHÚNG (không dùng aggregate để tránh double-count)
+ *    → bắt trọn Shopee/TikTok/Lazada kể cả khi source_code khác nhau
+ * 2. Source_code match: nếu không có sub-channel record → tìm theo source_code
+ * 3. Exact name match: fallback cuối cùng
+ *
+ * Ví dụ: "VN-Ecom" có sub-records "VN-Ecom - Shopee", "VN-Ecom - TiktokShop", "VN-Ecom - Lazada"
+ *   → priority 1 tìm cả 3 → tổng hợp đúng, không lẫn với aggregate "VN-Ecom"
  */
 export function matchChannelCost(
   channelCosts: ChannelCost[], channel: string, month: string, sourceCode?: string
 ): ChannelCost[] {
-  return channelCosts.filter(c => {
-    if (c.month !== month) return false
-    // Ưu tiên source_code (ổn định)
-    if (sourceCode && c.source_code) return c.source_code === sourceCode
-    // Fallback: name match (backward compat với record không có source_code)
-    return c.channel === channel
-  })
+  const subPrefix = channel + " - "
+
+  // 1. Sub-channel prefix match (catches renamed sub-channels like "VN-Ecom - Shopee")
+  const subRecords = channelCosts.filter(c => c.month === month && c.channel.startsWith(subPrefix))
+  if (subRecords.length > 0) return subRecords   // found sub-channels → use only them
+
+  // 2. Source_code match (for renamed channels with stable code)
+  if (sourceCode) {
+    const byCode = channelCosts.filter(c => c.month === month && c.source_code === sourceCode)
+    if (byCode.length > 0) return byCode
+  }
+
+  // 3. Exact name match (original behavior — aggregate or unchanged channel)
+  return channelCosts.filter(c => c.month === month && c.channel === channel)
 }
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const

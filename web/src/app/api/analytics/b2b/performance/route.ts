@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
   const filter = getDateFilter(startDate || null, endDate || null, source.dateCol)
 
   try {
-    const key = `b2b-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}`
+    // v2: thêm price_list_name, customer_code, sub_group_name vào response (cho tier grouping)
+    const key = `b2b-perf2:${dateColumn}:${startDate}:${endDate}:${groupBy}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""

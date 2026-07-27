@@ -673,7 +673,10 @@ export default function B2BPerformance() {
                         const nonStrategic = nonStrategicMemo
                         const searchLow = tierSearch.toLowerCase().trim()
                         const sorted = sortData(
-                          searchLow ? nonStrategic.filter(r => r.name.toLowerCase().includes(searchLow)) : nonStrategic,
+                          searchLow ? nonStrategic.filter(r =>
+                            r.name.toLowerCase().includes(searchLow) ||
+                            (r.price_list_name || "").toLowerCase().includes(searchLow)
+                          ) : nonStrategic,
                           wholesaleSort
                         )
                         // Tổng chỉ tính những row đang hiển thị (filtered by search)
