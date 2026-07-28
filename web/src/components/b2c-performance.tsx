@@ -523,15 +523,6 @@ export function B2CPerformance() {
                 </span>
               )}
             </button>
-            {dbRole === "creator" && (
-              <button
-                onClick={() => setShowCostModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm"
-              >
-                <Settings className="w-4 h-4" />
-                Manage Costs
-              </button>
-            )}
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm shadow-lg shadow-blue-900/20"
@@ -1455,14 +1446,6 @@ export function B2CPerformance() {
         )}
       </div>
 
-      {/* Operational Cost Modal */}
-      <CostManagementModal
-        isOpen={showCostModal}
-        onClose={() => setShowCostModal(false)}
-        onSave={() => fetchData(true)}
-        initialMonth={startDate.slice(0, 7)}
-        scope="b2c"
-      />
     </div>
   )
 }

@@ -93,6 +93,8 @@ export default function ChannelPerformancePage() {
 
   const [channels, setChannels] = useState<{ channel_id: string, channel_name: string }[]>([])
   const [selectedChannel, setSelectedChannel] = useState<string>("")
+  const [allChannelsData, setAllChannelsData] = useState<any[]>([])
+  const [loadingAll, setLoadingAll] = useState(false)
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -344,9 +346,8 @@ export default function ChannelPerformancePage() {
   }, [selectedChannel])
 
   useEffect(() => {
-    if (selectedChannel) {
-      fetchChannelData()
-    }
+    if (selectedChannel) fetchChannelData()
+    else fetchAllChannels()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChannel, showAllProducts])
 
@@ -385,9 +386,11 @@ export default function ChannelPerformancePage() {
         const formatted = data.map((name: string) => ({ channel_id: name, channel_name: name }))
         setChannels(formatted)
         if (formatted.length > 0) {
-          if (!formatted.some(c => c.channel_id === selectedChannel)) {
+          // Chỉ auto-select khi đang có channel cụ thể nhưng không còn trong list
+          if (selectedChannel !== "" && !formatted.some(c => c.channel_id === selectedChannel)) {
             setSelectedChannel(formatted[0].channel_id)
           }
+          // Nếu selectedChannel === "" → giữ nguyên (chế độ All Channels)
         } else {
           setSelectedChannel("")
         }
@@ -400,6 +403,19 @@ export default function ChannelPerformancePage() {
       setChannels([])
       setSelectedChannel("")
     }
+  }
+
+  const fetchAllChannels = async () => {
+    setLoadingAll(true)
+    try {
+      const params = new URLSearchParams()
+      if (startDate) params.append("startDate", startDate)
+      if (endDate) params.append("endDate", endDate)
+      params.append("dateColumn", dateColumn)
+      if (channelGroup !== "All") params.append("channelGroup", channelGroup)
+      const res = await fetch(`/api/analytics/channels/performance?${params}`)
+      if (res.ok) setAllChannelsData(await res.json())
+    } catch (e) { console.error("fetchAllChannels error:", e) } finally { setLoadingAll(false) }
   }
 
   const fetchSubChannels = async () => {
@@ -942,7 +958,7 @@ export default function ChannelPerformancePage() {
               onChange={(e) => setSelectedChannel(e.target.value)}
               className="bg-transparent text-sm font-medium focus:outline-none min-w-[150px]"
             >
-              <option value="" disabled>Select partner...</option>
+              <option value="">All Channels (Overview)</option>
               {channels.map(c => (
                 <option key={c.channel_id} value={c.channel_id}>{c.channel_name}</option>
               ))}
@@ -980,15 +996,6 @@ export default function ChannelPerformancePage() {
             <span className="text-sm font-medium">Filters</span>
           </button>
 
-          {dbRole === "creator" && (
-            <button
-              onClick={() => setShowCostModal(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm shadow-sm"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Manage Costs</span>
-            </button>
-          )}
 
           <button
             onClick={fetchChannelData}
@@ -1212,6 +1219,105 @@ export default function ChannelPerformancePage() {
         </div>
       )}
 
+      {!selectedChannel ? (
+        /* All Channels Overview */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">All Channels Overview</h3>
+              <p className="text-sm text-slate-500">Performance tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
+            </div>
+            <button onClick={fetchAllChannels} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+              <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingAll && "animate-spin")} />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Group</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GP</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Margin%</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1%</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">MoM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loadingAll ? (
+                  Array(5).fill(0).map((_, i) => (
+                    <tr key={i}>
+                      {Array(10).fill(0).map((_, j) => (
+                        <td key={j} className="px-6 py-4"><Skeleton className="h-4 w-20 ml-auto" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : allChannelsData.length > 0 ? (
+                  allChannelsData.map((ch: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setSelectedChannel(ch.channel)}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600"><Globe className="w-4 h-4" /></div>
+                          <span className="text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors">{ch.channel}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                          ch.group_name === "B2B" ? "bg-blue-50 text-blue-600" :
+                          ch.group_name === "B2C" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>
+                          {ch.group_name || "-"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(ch.revenue || 0)}</td>
+                      <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.margin||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.margin||0)}</span></td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.margin_percent||0).toFixed(1)}%</td>
+                      <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.gpm2||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.gpm2||0)}</span></td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.gpm2_percent||0).toFixed(1)}%</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.orders||0)}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.units||0)}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className={cn("inline-flex items-center gap-1 text-xs font-bold", (ch.mom||0)>=0?"text-emerald-600":"text-rose-600")}>
+                          {(ch.mom||0)>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
+                          {Math.abs(Math.round(ch.mom||0))}%
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 italic">Chọn Apply Filters để tải dữ liệu tất cả kênh</td></tr>
+                )}
+                {allChannelsData.length > 0 && (() => {
+                  const tot = allChannelsData.reduce((a: any, ch: any) => ({
+                    revenue: a.revenue + (ch.revenue||0),
+                    margin: a.margin + (ch.margin||0),
+                    gpm2: a.gpm2 + (ch.gpm2||0),
+                    orders: a.orders + (ch.orders||0),
+                    units: a.units + (ch.units||0),
+                  }), { revenue: 0, margin: 0, gpm2: 0, orders: 0, units: 0 })
+                  return (
+                    <tr className="bg-slate-100 font-black border-t-2 border-slate-200">
+                      <td className="px-6 py-4 text-[11px] uppercase tracking-widest text-slate-600" colSpan={2}>TOTAL</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-slate-900">{formatCurrency(tot.revenue)}</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-emerald-700">{formatCurrency(tot.margin)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{tot.revenue>0?((tot.margin/tot.revenue)*100).toFixed(1):0}%</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-emerald-700">{formatCurrency(tot.gpm2)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{tot.revenue>0?((tot.gpm2/tot.revenue)*100).toFixed(1):0}%</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{formatNumber(tot.orders)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{formatNumber(tot.units)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-400">-</td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Pro-rata Projection */}
       {projection && !loading && (
         <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
@@ -1694,13 +1800,8 @@ export default function ChannelPerformancePage() {
         )}
       </div>
 
-      {/* Cost Management Modal */}
-      <CostManagementModal
-        isOpen={showCostModal}
-        onClose={() => setShowCostModal(false)}
-        onSave={() => fetchChannelData()}
-        initialMonth={startDate.slice(0, 7)}
-      />
+      </>
+      )}
     </div>
   )
 }

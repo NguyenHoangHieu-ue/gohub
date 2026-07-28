@@ -8,14 +8,12 @@ import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
   Calendar, Download, ChevronDown, Globe, Search, X,
-  ArrowUpDown, ShoppingBag, Settings, Check, Zap, Building2, Shield, FileText,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
-import { CostManagementModal } from "@/components/cost-management-modal"
 import { DatePresets } from "@/components/date-presets"
 import { exportToExcel } from "@/lib/export-excel"
-import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -58,10 +56,8 @@ export default function B2BPerformance() {
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
 
-  const [showCostModal, setShowCostModal] = useState(false)
-  const [monthlyCosts, setMonthlyCosts] = useState<Record<string, any>>({})
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
-  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
+  const [b2bCostMap, setB2bCostMap] = useState<Record<string, { cost_lines: { label?: string; type: string; value: number }[] }>>({})
 
   const [combinedKpis, setCombinedKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<any[]>([])
@@ -100,13 +96,25 @@ export default function B2BPerformance() {
   const projectionFactor = getProjectionFactor()
   const isProjectable = projectionFactor > 1
 
-  const fetchCosts = async (month: string) => {
+  const fetchB2BCosts = async (month: string) => {
     try {
-      const res = await fetch(`/api/channel-costs?month=${month}`)
-      if (res.ok) setMonthlyCosts(await res.json())
-    } catch (err) {
-      console.error("Error fetching costs:", err)
-    }
+      const res = await fetch(`/api/analytics/b2b-customer-costs?month=${month}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const map: Record<string, { cost_lines: { label?: string; type: string; value: number }[] }> = {}
+      for (const row of data.rows || []) {
+        if (!row.customer_code) continue
+        map[row.customer_code] = { cost_lines: row.cost_lines_parsed || [] }
+      }
+      setB2bCostMap(map)
+    } catch (e) { console.error("Error fetching b2b costs:", e) }
+  }
+
+  const calcChCost = (customerCode: string | undefined, revenue: number): number => {
+    if (!customerCode) return 0
+    const lines = b2bCostMap[customerCode]?.cost_lines
+    if (!lines?.length) return 0
+    return lines.reduce((s, l) => s + (l.type === "percent" ? (l.value / 100) * revenue : l.value), 0)
   }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
@@ -167,7 +175,7 @@ export default function B2BPerformance() {
       setTrendData(safeTrend)
       setChannelsWithPlatformFee(safeFeeChannels)
 
-      fetchCosts(startDate.slice(0, 7))
+      fetchB2BCosts(startDate.slice(0, 7))
 
       const findKPI = (kpis: any[], label: string) => kpis.find(k => k.label === label)
       const b2bRev = findKPI(safeB2BKpis, "Total Revenue")?.value || 0
@@ -320,11 +328,6 @@ export default function B2BPerformance() {
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
               <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
             </div>
-            {dbRole === "creator" && (
-              <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
-                <Settings className="w-3.5 h-3.5" />Manage Costs
-              </button>
-            )}
             <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>
@@ -689,7 +692,13 @@ export default function B2BPerformance() {
                         // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
-                        const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
+                        // Tính total CH.Cost + CM1 từ b2bCostMap (giống Quarter Report)
+                        const totalChCost = sorted.reduce((acc, curr) => {
+                          const has = !!(curr.customer_code && b2bCostMap[curr.customer_code]?.cost_lines?.length)
+                          return acc + (has ? calcChCost(curr.customer_code, curr.revenue) : (curr.margin - curr.gpm2))
+                        }, 0)
+                        const totalCm1 = totals.margin - totalChCost
+                        const totalCm1Pct = totals.revenue > 0 ? (totalCm1 / totals.revenue) * 100 : 0
 
                         // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
                         const classifyTier = (pln?: string): string => {
@@ -721,7 +730,11 @@ export default function B2BPerformance() {
 
                         const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
-                              const costs = monthlyCosts[row.name]
+                              const hasB2BCost = !!(row.customer_code && b2bCostMap[row.customer_code]?.cost_lines?.length)
+                              const chCost = hasB2BCost ? calcChCost(row.customer_code, row.revenue) : (row.margin - row.gpm2)
+                              const cm1 = row.margin - chCost
+                              const cm1Pct = row.revenue > 0 ? (cm1 / row.revenue) * 100 : 0
+                              const costLines = row.customer_code ? (b2bCostMap[row.customer_code]?.cost_lines || []) : []
                               return (
                                 <React.Fragment key={idx}>
                                   <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-blue-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
@@ -746,17 +759,17 @@ export default function B2BPerformance() {
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.margin_percent.toFixed(1)}%</span></td>
                                     <td className="px-8 py-4 text-right">
-                                      <span className={cn("text-sm font-bold tracking-tight", (row.margin - row.gpm2) >= 0 ? "text-amber-600" : "text-rose-500")}>
-                                        {formatCurrency(Math.round(row.margin - row.gpm2)).replace("₫","VND")}
+                                      <span className={cn("text-sm font-bold tracking-tight", chCost >= 0 ? "text-amber-600" : "text-rose-500")}>
+                                        {formatCurrency(Math.round(chCost)).replace("₫","VND")}
                                       </span>
                                     </td>
                                     <td className="px-8 py-4 text-right">
                                       <div className="flex flex-col items-end">
-                                        <span className={cn("text-sm font-bold tracking-tight", row.gpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.gpm2).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(row.gpm2 * projectionFactor).replace("₫", "")}</span>}
+                                        <span className={cn("text-sm font-bold tracking-tight", cm1 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(cm1).replace("₫", "VND")}</span>
+                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(cm1 * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
-                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.gpm2_percent.toFixed(1)}%</span></td>
+                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{cm1Pct.toFixed(1)}%</span></td>
                                   </tr>
                                   {isExpanded && (
                                     <tr className="bg-slate-50/80">
@@ -792,17 +805,22 @@ export default function B2BPerformance() {
                                               </table>
                                             </div>
                                           )}
-                                          <div className="grid grid-cols-4 gap-4">
-                                            {(["ads", "platformFee", "sponsorProducts", "media"] as const).map(category => {
-                                              const amount = row.cost_breakdown?.[category] || costs?.[category] || 0
-                                              return (
-                                                <div key={category} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
-                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{category.replace(/([A-Z])/g, " $1")}</p>
-                                                  <div className="flex items-baseline justify-between"><p className="text-xs font-bold text-slate-700">{formatNumber(Math.round(amount))}</p></div>
+                                          {costLines.length > 0 ? (
+                                            <div className={`grid grid-cols-${Math.min(costLines.length, 4)} gap-4`}>
+                                              {costLines.map((line, li) => (
+                                                <div key={li} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
+                                                  <p className="text-xs font-bold text-slate-700">
+                                                    {line.type === "percent"
+                                                      ? `${line.value}% → ${formatNumber(Math.round((line.value / 100) * row.revenue))}`
+                                                      : formatNumber(Math.round(line.value))}
+                                                  </p>
                                                 </div>
-                                              )
-                                            })}
-                                          </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="text-xs text-slate-400 italic">Chưa có dữ liệu chi phí cho khách hàng này</p>
+                                          )}
                                         </div>
                                       </td>
                                     </tr>
@@ -856,15 +874,15 @@ export default function B2BPerformance() {
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{margin_percent.toFixed(1)}%</td>
                               <td className="px-8 py-4 text-right text-sm font-black text-amber-600">
-                                {formatCurrency(Math.round(totals.margin - totals.gpm2)).replace("₫","VND")}
+                                {formatCurrency(Math.round(totalChCost)).replace("₫","VND")}
                               </td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
-                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totals.gpm2)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totals.gpm2 * projectionFactor)).replace("₫", "")}</span>}
+                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totalCm1)).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totalCm1 * projectionFactor)).replace("₫", "")}</span>}
                                 </div>
                               </td>
-                              <td className="px-8 py-4 text-right text-sm text-slate-700">{gpm2_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-700">{totalCm1Pct.toFixed(1)}%</td>
                             </tr>
                           </>
                         )
@@ -877,7 +895,6 @@ export default function B2BPerformance() {
           </>
         )}
       </div>
-      <CostManagementModal isOpen={showCostModal} onClose={() => setShowCostModal(false)} onSave={() => fetchData(true)} initialMonth={startDate.slice(0, 7)} />
     </div>
   )
 }
