@@ -1,17 +1,17 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, Suspense } from "react"
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
-import { Users, Calendar, Filter, Download, Search, ChevronDown, ChevronRight, TrendingUp, RefreshCw, X } from "lucide-react"
+import { Users, Calendar, Filter, Download, Search, ChevronDown, ChevronRight, TrendingUp, RefreshCw, X, Play } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
+  ResponsiveContainer, Cell, Legend,
 } from "recharts"
 
 interface StaffRow {
@@ -25,17 +25,43 @@ interface StaffRow {
 }
 
 interface CustomerRow {
-  customer_code: string
-  customer_name: string
-  revenue:       number
-  hk3_revenue:   number
-  order_count:   number
+  customer_code:   string
+  customer_name:   string
+  price_list_name: string | null
+  revenue:         number
+  hk3_revenue:     number
+  order_count:     number
 }
 
 const COLORS = ["#003B95","#0052CC","#0065FF","#2684FF","#4C9AFF","#B3D4FF"]
 const HK3_COLOR = "#F97316"
+const MONTH_COLORS = ["#003B95","#F97316","#10b981","#8b5cf6","#ef4444","#f59e0b"]
+
+const TIER_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  Strategic: { label: "Strategic", bg: "bg-indigo-100",  text: "text-indigo-700" },
+  VIP:       { label: "VIP",       bg: "bg-purple-100",  text: "text-purple-700" },
+  Gold:      { label: "Gold",      bg: "bg-amber-100",   text: "text-amber-700"  },
+  Silver:    { label: "Silver",    bg: "bg-slate-100",   text: "text-slate-600"  },
+}
 
 function fck(n: number) { return formatCompactNumber(n) }
+
+function TierBadge({ pln, tierKeywords }: { pln: string | null; tierKeywords: Record<string, string[]> }) {
+  if (!pln) return null
+  const p = pln.toUpperCase()
+  let matched = ""
+  for (const [tier, kws] of Object.entries(tierKeywords)) {
+    if ((kws as string[]).some(kw => p.includes(kw.toUpperCase()))) { matched = tier; break }
+  }
+  if (!matched) matched = "Strategic"
+  const cfg = TIER_CONFIG[matched]
+  if (!cfg) return null
+  return (
+    <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", cfg.bg, cfg.text)}>
+      {cfg.label}
+    </span>
+  )
+}
 
 function MiniSparkline({ data }: { data: StaffRow["monthly"] }) {
   if (!data.length) return <span className="text-slate-300 text-xs">–</span>
@@ -68,6 +94,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 function StaffPageInner() {
   const def = getDefaultDateRange()
+
+  // URL state (chỉ cập nhật khi Apply)
   const [urlState, setUrlState] = useUrlStates({
     startDate:    def.startDate,
     endDate:      def.endDate,
@@ -77,47 +105,82 @@ function StaffPageInner() {
     viewMode:     "fulfilled",
   }, 0)
 
-  const { startDate, endDate, channelGroup, channel, companyCode, viewMode } = urlState
+  // Draft (form) — user đang chỉnh nhưng chưa Apply
+  const [draft, setDraft] = useState({
+    startDate:    urlState.startDate,
+    endDate:      urlState.endDate,
+    channelGroup: urlState.channelGroup,
+    channel:      urlState.channel,
+    companyCode:  urlState.companyCode,
+    viewMode:     urlState.viewMode,
+  })
+
+  // Applied — đây là giá trị thực sự fetch
+  const [applied, setApplied] = useState(draft)
+
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(applied)
+
+  const applyFilters = () => {
+    setApplied(draft)
+    setUrlState(draft)
+  }
 
   const [channels, setChannels]         = useState<string[]>([])
   const [staffData, setStaffData]       = useState<StaffRow[]>([])
   const [loading, setLoading]           = useState(true)
+  const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
+    Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
+  })
 
-  // Staff filter (client-side, derived from staffData)
-  const [staffSearch, setStaffSearch]   = useState("")
+  // Staff filter (client-side)
+  const [staffSearch, setStaffSearch]     = useState("")
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [staffDropOpen, setStaffDropOpen] = useState(false)
 
   // Expand + customers
-  const [expandedStaff, setExpandedStaff]   = useState<string | null>(null)
-  const [customers, setCustomers]           = useState<CustomerRow[]>([])
+  const [expandedStaff, setExpandedStaff]     = useState<string | null>(null)
+  const [customers, setCustomers]             = useState<CustomerRow[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
-  const [chartView, setChartView]           = useState<"staff" | "customer">("staff")
+  const [chartView, setChartView]             = useState<"staff" | "customer">("staff")
 
   const fetchChannels = useCallback(async () => {
     try {
-      const p = new URLSearchParams({ channelGroup: channelGroup === "All" ? "" : channelGroup })
+      const p = new URLSearchParams({ channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup })
       const r = await fetch(`/api/channels?${p}`)
       if (r.ok) setChannels(await r.json())
     } catch {}
-  }, [channelGroup])
+  }, [applied.channelGroup])
 
   const fetchStaff = useCallback(async () => {
     setLoading(true)
     try {
       const p = new URLSearchParams({
-        startDate, endDate, dataSource: viewMode,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel, companyCode,
+        startDate:    applied.startDate,
+        endDate:      applied.endDate,
+        dataSource:   applied.viewMode,
+        channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
+        channel:      applied.channel,
+        companyCode:  applied.companyCode,
       })
       const r = await fetch(`/api/analytics/staff-report?${p}`)
       if (r.ok) setStaffData(await r.json())
     } catch {}
     finally { setLoading(false) }
-  }, [startDate, endDate, viewMode, channelGroup, channel, companyCode])
+  }, [applied])
+
+  const fetchTierKeywords = useCallback(async () => {
+    try {
+      const r = await fetch("/api/analytics/quarterly-settings")
+      if (r.ok) {
+        const d = await r.json()
+        if (d?.tierKeywords) setTierKeywords(d.tierKeywords)
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => { fetchChannels() }, [fetchChannels])
-  useEffect(() => { fetchStaff() }, [fetchStaff])
+  useEffect(() => { fetchStaff() },   [fetchStaff])
+  useEffect(() => { fetchTierKeywords() }, [fetchTierKeywords])
 
   const toggleExpand = async (staffCode: string) => {
     if (expandedStaff === staffCode) {
@@ -126,27 +189,17 @@ function StaffPageInner() {
     setExpandedStaff(staffCode); setCustomers([]); setCustomersLoading(true); setChartView("customer")
     try {
       const p = new URLSearchParams({
-        staffCode, startDate, endDate, dataSource: viewMode,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel, companyCode,
+        staffCode,
+        startDate:    applied.startDate,
+        endDate:      applied.endDate,
+        dataSource:   applied.viewMode,
+        channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
+        channel:      applied.channel,
+        companyCode:  applied.companyCode,
       })
       const r = await fetch(`/api/analytics/staff-report/customers?${p}`)
       if (r.ok) setCustomers(await r.json())
     } catch {} finally { setCustomersLoading(false) }
-  }
-
-  const handleExport = () => {
-    const rows = displayed.map((s, i) => ({
-      Rank: i + 1,
-      "Staff Code": s.staff_code,
-      "Staff Name": s.staff_name,
-      "Total Revenue": s.total_revenue,
-      "3HK Revenue": s.hk3_revenue,
-      "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue) * 100).toFixed(1) : 0,
-      "Customers": s.customer_count,
-      "Orders": s.total_orders,
-    }))
-    exportRawRows(rows, `Staff_Report_${startDate}_to_${endDate}`, "Staff")
   }
 
   // Client-side staff filter
@@ -160,10 +213,37 @@ function StaffPageInner() {
     s.staff_code.toLowerCase().includes(staffSearch.toLowerCase())
   )
 
-  const totalRevenue = displayed.reduce((s, r) => s + r.total_revenue, 0)
-  const totalHk3     = displayed.reduce((s, r) => s + r.hk3_revenue, 0)
-  const totalOrders  = displayed.reduce((s, r) => s + r.total_orders, 0)
+  const totalRevenue   = displayed.reduce((s, r) => s + r.total_revenue, 0)
+  const totalHk3       = displayed.reduce((s, r) => s + r.hk3_revenue, 0)
+  const totalOrders    = displayed.reduce((s, r) => s + r.total_orders, 0)
   const totalCustomers = displayed.reduce((s, r) => s + r.customer_count, 0)
+
+  // Detect multi-month range
+  const isMultiMonth = useMemo(() => {
+    const s = new Date(applied.startDate)
+    const e = new Date(applied.endDate)
+    return s.getFullYear() !== e.getFullYear() || s.getMonth() !== e.getMonth()
+  }, [applied.startDate, applied.endDate])
+
+  // Monthly comparison chart data (aggregate all displayed staff)
+  const monthlyComparisonData = useMemo(() => {
+    if (!isMultiMonth || !displayed.length) return []
+    const agg: Record<string, { revenue: number; hk3: number }> = {}
+    displayed.forEach(s => {
+      s.monthly.forEach(m => {
+        if (!agg[m.month]) agg[m.month] = { revenue: 0, hk3: 0 }
+        agg[m.month].revenue += m.revenue
+        agg[m.month].hk3 += m.hk3_revenue
+      })
+    })
+    return Object.entries(agg)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, data]) => ({
+        month: `T${month.slice(5)}/${month.slice(2, 4)}`,
+        "Tổng Rev": data.revenue,
+        "3HK Rev":  data.hk3,
+      }))
+  }, [isMultiMonth, displayed])
 
   const staffChartData = displayed.slice(0, 12).map(s => ({
     name: s.staff_name.length > 12 ? s.staff_name.slice(0, 12) + "…" : s.staff_name,
@@ -181,6 +261,20 @@ function StaffPageInner() {
   const chartTitle = chartView === "customer"
     ? `Breakdown KH — ${staffData.find(s => s.staff_code === expandedStaff)?.staff_name || ""}`
     : "So sánh doanh thu Sales"
+
+  const handleExport = () => {
+    const rows = displayed.map((s, i) => ({
+      Rank: i + 1,
+      "Staff Code": s.staff_code,
+      "Staff Name": s.staff_name,
+      "Total Revenue": s.total_revenue,
+      "3HK Revenue": s.hk3_revenue,
+      "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue) * 100).toFixed(1) : 0,
+      "Customers": s.customer_count,
+      "Orders": s.total_orders,
+    }))
+    exportRawRows(rows, `Staff_Report_${applied.startDate}_to_${applied.endDate}`, "Staff")
+  }
 
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-[1600px] mx-auto pb-24 lg:pb-8 animate-in fade-in duration-500">
@@ -203,35 +297,37 @@ function StaffPageInner() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             {(["fulfilled","created"] as const).map(m => (
-              <button key={m} onClick={() => setUrlState({ viewMode: m })}
+              <button key={m} onClick={() => setDraft(d => ({ ...d, viewMode: m }))}
                 className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  viewMode === m ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                  draft.viewMode === m ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
                 {m === "fulfilled" ? "Fulfilled" : "Created"}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <input type="date" value={startDate} onChange={e => setUrlState({ startDate: e.target.value })}
+            <input type="date" value={draft.startDate}
+              onChange={e => setDraft(d => ({ ...d, startDate: e.target.value }))}
               className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
             <span className="text-slate-300">→</span>
-            <input type="date" value={endDate} onChange={e => setUrlState({ endDate: e.target.value })}
+            <input type="date" value={draft.endDate}
+              onChange={e => setDraft(d => ({ ...d, endDate: e.target.value }))}
               className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
           </div>
-          <DatePresets onSelect={(s, e) => setUrlState({ startDate: s, endDate: e })} />
+          <DatePresets onSelect={(s, e) => setDraft(d => ({ ...d, startDate: s, endDate: e }))} />
         </div>
       </div>
 
-      {/* ── Filters ── */}
+      {/* ── Filters + Apply ── */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <Filter className="w-4 h-4 text-slate-400 shrink-0" />
 
         {/* B2B/B2C/All */}
         <div className="flex gap-2">
           {(["All","B2B","B2C"] as const).map(g => (
-            <button key={g} onClick={() => setUrlState({ channelGroup: g, channel: "" })}
+            <button key={g} onClick={() => setDraft(d => ({ ...d, channelGroup: g, channel: "" }))}
               className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
-                channelGroup === g
+                draft.channelGroup === g
                   ? "bg-blue-600 border-blue-600 text-white shadow-sm"
                   : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
               {g}
@@ -240,14 +336,14 @@ function StaffPageInner() {
         </div>
 
         {/* Channel */}
-        <select value={channel} onChange={e => setUrlState({ channel: e.target.value })}
+        <select value={draft.channel} onChange={e => setDraft(d => ({ ...d, channel: e.target.value }))}
           className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1 focus:ring-blue-500">
           <option value="">All Channels</option>
           {channels.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         {/* Company */}
-        <select value={companyCode} onChange={e => setUrlState({ companyCode: e.target.value })}
+        <select value={draft.companyCode} onChange={e => setDraft(d => ({ ...d, companyCode: e.target.value }))}
           className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1 focus:ring-blue-500">
           <option value="ALL">All Companies</option>
           <option value="VN">VN</option>
@@ -307,8 +403,21 @@ function StaffPageInner() {
           )}
         </div>
 
-        {/* Close dropdown on outside click */}
         {staffDropOpen && <div className="fixed inset-0 z-40" onClick={() => setStaffDropOpen(false)} />}
+
+        {/* Apply button */}
+        <button
+          onClick={applyFilters}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm",
+            isDirty
+              ? "bg-blue-600 text-white hover:bg-blue-700 animate-pulse"
+              : "bg-blue-600 text-white hover:bg-blue-700"
+          )}
+        >
+          <Play className="w-3 h-3 fill-white" />
+          Apply Filters
+        </button>
 
         <div className="ml-auto flex items-center gap-2">
           <div className="flex items-center gap-1 text-xs font-bold text-slate-400">
@@ -342,7 +451,38 @@ function StaffPageInner() {
         ))}
       </div>
 
-      {/* ── Bar Chart ── */}
+      {/* ── Monthly Comparison Chart (hiện khi filter nhiều tháng) ── */}
+      {isMultiMonth && monthlyComparisonData.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">So sánh theo tháng</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {applied.startDate.slice(0,7)} → {applied.endDate.slice(0,7)} · {monthlyComparisonData.length} tháng
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600 inline-block" /> Tổng Rev</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block" /> 3HK Rev</span>
+            </div>
+          </div>
+          <div className="p-4" style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyComparisonData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={60} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="Tổng Rev" fill="#003B95" radius={[4,4,0,0]} maxBarSize={48} />
+                <Bar dataKey="3HK Rev"  fill={HK3_COLOR} radius={[4,4,0,0]} maxBarSize={48} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bar Chart (staff/customer) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
@@ -489,8 +629,13 @@ function StaffPageInner() {
                                         <tr key={c.customer_code} className="hover:bg-blue-50/40 transition-colors">
                                           <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
                                           <td className="px-4 py-2">
-                                            <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
-                                            <p className="text-[9px] text-slate-400">{c.customer_code}</p>
+                                            <div className="flex items-center gap-1">
+                                              <TierBadge pln={c.price_list_name} tierKeywords={tierKeywords} />
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
+                                                <p className="text-[9px] text-slate-400">{c.customer_code}</p>
+                                              </div>
+                                            </div>
                                           </td>
                                           <td className="px-4 py-2 text-right text-xs font-black text-slate-900">{fck(c.revenue)}</td>
                                           <td className="px-4 py-2 text-right text-xs font-bold text-orange-600">{fck(c.hk3_revenue)}</td>

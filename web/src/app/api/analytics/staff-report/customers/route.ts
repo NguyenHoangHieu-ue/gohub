@@ -45,13 +45,14 @@ export async function GET(req: NextRequest) {
       SELECT
         f.customer_code,
         COALESCE(dc.name, f.customer_code) AS customer_name,
+        MAX(dc.price_list_name) AS price_list_name,
         SUM(f.${revCol}) AS revenue,
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         COUNT(DISTINCT f.order_code) AS order_count
       FROM ${mainTable} f
-      LEFT JOIN dim_customer dc ON f.customer_code = dc.code
+      LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON f.sku = sk.sku
+      LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
       ${where}
       GROUP BY f.customer_code, COALESCE(dc.name, f.customer_code)
       ORDER BY revenue DESC
@@ -60,11 +61,12 @@ export async function GET(req: NextRequest) {
 
     const rows = await queryAnalytics(sql, params)
     const result = (rows as any[]).map(r => ({
-      customer_code: r.customer_code,
-      customer_name: r.customer_name,
-      revenue:       Number(r.revenue) || 0,
-      hk3_revenue:   Number(r.hk3_revenue) || 0,
-      order_count:   Number(r.order_count) || 0,
+      customer_code:   r.customer_code,
+      customer_name:   r.customer_name,
+      price_list_name: r.price_list_name || null,
+      revenue:         Number(r.revenue) || 0,
+      hk3_revenue:     Number(r.hk3_revenue) || 0,
+      order_count:     Number(r.order_count) || 0,
     }))
 
     return NextResponse.json(result)
