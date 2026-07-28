@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
 } from "recharts"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -212,47 +212,106 @@ function StaffPageInner() {
 
   const isMultiMonth = monthsInRange.length > 1
 
-  // ─── Monthly comparison: stacked bar per month, each segment = 1 sales ──
+  // ─── Monthly line chart: mỗi sales = 1 đường qua các tháng ──────────────
+  const staffLineKeys = useMemo(() =>
+    displayed.slice(0, 8).map(s =>
+      s.staff_name.length > 20 ? s.staff_name.slice(0, 20) + "…" : s.staff_name
+    ), [displayed])
+
   const staffMonthlyChart = useMemo(() => {
     if (!isMultiMonth || !displayed.length) return []
-    const top = displayed.slice(0, 8) // tối đa 8 sales để chart dễ đọc
+    const top = displayed.slice(0, 8)
     return monthsInRange.map(month => {
       const row: Record<string, any> = { month: `T${month.slice(5)}/${month.slice(2,4)}` }
-      top.forEach(s => {
+      top.forEach((s, i) => {
         const m = s.monthly.find(x => x.month === month)
-        row[s.staff_name.length > 10 ? s.staff_name.slice(0,10)+"…" : s.staff_name] = m?.revenue || 0
+        row[staffLineKeys[i]] = m?.revenue || 0
       })
       return row
     })
-  }, [isMultiMonth, displayed, monthsInRange])
+  }, [isMultiMonth, displayed, monthsInRange, staffLineKeys])
 
   // ─── Customer monthly chart (khi có expanded) ───────────────────────────
+  const custLineKeys = useMemo(() =>
+    customers.slice(0, 8).map(c => {
+      const name = c.customer_name || c.customer_code
+      return name.length > 22 ? name.slice(0, 22) + "…" : name
+    }), [customers])
+
   const custMonthlyChart = useMemo(() => {
     if (!isMultiMonth || !customers.length) return []
     const top = customers.slice(0, 8)
     return monthsInRange.map(month => {
       const row: Record<string, any> = { month: `T${month.slice(5)}/${month.slice(2,4)}` }
-      top.forEach(c => {
-        const name = (c.customer_name || c.customer_code)
-        const label = name.length > 12 ? name.slice(0,12)+"…" : name
+      top.forEach((c, i) => {
         const m = c.monthly.find(x => x.month === month)
-        row[label] = m?.revenue || 0
+        row[custLineKeys[i]] = m?.revenue || 0
       })
       return row
     })
-  }, [isMultiMonth, customers, monthsInRange])
+  }, [isMultiMonth, customers, monthsInRange, custLineKeys])
 
   // ─── Export ─────────────────────────────────────────────────────────────
   const exportStaff = () => {
-    const rows = displayed.map((s, i) => ({
-      Rank: i + 1, "Staff Code": s.staff_code, "Staff Name": s.staff_name,
-      "Total Revenue": s.total_revenue, "3HK Revenue": s.hk3_revenue,
-      "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
-      "Gross Profit": s.gross_profit, "CM1": +s.cm1.toFixed(0),
-      "CM1 %": +s.cm1_pct.toFixed(1),
-      "Customers": s.customer_count, "Orders": s.total_orders,
-    }))
-    exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
+    if (isMultiMonth) {
+      // Multi-month: mỗi sales → từng tháng → TỔNG sales → cuối cùng GRAND TOTAL
+      const rows: Record<string, any>[] = []
+      displayed.forEach((s, i) => {
+        monthsInRange.forEach(month => {
+          const m = s.monthly.find(x => x.month === month)
+          rows.push({
+            "Rank":        i + 1,
+            "Staff Code":  s.staff_code,
+            "Staff Name":  s.staff_name,
+            "Tháng":       month,
+            "Revenue":     m?.revenue || 0,
+            "3HK Revenue": m?.hk3_revenue || 0,
+            "3HK %":       (m?.revenue || 0) > 0 ? +((m!.hk3_revenue / m!.revenue)*100).toFixed(1) : 0,
+            "GP":          m?.gross_profit || 0,
+            "CM1":         "",
+            "CM1 %":       "",
+            "KH":          "",
+            "Đơn":         "",
+          })
+        })
+        // Subtotal per sales
+        rows.push({
+          "Rank":        i + 1,
+          "Staff Code":  s.staff_code,
+          "Staff Name":  s.staff_name,
+          "Tháng":       "TỔNG",
+          "Revenue":     s.total_revenue,
+          "3HK Revenue": s.hk3_revenue,
+          "3HK %":       s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+          "GP":          s.gross_profit,
+          "CM1":         +s.cm1.toFixed(0),
+          "CM1 %":       +s.cm1_pct.toFixed(1),
+          "KH":          s.customer_count,
+          "Đơn":         s.total_orders,
+        })
+        rows.push({}) // dòng trống ngăn cách
+      })
+      // Grand total
+      rows.push({
+        "Rank": "", "Staff Code": "", "Staff Name": "GRAND TOTAL", "Tháng": "",
+        "Revenue": totRev, "3HK Revenue": totHk3,
+        "3HK %": totRev > 0 ? +((totHk3/totRev)*100).toFixed(1) : 0,
+        "GP": totGP, "CM1": +totCM1.toFixed(0),
+        "CM1 %": totRev > 0 ? +((totCM1/totRev)*100).toFixed(1) : 0,
+        "KH": totCust, "Đơn": totOrds,
+      })
+      exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
+    } else {
+      // Single period: flat
+      const rows = displayed.map((s, i) => ({
+        "Rank": i + 1, "Staff Code": s.staff_code, "Staff Name": s.staff_name,
+        "Revenue": s.total_revenue, "3HK Revenue": s.hk3_revenue,
+        "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+        "GP": s.gross_profit, "CM1": +s.cm1.toFixed(0), "CM1 %": +s.cm1_pct.toFixed(1),
+        "KH": s.customer_count, "Đơn": s.total_orders,
+      }))
+      exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
+    }
   }
 
   const exportCustomers = (staffName: string) => {
@@ -420,68 +479,64 @@ function StaffPageInner() {
         ))}
       </div>
 
-      {/* Monthly comparison chart — stacked per sales */}
+      {/* Monthly line chart — mỗi sales = 1 đường */}
       {isMultiMonth && staffMonthlyChart.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-black text-slate-900">So sánh theo tháng — Revenue từng Sales</h3>
+              <h3 className="text-sm font-black text-slate-900">So sánh Revenue từng Sales theo tháng</h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 {applied.startDate.slice(0,7)} → {applied.endDate.slice(0,7)} · {monthsInRange.length} tháng
                 {displayed.length > 8 && <span className="ml-1 text-amber-600">(Top 8 sales)</span>}
               </p>
             </div>
           </div>
-          <div className="p-4" style={{ height: 260 }}>
+          <div className="p-4" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={staffMonthlyChart} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barCategoryGap="25%">
+              <LineChart data={staffMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={60} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
                 <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                {displayed.slice(0,8).map((s, i) => (
-                  <Bar key={s.staff_code}
-                    dataKey={s.staff_name.length > 10 ? s.staff_name.slice(0,10)+"…" : s.staff_name}
-                    stackId="a" fill={STAFF_COLORS[i % STAFF_COLORS.length]}
-                    radius={i === Math.min(7, displayed.length-1) ? [4,4,0,0] : [0,0,0,0]}
-                    maxBarSize={60} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                {staffLineKeys.map((key, i) => (
+                  <Line key={key} type="monotone" dataKey={key}
+                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
+                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }} />
                 ))}
-              </BarChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
 
-      {/* Customer monthly chart — khi có sales expanded và multi-month */}
+      {/* Customer monthly line chart */}
       {isMultiMonth && expandedStaff && custMonthlyChart.length > 0 && (
         <div className="bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-blue-100">
             <h3 className="text-sm font-black text-blue-900">
-              Khách hàng theo tháng — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
+              So sánh Revenue KH theo tháng — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
             </h3>
-            <p className="text-xs text-blue-600 mt-0.5">Revenue từng KH qua {monthsInRange.length} tháng
-              {customers.length > 8 && <span className="ml-1">(Top 8 KH)</span>}</p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              {monthsInRange.length} tháng{customers.length > 8 && " · Top 8 KH"}
+            </p>
           </div>
-          <div className="p-4" style={{ height: 240 }}>
+          <div className="p-4" style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={custMonthlyChart} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barCategoryGap="25%">
+              <LineChart data={custMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4338ca", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={60} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
                 <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                {customers.slice(0,8).map((c, i) => {
-                  const name = (c.customer_name || c.customer_code)
-                  const label = name.length > 12 ? name.slice(0,12)+"…" : name
-                  return (
-                    <Bar key={c.customer_code} dataKey={label} stackId="b"
-                      fill={STAFF_COLORS[i % STAFF_COLORS.length]}
-                      radius={i === Math.min(7, customers.length-1) ? [4,4,0,0] : [0,0,0,0]}
-                      maxBarSize={60} />
-                  )
-                })}
-              </BarChart>
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                {custLineKeys.map((key, i) => (
+                  <Line key={key} type="monotone" dataKey={key}
+                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
+                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }} />
+                ))}
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
