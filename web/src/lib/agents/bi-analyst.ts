@@ -143,9 +143,9 @@ export async function runBIAnalyst(
   }
   appendModelContent()
 
-  // Function calling loop — max 10 iterations.
+  // Function calling loop — max 12 iterations (12 cho báo cáo phức tạp: 5 query + YoY + retry).
   async function processToolCalls() {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 12; i++) {
       const calls = genResult.response.functionCalls()
       if (!calls || calls.length === 0) break
       anyToolCall = true

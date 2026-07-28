@@ -52,6 +52,39 @@ const CASES: [string, string | string[]][] = [
   ["WorldMove có bao nhiêu gói chưa được GoHub tạo SKU?", ["gap-analysis", "data-explorer"]], // gap KHÔNG bị BI cướp
   ["có sản phẩm nào dùng được ở cả Malaysia và Singapore không", "tu-van"], // multi-country → tu-van
   ["tổng hợp báo cáo sản phẩm 3HK trong kho Hà Nội của quý 2", "bi-analyst"], // "trong kho X" = BI (không phải gap)
+
+  // ── New cases từ master plan (session 127) ──
+  // BI — YoY / weekly / vendor mix / location / usage eSIM
+  ["doanh thu tháng 7 so với tháng 7 năm ngoái", "bi-analyst"],           // YoY
+  ["xu hướng doanh thu theo tuần trong 4 tuần gần nhất", "bi-analyst"],   // weekly trend
+  ["thị phần doanh thu theo vendor Q2 2026", "bi-analyst"],               // vendor mix %
+  ["top 10 khách hàng B2B theo tổng doanh thu từ đầu năm", "bi-analyst"], // customer LTV
+  ["khách hàng mua lần đầu trong tháng 7 là ai?", "bi-analyst"],          // new customers
+  ["doanh thu theo kho và chi nhánh tháng 7", "bi-analyst"],               // location breakdown
+  ["thống kê usage eSIM theo nhóm Unused/Low/Medium/High tháng 7", "bi-analyst"], // usage_class
+  ["3HK data usage theo nước nào dùng nhiều nhất tháng 6", "bi-analyst"], // data_usage_log
+  ["hoa hồng tháng này của từng kênh là bao nhiêu?", "bi-analyst"],       // commission → BI
+  // BI — error recovery / edge cases
+  ["doanh thu hôm nay bao nhiêu?", "bi-analyst"],                         // today cutoff → BI (giải thích)
+  ["tổng kết kinh doanh tháng 7 2026", "bi-analyst"],                     // full report → BI
+  ["so sánh doanh thu week over week", "bi-analyst"],                      // WoW → BI
+  // tu-van edge cases
+  ["SIM nào đi Nhật có nghe gọi?", "tu-van"],                             // feature filter → tu-van
+  ["gói unlimited đi Hàn Quốc 7 ngày", "tu-van"],                         // unlimited → tu-van
+  ["có gói nào đi cả châu Âu không?", "tu-van"],                          // regional → tu-van
+  // tra-cuu
+  ["1CJPNWM10014 cho tôi thông tin chi tiết", "tra-cuu"],                 // SKU lookup
+  ["giá vốn của 1CTHANWM10001 bao nhiêu?", "tra-cuu"],                    // COGS lookup
+  // giai-dap
+  ["CM1 khác Gross Profit như thế nào?", "giai-dap"],                     // glossary → giai-dap
+  ["data policy code A là gì?", "giai-dap"],                               // decode → giai-dap
+  ["đối tác chiến lược của GoHub gồm những ai?", ["giai-dap", "bi-analyst"]], // partner tiers
+  // data-explorer
+  ["Có bao nhiêu SKU active trong hệ thống?", "data-explorer"],           // count catalog
+  ["chi phí kênh nào đang được cấu hình cho tháng 7?", ["data-explorer", "bi-analyst"]],
+  // gap-analysis
+  ["WorldMove có gói gì cho Nhật mà GoHub chưa tạo?", "gap-analysis"],   // gap WM
+  ["3HK zone A có những loại gói nào?", "gap-analysis"],                   // 3HK browse
 ]
 
 describe("Chatbot routing — câu hỏi thật của user", () => {
