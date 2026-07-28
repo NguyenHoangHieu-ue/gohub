@@ -39,7 +39,8 @@ describe("SQL input sanitization (chống injection)", () => {
     expect(dirty).not.toContain("DROP")
     expect(dirty).toContain("INTERVAL '30 days'") // fallback an toàn
     const clean = getDateFilter("2026-07-01", "2026-07-14", "fulfiled_date")
-    expect(clean).toContain("BETWEEN '2026-07-01' AND '2026-07-14'")
+    // Yesterday-cutoff (session 126): endDate được wrap bằng LEAST(..., CURRENT_DATE-1)
+    expect(clean).toContain("BETWEEN '2026-07-01' AND LEAST('2026-07-14'::date")
   })
 
   test("getDateFilter: companyCode hợp lệ được thêm, code bẩn → ALL (bỏ qua)", () => {
