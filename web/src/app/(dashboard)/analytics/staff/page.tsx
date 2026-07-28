@@ -57,23 +57,29 @@ const RANK_STYLE = [
   "bg-orange-50 text-orange-600 border border-orange-100",
 ]
 const TIER_CONFIG: Record<string, { bg: string; text: string }> = {
-  Strategic: { bg: "bg-indigo-100", text: "text-indigo-700" },
-  VIP:       { bg: "bg-purple-100", text: "text-purple-700" },
-  Gold:      { bg: "bg-amber-100",  text: "text-amber-700"  },
-  Silver:    { bg: "bg-slate-100",  text: "text-slate-600"  },
+  Strategic: { bg: "bg-indigo-100",  text: "text-indigo-700" },
+  VIP:       { bg: "bg-purple-100",  text: "text-purple-700" },
+  Gold:      { bg: "bg-amber-100",   text: "text-amber-700"  },
+  Silver:    { bg: "bg-slate-100",   text: "text-slate-600"  },
+  B2C:       { bg: "bg-emerald-100", text: "text-emerald-700" },
 }
 
 function fck(n: number) { return formatCompactNumber(n) }
 function pct(n: number) { return n.toFixed(1) + "%" }
 
 function TierBadge({ pln, kws }: { pln: string | null; kws: Record<string, string[]> }) {
-  if (!pln) return null
+  // B2C: không có price_list_name (theo chuẩn Quarter Report: null → Strategic cho B2B,
+  // nhưng Staff tab gặp cả B2C nên null = B2C)
+  if (!pln) {
+    return <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0 bg-emerald-100 text-emerald-700">B2C</span>
+  }
+  // B2B: classify theo tierKeywords (null price_list_name đã handled trên)
   const up = pln.toUpperCase()
   let tier = ""
   for (const [t, ks] of Object.entries(kws)) {
     if ((ks as string[]).some(k => up.includes(k.toUpperCase()))) { tier = t; break }
   }
-  if (!tier) tier = "Strategic"
+  if (!tier) tier = "Strategic"   // B2B không khớp keyword → Strategic (chuẩn Quarter Report)
   const c = TIER_CONFIG[tier]; if (!c) return null
   return (
     <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", c.bg, c.text)}>
@@ -320,7 +326,7 @@ function StaffPageInner() {
     const rows = customers.map((c, i) => ({
       Rank: i + 1, "Customer Code": c.customer_code, "Customer Name": c.customer_name,
       "Tier": (() => {
-        if (!c.price_list_name) return ""
+        if (!c.price_list_name) return "B2C"
         const up = c.price_list_name.toUpperCase()
         for (const [t, ks] of Object.entries(tierKeywords))
           if ((ks as string[]).some(k => up.includes(k.toUpperCase()))) return t
@@ -480,8 +486,8 @@ function StaffPageInner() {
         ))}
       </div>
 
-      {/* Single-month bar chart — so sánh sales */}
-      {!isMultiMonth && displayed.length > 0 && (
+      {/* Single-month: bar chart so sánh sales */}
+      {!isMultiMonth && !loading && displayed.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
@@ -493,7 +499,7 @@ function StaffPageInner() {
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block"/> 3HK Rev</span>
             </div>
           </div>
-          <div className="p-4" style={{ height: 260 }}>
+          <div className="p-4" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={displayed.slice(0, 12).map(s => ({
@@ -501,19 +507,58 @@ function StaffPageInner() {
                   "Tổng Rev": s.total_revenue,
                   "3HK Rev":  s.hk3_revenue,
                 }))}
-                margin={{ top: 4, right: 8, left: 0, bottom: 24 }}
+                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
                 barGap={2}
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false}
-                  angle={-20} textAnchor="end" height={48} interval={0} />
+                  angle={-25} textAnchor="end" height={52} interval={0} />
                 <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
                   tickFormatter={v => fck(v)} width={64} />
                 <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="Tổng Rev" radius={[4,4,0,0]} maxBarSize={36}>
+                <Bar dataKey="Tổng Rev" radius={[4,4,0,0]} maxBarSize={40}>
                   {displayed.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
                 </Bar>
-                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={36} />
+                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Single-month: bar chart so sánh KH của sales đang expand */}
+      {!isMultiMonth && expandedStaff && !custLoading && customers.length > 0 && (
+        <div className="bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-blue-100">
+            <h3 className="text-sm font-black text-blue-900">
+              So sánh KH — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
+            </h3>
+            <p className="text-xs text-blue-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
+          </div>
+          <div className="p-4" style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={customers.slice(0, 12).map((c, i) => {
+                  const name = c.customer_name || c.customer_code
+                  return {
+                    name: name.length > 14 ? name.slice(0, 14) + "…" : name,
+                    "Revenue": c.revenue,
+                    "3HK Rev": c.hk3_revenue,
+                  }
+                })}
+                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
+                barGap={2}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#4338ca" }} axisLine={false} tickLine={false}
+                  angle={-25} textAnchor="end" height={52} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="Revenue" radius={[4,4,0,0]} maxBarSize={40}>
+                  {customers.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
+                </Bar>
+                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
