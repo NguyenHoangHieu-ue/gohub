@@ -13,8 +13,9 @@ import { cn } from "@/lib/utils"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, Cell,
 } from "recharts"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -479,7 +480,47 @@ function StaffPageInner() {
         ))}
       </div>
 
-      {/* Monthly line chart — mỗi sales = 1 đường */}
+      {/* Single-month bar chart — so sánh sales */}
+      {!isMultiMonth && displayed.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">So sánh doanh thu Sales</h3>
+              <p className="text-xs text-slate-500 mt-0.5">{applied.startDate} → {applied.endDate}</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600 inline-block"/> Tổng Rev</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block"/> 3HK Rev</span>
+            </div>
+          </div>
+          <div className="p-4" style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={displayed.slice(0, 12).map(s => ({
+                  name: s.staff_name.length > 14 ? s.staff_name.slice(0, 14) + "…" : s.staff_name,
+                  "Tổng Rev": s.total_revenue,
+                  "3HK Rev":  s.hk3_revenue,
+                }))}
+                margin={{ top: 4, right: 8, left: 0, bottom: 24 }}
+                barGap={2}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false}
+                  angle={-20} textAnchor="end" height={48} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="Tổng Rev" radius={[4,4,0,0]} maxBarSize={36}>
+                  {displayed.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
+                </Bar>
+                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-month line chart — mỗi sales = 1 đường */}
       {isMultiMonth && staffMonthlyChart.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
