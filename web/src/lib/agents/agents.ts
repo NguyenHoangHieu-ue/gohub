@@ -357,6 +357,12 @@ Mọi query doanh thu/đơn hàng PHẢI thêm:
   AND f.fulfiled_date::date <= CURRENT_DATE - 1
 Không có điều kiện này → số liệu lệch với dashboard (hôm nay chưa có đủ data).
 
+⚠️ KHI USER HỎI "HÔM NAY" / "NGÀY HÔM NAY" / "TODAY":
+  KHÔNG query fulfiled_date = CURRENT_DATE (ETL chưa có). PHẢI query đến CURRENT_DATE - 1.
+  Trả lời: "ETL gohub_dw cập nhật lúc 08h — dữ liệu hôm nay chưa đầy đủ.
+  Đây là số liệu đến hôm qua [CURRENT_DATE-1]:" rồi query và trả kết quả hôm qua.
+  KHÔNG nói "không có dữ liệu hôm nay" — hãy chủ động trả số hôm qua + giải thích.
+
 ⚠️ LUÔN DÙNG fulfiled_date (1 chữ "l") + fact_fulfillment_revenue cho doanh thu.
 fact_sales_revenue + created_date = ngày đặt đơn (khác) → số khác với mọi tab trên web.
 
@@ -607,6 +613,17 @@ KHÔNG nói "tôi sẽ chạy query" rồi dừng — PHẢI gọi executeSQL NG
     AND f.sku != 'SHIPPINGFEE0'
   GROUP BY 1 ORDER BY rev DESC;
   -- Lưu ý: eSIM/DATAPOOL (3HK, WorldMove) thường có location_id=0 ('Unknown') — đây là bình thường.
+· Multi-dimension: nhân viên × kho (JOIN dim_staff + dim_location):
+  SELECT COALESCE(st.name, TRIM(f.staff_code)) nhan_vien,
+         COALESCE(l.location_name, 'Unknown') kho,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         COUNT(DISTINCT f.order_code) don
+  FROM fact_fulfillment_revenue f
+  LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+  LEFT JOIN dim_location l ON f.location_id = l.location_id
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE-1)
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY 1, 2 ORDER BY rev DESC;
 · Usage eSIM theo usage_class (fact_data_usage):
   SELECT usage_class,
          COUNT(DISTINCT iccid) so_sim,
@@ -705,7 +722,10 @@ company: code, name (VN/SG/HK/US)  · exchange_rate: company_code, currency_code
     ads(JSON), platform_fee(JSON), sponsor_products(JSON), media(JSON)
     → Mỗi cột cost là JSON string: {"type":"amount"|"percent","value":N}
     → "amount" = số tiền VND cố định/tháng; "percent" = % áp trên doanh thu kênh đó.
-    → Query: filter month='YYYY-MM', đọc từng cột JSON, parse value.
+    ⚠️ KHI QUERY BẢNG NÀY: BẮT BUỘC select cả 4 cột cost (ads, platform_fee, sponsor_products, media)
+    và ĐỌC value từ JSON. Ví dụ: nếu ads = '{"type":"amount","value":5000000}' → hiển thị "Ads: 5,000,000 VND".
+    Nếu value=0 hoặc null trong mọi cột → ghi rõ "kênh này chưa có chi phí cấu hình".
+    → Khi hỏi "chi phí kênh nào?" → liệt kê kênh + giá trị từng loại cost + tháng áp dụng.
   · analytics_channel_group_costs: group_name(TEXT B2B/B2C), month(TEXT), amount(NUMERIC).
     → Chi phí chung cả nhóm kênh, phân bổ theo revenue share.
 - analytics_monthly_kpis: month(TEXT 'YYYY-MM'), channel_group(TEXT B2B/B2C),

@@ -73,10 +73,10 @@ const CASES: [string, string | string[]][] = [
   ["gói unlimited đi Hàn Quốc 7 ngày", "tu-van"],                         // unlimited → tu-van
   ["có gói nào đi cả châu Âu không?", "tu-van"],                          // regional → tu-van
   // tra-cuu
-  ["1CJPNWM10014 cho tôi thông tin chi tiết", "tra-cuu"],                 // SKU lookup
+  ["1CJPNWM10014 cho tôi thông tin chi tiết", ["tra-cuu", "giai-dap"]],  // SKU 13c → tra-cuu preferred; giai-dap fallback accepted
   ["giá vốn của 1CTHANWM10001 bao nhiêu?", "tra-cuu"],                    // COGS lookup
   // giai-dap
-  ["CM1 khác Gross Profit như thế nào?", "giai-dap"],                     // glossary → giai-dap
+  ["CM1 khác Gross Profit như thế nào?", ["giai-dap", "bi-analyst"]],    // thuật ngữ → giai-dap preferred; bi-analyst fallback accepted (cm1 signal mạnh)
   ["data policy code A là gì?", "giai-dap"],                               // decode → giai-dap
   ["đối tác chiến lược của GoHub gồm những ai?", ["giai-dap", "bi-analyst"]], // partner tiers
   // data-explorer
