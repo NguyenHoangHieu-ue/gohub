@@ -10,11 +10,14 @@ export async function GET(req: NextRequest) {
   if (guard) return guard
 
   const p = req.nextUrl.searchParams
-  const startDate   = p.get("startDate") || ""
-  const endDate     = p.get("endDate") || ""
+  // singleDate shorthand: sets startDate=endDate=date (filter by 1 day)
+  const singleDate  = p.get("date") || ""
+  const startDate   = singleDate || p.get("startDate") || ""
+  const endDate     = singleDate || p.get("endDate") || ""
   const staffCode   = p.get("staffCode") || ""
   const channelGroup = p.get("channelGroup") || ""
   const channel     = p.get("channel") || ""
+  const orderSource = p.get("orderSource") || ""
   const companyCode = p.get("companyCode") || "ALL"
   const dataSource  = p.get("dataSource") || "fulfilled"
   const isExport    = p.get("export") === "1"
@@ -23,15 +26,16 @@ export async function GET(req: NextRequest) {
   const offset      = (page - 1) * limit
 
   if (!startDate || !endDate) {
-    return NextResponse.json({ error: "startDate và endDate là bắt buộc" }, { status: 400 })
+    return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 })
   }
 
   const isSales   = dataSource === "created"
   const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
   const dateCol   = isSales ? "created_date" : "fulfiled_date"
   const revCol    = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
-  const qtyCol    = isSales ? "NULL::bigint" : "f.fulfilled_quantity"
-  // fact_sales_revenue không có gross_profit_vnd
+  // fact_sales_revenue uses "quantity"; fact_fulfillment_revenue uses "fulfilled_quantity"
+  const qtyCol    = isSales ? "f.quantity" : "f.fulfilled_quantity"
+  // fact_sales_revenue has no gross_profit_vnd
   const gpCol     = isSales ? "0" : "f.gross_profit_vnd"
 
   const params: unknown[] = [startDate, endDate]
@@ -47,7 +51,10 @@ export async function GET(req: NextRequest) {
     params.push(staffCode)
     where += ` AND TRIM(f.staff_code) = $${params.length}`
   }
-  if (channel) {
+  if (orderSource) {
+    params.push(orderSource)
+    where += ` AND TRIM(s.channel_name) = $${params.length}`
+  } else if (channel) {
     params.push(channel)
     where += ` AND TRIM(s.channel_name) = $${params.length}`
   } else if (channelGroup && channelGroup !== "All") {
@@ -55,34 +62,35 @@ export async function GET(req: NextRequest) {
     where += ` AND UPPER(COALESCE(s.group_name, '')) = UPPER($${params.length})`
   }
 
-  // Base SELECT (dùng chung cho count + data)
   const baseSelect = `
     SELECT
-      MIN(f.${dateCol})::date AS order_date,
-      TRIM(f.staff_code)      AS staff_code,
-      COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Chưa gán') AS staff_name,
-      COALESCE(dc.name, TRIM(f.customer_code)) AS customer_name,
-      TRIM(f.customer_code)   AS customer_code,
+      MIN(f.${dateCol})::date  AS order_date,
+      TRIM(f.staff_code)       AS staff_code,
+      COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unassigned') AS staff_name,
+      COALESCE(dc.name, TRIM(f.customer_code))  AS customer_name,
+      TRIM(f.customer_code)    AS customer_code,
       f.order_code,
       STRING_AGG(DISTINCT TRIM(f.sku), ', ' ORDER BY TRIM(f.sku)) AS order_name,
       STRING_AGG(DISTINCT COALESCE(sk.type_of_sim, 'Other'), ', ') AS sim_type,
-      SUM(${qtyCol})::bigint  AS quantity,
+      COALESCE(MAX(s.channel_name), '')  AS channel_name,
+      COALESCE(UPPER(MAX(s.group_name)), '') AS channel_group,
+      SUM(${qtyCol})::bigint   AS quantity,
       ROUND(
         SUM(f.${revCol})::numeric / NULLIF(SUM(${qtyCol})::numeric, 0)
-      )::bigint               AS unit_price,
-      SUM(f.${revCol})::bigint AS total_revenue,
-      SUM(${gpCol})::bigint   AS gross_profit,
-      MAX(dc.price_list_name) AS price_list_name
+      )::bigint                AS unit_price,
+      SUM(f.${revCol})::bigint  AS total_revenue,
+      SUM(${gpCol})::bigint    AS gross_profit,
+      MAX(dc.price_list_name)  AS price_list_name
     FROM ${mainTable} f
-    LEFT JOIN dim_staff       st ON TRIM(f.staff_code)    = TRIM(st.code)
-    LEFT JOIN dim_customer    dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
-    LEFT JOIN dim_sku         sk ON TRIM(f.sku)           = TRIM(sk.sku)
-    LEFT JOIN dim_order_source s ON f.order_source_code   = s.code
+    LEFT JOIN dim_staff        st ON TRIM(f.staff_code)    = TRIM(st.code)
+    LEFT JOIN dim_customer     dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_sku          sk ON TRIM(f.sku)           = TRIM(sk.sku)
+    LEFT JOIN dim_order_source  s ON f.order_source_code   = s.code
     ${where}
     GROUP BY
       f.order_code,
       TRIM(f.staff_code),
-      COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Chưa gán'),
+      COALESCE(st.name, NULLIF(TRIM(f.staff_code), ''), 'Unassigned'),
       COALESCE(dc.name, TRIM(f.customer_code)),
       TRIM(f.customer_code)
   `
@@ -96,7 +104,9 @@ export async function GET(req: NextRequest) {
       queryAnalytics(dataSQL, params),
     ])
 
-    const total = isExport ? (dataRows as any[]).length : parseInt((countRows as any[])[0]?.total || "0")
+    const total = isExport
+      ? (dataRows as any[]).length
+      : parseInt((countRows as any[])[0]?.total || "0")
 
     const rows = (dataRows as any[]).map(r => ({
       order_date:      r.order_date,
@@ -107,6 +117,8 @@ export async function GET(req: NextRequest) {
       order_code:      r.order_code,
       order_name:      r.order_name,
       sim_type:        r.sim_type,
+      channel_name:    r.channel_name,
+      channel_group:   r.channel_group,
       quantity:        Number(r.quantity) || 0,
       unit_price:      Number(r.unit_price) || 0,
       total_revenue:   Number(r.total_revenue) || 0,
