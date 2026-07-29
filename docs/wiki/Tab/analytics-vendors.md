@@ -31,3 +31,16 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - **Vendor 3HK** lưu `'3HK DATAPOOL'` (có dấu cách) → lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
 - Created mode → margin = 0.
 - Đây là hiệu suất **bán ra theo vendor** (không phải giá vốn/COGS catalog — cái đó ở SP Hệ Thống).
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY vendor |
+| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` per vendor |
+| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` |
+| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` per vendor |
+| Vendor | `dim_sku.vendor` | JOIN `f.sku = dim_sku.sku`; vd `'3HK DATAPOOL'`, `'WorldMove'` |
+| Channel Group | `dim_order_source.group_name` | JOIN `f.order_source_code = dim_order_source.code`; B2B / B2C filter |

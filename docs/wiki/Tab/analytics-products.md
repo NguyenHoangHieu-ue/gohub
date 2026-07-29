@@ -38,3 +38,19 @@ Doanh số bán theo **SKU**: revenue, units, orders, margin — kèm breakdown 
 - Region = nước ĐÍCH suy từ mã SKU (KHÔNG phải `dim_location`).
 - Created mode → margin = 0.
 - Chuỗi filter nội suy trực tiếp (đã escape `'`), không phải param hoá.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY SKU |
+| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` |
+| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` |
+| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` per SKU |
+| SKU | `fact_fulfillment_revenue.sku` | Mã sản phẩm gốc |
+| Category | `dim_sku.category_name` | JOIN `f.sku = dim_sku.sku` |
+| Vendor | `dim_sku.vendor` | JOIN `f.sku = dim_sku.sku` |
+| Region (nước đích) | `dim_sku.sku` + `country_codes` (Turso) | Suy từ mã SKU — KHÔNG phải `dim_location` |
+| Channel | `dim_order_source.channel_name` + `group_name` | JOIN `f.order_source_code = dim_order_source.code` |

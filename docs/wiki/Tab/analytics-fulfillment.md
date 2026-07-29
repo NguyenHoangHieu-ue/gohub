@@ -30,3 +30,16 @@ Tốc độ & chất lượng giao SIM theo tháng / chi nhánh / loại SP. Dù
 ## 3. Gotchas
 - Báo cáo này **luôn dùng Fulfillment** (`fact_fulfillment_revenue`) — không có chế độ Created.
 - `dim_location` = **chi nhánh**, KHÔNG phải nước đích.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY month |
+| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` |
+| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` |
+| Month | `fact_fulfillment_revenue.fulfiled_date` | GROUP BY `DATE_TRUNC('month', fulfiled_date)` |
+| Location (Chi nhánh) | `dim_location.location_name` | JOIN `f.location_id = dim_location.location_id`; chi nhánh GoHub, KHÔNG phải nước đích |
+| Product Type | `dim_sku.type_of_sim` | JOIN `f.sku = dim_sku.sku`; eSIM / SIM phân loại |

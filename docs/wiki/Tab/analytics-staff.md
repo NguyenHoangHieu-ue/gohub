@@ -29,3 +29,17 @@ Leaderboard nhân viên theo doanh thu / số đơn / units. Dùng data model ch
 - Loại nhân viên hệ thống: `staff_name != 'Auto ESIM'`; SKU nhiễu `SHIPPINGFEE0`.
 - Nhân viên không map → `TRIM(staff_code)` / "Unknown".
 - Từng có bug NaN khi staff null → đã COALESCE.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY `staff_code` |
+| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` per staff |
+| CM1 | GP − phân bổ Operation Cost | GP − `analytics_channel_group_costs.amount` phân bổ theo revenue share của staff |
+| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` per staff |
+| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` per staff |
+| Staff Name | `dim_staff.name` | JOIN `TRIM(f.staff_code) = TRIM(dim_staff.code)` |
+| Operation Cost | Supabase `analytics_channel_group_costs` | Phân bổ theo tỷ lệ revenue của từng staff |

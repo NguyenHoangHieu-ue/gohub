@@ -44,6 +44,17 @@ const ROUTING: [string, string][] = [
   // data-explorer
   ["Liệt kê các trang wiki nội bộ", "data-explorer"],
   ["Đếm số item theo kênh bán", "data-explorer"],
+  // bi-analyst — new SQL template coverage
+  ["doanh thu tháng 7 so sánh với tháng 7 năm ngoái", "bi-analyst"],
+  ["xu hướng doanh thu theo tuần 4 tuần gần nhất", "bi-analyst"],
+  ["thị phần doanh thu theo vendor trong Q2", "bi-analyst"],
+  ["top khách hàng B2B theo tổng doanh thu từ đầu năm", "bi-analyst"],
+  ["khách hàng mua lần đầu tháng 7 là ai", "bi-analyst"],
+  ["doanh thu theo kho chi nhánh tháng 7", "bi-analyst"],
+  ["thống kê usage eSIM theo nhóm sử dụng tháng 7", "bi-analyst"],
+  ["3HK usage theo nước nào dùng nhiều nhất tháng 6", "bi-analyst"],
+  ["hoa hồng tháng này của các kênh", "bi-analyst"],
+  // Guardian check riêng (không qua pick() — chạy ở agent-grade/guardian bank)
 ]
 
 describe("capability graph — routing xác định (không LLM)", () => {

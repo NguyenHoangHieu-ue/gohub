@@ -13,10 +13,10 @@ export const ALL_ANALYTICS_IDS = [
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   bod:        ALL_ANALYTICS_IDS, // BOD xem toàn bộ analytics (scheduled đã tách riêng management)
   staff:      ["dashboard", "feedback", "products"],
-  b2b:        ["dashboard", "quarterly", "b2b", "vendors", "channels", "customers", "targets"],
+  b2b:        ["dashboard", "quarterly", "b2b", "vendors", "channels", "customers", "targets", "orders"],
   b2c:        ["dashboard", "quarterly", "b2c", "channels", "website", "products", "customers"],
   saleb2c:    ["dashboard", "b2c", "channels", "website"],
   "ops-&-cs": ["dashboard", "orders", "fulfillment", "cs-troubleshoot", "feedback", "3hk-usage"],
-  hr:         ["dashboard", "staff"],
+  hr:         ["dashboard", "staff", "orders"],
   product:    ["dashboard", "products", "3hk-usage", "vendors", "all-time"],
 }

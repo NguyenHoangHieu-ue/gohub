@@ -147,13 +147,17 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
 // ─── Table header row ─────────────────────────────────────────────────────────
 
 const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
-const QT_COLS = ["Chỉ số Quý", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%", "%QoQ(CM1)"]
+const QT_COLS = ["Chỉ số Quý", "Revenue", "Proj.Rev", "GP", "GP%", "Ch.Cost", "Gr.Cost", "CM1", "Proj.CM1", "CM1%", "3HK%", "QoQ"]
 
-function TableHead({ cols }: { cols: string[] }) {
+function TableHead({ cols, compact = false }: { cols: string[]; compact?: boolean }) {
   return (
     <tr className="bg-[#003B95]">
       {cols.map((h, i) => (
-        <th key={h} className={cn("px-4 py-2.5 text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap", i === 0 ? "text-left" : "text-right")}>
+        <th key={h} className={cn(
+          compact ? "px-2 py-2" : "px-4 py-2.5",
+          "text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
+          i === 0 ? "text-left" : "text-right"
+        )}>
           {h}
         </th>
       ))}
@@ -615,8 +619,8 @@ function QuarterlyContent() {
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp cả Quý — So sánh với Target</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse">
-              <thead><TableHead cols={QT_COLS} /></thead>
+            <table className="w-full text-[11px] border-collapse">
+              <thead><TableHead cols={QT_COLS} compact /></thead>
               <tbody>
                 {qt.b2b && (
                   <>
@@ -654,19 +658,19 @@ function QuarterlyContent() {
                     )}
                   </>
                 )}
-                <tr className="bg-[#003B95] text-white">
-                  <td className="px-4 py-3 font-bold text-white">Tổng {selQ}-{selYear}</td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fc(totGmRaw)}</td>
-                  <td className="px-4 py-3 text-right text-slate-300">{totRevRaw > 0 ? pct(totGmRaw / totRevRaw * 100) : "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{totCcRaw > 0 ? fc(totCcRaw) : "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{totGcRaw > 0 ? fc(totGcRaw) : "—"}</td>
-                  <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totCm1Raw)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
-                  <td className={cn("px-4 py-3 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
-                  <td className="px-4 py-3 text-right text-slate-300">{pct(totThkPct)}</td>
-                  <td className={cn("px-4 py-3 text-right font-bold tabular-nums", totQoQ == null ? "text-slate-400" : totQoQ >= 0 ? "text-green-300" : "text-red-300")}>
+                <tr className="bg-[#003B95] text-white text-[11px]">
+                  <td className="px-2 py-2 font-bold text-white">Tổng {selQ}-{selYear}</td>
+                  <td className="px-2 py-2 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fc(totGmRaw)}</td>
+                  <td className="px-2 py-2 text-right text-slate-300">{totRevRaw > 0 ? pct(totGmRaw / totRevRaw * 100) : "—"}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-300">{totCcRaw > 0 ? fc(totCcRaw) : "—"}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-300">{totGcRaw > 0 ? fc(totGcRaw) : "—"}</td>
+                  <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totCm1Raw)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
+                  <td className={cn("px-2 py-2 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
+                  <td className="px-2 py-2 text-right text-slate-300">{pct(totThkPct)}</td>
+                  <td className={cn("px-2 py-2 text-right font-bold tabular-nums", totQoQ == null ? "text-slate-400" : totQoQ >= 0 ? "text-green-300" : "text-red-300")}>
                     {totQoQ != null ? `${totQoQ >= 0 ? "+" : ""}${totQoQ.toFixed(1)}%` : "—"}
                   </td>
                 </tr>
@@ -742,19 +746,19 @@ function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1
   const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
   const qoqCls = qoqPct == null ? "text-slate-300" : qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
   return (
-    <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[12px]">
-      <td className="px-4 py-3 font-semibold text-slate-800">{label}</td>
-      <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
-      <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{fc(prRev)}</td>
-      <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(gmRaw)}</td>
-      <td className="px-4 py-3 text-right text-slate-500">{pct(gmPct)}</td>
-      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{ccRaw > 0 ? fc(ccRaw) : "—"}</td>
-      <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{gcRaw > 0 ? fc(gcRaw) : "—"}</td>
-      <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
-      <td className={cn("px-4 py-3 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
-      <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
-      <td className="px-4 py-3 text-right text-slate-500">{pct(hk3Pct)}</td>
-      <td className={cn("px-4 py-3 text-right tabular-nums", qoqCls)}>
+    <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[11px]">
+      <td className="px-2 py-2 font-semibold text-slate-800">{label}</td>
+      <td className="px-2 py-2 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
+      <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prRev)}</td>
+      <td className="px-2 py-2 text-right text-slate-700 tabular-nums">{fc(gmRaw)}</td>
+      <td className="px-2 py-2 text-right text-slate-500">{pct(gmPct)}</td>
+      <td className="px-2 py-2 text-right text-slate-600 tabular-nums">{ccRaw > 0 ? fc(ccRaw) : "—"}</td>
+      <td className="px-2 py-2 text-right text-slate-600 tabular-nums">{gcRaw > 0 ? fc(gcRaw) : "—"}</td>
+      <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
+      <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
+      <td className={cn("px-2 py-2 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
+      <td className="px-2 py-2 text-right text-slate-500">{pct(hk3Pct)}</td>
+      <td className={cn("px-2 py-2 text-right tabular-nums", qoqCls)}>
         {qoqPct != null ? `${qoqPct >= 0 ? "+" : ""}${qoqPct.toFixed(1)}%` : "—"}
       </td>
     </tr>
@@ -777,31 +781,29 @@ function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act
     </span>
   )
   return (
-    <tr className="border-b border-dashed border-blue-100 bg-blue-50/20 text-[11px] text-slate-600">
-      <td className="px-4 py-2 pl-9 italic text-slate-500">{label}</td>
-      {/* Cols 1-3 (Revenue, PR Rev, Gross Margin): hiện nhóm Revenue target */}
-      <td colSpan={3} className="px-4 py-2">
-        <div className="flex items-center gap-2 justify-end flex-wrap">
-          <span className="text-slate-500 tabular-nums">Rev target: <b className="text-slate-700">{fc(targetRev)}</b></span>
+    <tr className="border-b border-dashed border-blue-100 bg-blue-50/20 text-[10px] text-slate-600">
+      <td className="px-2 py-1.5 pl-6 italic text-slate-500">{label}</td>
+      <td colSpan={3} className="px-2 py-1.5">
+        <div className="flex items-center gap-1.5 justify-end flex-wrap">
+          <span className="text-slate-500 tabular-nums">Rev: <b className="text-slate-700">{fc(targetRev)}</b></span>
           <span className="text-slate-400">PR {badge(revPrPct)}</span>
           <span className="text-slate-400">TT {badge(revActPct)}</span>
         </div>
       </td>
-      <td className="px-4 py-2 text-right text-slate-300">—</td>
-      <td className="px-4 py-2 text-right text-slate-300">—</td>
-      <td className="px-4 py-2 text-right text-slate-300">—</td>
-      {/* Cols 7-9 (CM1, PR CM1, CM1%): hiện nhóm CM1 target */}
-      <td colSpan={3} className="px-4 py-2">
+      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
+      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
+      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
+      <td colSpan={3} className="px-2 py-1.5">
         {targetCm1 > 0 ? (
-          <div className="flex items-center gap-2 justify-end flex-wrap">
-            <span className="text-slate-500 tabular-nums">CM1 target: <b className="text-slate-700">{fc(targetCm1)}</b></span>
+          <div className="flex items-center gap-1.5 justify-end flex-wrap">
+            <span className="text-slate-500 tabular-nums">CM1: <b className="text-slate-700">{fc(targetCm1)}</b></span>
             <span className="text-slate-400">PR {badge(cm1PrPct)}</span>
             <span className="text-slate-400">TT {badge(cm1ActPct)}</span>
           </div>
         ) : <span className="text-slate-300 float-right">—</span>}
       </td>
-      <td className="px-4 py-2 text-right text-slate-300">—</td>
-      <td className="px-4 py-2 text-right text-slate-300">—</td>
+      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
+      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
     </tr>
   )
 }

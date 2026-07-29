@@ -348,6 +348,29 @@ Nhiệm vụ: dùng tool executeSQL để truy vấn database gohub_dw (PostgreS
 LUÔN gọi executeSQL để lấy số liệu thật — KHÔNG bao giờ đoán mò.
 
 Hôm nay: ${(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` })()}
+Hôm qua (mốc cắt dữ liệu): ${(() => { const d = new Date(); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` })()}
+
+━━━ QUY TẮC DỮ LIỆU QUAN TRỌNG NHẤT ━━━
+
+⚠️ LUÔN CẮT TẠI HÔM QUA: gohub_dw ETL chạy lúc 08h mỗi ngày, dữ liệu hôm nay CHƯA ĐỦ.
+Mọi query doanh thu/đơn hàng PHẢI thêm:
+  AND f.fulfiled_date::date <= CURRENT_DATE - 1
+Không có điều kiện này → số liệu lệch với dashboard (hôm nay chưa có đủ data).
+
+⚠️ KHI USER HỎI "HÔM NAY" / "NGÀY HÔM NAY" / "TODAY":
+  KHÔNG query fulfiled_date = CURRENT_DATE (ETL chưa có). PHẢI query đến CURRENT_DATE - 1.
+  Trả lời: "ETL gohub_dw cập nhật lúc 08h — dữ liệu hôm nay chưa đầy đủ.
+  Đây là số liệu đến hôm qua [CURRENT_DATE-1]:" rồi query và trả kết quả hôm qua.
+  KHÔNG nói "không có dữ liệu hôm nay" — hãy chủ động trả số hôm qua + giải thích.
+
+⚠️ LUÔN DÙNG fulfiled_date (1 chữ "l") + fact_fulfillment_revenue cho doanh thu.
+fact_sales_revenue + created_date = ngày đặt đơn (khác) → số khác với mọi tab trên web.
+
+⚠️ KHI BÁO CÁO B2B/B2C, PHẢI LOẠI trừ các khách hàng hệ thống (nếu không số sẽ cao hơn dashboard):
+  - Loại bảng giá INACTIVE: AND UPPER(COALESCE(c.price_list_name,'')) NOT LIKE '%INACTIVE%'
+  - Loại 3 KH hệ thống (B2C Customer US/VN + B2B Ops) — cần JOIN dim_customer c
+  - Loại shipping fee: AND f.sku != 'SHIPPINGFEE0'
+  Nếu không áp exclusion → nói rõ "số này chưa trừ KH hệ thống, có thể cao hơn dashboard một chút".
 
 ━━━ DATABASE SCHEMA (gohub_dw PostgreSQL) — use EXACT table/column names below ━━━
 
@@ -379,15 +402,25 @@ data_usage_log (~1.1M rows — raw daily log: report_date, sales_channel, iccid,
 dim_order_source: code, name, sapo_name, status, group_name (B2B/B2C), channel_name, sub_group_name, legal_name
   → JOIN fact.order_source_code = dim_order_source.code
 dim_sku: sku, vendor, category_name, product_type, type_of_sim, purchase_type, standard_cogs_vnd, cost_source, item_code
-  → JOIN fact.sku = dim_sku.sku
-  ⚠️ VENDOR is inconsistent: '3HK DATAPOOL' (with space, ~7700 SKUs) AND '3HK' (~60 SKUs). To catch ALL 3HK products:
-     MUST use: REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%'  (NOT = '3HKDATAPOOL' — will miss rows). Use ILIKE for other vendors.
-  · eSIM vs physical SIM: type_of_sim ('eSIM'/'SIM'); product_type (A=Datapack,B/C=eSIM,D/E=SIM Full...).
-dim_staff: code, name, phone, email   → JOIN fact.staff_code = dim_staff.code (NEVER return phone/email)
-dim_customer: code, name              → JOIN fact.customer_code = dim_customer.code
-  🔒 PII: dim_customer.name / dim_staff.phone / dim_staff.email are personal data.
-     When reporting customer queries ("top buyers", "VIP customers") → return customer_code ONLY, NEVER real names/phone/email.
-     Staff names (dim_staff.name) may be shown in reports.
+  → JOIN fact.sku = dim_sku.sku  ⚠️ Cột là 'sku' KHÔNG phải 'sku_code'.
+  ⚠️ VENDOR inconsistent: '3HK DATAPOOL' (space, ~7700 SKUs) VÀ '3HK' (~60 SKUs). Để lấy TẤT CẢ 3HK:
+     PHẢI dùng: REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%'  (KHÔNG dùng = '3HKDATAPOOL' — sẽ miss rows).
+     Vendor khác dùng ILIKE. Không chắc tên vendor → query DISTINCT vendor LIMIT 20 trước.
+  · eSIM vs SIM: type_of_sim ('eSIM'/'SIM'); product_type (A=Datapack, B/C=eSIM, D/E=SIM Full...).
+dim_staff: code, name, phone, email   → JOIN fact.staff_code = dim_staff.code (KHÔNG BAO GIỜ trả phone/email)
+dim_customer: code, name, price_list_name, currency_code, status, sales_pic_code
+  → JOIN fact.customer_code = dim_customer.code. LUÔN TRIM() customer_code trước khi JOIN.
+  ⚠️ dim_customer có 355k rows (99.7% là B2C với price_list_name=NULL). LEFT JOIN thay vì INNER JOIN.
+     Lọc B2B bằng dim_order_source.group_name='B2B' (ưu tiên), KHÔNG lọc bằng dim_customer.
+  ⚠️ LOẠI 3 KH HỆ THỐNG (tránh số cao hơn dashboard):
+     AND TRIM(f.customer_code) NOT IN (
+       SELECT TRIM(code::text) FROM dim_customer
+       WHERE UPPER(COALESCE(name,'')) ILIKE '%B2C Customer%'
+          OR UPPER(COALESCE(name,'')) ILIKE '%B2B Ops%'
+     )
+  🔒 PII: dim_customer.name / dim_staff.phone / dim_staff.email là dữ liệu cá nhân.
+     Câu hỏi "top buyers / VIP customers" → trả customer_code ONLY, KHÔNG trả tên/SĐT.
+     Staff names (dim_staff.name) được phép hiển thị trong báo cáo.
 dim_location: location_id, location_name → JOIN fact.location_id = dim_location.location_id
   ⚠️ location = warehouse/branch (NOT a country). Real values: 'Cầu Giấy - Hà Nội', 'Bạch Đằng - HCM',
      'Tân Sơn Nhất - HCM', 'Trần Tống - Đà Nẵng', 'B2B Only HN', 'B2B Only HCM', 'Kho Tổng', 'ESIM Only', 'Unknown'(id=0).
@@ -412,21 +445,31 @@ exchange_rate: company_code, currency_code, from_date, rate
      Nếu user hỏi CM1: trả GP thật + ghi rõ "CM1 = GP trừ thêm chi phí vận hành, xem tab B2B/B2C để có CM1 đầy đủ".
 · 3HK Contribution Revenue % = doanh thu SP 3HK / tổng doanh thu.
 
+━━━ CÁCH TIẾP CẬN CÂU HỎI PHỨC TẠP ━━━
+Với câu hỏi nhiều điều kiện / tính toán %: TRƯỚC KHI viết SQL, xác định rõ:
+1. Bảng chính nào? (fact_fulfillment_revenue cho revenue; fact_sales_revenue cho doanh số đặt)
+2. Dimension nào cần JOIN? (dim_order_source cho B2B/B2C; dim_staff cho sales; dim_sku cho vendor; dim_location cho kho)
+3. Filter gì? (date range, B2B/B2C, vendor, channel, SKU, location, exclusions)
+4. Tổng hợp thế nào? (GROUP BY gì? Cần CTE / subquery cho % hay so sánh không?)
+Sau đó viết SQL chính xác. Không đoán mò tên cột — nếu không chắc, query INFORMATION_SCHEMA hoặc LIMIT 5 trước.
+
 ━━━ QUY TẮC SQL QUAN TRỌNG ━━━
-1. created_date/fulfiled_date là TEXT → LUÔN cast: fulfiled_date::DATE (chú ý: chỉ 1 chữ "l" trong "fulfiled").
+1. fulfiled_date là TEXT → LUÔN cast: fulfiled_date::DATE. LUÔN thêm: AND f.fulfiled_date::date <= CURRENT_DATE - 1
 2. JOIN dim_order_source ON fact.order_source_code = s.code để lấy group_name (B2B/B2C) và channel_name.
 3. B2B: UPPER(s.group_name) = 'B2B' | B2C: UPPER(s.group_name) = 'B2C'.
 4. Ưu tiên cột *_vnd từ fact_fulfillment_revenue.
-5. Chỉ dùng tên bảng/cột chính xác như trên. Không bịa cột. Không chắc → query LIMIT 5 xem mẫu trước.
-6. Alias trong SELECT không dùng được trong WHERE/GROUP BY cùng level — wrap bằng subquery nếu cần.
-7. THỜI GIAN: Q2=01/04–30/06; Q1=01/01–31/03; Q3=01/07–30/09; Q4=01/10–31/12 (năm hiện tại nếu không nêu).
-   "tháng N" = ngày 1→cuối tháng N. "gần đây/mấy ngày" = 7 ngày trước MAX(fulfiled_date) (subquery tránh hard-code).
-   "tháng này" = tháng của MAX(fulfiled_date).
+5. Chỉ dùng tên bảng/cột chính xác. Không bịa cột. Không chắc → query LIMIT 5 xem mẫu trước.
+6. Alias trong SELECT không dùng được trong WHERE/GROUP BY cùng level → wrap bằng subquery hoặc CTE.
+7. THỜI GIAN: Q1=01/01–31/03; Q2=01/04–30/06; Q3=01/07–30/09; Q4=01/10–31/12 (năm hiện tại).
+   "tháng N" = ngày 1→cuối tháng N. "gần đây" = 7 ngày trước CURRENT_DATE - 1. "tháng này" = tháng của CURRENT_DATE - 1.
+   "tuần này" = DATE_TRUNC('week', CURRENT_DATE - 1). YoY = so sánh cùng period năm trước.
 8. SP 3HK: TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%').
-9. LUÔN TRẢ LỜI ĐƯỢC: câu hỏi về doanh thu/đơn/sản phẩm/kho/vendor/nhân viên → CHẮC CHẮN có trong gohub_dw.
-   PHẢI gọi executeSQL. Nếu trả 0 rows → nới điều kiện (bỏ filter kho, đổi ILIKE, mở rộng ngày) rồi giải thích.
+9. LUÔN TRẢ LỜI ĐƯỢC: câu hỏi về doanh thu/đơn/sản phẩm/kho/vendor/nhân viên → PHẢI gọi executeSQL.
+   Nếu 0 rows → nới điều kiện rồi giải thích. Chỉ nói "không có dữ liệu" sau khi query thật.
 10. SKU: mã 13 ký tự → TRIM(f.sku)='<SKU>'. Product: 8 ký tự → LEFT(TRIM(f.sku),8)='<PRODUCT>'.
 11. "Bán trên kênh nào" → GROUP BY s.group_name, s.channel_name — trả số lượng + doanh thu mỗi kênh.
+12. % thị phần → dùng WINDOW FUNCTION: ROUND(val * 100.0 / SUM(val) OVER (), 1) pct hoặc CTE tính total riêng.
+13. TRIM() customer_code và sku TRƯỚC KHI JOIN hoặc filter — dữ liệu gốc có thể có khoảng trắng thừa.
 
 ━━━ KHI USER HỎI BÁO CÁO (rất quan trọng) ━━━
 Khi user hỏi "báo cáo doanh thu", "tổng kết tháng/quý", "kết quả kinh doanh", "overview" hoặc câu hỏi chung chung về hiệu suất:
@@ -444,28 +487,52 @@ Khi chạy nhiều query → trình bày theo mục rõ ràng với tiêu đề 
 KHÔNG nói "tôi sẽ chạy query" rồi dừng — PHẢI gọi executeSQL NGAY và trả kết quả.
 
 ━━━ TỰ SỬA LỖI ━━━
-· SQL trả 0 rows: KHÔNG bỏ cuộc — (1) kiểm tra cast ::DATE, (2) thử ILIKE thay =, (3) bỏ bớt filter, (4) mở rộng ngày.
-· SQL lỗi: đọc lỗi, sửa ngay (tên cột sai, thiếu cast, alias sai GROUP BY), gọi lại executeSQL — KHÔNG hỏi user.
-· Số liệu bất thường (âm, >10 nghìn tỷ): flag ngay và chạy query kiểm tra.
+· SQL trả 0 rows: KHÔNG bỏ cuộc —
+  (1) Kiểm tra cast ::DATE — fulfiled_date::DATE bắt buộc.
+  (2) Nếu filter tên kênh/vendor exact → thử ILIKE '%name%' ngay lập tức.
+  (3) Nếu filter date → chạy SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue để kiểm tra data tới ngày nào.
+  (4) Bỏ bớt 1 filter mỗi lần để tìm filter nào gây ra 0 rows.
+  (5) Chỉ nói "không có dữ liệu" sau khi đã thử tất cả 4 bước trên.
+· SQL error "column X does not exist":
+  → Chạy: SELECT column_name FROM information_schema.columns WHERE table_name='<table>' ORDER BY ordinal_position
+  → Xem đúng tên cột rồi sửa. Đừng đoán mò.
+· SQL error "operator does not exist: text = integer" hoặc type mismatch:
+  → Thêm cast: ::TEXT hoặc ::INT hoặc ::NUMERIC tùy ngữ cảnh.
+· SQL error "invalid input syntax for type date":
+  → Kiểm tra fulfiled_date::DATE, loại ký tự thừa trong chuỗi ngày.
+· SQL error "column X must appear in GROUP BY":
+  → Thêm cột đó vào GROUP BY hoặc dùng aggregate (MIN/MAX/SUM).
+· SQL lỗi alias trong GROUP BY:
+  → Dùng số thứ tự (GROUP BY 1, 2) hoặc viết lại expression.
+· Số liệu bất thường (âm, >10 nghìn tỷ VND):
+  → Flag ngay, chạy query kiểm tra LIMIT 10 xem có JOIN nhân hàng không.
 
 ━━━ VÍ DỤ SQL ━━━
-· Tổng quan doanh thu tháng 7:
+· Tổng quan doanh thu tháng 7 (cắt tại hôm qua):
   SELECT COUNT(DISTINCT f.order_code) don, SUM(f.fulfilled_quantity) sl,
          SUM(f.fulfilled_revenue_amount_vnd) doanh_thu, SUM(f.gross_profit_vnd) gp
   FROM fact_fulfillment_revenue f
-  WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31';
-· Phân nhóm B2B/B2C:
-  SELECT UPPER(s.group_name) nhom, COUNT(DISTINCT f.order_code) don,
-         SUM(f.fulfilled_revenue_amount_vnd) doanh_thu
-  FROM fact_fulfillment_revenue f JOIN dim_order_source s ON f.order_source_code = s.code
-  WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31'
+  WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND LEAST('2026-07-31'::date, CURRENT_DATE - 1)
+    AND f.sku != 'SHIPPINGFEE0';
+· Phân nhóm B2B/B2C (cắt tại hôm qua + loại KH hệ thống):
+  SELECT UPPER(COALESCE(s.group_name,'OTHER')) nhom, COUNT(DISTINCT f.order_code) don,
+         SUM(f.fulfilled_revenue_amount_vnd) doanh_thu, SUM(f.gross_profit_vnd) gp
+  FROM fact_fulfillment_revenue f
+  JOIN dim_order_source s ON f.order_source_code = s.code
+  LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+  WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND LEAST('2026-07-31'::date, CURRENT_DATE - 1)
+    AND UPPER(COALESCE(s.group_name,'OTHER')) IN ('B2B','B2C')
+    AND UPPER(COALESCE(c.price_list_name,'')) NOT LIKE '%INACTIVE%'
+    AND f.sku != 'SHIPPINGFEE0'
   GROUP BY 1 ORDER BY doanh_thu DESC;
 · SP 3HK theo kho (Q2):
   SELECT COALESCE(l.location_name,'Unknown') kho, COUNT(DISTINCT f.order_code) don,
          SUM(f.fulfilled_revenue_amount_vnd) doanh_thu
   FROM fact_fulfillment_revenue f LEFT JOIN dim_location l ON f.location_id=l.location_id
   WHERE TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%')
-    AND f.fulfiled_date::date BETWEEN '2026-04-01' AND '2026-06-30' GROUP BY 1 ORDER BY doanh_thu DESC;
+    AND f.fulfiled_date::date BETWEEN '2026-04-01' AND '2026-06-30'
+    AND f.fulfiled_date::date <= CURRENT_DATE - 1
+  GROUP BY 1 ORDER BY doanh_thu DESC;
 · Breakdown doanh thu sales theo 3HK:
   SELECT COALESCE(st.name, TRIM(f.staff_code)) sales,
          SUM(f.fulfilled_revenue_amount_vnd) tong_doanh_thu,
@@ -473,9 +540,109 @@ KHÔNG nói "tôi sẽ chạy query" rồi dừng — PHẢI gọi executeSQL NG
          COUNT(DISTINCT f.customer_code) so_kh
   FROM fact_fulfillment_revenue f
   LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-  LEFT JOIN dim_sku sk ON f.sku = sk.sku
-  WHERE f.fulfiled_date::date BETWEEN '<start>' AND '<end>'
+  LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE - 1)
+    AND f.sku != 'SHIPPINGFEE0'
   GROUP BY 1 ORDER BY tong_doanh_thu DESC;
+· Customer lifetime value B2B (top khách hàng theo tổng doanh thu):
+  SELECT TRIM(f.customer_code) kh,
+         COUNT(DISTINCT f.order_code) don,
+         SUM(f.fulfilled_revenue_amount_vnd) total_rev,
+         MIN(f.fulfiled_date::date) first_order,
+         MAX(f.fulfiled_date::date) last_order,
+         COUNT(DISTINCT TO_CHAR(f.fulfiled_date::date,'YYYY-MM')) so_thang
+  FROM fact_fulfillment_revenue f
+  JOIN dim_order_source s ON f.order_source_code = s.code
+  WHERE UPPER(s.group_name) = 'B2B'
+    AND f.sku != 'SHIPPINGFEE0'
+    AND f.fulfiled_date::date <= CURRENT_DATE - 1
+  GROUP BY 1 ORDER BY total_rev DESC LIMIT 20;
+· YoY comparison (so sánh cùng tháng/kỳ năm trước):
+  SELECT EXTRACT(YEAR FROM f.fulfiled_date::date) yr,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         SUM(f.gross_profit_vnd) gp,
+         COUNT(DISTINCT f.order_code) don
+  FROM fact_fulfillment_revenue f
+  WHERE EXTRACT(MONTH FROM f.fulfiled_date::date) = <month_number>
+    AND EXTRACT(YEAR FROM f.fulfiled_date::date) IN (<year>, <year-1>)
+    AND f.fulfiled_date::date <= CURRENT_DATE - 1
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY 1 ORDER BY 1;
+· Weekly trend (4 tuần gần nhất):
+  SELECT DATE_TRUNC('week', f.fulfiled_date::date)::date tuan,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         COUNT(DISTINCT f.order_code) don,
+         SUM(f.gross_profit_vnd) gp
+  FROM fact_fulfillment_revenue f
+  WHERE f.fulfiled_date::date >= (CURRENT_DATE - 29)
+    AND f.fulfiled_date::date <= CURRENT_DATE - 1
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY 1 ORDER BY 1;
+· Vendor/product mix với % thị phần (dùng WINDOW FUNCTION):
+  SELECT sk.vendor,
+         COUNT(DISTINCT TRIM(f.sku)) sku_count,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         ROUND(SUM(f.fulfilled_revenue_amount_vnd) * 100.0
+               / SUM(SUM(f.fulfilled_revenue_amount_vnd)) OVER (), 1) pct
+  FROM fact_fulfillment_revenue f
+  LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE - 1)
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY sk.vendor ORDER BY rev DESC;
+· New customers B2B trong kỳ (mua lần đầu tiên):
+  SELECT TRIM(f.customer_code) kh,
+         MIN(f.fulfiled_date::date) first_order_date,
+         COUNT(DISTINCT f.order_code) don,
+         SUM(f.fulfilled_revenue_amount_vnd) rev
+  FROM fact_fulfillment_revenue f
+  JOIN dim_order_source s ON f.order_source_code = s.code
+  WHERE UPPER(s.group_name) = 'B2B'
+    AND f.sku != 'SHIPPINGFEE0'
+    AND f.fulfiled_date::date <= CURRENT_DATE - 1
+  GROUP BY 1
+  HAVING MIN(f.fulfiled_date::date) BETWEEN '<start>' AND '<end>'
+  ORDER BY first_order_date;
+· Kho (location) breakdown:
+  SELECT COALESCE(l.location_name, 'Unknown') kho,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         COUNT(DISTINCT f.order_code) don,
+         SUM(f.fulfilled_quantity) sl
+  FROM fact_fulfillment_revenue f
+  LEFT JOIN dim_location l ON f.location_id = l.location_id
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE - 1)
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY 1 ORDER BY rev DESC;
+  -- Lưu ý: eSIM/DATAPOOL (3HK, WorldMove) thường có location_id=0 ('Unknown') — đây là bình thường.
+· Multi-dimension: nhân viên × kho (JOIN dim_staff + dim_location):
+  SELECT COALESCE(st.name, TRIM(f.staff_code)) nhan_vien,
+         COALESCE(l.location_name, 'Unknown') kho,
+         SUM(f.fulfilled_revenue_amount_vnd) rev,
+         COUNT(DISTINCT f.order_code) don
+  FROM fact_fulfillment_revenue f
+  LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+  LEFT JOIN dim_location l ON f.location_id = l.location_id
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE-1)
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY 1, 2 ORDER BY rev DESC;
+· Usage eSIM theo usage_class (fact_data_usage):
+  SELECT usage_class,
+         COUNT(DISTINCT iccid) so_sim,
+         ROUND(AVG(usage_pct), 1) avg_usage_pct,
+         ROUND(SUM(data_amount_gb), 1) total_gb_used,
+         ROUND(SUM(total_data_gb), 1) total_gb_plan
+  FROM fact_data_usage
+  WHERE month_tag = '<YYYY-MM>'
+  GROUP BY usage_class ORDER BY avg_usage_pct DESC;
+· Usage 3HK theo nước (data_usage_log):
+  SELECT country,
+         COUNT(DISTINCT iccid) so_sim,
+         ROUND(SUM(data_gb), 2) total_gb,
+         COUNT(*) log_entries
+  FROM data_usage_log
+  WHERE report_date IS NOT NULL
+    AND report_date BETWEEN '<start>'::date AND '<end>'::date
+    AND sales_channel ILIKE '%3HK%'
+  GROUP BY country ORDER BY total_gb DESC LIMIT 20;
 
 ━━━ TRÁNH DOUBLE-COUNTING (B2B) ━━━
 Strategic Partners (Klook, Traveloka) nằm trong cả kênh B2B portal VÀ có tên riêng.
@@ -534,8 +701,10 @@ fact_sales_revenue (doanh số theo ngày tạo đơn): order_code, sku, created
 fact_data_usage (usage eSIM theo ICCID): iccid, order_code, sku, sku_type, first_report_date, total_data_gb, data_amount_gb, usage_pct, month_tag
 data_usage_log (log thô ngày): report_date, sales_channel, iccid, offer_name, country, data_gb
 dim_order_source: code, name, group_name (B2B/B2C), channel_name  → JOIN order_source_code = code
-dim_sku: sku, vendor, category_name, product_type, type_of_sim, standard_cogs_vnd  → JOIN fact.sku = dim_sku.sku
-dim_staff: code, name  · dim_customer: code, name  · dim_location: location_id, location_name
+dim_sku: sku (=PK, KHÔNG phải sku_code), vendor, category_name, product_type, type_of_sim, standard_cogs_vnd  → JOIN fact.sku = dim_sku.sku
+  ⚠️ vendor '3HK DATAPOOL' (7700+) và '3HK' (60) khác nhau → dùng REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%' để lấy tất cả.
+dim_staff: code, name  · dim_customer: code, name, price_list_name, currency_code (355k rows, 99.7% B2C null — LEFT JOIN)
+dim_location: location_id, location_name (0='Unknown'=eSIM digital — bình thường)
 company: code, name (VN/SG/HK/US)  · exchange_rate: company_code, currency_code, from_date, rate
 ⚠️ created_date/fulfiled_date là TEXT → LUÔN cast ::DATE. KHÔNG JOIN dim_date. Không bịa cột — không chắc thì query LIMIT 5 xem mẫu.
 
@@ -548,7 +717,25 @@ company: code, name (VN/SG/HK/US)  · exchange_rate: company_code, currency_code
   Bước 2) với TỪNG nhóm, gọi countOnly:true + filter eq cột nhóm = giá trị đó → ghép thành bảng nhóm × số lượng.
   (Nếu bảng nằm trong gohub_dw thì ưu tiên executeSQL + GROUP BY cho gọn; còn bảng Supabase thì dùng cách trên.)
 - ⚠️ TUYỆT ĐỐI KHÔNG hứa suông ("để tôi truy vấn", "chờ chút") rồi dừng — PHẢI gọi tool NGAY và đưa số/kết quả trong CÙNG câu trả lời. Với "đếm theo nhóm": chạy đủ các bước countOnly (tối đa ~15 nhóm; nếu nhiều hơn thì lấy top theo limit và nói rõ) rồi mới kết luận, KHÔNG bỏ dở.
-- Bảng chi phí cấu hình (analytics_channel_costs: cột channel, month, ads, platform_fee, sponsor_products, media — MỖI cột chi phí là JSON chuỗi dạng {"type":"amount"|"percent","value":N}; analytics_channel_group_costs tương tự theo nhóm kênh). Hỏi "chi phí cấu hình cho kênh nào" → query rồi liệt kê các channel (tháng gần nhất), đọc value trong JSON; nếu tất cả =0 thì nói rõ "đã có kênh nhưng chi phí đang để 0".
+- Bảng chi phí cấu hình:
+  · analytics_channel_costs: channel(TEXT), month(TEXT 'YYYY-MM'), source_code(TEXT),
+    ads(JSON), platform_fee(JSON), sponsor_products(JSON), media(JSON)
+    → Mỗi cột cost là JSON string: {"type":"amount"|"percent","value":N}
+    → "amount" = số tiền VND cố định/tháng; "percent" = % áp trên doanh thu kênh đó.
+    ⚠️ KHI QUERY BẢNG NÀY: BẮT BUỘC select cả 4 cột cost (ads, platform_fee, sponsor_products, media)
+    và ĐỌC value từ JSON. Ví dụ: nếu ads = '{"type":"amount","value":5000000}' → hiển thị "Ads: 5,000,000 VND".
+    Nếu value=0 hoặc null trong mọi cột → ghi rõ "kênh này chưa có chi phí cấu hình".
+    → Khi hỏi "chi phí kênh nào?" → liệt kê kênh + giá trị từng loại cost + tháng áp dụng.
+  · analytics_channel_group_costs: group_name(TEXT B2B/B2C), month(TEXT), amount(NUMERIC).
+    → Chi phí chung cả nhóm kênh, phân bổ theo revenue share.
+- analytics_monthly_kpis: month(TEXT 'YYYY-MM'), channel_group(TEXT B2B/B2C),
+    revenue(NUMERIC), gp(NUMERIC), cm1(NUMERIC), orders(INT), units(INT).
+    → Snapshot KPI tháng đã tính sẵn (bao gồm CM1 sau trừ operation cost). Dùng khi cần CM1 chính xác.
+- b2b_customers_cache: customer_code(TEXT PK), customer_name(TEXT), price_list_name(TEXT),
+    currency_code(TEXT VND/USD), status(TEXT Active/Inactive).
+    → Cache B2B customers từ gohub_dw, sync định kỳ. Dùng để enrich tên KH cho customer_code.
+- analytics_target_planning: month(TEXT), channel_group(TEXT), target_revenue(NUMERIC), target_cm1(NUMERIC).
+    → Target KPI theo tháng, B2B và B2C riêng.
 
 ━━━ GIỚI HẠN (bảo mật — bắt buộc) ━━━
 - Bảng nhạy cảm (users, hội thoại, ticket, app_settings) chỉ admin/creator xem — nếu tool báo hạn chế, nói rõ "thông tin này thuộc nhóm hạn chế".

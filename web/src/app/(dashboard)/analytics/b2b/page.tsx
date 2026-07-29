@@ -7,15 +7,13 @@ import {
 import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
-  Calendar, Download, ChevronDown, Globe,
-  ArrowUpDown, ShoppingBag, Settings, Check, Zap, Building2, Shield, FileText,
+  Calendar, Download, ChevronDown, Globe, Search, X,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
-import { CostManagementModal } from "@/components/cost-management-modal"
 import { DatePresets } from "@/components/date-presets"
 import { exportToExcel } from "@/lib/export-excel"
-import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -42,7 +40,9 @@ interface KPI {
   isPositive: boolean; isCurrency?: boolean; icon?: React.ReactNode
 }
 interface PerformanceData {
-  name: string; channel?: string; revenue: number; margin: number; margin_percent: number
+  name: string; channel?: string; sub_group_name?: string; source_code?: string
+  customer_code?: string; price_list_name?: string; currency_code?: string
+  revenue: number; margin: number; margin_percent: number
   gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
 }
@@ -56,10 +56,8 @@ export default function B2BPerformance() {
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
 
-  const [showCostModal, setShowCostModal] = useState(false)
-  const [monthlyCosts, setMonthlyCosts] = useState<Record<string, any>>({})
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
-  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
+  const [b2bCostMap, setB2bCostMap] = useState<Record<string, { cost_lines: { label?: string; type: string; value: number }[] }>>({})
 
   const [combinedKpis, setCombinedKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<any[]>([])
@@ -69,6 +67,18 @@ export default function B2BPerformance() {
   const [channelsWithPlatformFee, setChannelsWithPlatformFee] = useState<string[]>([])
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
+  const [tierSearch, setTierSearch] = useState("")
+  // Tier keywords từ quarterly-settings (giống Q.Report) — mặc định Strategic/VIP/Gold/Silver
+  const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
+    Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
+  })
+  // Collapse/expand per tier — mặc định mở hết
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<string>>(new Set())
+  const toggleTier = (tier: string) => setCollapsedTiers(prev => {
+    const next = new Set(prev)
+    if (next.has(tier)) next.delete(tier); else next.add(tier)
+    return next
+  })
 
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
@@ -86,13 +96,25 @@ export default function B2BPerformance() {
   const projectionFactor = getProjectionFactor()
   const isProjectable = projectionFactor > 1
 
-  const fetchCosts = async (month: string) => {
+  const fetchB2BCosts = async (month: string) => {
     try {
-      const res = await fetch(`/api/channel-costs?month=${month}`)
-      if (res.ok) setMonthlyCosts(await res.json())
-    } catch (err) {
-      console.error("Error fetching costs:", err)
-    }
+      const res = await fetch(`/api/analytics/b2b-customer-costs?month=${month}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const map: Record<string, { cost_lines: { label?: string; type: string; value: number }[] }> = {}
+      for (const row of data.rows || []) {
+        if (!row.customer_code) continue
+        map[row.customer_code] = { cost_lines: row.cost_lines_parsed || [] }
+      }
+      setB2bCostMap(map)
+    } catch (e) { console.error("Error fetching b2b costs:", e) }
+  }
+
+  const calcChCost = (customerCode: string | undefined, revenue: number): number => {
+    if (!customerCode) return 0
+    const lines = b2bCostMap[customerCode]?.cost_lines
+    if (!lines?.length) return 0
+    return lines.reduce((s, l) => s + (l.type === "percent" ? (l.value / 100) * revenue : l.value), 0)
   }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
@@ -129,13 +151,15 @@ export default function B2BPerformance() {
       if (fresh) queryParams.append("nocache", "1")
       const nc = fresh ? "&nocache=1" : ""
 
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData] = await Promise.all([
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
+        // Load tier keywords từ quarterly-settings (giống Quarter Report)
+        fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -145,12 +169,13 @@ export default function B2BPerformance() {
       const safeFeeChannels = Array.isArray(feeChannels) ? feeChannels : []
 
       setPartnerTiers(tiersData)
+      if (quarterlySettings?.tierKeywords) setTierKeywords(quarterlySettings.tierKeywords)
       setWholesaleCustomers(safeB2BPerfCustomer)
       setStrategicPerformance(safeStrategicPerf)
       setTrendData(safeTrend)
       setChannelsWithPlatformFee(safeFeeChannels)
 
-      fetchCosts(startDate.slice(0, 7))
+      fetchB2BCosts(startDate.slice(0, 7))
 
       const findKPI = (kpis: any[], label: string) => kpis.find(k => k.label === label)
       const b2bRev = findKPI(safeB2BKpis, "Total Revenue")?.value || 0
@@ -303,11 +328,6 @@ export default function B2BPerformance() {
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
               <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
             </div>
-            {dbRole === "creator" && (
-              <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
-                <Settings className="w-3.5 h-3.5" />Manage Costs
-              </button>
-            )}
             <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>
@@ -615,28 +635,45 @@ export default function B2BPerformance() {
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-blue-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">Other Tiers Customers</h2>
-                      <p className="text-xs text-slate-500 font-medium">Performance by individual non-strategic customers.</p>
+                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">B2B Tier Performance</h2>
+                      <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá: Strategic · VIP · Gold · Silver</p>
                     </div>
                   </div>
-                  <button onClick={() => {
-                    const nonStrategic = getFilteredOtherTiers()
-                    const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
-                    if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
-                    columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                    const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
-                    exportToCSV(exportData, "Other_Tiers_Customers", columns)
-                  }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                    <Download className="w-3 h-3" />CSV
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm khách hàng..."
+                        value={tierSearch}
+                        onChange={e => setTierSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500 w-48"
+                      />
+                      {tierSearch && (
+                        <button onClick={() => setTierSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <button onClick={() => {
+                      const nonStrategic = getFilteredOtherTiers()
+                      const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
+                      if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
+                      columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
+                      const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
+                      exportToCSV(exportData, "B2B_Tier_Performance", columns)
+                    }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
+                      <Download className="w-3 h-3" />CSV
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50">
-                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [keyof PerformanceData, string][]).map(([key, label], i) => (
-                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => setWholesaleSort({ key, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
-                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}<SortIcon sort={wholesaleSort} column={key} /></div>
+                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["__ch_cost__", "CH.Cost"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [string, string][]).map(([key, label], i) => (
+                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => key !== "__ch_cost__" && setWholesaleSort({ key: key as keyof PerformanceData, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
+                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}{key !== "__ch_cost__" && <SortIcon sort={wholesaleSort} column={key} />}</div>
                           </th>
                         ))}
                       </tr>
@@ -644,15 +681,60 @@ export default function B2BPerformance() {
                     <tbody className="divide-y divide-slate-50">
                       {(() => {
                         const nonStrategic = nonStrategicMemo
-                        const sorted = sortData(nonStrategic, wholesaleSort)
+                        const searchLow = tierSearch.toLowerCase().trim()
+                        const sorted = sortData(
+                          searchLow ? nonStrategic.filter(r =>
+                            r.name.toLowerCase().includes(searchLow) ||
+                            (r.price_list_name || "").toLowerCase().includes(searchLow)
+                          ) : nonStrategic,
+                          wholesaleSort
+                        )
+                        // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
-                        const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
-                        return (
-                          <>
-                            {sorted.map((row, idx) => {
+                        // Tính total CH.Cost + CM1 từ b2bCostMap (giống Quarter Report)
+                        const totalChCost = sorted.reduce((acc, curr) => {
+                          const has = !!(curr.customer_code && b2bCostMap[curr.customer_code]?.cost_lines?.length)
+                          return acc + (has ? calcChCost(curr.customer_code, curr.revenue) : (curr.margin - curr.gpm2))
+                        }, 0)
+                        const totalCm1 = totals.margin - totalChCost
+                        const totalCm1Pct = totals.revenue > 0 ? (totalCm1 / totals.revenue) * 100 : 0
+
+                        // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
+                        const classifyTier = (pln?: string): string => {
+                          if (!pln) return "Strategic"
+                          const p = pln.toUpperCase()
+                          for (const [tier, keywords] of Object.entries(tierKeywords)) {
+                            if ((keywords as string[]).some(kw => p.includes(kw.toUpperCase()))) return tier
+                          }
+                          return "Strategic"   // default như Quarter Report
+                        }
+                        const TIER_ORDER = Object.keys(tierKeywords).length > 0
+                          ? Object.keys(tierKeywords)
+                          : ["Strategic", "VIP", "Gold", "Silver"]
+                        const hasTierInfo = sorted.some(r => r.price_list_name)
+                        const groups = new Map<string, PerformanceData[]>()
+                        sorted.forEach(row => {
+                          const grp = hasTierInfo
+                            ? classifyTier(row.price_list_name)
+                            : (row.sub_group_name || "__flat__")
+                          if (!groups.has(grp)) groups.set(grp, [])
+                          groups.get(grp)!.push(row)
+                        })
+                        // Sort tiers theo thứ tự chuẩn
+                        const sortedGroups = new Map<string, PerformanceData[]>()
+                        const tierKeys = hasTierInfo
+                          ? [...TIER_ORDER.filter(t => groups.has(t)), ...Array.from(groups.keys()).filter(k => !TIER_ORDER.includes(k))]
+                          : Array.from(groups.keys())
+                        tierKeys.forEach(k => { if (groups.has(k)) sortedGroups.set(k, groups.get(k)!) })
+
+                        const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
-                              const costs = monthlyCosts[row.name]
+                              const hasB2BCost = !!(row.customer_code && b2bCostMap[row.customer_code]?.cost_lines?.length)
+                              const chCost = hasB2BCost ? calcChCost(row.customer_code, row.revenue) : (row.margin - row.gpm2)
+                              const cm1 = row.margin - chCost
+                              const cm1Pct = row.revenue > 0 ? (cm1 / row.revenue) * 100 : 0
+                              const costLines = row.customer_code ? (b2bCostMap[row.customer_code]?.cost_lines || []) : []
                               return (
                                 <React.Fragment key={idx}>
                                   <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-blue-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
@@ -677,16 +759,21 @@ export default function B2BPerformance() {
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.margin_percent.toFixed(1)}%</span></td>
                                     <td className="px-8 py-4 text-right">
+                                      <span className={cn("text-sm font-bold tracking-tight", chCost >= 0 ? "text-amber-600" : "text-rose-500")}>
+                                        {formatCurrency(Math.round(chCost)).replace("₫","VND")}
+                                      </span>
+                                    </td>
+                                    <td className="px-8 py-4 text-right">
                                       <div className="flex flex-col items-end">
-                                        <span className={cn("text-sm font-bold tracking-tight", row.gpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.gpm2).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(row.gpm2 * projectionFactor).replace("₫", "")}</span>}
+                                        <span className={cn("text-sm font-bold tracking-tight", cm1 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(cm1).replace("₫", "VND")}</span>
+                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(cm1 * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
-                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.gpm2_percent.toFixed(1)}%</span></td>
+                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{cm1Pct.toFixed(1)}%</span></td>
                                   </tr>
                                   {isExpanded && (
                                     <tr className="bg-slate-50/80">
-                                      <td colSpan={7} className="px-8 py-3">
+                                      <td colSpan={8} className="px-8 py-3">
                                         <div className="space-y-4">
                                           {row.sub_channels && row.sub_channels.length > 0 && (
                                             <div className="bg-white/60 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -718,25 +805,59 @@ export default function B2BPerformance() {
                                               </table>
                                             </div>
                                           )}
-                                          <div className="grid grid-cols-4 gap-4">
-                                            {(["ads", "platformFee", "sponsorProducts", "media"] as const).map(category => {
-                                              const amount = row.cost_breakdown?.[category] || costs?.[category] || 0
-                                              return (
-                                                <div key={category} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
-                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{category.replace(/([A-Z])/g, " $1")}</p>
-                                                  <div className="flex items-baseline justify-between"><p className="text-xs font-bold text-slate-700">{formatNumber(Math.round(amount))}</p></div>
+                                          {costLines.length > 0 ? (
+                                            <div className={`grid grid-cols-${Math.min(costLines.length, 4)} gap-4`}>
+                                              {costLines.map((line, li) => (
+                                                <div key={li} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
+                                                  <p className="text-xs font-bold text-slate-700">
+                                                    {line.type === "percent"
+                                                      ? `${line.value}% → ${formatNumber(Math.round((line.value / 100) * row.revenue))}`
+                                                      : formatNumber(Math.round(line.value))}
+                                                  </p>
                                                 </div>
-                                              )
-                                            })}
-                                          </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="text-xs text-slate-400 italic">Chưa có dữ liệu chi phí cho khách hàng này</p>
+                                          )}
                                         </div>
                                       </td>
                                     </tr>
                                   )}
                                 </React.Fragment>
                               )
+                        }
+
+                        return (
+                          <>
+                            {Array.from(sortedGroups.entries()).map(([grpName, grpRows]) => {
+                              if (grpName === "__flat__") {
+                                // No sub_group_name data — render flat (backward compat)
+                                return grpRows.map((row, idx) => renderRow(row, idx))
+                              }
+                              return (
+                                <React.Fragment key={grpName}>
+                                  {/* Tier header — click để collapse/expand */}
+                                  <tr
+                                    className="bg-blue-600 border-y border-blue-700 cursor-pointer select-none hover:bg-blue-700 transition-colors"
+                                    onClick={() => toggleTier(grpName)}
+                                  >
+                                    <td colSpan={8} className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-white">
+                                      <div className="flex items-center gap-2">
+                                        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform shrink-0", collapsedTiers.has(grpName) && "-rotate-90")} />
+                                        {grpName}
+                                        <span className="ml-2 bg-white/20 px-2 py-0.5 rounded text-[10px]">{grpRows.length} KH</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {/* Customer rows — ẩn khi collapsed */}
+                                  {!collapsedTiers.has(grpName) && grpRows.map((row, idx) => renderRow(row, idx))}
+                                </React.Fragment>
+                              )
                             })}
-                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200 italic">
+                            {/* TOTAL OTHERS — tổng tất cả KH sau filter/search */}
+                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                               <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL OTHERS</td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
@@ -752,13 +873,16 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{margin_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm font-black text-amber-600">
+                                {formatCurrency(Math.round(totalChCost)).replace("₫","VND")}
+                              </td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
-                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totals.gpm2)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totals.gpm2 * projectionFactor)).replace("₫", "")}</span>}
+                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totalCm1)).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totalCm1 * projectionFactor)).replace("₫", "")}</span>}
                                 </div>
                               </td>
-                              <td className="px-8 py-4 text-right text-sm text-slate-700">{gpm2_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-700">{totalCm1Pct.toFixed(1)}%</td>
                             </tr>
                           </>
                         )
@@ -771,7 +895,6 @@ export default function B2BPerformance() {
           </>
         )}
       </div>
-      <CostManagementModal isOpen={showCostModal} onClose={() => setShowCostModal(false)} onSave={() => fetchData(true)} initialMonth={startDate.slice(0, 7)} />
     </div>
   )
 }

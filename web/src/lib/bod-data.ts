@@ -26,19 +26,54 @@ export function monthsBetween(startDate: string, endDate: string) {
 }
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
-interface ChannelCost { channel: string; month: string; ads: any; platformFee: any; sponsorProducts: any; media: any }
+interface ChannelCost {
+  channel: string; month: string
+  source_code?: string  // dim_order_source.code — ổn định khi channel đổi tên
+  ads: any; platformFee: any; sponsorProducts: any; media: any
+}
 
 export async function fetchCosts(months: string[]): Promise<{ channelCosts: ChannelCost[]; groupCosts: any[] }> {
   if (months.length === 0) return { channelCosts: [], groupCosts: [] }
   const [{ data: ccData }, { data: gcData }] = await Promise.all([
-    supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
+    supabaseAdmin.from("analytics_channel_costs").select("channel, month, source_code, ads, platform_fee, sponsor_products, media").in("month", months),
     supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
   ])
   const channelCosts = (ccData || []).map((r: any) => ({
-    channel: r.channel, month: String(r.month),
+    channel: r.channel, month: String(r.month), source_code: r.source_code || undefined,
     ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
   }))
   return { channelCosts, groupCosts: (gcData || []).map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
+}
+
+/** Match channel cost — permanent fix cho channel rename.
+ *
+ * Thứ tự ưu tiên:
+ * 1. Sub-channel prefix: tìm tất cả record "Channel - *" cho tháng đó
+ *    → nếu có → dùng CHÚNG (không dùng aggregate để tránh double-count)
+ *    → bắt trọn Shopee/TikTok/Lazada kể cả khi source_code khác nhau
+ * 2. Source_code match: nếu không có sub-channel record → tìm theo source_code
+ * 3. Exact name match: fallback cuối cùng
+ *
+ * Ví dụ: "VN-Ecom" có sub-records "VN-Ecom - Shopee", "VN-Ecom - TiktokShop", "VN-Ecom - Lazada"
+ *   → priority 1 tìm cả 3 → tổng hợp đúng, không lẫn với aggregate "VN-Ecom"
+ */
+export function matchChannelCost(
+  channelCosts: ChannelCost[], channel: string, month: string, sourceCode?: string
+): ChannelCost[] {
+  const subPrefix = channel + " - "
+
+  // 1. Sub-channel prefix match (catches renamed sub-channels like "VN-Ecom - Shopee")
+  const subRecords = channelCosts.filter(c => c.month === month && c.channel.startsWith(subPrefix))
+  if (subRecords.length > 0) return subRecords   // found sub-channels → use only them
+
+  // 2. Source_code match (for renamed channels with stable code)
+  if (sourceCode) {
+    const byCode = channelCosts.filter(c => c.month === month && c.source_code === sourceCode)
+    if (byCode.length > 0) return byCode
+  }
+
+  // 3. Exact name match (original behavior — aggregate or unchanged channel)
+  return channelCosts.filter(c => c.month === month && c.channel === channel)
 }
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const

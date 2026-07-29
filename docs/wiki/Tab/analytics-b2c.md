@@ -139,3 +139,21 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - [ ] Kiểm tra Turso lead token hoặc fallback Omni/Chatwoot.
 - [ ] Kiểm tra Customer New/Returning bằng `summary.byUserType`.
 - [ ] Kiểm tra local build `npm run build`.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue B2C | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` WHERE `group_name='B2C'` |
+| GP (Gross Profit) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| CM1 | GP − Operation Cost | GP − `analytics_channel_group_costs.amount` (B2C group) |
+| CM1% | CM1 / Revenue × 100 | Tính từ 2 cột trên |
+| Marketing Spend | `analytics_channel_group_costs` | `SUM(amount)` WHERE `group_name='B2C'` theo tháng |
+| Budget Marketing | `analytics_channel_costs` | `SUM(amount)` các kênh B2C từ Manage Costs |
+| Customers New/Returning | Admin GoHub Internal API `/v1/internal/customers/revenue` | `summary.byUserType.new` / `.returning` |
+| Leads | Turso chat-center (primary) → Omni → Chatwoot | Các trạng thái: New Lead, Sales Consulting, Waiting Payment… |
+| Website CR | Google Analytics 4 | 2 property: config `app_config['ga4_configs']` (Supabase `app_settings`) |
+| ROAS | Revenue B2C / Marketing Spend | Tính từ 2 cột trên |
+| CAC | Marketing Spend / New Customers | Tính từ 2 cột trên |

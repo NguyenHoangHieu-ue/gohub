@@ -268,9 +268,22 @@ export async function runDataExplorer(
         try {
           console.log(`[DataExplorer] SQL: ${sql.substring(0, 120)}`)
           const rows = await queryAnalytics(sql)
-          fnParts.push({ functionResponse: { name: "executeSQL", response: { result: rows.slice(0, 100), rowCount: rows.length } } })
+          const limited = rows.slice(0, 100)
+          const response: any = { result: limited, rowCount: rows.length }
+          if (rows.length === 0) {
+            response.hint = "0 rows. Try: (1) check fulfiled_date::DATE cast, (2) ILIKE instead of =, (3) remove one filter, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue."
+          }
+          const firstRow = limited[0] as any
+          if (firstRow) {
+            const nums = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v)))).map(v => Number(v))
+            if (nums.some(n => n > 1e13)) response.warning = "Some values appear unusually large (>10 trillion). Check for missing JOIN condition causing row multiplication."
+          }
+          fnParts.push({ functionResponse: { name: "executeSQL", response } })
         } catch (err: any) {
-          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: err.message } } })
+          fnParts.push({ functionResponse: { name: "executeSQL", response: {
+            error: err.message,
+            fix_hint: "Fix the SQL error and call executeSQL again. Common: wrong column name (query information_schema.columns), missing ::DATE cast, alias in GROUP BY (use position number instead).",
+          } } })
         }
         continue
       }

@@ -30,3 +30,16 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
 ## 3. Gotchas
 - `tier` (Strategic/Non) lấy từ Partner Tiers (Supabase). Kênh B2B không thuộc Strategic → Non-Strategic.
 - Không giới hạn kỳ ngắn → dữ liệu lớn, dựa vào cache 12h.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` toàn thời gian |
+| Margin (GP) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| Period | `fact_fulfillment_revenue.fulfiled_date` | GROUP BY tháng/năm (`period`) |
+| Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Derived Group | `dim_order_source.group_name` + Partner Tiers | B2B-Strategic / B2B-Non-Strategic / B2C |
+| Tier (B2B) | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` → Strategic |
