@@ -37,7 +37,7 @@ const TIER_CONFIG: Record<string, { bg: string; text: string }> = {
   B2C:       { bg: "bg-emerald-100", text: "text-emerald-700" },
 }
 const PAGE_SIZE = 50
-const TODAY = new Date().toISOString().split("T")[0]
+function getToday() { return new Date().toISOString().split("T")[0] }
 
 // Format YYYY-MM-DD → DD/MM/YY
 function fmtDate(d: string) {
@@ -67,11 +67,17 @@ export default function OrdersPage() {
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [dateMode,     setDateMode]     = useState<"day" | "range">("day")
-  const [singleDate,   setSingleDate]   = useState(TODAY)
-  const [startDate,    setStartDate]    = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]
-  })
-  const [endDate,      setEndDate]      = useState(TODAY)
+  const [singleDate,   setSingleDate]   = useState("")
+  const [startDate,    setStartDate]    = useState("")
+  const [endDate,      setEndDate]      = useState("")
+  // Set dates client-side only (avoid SSR hydration mismatch with new Date())
+  useEffect(() => {
+    const today = getToday()
+    const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30)
+    setSingleDate(today)
+    setStartDate(monthAgo.toISOString().split("T")[0])
+    setEndDate(today)
+  }, [])
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -137,10 +143,11 @@ export default function OrdersPage() {
     }
   }, [buildParams])
 
-  // Auto-fetch when single date changes
-  useEffect(() => { if (dateMode === "day") fetchData(1) }, [singleDate, dataSource])
-  // Fetch on mount
-  useEffect(() => { fetchData(1) }, [])
+  // Fetch when singleDate/dataSource changes (singleDate is set after mount)
+  useEffect(() => {
+    if (singleDate) fetchData(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [singleDate, dataSource])
 
   // ── Client-side search ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -256,7 +263,7 @@ export default function OrdersPage() {
               </label>
               <input type="date" value={singleDate}
                 onChange={e => setSingleDate(e.target.value)}
-                max={TODAY}
+                suppressHydrationWarning
                 className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
               />
             </div>
@@ -270,7 +277,7 @@ export default function OrdersPage() {
               <span className="text-slate-400 dark:text-slate-500 pb-1.5">→</span>
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">To</label>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} max={TODAY}
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} suppressHydrationWarning
                   className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
               </div>
             </div>
