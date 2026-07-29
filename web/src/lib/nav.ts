@@ -37,8 +37,9 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
     { href: "/analytics/b2b",       label: "B2B",        icon: Building2  },
     { href: "/analytics/b2c",       label: "B2C",        icon: ShoppingBag },
     { href: "/analytics/website",   label: "Website Analytics", icon: Globe   },
-    { href: "/analytics/staff",     label: "Staff",      icon: Users      },
-    { href: "/analytics/customers", label: "Customers",  icon: Users      },
+    { href: "/analytics/staff",        label: "Staff",        icon: Users        },
+    { href: "/analytics/order-report", label: "Order Report", icon: ClipboardList },
+    { href: "/analytics/customers",    label: "Customers",    icon: Users        },
     { href: "/analytics/vendors",   label: "Vendors",    icon: TrendingUp },
   ]},
   { label: "Operations & Support", items: [
