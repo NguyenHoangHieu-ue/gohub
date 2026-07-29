@@ -30,3 +30,17 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 ## 3. Gotchas
 - Khách không map được → hiển thị `TRIM(customer_code)` hoặc "Unknown".
 - Created mode → margin = 0.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY customer_code; lọc B2B |
+| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` |
+| Units / Quantity | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` |
+| Customer Name | `dim_customer.name` | JOIN `TRIM(f.customer_code) = TRIM(dim_customer.code)` |
+| Customer Code | `fact_fulfillment_revenue.customer_code` | Fallback: `TRIM(customer_code)` nếu không map được |
+| Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Product | `dim_sku.type_of_sim` | JOIN `f.sku = dim_sku.sku` |

@@ -94,3 +94,21 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 
 ## 6. Phân quyền
 Admin, Creator, BOD, Manager, Staff đều xem được. Không có role restriction riêng cho tab này.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY channel |
+| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| Margin% | GP / Revenue × 100 | Tính từ 2 cột trên |
+| CM1 (gpm2) | GP − Operation Cost | `margin - opCost`; opCost từ `analytics_channel_costs` + `analytics_channel_group_costs` |
+| CM1% (gpm2%) | CM1 / Revenue × 100 | Tính từ 2 cột trên |
+| Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Group (B2B/B2C) | `dim_order_source.group_name` | `UPPER(group_name)` |
+| Is Strategic | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` |
+| CH.Cost per channel | Supabase `analytics_channel_costs` | `SUM(amount)` per `channel_name` × tháng (ads/platform/sponsor/media) |
+| Group Cost | Supabase `analytics_channel_group_costs` | `SUM(amount)` per `group_name` × tháng; phân bổ theo revenue share |
+| MoM% | `fact_fulfillment_revenue` kỳ trước | `(revenue_cur - revenue_prev) / revenue_prev × 100` |

@@ -68,3 +68,15 @@ Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/
 - **XEM (GET)**: mọi role được cấp tab `scheduled` (qua `role_permissions`/`allowed_analytics`, layout enforce) đều thấy **TẤT CẢ** lịch hiện có + cột **Người tạo** (`created_by`). API GET dùng `VIEW_ROLES` (toàn bộ role analytics), không lọc theo người tạo.
 - **SỬA/XÓA/BẬT-TẮT/TEST (POST/PUT/DELETE)**: chỉ **Admin & Creator**. Người chỉ-xem không thấy nút thao tác (read-only).
 - `created_by` lưu khi tạo (POST). Trang `/analytics/scheduled` (cột Người tạo) + admin ScheduledTab (badge người tạo) đều hiển thị.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Scheduled messages list | Supabase `lark_scheduled_messages` | Migration v15; id, report_type, cron_expression, chat_id, is_active, created_by |
+| Last run time | `lark_scheduled_messages.last_run_at` | Ghi theo slot time (không phải execution time); atomic claim UPDATE |
+| Report data (số liệu) | `fact_fulfillment_revenue` (qua `scheduled-report-data.ts`) | SQL cố định: Revenue/GP/CM1/3HK per company_code (VN/US/Tổng), MoM/WoW, top B2B KH, top kênh B2C |
+| Operation Cost | Supabase `analytics_channel_group_costs` | Dùng cho CM1 trong precomputed report |
+| Message delivery | Lark Bot API (`lib/lark.ts`) | Push formatted message vào `chat_id` Lark group |

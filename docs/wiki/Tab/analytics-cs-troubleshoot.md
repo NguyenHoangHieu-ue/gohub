@@ -30,3 +30,14 @@ Tra cứu & phân tích ticket chăm sóc khách hàng (Lark) để tìm nhanh c
 ## 3. Gotchas
 - Đây là nguồn **Supabase**, không phải gohub_dw.
 - Cron sync cần `CRON_SECRET`.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Ticket list | Supabase `lark_cs_tickets` | 24.712 ticket, migrate từ Turso (`scripts/migrate_turso_tickets.py`) |
+| Ticket search | Supabase `lark_cs_tickets` | Full-text search theo nội dung / loại / trạng thái |
+| Sync source | Lark Base API | Cron `/api/admin/sync-lark-tickets` chạy 02:00 UTC |
+| Handler | `lark_cs_tickets.handler` | Field "Ticket Handler" từ Lark Base (page_size=500) |

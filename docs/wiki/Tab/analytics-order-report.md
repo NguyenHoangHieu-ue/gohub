@@ -103,3 +103,21 @@ Dùng `tierKeywords` từ `/api/analytics/quarterly-settings`:
 3. `STRING_AGG(DISTINCT sku)` có thể dài nếu đơn có nhiều SKU → FE truncate với `max-w-[200px] truncate`.
 4. Count query (`COUNT(*) FROM subquery`) không chạy khi `export=1` → tổng = số rows trả về.
 5. `dim_customer.code` là `text` trong gohub_dw mới → cần `TRIM(dc.code::text)` để match.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Date | `fact_fulfillment_revenue.fulfiled_date` / `fact_sales_revenue.created_date` | Toggle: Fulfillment (mặc định) / Created |
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY order_code |
+| CM1 / GP | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = GP. Op cost không phân bổ được xuống cấp đơn |
+| Quantity | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` — NULL khi Created mode |
+| PIC (Staff) | `dim_staff.name` | JOIN `TRIM(f.staff_code) = TRIM(dim_staff.code)` |
+| Customer | `dim_customer.name` | JOIN `TRIM(f.customer_code) = TRIM(dim_customer.code)` |
+| Tier KH | `dim_customer.price_list_name` | Phân loại từ `tierKeywords` (quarterly-settings): B2C / Strategic / VIP / Gold / Silver |
+| SKU list | `fact_fulfillment_revenue.sku` | `STRING_AGG(DISTINCT sku)` — nhiều SKU trong 1 đơn |
+| Product Type | `dim_sku.type_of_sim` | JOIN `f.sku = dim_sku.sku`; eSIM / SIM |
+| Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Group (B2B/B2C) | `dim_order_source.group_name` | Filter B2B / B2C |

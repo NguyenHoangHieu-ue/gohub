@@ -59,4 +59,17 @@ Hệ thống GoHub Intel áp dụng quy chế phân quyền chặt chẽ thông 
 ## 3. Phân Quyền
 - **Users, Schema, Settings**: Chỉ hiển thị và cấp quyền chỉnh sửa cho vai trò **Admin và Creator**.
 - **Creator Settings**: Chỉ tài khoản có vai trò duy nhất là **`creator`** mới có quyền truy cập và thao tác.
-- **Creator Dev Tools**: CHỈ role **`creator`** (page + cả 2 API đều chặn admin).\n
+- **Creator Dev Tools**: CHỈ role **`creator`** (page + cả 2 API đều chặn admin).
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Users list | Supabase `users` | Danh sách tài khoản + role + department |
+| Role permissions matrix | Supabase `app_settings.role_permissions` | JSON: role → list report IDs được phép |
+| Per-user permissions | Supabase `users.allowed_analytics` + `users.allowed_tabs` | Migration v17; cộng dồn lên role base |
+| Schema metadata | Supabase `app_settings` (key `dim_schema`) | Mô tả cột/bảng cho AI agent bi-analyst |
+| Analytics cache | Supabase `analytics_query_cache` | L2 cache kết quả query; `/api/admin/flush-analytics-cache` xóa |
+| Supabase tables (DevTools) | Supabase OpenAPI `/rest/v1/` | Liệt kê bảng qua `supabaseAdmin` (service key); CHỈ creator |

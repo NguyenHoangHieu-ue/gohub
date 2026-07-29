@@ -30,3 +30,13 @@ Chạy truy vấn **SELECT-only** trực tiếp trên `gohub_dw` để tra cứu
 ## 3. Mẹo
 - Xem schema: bảng chính ở [[_analytics-data-model]] (fact_fulfillment_revenue, fact_sales_revenue, fact_data_usage, dim_*).
 - File `test.sql` ở root có sẵn ví dụ query 3HK.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Query target | `gohub_dw` (Postgres, GCP) | Toàn bộ fact/dim tables: `fact_fulfillment_revenue`, `fact_sales_revenue`, `fact_data_usage`, `dim_sku`, `dim_staff`, `dim_customer`, `dim_order_source`, `dim_location` |
+| Schema info | `/api/admin/sql-schema` | Liệt kê bảng + cột từ `information_schema` |
+| Execution | `/api/admin/sql-query` | SELECT-only; chặn INSERT/UPDATE/DELETE/DDL |

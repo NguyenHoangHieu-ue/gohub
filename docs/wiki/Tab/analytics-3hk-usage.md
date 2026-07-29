@@ -299,3 +299,19 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
 **Góc nhìn doanh nghiệp:**
 - Gói Unlimited **không có cap cứng** → "Usage %" là **tỉ lệ Thực tế/Kế hoạch (cost vs budget)**, **>100% là bình thường** (nhiều SKU 120–355%) và nghĩa là **vượt chi phí datapool dự kiến** → rủi ro biên lợi nhuận. KPI cần theo dõi là **GB/ngày/SIM** (đã đưa lên cả cấp nhóm + summary card), không phải "Usage %" kiểu gói Fixed.
 - Ngưỡng màu Usage% đổi mốc 100/80 (đỏ khi >100% = vượt budget) thay cho 80/50 (vốn hợp với gói Fixed).
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Active SIMs | `fact_data_usage` | `COUNT(DISTINCT (iccid, order_code))` bundle có `first_report_date` trong kỳ |
+| Total Usage (GB) | `fact_data_usage.total_data_gb` | `SUM(total_data_gb)` — incremental usage mỗi snapshot |
+| Total Capacity (GB) | `fact_data_usage.data_amount_gb` | `SUM(data_amount_gb)` — định mức/plan của gói |
+| Avg. Usage % | Tính từ 2 cột trên | `SUM(total_data_gb) / SUM(data_amount_gb) × 100` (Weighted) |
+| GB/ngày/SIM | `fact_data_usage` | `SUM(total_data_gb) ÷ (active_sims × số_ngày)` — KPI chính cho Unlimited |
+| SKU Type | `fact_data_usage.sku` + `dim_sku` | `CASE WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data' ELSE sku_type END` |
+| Nhóm tốc độ (Unlimited) | Supabase `skus.throttle_speed` | API `/api/analytics/3hk-speed-map`; A=5mbps, B=10mbps; mã cũ P1/P2/PY |
+| Country × Month (TB) | `data_usage_log` | `SUM(data_gb)/1024` GROUP BY `country`, `to_char(report_date,'YYYY-MM')` |
+| Vendor filter | `dim_sku.vendor` | `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'` |

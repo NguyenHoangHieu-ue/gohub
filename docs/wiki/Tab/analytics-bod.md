@@ -46,3 +46,19 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 - Chế độ **Created** → margin/COGS = 0 (bảng sales không có) → GP/CM1/3HK-contribution chỉ có nghĩa ở **Fulfillment**.
 - 3HK match bằng `vendor ILIKE '3HKDATAPOOL'` (TRIM, ILIKE thẳng — tương đương REPLACE-space vì dữ liệu vendor 3HK).
 - Phân quyền nền: Admin, Creator, BOD, Manager.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY month |
+| GP (Gross Profit) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| GPM% | Tính từ GP / Revenue | `GP / Revenue × 100` |
+| CM1 | GP − Operation Cost | GP − `SUM(analytics_channel_group_costs.amount)` theo group |
+| CM1% | CM1 / Revenue × 100 | Tính từ 2 cột trên |
+| 3HK Contribution % | `fact_fulfillment_revenue` + `dim_sku.vendor` | `SUM(revenue WHERE vendor ILIKE '3HKDATAPOOL') / SUM(total_revenue) × 100` |
+| Operation Cost | Supabase `analytics_channel_group_costs` | `SUM(amount)` WHERE `group_name` IN ('B2B','B2C') theo tháng |
+| Group Margin | `fact_fulfillment_revenue` + `dim_order_source.group_name` | B2B-Strategic / B2B-Non-Strategic / B2C breakdown |
+| Channel Performance | `fact_fulfillment_revenue` + `dim_order_source.channel_name` | Revenue/margin theo tháng × kênh |

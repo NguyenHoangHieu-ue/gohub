@@ -51,3 +51,20 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 - Toggle Fulfillment/Created + khoảng ngày áp cho tất cả khối.
 - Created mode → `marginCol = "0"` → GP/CM1 = 0 (fact_sales_revenue không có margin). Nên dùng Fulfillment khi cần CM1.
 - `analytics_monthly_kpis` Supabase: bảng snapshot CM1 theo tháng, cron `refresh-monthly-kpis` chạy 00:00 UTC daily. Chatbot query bảng này để trả lời câu hỏi về CM1/revenue/3HK theo tháng cụ thể.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue KPI | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` kỳ hiện tại + kỳ trước (MoM) |
+| Revenue Chart | `fact_fulfillment_revenue` | GROUP BY `fulfiled_date::date` → trend theo ngày |
+| Region Chart | `fact_fulfillment_revenue` + `country_codes` (Turso) | Country suy từ SKU + Turso mapping |
+| Performance by Source | `fact_fulfillment_revenue` + `dim_order_source.code` | GROUP BY `order_source_code` |
+| Performance by Channel | `dim_order_source.channel_name` | GROUP BY `channel_name` |
+| Recent Orders | `fact_fulfillment_revenue` | ORDER BY `fulfiled_date` DESC LIMIT N |
+| Monthly KPI Summary | Supabase `analytics_monthly_kpis` | Snapshot: Revenue/GP/CM1/CM1%/3HK% per month; cron refresh hàng ngày |
+| Pro-rata Projection | `fact_fulfillment_revenue` | `revenue_mtd × (days_in_month / elapsed_days)` |
+| Target Progress | Supabase `analytics_target_planning` | So sánh revenue thực vs kế hoạch |
+| Quarterly Report | `fact_fulfillment_revenue` + `dim_customer` + `analytics_channel_costs` | API `/api/analytics/quarterly-report` |

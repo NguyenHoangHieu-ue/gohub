@@ -30,3 +30,16 @@ status: active
 ## 3. Gotchas
 - Kế hoạch = Supabase (creator/admin sửa được); thực tế = gohub_dw.
 - Nút Lưu dirty-state: snapshot lúc load → so sánh → `disabled` khi chưa đổi.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Target (kế hoạch) | Supabase `analytics_target_planning` | Revenue/CM1/3HK% target per month; creator/admin nhập |
+| Actual Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` per month từ gohub_dw |
+| Actual GP | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` per month |
+| B2C KPI Target | Supabase `app_settings` (key `b2c_kpi_targets`) | CAC/ROAS/Leads target per month |
+| B2C Marketing Budget | Supabase `analytics_channel_costs` | Budget B2C Channels per month |
+| Progress % | Actual / Target × 100 | So sánh live từ gohub_dw vs kế hoạch Supabase |

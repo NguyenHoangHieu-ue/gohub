@@ -28,3 +28,13 @@ Nơi mọi user gửi phản hồi/góp ý về hệ thống; admin/creator xem 
 
 ## 3. Gotchas
 - Nguồn Supabase, không phải gohub_dw.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Feedback list | Supabase `feedbacks` | Toàn bộ feedback từ mọi user |
+| Status | `feedbacks.status` | Admin/creator cập nhật; user chỉ đọc |
+| Submitted by | `feedbacks.user_id` / `feedbacks.created_at` | Mọi role gửi được |

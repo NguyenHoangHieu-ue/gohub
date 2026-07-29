@@ -93,3 +93,22 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 - **Sửa CH.Cost**: admin, creator, bod, b2b, b2c, staff.
 - **Cài đặt (tier/exclusion)**: chỉ admin, creator.
 - **Tải lại mới (cache flush)**: mọi user đã login.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY month trong quý |
+| GP (Gross Profit) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` |
+| Channel Cost | Supabase `analytics_channel_costs` | `SUM(amount)` per channel per month; phân bổ B2B/B2C |
+| Group Cost | Supabase `analytics_channel_group_costs` | `SUM(amount)` per group (B2B/B2C) per month |
+| CM1 | GP − Channel Cost − Group Cost | Công thức chính (không phân bổ xuống đơn) |
+| CM1% | CM1 / Revenue × 100 | |
+| 3HK% | `fact_fulfillment_revenue` + `dim_sku.vendor` | Revenue vendor `3HKDATAPOOL` / total revenue |
+| Tier (B2B) | `dim_customer.price_list_name` | `tierKeywords` từ `app_settings.quarterly_tier_keywords`; Strategic/VIP/Gold/Silver |
+| CH.Cost per customer | Turso `b2b_customer_cost_monthly` | `cost_lines` JSON: amount (VND) hoặc percent (% revenue) |
+| Target | Turso `target_planning_quarter` | `target_revenue`, `target_cm1`, `target_three_hk_pct` per B2B/B2C per quarter |
+| QoQ % | `fact_fulfillment_revenue` quý trước | `(CM1_cur_prorata − CM1_prev) / |CM1_prev| × 100`; monthly pro-rata |
+| Pro-rata | `fact_fulfillment_revenue` tháng hiện tại | `cm1_actual × (days_in_month / elapsed_days)` |

@@ -79,3 +79,18 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Created mode → margin/CM1 = 0 (fact_sales_revenue không có gross_profit).
 - Phân quyền: Admin, Creator, BOD, Manager, Staff.
 - `calcChCost` chỉ dùng tháng `startDate.slice(0,7)` — multi-month range không tổng hợp nhiều tháng.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` WHERE `group_name='B2B'` |
+| GP (Gross Profit) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| CM1 | GP − CH.Cost | GP trừ chi phí kênh từ Turso hoặc fallback channel API |
+| CH.Cost (per customer) | Turso `b2b_customer_cost_monthly` | `cost_lines`: `amount` (VND cố định) hoặc `percent` (% revenue) |
+| Tier (B2B) | `dim_customer.price_list_name` | `tierKeywords` từ `quarterly-settings`; Strategic/VIP/Gold/Silver |
+| Channel (B2B) | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Strategic Partners | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` |
+| Units / Orders | `fact_fulfillment_revenue` | `SUM(fulfilled_quantity)` / `COUNT(DISTINCT order_code)` |

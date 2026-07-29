@@ -33,3 +33,17 @@ Số liệu website từ **Google Analytics 4** (sessions, users, conversion, re
 ## 4. Gotchas
 - Cần credentials Google hợp lệ (service account / OAuth) — thiếu thì section rỗng graceful.
 - Đọc theo từng `siteId` (2 property VN/Global).
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Active Users | Google Analytics 4 API | Metric `activeUsers` per `siteId` (2 property VN/Global) |
+| Sessions | Google Analytics 4 API | Metric `sessions` |
+| Purchases / CR | Google Analytics 4 API | Metrics `purchases`, `conversionRate` |
+| Purchase Revenue | Google Analytics 4 API | Metric `purchaseRevenue` |
+| GA4 Config | Supabase `app_settings.ga4_configs` | 2 property config; đọc qua `/api/config/ga4` |
+| Impressions / Clicks | Google Search Console API | `googleapis` service account; query theo `siteUrl` |
+| Average Position | Google Search Console API | Top queries + pages ranking |
