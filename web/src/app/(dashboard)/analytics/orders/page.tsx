@@ -124,12 +124,18 @@ export default function OrdersPage() {
       .catch(() => {})
     fetch("/api/channels")
       .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setChannelList(d) })
+      .then(d => {
+        if (Array.isArray(d)) setChannelList(
+          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.channel_name || "")).filter(Boolean)
+        )
+      })
       .catch(() => {})
     fetch("/api/order-sources")
       .then(r => r.json())
       .then(d => {
-        if (Array.isArray(d)) setOrderSrcList(d.map((x: any) => (x && (x.name || x))).filter(Boolean))
+        if (Array.isArray(d)) setOrderSrcList(
+          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.code || "")).filter(Boolean)
+        )
       })
       .catch(() => {})
   }, [])
