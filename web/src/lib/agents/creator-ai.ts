@@ -125,6 +125,37 @@ const webSearchDecl = {
   },
 }
 
+const browsePortalDecl = {
+  name: "browsePortal",
+  description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      portal_name: { type: SchemaType.STRING, description: "Portal name or URL fragment to look up in stored credentials (e.g. 'sunspeedy', 'cardweb')." },
+      path:        { type: SchemaType.STRING, description: "Path to navigate after login (e.g. '/products', '/inventory'). Omit to load homepage/dashboard after login." },
+    },
+    required: ["portal_name"],
+  },
+}
+
+const managePortalCredsDecl = {
+  name: "managePortalCredentials",
+  description: "Save, list, or delete portal credentials stored in Supabase. Use to configure new portals or update existing ones.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:     { type: SchemaType.STRING, description: "Action: 'list' | 'save' | 'delete'" },
+      name:       { type: SchemaType.STRING, description: "Portal display name (e.g. 'SunSpeedy Card Web')" },
+      url:        { type: SchemaType.STRING, description: "Base URL of the portal (e.g. 'https://cardweb.sunspeedy.com')" },
+      username:   { type: SchemaType.STRING, description: "Login username or email" },
+      password:   { type: SchemaType.STRING, description: "Login password" },
+      login_path: { type: SchemaType.STRING, description: "Login page path if different from root (e.g. '/auth/login')" },
+      notes:      { type: SchemaType.STRING, description: "Optional notes about this portal" },
+    },
+    required: ["action"],
+  },
+}
+
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are "Gấu Pro" — a private AI assistant exclusively for Hiếu, the creator and lead developer of GoHub Intelligence. This is a completely private workspace with FULL ACCESS to all data and no restrictions whatsoever.
@@ -225,6 +256,23 @@ T2/2026,1500000000,450000000,30.0%
 - For spreadsheets/CSV: describe structure, count rows, list columns, identify key data
 - For PDF/images: describe content, extract information, answer questions
 - For code files: review, explain, suggest improvements
+
+## External Portal Access
+You can login to external supplier/partner portals and fetch their content using browsePortal.
+Credentials are securely stored in Supabase (never exposed in responses).
+
+Workflow:
+1. First time: ask Hiếu for credentials → call managePortalCredentials(action:"save", ...) to store
+2. Subsequent use: call browsePortal(portal_name:"...") → page content returned as text
+3. Analyze/compare returned content, make recommendations
+
+Portal browsing limitations:
+- Works for traditional server-rendered sites (HTML form login)
+- May not work for SPAs that require JavaScript rendering
+- If page content looks empty/wrong → try a specific path or the site may be JS-heavy
+- Content is truncated at 12k chars; request specific paths for focused data
+
+When Hiếu says "xem sản phẩm trên portal X": browse the portal, extract products/prices from the text content, compare with GoHub's catalog, identify gaps or pricing opportunities.
 
 ## GoHub Business Context
 - **GoHub**: sells Sim/eSIM data packages for international travel
@@ -377,6 +425,237 @@ async function runWebSearch(query: string): Promise<{ result: string; sources: W
   }
 }
 
+// ─── Portal browser ───────────────────────────────────────────────────────────
+
+interface PortalCredential {
+  name:       string
+  url:        string
+  username:   string
+  password:   string
+  login_path?: string
+  notes?:     string
+}
+
+const PORTAL_SETTINGS_KEY = "portal_credentials"
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+async function loadPortalCreds(): Promise<PortalCredential[]> {
+  try {
+    const { data } = await supabaseAdmin.from("app_settings")
+      .select("value").eq("key", PORTAL_SETTINGS_KEY).maybeSingle()
+    return data?.value ? JSON.parse(data.value) : []
+  } catch { return [] }
+}
+
+async function savePortalCreds(creds: PortalCredential[]): Promise<void> {
+  await supabaseAdmin.from("app_settings").upsert(
+    { key: PORTAL_SETTINGS_KEY, value: JSON.stringify(creds) },
+    { onConflict: "key" }
+  )
+}
+
+function cleanHtml(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ").trim()
+}
+
+// Parse Set-Cookie header(s) into a cookie jar object
+function parseCookies(raw: string | null, jar: Record<string, string>) {
+  if (!raw) return
+  // set-cookie can be a single string with multiple cookies separated by commas (tricky)
+  // Split on ", " but only when followed by a cookie-name pattern
+  const entries = raw.split(/,(?=\s*[a-zA-Z_][a-zA-Z0-9_\-]*=)/)
+  for (const entry of entries) {
+    const [pair] = entry.trim().split(";")
+    const eqIdx = pair.indexOf("=")
+    if (eqIdx > 0) {
+      const name = pair.slice(0, eqIdx).trim()
+      const val  = pair.slice(eqIdx + 1).trim()
+      if (name) jar[name] = val
+    }
+  }
+}
+
+async function runBrowsePortal(args: { portal_name: string; path?: string }): Promise<any> {
+  const creds  = await loadPortalCreds()
+  const portal = creds.find(p =>
+    p.name.toLowerCase().includes(args.portal_name.toLowerCase()) ||
+    p.url.toLowerCase().includes(args.portal_name.toLowerCase())
+  )
+  if (!portal) {
+    return {
+      error:     `Portal "${args.portal_name}" not found in stored credentials.`,
+      available: creds.length ? creds.map(c => `${c.name} (${c.url})`).join(", ") : "No portals configured yet.",
+      hint:      "Call managePortalCredentials(action:'save', name, url, username, password) to add one.",
+    }
+  }
+
+  const baseUrl   = portal.url.replace(/\/$/, "")
+  const loginUrl  = portal.login_path
+    ? (portal.login_path.startsWith("http") ? portal.login_path : `${baseUrl}${portal.login_path}`)
+    : baseUrl
+  const cookieJar: Record<string, string> = {}
+  const cookieHeader = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join("; ")
+
+  const timeout = (ms: number) => AbortSignal.timeout(ms)
+
+  // Step 1: GET login page
+  let loginHtml = ""
+  try {
+    const r1 = await fetch(loginUrl, { headers: { "User-Agent": BROWSER_UA }, signal: timeout(12000) })
+    loginHtml = await r1.text()
+    parseCookies(r1.headers.get("set-cookie"), cookieJar)
+  } catch (e: any) {
+    return { error: `Cannot reach ${loginUrl}: ${e.message}` }
+  }
+
+  // Extract CSRF token (multiple common patterns)
+  const csrfRe = /(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["'][^>]*value=["']([^"']{8,})["']|value=["']([^"']{8,})["'][^>]*(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken)["']/i
+  const csrfMatch  = loginHtml.match(csrfRe)
+  const csrfToken  = csrfMatch?.[1] || csrfMatch?.[2]
+  const csrfField  = loginHtml.match(/name=["'](_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["']/i)?.[1] || "_token"
+
+  // Detect form action
+  const formActionMatch = loginHtml.match(/<form[^>]*action=["']([^"']+)["'][^>]*(?:method=["']post["'])?/i)
+                       || loginHtml.match(/<form[^>]*(?:method=["']post["'])[^>]*action=["']([^"']+)["']/i)
+  const formAction  = formActionMatch?.[1]
+  const postUrl = formAction
+    ? (formAction.startsWith("http") ? formAction : `${baseUrl}${formAction.startsWith("/") ? formAction : `/${formAction}`}`)
+    : `${loginUrl}/login`
+
+  // Detect username/password field names
+  const userFieldRe = /name=["']([^"']*(?:user|login|email|account|name)[^"']*)["'][^>]*type=["'](?:text|email)["']|type=["'](?:text|email)["'][^>]*name=["']([^"']*(?:user|login|email|account)[^"']*)["']/i
+  const passFieldRe = /name=["']([^"']*(?:pass(?:word|wd|wd)?|pwd)[^"']*)["'][^>]*type=["']password["']|type=["']password["'][^>]*name=["']([^"']*(?:pass|pwd)[^"']*)["']/i
+  const userField = loginHtml.match(userFieldRe)?.[1] || loginHtml.match(userFieldRe)?.[2] || "username"
+  const passField = loginHtml.match(passFieldRe)?.[1] || loginHtml.match(passFieldRe)?.[2] || "password"
+
+  // Step 2: POST login form
+  const body = new URLSearchParams()
+  body.append(userField, portal.username)
+  body.append(passField, portal.password)
+  if (csrfToken) body.append(csrfField, csrfToken)
+
+  let r2: Response
+  try {
+    r2 = await fetch(postUrl, {
+      method:   "POST",
+      headers:  { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": loginUrl },
+      body:     body.toString(),
+      redirect: "manual",
+      signal:   timeout(12000),
+    })
+    parseCookies(r2.headers.get("set-cookie"), cookieJar)
+  } catch (e: any) {
+    return { error: `Login POST failed: ${e.message}` }
+  }
+
+  // Follow up to 3 redirects
+  let nextLoc = r2.headers.get("location")
+  for (let i = 0; i < 3 && nextLoc; i++) {
+    const url = nextLoc.startsWith("http") ? nextLoc : `${baseUrl}${nextLoc.startsWith("/") ? nextLoc : `/${nextLoc}`}`
+    try {
+      const rr = await fetch(url, { headers: { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA }, redirect: "manual", signal: timeout(10000) })
+      parseCookies(rr.headers.get("set-cookie"), cookieJar)
+      nextLoc = rr.headers.get("location")
+    } catch { break }
+  }
+
+  // Step 3: Fetch target page
+  const targetUrl = args.path
+    ? (args.path.startsWith("http") ? args.path : `${baseUrl}${args.path.startsWith("/") ? args.path : `/${args.path}`}`)
+    : baseUrl
+
+  let pageHtml   = ""
+  let pageStatus = 0
+  try {
+    const r5 = await fetch(targetUrl, { headers: { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": baseUrl }, signal: timeout(15000) })
+    pageStatus = r5.status
+    pageHtml   = await r5.text()
+  } catch (e: any) {
+    return { error: `Failed to load ${targetUrl}: ${e.message}` }
+  }
+
+  const text      = cleanHtml(pageHtml)
+  const truncated = text.length > 12000
+
+  // Quick login-success heuristic: if page still has login form, login probably failed
+  const hasLoginForm = /<input[^>]+type=["']password["']/i.test(pageHtml)
+
+  return {
+    portal:      portal.name,
+    url:         targetUrl,
+    http_status: pageStatus,
+    login_ok:    !hasLoginForm,
+    content:     text.slice(0, 12000),
+    truncated,
+    hint: truncated
+      ? "Content truncated at 12k chars. Use 'path' parameter to fetch a specific subpage for more focused data."
+      : hasLoginForm
+        ? "Login may have failed — page still shows a login form. Check credentials or try a different login_path."
+        : null,
+  }
+}
+
+async function runManagePortalCredentials(args: {
+  action:     string
+  name?:      string
+  url?:       string
+  username?:  string
+  password?:  string
+  login_path?: string
+  notes?:     string
+}): Promise<any> {
+  const creds = await loadPortalCreds()
+
+  if (args.action === "list") {
+    if (!creds.length) return { message: "No portals configured yet.", portals: [] }
+    return {
+      portals: creds.map(c => ({ name: c.name, url: c.url, username: c.username, login_path: c.login_path, notes: c.notes })),
+      count: creds.length,
+    }
+  }
+
+  if (args.action === "save") {
+    if (!args.name || !args.url || !args.username || !args.password) {
+      return { error: "save requires: name, url, username, password" }
+    }
+    const idx  = creds.findIndex(c => c.name.toLowerCase() === args.name!.toLowerCase() || c.url === args.url)
+    const cred: PortalCredential = {
+      name:       args.name,
+      url:        args.url.replace(/\/$/, ""),
+      username:   args.username,
+      password:   args.password,
+      login_path: args.login_path,
+      notes:      args.notes,
+    }
+    if (idx >= 0) {
+      creds[idx] = cred
+      await savePortalCreds(creds)
+      return { success: true, message: `Updated portal "${args.name}". Total: ${creds.length}` }
+    } else {
+      creds.push(cred)
+      await savePortalCreds(creds)
+      return { success: true, message: `Saved new portal "${args.name}". Total: ${creds.length}` }
+    }
+  }
+
+  if (args.action === "delete") {
+    if (!args.name) return { error: "delete requires: name" }
+    const before = creds.length
+    const filtered = creds.filter(c => c.name.toLowerCase() !== args.name!.toLowerCase())
+    await savePortalCreds(filtered)
+    return { success: true, message: `Deleted ${before - filtered.length} portal(s). Remaining: ${filtered.length}` }
+  }
+
+  return { error: `Unknown action "${args.action}". Use: list | save | delete` }
+}
+
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 export async function runCreatorAI(
@@ -396,7 +675,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
-    tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl] }],
+    tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -443,6 +722,21 @@ export async function runCreatorAI(
     const fnParts: any[] = []
 
     for (const call of calls) {
+      // ── browsePortal ──
+      if (call.name === "browsePortal") {
+        console.log(`[CreatorAI] browsePortal: ${(call.args as any).portal_name}`)
+        const resp = await runBrowsePortal(call.args as any)
+        fnParts.push({ functionResponse: { name: "browsePortal", response: resp } })
+        continue
+      }
+
+      // ── managePortalCredentials ──
+      if (call.name === "managePortalCredentials") {
+        const resp = await runManagePortalCredentials(call.args as any)
+        fnParts.push({ functionResponse: { name: "managePortalCredentials", response: resp } })
+        continue
+      }
+
       // ── webSearch ──
       if (call.name === "webSearch") {
         const { query } = call.args as { query: string }
