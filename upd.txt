@@ -1,0 +1,136 @@
+================================================================
+PLAN CHƯA LÀM — Gấu Pro Roadmap (2026-07-30, Session 130)
+================================================================
+
+================================================================
+#1 — TEST/FIX PLAN: Chất lượng câu trả lời Gấu Pro
+================================================================
+Mục tiêu: Kiểm tra và fix từng nhóm để đảm bảo response chính xác, nhất quán.
+
+[Nhóm A] Data Accuracy — QUAN TRỌNG NHẤT
+  [ ] Test: "Doanh thu tháng 7/2026 bao nhiêu?" → cross-check vs tab BOD
+  [ ] Test: "Top 5 kênh B2B doanh thu cao nhất tháng này"
+  [ ] Test: "COGS của SKU X là bao nhiêu?" → verify vs Supabase skus table
+  [ ] Test SQL: so sánh số Gấu Pro trả vs tab Channels/Staff/Orders thực tế
+  Fix nếu sai: tăng self-verification trong system prompt, thêm SQL cross-check template
+
+[Nhóm B] Knowledge Base Integration
+  [ ] Test: "Cấu trúc mã product code" → phải đọc Own Info trước (không bịa)
+  [ ] Test: "Tỷ giá USD/VND hiện tại" → phải đọc entry fx_rates_current từ KB
+  [ ] Test: "Quy trình tạo SKU mới" → phải đọc entry processes từ KB
+  Fix nếu sai: force readKnowledgeBase() trong system prompt + gọi at session start
+
+[Nhóm C] Multi-turn Context
+  [ ] Test: hỏi 2 câu liên tiếp khác chủ đề → câu 2 không bị nhiễm context câu 1
+  [ ] Test: "Chi tiết hơn về cái đó" → AI nhận đúng "cái đó" là gì
+  [ ] Test: chuyển từ data query sang web search → không nhầm lẫn
+  Fix nếu sai: strengthen HISTORY RULES trong system prompt
+
+[Nhóm D] Chart Rendering
+  [ ] Test: "Vẽ bar chart doanh thu 6 tháng B2B+B2C" → multi-series hiển thị đúng
+  [ ] Test: chart trong PDF capture → chart phải xuất hiện trong file
+  [ ] Verify: không còn bug white boxes (đã fix lần trước)
+
+[Nhóm E] Export Behavior
+  [ ] Test: trả lời bình thường → KHÔNG có CSV/export block tự phát
+  [ ] Test: "Xuất Excel doanh thu tháng này" → xuất CSV block đúng
+  [ ] Test: "Download PDF báo cáo này" → PDF button hoạt động, có chart
+  [ ] Test: "Xuất Word" → Word file download, format chuẩn
+
+----------------------------------------------------------------
+Cách test nhanh: Nói với Gấu Pro từng câu trên, compare kết quả
+và ghi lại case nào sai để fix system prompt / SQL template.
+----------------------------------------------------------------
+
+================================================================
+#3 — PORTAL: Kiểm tra + fix các portal hiện có
+================================================================
+
+[Elite — simply.elitemobile.com] — Traditional ASP.NET  ✅ SẴN SÀNG
+  [ ] Test runtime: "Vào portal Elite, xem danh sách sản phẩm"
+  [ ] Map path product list (vd: /Products, /Catalog) — hỏi Gấu Pro thử vài path
+  Status: code hoàn chỉnh (traditional form login, verified có form POST /Login)
+
+[SunSpeedy — cardweb.sunspeedy.com] — SPA + CAPTCHA  ✅ CODE XONG
+  API base: https://cardadmin.sunspeedy.com/card-admin
+  Login: POST /sys/login {username,password,captcha,uuid} — CAPTCHA giải bằng Gemini Vision
+  [ ] Test runtime: "Vào SunSpeedy xem số dư" (verify CAPTCHA solver chạy trên Vercel)
+  [ ] Map endpoint product/balance:
+    - Thử: /card-admin/card/product/list
+    - Thử: /card-admin/sys/user/info (balance CNY 15k)
+  Status: CAPTCHA + login code đã verify endpoint tồn tại (401 khi thiếu captcha = đúng)
+
+[JoyTel — joytelshop.com] — SPA SpringBlade (Chinese "卓一发货系统")  ⚠️ CẦN CONFIG
+  Đã tìm được: API base http://118.31.34.69:8088/zyfh (hoặc qua www.joytelshop.com/zyfh)
+  Login endpoint: /access/login (POST) — NHƯNG trả 401 "令牌校验不通过" (token validation failed)
+  → SpringBlade cần header Authorization: Basic <clientId:secret> HARDCODED để gọi login
+  → Không tìm được clientId trong JS bundle (obfuscated)
+  ACTION cho Hiếu (1 lần):
+    1. Mở https://www.joytelshop.com, F12 → Network tab
+    2. Login thủ công (Gohub / Gohub10266)
+    3. Tìm request tới /access/login, copy giá trị header "Authorization" (dạng "Basic xxx=")
+    4. Nói Gấu Pro: "Lưu portal JoyTel: api_base=https://www.joytelshop.com/zyfh,
+       login_api=/access/login, auth_header=Basic xxx=, user_field=account (hoặc username)"
+  Status: cơ chế auth_header đã implement, chỉ cần Hiếu cung cấp Basic token 1 lần
+
+CƠ CHẾ MỚI (commit 82b405d): Portal SPA linh hoạt
+  PortalCredential có thêm: api_base, login_api, auth_header, user_field, pass_field
+  Gấu Pro tự hướng dẫn Hiếu lấy config từ DevTools khi gặp SPA lạ.
+
+================================================================
+#4 — PRODUCT AUTOMATION ROADMAP (3 phases)
+================================================================
+
+[Phase 1 — Manual Assist với Gấu Pro] — CÓ THỂ LÀM NGAY
+  [ ] Gấu Pro browse NCC portal (Elite/SunSpeedy/JoyTel) → extract product list
+  [ ] Compare với Supabase skus (tìm gap — SP NCC có mà GoHub chưa tạo)
+  [ ] Format theo template combo chuẩn (42 combo/country)
+  [ ] Xuất Excel template → Hiếu review
+  Cần làm: test portal browse, viết prompt template cho Gấu Pro
+
+[Phase 2 — Semi-Auto với Human Approval] — Sau 2-3 tháng kiểm chứng Phase 1
+  [ ] Gấu Pro draft SKU data (product_code, sku_code, COGS, specs)
+  [ ] Show preview cho Hiếu review
+  [ ] Hiếu approve → Gấu Pro call Supabase API để insert (chỉ Supabase, không PM)
+  [ ] Notify Hiếu khi xong
+  Điều kiện: Phase 1 đã ổn định ≥ 2 tháng, accuracy ≥ 95%
+
+[Phase 3 — Full Auto Pipeline] — Sau 6+ tháng kiểm chứng Phase 2
+  [ ] Auto pipeline: NCC portal → extract → format → validate → insert PM API
+  [ ] PM API: /api-pull/gohub-cloud/products POST (cần PM Bearer token)
+  [ ] Notification + audit log mỗi lần chạy
+  [ ] Rollback mechanism nếu có lỗi
+  Điều kiện: Phase 2 accuracy ≥ 99%, có PM API key, đã test extensive
+
+================================================================
+#TECHNICAL DEBT — Cần xử lý
+================================================================
+
+[✅] JoyTel: cơ chế auth_header đã có (commit 82b405d) — chờ Hiếu cung cấp Basic token từ DevTools
+[ ] SunSpeedy API path cho product data chưa xác định (test runtime)
+[ ] Own Info KB: chưa seed entries → chạy nút "Sync Wiki + Tỷ giá" trong Own Info
+    (hoặc GET /api/creator-ai/knowledge?action=sync)
+[ ] Migration v29 (pm_operators/pm_price_lists/sku_vat) đã tạo nhưng để trống
+    → Có thể DROP nếu không dùng: DROP TABLE pm_operators; DROP TABLE pm_price_lists; DROP TABLE sku_vat;
+[ ] Gấu Pro: verify portal CAPTCHA solver hoạt động trên production Vercel
+    (GEMINI_KEY env phải set, timeout đủ)
+
+================================================================
+CÁC THAY ĐỔI HIỆN TẠI TRÊN STAGING (chưa merge main)
+================================================================
+Commits kể từ lần merge main cuối (5c23672, 2026-07-29):
+- e54107c: fix code block trắng (pre/code CSS)
+- 7e9febe: PM API schema sync (products/skus/listings/items fields)
+- e8dec84: PM API operators/price-lists/sku-vat schema (revert ngay sau)
+- ba7c315: revert PM API sync (Admin API đủ dùng)
+- 807dea8: PDF/Word export + portal SPA+CAPTCHA support
+- 5bba609: fix build docx deps + serverExternalPackages
+
+Cần merge main khi: staging build PASS + verify export + verify portal.
+
+--- Session 130 tiếp (2026-07-30, Opus) ---
+- 82b405d: DOCX import (mammoth) + prompt fixes (KB mandatory, self-verify,
+  multi-turn) + portal SPA linh hoạt (api_base/login_api/auth_header/user_field)
+- Gấu Pro giờ import được: PDF, DOCX, Excel, CSV, JSON, ảnh, code files
+- Xuất được: CSV, Excel, JSON, PDF (có chart), Word (docx server-side)
+- CÒN LÀM: test runtime các portal + seed Own Info KB + test quality (#1)
