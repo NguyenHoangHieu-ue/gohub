@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  MessageSquare, Database, Clock, Settings, StickyNote, Crown,
+  MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -65,6 +65,7 @@ export const MANAGEMENT_GROUP: NavGroup = { label: "Management", items: [
 
 export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [
   { href: "/analytics/creator",          label: "Creator Settings", icon: Crown    },
+  { href: "/analytics/creator/ai",       label: "Gấu Pro",          icon: Cpu      },
   { href: "/analytics/creator/devtools", label: "API & Database",   icon: Terminal },
 ]}
 
