@@ -1,11 +1,69 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }          from "next-auth"
 import { authOptions }               from "@/lib/auth"
-import { runCreatorAI }              from "@/lib/agents/creator-ai"
+import { runCreatorAI, FileContext } from "@/lib/agents/creator-ai"
 
-// Creator AI: private endpoint for creator role only.
-// Quality over speed — allow up to 5 minutes for complex multi-query answers.
 export const maxDuration = 300
+
+// ─── File parser ─────────────────────────────────────────────────────────────
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
+
+async function parseUploadedFile(file: File): Promise<FileContext> {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`File quá lớn (${(file.size / 1024 / 1024).toFixed(1)} MB). Giới hạn 20 MB.`)
+  }
+
+  const name     = file.name
+  const mime     = file.type || ""
+  const ext      = name.split(".").pop()?.toLowerCase() || ""
+
+  // ── Excel → CSV text ───────────────────────────────────────────────────────
+  if (mime.includes("spreadsheetml") || mime.includes("excel") || ext === "xlsx" || ext === "xls") {
+    const XLSX = (await import("xlsx")).default
+    const buf  = await file.arrayBuffer()
+    const wb   = XLSX.read(buf, { type: "buffer" })
+    const parts: string[] = []
+    for (const sheetName of wb.SheetNames) {
+      const ws  = wb.Sheets[sheetName]
+      const csv = XLSX.utils.sheet_to_csv(ws)
+      if (csv.trim()) parts.push(`=== Sheet: ${sheetName} ===\n${csv}`)
+    }
+    return { name, type: "text", content: parts.join("\n\n") }
+  }
+
+  // ── CSV / JSON / TXT / MD / code → text ───────────────────────────────────
+  if (
+    mime.startsWith("text/") ||
+    ["csv", "json", "txt", "md", "mdx", "ts", "tsx", "js", "jsx", "py", "sql", "yaml", "yml", "toml", "xml", "html"].includes(ext)
+  ) {
+    return { name, type: "text", content: await file.text() }
+  }
+
+  // ── PDF → inline data ─────────────────────────────────────────────────────
+  if (mime === "application/pdf" || ext === "pdf") {
+    const buf    = await file.arrayBuffer()
+    const base64 = Buffer.from(buf).toString("base64")
+    return { name, type: "pdf", content: base64, mimeType: "application/pdf" }
+  }
+
+  // ── Images → inline data ──────────────────────────────────────────────────
+  if (mime.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "bmp"].includes(ext)) {
+    const buf    = await file.arrayBuffer()
+    const base64 = Buffer.from(buf).toString("base64")
+    const mType  = mime.startsWith("image/") ? mime : `image/${ext}`
+    return { name, type: "image", content: base64, mimeType: mType }
+  }
+
+  // ── Fallback: try text ─────────────────────────────────────────────────────
+  try {
+    return { name, type: "text", content: await file.text() }
+  } catch {
+    throw new Error(`Không hỗ trợ định dạng file "${ext}". Hỗ trợ: PDF, hình ảnh, Excel, CSV, JSON, TXT, code files.`)
+  }
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -14,18 +72,31 @@ export async function POST(req: NextRequest) {
   }
 
   let messages: { role: string; content: string }[] = []
+  let fileContext: FileContext | undefined
+
   try {
-    const body = await req.json()
-    messages   = Array.isArray(body.messages) ? body.messages : []
-  } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    const contentType = req.headers.get("content-type") || ""
+
+    if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData()
+      const raw  = form.get("messages")
+      messages   = JSON.parse(typeof raw === "string" ? raw : "[]")
+      const file = form.get("file") as File | null
+      if (file && file.size > 0) {
+        fileContext = await parseUploadedFile(file)
+      }
+    } else {
+      const body = await req.json()
+      messages   = Array.isArray(body.messages) ? body.messages : []
+    }
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Invalid request" }, { status: 400 })
   }
 
   if (messages.length === 0) {
     return NextResponse.json({ error: "No messages" }, { status: 400 })
   }
 
-  // Convert to Gemini history format (all but last message = history, last = current)
   const history = messages.slice(0, -1).map(m => ({
     role:  m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
@@ -33,7 +104,7 @@ export async function POST(req: NextRequest) {
   const lastMsg = messages[messages.length - 1]?.content || ""
 
   try {
-    const { text, sources } = await runCreatorAI(history, lastMsg)
+    const { text, sources } = await runCreatorAI(history, lastMsg, fileContext)
     return NextResponse.json({ text, sources })
   } catch (e: any) {
     console.error("[CreatorAI] Error:", e.message)

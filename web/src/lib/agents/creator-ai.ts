@@ -13,6 +13,13 @@ import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
 
 export interface WebSource { title: string; url: string }
 
+export interface FileContext {
+  name:     string
+  type:     "text" | "image" | "pdf"
+  content:  string   // text content (for "text") or base64 (for "image"/"pdf")
+  mimeType?: string  // e.g. "image/png", "application/pdf"
+}
+
 // ─── Tool declarations ───────────────────────────────────────────────────────
 
 const executeSQLDecl = {
@@ -200,6 +207,25 @@ const SYSTEM_PROMPT = `You are "Gấu Pro" — a private AI assistant exclusivel
 
 Use chart_type "line" or "area" for time-series trends. For bar charts use "bars", for line/area charts use "lines". Pie charts use single-metric format only.
 
+## File Export
+When user asks to download/export data as CSV or Excel:
+- Output a \`\`\`csv code block with the actual CSV content (comma-separated, first line = headers)
+- Example:
+\`\`\`csv
+Tháng,Doanh thu (VND),Gross Profit (VND),GP%
+T1/2026,1200000000,360000000,30.0%
+T2/2026,1500000000,450000000,30.0%
+\`\`\`
+- The UI will automatically show a "Download CSV" / "Download Excel" button when it detects a csv block.
+- For JSON export, output a \`\`\`json block (array of objects) — UI will show "Download JSON".
+- Always confirm what data is being exported before generating the block.
+
+## File Analysis (when user uploads a file)
+- Analyze the file content carefully and answer questions about it
+- For spreadsheets/CSV: describe structure, count rows, list columns, identify key data
+- For PDF/images: describe content, extract information, answer questions
+- For code files: review, explain, suggest improvements
+
 ## GoHub Business Context
 - **GoHub**: sells Sim/eSIM data packages for international travel
 - **Channels**: B2B (corporate/wholesale, price_list_name has tier: Strategic/VIP/Gold/Silver) + B2C (direct, price_list_name = null)
@@ -355,7 +381,8 @@ async function runWebSearch(query: string): Promise<{ result: string; sources: W
 
 export async function runCreatorAI(
   geminiHistory: any[],
-  lastMsg: string
+  lastMsg: string,
+  fileContext?: FileContext
 ): Promise<{ text: string; sources: WebSource[] }> {
   const [partnerTierInfo, ga4SiteList] = await Promise.all([
     getPartnerTiers().then(tiers => {
@@ -373,9 +400,30 @@ export async function runCreatorAI(
     generationConfig: { temperature: 0 },
   })
 
+  // Build user message parts — include file if attached
+  let userParts: any[]
+  const msgText = lastMsg || (fileContext ? `Phân tích file: ${fileContext.name}` : "")
+  if (fileContext) {
+    if (fileContext.type === "text") {
+      // Inject text content (CSV, Excel, TXT, JSON) directly into the prompt
+      const truncated = fileContext.content.length > 40000
+        ? fileContext.content.slice(0, 40000) + "\n... [truncated at 40k chars]"
+        : fileContext.content
+      userParts = [{ text: `${msgText}\n\n=== FILE ĐÍNH KÈM: ${fileContext.name} ===\n${truncated}` }]
+    } else {
+      // PDF or image — send as inline data (Gemini multimodal)
+      userParts = [
+        { text: msgText },
+        { inlineData: { mimeType: fileContext.mimeType || "application/octet-stream", data: fileContext.content } },
+      ]
+    }
+  } else {
+    userParts = [{ text: msgText }]
+  }
+
   const contents: any[] = [
     ...geminiHistory,
-    { role: "user", parts: [{ text: lastMsg }] },
+    { role: "user", parts: userParts },
   ]
 
   let genResult = await model.generateContent({ contents })
