@@ -20,7 +20,7 @@ async function parseUploadedFile(file: File): Promise<FileContext> {
 
   // ── Excel → CSV text ───────────────────────────────────────────────────────
   if (mime.includes("spreadsheetml") || mime.includes("excel") || ext === "xlsx" || ext === "xls") {
-    const XLSX = (await import("xlsx")).default
+    const XLSX = await import("xlsx")
     const buf  = await file.arrayBuffer()
     const wb   = XLSX.read(buf, { type: "buffer" })
     const parts: string[] = []

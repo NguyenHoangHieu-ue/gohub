@@ -62,7 +62,7 @@ function downloadText(content: string, filename: string, mime: string) {
 
 function downloadCSVAsExcel(csv: string, filename: string) {
   // Use xlsx to create real Excel file
-  import("xlsx").then(({ default: XLSX }) => {
+  import("xlsx").then((XLSX) => {
     const rows    = csv.split("\n").map(r => r.split(",").map(c => c.replace(/^"|"$/g, "").replace(/""/g, '"')))
     const ws      = XLSX.utils.aoa_to_sheet(rows)
     const wb      = XLSX.utils.book_new()
