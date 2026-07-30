@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  Download, FileJson, FileType,
+  Download, FileJson, FileType, Package,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -466,6 +466,14 @@ const QUICK_GROUPS = [
     prompts: [
       "Vẽ bar chart doanh thu 6 tháng gần nhất theo tháng (B2B + B2C)",
       "Top 5 kênh doanh thu tháng này — pie chart",
+    ],
+  },
+  {
+    label: "Sản phẩm & Onboarding",
+    icon:  Package,
+    prompts: [
+      "Tìm gói eSIM Đài Loan trên WorldMove chưa có trong hệ thống, tạo template onboard để review",
+      "So sánh giá vendor cho eSIM Nhật, chọn option rẻ nhất và draft SKU",
     ],
   },
   {

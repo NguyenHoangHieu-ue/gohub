@@ -81,12 +81,15 @@ CƠ CHẾ MỚI (commit 82b405d): Portal SPA linh hoạt
 #4 — PRODUCT AUTOMATION ROADMAP (3 phases)
 ================================================================
 
-[Phase 1 — Manual Assist với Gấu Pro] — CÓ THỂ LÀM NGAY
-  [ ] Gấu Pro browse NCC portal (Elite/SunSpeedy/JoyTel) → extract product list
-  [ ] Compare với Supabase skus (tìm gap — SP NCC có mà GoHub chưa tạo)
-  [ ] Format theo template combo chuẩn (42 combo/country)
-  [ ] Xuất Excel template → Hiếu review
-  Cần làm: test portal browse, viết prompt template cho Gấu Pro
+[Phase 1 — Manual Assist với Gấu Pro] — ✅ ĐÃ IMPLEMENT (commit tiếp theo)
+  [✅] System prompt "Product Onboarding Automation" 5 bước:
+       Find (portal/NCC) → Check gap (skus) → Apply rules (42 combo + code structure)
+       → Format template columns (SKU + Product) → Output Excel review
+  [✅] Tận dụng export marker: Gấu Pro output ```export {formats:excel} + ```csv
+  [✅] Quick prompt "Sản phẩm & Onboarding" trong UI
+  [✅] DRAFT-ONLY: không ghi DB/PM, luôn kết thúc "bản nháp để review"
+  [ ] TEST runtime: "Tìm gói eSIM Đài Loan WM chưa có, tạo template onboard"
+  Cần làm: test end-to-end, tinh chỉnh template columns nếu Hiếu muốn khác
 
 [Phase 2 — Semi-Auto với Human Approval] — Sau 2-3 tháng kiểm chứng Phase 1
   [ ] Gấu Pro draft SKU data (product_code, sku_code, COGS, specs)
