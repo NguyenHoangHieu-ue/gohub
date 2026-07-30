@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
+import { createHash }                     from "crypto"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
@@ -361,37 +362,34 @@ Use chart_type "line" or "area" for time-series trends. For bar charts use "bars
 
 ## File Export Rules (STRICT)
 
-**ONLY generate export blocks when user explicitly requests: "xuất", "download", "tải", "export", "save file", "lưu file"**
-- Do NOT add export blocks to regular answers — only when asked
-- Do NOT ask "bạn có muốn xuất file không?" — wait until asked
+**Download buttons ONLY appear when you output an \`\`\`export marker. Output it ONLY when the user explicitly asks to export/download/save a file (keywords: "xuất", "download", "tải", "export", "lưu file", "file PDF/Word/Excel").**
+- Regular answers → NO export marker → NO buttons shown.
+- Do NOT ask "bạn có muốn xuất file không?" — only act when asked.
 
-### CSV/Excel export (when asked)
-Output a \`\`\`csv block:
-\`\`\`csv
-Tháng,Doanh thu (VND),Gross Profit (VND),GP%
-T1/2026,1200000000,360000000,30.0%
-T2/2026,1500000000,450000000,30.0%
+### The export marker (place at the END of your answer)
+\`\`\`export
+formats: pdf, word
+title: Báo cáo doanh thu tháng 7
 \`\`\`
-→ UI shows "Download CSV" and "Download Excel" buttons automatically.
+- \`formats\`: comma-separated list of ONLY what the user asked for: pdf | word | csv | excel | json
+- \`title\`: report title (used for filename + document header)
+- The UI shows exactly one button per format listed. No marker = no buttons.
 
-### PDF export (when asked for PDF)
-Tell user: "Bạn nhấn nút **Download PDF** bên dưới để tải PDF của câu trả lời này."
-→ Do NOT output any special block — PDF is generated client-side from rendered content.
+### Format-specific requirements
+- **pdf**: captures the rendered answer (includes charts). No extra data needed.
+- **word**: server-generated .docx from your answer's markdown. No extra data needed.
+- **csv / excel**: you MUST also include a \`\`\`csv data block (headers + rows) for the actual data:
+  \`\`\`csv
+  Tháng,Doanh thu (VND),Gross Profit (VND),GP%
+  T1/2026,1200000000,360000000,30.0
+  \`\`\`
+- **json**: you MUST also include a \`\`\`json block (array of objects).
 
-### Word/DOCX export (when asked for Word/báo cáo Word)
-Output EXACTLY this marker so UI can trigger Word export:
-\`\`\`export-word
-title: [tên báo cáo]
-\`\`\`
-→ UI will call the export API with the full message content.
-
-### JSON export (when asked)
-Output a \`\`\`json block (array of objects only).
-
-### Format rules for all exports
-- Numbers: no thousand separator issues (use raw numbers in CSV, formatted in Word)
-- Vietnamese text: always UTF-8, no encoding shortcuts
-- Confirm what's being exported before generating: "Tôi sẽ xuất [X rows] gồm [các cột]..."
+### Rules
+- Confirm before exporting: "Tôi sẽ xuất [nội dung] dạng [format]..."
+- Numbers in CSV: raw (no thousand separators). Vietnamese: UTF-8.
+- If user asks "xuất báo cáo" without specifying format → default to \`formats: pdf, word\`.
+- If user asks "xuất Excel/bảng" → \`formats: csv, excel\` + include \`\`\`csv block.
 
 ## File Analysis (when user uploads a file)
 - Analyze the file content carefully and answer questions about it
@@ -795,6 +793,32 @@ async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: strin
     return { cookies: cookieJar, error: `SunSpeedy login failed: ${JSON.stringify(body?.msg || body)}` }
   }
 
+  // ── 1b. JoyTel-specific: /zyfh/api/v1 + SHA1 password + JPEG captcha ─────────
+  if (portal.url.includes("joytel")) {
+    const apiV1 = `${baseUrl}/zyfh/api/v1`
+    // Retry up to 3 times (captcha OCR may misread, or expire)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const captchaText = await solveImageCaptcha(`${apiV1}/access/kaptcha?rnd=${Date.now()}${attempt}`, {})
+      if (!captchaText) continue
+      const pwSha1 = createHash("sha1").update(portal.password).digest("hex")
+      const r = await fetch(`${apiV1}/access/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": baseUrl, "Referer": baseUrl + "/" },
+        body: JSON.stringify({ name: portal.username, password: pwSha1, verifyCode: captchaText, system: portal.username }),
+        signal: AbortSignal.timeout(12000),
+      })
+      const body = await r.json().catch(() => null)
+      // Token nằm trong data.info.authc.principal.token hoặc data.token
+      const token = body?.data?.info?.authc?.principal?.token || extractToken(body) || body?.data?.token
+      if (body?.success && token) return { token, cookies: cookieJar }
+      // 4006 expired / 4007 wrong → retry với captcha mới
+      if (body?.code === 4006 || body?.code === 4007) continue
+      // Lỗi khác (sai mật khẩu...) → dừng
+      return { cookies: cookieJar, error: `JoyTel login: ${body?.message || JSON.stringify(body)}` }
+    }
+    return { cookies: cookieJar, error: "JoyTel: CAPTCHA OCR thất bại sau 3 lần thử" }
+  }
+
   // ── 2. Configured login_api (Hiếu đã lấy từ DevTools) ───────────────────────
   if (portal.login_api) {
     try {
@@ -928,14 +952,26 @@ async function runBrowsePortal(args: { portal_name: string; path?: string }): Pr
   }
 
   // ── Step 3: Fetch target page ─────────────────────────────────────────────────
+  // SPA mode: resolve relative paths against the API base (data lives on the REST API,
+  // not the static frontend). JoyTel → /zyfh/api/v1, SunSpeedy → cardadmin, else api_base.
+  let apiRoot = baseUrl
+  if (authToken) {
+    if (portal.api_base) apiRoot = portal.api_base.replace(/\/$/, "")
+    else if (portal.url.includes("joytel"))   apiRoot = `${baseUrl}/zyfh/api/v1`
+    else if (portal.url.includes("sunspeedy") || portal.url.includes("cardweb")) apiRoot = "https://cardadmin.sunspeedy.com/card-admin"
+  }
   const targetUrl = args.path
-    ? (args.path.startsWith("http") ? args.path : `${baseUrl}${args.path.startsWith("/") ? args.path : `/${args.path}`}`)
-    : baseUrl
+    ? (args.path.startsWith("http") ? args.path : `${apiRoot}${args.path.startsWith("/") ? args.path : `/${args.path}`}`)
+    : (authToken ? apiRoot : baseUrl)
 
   let pageText = "", pageStatus = 0
   try {
     const headers: Record<string, string> = { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": baseUrl }
-    if (authToken) headers["Authorization"] = `Bearer ${authToken}`
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`
+      // JoyTel/Blade also accept token via custom header
+      headers["Blade-Auth"]    = `bearer ${authToken}`
+    }
 
     const r5 = await fetch(targetUrl, { headers, signal: timeout(15000) })
     pageStatus = r5.status

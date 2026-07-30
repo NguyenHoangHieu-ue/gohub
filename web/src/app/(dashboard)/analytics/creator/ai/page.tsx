@@ -83,6 +83,18 @@ function stripLatex(text: string): string {
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
+// Parse the ```export marker → { formats: Set, title }. Null if no marker (no buttons shown).
+function parseExportMarker(text: string): { formats: Set<string>; title: string } | null {
+  const m = text.match(/```export\s*([\s\S]*?)```/)
+  if (!m) return null
+  const body    = m[1]
+  const fmtLine = body.match(/formats?\s*:\s*(.+)/i)?.[1] || ""
+  const formats = new Set(fmtLine.split(",").map(s => s.trim().toLowerCase()).filter(Boolean))
+  const title   = body.match(/title\s*:\s*(.+)/i)?.[1]?.trim() || "Báo cáo Gấu Pro"
+  if (!formats.size) return null
+  return { formats, title }
+}
+
 function extractCSVBlock(text: string) {
   const m = text.match(/```csv\s*([\s\S]*?)\s*```/)
   return m ? m[1] : null
@@ -91,11 +103,6 @@ function extractCSVBlock(text: string) {
 function extractJSONArray(text: string) {
   const m = text.match(/```json\s*(\[[\s\S]*?])\s*```/)
   return m ? m[1] : null
-}
-
-function extractWordMarker(text: string): string | null {
-  const m = text.match(/```export-word\s*(?:title:\s*(.+))?\s*```/)
-  return m ? (m[1]?.trim() || "Báo cáo") : null
 }
 
 function extractMarkdownTable(text: string): string | null {
@@ -232,57 +239,62 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
   const [pdfLoading,  setPdfLoading]  = useState(false)
   const [wordLoading, setWordLoading] = useState(false)
 
-  const csvContent   = extractCSVBlock(content) || extractMarkdownTable(content)
-  const jsonContent  = extractJSONArray(content)
-  const wordTitle    = extractWordMarker(content)
-  const stamp        = new Date().toISOString().slice(0, 10)
+  const marker = parseExportMarker(content)
+  // NO buttons unless AI explicitly output an ```export marker (user requested export)
+  if (!marker) return null
 
-  // Only show export bar when AI has output an explicit export block or marker
-  const hasExportMarker = !!(csvContent || jsonContent || wordTitle)
-  // Always show PDF + Word buttons (they work on any message content)
-  const hasPDF  = content.length > 100
-  const hasWord = content.length > 100
+  const { formats, title } = marker
+  const stamp       = new Date().toISOString().slice(0, 10)
+  const csvContent  = extractCSVBlock(content) || extractMarkdownTable(content)
+  const jsonContent = extractJSONArray(content)
+  // Content sent to Word: strip the export/csv/json helper blocks
+  const cleanForDoc = content
+    .replace(/```export[\s\S]*?```/g, "")
+    .replace(/```csv[\s\S]*?```/g, "")
+    .replace(/```json[\s\S]*?```/g, "")
+    .trim()
 
-  if (!hasExportMarker && !hasPDF) return null
+  const showCSV   = formats.has("csv")   && csvContent
+  const showExcel = formats.has("excel") && csvContent
+  const showJSON  = formats.has("json")  && jsonContent
+  const showPDF   = formats.has("pdf")
+  const showWord  = formats.has("word")
+
+  if (!showCSV && !showExcel && !showJSON && !showPDF && !showWord) return null
 
   return (
     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-      {/* CSV / Excel — only when AI outputs ```csv block or markdown table */}
-      {csvContent && (
-        <>
-          <button
-            onClick={() => downloadText(csvContent, `export-${stamp}.csv`, "text/csv")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors"
-          >
-            <Download size={12} /> CSV
-          </button>
-          <button
-            onClick={() => downloadCSVAsExcel(csvContent, `export-${stamp}.xlsx`)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            <FileSpreadsheet size={12} /> Excel
-          </button>
-        </>
-      )}
-
-      {/* JSON */}
-      {jsonContent && (
+      {showCSV && (
         <button
-          onClick={() => downloadText(jsonContent, `export-${stamp}.json`, "application/json")}
+          onClick={() => downloadText(csvContent!, `${stamp}.csv`, "text/csv")}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors"
+        >
+          <Download size={12} /> CSV
+        </button>
+      )}
+      {showExcel && (
+        <button
+          onClick={() => downloadCSVAsExcel(csvContent!, `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${stamp}.xlsx`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
+        >
+          <FileSpreadsheet size={12} /> Excel
+        </button>
+      )}
+      {showJSON && (
+        <button
+          onClick={() => downloadText(jsonContent!, `${stamp}.json`, "application/json")}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 transition-colors"
         >
           <FileJson size={12} /> JSON
         </button>
       )}
-
-      {/* PDF — captures rendered content as-is (charts included) */}
-      {hasPDF && (
+      {showPDF && (
         <button
           disabled={pdfLoading}
           onClick={async () => {
             if (!contentRef.current) return
             setPdfLoading(true)
-            try { await downloadPDF(contentRef.current, wordTitle || "Báo cáo Gấu Pro") }
+            try { await downloadPDF(contentRef.current, title) }
             catch (e: unknown) { alert("PDF thất bại: " + String(e)) }
             finally { setPdfLoading(false) }
           }}
@@ -292,16 +304,12 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
           PDF
         </button>
       )}
-
-      {/* Word — server-side, proper fonts + structure */}
-      {hasWord && (
+      {showWord && (
         <button
           disabled={wordLoading}
           onClick={async () => {
             setWordLoading(true)
-            // Strip export-word marker from content before sending to Word
-            const clean = content.replace(/```export-word[\s\S]*?```/g, "").trim()
-            try { await downloadWord(clean, wordTitle || "Báo cáo Gấu Pro") }
+            try { await downloadWord(cleanForDoc, title) }
             catch (e: unknown) { alert("Word thất bại: " + String(e)) }
             finally { setWordLoading(false) }
           }}
@@ -409,16 +417,24 @@ function SourceCitations({ sources }: { sources: WebSource[] }) {
 
 function MsgContent({ msg }: { msg: { content: string; sources?: WebSource[] } }) {
   const contentRef = useRef<HTMLDivElement>(null)
-  const chartResult = extractChartData(msg.content)
+  // Hide export helper blocks from the visible answer (they drive buttons, not display)
+  const display = msg.content
+    .replace(/```export\s[\s\S]*?```/g, "")
+    .replace(/```csv[\s\S]*?```/g, "")
+    .replace(/```json\s*\[[\s\S]*?```/g, "")
+    .trim()
+  const chartResult = extractChartData(display)
   return (
-    <div ref={contentRef}>
-      {chartResult ? (
-        <>
-          {chartResult.before && renderMarkdown(chartResult.before)}
-          <ChatChart data={chartResult.chart} />
-          {chartResult.after && renderMarkdown(chartResult.after)}
-        </>
-      ) : renderMarkdown(msg.content)}
+    <div>
+      <div ref={contentRef}>
+        {chartResult ? (
+          <>
+            {chartResult.before && renderMarkdown(chartResult.before)}
+            <ChatChart data={chartResult.chart} />
+            {chartResult.after && renderMarkdown(chartResult.after)}
+          </>
+        ) : renderMarkdown(display)}
+      </div>
       <ExportBar content={msg.content} contentRef={contentRef} />
       {msg.sources && msg.sources.length > 0 && <SourceCitations sources={msg.sources} />}
     </div>
