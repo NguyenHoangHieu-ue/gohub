@@ -21,9 +21,6 @@
     },
     "src/app/api/cron/refresh-monthly-kpis/route.ts": {
       "maxDuration": 60
-    },
-    "src/app/api/cron/sync-pm-data/route.ts": {
-      "maxDuration": 300
     }
   },
   "crons": [
@@ -46,10 +43,6 @@
     {
       "path": "/api/cron/refresh-monthly-kpis",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/sync-pm-data",
-      "schedule": "30 1 * * *"
     }
   ]
 }

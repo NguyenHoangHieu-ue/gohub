@@ -22,12 +22,6 @@ export const SUPABASE_TABLES: Record<string, string> = {
   items:                  "Item bán B2B/WS (item_code 18 ký tự, item_ref, alias, sku_code, listing_code, category_code, status, item_type, item_name_en/vn, price_list, pricelistcode, channel, day_amount, day_amount_unit, data_amount, data_amount_unit, throttle_speed_en/vn, call_en/vn, call_sms_details_en/vn, unitprice, currency, sales_channel) — chỉ parent rows",
   sku_catalog:            "Danh mục SKU tra nhanh (mã nhóm nước → SKU active)",
   items_itn:              "Item nội bộ ITN (internal price list type=itn): item_code, alias, alias_status, sku_code, listing_code, category_code, status, price_list, item_name_en/vn, day_amount/unit, data_amount/unit, throttle_speed, call fields, final_retail_price_vnd/usd, old_price_vnd/usd, final_margin_usd/vnd, cogs_not_include_vat, vat, final_cogs_included_vat, exchange_rate_usd, visibility, unitprice, currency",
-  // Từ PM API /operators — nhà mạng vận hành
-  pm_operators:           "Nhà mạng/operator (code, name, description, image_url, country, category_codes, date_created, last_modified_date) — source: PM /api-pull/gohub-cloud/operators",
-  // Từ PM API /price-lists — bảng giá ext + itn
-  pm_price_lists:         "Bảng giá PM (type: ext=external|itn=internal, tenant VN/US, code 3 ký tự, channel, channel_code, label, description, listing_type, sort_order, is_active, date_created, last_modified_date) — source: PM /api-pull/gohub-cloud/price-lists",
-  // Từ PM API /sku-vat — trạng thái VAT theo SKU
-  sku_vat:                "VAT theo SKU (sku_code, vendor_code, product_code, product_type, vat_status Yes|No, name_vn, vat_unit, vat_price, vat_tax_rate) — chỉ tenant VN; Product Type D/E luôn No — source: PM /api-pull/gohub-cloud/sku-vat",
   // NCC (nhà cung cấp)
   ncc_worldmove:          "Catalog WorldMove (WM) — gói vendor, exist=Yes/No so với GoHub",
   ncc_3hk:                "Catalog 3HK — zone + giá HKD/GB",
