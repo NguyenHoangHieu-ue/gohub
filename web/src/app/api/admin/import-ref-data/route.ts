@@ -45,16 +45,65 @@ function mapRow(row: Record<string, any>, table: string): Record<string, any> | 
       notes:         row["description"] || row["notes"] || null,
     }
   }
+  if (table === "pm_operators") {
+    const code = (row["code"] || row["operator_code"] || "").toString().trim()
+    if (!code) return null
+    return {
+      code,
+      name:           (row["name"] || "").toString().trim(),
+      description:    row["description"] || null,
+      image_url:      row["image_url"] || row["imageUrl"] || null,
+      country:        row["country"] || null,
+      category_codes: row["category_codes"] || row["categoryCodes"] || null,
+    }
+  }
+  if (table === "pm_price_lists") {
+    const code = (row["code"] || "").toString().trim()
+    if (!code) return null
+    return {
+      code,
+      type:         row["type"] || null,
+      tenant:       row["tenant"] || null,
+      channel:      row["channel"] || null,
+      channel_code: row["channel_code"] || row["channelCode"] || null,
+      label:        row["label"] || null,
+      description:  row["description"] || null,
+      listing_type: row["listing_type"] || row["listingType"] || null,
+      sort_order:   row["sort_order"] != null ? Number(row["sort_order"]) : null,
+      is_active:    row["is_active"] != null ? Boolean(row["is_active"]) : true,
+    }
+  }
+  if (table === "sku_vat") {
+    const skuCode = (row["sku_code"] || row["skuCode"] || "").toString().trim()
+    if (!skuCode) return null
+    return {
+      sku_code:       skuCode,
+      vendor_code:    row["vendor_code"] || row["vendorCode"] || null,
+      product_code:   row["product_code"] || row["productCode"] || null,
+      product_type:   row["product_type"] || row["productType"] || null,
+      vat_status:     row["vat_status"] || row["vatStatus"] || "No",
+      name_vn:        row["name_vn"] || row["nameVn"] || null,
+      vat_unit:       row["vat_unit"] || row["vatUnit"] || null,
+      vat_price:      row["vat_price"] != null ? Number(row["vat_price"]) : null,
+      vat_tax_rate:   row["vat_tax_rate"] || row["vatTaxRate"] || null,
+    }
+  }
   return null
 }
 
 function detectTable(filename: string, headers: string[]): string {
   const fn = filename.toLowerCase()
+  if (fn.includes("operators"))          return "pm_operators"
+  if (fn.includes("price-lists") || fn.includes("pricelists")) return "pm_price_lists"
+  if (fn.includes("sku-vat") || fn.includes("skuvat"))         return "sku_vat"
   if (fn.includes("vendors"))            return "ref_vendors"
   if (fn.includes("support-countries"))  return "ref_support_countries"
   if (fn.includes("categories"))         return "ref_categories"
   if (fn.includes("countries"))          return "ref_countries"
   // fallback: detect from headers
+  if (headers.includes("operator_code") || (headers.includes("code") && headers.includes("country") && headers.includes("category_codes"))) return "pm_operators"
+  if (headers.includes("listing_type") || headers.includes("channel_code")) return "pm_price_lists"
+  if (headers.includes("sku_code") && headers.includes("vat_status")) return "sku_vat"
   if (headers.includes("Vendor Code") || headers.includes("vendor_code")) return "ref_vendors"
   if (headers.includes("supportCountry") || headers.includes("support_country")) return "ref_support_countries"
   if (headers.includes("nameVn") || headers.includes("name_vn")) return "ref_countries"
@@ -65,6 +114,7 @@ function detectTable(filename: string, headers: string[]): string {
 function getPK(table: string): string {
   if (table === "ref_vendors")    return "vendor_code"
   if (table === "ref_categories") return "category_code"
+  if (table === "sku_vat")        return "sku_code"
   return "code"
 }
 
@@ -97,7 +147,7 @@ export async function POST(req: NextRequest) {
   const headers = Object.keys(raw[0])
   const table = detectTable(file.name, headers)
   if (!table)
-    return NextResponse.json({ error: `Không nhận ra loại file. Tên file phải chứa: countries / support-countries / vendors / categories` }, { status: 400 })
+    return NextResponse.json({ error: `Không nhận ra loại file. Tên file phải chứa: countries / support-countries / vendors / categories / operators / price-lists / sku-vat` }, { status: 400 })
 
   const mapped = raw.map(r => mapRow(r, table)).filter(Boolean) as Record<string, any>[]
   if (!mapped.length)
