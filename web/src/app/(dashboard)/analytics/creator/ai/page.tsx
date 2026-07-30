@@ -24,6 +24,63 @@ interface Message {
   fileName?: string  // attached file name shown in user bubble
 }
 
+// ─── LaTeX → Unicode converter ───────────────────────────────────────────────
+// Gemini sometimes outputs LaTeX math ($\approx$, \times, etc.) which ReactMarkdown
+// cannot render. Convert to plain Unicode symbols before display.
+
+const LATEX_UNICODE: [RegExp, string][] = [
+  // Wrappers — extract inner text
+  [/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)"],
+  [/\\(?:text|mathbf|mathit|mathrm|boldsymbol|operatorname)\{([^}]+)\}/g, "$1"],
+  [/\\sqrt\{([^}]+)\}/g, "√($1)"],
+  // Math operators
+  [/\\approx/g, "≈"], [/\\sim(?!eq)/g, "~"], [/\\simeq/g, "≃"],
+  [/\\times/g, "×"], [/\\div/g, "÷"], [/\\cdot/g, "·"],
+  [/\\pm/g, "±"], [/\\mp/g, "∓"],
+  [/\\leq?/g, "≤"], [/\\geq?/g, "≥"],
+  [/\\neq?/g, "≠"], [/\\equiv/g, "≡"],
+  [/\\not=/g, "≠"],
+  // Arrows
+  [/\\Rightarrow/g, "⇒"], [/\\Leftarrow/g, "⇐"],
+  [/\\rightarrow/g, "→"], [/\\leftarrow/g, "←"], [/\\to(?=\s|$|[^a-z])/g, "→"],
+  [/\\leftrightarrow/g, "↔"], [/\\Leftrightarrow/g, "⇔"],
+  // Greek uppercase
+  [/\\Gamma/g, "Γ"], [/\\Delta/g, "Δ"], [/\\Theta/g, "Θ"], [/\\Lambda/g, "Λ"],
+  [/\\Pi(?=[^a-z])/g, "Π"], [/\\Sigma/g, "Σ"], [/\\Phi/g, "Φ"], [/\\Psi/g, "Ψ"], [/\\Omega/g, "Ω"],
+  // Greek lowercase
+  [/\\alpha/g, "α"], [/\\beta/g, "β"], [/\\gamma/g, "γ"], [/\\delta/g, "δ"],
+  [/\\epsilon/g, "ε"], [/\\zeta/g, "ζ"], [/\\eta/g, "η"], [/\\theta/g, "θ"],
+  [/\\lambda/g, "λ"], [/\\mu/g, "μ"], [/\\nu/g, "ν"], [/\\xi/g, "ξ"],
+  [/\\pi(?=[^a-z])/g, "π"], [/\\rho/g, "ρ"], [/\\sigma/g, "σ"], [/\\tau/g, "τ"],
+  [/\\phi/g, "φ"], [/\\chi/g, "χ"], [/\\psi/g, "ψ"], [/\\omega/g, "ω"],
+  // Set / logic
+  [/\\sum/g, "∑"], [/\\prod/g, "∏"], [/\\int/g, "∫"],
+  [/\\infty/g, "∞"], [/\\partial/g, "∂"], [/\\nabla/g, "∇"],
+  [/\\forall/g, "∀"], [/\\exists/g, "∃"],
+  [/\\in(?=[^f])/g, "∈"], [/\\notin/g, "∉"],
+  [/\\subset/g, "⊂"], [/\\supset/g, "⊃"],
+  [/\\cup/g, "∪"], [/\\cap/g, "∩"],
+  [/\\sqrt/g, "√"],
+  // Misc
+  [/\\ldots/g, "…"], [/\\cdots/g, "…"], [/\\vdots/g, "⋮"], [/\\ddots/g, "⋱"],
+  [/\\%/g, "%"], [/\\\$/g, "$"], [/\\&/g, "&"],
+  // Strip display math delimiters $$...$$ then inline $...$
+  [/\$\$([\s\S]*?)\$\$/g, "$1"],
+  [/\$([^$\n]{1,120})\$/g, "$1"],
+  // Clean up leftover backslash-commands that weren't matched
+  [/\\[a-zA-Z]+\*/g, ""], [/\\\\/g, "↵"],
+]
+
+function stripLatex(text: string): string {
+  // Skip code blocks — only process non-code segments
+  const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g)
+  return parts.map((part, i) =>
+    i % 2 === 1   // odd index = code block → leave as-is
+      ? part
+      : LATEX_UNICODE.reduce((t, [re, rep]) => t.replace(re, rep), part)
+  ).join("")
+}
+
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
 function extractExportBlocks(text: string): {
@@ -148,7 +205,8 @@ function extractChartData(text: string): { chart: any; before: string; after: st
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
-function renderMarkdown(text: string) {
+function renderMarkdown(raw: string) {
+  const text = stripLatex(raw)
   return (
     <div className="markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
