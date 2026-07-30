@@ -16,12 +16,13 @@ import { getRoleDataFilter }               from "./bi-analyst"
 // Danh mục bảng Supabase (nguồn từ PostgREST — 40 bảng). Chỉ những bảng liệt kê ở đây mới query được.
 export const SUPABASE_TABLES: Record<string, string> = {
   // Sản phẩm / catalog GoHub
-  products:               "Sản phẩm (product_code 8 ký tự, tenant, status, vendor_code, product_type, type_of_sim, supported_countries, hotspot, kyc_needed, telco_perks)",
-  skus:                   "SKU (sku_code 13 ký tự, product_code, status, sim_esim, data_amount, day_amount, call, throttle_speed, latest_cogs, latest_cogs_currency)",
-  listings:               "Bảng giá hiển thị web B2C (listing_code, status, listing_name_en/vn, data_type_en, category_code, network_operator)",
-  items:                  "Item bán (item_code 18 ký tự, alias, sku_code, unitprice, currency, sales_channel, status)",
+  products:               "Sản phẩm (product_code 8 ký tự, product_ref, tenant, status, type_of_sim, product_type, vendor_code, data_policy_code, gc_purchase_type, sku_type, data_type, import_type, supported_countries, daily_reset_time, activation_time, network_type, onsite_carrier, hotspot, kyc_code, kyc_needed, top_up_options, local_phone_number, local_number_country, apn, apn_original, telco_perks, note)",
+  skus:                   "SKU (sku_code 13 ký tự, sku_ref, product_code, status, sim_esim, data_amount, data_amount_unit, day_amount, day_amount_unit, parents, frame, datapack, call, call_sms_details, throttle_speed, hotspot, expirations, vendor_sku, vendor_sku_sim, latest_cogs, latest_cogs_currency, original_cost, reference_cost_vnd, final_cogs_included_vat_vnd, final_cogs_usd, network_type, operator_code, kyc_needed, wr_group, note)",
+  listings:               "Bảng giá hiển thị web B2C (listing_code, listing_ref, reference_product_code, status, listing_name_en/vn, listing_type, type_of_sim, vendor_code, support_country_code, data_type_en/vn, esim_type_en/vn, category_code, network_operator, daily_reset_time_en/vn, activation_time_en/vn, network_type, hotspot_en/vn, kyc_needed_en/vn, expirations_en/vn, top_up_options_en/vn, special_activation_required_en/vn, call_en/vn, call_sms_details_en/vn, local_phone_number_en/vn, local_phone_number_country, note_en/vn, apn, supported_country_name_en/vn, category_name_en/vn)",
+  items:                  "Item bán B2B/WS (item_code 18 ký tự, item_ref, alias, sku_code, listing_code, category_code, status, item_type, item_name_en/vn, price_list, pricelistcode, channel, day_amount, day_amount_unit, data_amount, data_amount_unit, throttle_speed_en/vn, call_en/vn, call_sms_details_en/vn, unitprice, currency, sales_channel) — chỉ parent rows",
   sku_catalog:            "Danh mục SKU tra nhanh (mã nhóm nước → SKU active)",
   // NCC (nhà cung cấp)
+  items_itn:              "Item nội bộ ITN (internal price list type=itn): item_code, alias, alias_status, sku_code, listing_code, category_code, status, price_list, item_name_en/vn, day_amount/unit, data_amount/unit, throttle_speed, call fields, final_retail_price_vnd/usd, old_price_vnd/usd, final_margin_usd/vnd, cogs_not_include_vat, vat, final_cogs_included_vat, exchange_rate_usd, visibility, unitprice, currency",
   ncc_worldmove:          "Catalog WorldMove (WM) — gói vendor, exist=Yes/No so với GoHub",
   ncc_3hk:                "Catalog 3HK — zone + giá HKD/GB",
   ncc_datapool:           "3HK Datapool (mã, throttle_speed, country)",
