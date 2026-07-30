@@ -314,6 +314,7 @@ export default function CreatorAIPage() {
   const [elapsed,       setElapsed]       = useState(0)
   const [attachedFile,  setAttachedFile]  = useState<File | null>(null)
   const [fileError,     setFileError]     = useState("")
+  const [gpAllowed,     setGpAllowed]     = useState<boolean | null>(null) // null = loading
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -321,12 +322,15 @@ export default function CreatorAIPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const LS_KEY       = "gp_conv"
 
-  // Creator-only guard
+  // Access guard: creator → always allowed. Others → check gp_enabled from /api/user/me
   useEffect(() => {
     if (status === "loading") return
-    if (!session?.user || session.user.role !== "creator") {
-      router.replace("/analytics")
-    }
+    if (!session?.user) { router.replace("/analytics"); return }
+    if (session.user.role === "creator") { setGpAllowed(true); return }
+    fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.gp_enabled) setGpAllowed(true)
+      else router.replace("/analytics")
+    }).catch(() => router.replace("/analytics"))
   }, [session, status, router])
 
   // Restore conversation from localStorage on mount
@@ -452,9 +456,8 @@ export default function CreatorAIPage() {
     }
   }, [send, input])
 
-  if (status === "loading" || !session?.user || session.user.role !== "creator") {
-    return null
-  }
+  if (status === "loading" || !session?.user || gpAllowed === null) return null
+  if (!gpAllowed) return null
 
   const thinkingMsg = elapsed > 0 ? ` (${elapsed}s)` : ""
 

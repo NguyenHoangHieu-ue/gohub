@@ -66,7 +66,7 @@ export const MANAGEMENT_GROUP: NavGroup = { label: "Management", items: [
 export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [
   { href: "/analytics/creator",            label: "Creator Settings", icon: Crown    },
   { href: "/analytics/creator/ai",         label: "Gấu Pro",          icon: Cpu      },
-  { href: "/analytics/creator/knowledge",  label: "Knowledge Base",   icon: BookOpen },
+  { href: "/analytics/creator/knowledge",  label: "Own Info",         icon: BookOpen },
   { href: "/analytics/creator/devtools",   label: "API & Database",   icon: Terminal },
 ]}
 

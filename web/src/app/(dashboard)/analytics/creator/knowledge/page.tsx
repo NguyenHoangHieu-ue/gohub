@@ -6,7 +6,7 @@ import { useRouter }                         from "next/navigation"
 import {
   BookOpen, Plus, Trash2, Save, RefreshCw, Tag, FileText,
   DollarSign, Package, Users, Cog, StickyNote, Cpu, ChevronRight,
-  Eye, Edit3,
+  Eye, Edit3, Download,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -26,13 +26,14 @@ interface KBEntry {
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
-  { id: "product_codes",  label: "Mã Sản Phẩm",  icon: Package,    color: "violet" },
-  { id: "sku_rules",      label: "Quy Tắc SKU",   icon: Tag,        color: "blue"   },
-  { id: "exchange_rates", label: "Tỷ Giá",         icon: DollarSign, color: "emerald"},
-  { id: "cogs",           label: "COGS & Giá Vốn", icon: DollarSign, color: "amber"  },
-  { id: "vendors",        label: "Nhà Cung Cấp",   icon: Users,      color: "orange" },
-  { id: "processes",      label: "Quy Trình",       icon: Cog,        color: "cyan"   },
-  { id: "notes",          label: "Ghi Chú Khác",   icon: StickyNote, color: "gray"   },
+  { id: "product_codes",  label: "Mã Sản Phẩm",   icon: Package,    color: "violet"  },
+  { id: "sku_rules",      label: "Quy Tắc SKU",    icon: Tag,        color: "blue"    },
+  { id: "exchange_rates", label: "Tỷ Giá",          icon: DollarSign, color: "emerald" },
+  { id: "cogs",           label: "COGS & Giá Vốn",  icon: DollarSign, color: "amber"   },
+  { id: "vendors",        label: "Nhà Cung Cấp",    icon: Users,      color: "orange"  },
+  { id: "processes",      label: "Quy Trình",        icon: Cog,        color: "cyan"    },
+  { id: "wiki",           label: "Wiki & Tài Liệu", icon: BookOpen,   color: "indigo"  },
+  { id: "notes",          label: "Ghi Chú Khác",    icon: StickyNote, color: "gray"    },
 ] as const
 
 const COLOR_CLASSES: Record<string, { badge: string; active: string }> = {
@@ -43,6 +44,40 @@ const COLOR_CLASSES: Record<string, { badge: string; active: string }> = {
   orange:  { badge: "bg-orange-100 text-orange-700",   active: "bg-orange-50 border-orange-300 text-orange-800" },
   cyan:    { badge: "bg-cyan-100 text-cyan-700",       active: "bg-cyan-50 border-cyan-300 text-cyan-800"       },
   gray:    { badge: "bg-gray-100 text-gray-600",       active: "bg-gray-50 border-gray-300 text-gray-700"       },
+}
+
+// ─── Sync button ─────────────────────────────────────────────────────────────
+
+function SyncButton({ onDone }: { onDone: () => void }) {
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult]   = useState<string | null>(null)
+
+  const sync = async () => {
+    setSyncing(true)
+    setResult(null)
+    try {
+      const r = await fetch("/api/creator-ai/knowledge?action=sync")
+      const d = await r.json()
+      if (d.ok) {
+        setResult(`✓ Đã sync ${d.wiki} wiki + FX rates`)
+        onDone()
+      } else {
+        setResult(`⚠ Lỗi: ${d.errors?.join(", ") || "unknown"}`)
+      }
+    } catch { setResult("⚠ Sync thất bại") }
+    finally { setSyncing(false); setTimeout(() => setResult(null), 4000) }
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <button onClick={sync} disabled={syncing}
+        className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-violet-600 hover:bg-violet-50 border border-violet-200 rounded-lg transition-colors disabled:opacity-50">
+        {syncing ? <RefreshCw size={11} className="animate-spin" /> : <Download size={11} />}
+        {syncing ? "Đang sync…" : "Sync Wiki + Tỷ giá"}
+      </button>
+      {result && <span className="text-[10px] text-gray-400">{result}</span>}
+    </div>
+  )
 }
 
 function slugify(text: string) {
@@ -160,9 +195,10 @@ export default function KnowledgePage() {
         <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-violet-600" />
-            <h1 className="text-sm font-bold text-gray-900 dark:text-slate-100">Knowledge Base</h1>
+            <h1 className="text-sm font-bold text-gray-900 dark:text-slate-100">Own Info</h1>
           </div>
           <p className="text-[10px] text-gray-400 mt-0.5">Gấu Pro tự đọc trước khi trả lời</p>
+          <SyncButton onDone={load} />
         </div>
 
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">

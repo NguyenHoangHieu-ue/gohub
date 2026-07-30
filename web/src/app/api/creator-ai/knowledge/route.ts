@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }          from "next-auth"
 import { authOptions }               from "@/lib/auth"
 import { supabaseAdmin }              from "@/lib/supabase"
+import { queryAnalytics }            from "@/lib/analytics-db"
 
 // Creator-only CRUD for creator_kb table
 
@@ -18,6 +19,12 @@ export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get("regenerate") === "1") {
     await regenerateMasterNote()
     return NextResponse.json({ ok: true, message: "Master note regenerated" })
+  }
+
+  // ?action=sync → sync wiki pages + FX rates vào creator_kb
+  if (req.nextUrl.searchParams.get("action") === "sync") {
+    const result = await syncFromSystem()
+    return NextResponse.json(result)
   }
 
   const category = req.nextUrl.searchParams.get("category")
@@ -75,6 +82,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   cogs:           "COGS & Giá Vốn",
   vendors:        "Nhà Cung Cấp",
   processes:      "Quy Trình",
+  wiki:           "Wiki & Tài Liệu",
   notes:          "Ghi Chú Khác",
 }
 
@@ -104,4 +112,77 @@ async function regenerateMasterNote() {
       content: note, updated_at: new Date().toISOString(),
     }, { onConflict: "key" })
   } catch { /* non-critical */ }
+}
+
+// ─── Sync từ hệ thống (wiki + FX rates) ──────────────────────────────────────
+
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 80)
+}
+
+async function syncFromSystem(): Promise<{ ok: boolean; wiki: number; fx: boolean; errors: string[] }> {
+  const errors: string[] = []
+  let wikiCount = 0
+  let fxOk = false
+
+  // 1. Wiki pages từ Supabase kb_wiki_pages
+  try {
+    const { data: pages } = await supabaseAdmin.from("kb_wiki_pages")
+      .select("title, content, page_type, updated_at")
+      .order("title")
+
+    if (pages?.length) {
+      const upserts = pages.map(p => ({
+        key:        `wiki_${slugify(p.title)}`,
+        category:   "wiki",
+        title:      p.title,
+        content:    (p.content || "").slice(0, 8000), // truncate dài quá
+        metadata:   { page_type: p.page_type, source: "kb_wiki_pages", synced_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }))
+
+      // Upsert theo batch 20
+      for (let i = 0; i < upserts.length; i += 20) {
+        const batch = upserts.slice(i, i + 20)
+        const { error } = await supabaseAdmin.from("creator_kb").upsert(batch, { onConflict: "key" })
+        if (error) errors.push(`Wiki batch ${i}: ${error.message}`)
+        else wikiCount += batch.length
+      }
+    }
+  } catch (e: any) {
+    errors.push(`Wiki sync error: ${e.message}`)
+  }
+
+  // 2. FX rates từ gohub_dw
+  try {
+    const rows = await queryAnalytics(`
+      SELECT DISTINCT ON (currency_code)
+        company_code, currency_code, rate, from_date::text as from_date
+      FROM exchange_rate
+      ORDER BY currency_code, from_date DESC
+    `)
+
+    if (rows?.length) {
+      const table = "| Công ty | Tiền tệ | Tỷ giá | Ngày hiệu lực |\n|---|---|---|---|\n" +
+        rows.map((r: any) => `| ${r.company_code} | ${r.currency_code} | ${r.rate} | ${r.from_date} |`).join("\n")
+
+      const content = `## Tỷ giá hiện tại (gohub_dw)\n\n*Sync lần cuối: ${new Date().toLocaleDateString("vi-VN")}*\n\n${table}\n\n**Nguồn:** Bảng \`exchange_rate\` trong gohub_dw. Tỷ giá theo company_code (VN/SG/HK/US).`
+
+      const { error } = await supabaseAdmin.from("creator_kb").upsert({
+        key: "fx_rates_current", category: "exchange_rates",
+        title: "Tỷ giá hiện tại (gohub_dw)",
+        content, updated_at: new Date().toISOString(),
+      }, { onConflict: "key" })
+
+      if (error) errors.push(`FX sync: ${error.message}`)
+      else fxOk = true
+    }
+  } catch (e: any) {
+    errors.push(`FX sync error: ${e.message}`)
+  }
+
+  // Regenerate master note
+  await regenerateMasterNote()
+
+  return { ok: errors.length === 0, wiki: wikiCount, fx: fxOk, errors }
 }
