@@ -14,6 +14,12 @@ async function guard(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!await guard(req)) return NextResponse.json({ error: "Creator only" }, { status: 403 })
 
+  // ?regenerate=1 → force regenerate master note only
+  if (req.nextUrl.searchParams.get("regenerate") === "1") {
+    await regenerateMasterNote()
+    return NextResponse.json({ ok: true, message: "Master note regenerated" })
+  }
+
   const category = req.nextUrl.searchParams.get("category")
   let q = supabaseAdmin.from("creator_kb").select("*").order("category").order("updated_at", { ascending: false })
   if (category) q = q.eq("category", category)
