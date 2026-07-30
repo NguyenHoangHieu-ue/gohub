@@ -221,7 +221,7 @@ function renderMarkdown(raw: string) {
         h3:     ({ children }) => <p className="font-semibold text-sm mb-1 text-gray-700 dark:text-slate-300">{children}</p>,
         hr:     () => <hr className="my-3 border-gray-200 dark:border-slate-600" />,
         code:   ({ children }) => <code className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
-        pre:    ({ children }) => <pre className="bg-gray-900 dark:bg-slate-950 text-gray-100 rounded-xl p-4 overflow-x-auto text-xs font-mono mb-3">{children}</pre>,
+        pre:    ({ children }) => <pre className="bg-gray-900 dark:bg-slate-950 text-gray-100 rounded-xl p-4 overflow-x-auto text-xs font-mono mb-3 [&_code]:bg-transparent [&_code]:p-0 [&_code]:rounded-none">{children}</pre>,
         table:  ({ children }) => (
           <div className="overflow-x-auto mb-3 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
             <table className="text-xs border-collapse w-full">{children}</table>
