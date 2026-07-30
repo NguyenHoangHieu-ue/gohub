@@ -315,10 +315,11 @@ export default function CreatorAIPage() {
   const [attachedFile,  setAttachedFile]  = useState<File | null>(null)
   const [fileError,     setFileError]     = useState("")
 
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
-  const inputRef    = useRef<HTMLTextAreaElement>(null)
+  const bottomRef    = useRef<HTMLDivElement>(null)
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+  const inputRef     = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const LS_KEY       = "gp_conv"
 
   // Creator-only guard
   useEffect(() => {
@@ -327,6 +328,26 @@ export default function CreatorAIPage() {
       router.replace("/analytics")
     }
   }, [session, status, router])
+
+  // Restore conversation from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[]
+        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist conversation to localStorage on every change
+  useEffect(() => {
+    try {
+      if (messages.length > 0) localStorage.setItem(LS_KEY, JSON.stringify(messages))
+      else localStorage.removeItem(LS_KEY)
+    } catch {}
+  }, [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -351,6 +372,7 @@ export default function CreatorAIPage() {
     setInput("")
     setAttachedFile(null)
     setFileError("")
+    try { localStorage.removeItem(LS_KEY) } catch {}
     inputRef.current?.focus()
   }, [])
 
