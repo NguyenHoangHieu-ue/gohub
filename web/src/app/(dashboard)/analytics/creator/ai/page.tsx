@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  Download, FileJson,
+  Download, FileJson, FileType,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -83,23 +83,25 @@ function stripLatex(text: string): string {
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
-function extractExportBlocks(text: string): {
-  csv:   { content: string; idx: number; end: number } | null
-  json:  { content: string; idx: number; end: number } | null
-} {
-  const csvMatch  = text.match(/```csv\s*([\s\S]*?)\s*```/)
-  const jsonMatch = text.match(/```json\s*(\[[\s\S]*?])\s*```/)  // only JSON arrays
-  return {
-    csv:  csvMatch  ? { content: csvMatch[1],  idx: text.indexOf("```csv"),  end: text.indexOf("```", text.indexOf("```csv")  + 6) + 3 } : null,
-    json: jsonMatch ? { content: jsonMatch[1], idx: text.indexOf("```json"), end: text.indexOf("```", text.indexOf("```json") + 7) + 3 } : null,
-  }
+function extractCSVBlock(text: string) {
+  const m = text.match(/```csv\s*([\s\S]*?)\s*```/)
+  return m ? m[1] : null
+}
+
+function extractJSONArray(text: string) {
+  const m = text.match(/```json\s*(\[[\s\S]*?])\s*```/)
+  return m ? m[1] : null
+}
+
+function extractWordMarker(text: string): string | null {
+  const m = text.match(/```export-word\s*(?:title:\s*(.+))?\s*```/)
+  return m ? (m[1]?.trim() || "Báo cáo") : null
 }
 
 function extractMarkdownTable(text: string): string | null {
-  // Detect markdown table with at least header + separator + 1 data row
   const m = text.match(/(\|.+\|\n\|[-:| ]+\|\n(?:\|.+\|\n?)+)/)
   if (!m) return null
-  const lines = m[1].trim().split("\n").filter((l, i) => i !== 1) // remove separator row
+  const lines = m[1].trim().split("\n").filter((_, i) => i !== 1)
   return lines.map(line =>
     line.replace(/^\||\|$/g, "").split("|").map(cell =>
       `"${cell.trim().replace(/"/g, '""')}"`
@@ -107,69 +109,206 @@ function extractMarkdownTable(text: string): string | null {
   ).join("\n")
 }
 
-function downloadText(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement("a")
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a   = document.createElement("a")
   a.href     = url
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
 
+function downloadText(content: string, filename: string, mime: string) {
+  downloadBlob(new Blob(["﻿" + content], { type: mime + ";charset=utf-8" }), filename)
+}
+
 function downloadCSVAsExcel(csv: string, filename: string) {
-  // Use xlsx to create real Excel file
   import("xlsx").then((XLSX) => {
-    const rows    = csv.split("\n").map(r => r.split(",").map(c => c.replace(/^"|"$/g, "").replace(/""/g, '"')))
-    const ws      = XLSX.utils.aoa_to_sheet(rows)
-    const wb      = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1")
+    const rows = csv.split("\n").map(r => {
+      // Parse quoted CSV properly
+      const result: string[] = []
+      let cur = "", inQ = false
+      for (let i = 0; i < r.length; i++) {
+        if (r[i] === '"') { inQ = !inQ }
+        else if (r[i] === "," && !inQ) { result.push(cur); cur = "" }
+        else cur += r[i]
+      }
+      result.push(cur)
+      return result
+    })
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Data")
     XLSX.writeFile(wb, filename)
-  }).catch(() => {
-    // fallback: download as CSV
-    downloadText(csv, filename.replace(".xlsx", ".csv"), "text/csv")
+  }).catch(() => downloadText(csv, filename.replace(".xlsx", ".csv"), "text/csv"))
+}
+
+async function downloadPDF(contentEl: HTMLElement, title: string) {
+  const { default: html2canvas } = await import("html2canvas")
+  const { default: jsPDF }       = await import("jspdf")
+
+  // Clone element with white background for clean PDF
+  const clone = contentEl.cloneNode(true) as HTMLElement
+  clone.style.cssText = "background:#fff;color:#000;padding:20px;max-width:750px;font-family:Arial,sans-serif"
+  document.body.appendChild(clone)
+
+  try {
+    const canvas = await html2canvas(clone, {
+      scale:           2,
+      backgroundColor: "#ffffff",
+      logging:         false,
+      useCORS:         true,
+      allowTaint:      true,
+    })
+
+    const pdf      = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+    const pageW    = pdf.internal.pageSize.getWidth()
+    const pageH    = pdf.internal.pageSize.getHeight()
+    const margin   = 10
+    const imgW     = pageW - margin * 2
+    const imgH     = (canvas.height * imgW) / canvas.width
+    const pageImgH = pageH - margin * 2
+    const stamp    = new Date().toLocaleDateString("vi-VN")
+
+    // Header on first page
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(14)
+    pdf.setTextColor(0, 0, 0)
+    pdf.text(title, margin, margin + 5)
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
+    pdf.setTextColor(120, 120, 120)
+    pdf.text(stamp, margin, margin + 10)
+    pdf.setDrawColor(200, 200, 200)
+    pdf.line(margin, margin + 13, pageW - margin, margin + 13)
+
+    const contentTop = margin + 16
+    const firstPageH = pageH - contentTop - margin
+
+    const imgData = canvas.toDataURL("image/png")
+
+    if (imgH <= firstPageH) {
+      pdf.addImage(imgData, "PNG", margin, contentTop, imgW, imgH)
+    } else {
+      // Multi-page: slice canvas per page
+      let yOffset = 0
+      let isFirst = true
+      while (yOffset < canvas.height) {
+        if (!isFirst) pdf.addPage()
+        const yStart   = isFirst ? contentTop : margin
+        const availH   = isFirst ? firstPageH : pageImgH
+        const sliceH   = Math.min(availH / imgW * canvas.width, canvas.height - yOffset)
+        const tmpCanvas = document.createElement("canvas")
+        tmpCanvas.width  = canvas.width
+        tmpCanvas.height = sliceH
+        tmpCanvas.getContext("2d")!.drawImage(canvas, 0, -yOffset)
+        pdf.addImage(tmpCanvas.toDataURL("image/png"), "PNG", margin, yStart, imgW, availH)
+        yOffset += sliceH
+        isFirst  = false
+      }
+    }
+
+    const fname = `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`
+    pdf.save(fname)
+  } finally {
+    document.body.removeChild(clone)
+  }
+}
+
+async function downloadWord(markdown: string, title: string) {
+  const res = await fetch("/api/creator-ai/export", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ markdown, title, format: "docx" }),
   })
+  if (!res.ok) { alert("Xuất Word thất bại: " + (await res.text())); return }
+  const blob = await res.blob()
+  downloadBlob(blob, `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.docx`)
 }
 
 // ─── Export button bar ────────────────────────────────────────────────────────
 
-function ExportBar({ content }: { content: string }) {
-  const { csv, json } = extractExportBlocks(content)
-  const tableCSV      = !csv ? extractMarkdownTable(content) : null
-  const hasExport     = csv || json || tableCSV
+function ExportBar({ content, contentRef }: { content: string; contentRef: React.RefObject<HTMLDivElement | null> }) {
+  const [pdfLoading,  setPdfLoading]  = useState(false)
+  const [wordLoading, setWordLoading] = useState(false)
 
-  if (!hasExport) return null
+  const csvContent   = extractCSVBlock(content) || extractMarkdownTable(content)
+  const jsonContent  = extractJSONArray(content)
+  const wordTitle    = extractWordMarker(content)
+  const stamp        = new Date().toISOString().slice(0, 10)
 
-  const csvContent    = csv?.content || tableCSV || ""
-  const stamp         = new Date().toISOString().slice(0, 10)
+  // Only show export bar when AI has output an explicit export block or marker
+  const hasExportMarker = !!(csvContent || jsonContent || wordTitle)
+  // Always show PDF + Word buttons (they work on any message content)
+  const hasPDF  = content.length > 100
+  const hasWord = content.length > 100
+
+  if (!hasExportMarker && !hasPDF) return null
 
   return (
     <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-      {(csv || tableCSV) && (
+      {/* CSV / Excel — only when AI outputs ```csv block or markdown table */}
+      {csvContent && (
         <>
           <button
             onClick={() => downloadText(csvContent, `export-${stamp}.csv`, "text/csv")}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors"
           >
-            <Download size={12} />
-            Download CSV
+            <Download size={12} /> CSV
           </button>
           <button
             onClick={() => downloadCSVAsExcel(csvContent, `export-${stamp}.xlsx`)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
           >
-            <FileSpreadsheet size={12} />
-            Download Excel
+            <FileSpreadsheet size={12} /> Excel
           </button>
         </>
       )}
-      {json && (
+
+      {/* JSON */}
+      {jsonContent && (
         <button
-          onClick={() => downloadText(json.content, `export-${stamp}.json`, "application/json")}
+          onClick={() => downloadText(jsonContent, `export-${stamp}.json`, "application/json")}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 transition-colors"
         >
-          <FileJson size={12} />
-          Download JSON
+          <FileJson size={12} /> JSON
+        </button>
+      )}
+
+      {/* PDF — captures rendered content as-is (charts included) */}
+      {hasPDF && (
+        <button
+          disabled={pdfLoading}
+          onClick={async () => {
+            if (!contentRef.current) return
+            setPdfLoading(true)
+            try { await downloadPDF(contentRef.current, wordTitle || "Báo cáo Gấu Pro") }
+            catch (e: unknown) { alert("PDF thất bại: " + String(e)) }
+            finally { setPdfLoading(false) }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+        >
+          {pdfLoading ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+          PDF
+        </button>
+      )}
+
+      {/* Word — server-side, proper fonts + structure */}
+      {hasWord && (
+        <button
+          disabled={wordLoading}
+          onClick={async () => {
+            setWordLoading(true)
+            // Strip export-word marker from content before sending to Word
+            const clean = content.replace(/```export-word[\s\S]*?```/g, "").trim()
+            try { await downloadWord(clean, wordTitle || "Báo cáo Gấu Pro") }
+            catch (e: unknown) { alert("Word thất bại: " + String(e)) }
+            finally { setWordLoading(false) }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+        >
+          {wordLoading ? <Loader2 size={12} className="animate-spin" /> : <FileType size={12} />}
+          Word
         </button>
       )}
     </div>
@@ -261,6 +400,26 @@ function SourceCitations({ sources }: { sources: WebSource[] }) {
           </a>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── MsgContent — assistant message with PDF ref ─────────────────────────────
+
+function MsgContent({ msg }: { msg: { content: string; sources?: WebSource[] } }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const chartResult = extractChartData(msg.content)
+  return (
+    <div ref={contentRef}>
+      {chartResult ? (
+        <>
+          {chartResult.before && renderMarkdown(chartResult.before)}
+          <ChatChart data={chartResult.chart} />
+          {chartResult.after && renderMarkdown(chartResult.after)}
+        </>
+      ) : renderMarkdown(msg.content)}
+      <ExportBar content={msg.content} contentRef={contentRef} />
+      {msg.sources && msg.sources.length > 0 && <SourceCitations sources={msg.sources} />}
     </div>
   )
 }
@@ -579,19 +738,8 @@ export default function CreatorAIPage() {
                   ) : (() => {
                     const chartResult = extractChartData(msg.content)
                     return (
-                      <div>
-                        {chartResult ? (
-                          <>
-                            {chartResult.before && renderMarkdown(chartResult.before)}
-                            <ChatChart data={chartResult.chart} />
-                            {chartResult.after && renderMarkdown(chartResult.after)}
-                          </>
-                        ) : renderMarkdown(msg.content)}
-                        <ExportBar content={msg.content} />
-                        {msg.sources && msg.sources.length > 0 && (
-                          <SourceCitations sources={msg.sources} />
-                        )}
-                      </div>
+                      <MsgContent msg={msg} />
+
                     )
                   })()}
                 </div>

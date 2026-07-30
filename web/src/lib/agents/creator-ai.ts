@@ -335,18 +335,39 @@ When writing to KB: always update master note + any relevant wiki page simultane
 
 Use chart_type "line" or "area" for time-series trends. For bar charts use "bars", for line/area charts use "lines". Pie charts use single-metric format only.
 
-## File Export
-When user asks to download/export data as CSV or Excel:
-- Output a \`\`\`csv code block with the actual CSV content (comma-separated, first line = headers)
-- Example:
+## File Export Rules (STRICT)
+
+**ONLY generate export blocks when user explicitly requests: "xuất", "download", "tải", "export", "save file", "lưu file"**
+- Do NOT add export blocks to regular answers — only when asked
+- Do NOT ask "bạn có muốn xuất file không?" — wait until asked
+
+### CSV/Excel export (when asked)
+Output a \`\`\`csv block:
 \`\`\`csv
 Tháng,Doanh thu (VND),Gross Profit (VND),GP%
 T1/2026,1200000000,360000000,30.0%
 T2/2026,1500000000,450000000,30.0%
 \`\`\`
-- The UI will automatically show a "Download CSV" / "Download Excel" button when it detects a csv block.
-- For JSON export, output a \`\`\`json block (array of objects) — UI will show "Download JSON".
-- Always confirm what data is being exported before generating the block.
+→ UI shows "Download CSV" and "Download Excel" buttons automatically.
+
+### PDF export (when asked for PDF)
+Tell user: "Bạn nhấn nút **Download PDF** bên dưới để tải PDF của câu trả lời này."
+→ Do NOT output any special block — PDF is generated client-side from rendered content.
+
+### Word/DOCX export (when asked for Word/báo cáo Word)
+Output EXACTLY this marker so UI can trigger Word export:
+\`\`\`export-word
+title: [tên báo cáo]
+\`\`\`
+→ UI will call the export API with the full message content.
+
+### JSON export (when asked)
+Output a \`\`\`json block (array of objects only).
+
+### Format rules for all exports
+- Numbers: no thousand separator issues (use raw numbers in CSV, formatted in Word)
+- Vietnamese text: always UTF-8, no encoding shortcuts
+- Confirm what's being exported before generating: "Tôi sẽ xuất [X rows] gồm [các cột]..."
 
 ## File Analysis (when user uploads a file)
 - Analyze the file content carefully and answer questions about it
@@ -668,6 +689,89 @@ function parseCookies(raw: string | null, jar: Record<string, string>) {
   }
 }
 
+// Detect if a page is an SPA (no server-rendered content, just JS bundle)
+function isSPA(html: string): boolean {
+  const hasForm = /<form[\s>]/i.test(html)
+  const hasMeta = /react|vue|angular|vite|webpack|next\.js/i.test(html)
+  const bodyEmpty = /<body[^>]*>\s*<div[^>]*>\s*<\/div>\s*<\/body>/i.test(html)
+  return !hasForm && (hasMeta || bodyEmpty)
+}
+
+// Solve image CAPTCHA via Gemini Vision
+async function solveImageCaptcha(imageUrl: string, cookieJar: Record<string, string>): Promise<string> {
+  try {
+    const res = await fetch(imageUrl, {
+      headers: { "Cookie": Object.entries(cookieJar).map(([k,v]) => `${k}=${v}`).join("; "), "User-Agent": BROWSER_UA },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return ""
+    const buf    = await res.arrayBuffer()
+    const base64 = Buffer.from(buf).toString("base64")
+    const mime   = res.headers.get("content-type") || "image/png"
+
+    // Call Gemini Vision to read the captcha
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" })
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [
+        { text: "Read the text/numbers in this CAPTCHA image. Return ONLY the captcha text, nothing else. No spaces." },
+        { inlineData: { mimeType: mime, data: base64 } },
+      ]}],
+    })
+    return result.response.text().trim().replace(/\s/g, "")
+  } catch { return "" }
+}
+
+// SPA API login: try common REST login endpoints and return auth token/cookie
+async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: string; cookies: Record<string, string>; error?: string }> {
+  const baseUrl   = portal.url.replace(/\/$/, "")
+  const cookieJar: Record<string, string> = {}
+
+  // SunSpeedy-specific: uses cardadmin.sunspeedy.com API with captcha
+  if (portal.url.includes("sunspeedy") || portal.url.includes("cardweb")) {
+    const adminBase = "https://cardadmin.sunspeedy.com/card-admin"
+    // Step 1: get captcha
+    const uuid = `gp-${Date.now()}`
+    const captchaUrl = `${adminBase}/captcha?uuid=${uuid}`
+    const captchaText = await solveImageCaptcha(captchaUrl, {})
+    if (!captchaText) return { cookies: cookieJar, error: "Could not solve captcha" }
+
+    // Step 2: login
+    const r = await fetch(`${adminBase}/sys/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA },
+      body: JSON.stringify({ username: portal.username, password: portal.password, captcha: captchaText, uuid }),
+      signal: AbortSignal.timeout(12000),
+    })
+    const body = await r.json().catch(() => null)
+    if (body?.code === 0 && body?.data?.token) {
+      return { token: body.data.token, cookies: cookieJar }
+    }
+    return { cookies: cookieJar, error: `SPA login failed: ${JSON.stringify(body?.msg || body)}` }
+  }
+
+  // JoyTel / generic SPA: try common REST login patterns
+  const loginEndpoints = ["/api/login", "/api/user/login", "/api/auth/login", "/login/api"]
+  for (const ep of loginEndpoints) {
+    try {
+      const r = await fetch(`${baseUrl}${ep}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA },
+        body: JSON.stringify({ username: portal.username, password: portal.password }),
+        signal: AbortSignal.timeout(8000),
+      })
+      parseCookies(r.headers.get("set-cookie"), cookieJar)
+      const body = await r.json().catch(() => null)
+      // Common success patterns
+      if (r.ok || (body?.code === 0) || body?.token || body?.access_token) {
+        const token = body?.token || body?.access_token || body?.data?.token
+        return { token, cookies: cookieJar }
+      }
+    } catch { continue }
+  }
+  return { cookies: cookieJar, error: "No working SPA login endpoint found" }
+}
+
 async function runBrowsePortal(args: { portal_name: string; path?: string }): Promise<any> {
   const creds  = await loadPortalCreds()
   const portal = creds.find(p =>
@@ -682,108 +786,121 @@ async function runBrowsePortal(args: { portal_name: string; path?: string }): Pr
     }
   }
 
-  const baseUrl   = portal.url.replace(/\/$/, "")
-  const loginUrl  = portal.login_path
+  const baseUrl  = portal.url.replace(/\/$/, "")
+  const loginUrl = portal.login_path
     ? (portal.login_path.startsWith("http") ? portal.login_path : `${baseUrl}${portal.login_path}`)
     : baseUrl
-  const cookieJar: Record<string, string> = {}
-  const cookieHeader = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join("; ")
+  const timeout  = (ms: number) => AbortSignal.timeout(ms)
 
-  const timeout = (ms: number) => AbortSignal.timeout(ms)
-
-  // Step 1: GET login page
+  // ── Step 1: Check if SPA or traditional ──────────────────────────────────────
   let loginHtml = ""
   try {
     const r1 = await fetch(loginUrl, { headers: { "User-Agent": BROWSER_UA }, signal: timeout(12000) })
     loginHtml = await r1.text()
-    parseCookies(r1.headers.get("set-cookie"), cookieJar)
   } catch (e: any) {
     return { error: `Cannot reach ${loginUrl}: ${e.message}` }
   }
 
-  // Extract CSRF token (multiple common patterns)
-  const csrfRe = /(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["'][^>]*value=["']([^"']{8,})["']|value=["']([^"']{8,})["'][^>]*(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken)["']/i
-  const csrfMatch  = loginHtml.match(csrfRe)
-  const csrfToken  = csrfMatch?.[1] || csrfMatch?.[2]
-  const csrfField  = loginHtml.match(/name=["'](_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["']/i)?.[1] || "_token"
+  const cookieJar: Record<string, string> = {}
+  const cookieHeader = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join("; ")
+  let authToken: string | undefined
 
-  // Detect form action
-  const formActionMatch = loginHtml.match(/<form[^>]*action=["']([^"']+)["'][^>]*(?:method=["']post["'])?/i)
-                       || loginHtml.match(/<form[^>]*(?:method=["']post["'])[^>]*action=["']([^"']+)["']/i)
-  const formAction  = formActionMatch?.[1]
-  const postUrl = formAction
-    ? (formAction.startsWith("http") ? formAction : `${baseUrl}${formAction.startsWith("/") ? formAction : `/${formAction}`}`)
-    : `${loginUrl}/login`
+  if (isSPA(loginHtml)) {
+    // ── SPA portal: use REST API login ─────────────────────────────────────────
+    const loginResult = await loginSPAPortal(portal)
+    if (loginResult.error && !loginResult.token) {
+      return { portal: portal.name, login_ok: false, error: loginResult.error,
+        hint: "SPA portal detected. " + loginResult.error }
+    }
+    Object.assign(cookieJar, loginResult.cookies)
+    authToken = loginResult.token
+  } else {
+    // ── Traditional portal: HTML form login ────────────────────────────────────
+    // Extract CSRF token
+    const csrfRe    = /(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["'][^>]*value=["']([^"']{8,})["']|value=["']([^"']{8,})["'][^>]*(?:name|id)=["'](?:_token|csrf[_-]?token|csrfmiddlewaretoken)["']/i
+    const csrfMatch = loginHtml.match(csrfRe)
+    const csrfToken = csrfMatch?.[1] || csrfMatch?.[2]
+    const csrfField = loginHtml.match(/name=["'](_token|csrf[_-]?token|csrfmiddlewaretoken|authenticity_token)["']/i)?.[1] || "_token"
 
-  // Detect username/password field names
-  const userFieldRe = /name=["']([^"']*(?:user|login|email|account|name)[^"']*)["'][^>]*type=["'](?:text|email)["']|type=["'](?:text|email)["'][^>]*name=["']([^"']*(?:user|login|email|account)[^"']*)["']/i
-  const passFieldRe = /name=["']([^"']*(?:pass(?:word|wd|wd)?|pwd)[^"']*)["'][^>]*type=["']password["']|type=["']password["'][^>]*name=["']([^"']*(?:pass|pwd)[^"']*)["']/i
-  const userField = loginHtml.match(userFieldRe)?.[1] || loginHtml.match(userFieldRe)?.[2] || "username"
-  const passField = loginHtml.match(passFieldRe)?.[1] || loginHtml.match(passFieldRe)?.[2] || "password"
+    // Detect form action
+    const formAction = (loginHtml.match(/<form[^>]*action=["']([^"']+)["']/i) || [])[1]
+    const postUrl    = formAction
+      ? (formAction.startsWith("http") ? formAction : `${baseUrl}${formAction.startsWith("/") ? formAction : `/${formAction}`}`)
+      : `${baseUrl}/login`
 
-  // Step 2: POST login form
-  const body = new URLSearchParams()
-  body.append(userField, portal.username)
-  body.append(passField, portal.password)
-  if (csrfToken) body.append(csrfField, csrfToken)
+    // Detect field names
+    const userFieldRe = /name=["']([^"']*(?:user|login|email|account)[^"']*)["'][^>]*type=["'](?:text|email)["']|type=["'](?:text|email)["'][^>]*name=["']([^"']*(?:user|login|email|account)[^"']*)["']/i
+    const passFieldRe = /name=["']([^"']*(?:pass(?:word|wd)?|pwd)[^"']*)["'][^>]*type=["']password["']|type=["']password["'][^>]*name=["']([^"']*(?:pass|pwd)[^"']*)["']/i
+    const userField   = loginHtml.match(userFieldRe)?.[1] || loginHtml.match(userFieldRe)?.[2] || "Username"
+    const passField   = loginHtml.match(passFieldRe)?.[1] || loginHtml.match(passFieldRe)?.[2] || "Password"
 
-  let r2: Response
-  try {
-    r2 = await fetch(postUrl, {
-      method:   "POST",
-      headers:  { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": loginUrl },
-      body:     body.toString(),
-      redirect: "manual",
-      signal:   timeout(12000),
-    })
-    parseCookies(r2.headers.get("set-cookie"), cookieJar)
-  } catch (e: any) {
-    return { error: `Login POST failed: ${e.message}` }
-  }
+    parseCookies((await fetch(loginUrl, { headers: { "User-Agent": BROWSER_UA }, signal: timeout(5000) })).headers.get("set-cookie"), cookieJar)
 
-  // Follow up to 3 redirects
-  let nextLoc = r2.headers.get("location")
-  for (let i = 0; i < 3 && nextLoc; i++) {
-    const url = nextLoc.startsWith("http") ? nextLoc : `${baseUrl}${nextLoc.startsWith("/") ? nextLoc : `/${nextLoc}`}`
+    const formBody = new URLSearchParams()
+    formBody.append(userField, portal.username)
+    formBody.append(passField, portal.password)
+    if (csrfToken) formBody.append(csrfField, csrfToken)
+
     try {
-      const rr = await fetch(url, { headers: { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA }, redirect: "manual", signal: timeout(10000) })
-      parseCookies(rr.headers.get("set-cookie"), cookieJar)
-      nextLoc = rr.headers.get("location")
-    } catch { break }
+      const r2 = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": loginUrl },
+        body: formBody.toString(), redirect: "manual", signal: timeout(12000),
+      })
+      parseCookies(r2.headers.get("set-cookie"), cookieJar)
+      // Follow redirects
+      let loc = r2.headers.get("location")
+      for (let i = 0; i < 3 && loc; i++) {
+        const url = loc.startsWith("http") ? loc : `${baseUrl}${loc.startsWith("/") ? loc : `/${loc}`}`
+        const rr  = await fetch(url, { headers: { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA }, redirect: "manual", signal: timeout(10000) })
+        parseCookies(rr.headers.get("set-cookie"), cookieJar)
+        loc = rr.headers.get("location")
+      }
+    } catch (e: any) {
+      return { error: `Login POST failed: ${e.message}` }
+    }
   }
 
-  // Step 3: Fetch target page
+  // ── Step 3: Fetch target page ─────────────────────────────────────────────────
   const targetUrl = args.path
     ? (args.path.startsWith("http") ? args.path : `${baseUrl}${args.path.startsWith("/") ? args.path : `/${args.path}`}`)
     : baseUrl
 
-  let pageHtml   = ""
-  let pageStatus = 0
+  let pageText = "", pageStatus = 0
   try {
-    const r5 = await fetch(targetUrl, { headers: { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": baseUrl }, signal: timeout(15000) })
+    const headers: Record<string, string> = { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": baseUrl }
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`
+
+    const r5 = await fetch(targetUrl, { headers, signal: timeout(15000) })
     pageStatus = r5.status
-    pageHtml   = await r5.text()
+    const raw  = await r5.text()
+
+    // If SPA returns JSON (API call), format it nicely
+    if (r5.headers.get("content-type")?.includes("application/json")) {
+      try { pageText = JSON.stringify(JSON.parse(raw), null, 2) }
+      catch { pageText = raw }
+    } else {
+      pageText = cleanHtml(raw)
+    }
   } catch (e: any) {
     return { error: `Failed to load ${targetUrl}: ${e.message}` }
   }
 
-  const text      = cleanHtml(pageHtml)
-  const truncated = text.length > 12000
-
-  // Quick login-success heuristic: if page still has login form, login probably failed
-  const hasLoginForm = /<input[^>]+type=["']password["']/i.test(pageHtml)
+  const truncated    = pageText.length > 15000
+  const hasLoginForm = /<input[^>]+type=["']password["']/i.test(pageText)
 
   return {
     portal:      portal.name,
     url:         targetUrl,
     http_status: pageStatus,
-    login_ok:    !hasLoginForm,
-    content:     text.slice(0, 12000),
+    login_ok:    !!authToken || !hasLoginForm,
+    portal_type: isSPA(loginHtml) ? "SPA" : "Traditional",
+    content:     pageText.slice(0, 15000),
     truncated,
     hint: truncated
-      ? "Content truncated at 12k chars. Use 'path' parameter to fetch a specific subpage for more focused data."
+      ? "Content truncated at 15k chars. Request a specific path for more focused data."
       : hasLoginForm
-        ? "Login may have failed — page still shows a login form. Check credentials or try a different login_path."
+        ? "Login may have failed — page still shows login form."
         : null,
   }
 }
