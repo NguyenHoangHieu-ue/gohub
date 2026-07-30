@@ -125,6 +125,44 @@ const webSearchDecl = {
   },
 }
 
+const readKBDecl = {
+  name: "readKnowledgeBase",
+  description: "Read entries from Hiếu's private Creator Knowledge Base (creator_kb table). Always call this at the start of a conversation or when questions relate to product codes, SKU rules, exchange rates, COGS, vendors, or processes. Returns the configured definitions and rules.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      category: { type: SchemaType.STRING, description: "Filter by category: product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes. Omit to get all entries." },
+    },
+  },
+}
+
+const writeKBDecl = {
+  name: "writeKnowledgeBase",
+  description: "Save or update entries in the Creator Knowledge Base. ONLY call this AFTER the user has explicitly confirmed the proposed changes ('ok', 'xác nhận', 'đồng ý'). This also updates the Master Note and relevant wiki pages.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      entries: {
+        type: SchemaType.ARRAY,
+        description: "List of entries to upsert.",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            key:      { type: SchemaType.STRING, description: "Unique slug (snake_case, e.g. 'fx_usd_vnd')" },
+            category: { type: SchemaType.STRING, description: "product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes" },
+            title:    { type: SchemaType.STRING, description: "Human-readable title" },
+            content:  { type: SchemaType.STRING, description: "Entry content in Markdown" },
+          },
+          required: ["key", "category", "title", "content"],
+        },
+      },
+      wiki_page_title: { type: SchemaType.STRING, description: "If provided, also update the kb_wiki_pages entry with this title." },
+      wiki_content:    { type: SchemaType.STRING, description: "New content for the wiki page (required if wiki_page_title is set)." },
+    },
+    required: ["entries"],
+  },
+}
+
 const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -173,6 +211,59 @@ const SYSTEM_PROMPT = `You are "Gấu Pro" — a private AI assistant exclusivel
 | General / Research | Broadly knowledgeable, opinionated, up-to-date |
 
 **Auto-select the most appropriate persona. For multi-domain questions, blend personas naturally. State assumptions confidently.**
+
+## About Hiếu (Your Principal)
+Hiếu is **Product Operations & BI Analyst** at GoHub (Sim/eSIM for international travel, Vietnam).
+
+**Primary role (70%): Product Operations & Sourcing**
+- Automate product onboarding pipeline (SIM/eSIM) — target: process request ≤2 days
+- Analyze and compare vendor quotes: 3HK, WorldMove, JoyTel, CMLink, and others
+- Optimize CM1 margin at the SKU level
+- Identify best-cost options per market/destination
+
+**Secondary role (30%): BI & AI Automation**
+- Develop and maintain GoHub Intel reporting system
+- Train and improve Bé Gấu AI assistant for Sales/CS/Ops teams
+
+**Q3 2026 success metrics (help Hiếu hit these):**
+- SLA: product request processed ≤2 days (90% of requests)
+- Price comparison: best vendor selected ≤15-30 mins per product need
+- CM1 improvement: +2-5% on key SKUs
+- New SKU GMV contribution: ≥15% of total company revenue
+- Win rate: ≥80% of new SKUs reach 5 orders within 14 days
+
+When Hiếu asks a question, relate your answer to these goals where applicable.
+
+## Product Data Architecture
+GoHub products exist in TWO separate systems — understand when to query which:
+
+**Supabase PM** (source of truth for current product data):
+- "products": Product master — product_code (8 chars), vendor_code, country_group, type, COGS
+- "skus": SKU variants — sku_code (13 chars), data_amount, day_amount, throttle_speed, latest_cogs
+- "listings": B2C display prices and descriptions
+- "items": B2B/wholesale pricing with channel-specific alias codes
+- PM has been FULLY UPDATED to new codes and latest specs — AUTHORITATIVE for product info
+
+**gohub_dw** (analytics DW — historical revenue/order data):
+- Contains ORDER HISTORY (fulfillment, revenue, COGS at time of sale)
+- Still contains a mix of old and new product codes
+- NOT authoritative for current COGS, specs, or product status
+- Use ONLY for revenue analytics, sales volume, GP/CM1 trends
+
+Rule: product specs/COGS/status → query Supabase. Revenue/orders/trends → query gohub_dw.
+
+## Creator Knowledge Base
+Hiếu maintains a private Knowledge Base (creator_kb Supabase table) with definitions, rules, and configs.
+Call readKnowledgeBase() at the start of relevant conversations (product, pricing, vendor, process questions).
+
+**Update workflow (STRICT):**
+1. When Hiếu asks to save/update info: PROPOSE FIRST — show exactly what will change
+2. Format: "Tôi sẽ cập nhật: (1) creator_kb entry [...], (2) wiki [...], (3) master note. Xác nhận?"
+3. WAIT for explicit confirmation ("ok", "xác nhận", "đồng ý", "yes")
+4. Only AFTER confirmation: call writeKnowledgeBase() to execute all 3 updates atomically
+5. NEVER skip the proposal step, even if asked to "just do it"
+
+When writing to KB: always update master note + any relevant wiki page simultaneously.
 
 ## Formatting Rules (STRICT)
 - **NO LaTeX/math notation** — NEVER use dollar-sign math ($...$), double-dollar ($$...$$), \\approx, \\times, \\frac{}{}, \\leq, or any backslash-command. The UI cannot render LaTeX.
@@ -431,6 +522,95 @@ async function runWebSearch(query: string): Promise<{ result: string; sources: W
   }
 }
 
+// ─── Knowledge Base helpers ───────────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  product_codes:  "Mã Sản Phẩm & Cấu Trúc",
+  sku_rules:      "Quy Tắc SKU",
+  exchange_rates: "Tỷ Giá",
+  cogs:           "COGS & Giá Vốn",
+  vendors:        "Nhà Cung Cấp",
+  processes:      "Quy Trình",
+  notes:          "Ghi Chú Khác",
+}
+
+async function runReadKnowledgeBase(category?: string): Promise<any> {
+  try {
+    let q = supabaseAdmin.from("creator_kb").select("key,category,title,content,updated_at")
+      .neq("category", "_system")
+      .order("category").order("updated_at", { ascending: false })
+    if (category) q = q.eq("category", category)
+    const { data, error } = await q
+    if (error) return { error: error.message }
+    if (!data?.length) return { message: "Knowledge base is empty. No entries found.", entries: [] }
+    return { entries: data, count: data.length }
+  } catch (e: any) {
+    return { error: e.message }
+  }
+}
+
+async function runWriteKnowledgeBase(args: {
+  entries: { key: string; category: string; title: string; content: string }[]
+  wiki_page_title?: string
+  wiki_content?: string
+}): Promise<any> {
+  const results: string[] = []
+
+  // 1. Upsert KB entries
+  for (const entry of args.entries) {
+    const { error } = await supabaseAdmin.from("creator_kb").upsert(
+      { ...entry, updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    )
+    if (error) results.push(`ERROR upsert ${entry.key}: ${error.message}`)
+    else results.push(`OK: creator_kb["${entry.key}"] updated`)
+  }
+
+  // 2. Regenerate master note
+  try {
+    const { data: all } = await supabaseAdmin.from("creator_kb")
+      .select("*").neq("category", "_system").order("category").order("title")
+    if (all?.length) {
+      const grouped: Record<string, typeof all> = {}
+      for (const e of all) { if (!grouped[e.category]) grouped[e.category] = []; grouped[e.category].push(e) }
+      const sections = Object.entries(grouped).map(([cat, entries]) => {
+        const label   = CATEGORY_LABELS[cat] || cat
+        const content = entries.map((e: any) => `### ${e.title}\n${e.content}`).join("\n\n")
+        return `## ${label}\n\n${content}`
+      }).join("\n\n---\n\n")
+      const now  = new Date().toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
+      const note = `# GoHub Creator Knowledge Base\n\n*Cập nhật: ${now}*\n\n${sections}`
+      await supabaseAdmin.from("creator_kb").upsert(
+        { key: "_master_note", category: "_system", title: "Master Note", content: note, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      )
+      results.push("OK: master note regenerated")
+    }
+  } catch (e: any) {
+    results.push(`WARN: master note regeneration failed — ${e.message}`)
+  }
+
+  // 3. Update wiki page if requested
+  if (args.wiki_page_title && args.wiki_content) {
+    try {
+      const { data: existing } = await supabaseAdmin.from("kb_wiki_pages")
+        .select("id").eq("title", args.wiki_page_title).maybeSingle()
+      if (existing?.id) {
+        await supabaseAdmin.from("kb_wiki_pages")
+          .update({ content: args.wiki_content, updated_at: new Date().toISOString() })
+          .eq("id", existing.id)
+        results.push(`OK: wiki "${args.wiki_page_title}" updated`)
+      } else {
+        results.push(`WARN: wiki page "${args.wiki_page_title}" not found — skipped`)
+      }
+    } catch (e: any) {
+      results.push(`WARN: wiki update failed — ${e.message}`)
+    }
+  }
+
+  return { results, summary: `Updated ${args.entries.length} KB entry(ies) + master note.` }
+}
+
 // ─── Portal browser ───────────────────────────────────────────────────────────
 
 interface PortalCredential {
@@ -681,7 +861,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
-    tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -728,6 +908,21 @@ export async function runCreatorAI(
     const fnParts: any[] = []
 
     for (const call of calls) {
+      // ── readKnowledgeBase ──
+      if (call.name === "readKnowledgeBase") {
+        const a = call.args as any
+        const resp = await runReadKnowledgeBase(a?.category)
+        fnParts.push({ functionResponse: { name: "readKnowledgeBase", response: resp } })
+        continue
+      }
+
+      // ── writeKnowledgeBase ──
+      if (call.name === "writeKnowledgeBase") {
+        const resp = await runWriteKnowledgeBase(call.args as any)
+        fnParts.push({ functionResponse: { name: "writeKnowledgeBase", response: resp } })
+        continue
+      }
+
       // ── browsePortal ──
       if (call.name === "browsePortal") {
         console.log(`[CreatorAI] browsePortal: ${(call.args as any).portal_name}`)
