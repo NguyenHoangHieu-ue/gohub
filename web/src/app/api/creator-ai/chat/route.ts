@@ -34,6 +34,18 @@ async function parseUploadedFile(file: File): Promise<FileContext> {
     return { name, type: "text", content: parts.join("\n\n") }
   }
 
+  // ── DOCX / DOC → plain text via mammoth ──────────────────────────────────
+  if (mime.includes("wordprocessingml") || mime.includes("msword") || ext === "docx" || ext === "doc") {
+    const mammoth = await import("mammoth")
+    const buf     = await file.arrayBuffer()
+    const result  = await mammoth.extractRawText({ buffer: Buffer.from(buf) })
+    const text    = result.value.trim()
+    if (!text) throw new Error(`File "${name}" không có nội dung text.`)
+    // Also append any messages about the conversion
+    const notes = result.messages.filter(m => m.type === "warning").map(m => m.message).join("; ")
+    return { name, type: "text", content: notes ? `${text}\n\n[Lưu ý khi đọc DOCX: ${notes}]` : text }
+  }
+
   // ── CSV / JSON / TXT / MD / code → text ───────────────────────────────────
   if (
     mime.startsWith("text/") ||
@@ -61,7 +73,7 @@ async function parseUploadedFile(file: File): Promise<FileContext> {
   try {
     return { name, type: "text", content: await file.text() }
   } catch {
-    throw new Error(`Không hỗ trợ định dạng file "${ext}". Hỗ trợ: PDF, hình ảnh, Excel, CSV, JSON, TXT, code files.`)
+    throw new Error(`Không hỗ trợ định dạng file "${ext}". Hỗ trợ: PDF, DOCX, hình ảnh, Excel, CSV, JSON, TXT, code files.`)
   }
 }
 

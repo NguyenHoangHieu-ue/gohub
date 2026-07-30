@@ -182,13 +182,18 @@ const managePortalCredsDecl = {
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      action:     { type: SchemaType.STRING, description: "Action: 'list' | 'save' | 'delete'" },
-      name:       { type: SchemaType.STRING, description: "Portal display name (e.g. 'SunSpeedy Card Web')" },
-      url:        { type: SchemaType.STRING, description: "Base URL of the portal (e.g. 'https://cardweb.sunspeedy.com')" },
-      username:   { type: SchemaType.STRING, description: "Login username or email" },
-      password:   { type: SchemaType.STRING, description: "Login password" },
-      login_path: { type: SchemaType.STRING, description: "Login page path if different from root (e.g. '/auth/login')" },
-      notes:      { type: SchemaType.STRING, description: "Optional notes about this portal" },
+      action:      { type: SchemaType.STRING, description: "Action: 'list' | 'save' | 'delete'" },
+      name:        { type: SchemaType.STRING, description: "Portal display name (e.g. 'SunSpeedy Card Web')" },
+      url:         { type: SchemaType.STRING, description: "Base URL of the portal (e.g. 'https://cardweb.sunspeedy.com')" },
+      username:    { type: SchemaType.STRING, description: "Login username or email" },
+      password:    { type: SchemaType.STRING, description: "Login password" },
+      login_path:  { type: SchemaType.STRING, description: "Login page path for traditional form login (e.g. '/auth/login')" },
+      notes:       { type: SchemaType.STRING, description: "Optional notes about this portal" },
+      api_base:    { type: SchemaType.STRING, description: "For SPA portals: REST API base URL (e.g. 'https://cardadmin.sunspeedy.com/card-admin')" },
+      login_api:   { type: SchemaType.STRING, description: "For SPA portals: login API endpoint path (e.g. '/sys/login', '/access/login')" },
+      auth_header: { type: SchemaType.STRING, description: "For SPA portals needing a fixed Authorization header to call login (e.g. SpringBlade 'Basic xxx='). Get from DevTools Network tab." },
+      user_field:  { type: SchemaType.STRING, description: "Username field name in login body (default 'username'; some use 'account')" },
+      pass_field:  { type: SchemaType.STRING, description: "Password field name in login body (default 'password')" },
     },
     required: ["action"],
   },
@@ -252,9 +257,17 @@ GoHub products exist in TWO separate systems — understand when to query which:
 
 Rule: product specs/COGS/status → query Supabase. Revenue/orders/trends → query gohub_dw.
 
-## Creator Knowledge Base
-Hiếu maintains a private Knowledge Base (creator_kb Supabase table) with definitions, rules, and configs.
-Call readKnowledgeBase() at the start of relevant conversations (product, pricing, vendor, process questions).
+## Creator Knowledge Base — MANDATORY READ
+
+**RULE: Call readKnowledgeBase() FIRST before answering these topics:**
+- Product/SKU code structure, vendor rules, combo standards
+- Exchange rates, COGS, pricing
+- Business processes, workflows
+- Any question where KB might have a definition or rule
+
+**Why mandatory**: Hiếu has stored authoritative definitions in KB. Do NOT answer from training data alone when KB entries exist — they contain GoHub-specific rules that override general knowledge.
+
+**FIRST MESSAGE protocol**: If the conversation just started AND the question relates to any topic above → call readKnowledgeBase() immediately, THEN answer.
 
 **Update workflow (STRICT):**
 1. When Hiếu asks to save/update info: PROPOSE FIRST — show exactly what will change
@@ -278,6 +291,17 @@ When writing to KB: always update master note + any relevant wiki page simultane
 2. Report ONLY what the data actually returns. If 0 rows: say "không có dữ liệu cho query này" explicitly
 3. Run multiple queries when needed for comprehensive answers (up to 20 tool calls allowed)
 4. If a SQL query errors: FIX the SQL immediately and retry — do not stop and apologize
+5. **Self-verify after getting results**:
+   - Revenue in billions VND for a month → sanity check (GoHub monthly ~1-5 tỷ VND is normal)
+   - If result looks suspiciously high/low → re-check query logic before reporting
+   - Always state the time period clearly: "Dữ liệu từ [ngày] đến [ngày]"
+   - For 0 rows: try relaxing one filter at a time before concluding no data
+
+### For multi-turn conversations (CRITICAL)
+- When user says "cái đó / nó / này / đó" → refers to the MOST RECENT entity discussed
+- When new message changes topic completely → RESTART reasoning fresh, do NOT carry assumptions from previous exchange
+- If it's unclear what "cái đó" refers to (multiple options) → ASK: "Bạn muốn xem chi tiết về [A] hay [B]?"
+- History = context clues only, NOT constraints on the new answer
 5. After getting data: present it in the most insightful way possible (highlight anomalies, trends, key insights)
 
 ### For opinions, analysis, and suggestions
@@ -379,18 +403,26 @@ Output a \`\`\`json block (array of objects only).
 You can login to external supplier/partner portals and fetch their content using browsePortal.
 Credentials are securely stored in Supabase (never exposed in responses).
 
-Workflow:
-1. First time: ask Hiếu for credentials → call managePortalCredentials(action:"save", ...) to store
-2. Subsequent use: call browsePortal(portal_name:"...") → page content returned as text
-3. Analyze/compare returned content, make recommendations
+### Two portal types (auto-detected)
+**Traditional (server-rendered, HTML form)** — e.g. Elite Mobile:
+- Works out of the box: browsePortal handles form login + cookies automatically.
 
-Portal browsing limitations:
-- Works for traditional server-rendered sites (HTML form login)
-- May not work for SPAs that require JavaScript rendering
-- If page content looks empty/wrong → try a specific path or the site may be JS-heavy
-- Content is truncated at 12k chars; request specific paths for focused data
+**SPA (JavaScript app with REST API)** — e.g. SunSpeedy, JoyTel:
+- SunSpeedy: fully automated (CAPTCHA solved via Gemini Vision).
+- Other SPAs need one-time config. If browsePortal returns an error about "login_api" or "auth_header":
+  → Ask Hiếu to open the portal, press F12 → Network tab → login manually →
+    find the login request and copy: (a) the API URL, (b) the Authorization header if any,
+    (c) the field names for username/password in the request body.
+  → Then call managePortalCredentials(action:"save", name:"...", api_base:"...",
+    login_api:"...", auth_header:"...", user_field:"...", pass_field:"...").
 
-When Hiếu says "xem sản phẩm trên portal X": browse the portal, extract products/prices from the text content, compare with GoHub's catalog, identify gaps or pricing opportunities.
+### Workflow
+1. Try browsePortal(portal_name:"...") first — it auto-detects the type.
+2. If it errors with SPA config needed → guide Hiếu to grab DevTools info, save config, retry.
+3. Once working: extract products/prices, compare with GoHub catalog, find gaps/opportunities.
+
+When Hiếu says "xem sản phẩm trên portal X": browse it, extract data, compare with GoHub's catalog.
+Content is truncated at 15k chars; request a specific path for focused data.
 
 ## GoHub Business Context
 - **GoHub**: sells Sim/eSIM data packages for international travel
@@ -635,12 +667,18 @@ async function runWriteKnowledgeBase(args: {
 // ─── Portal browser ───────────────────────────────────────────────────────────
 
 interface PortalCredential {
-  name:       string
-  url:        string
-  username:   string
-  password:   string
+  name:        string
+  url:         string
+  username:    string
+  password:    string
   login_path?: string
-  notes?:     string
+  notes?:      string
+  // Advanced (for SPA portals with custom auth) — Hiếu lấy từ DevTools 1 lần:
+  api_base?:      string   // base URL của REST API (vd cardadmin.sunspeedy.com/card-admin)
+  login_api?:     string   // path endpoint login (vd /access/login, /sys/login)
+  auth_header?:   string   // giá trị header Authorization cố định để gọi login (vd "Basic xxx" cho SpringBlade)
+  user_field?:    string   // tên field username trong body login (vd "account", "username")
+  pass_field?:    string   // tên field password trong body login
 }
 
 const PORTAL_SETTINGS_KEY = "portal_credentials"
@@ -722,54 +760,82 @@ async function solveImageCaptcha(imageUrl: string, cookieJar: Record<string, str
   } catch { return "" }
 }
 
-// SPA API login: try common REST login endpoints and return auth token/cookie
+// Extract token from a login response body (covers most REST/JWT patterns)
+function extractToken(body: any): string | undefined {
+  if (!body || typeof body !== "object") return undefined
+  return body.token || body.access_token || body.accessToken ||
+         body.data?.token || body.data?.access_token || body.data?.accessToken ||
+         body.data?.tokenValue || body.result?.token || undefined
+}
+
+// SPA API login: use configured api_base/login_api if present, else try common patterns.
 async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: string; cookies: Record<string, string>; error?: string }> {
   const baseUrl   = portal.url.replace(/\/$/, "")
   const cookieJar: Record<string, string> = {}
+  const apiBase   = (portal.api_base || baseUrl).replace(/\/$/, "")
+  const userField = portal.user_field || "username"
+  const passField = portal.pass_field || "password"
 
-  // SunSpeedy-specific: uses cardadmin.sunspeedy.com API with captcha
+  // ── 1. SunSpeedy-specific: cardadmin API + image CAPTCHA ────────────────────
   if (portal.url.includes("sunspeedy") || portal.url.includes("cardweb")) {
-    const adminBase = "https://cardadmin.sunspeedy.com/card-admin"
-    // Step 1: get captcha
-    const uuid = `gp-${Date.now()}`
-    const captchaUrl = `${adminBase}/captcha?uuid=${uuid}`
-    const captchaText = await solveImageCaptcha(captchaUrl, {})
-    if (!captchaText) return { cookies: cookieJar, error: "Could not solve captcha" }
+    const adminBase = portal.api_base || "https://cardadmin.sunspeedy.com/card-admin"
+    const uuid       = `gp-${Date.now()}`
+    const captchaText = await solveImageCaptcha(`${adminBase}/captcha?uuid=${uuid}`, {})
+    if (!captchaText) return { cookies: cookieJar, error: "Không giải được CAPTCHA của SunSpeedy" }
 
-    // Step 2: login
-    const r = await fetch(`${adminBase}/sys/login`, {
+    const r = await fetch(`${adminBase}${portal.login_api || "/sys/login"}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA },
-      body: JSON.stringify({ username: portal.username, password: portal.password, captcha: captchaText, uuid }),
+      body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password, captcha: captchaText, uuid }),
       signal: AbortSignal.timeout(12000),
     })
-    const body = await r.json().catch(() => null)
-    if (body?.code === 0 && body?.data?.token) {
-      return { token: body.data.token, cookies: cookieJar }
-    }
-    return { cookies: cookieJar, error: `SPA login failed: ${JSON.stringify(body?.msg || body)}` }
+    const body  = await r.json().catch(() => null)
+    const token = extractToken(body)
+    if ((body?.code === 0 || r.ok) && token) return { token, cookies: cookieJar }
+    return { cookies: cookieJar, error: `SunSpeedy login failed: ${JSON.stringify(body?.msg || body)}` }
   }
 
-  // JoyTel / generic SPA: try common REST login patterns
-  const loginEndpoints = ["/api/login", "/api/user/login", "/api/auth/login", "/login/api"]
+  // ── 2. Configured login_api (Hiếu đã lấy từ DevTools) ───────────────────────
+  if (portal.login_api) {
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": baseUrl, "Referer": baseUrl + "/" }
+      if (portal.auth_header) headers["Authorization"] = portal.auth_header  // SpringBlade Basic clientId
+      const r = await fetch(`${apiBase}${portal.login_api}`, {
+        method: "POST", headers,
+        body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password }),
+        signal: AbortSignal.timeout(12000),
+      })
+      parseCookies(r.headers.get("set-cookie"), cookieJar)
+      const body  = await r.json().catch(() => null)
+      const token = extractToken(body)
+      if ((r.ok || body?.code === 0 || body?.code === 200) && token) return { token, cookies: cookieJar }
+      return { cookies: cookieJar, error: `Login API trả về: ${JSON.stringify(body).slice(0, 200)}` }
+    } catch (e: any) {
+      return { cookies: cookieJar, error: `Login API error: ${e.message}` }
+    }
+  }
+
+  // ── 3. Generic fallback: try common REST login patterns ─────────────────────
+  const loginEndpoints = ["/api/login", "/api/user/login", "/api/auth/login", "/access/login", "/login/api"]
   for (const ep of loginEndpoints) {
     try {
-      const r = await fetch(`${baseUrl}${ep}`, {
+      const r = await fetch(`${apiBase}${ep}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA },
-        body: JSON.stringify({ username: portal.username, password: portal.password }),
+        body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password }),
         signal: AbortSignal.timeout(8000),
       })
       parseCookies(r.headers.get("set-cookie"), cookieJar)
-      const body = await r.json().catch(() => null)
-      // Common success patterns
-      if (r.ok || (body?.code === 0) || body?.token || body?.access_token) {
-        const token = body?.token || body?.access_token || body?.data?.token
-        return { token, cookies: cookieJar }
+      const body  = await r.json().catch(() => null)
+      const token = extractToken(body)
+      if ((r.ok || body?.code === 0) && token) return { token, cookies: cookieJar }
+      // 401 with JSON body = endpoint exists but needs auth_header (SpringBlade)
+      if (r.status === 401 && body) {
+        return { cookies: cookieJar, error: `Endpoint ${ep} tồn tại nhưng cần auth_header (framework như SpringBlade). Hiếu vào DevTools > Network khi login, copy header Authorization và lưu vào portal (managePortalCredentials với auth_header).` }
       }
     } catch { continue }
   }
-  return { cookies: cookieJar, error: "No working SPA login endpoint found" }
+  return { cookies: cookieJar, error: "Không tìm được login endpoint. Hiếu cần cấu hình login_api + api_base cho portal SPA này (lấy từ DevTools Network tab)." }
 }
 
 async function runBrowsePortal(args: { portal_name: string; path?: string }): Promise<any> {
@@ -906,36 +972,52 @@ async function runBrowsePortal(args: { portal_name: string; path?: string }): Pr
 }
 
 async function runManagePortalCredentials(args: {
-  action:     string
-  name?:      string
-  url?:       string
-  username?:  string
-  password?:  string
+  action:      string
+  name?:       string
+  url?:        string
+  username?:   string
+  password?:   string
   login_path?: string
-  notes?:     string
+  notes?:      string
+  api_base?:   string
+  login_api?:  string
+  auth_header?: string
+  user_field?: string
+  pass_field?: string
 }): Promise<any> {
   const creds = await loadPortalCreds()
 
   if (args.action === "list") {
     if (!creds.length) return { message: "No portals configured yet.", portals: [] }
     return {
-      portals: creds.map(c => ({ name: c.name, url: c.url, username: c.username, login_path: c.login_path, notes: c.notes })),
+      // Không trả password ra ngoài; báo có cấu hình SPA hay không
+      portals: creds.map(c => ({
+        name: c.name, url: c.url, username: c.username, login_path: c.login_path, notes: c.notes,
+        spa_configured: !!(c.api_base || c.login_api), has_auth_header: !!c.auth_header,
+      })),
       count: creds.length,
     }
   }
 
   if (args.action === "save") {
-    if (!args.name || !args.url || !args.username || !args.password) {
-      return { error: "save requires: name, url, username, password" }
+    // Cho phép update từng field: nếu portal đã tồn tại, chỉ ghi đè field được cung cấp
+    const idx = creds.findIndex(c => c.name.toLowerCase() === (args.name || "").toLowerCase() || c.url === args.url)
+    const existing = idx >= 0 ? creds[idx] : null
+    if (!existing && (!args.name || !args.url || !args.username || !args.password)) {
+      return { error: "Tạo mới cần: name, url, username, password. (Update portal có sẵn thì chỉ cần name + field muốn đổi)" }
     }
-    const idx  = creds.findIndex(c => c.name.toLowerCase() === args.name!.toLowerCase() || c.url === args.url)
     const cred: PortalCredential = {
-      name:       args.name,
-      url:        args.url.replace(/\/$/, ""),
-      username:   args.username,
-      password:   args.password,
-      login_path: args.login_path,
-      notes:      args.notes,
+      name:        args.name       ?? existing!.name,
+      url:         (args.url ?? existing!.url).replace(/\/$/, ""),
+      username:    args.username   ?? existing!.username,
+      password:    args.password   ?? existing!.password,
+      login_path:  args.login_path ?? existing?.login_path,
+      notes:       args.notes      ?? existing?.notes,
+      api_base:    args.api_base    ?? existing?.api_base,
+      login_api:   args.login_api   ?? existing?.login_api,
+      auth_header: args.auth_header ?? existing?.auth_header,
+      user_field:  args.user_field  ?? existing?.user_field,
+      pass_field:  args.pass_field  ?? existing?.pass_field,
     }
     if (idx >= 0) {
       creds[idx] = cred

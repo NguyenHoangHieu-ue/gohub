@@ -317,13 +317,14 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
 
 // ─── File chip ────────────────────────────────────────────────────────────────
 
-const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql"
+const ACCEPT = ".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql"
 const MAX_MB = 20
 
 function fileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() || ""
   if (["png","jpg","jpeg","webp","gif","bmp"].includes(ext)) return <ImageIcon size={13} />
   if (["xlsx","xls","csv"].includes(ext))                     return <FileSpreadsheet size={13} />
+  if (["docx","doc"].includes(ext))                           return <FileType size={13} />
   if (ext === "json")                                          return <FileJson size={13} />
   return <FileText size={13} />
 }
