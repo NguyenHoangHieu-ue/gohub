@@ -722,6 +722,38 @@ KHÔNG nói "tôi sẽ chạy query" rồi dừng — PHẢI gọi executeSQL NG
     AND sales_channel ILIKE '%3HK%'
   GROUP BY country ORDER BY total_gb DESC LIMIT 20;
 
+· Product Win Rate — SKU mới có đơn đầu trong 14 ngày gần đây, đạt ≥5 đơn?
+  WITH first_orders AS (
+    SELECT TRIM(sku) sku, MIN(fulfiled_date::date) first_date,
+           COUNT(DISTINCT order_code) total_don
+    FROM fact_fulfillment_revenue
+    WHERE fulfiled_date::date <= CURRENT_DATE - 1 AND sku != 'SHIPPINGFEE0'
+    GROUP BY 1
+  )
+  SELECT f.sku, f.first_date, f.total_don,
+         CASE WHEN f.total_don >= 5 THEN '✅ WIN' ELSE '❌ CHƯA ĐỦ' END ket_qua,
+         sk.vendor
+  FROM first_orders f
+  LEFT JOIN dim_sku sk ON f.sku = TRIM(sk.sku)
+  WHERE f.first_date >= CURRENT_DATE - 14
+  ORDER BY f.total_don DESC;
+  -- Win Rate = (số SKU 'WIN') / (tổng SKU mới) × 100%. Mục tiêu: ≥80%.
+· Margin Optimizer — Top SKU doanh thu cao nhưng GP% thấp cần đàm phán COGS:
+  SELECT TRIM(f.sku) sku, sk.vendor,
+         COUNT(DISTINCT f.order_code) don,
+         SUM(f.fulfilled_revenue_amount_vnd) doanh_thu,
+         SUM(f.gross_profit_vnd) gp,
+         ROUND(SUM(f.gross_profit_vnd)*100.0/NULLIF(SUM(f.fulfilled_revenue_amount_vnd),0),1) gp_pct,
+         sk.standard_cogs_vnd cogs_don_vi
+  FROM fact_fulfillment_revenue f
+  LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+  WHERE f.fulfiled_date::date BETWEEN '<start>' AND LEAST('<end>'::date, CURRENT_DATE - 1)
+    AND f.sku != 'SHIPPINGFEE0'
+  GROUP BY TRIM(f.sku), sk.vendor, sk.standard_cogs_vnd
+  HAVING SUM(f.fulfilled_revenue_amount_vnd) > 0
+  ORDER BY doanh_thu DESC LIMIT 30;
+  -- GP% < 20%: ưu tiên đàm phán giảm COGS; >40%: biên tốt. Kết hợp với cột cogs_don_vi để tính mục tiêu COGS mới.
+
 ━━━ TRÁNH DOUBLE-COUNTING (B2B) ━━━
 Strategic Partners (Klook, Traveloka) nằm trong cả kênh B2B portal VÀ có tên riêng.
 Khi báo hiệu suất kênh B2B: phải trừ phần Strategic khỏi "Other" nếu cần.

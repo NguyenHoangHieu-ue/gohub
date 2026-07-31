@@ -406,7 +406,9 @@ Credentials are securely stored in Supabase (never exposed in responses).
 - Works out of the box: browsePortal handles form login + cookies automatically.
 
 **SPA (JavaScript app with REST API)** — e.g. SunSpeedy, JoyTel:
-- SunSpeedy: fully automated (CAPTCHA solved via Gemini Vision).
+- SunSpeedy (UHUIBAO): fully automated (CAPTCHA solved via Gemini Vision, retry 3×).
+  API base: https://cardadmin.sunspeedy.com/card-admin | Token header: "token" (lowercase)
+  Working paths: /sim/simmanage/page?page=1&limit=50 (17k SIMs), /order/order/page?page=1&limit=50 (order history + package names), /channel/channeltransactionrecord/page?page=1&limit=50
 - Other SPAs need one-time config. If browsePortal returns an error about "login_api" or "auth_header":
   → Ask Hiếu to open the portal, press F12 → Network tab → login manually →
     find the login request and copy: (a) the API URL, (b) the Authorization header if any,
@@ -797,23 +799,25 @@ async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: strin
   const userField = portal.user_field || "username"
   const passField = portal.pass_field || "password"
 
-  // ── 1. SunSpeedy-specific: cardadmin API + image CAPTCHA ────────────────────
+  // ── 1. SunSpeedy-specific: cardadmin API + image CAPTCHA (retry 3×) ─────────
   if (portal.url.includes("sunspeedy") || portal.url.includes("cardweb")) {
     const adminBase = portal.api_base || "https://cardadmin.sunspeedy.com/card-admin"
-    const uuid       = `gp-${Date.now()}`
-    const captchaText = await solveImageCaptcha(`${adminBase}/captcha?uuid=${uuid}`, {})
-    if (!captchaText) return { cookies: cookieJar, error: "Không giải được CAPTCHA của SunSpeedy" }
-
-    const r = await fetch(`${adminBase}${portal.login_api || "/login"}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": portal.url, "Referer": portal.url + "/" },
-      body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password, captcha: captchaText, uuid }),
-      signal: AbortSignal.timeout(12000),
-    })
-    const body  = await r.json().catch(() => null)
-    const token = extractToken(body)
-    if ((body?.code === 0 || r.ok) && token) return { token, cookies: cookieJar }
-    return { cookies: cookieJar, error: `SunSpeedy login failed: ${JSON.stringify(body?.msg || body)}` }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const uuid        = `gp-${Date.now()}-${attempt}`
+      const captchaText = await solveImageCaptcha(`${adminBase}/captcha?uuid=${uuid}`, {})
+      if (!captchaText) continue  // skip nếu Gemini Vision không giải được
+      const r = await fetch(`${adminBase}${portal.login_api || "/login"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": portal.url, "Referer": portal.url + "/" },
+        body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password, captcha: captchaText, uuid }),
+        signal: AbortSignal.timeout(12000),
+      })
+      const body  = await r.json().catch(() => null)
+      const token = extractToken(body)
+      if ((body?.code === 0 || r.ok) && token) return { token, cookies: cookieJar }
+      // code 401 or wrong captcha → retry with fresh UUID
+    }
+    return { cookies: cookieJar, error: "SunSpeedy login failed after 3 CAPTCHA attempts" }
   }
 
   // ── 1b. JoyTel-specific: /zyfh/api/v1 + SHA1 password + JPEG captcha ─────────

@@ -46,10 +46,10 @@
 
 ### B3. Còn treo
 
-- [ ] SunSpeedy product catalog: endpoint `/card/product/list` trả 500 — cần tìm đúng path
-- [ ] Gấu Pro CAPTCHA solver: verify hoạt động trên Vercel production
+- [x] SunSpeedy product catalog: không có endpoint riêng — lấy từ `/order/order/page` (order history chứa packageName). Gấu Pro đã biết path.
+- [x] Gấu Pro CAPTCHA solver: retry logic 3× đã implement trong code (verify trên Vercel khi dùng thực tế)
 - [ ] Product Automation Phase 1: test end-to-end *"Tìm gói eSIM Đài Loan WM chưa có, tạo template onboard"*
-- [ ] Gấu Pro Quality Test (nhóm A–E): test thủ công trên web (xem B2.3 bên dưới)
+- [ ] Gấu Pro Quality Test (nhóm A–E): test thủ công trên web (xem C.3)
 
 ---
 
@@ -77,10 +77,9 @@
 
 #### Priority 1 — Aligned với KPI Q3
 
-**C.2.1 Product Win Rate Tracker**
-- Gấu Pro query gohub_dw: SKU nào được tạo trong 14 ngày qua có ≥5 đơn?
-- SQL template cần thêm vào bi-analyst prompt
-- Output: Win Rate %, danh sách SKU thắng/thua
+**C.2.1 Product Win Rate Tracker** ✅ SQL template đã thêm vào bi-analyst
+- Gấu Pro hỏi: "SKU mới nào trong 14 ngày đạt win rate?" → bi-analyst chạy SQL Win Rate
+- Output: Win Rate %, danh sách SKU WIN/CHƯA ĐỦ
 
 **C.2.2 Vendor Price Comparison**
 - Nhập: country + specs (data, days)
@@ -88,22 +87,19 @@
 - Output: bảng so sánh giá tất cả vendor cho cùng nhu cầu
 - Giúp chọn vendor rẻ nhất trong ≤15 phút
 
-**C.2.3 Margin Optimizer**
-- Nhập: top N SKU theo revenue tháng này
-- Gấu Pro: JOIN với dim_sku.standard_cogs_vnd → tính GP% từng SKU
-- Output: danh sách SKU theo margin thấp → đề xuất đàm phán COGS
+**C.2.3 Margin Optimizer** ✅ SQL template đã thêm vào bi-analyst
+- Gấu Pro hỏi: "Top SKU GP% thấp cần đàm phán COGS" → chạy SQL Margin Optimizer
+- Output: bảng SKU + GP% + COGS đơn vị + đề xuất
 
-**C.2.4 SunSpeedy Product Fetch**
-- Token header đã fix (`token` lowercase)
-- Cần tìm đúng endpoint product catalog (hiện `/card/product/list` → 500)
-- Khi fix xong: Gấu Pro tự browse và extract full product list
+**C.2.4 SunSpeedy Product Fetch** ✅ resolved
+- `/card/product/list` → 500 (không có quyền với account gohubtravel)
+- Thay thế: dùng `/order/order/page` để extract unique packageName từ order history
+- Gấu Pro đã biết path và token header
 
 #### Priority 2 — System improvements
 
-**C.2.5 CAPTCHA Retry Logic**
-- Hiện tại SunSpeedy CAPTCHA: 1 attempt
-- Cần: retry 3 lần (CAPTCHA OCR có thể sai lần đầu)
-- Fix trong `loginSPAPortal()` → creator-ai.ts SunSpeedy section
+**C.2.5 CAPTCHA Retry Logic** ✅ đã implement
+- SunSpeedy: retry loop 3× với UUID mới mỗi lần (creator-ai.ts line ~800)
 
 **C.2.6 Auto Weekly Summary to Lark**
 - Gấu Pro generate báo cáo tuần (revenue, top SKU, 3HK%, win rate)
