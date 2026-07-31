@@ -8,6 +8,7 @@ import { HeartbeatProvider } from "@/components/heartbeat-provider"
 import { ToastProvider }     from "@/components/toast"
 import { SearchShortcut }   from "@/components/search-shortcut"
 import { CommandPalette }   from "@/components/command-palette"
+import { TrackPageView }    from "@/components/track-page-view"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -17,6 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <ToastProvider>
       <SidebarProvider>
         <HeartbeatProvider />
+        <TrackPageView />
         <SearchShortcut />
         <CommandPalette />
         <div className="flex min-h-screen">
