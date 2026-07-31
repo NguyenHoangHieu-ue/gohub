@@ -11,10 +11,12 @@ export interface CustCell { revenue: number; count: number }
 export interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 export interface ChannelCell { web: number; app: number; other: number }
 export interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+export interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
 export interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 export interface B2CMonthPayload {
   market: MarketCell
   customers: CustRow
+  customerChannels?: CustomerChannelCell
   channels: ChannelCell
   marketChannels?: MarketChannelCell
   profitByChannel?: Record<string, ProfitCell>
@@ -50,6 +52,28 @@ function costAmount(value: CostValue, revenue: number, ratio: number): number {
   return value?.type === "percent" ? revenue * n / 100 : n * ratio
 }
 
+function emptyCustCell(): CustCell {
+  return { revenue: 0, count: 0 }
+}
+
+function emptyCustRow(): CustRow {
+  return {
+    new: emptyCustCell(),
+    returning: emptyCustCell(),
+    total: emptyCustCell(),
+  }
+}
+
+function emptyCustomerChannelCell(): CustomerChannelCell {
+  return {
+    vnB2c: emptyCustRow(),
+    vnWeb: emptyCustRow(),
+    usB2c: emptyCustRow(),
+    usWeb: emptyCustRow(),
+    usApp: emptyCustRow(),
+  }
+}
+
 function emptyPayload(): B2CMonthPayload {
   return {
     market: { vn: 0, us: 0, total: 0 },
@@ -58,6 +82,7 @@ function emptyPayload(): B2CMonthPayload {
       returning: { revenue: 0, count: 0 },
       total: { revenue: 0, count: 0 },
     },
+    customerChannels: emptyCustomerChannelCell(),
     channels: { web: 0, app: 0, other: 0 },
     marketChannels: { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 },
     profitByChannel: {},
@@ -91,6 +116,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   const byMonth = new Map(snapshots.map(row => [row.month, row]))
   const markets: Record<string, MarketCell> = {}
   const customers: Record<string, CustRow> = {}
+  const customerChannels: Record<string, CustomerChannelCell> = {}
   const channels: Record<string, ChannelCell> = {}
   const marketChannels: Record<string, MarketChannelCell> = {}
   const profitByChannel: Record<string, Record<string, ProfitCell>> = {}
@@ -103,6 +129,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
     const payload = byMonth.get(month)?.payload ?? emptyPayload()
     markets[month] = payload.market
     customers[month] = payload.customers
+    customerChannels[month] = payload.customerChannels ?? emptyCustomerChannelCell()
     channels[month] = payload.channels
     marketChannels[month] = payload.marketChannels ?? { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 }
     profitByChannel[month] = payload.profitByChannel ?? {}
@@ -123,6 +150,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   return {
     markets,
     customers,
+    customerChannels,
     channels,
     marketChannels,
     profitByChannel,
@@ -276,6 +304,73 @@ async function loadRevenue(months: string[]) {
   return payloads
 }
 
+async function loadCustomerChannels(months: string[]) {
+  const windowStart = `${months[0]}-01`
+  const rows = await queryAnalytics<{ month: string; bucket: keyof CustomerChannelCell; type: string; revenue: string; count: string }>(
+    `WITH first_order AS (
+       SELECT f.customer_code,
+              MIN(to_char(f.fulfiled_date::date, 'YYYY-MM')) AS first_month
+       FROM fact_fulfillment_revenue f
+       JOIN dim_order_source s ON f.order_source_code = s.code
+       WHERE UPPER(s.group_name) = 'B2C'
+         AND f.customer_code IS NOT NULL
+       GROUP BY 1
+     ),
+     monthly_channel AS (
+       SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+              f.customer_code,
+              COALESCE(f.company_code, 'NA')            AS market,
+              CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
+                   WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                   ELSE 'other' END                     AS ctype,
+              SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
+       FROM fact_fulfillment_revenue f
+       JOIN dim_order_source s ON f.order_source_code = s.code
+       WHERE UPPER(s.group_name) = 'B2C'
+         AND f.fulfiled_date::date >= $1
+         AND f.customer_code IS NOT NULL
+       GROUP BY 1, 2, 3, 4
+     ),
+     typed AS (
+       SELECT m.*,
+              CASE WHEN m.month = fo.first_month THEN 'new' ELSE 'returning' END AS type
+       FROM monthly_channel m
+       JOIN first_order fo ON m.customer_code = fo.customer_code
+     )
+     SELECT month, bucket, type, SUM(revenue) AS revenue, COUNT(DISTINCT customer_code) AS count
+     FROM (
+       SELECT month, 'vnB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
+       UNION ALL
+       SELECT month, 'vnWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
+       UNION ALL
+       SELECT month, 'usB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype IN ('web', 'app')
+       UNION ALL
+       SELECT month, 'usWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'web'
+       UNION ALL
+       SELECT month, 'usApp'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'app'
+     ) buckets
+     GROUP BY 1, 2, 3`,
+    [windowStart],
+  )
+
+  const payloads: Record<string, CustomerChannelCell> = {}
+  for (const month of months) payloads[month] = emptyCustomerChannelCell()
+  for (const r of rows) {
+    const monthCell = payloads[r.month]
+    if (!monthCell) continue
+    const bucket = monthCell[r.bucket]
+    if (!bucket) continue
+    const target = r.type === "new" ? bucket.new : bucket.returning
+    const revenue = parseFloat(r.revenue || "0")
+    const count = parseInt(r.count || "0")
+    target.revenue += revenue
+    target.count += count
+    bucket.total.revenue += revenue
+    bucket.total.count += count
+  }
+  return payloads
+}
+
 async function loadMarketing(months: string[]) {
   const spend: Record<string, number> = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
   const budget = await getB2CChannelBudgetByMonth(months)
@@ -302,8 +397,9 @@ async function loadLeads(months: string[]) {
 export async function refreshB2CMonthlySnapshots(months: string[]) {
   if (months.length === 0) return { refreshed: 0, months: [] as string[] }
   const refreshedAt = new Date().toISOString()
-  const [revenue, marketing, leads] = await Promise.all([
+  const [revenue, customerChannels, marketing, leads] = await Promise.all([
     loadRevenue(months),
+    loadCustomerChannels(months),
     loadMarketing(months),
     loadLeads(months),
   ])
@@ -322,6 +418,7 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
     let errorMessage: string | null = null
 
     payload.market = revenue[month]?.market ?? payload.market
+    payload.customerChannels = customerChannels[month] ?? payload.customerChannels
     payload.channels = revenue[month]?.channels ?? payload.channels
     payload.marketChannels = revenue[month]?.marketChannels ?? payload.marketChannels
     payload.profitByChannel = revenue[month]?.profitByChannel ?? payload.profitByChannel

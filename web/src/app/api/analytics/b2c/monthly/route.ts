@@ -22,6 +22,7 @@ interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 type CostValue = { type?: string; value?: number }
 
@@ -39,6 +40,28 @@ function costAmount(value: CostValue, revenue: number, ratio: number): number {
   const n = Number(value?.value) || 0
   if (!n) return 0
   return value?.type === "percent" ? revenue * n / 100 : n * ratio
+}
+
+function emptyCustCell(): CustCell {
+  return { revenue: 0, count: 0 }
+}
+
+function emptyCustRow(): CustRow {
+  return {
+    new: emptyCustCell(),
+    returning: emptyCustCell(),
+    total: emptyCustCell(),
+  }
+}
+
+function emptyCustomerChannelCell(): CustomerChannelCell {
+  return {
+    vnB2c: emptyCustRow(),
+    vnWeb: emptyCustRow(),
+    usB2c: emptyCustRow(),
+    usWeb: emptyCustRow(),
+    usApp: emptyCustRow(),
+  }
 }
 
 async function readTargets() {
@@ -73,8 +96,8 @@ export async function GET(req: NextRequest) {
   try {
     try {
       const snapshots = await readB2CMonthlySnapshots(months)
-      const hasMarketChannelBreakdown = snapshots.every(s => (s.payload as any)?.marketChannels)
-      if (snapshots.length === months.length && hasMarketChannelBreakdown) {
+      const hasCurrentBreakdowns = snapshots.every(s => (s.payload as any)?.marketChannels && (s.payload as any)?.customerChannels)
+      if (snapshots.length === months.length && hasCurrentBreakdowns) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
         if (onlyLeads) {
           return NextResponse.json(
@@ -176,8 +199,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const data = await cachedQuery(`b2c-monthly:v8:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
-      const [marketRows, custRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
+    const data = await cachedQuery(`b2c-monthly:v9:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
+      const [marketRows, custRows, customerChannelRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')           AS market,
@@ -190,6 +213,52 @@ export async function GET(req: NextRequest) {
           [windowStart]
         ),
         loadCustomerRows(),
+        queryAnalytics<{ month: string; bucket: keyof CustomerChannelCell; type: string; revenue: string; count: string }>(
+          `WITH first_order AS (
+             SELECT f.customer_code,
+                    MIN(to_char(f.fulfiled_date::date, 'YYYY-MM')) AS first_month
+             FROM fact_fulfillment_revenue f
+             JOIN dim_order_source s ON f.order_source_code = s.code
+             WHERE UPPER(s.group_name) = 'B2C'
+               AND f.customer_code IS NOT NULL
+             GROUP BY 1
+           ),
+           monthly_channel AS (
+             SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                    f.customer_code,
+                    COALESCE(f.company_code, 'NA')            AS market,
+                    CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
+                         WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                         ELSE 'other' END                     AS ctype,
+                    SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
+             FROM fact_fulfillment_revenue f
+             JOIN dim_order_source s ON f.order_source_code = s.code
+             WHERE UPPER(s.group_name) = 'B2C'
+               AND f.fulfiled_date::date >= $1
+               AND f.customer_code IS NOT NULL
+             GROUP BY 1, 2, 3, 4
+           ),
+           typed AS (
+             SELECT m.*,
+                    CASE WHEN m.month = fo.first_month THEN 'new' ELSE 'returning' END AS type
+             FROM monthly_channel m
+             JOIN first_order fo ON m.customer_code = fo.customer_code
+           )
+           SELECT month, bucket, type, SUM(revenue) AS revenue, COUNT(DISTINCT customer_code) AS count
+           FROM (
+             SELECT month, 'vnB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
+             UNION ALL
+             SELECT month, 'vnWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
+             UNION ALL
+             SELECT month, 'usB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype IN ('web', 'app')
+             UNION ALL
+             SELECT month, 'usWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'web'
+             UNION ALL
+             SELECT month, 'usApp'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'app'
+           ) buckets
+           GROUP BY 1, 2, 3`,
+          [windowStart]
+        ),
         // Channel-type breakdown: Web (Websites) / App (Mobile-App) / Khác (còn lại)
         queryAnalytics<{ month: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -272,6 +341,23 @@ export async function GET(req: NextRequest) {
         row.total.count += cnt
       }
 
+      // ── Customers by requested B2C channel: VN Web, US Web, US App ──
+      const customerChannels: Record<string, CustomerChannelCell> = {}
+      for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
+      for (const r of customerChannelRows) {
+        const monthCell = customerChannels[r.month]
+        if (!monthCell) continue
+        const bucket = monthCell[r.bucket]
+        if (!bucket) continue
+        const target = r.type === "new" ? bucket.new : bucket.returning
+        const revenue = parseFloat(r.revenue || "0")
+        const count = parseInt(r.count || "0")
+        target.revenue += revenue
+        target.count += count
+        bucket.total.revenue += revenue
+        bucket.total.count += count
+      }
+
       // ── Channels: Web / App / Khác per month ──
       const channels: Record<string, ChannelCell> = {}
       for (const m of months) channels[m] = { web: 0, app: 0, other: 0 }
@@ -342,7 +428,7 @@ export async function GET(req: NextRequest) {
         console.error("[b2c/monthly] profit channel costs", (e as Error).message)
       }
 
-      return { markets, customers, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
+      return { markets, customers, customerChannels, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
     })
 
     // KPI targets: nhập ở KPI / Target. Budget: lấy từ Manage Costs → B2C Channels.

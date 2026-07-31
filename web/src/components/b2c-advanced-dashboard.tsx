@@ -17,6 +17,7 @@ interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
 interface KpiTarget { vn: number; us: number; total: number }
 interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturning: number; total: number }
 interface MarketBudgetCell { vn: number; us: number; total: number }
@@ -31,6 +32,7 @@ interface MonthlyData {
   customerSource?: "admin-gohub" | "admin-gohub-snapshot" | "analytics-db"
   customerBreakdown?: "new-returning" | "total-only"
   customerError?: string
+  customerChannels?: Record<string, CustomerChannelCell>
   channels:     Record<string, ChannelCell>
   marketChannels?: Record<string, MarketChannelCell>
   profitByChannel?: Record<string, Record<string, ProfitCell>>
@@ -75,6 +77,57 @@ const DEMO_DATA: MonthlyData = {
     "2026-05": { new: blankCust(1_120_000_000, 1980), returning: blankCust(440_000_000, 520), total: blankCust(1_560_000_000, 2500) },
     "2026-06": { new: blankCust(1_210_000_000, 2248), returning: blankCust(675_000_000, 916), total: blankCust(1_885_000_000, 3164) },
     "2026-07": { new: blankCust(460_000_000, 1260), returning: blankCust(256_330_420, 420), total: blankCust(716_330_420, 1680) },
+  },
+  customerChannels: {
+    "2026-01": {
+      vnB2c: { new: blankCust(330_000_000, 520), returning: blankCust(70_000_000, 120), total: blankCust(400_000_000, 640) },
+      vnWeb: { new: blankCust(330_000_000, 520), returning: blankCust(70_000_000, 120), total: blankCust(400_000_000, 640) },
+      usB2c: { new: blankCust(160_000_000, 290), returning: blankCust(40_000_000, 80), total: blankCust(200_000_000, 370) },
+      usWeb: { new: blankCust(50_000_000, 90), returning: blankCust(10_000_000, 20), total: blankCust(60_000_000, 110) },
+      usApp: { new: blankCust(110_000_000, 200), returning: blankCust(30_000_000, 60), total: blankCust(140_000_000, 260) },
+    },
+    "2026-02": {
+      vnB2c: { new: blankCust(360_000_000, 560), returning: blankCust(90_000_000, 140), total: blankCust(450_000_000, 700) },
+      vnWeb: { new: blankCust(360_000_000, 560), returning: blankCust(90_000_000, 140), total: blankCust(450_000_000, 700) },
+      usB2c: { new: blankCust(180_000_000, 320), returning: blankCust(50_000_000, 90), total: blankCust(230_000_000, 410) },
+      usWeb: { new: blankCust(60_000_000, 100), returning: blankCust(15_000_000, 25), total: blankCust(75_000_000, 125) },
+      usApp: { new: blankCust(120_000_000, 220), returning: blankCust(35_000_000, 65), total: blankCust(155_000_000, 285) },
+    },
+    "2026-03": {
+      vnB2c: { new: blankCust(470_000_000, 720), returning: blankCust(120_000_000, 180), total: blankCust(590_000_000, 900) },
+      vnWeb: { new: blankCust(470_000_000, 720), returning: blankCust(120_000_000, 180), total: blankCust(590_000_000, 900) },
+      usB2c: { new: blankCust(220_000_000, 390), returning: blankCust(80_000_000, 130), total: blankCust(300_000_000, 520) },
+      usWeb: { new: blankCust(75_000_000, 130), returning: blankCust(25_000_000, 40), total: blankCust(100_000_000, 170) },
+      usApp: { new: blankCust(145_000_000, 260), returning: blankCust(55_000_000, 90), total: blankCust(200_000_000, 350) },
+    },
+    "2026-04": {
+      vnB2c: { new: blankCust(760_000_000, 1080), returning: blankCust(290_000_000, 300), total: blankCust(1_050_000_000, 1380) },
+      vnWeb: { new: blankCust(760_000_000, 1080), returning: blankCust(290_000_000, 300), total: blankCust(1_050_000_000, 1380) },
+      usB2c: { new: blankCust(290_000_000, 520), returning: blankCust(140_000_000, 180), total: blankCust(430_000_000, 700) },
+      usWeb: { new: blankCust(70_000_000, 130), returning: blankCust(20_000_000, 30), total: blankCust(90_000_000, 160) },
+      usApp: { new: blankCust(220_000_000, 390), returning: blankCust(120_000_000, 150), total: blankCust(340_000_000, 540) },
+    },
+    "2026-05": {
+      vnB2c: { new: blankCust(560_000_000, 820), returning: blankCust(200_000_000, 240), total: blankCust(760_000_000, 1060) },
+      vnWeb: { new: blankCust(560_000_000, 820), returning: blankCust(200_000_000, 240), total: blankCust(760_000_000, 1060) },
+      usB2c: { new: blankCust(190_000_000, 340), returning: blankCust(90_000_000, 120), total: blankCust(280_000_000, 460) },
+      usWeb: { new: blankCust(45_000_000, 90), returning: blankCust(25_000_000, 30), total: blankCust(70_000_000, 120) },
+      usApp: { new: blankCust(145_000_000, 250), returning: blankCust(65_000_000, 90), total: blankCust(210_000_000, 340) },
+    },
+    "2026-06": {
+      vnB2c: { new: blankCust(650_000_000, 920), returning: blankCust(250_000_000, 270), total: blankCust(900_000_000, 1190) },
+      vnWeb: { new: blankCust(650_000_000, 920), returning: blankCust(250_000_000, 270), total: blankCust(900_000_000, 1190) },
+      usB2c: { new: blankCust(250_000_000, 440), returning: blankCust(120_000_000, 150), total: blankCust(370_000_000, 590) },
+      usWeb: { new: blankCust(55_000_000, 95), returning: blankCust(25_000_000, 35), total: blankCust(80_000_000, 130) },
+      usApp: { new: blankCust(195_000_000, 345), returning: blankCust(95_000_000, 115), total: blankCust(290_000_000, 460) },
+    },
+    "2026-07": {
+      vnB2c: { new: blankCust(330_000_000, 620), returning: blankCust(100_000_000, 130), total: blankCust(430_000_000, 750) },
+      vnWeb: { new: blankCust(330_000_000, 620), returning: blankCust(100_000_000, 130), total: blankCust(430_000_000, 750) },
+      usB2c: { new: blankCust(55_000_000, 120), returning: blankCust(20_000_000, 35), total: blankCust(75_000_000, 155) },
+      usWeb: { new: blankCust(8_000_000, 20), returning: blankCust(4_000_000, 10), total: blankCust(12_000_000, 30) },
+      usApp: { new: blankCust(47_000_000, 100), returning: blankCust(16_000_000, 25), total: blankCust(63_000_000, 125) },
+    },
   },
   channels: {
     "2026-01": { web: 240_000_000, app: 180_000_000, other: 380_000_000 },
@@ -484,6 +537,35 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     returning: { revenue: sumActualFor(key, m => data?.customers[m]?.returning.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.returning.count ?? 0) },
     total: { revenue: sumActualFor(key, m => data?.customers[m]?.total.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.total.count ?? 0) },
   })
+  const blankCustomerRow = (): CustRow => ({
+    new: { revenue: 0, count: 0 },
+    returning: { revenue: 0, count: 0 },
+    total: { revenue: 0, count: 0 },
+  })
+  const customerChannelOf = (key: string): CustomerChannelCell => {
+    const out: CustomerChannelCell = {
+      vnB2c: blankCustomerRow(),
+      vnWeb: blankCustomerRow(),
+      usB2c: blankCustomerRow(),
+      usWeb: blankCustomerRow(),
+      usApp: blankCustomerRow(),
+    }
+    for (const month of actualMonthsForPeriod(key)) {
+      const cell = data?.customerChannels?.[month]
+      if (!cell) continue
+      for (const bucket of ["vnB2c", "vnWeb", "usB2c", "usWeb", "usApp"] as const) {
+        out[bucket].new.revenue += cell[bucket]?.new.revenue ?? 0
+        out[bucket].new.count += cell[bucket]?.new.count ?? 0
+        out[bucket].returning.revenue += cell[bucket]?.returning.revenue ?? 0
+        out[bucket].returning.count += cell[bucket]?.returning.count ?? 0
+        out[bucket].total.revenue += cell[bucket]?.total.revenue ?? 0
+        out[bucket].total.count += cell[bucket]?.total.count ?? 0
+      }
+    }
+    return out
+  }
+  const customerRevenueSplitSub = (row: CustRow) =>
+    `New ${formatCompactNumber(row.new.revenue)} · Returning ${formatCompactNumber(row.returning.revenue)}`
   const targetOf = (key: string): KpiTarget => ({
     vn: sumPlanningFor(key, m => data?.targets[m]?.vn ?? 0),
     us: sumPlanningFor(key, m => data?.targets[m]?.us ?? 0),
@@ -1144,7 +1226,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách"
+            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · theo kênh"
               source="admin"
 >
               {data.customerError && (
@@ -1157,13 +1239,45 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   Admin API summary hiện có Total Customers/Revenue; New vs Returning cần snapshot item-level hoặc API summary breakdown riêng.
                 </div>
               )}
-	              <RollingTable rows={data.customerBreakdown === "total-only" ? [
-	                { label: "Total", get: m => customerOf(m).total.revenue, sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
-	              ] : [
-	                { label: "New",       get: m => customerOf(m).new.revenue,       sub: m => `${formatNumber(customerOf(m).new.count)} khách` },
-	                { label: "Returning", get: m => customerOf(m).returning.revenue, sub: m => `${formatNumber(customerOf(m).returning.count)} khách` },
-	                { label: "Total",     get: m => customerOf(m).total.revenue,     sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
-	              ]} />
+              <RollingTable rows={[
+                {
+                  label: "VN B2C",
+                  get: m => customerChannelOf(m).vnB2c.total.revenue,
+                  sub: m => customerRevenueSplitSub(customerChannelOf(m).vnB2c),
+                },
+                {
+                  key: "customer-vn-web",
+                  label: "Web VN",
+                  get: m => customerChannelOf(m).vnWeb.total.revenue,
+                  sub: m => customerRevenueSplitSub(customerChannelOf(m).vnWeb),
+                  breakdown: true,
+                },
+                {
+                  label: "US B2C",
+                  get: m => customerChannelOf(m).usB2c.total.revenue,
+                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usB2c),
+                },
+                {
+                  key: "customer-us-web",
+                  label: "Web",
+                  get: m => customerChannelOf(m).usWeb.total.revenue,
+                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usWeb),
+                  breakdown: true,
+                },
+                {
+                  key: "customer-us-app",
+                  label: "App",
+                  get: m => customerChannelOf(m).usApp.total.revenue,
+                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usApp),
+                  breakdown: true,
+                },
+                {
+                  label: "Total",
+                  get: m => customerOf(m).total.revenue,
+                  sub: m => `${formatNumber(customerOf(m).new.count)} mới · ${formatNumber(customerOf(m).returning.count)} quay lại · ${formatNumber(customerOf(m).total.count)} khách`,
+                  highlight: true,
+                },
+              ]} />
             </Section>
 
             <Section
