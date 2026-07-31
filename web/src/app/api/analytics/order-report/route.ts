@@ -92,7 +92,9 @@ export async function GET(req: NextRequest) {
     FROM ${mainTable} f
     LEFT JOIN dim_staff        st ON TRIM(f.staff_code)    = TRIM(st.code)
     LEFT JOIN dim_customer     dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
-    LEFT JOIN dim_sku          sk ON TRIM(f.sku)           = TRIM(sk.sku)
+    -- dim_sku dedupe: có mã trùng (vd 3ETWNWMF01010 × 2) → JOIN thẳng sẽ nhân đôi doanh thu (fan-out).
+    LEFT JOIN (SELECT TRIM(sku) AS sku, MAX(type_of_sim) AS type_of_sim FROM dim_sku GROUP BY TRIM(sku)) sk
+      ON TRIM(f.sku) = sk.sku
     LEFT JOIN dim_order_source  s ON f.order_source_code   = s.code
     ${where}
     GROUP BY
