@@ -5,7 +5,8 @@ import {
   ClipboardList, Download, Search, X, ChevronLeft, ChevronRight,
   Calendar, RefreshCw,
 } from "lucide-react"
-import { exportToExcel } from "@/lib/export-excel"
+import { exportToExcel }      from "@/lib/export-excel"
+import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -91,10 +92,11 @@ const PAGE_SIZE = 50
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function OrdersPage() {
   // Date state — empty until client sets it (avoid SSR hydration mismatch)
+  // Default: range mode (đầu tháng → hôm qua) để đồng bộ với Staff tab
   const [singleDate,   setSingleDate]   = useState("")
   const [startDate,    setStartDate]    = useState("")
   const [endDate,      setEndDate]      = useState("")
-  const [dateMode,     setDateMode]     = useState<"day" | "range">("day")
+  const [dateMode,     setDateMode]     = useState<"day" | "range">("range")
   const [dataSource,   setDataSource]   = useState("fulfilled")
 
   // Filter state
@@ -122,13 +124,13 @@ export default function OrdersPage() {
   const datesReady = useRef(false)
 
   // ── Init dates on client ─────────────────────────────────────────────────
+  // Dùng getDefaultDateRange() để đồng bộ với Staff tab (đầu tháng → hôm qua)
   useEffect(() => {
+    const { startDate: s, endDate: e } = getDefaultDateRange()
     const today = new Date().toISOString().split("T")[0]
-    const monthAgo = new Date()
-    monthAgo.setDate(monthAgo.getDate() - 30)
     setSingleDate(today)
-    setStartDate(monthAgo.toISOString().split("T")[0])
-    setEndDate(today)
+    setStartDate(s)
+    setEndDate(e)
     datesReady.current = true
   }, [])
 
@@ -198,9 +200,9 @@ export default function OrdersPage() {
 
   // ── Trigger fetch when dates are ready ───────────────────────────────────
   useEffect(() => {
-    if (singleDate) doFetch(1)
+    if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [singleDate])
+  }, [startDate, endDate])
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -243,6 +245,7 @@ export default function OrdersPage() {
 
       const cols = [
         { label: "Date",          key: "order_date"    },
+        { label: "Entity",        key: "company_code"  },
         { label: "PIC",           key: "staff_name"    },
         { label: "Order Name",    key: "order_name"    },
         { label: "Customer",      key: "customer_name" },
@@ -292,8 +295,34 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-5 shadow-sm space-y-3">
-        {/* Row 1: date */}
+        {/* Row 1: Entity + date */}
         <div className="flex flex-wrap items-end gap-3">
+          {/* Entity pills — đầu dòng */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
+            <div className="flex gap-1">
+              {[
+                { code: "",   label: "All" },
+                { code: "VN", label: "🇻🇳 VN" },
+                { code: "US", label: "🇺🇸 US" },
+                { code: "SG", label: "🇸🇬 SG" },
+                { code: "HK", label: "🇭🇰 HK" },
+              ].map(({ code, label }) => (
+                <button key={code} onClick={() => setCompanyCode(code)}
+                  className={cn(
+                    "px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
+                    companyCode === code
+                      ? "bg-[#003B95] text-white border-[#003B95]"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95] hover:text-[#003B95]"
+                  )}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
             <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
@@ -343,31 +372,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Row 2: Entity filter (VN/US/SG/HK) */}
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Entity</label>
-          <div className="flex gap-1.5 flex-wrap">
-            {[
-              { code: "",   label: "All",        flag: "" },
-              { code: "VN", label: "🇻🇳 VN",   flag: "VN" },
-              { code: "US", label: "🇺🇸 US",   flag: "US" },
-              { code: "SG", label: "🇸🇬 SG",   flag: "SG" },
-              { code: "HK", label: "🇭🇰 HK",   flag: "HK" },
-            ].map(({ code, label }) => (
-              <button key={code} onClick={() => setCompanyCode(code)}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors",
-                  companyCode === code
-                    ? "bg-[#003B95] text-white border-[#003B95]"
-                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95] hover:text-[#003B95]"
-                )}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Row 3: other filters + Apply */}
+        {/* Row 2: other filters + Apply */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
