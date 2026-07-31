@@ -14,6 +14,7 @@ interface OrderRow {
   staff_name:      string
   customer_name:   string
   order_code:      string
+  company_code:    string | null   // VN | US | SG | HK
   order_name:      string
   sim_type:        string
   channel_name:    string
@@ -22,6 +23,24 @@ interface OrderRow {
   total_revenue:   number
   gross_profit:    number
   price_list_name: string | null
+}
+
+const COMPANY_CFG: Record<string, { label: string; flag: string; bg: string; text: string }> = {
+  VN: { label: "VN", flag: "🇻🇳", bg: "bg-red-50",    text: "text-red-700"    },
+  US: { label: "US", flag: "🇺🇸", bg: "bg-blue-50",   text: "text-blue-700"  },
+  SG: { label: "SG", flag: "🇸🇬", bg: "bg-rose-50",   text: "text-rose-700"  },
+  HK: { label: "HK", flag: "🇭🇰", bg: "bg-red-50",    text: "text-red-800"   },
+}
+
+function CompanyBadge({ code }: { code: string | null }) {
+  if (!code) return null
+  const cfg = COMPANY_CFG[code.toUpperCase()]
+  if (!cfg) return <span className="text-[9px] font-bold text-slate-400">{code}</span>
+  return (
+    <span className={cn("text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-wider", cfg.bg, cfg.text)}>
+      {cfg.flag} {cfg.label}
+    </span>
+  )
 }
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
@@ -79,6 +98,7 @@ export default function OrdersPage() {
   const [dataSource,   setDataSource]   = useState("fulfilled")
 
   // Filter state
+  const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -210,6 +230,7 @@ export default function OrdersPage() {
         qs.set("startDate", startDate)
         qs.set("endDate", endDate)
       }
+      if (companyCode)  qs.set("companyCode", companyCode)
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
@@ -322,7 +343,31 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Row 2: other filters + Apply */}
+        {/* Row 2: Entity filter (VN/US/SG/HK) */}
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Entity</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { code: "",   label: "All",        flag: "" },
+              { code: "VN", label: "🇻🇳 VN",   flag: "VN" },
+              { code: "US", label: "🇺🇸 US",   flag: "US" },
+              { code: "SG", label: "🇸🇬 SG",   flag: "SG" },
+              { code: "HK", label: "🇭🇰 HK",   flag: "HK" },
+            ].map(({ code, label }) => (
+              <button key={code} onClick={() => setCompanyCode(code)}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors",
+                  companyCode === code
+                    ? "bg-[#003B95] text-white border-[#003B95]"
+                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95] hover:text-[#003B95]"
+                )}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 3: other filters + Apply */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
@@ -399,7 +444,7 @@ export default function OrdersPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Tier"].map(h => (
+                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Entity","Tier"].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -407,7 +452,7 @@ export default function OrdersPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400">
+                  <td colSpan={13} className="py-10 text-center text-slate-400">
                     <div className="flex justify-center">
                       <div className="animate-spin h-5 w-5 border-2 border-[#003B95] border-t-transparent rounded-full" />
                     </div>
@@ -416,7 +461,7 @@ export default function OrdersPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={13} className="py-10 text-center text-slate-400 dark:text-slate-500">
                     No orders found.
                   </td>
                 </tr>
@@ -469,6 +514,9 @@ export default function OrdersPage() {
                       (r.gross_profit || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>
                       {fmtNum(r.gross_profit)}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <CompanyBadge code={r.company_code} />
                   </td>
                   <td className="px-3 py-2">
                     <TierBadge pln={r.price_list_name} kws={tierKws} />
