@@ -6,9 +6,9 @@
 
 ## TRẠNG THÁI HIỆN TẠI (2026-07-31)
 
-- **Branch**: staging — `c70c74f` (feat: Usage Analytics tab)
+- **Branch**: staging — `fcc03a2` (docs: gộp plan + ELITE products)
 - **Staging → main**: cần Hiếu duyệt trước khi merge
-- **Next action**: Hiếu chạy migration `v30_usage_tracking.sql` trên Supabase
+- **Migration v30**: ✅ Hiếu đã chạy (2026-07-31)
 
 ---
 
@@ -29,10 +29,7 @@
 
 ### B1. Việc Hiếu cần làm (manual)
 
-- [ ] **Chạy migration v30** trên Supabase SQL Editor:
-  ```sql
-  -- paste nội dung web/db/migrations/v30_usage_tracking.sql
-  ```
+- [x] **Chạy migration v30** — ✅ 2026-07-31 (bảng `app_usage_events` đã tồn tại)
 - [ ] **JoyTel auth_header**: F12 → đăng nhập joytelshop.com → Network tab → tìm request `/access/login` → copy header `Authorization: Basic xxx=` → nói Gấu Pro: *"Lưu portal JoyTel, auth_header=Basic xxx="*
 - [ ] **Merge staging → main** khi sẵn sàng deploy
 - [ ] **Test Gấu Pro** thủ công (xem mục C.3)
@@ -44,6 +41,7 @@
 - [x] SunSpeedy login: fix `/login` endpoint + `token` header
 - [x] Elite products: đã extract vào `ELITE/elite_products.md`
 - [x] Usage Analytics tab: tạo mới `/analytics/creator/usage`
+- [x] Migration v30 `app_usage_events`: Hiếu đã chạy 2026-07-31
 
 ### B3. Còn treo
 
