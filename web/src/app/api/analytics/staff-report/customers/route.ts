@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
       FROM ${mainTable} f
       LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
       ${where}
       GROUP BY f.customer_code, COALESCE(dc.name, f.customer_code)
       ORDER BY revenue DESC
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
       ${where}
       GROUP BY f.customer_code, TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
       ORDER BY f.customer_code, month

@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
                    SUM(fulfilled_quantity) as units,
                    SUM(fulfilled_revenue_amount_vnd) as revenue
             FROM fact_fulfillment_revenue f
-            LEFT JOIN dim_sku v ON f.sku = v.sku
+            LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
             LEFT JOIN dim_location l ON f.location_id = l.location_id
             WHERE fulfiled_date::date BETWEEN $1 AND $2
             GROUP BY 1, 2, 3`, params),

@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
          SUM(CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as revenue_3hk
        FROM fact_fulfillment_revenue f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       LEFT JOIN dim_sku v ON f.sku = v.sku
+       LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
        WHERE TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') IN ('${prevMonths.join("','")}')
        GROUP BY 1, 2, 3`
     )

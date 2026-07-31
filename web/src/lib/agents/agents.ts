@@ -481,6 +481,10 @@ dim_order_source: code, name, sapo_name, status, group_name (B2B/B2C), channel_n
   → JOIN fact.order_source_code = dim_order_source.code
 dim_sku: sku, vendor, category_name, product_type, type_of_sim, purchase_type, standard_cogs_vnd, cost_source, item_code
   → JOIN fact.sku = dim_sku.sku  ⚠️ Cột là 'sku' KHÔNG phải 'sku_code'.
+  ⚠️⚠️ dim_sku CÓ MÃ TRÙNG (vd '3ETWNWMF01010' × 2). Khi SUM doanh thu/số lượng sau JOIN dim_sku
+     → PHẢI dedupe để tránh nhân đôi (fan-out): dùng
+     LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku)=TRIM(sk.sku)
+     thay cho JOIN dim_sku thẳng. (Nếu chỉ lọc bằng subquery IN(...) thì không bị.)
   ⚠️ VENDOR inconsistent: '3HK DATAPOOL' (space, ~7700 SKUs) VÀ '3HK' (~60 SKUs). Để lấy TẤT CẢ 3HK:
      PHẢI dùng: REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%'  (KHÔNG dùng = '3HKDATAPOOL' — sẽ miss rows).
      Vendor khác dùng ILIKE. Không chắc tên vendor → query DISTINCT vendor LIMIT 20 trước.

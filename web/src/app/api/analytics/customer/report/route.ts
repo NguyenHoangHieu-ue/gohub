@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
            CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN '1' ELSE '0' END as is_3hk
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN dim_sku v ON f.sku = v.sku
+         LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
          WHERE TRIM(COALESCE(c.${custNameCol}::text, f.customer_code)) IN (${customerNames})
            AND f.${source.dateCol}::date >= $1 AND f.${source.dateCol}::date <= $2`,

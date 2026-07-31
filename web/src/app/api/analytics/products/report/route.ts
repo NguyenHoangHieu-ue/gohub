@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
                   SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.quantityCol}) as units,
                   COUNT(DISTINCT f.order_code) as orders, SUM(f.${source.marginCol}) as margin
            FROM ${source.mainTable} f
-           LEFT JOIN dim_sku v ON f.sku = v.sku
+           LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
            WHERE ${where} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC LIMIT 50`
         ),
         getCountryMappings(),
