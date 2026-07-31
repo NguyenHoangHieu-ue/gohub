@@ -42,6 +42,7 @@
 - [x] Elite products: đã extract vào `ELITE/elite_products.md`
 - [x] Usage Analytics tab: tạo mới `/analytics/creator/usage`
 - [x] Migration v30 `app_usage_events`: Hiếu đã chạy 2026-07-31
+- [x] Migration v30b `user_name` column: Hiếu đã chạy 2026-07-31
 
 ### B3. Còn treo
 
