@@ -804,9 +804,9 @@ async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: strin
     const captchaText = await solveImageCaptcha(`${adminBase}/captcha?uuid=${uuid}`, {})
     if (!captchaText) return { cookies: cookieJar, error: "Không giải được CAPTCHA của SunSpeedy" }
 
-    const r = await fetch(`${adminBase}${portal.login_api || "/sys/login"}`, {
+    const r = await fetch(`${adminBase}${portal.login_api || "/login"}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA },
+      headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": portal.url, "Referer": portal.url + "/" },
       body: JSON.stringify({ [userField]: portal.username, [passField]: portal.password, captcha: captchaText, uuid }),
       signal: AbortSignal.timeout(12000),
     })
@@ -991,9 +991,14 @@ async function runBrowsePortal(args: { portal_name: string; path?: string }): Pr
   try {
     const headers: Record<string, string> = { "Cookie": cookieHeader(), "User-Agent": BROWSER_UA, "Referer": baseUrl }
     if (authToken) {
-      headers["Authorization"] = `Bearer ${authToken}`
-      // JoyTel/Blade also accept token via custom header
-      headers["Blade-Auth"]    = `bearer ${authToken}`
+      if (portal.url.includes("sunspeedy") || portal.url.includes("cardweb")) {
+        // SunSpeedy uses lowercase "token" header (not Authorization)
+        headers["token"] = authToken
+      } else {
+        headers["Authorization"] = `Bearer ${authToken}`
+        // JoyTel/Blade also accept token via custom header
+        headers["Blade-Auth"]    = `bearer ${authToken}`
+      }
     }
 
     const r5 = await fetch(targetUrl, { headers, signal: timeout(15000) })
