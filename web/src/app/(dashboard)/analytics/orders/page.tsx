@@ -101,7 +101,7 @@ export default function OrdersPage() {
 
   // Filter state
   const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
-  const [includeShip,  setIncludeShip]  = useState(false)       // false = loại phí ship (mặc định)
+  const [excludeShip,  setExcludeShip]  = useState(false)       // false = show all (mặc định, khớp báo cáo gốc)
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -184,7 +184,7 @@ export default function OrdersPage() {
         qs.set("endDate", effectiveEnd!)
       }
       if (companyCode)  qs.set("companyCode", companyCode)
-      if (includeShip)  qs.set("includeShip", "1")
+      if (excludeShip)  qs.set("excludeShip", "1")
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
@@ -212,7 +212,7 @@ export default function OrdersPage() {
   useEffect(() => {
     if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, includeShip])
+  }, [startDate, endDate, excludeShip])
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -249,7 +249,7 @@ export default function OrdersPage() {
           qs.set("endDate", endDate)
         }
         if (companyCode)  qs.set("companyCode", companyCode)
-        if (includeShip)  qs.set("includeShip", "1")
+        if (excludeShip)  qs.set("excludeShip", "1")
         if (staffCode)    qs.set("staffCode", staffCode)
         if (channelGroup) qs.set("channelGroup", channelGroup)
         if (channel)      qs.set("channel", channel)
@@ -405,21 +405,23 @@ export default function OrdersPage() {
 
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
 
-          {/* Toggle gồm phí ship — mặc định TẮT (loại phí ship khỏi doanh thu) */}
+          {/* Filter khuyến nghị: Loại shipping fee — mặc định TẮT (show all để validate tổng) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Phí ship</label>
-            <button onClick={() => setIncludeShip(v => !v)}
-              title={includeShip ? "Đang GỒM phí ship vào doanh thu" : "Đang LOẠI phí ship (chuẩn: phí ship không phải doanh thu SP)"}
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Filter khuyến nghị</label>
+            <button onClick={() => setExcludeShip(v => !v)}
+              title={excludeShip
+                ? "Đang LOẠI shipping fee → doanh thu SP thuần"
+                : "Đang SHOW ALL (gồm shipping) → khớp báo cáo gốc để validate tổng. Bật để loại shipping fee."}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
-                includeShip
-                  ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                excludeShip
+                  ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
                   : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95]"
               )}>
-              <span className={cn("w-8 h-4 rounded-full relative transition-colors", includeShip ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-600")}>
-                <span className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", includeShip ? "left-4.5" : "left-0.5")} style={{ left: includeShip ? "18px" : "2px" }} />
+              <span className={cn("w-8 h-4 rounded-full relative transition-colors shrink-0", excludeShip ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")}>
+                <span className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all" style={{ left: excludeShip ? "18px" : "2px" }} />
               </span>
-              {includeShip ? "Gồm phí ship" : "Loại phí ship"}
+              Loại shipping fee
             </button>
           </div>
         </div>
@@ -481,11 +483,14 @@ export default function OrdersPage() {
       </div>
 
       {/* KPI Cards — tổng TOÀN KỲ (từ API), không phải chỉ trang hiện tại */}
+      {(() => {
+        const shipNote = excludeShip ? "đã loại shipping fee" : "SHOW ALL (gồm shipping — khớp báo cáo gốc)"
+        return (
       <div className="grid grid-cols-3 gap-4 mb-5">
         {[
           { label: "Total Orders",  value: (isSearching ? filtered.length : total).toLocaleString("vi-VN"),   sub: isSearching ? "trong kết quả search" : "orders (toàn kỳ)" },
-          { label: "Total Revenue", value: fmtNum(kpiRevenue),               sub: isSearching ? "trong kết quả search" : "VND (toàn kỳ)" },
-          { label: "Gross Profit",  value: fmtNum(kpiGp),                    sub: isSearching ? "trong kết quả search" : "VND (toàn kỳ)" },
+          { label: "Total Revenue", value: fmtNum(kpiRevenue),               sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
+          { label: "Gross Profit",  value: fmtNum(kpiGp),                    sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
         ].map(k => (
           <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{k.label}</p>
@@ -494,6 +499,8 @@ export default function OrdersPage() {
           </div>
         ))}
       </div>
+        )
+      })()}
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">

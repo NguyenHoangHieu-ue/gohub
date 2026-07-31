@@ -42,14 +42,15 @@ Totals: `COUNT(*)`, `SUM(revenueCol)`, `SUM(quantityCol)`.
 ## 3. Bộ lọc
 - **Entity** (VN/US/SG/HK, `company_code`) — pills ở đầu Row 1, badge cột Entity trong bảng.
 - **Kênh nhóm** (`s.group_name`), **kênh con**, **staff (PIC)**, **source**, **khoảng ngày** (single day / range).
-- **Toggle "Phí ship"**: mặc định **Loại phí ship** (`sku != 'SHIPPINGFEE0'`, đồng bộ toàn hệ thống — phí giao hàng KHÔNG phải doanh thu SP). Bật → param `includeShip=1` bỏ điều kiện đó, doanh thu gồm cả phí ship (khớp bảng raw). Bật/tắt tự re-fetch ngay.
+- **Filter khuyến nghị "Loại shipping fee"**: mặc định **TẮT → SHOW ALL** (không hardcode loại gì) để tổng khớp báo cáo gốc, giúp **validate số total không lệch**. Bật → param `excludeShip=1` thêm `sku != 'SHIPPINGFEE0'` → doanh thu SP thuần. Bật/tắt tự re-fetch ngay. KPI sub-label ghi rõ trạng thái ("SHOW ALL (gồm shipping)" vs "đã loại shipping fee").
+  - Lý do KHÔNG hardcode: các report khác báo full total (vd 9.00 tỷ); nếu Orders mặc định lặng lẽ loại ship → 8.98 tỷ thì gây nghi ngờ lệch. Để mặc định show-all + filter khuyến nghị giúp user tự đối chiếu.
 - Loại nhiễu cố định: `staff_name != 'Auto ESIM'`.
 - Với role Sales: bỏ join `dim_location` (không xem chi nhánh).
 
 ## 3b. KPI & Số liệu (QUAN TRỌNG)
 - **KPI Total Revenue/GP = tổng TOÀN KỲ** (API trả `totalRevenue/totalGp/totalQty` qua aggregate SQL riêng), KHÔNG phải chỉ page hiện tại. Khi search (client-side, chỉ lọc page) → KPI đổi sang tổng của rows đang hiện + label "trong kết quả search".
 - **Total Orders** = `COUNT(DISTINCT order_code)` (số đơn duy nhất), khác "số dòng" line-item.
-- **Đối chiếu tháng 6/2026**: LOẠI ship = 8.978 tỷ (29,048 đơn) · GỒM ship = 9.000 tỷ. Bảng raw đếm dòng (30k+) + gồm ship nên cao hơn ~21M.
+- **Đối chiếu tháng 6/2026**: DEFAULT show all = 9.000 tỷ (29,048 đơn, khớp báo cáo gốc) · Bật "Loại shipping fee" = 8.978 tỷ (SP thuần, chênh ~21M phí ship). Bảng raw đếm theo dòng (30,570) nên rows cao hơn distinct orders.
 - **Export**: loop fetch tất cả page (5000/lần) → xuất ĐỦ mọi đơn, không chỉ 1 page. ORDER BY có tiebreaker `order_code` để phân trang ổn định. Cột Entity có trong file export.
 
 ## 4. Gotchas
