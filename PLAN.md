@@ -6,9 +6,9 @@
 
 ## TRẠNG THÁI HIỆN TẠI (2026-07-31)
 
-- **Branch**: staging — `fcc03a2` (docs: gộp plan + ELITE products)
+- **Branch**: staging — `227ea41` (feat: GauPro upload/export nâng cấp toàn diện)
 - **Staging → main**: cần Hiếu duyệt trước khi merge
-- **Migration v30**: ✅ Hiếu đã chạy (2026-07-31)
+- **Migrations chạy**: v30 ✅ | v30b ✅ (Hiếu đã chạy 2026-07-31)
 
 ---
 
@@ -30,7 +30,10 @@
 ### B1. Việc Hiếu cần làm (manual)
 
 - [x] **Chạy migration v30** — ✅ 2026-07-31 (bảng `app_usage_events` đã tồn tại)
-- [ ] **JoyTel auth_header**: đang xử lý — thử brute-force common SpringBlade clientId từ JS bundle
+- [x] **JoyTel auth_header**: ✅ KHÔNG cần Basic header — endpoint `/zyfh/api/v1/access/login`, SHA1 pw, no Basic auth
+  - ⚠️ Blocking issue: CAPTCHA JoyTel bị nhiễu nặng, Gemini OCR accuracy thấp (~0%). Code đúng, retry 4× đã implement.
+  - Giải pháp thay thế: dùng dịch vụ CAPTCHA chuyên (2captcha/anti-captcha ~$0.001/solve) — cân nhắc nếu cần JoyTel khẩn
+  - Hiện tại: login JoyTel chưa hoạt động được trên production
 - [ ] **Merge staging → main** khi sẵn sàng deploy
 - [x] **Test Gấu Pro** thủ công — ✅ Hiếu đã test (2026-07-31)
 
@@ -63,15 +66,18 @@
 | Query Supabase (26 bảng) | ✅ |
 | Query Turso | ✅ |
 | Web search | ✅ |
-| Import: PDF/DOCX/Excel/CSV/JSON/image/code | ✅ |
-| Export: CSV/Excel/JSON/PDF(chart)/Word | ✅ |
+| Import: PDF/DOCX/PPTX/Excel/CSV/JSON/image/code (tối đa 5 file) | ✅ updated 2026-07-31 |
+| Upload: Drag & drop + paste clipboard ảnh | ✅ added 2026-07-31 |
+| Export: CSV/Excel(auto-width)/JSON/PDF/Word(page footer) | ✅ updated 2026-07-31 |
 | Chart rendering multi-series | ✅ |
-| Portal: Elite (browse) | ✅ |
-| Portal: SunSpeedy (login fixed) | ✅ fixed 2026-07-31 |
-| Portal: JoyTel | ⏳ chờ auth_header từ Hiếu |
+| Portal: Elite (browse, 76 sản phẩm UK) | ✅ |
+| Portal: SunSpeedy (login OK, 3 endpoints hoạt động) | ✅ fixed 2026-07-31 |
+| Portal: JoyTel | ❌ CAPTCHA OCR accuracy ~0% — cần 2captcha service |
 | Knowledge Base (creator_kb) | ✅ 51 entries |
-| Product Onboarding Automation Phase 1 | ✅ |
+| Product Onboarding Automation Phase 1 | ✅ tested 2026-07-31 |
 | GA4 / GSC queries | ✅ |
+| SQL Win Rate Tracker + Margin Optimizer | ✅ added 2026-07-31 |
+| Lark chat logging → Usage Analytics | ✅ added 2026-07-31 |
 
 ### C.2 Improvements cần làm (theo Q3 priority)
 
@@ -81,11 +87,9 @@
 - Gấu Pro hỏi: "SKU mới nào trong 14 ngày đạt win rate?" → bi-analyst chạy SQL Win Rate
 - Output: Win Rate %, danh sách SKU WIN/CHƯA ĐỦ
 
-**C.2.2 Vendor Price Comparison**
-- Nhập: country + specs (data, days)
-- Gấu Pro: browsePortal Elite + SunSpeedy + querySupabase NCC Catalog
-- Output: bảng so sánh giá tất cả vendor cho cùng nhu cầu
-- Giúp chọn vendor rẻ nhất trong ≤15 phút
+**C.2.2 Vendor Price Comparison** ✅ Gấu Pro đã có đủ tools (browsePortal Elite/SunSpeedy + querySupabase NCC)
+- Hiếu hỏi: "So sánh giá eSIM UK 7 ngày từ Elite vs WM vs 3HK" → Gấu Pro tự browse + query + bảng kết quả
+- Không cần code thêm — đã hoạt động với prompt tự nhiên
 
 **C.2.3 Margin Optimizer** ✅ SQL template đã thêm vào bi-analyst
 - Gấu Pro hỏi: "Top SKU GP% thấp cần đàm phán COGS" → chạy SQL Margin Optimizer
@@ -106,11 +110,11 @@
 - Gửi vào Lark group mỗi thứ 2 sáng
 - Trigger: Scheduled Messages system (đã có) + Gấu Pro API call
 
-**C.2.7 JoyTel Integration**
-- Chờ Hiếu cung cấp Basic token (xem B1)
-- Sau khi có: test login → browse product endpoints:
-  - `/productOriginPool/list`
-  - `/category/findValidCategory`
+**C.2.7 JoyTel Integration** ❌ BLOCKED — CAPTCHA accuracy
+- Code đúng: POST `/zyfh/api/v1/access/login`, SHA1 pw, no Basic header, retry 4×
+- Blocking: CAPTCHA hình nhiễu nặng, Gemini đọc sai ~100% các lần thử
+- Giải pháp: tích hợp 2captcha API (`$0.001/solve`) hoặc bỏ qua JoyTel
+- Product endpoints khi login được: `/productOriginPool/list`, `/category/findValidCategory`
 
 #### Priority 3 — New features (sau Q3)
 
