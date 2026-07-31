@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-          LEFT JOIN dim_sku sk ON f.sku = sk.sku
+          LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON f.sku = sk.sku
           WHERE f.fulfiled_date::date >= '${qStartDate}'
             AND f.fulfiled_date::date <= '${qEndDate}'
             ${companyFilter}

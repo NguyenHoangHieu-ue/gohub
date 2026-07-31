@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Save, RefreshCw, Eye, EyeOff, Shield } from "lucide-react"
+import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -191,6 +191,127 @@ function CreatorSettings() {
           </p>
         </div>
       )}
+
+      {/* Gấu Pro Access */}
+      <GpAccessSection />
+    </div>
+  )
+}
+
+function GpAccessSection() {
+  const [allowedUsers, setAllowedUsers] = useState<{ username: string; name: string; role: string }[]>([])
+  const [newUsername, setNewUsername]   = useState("")
+  const [loading, setLoading]           = useState(true)
+  const [adding, setAdding]             = useState(false)
+  const [msg, setMsg]                   = useState<{ ok: boolean; text: string } | null>(null)
+
+  const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  useEffect(() => {
+    fetch("/api/creator-ai/gp-access").then(r => r.ok ? r.json() : null).then(d => {
+      setAllowedUsers(d?.users ?? [])
+    }).finally(() => setLoading(false))
+  }, [])
+
+  const add = async () => {
+    if (!newUsername.trim()) return
+    setAdding(true)
+    try {
+      const r = await fetch("/api/creator-ai/gp-access", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", username: newUsername.trim() }),
+      })
+      const d = await r.json()
+      if (!r.ok) { notify(false, d.error || "Lỗi"); return }
+      setNewUsername("")
+      // Refresh list
+      const res = await fetch("/api/creator-ai/gp-access")
+      const data = await res.json()
+      setAllowedUsers(data?.users ?? [])
+      notify(true, `Đã cấp quyền cho "${newUsername.trim()}"`)
+    } finally { setAdding(false) }
+  }
+
+  const remove = async (username: string) => {
+    const r = await fetch("/api/creator-ai/gp-access", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remove", username }),
+    })
+    if (r.ok) {
+      setAllowedUsers(prev => prev.filter(u => u.username !== username))
+      notify(true, `Đã thu hồi quyền của "${username}"`)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-violet-50 bg-violet-50/50 flex items-center gap-3">
+        <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center">
+          <Cpu className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <h2 className="font-bold text-slate-800">Gấu Pro — Phân quyền theo user</h2>
+          <p className="text-xs text-slate-400">Chỉ những user được thêm ở đây mới thấy và dùng được Gấu Pro</p>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-4">
+        {/* Warning */}
+        <div className="flex items-start gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 leading-relaxed">
+            <strong>Lưu ý:</strong> Gấu Pro có quyền truy cập toàn bộ database và hệ thống.
+            Các câu hỏi về <strong>code, cấu trúc hệ thống, credential</strong> tự động bị chặn với non-creator user.
+            Chỉ cấp quyền cho người tin tưởng hoàn toàn.
+          </p>
+        </div>
+
+        {msg && (
+          <div className={cn("px-4 py-2.5 rounded-xl text-sm", msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>
+            {msg.text}
+          </div>
+        )}
+
+        {/* Add user */}
+        <div className="flex gap-2">
+          <input
+            value={newUsername} onChange={e => setNewUsername(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && add()}
+            placeholder="Username cần cấp quyền..."
+            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400"
+          />
+          <button onClick={add} disabled={adding || !newUsername.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors">
+            <Plus className="w-3.5 h-3.5" />
+            {adding ? "Đang thêm…" : "Thêm"}
+          </button>
+        </div>
+
+        {/* Allowed users list */}
+        {loading ? (
+          <div className="text-xs text-slate-400 py-2">Đang tải...</div>
+        ) : allowedUsers.length === 0 ? (
+          <div className="text-xs text-slate-400 py-4 text-center">
+            Chưa có user nào được cấp quyền (ngoài creator).
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {allowedUsers.map(u => (
+              <div key={u.username} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-sm font-medium text-slate-800">{u.name}</span>
+                  <span className="ml-2 text-xs text-slate-400">@{u.username}</span>
+                  <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
+                </div>
+                <button onClick={() => remove(u.username)}
+                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -95,8 +95,11 @@ const MANAGEMENT_GROUP = {
 const CREATOR_GROUP = {
   label: "Creator",
   items: [
-    { href: "/analytics/creator",          label: "Creator Settings", icon: Crown    },
-    { href: "/analytics/creator/devtools", label: "API & Database",   icon: Terminal },
+    { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
+    { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
+    { href: "/analytics/creator/knowledge", label: "Own Info",         icon: BookOpen },
+    { href: "/analytics/creator/devtools",  label: "API & Database",   icon: Terminal },
+    { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
   ],
 }
 
@@ -122,7 +125,8 @@ function useSidebarData(username: string, sessionRole: string) {
     allowedTabs:     string[] | null
     rolePerms:       Record<string, string[]> | null
     hiddenTabs:      Set<string>
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set() })
+    gpEnabled:       boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -140,6 +144,7 @@ function useSidebarData(username: string, sessionRole: string) {
         allowedTabs:      me?.allowed_tabs       != null ? (me.allowed_tabs       as string).split(",").filter(Boolean) : null,
         rolePerms:        perms ?? null,
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
+        gpEnabled:        me?.gp_enabled === true,
       })
     })
   }, [username, sessionRole])
@@ -281,7 +286,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -292,6 +297,8 @@ export function Sidebar() {
   //  - admin/manager: toàn quyền
   //  - còn lại: quyền NỀN theo role (ma trận role_permissions) ∪ trang cấp THÊM per-user (allowed_analytics)
   const isCreatorUser = effectiveRole === "creator"
+  // gpEnabled: non-creator user được creator cấp quyền dùng Gấu Pro
+  const gpEnabled = !isCreatorUser && gpEnabledFlag
 
   const analyticsGroups = (() => {
     let groups = ANALYTICS_GROUPS
@@ -406,6 +413,9 @@ export function Sidebar() {
             {isCreatorUser && CREATOR_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
+            {gpEnabled && (
+              <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
+            )}
           </>
         ) : (
           /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
@@ -460,6 +470,12 @@ export function Sidebar() {
                     {CREATOR_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
                     ))}
+                  </div>
+                )}
+                {analystOpen && gpEnabled && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
+                    <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
                   </div>
                 )}
               </div>

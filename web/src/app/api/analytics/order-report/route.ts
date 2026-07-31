@@ -20,6 +20,10 @@ export async function GET(req: NextRequest) {
   const orderSource = p.get("orderSource") || ""
   const companyCode = p.get("companyCode") || "ALL"
   const dataSource  = p.get("dataSource") || "fulfilled"
+  // 2 filter Yes/No — mặc định No (=loại) cho ra doanh thu SP thuần.
+  // Bật CẢ 2 = Yes → khớp báo cáo gốc (validate tổng không lệch).
+  const includeShip        = p.get("includeShip") === "1"          // No (default) → loại SHIPPINGFEE0
+  const includeInternalOps = p.get("includeInternalOps") === "1"   // No (default) → loại INTERNAL-TRANSACTION
   const isExport    = p.get("export") === "1"
   const page        = Math.max(1, parseInt(p.get("page") || "1"))
   const limit       = isExport ? 5000 : Math.min(200, parseInt(p.get("limit") || "50"))
@@ -40,8 +44,11 @@ export async function GET(req: NextRequest) {
 
   const params: unknown[] = [startDate, endDate]
 
-  let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
-    AND f.sku != 'SHIPPINGFEE0'`
+  let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2`
+  // Include ShippingFee = No (default) → loại phí ship khỏi doanh thu SP
+  if (!includeShip) where += ` AND f.sku != 'SHIPPINGFEE0'`
+  // Include Internal Ops = No (default) → loại đơn chuyển nội bộ (revenue=0, chỉ có COGS)
+  if (!includeInternalOps) where += ` AND (UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION')`
 
   if (companyCode && companyCode !== "ALL") {
     params.push(companyCode)
@@ -70,6 +77,7 @@ export async function GET(req: NextRequest) {
       COALESCE(dc.name, TRIM(f.customer_code))  AS customer_name,
       TRIM(f.customer_code)    AS customer_code,
       f.order_code,
+      COALESCE(MAX(f.company_code), '')  AS company_code,
       STRING_AGG(DISTINCT TRIM(f.sku), ', ' ORDER BY TRIM(f.sku)) AS order_name,
       STRING_AGG(DISTINCT COALESCE(sk.type_of_sim, 'Other'), ', ') AS sim_type,
       COALESCE(MAX(s.channel_name), '')  AS channel_name,
@@ -84,7 +92,9 @@ export async function GET(req: NextRequest) {
     FROM ${mainTable} f
     LEFT JOIN dim_staff        st ON TRIM(f.staff_code)    = TRIM(st.code)
     LEFT JOIN dim_customer     dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
-    LEFT JOIN dim_sku          sk ON TRIM(f.sku)           = TRIM(sk.sku)
+    -- dim_sku dedupe: có mã trùng (vd 3ETWNWMF01010 × 2) → JOIN thẳng sẽ nhân đôi doanh thu (fan-out).
+    LEFT JOIN (SELECT TRIM(sku) AS sku, MAX(type_of_sim) AS type_of_sim FROM dim_sku GROUP BY TRIM(sku)) sk
+      ON TRIM(f.sku) = sk.sku
     LEFT JOIN dim_order_source  s ON f.order_source_code   = s.code
     ${where}
     GROUP BY
@@ -96,17 +106,25 @@ export async function GET(req: NextRequest) {
   `
 
   const countSQL = `SELECT COUNT(*) AS total FROM (${baseSelect}) sub`
-  const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC LIMIT ${limit} OFFSET ${offset}`
+  const aggrSQL  = `SELECT SUM(total_revenue) AS sum_revenue, SUM(gross_profit) AS sum_gp, SUM(quantity) AS sum_qty
+                    FROM (${baseSelect}) sub`
+  // ORDER BY có tiebreaker order_code → phân trang ổn định (không trùng/sót khi export loop nhiều page)
+  const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC, f.order_code LIMIT ${limit} OFFSET ${offset}`
 
   try {
-    const [countRows, dataRows] = await Promise.all([
-      isExport ? Promise.resolve([{ total: "0" }]) : queryAnalytics<{ total: string }>(countSQL, params),
+    const [countRows, aggrRows, dataRows] = await Promise.all([
+      // Đếm tổng đơn cho CẢ export (để client loop lấy hết) lẫn view thường
+      queryAnalytics<{ total: string }>(countSQL, params),
+      isExport ? Promise.resolve([{ sum_revenue: "0", sum_gp: "0", sum_qty: "0" }]) : queryAnalytics(aggrSQL, params),
       queryAnalytics(dataSQL, params),
     ])
 
-    const total = isExport
-      ? (dataRows as any[]).length
-      : parseInt((countRows as any[])[0]?.total || "0")
+    const total = parseInt((countRows as any[])[0]?.total || "0")
+
+    const aggr = (aggrRows as any[])[0] || {}
+    const totalRevenue = Number(aggr.sum_revenue) || 0
+    const totalGp      = Number(aggr.sum_gp)      || 0
+    const totalQty     = Number(aggr.sum_qty)      || 0
 
     const rows = (dataRows as any[]).map(r => ({
       order_date:      r.order_date,
@@ -115,6 +133,7 @@ export async function GET(req: NextRequest) {
       customer_name:   r.customer_name,
       customer_code:   r.customer_code,
       order_code:      r.order_code,
+      company_code:    r.company_code || null,
       order_name:      r.order_name,
       sim_type:        r.sim_type,
       channel_name:    r.channel_name,
@@ -126,7 +145,10 @@ export async function GET(req: NextRequest) {
       price_list_name: r.price_list_name || null,
     }))
 
-    return NextResponse.json({ rows, total, page, limit }, { headers: CACHE_HEADERS })
+    return NextResponse.json(
+      { rows, total, page, limit, totalRevenue, totalGp, totalQty },
+      { headers: CACHE_HEADERS },
+    )
   } catch (err: any) {
     console.error("[order-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

@@ -32,7 +32,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   let selectClause = "data.channel_name as name"
   let joinClause = ""
   if (groupBy === "vendor") {
-    selectClause = "v.vendor as name"; joinClause = "LEFT JOIN dim_sku v ON data.sku = v.sku"
+    selectClause = "v.vendor as name"; joinClause = "LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON data.sku = v.sku"
   } else if (groupBy === "destination") {
     const rule = await getSkuDestinationRule()
     selectClause = `${getDestinationSQL(rule).replace(/f\./g, "data.")} as name`

@@ -332,6 +332,16 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const { agentId, params, needsClarification, clarificationQuestion, agentIds, multi } = routed
     const agent    = AGENTS[agentId]
 
+    // Log chat event for Usage Analytics (fire-and-forget, không block response)
+    void supabaseAdmin.from("app_usage_events").insert({
+      event_type:   "chat",
+      user_email:   `lark:${openId}`,
+      user_name:    name || openId,
+      user_role:    role,
+      agent_id:     agentId,
+      user_message: userText.slice(0, 500),
+    })
+
     // Guardian: câu hỏi về nội bộ hệ thống → từ chối lịch sự ("hỏi Hiếu"), không gọi agent
     if (!guard.allowed) {
       await replyLarkMessage(messageId, stripMarkdown(guard.reason))

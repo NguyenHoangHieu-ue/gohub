@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     let joinClause = ""
     if (groupBy === "vendor") {
       selectClause = "v.vendor as name"
-      joinClause = "LEFT JOIN dim_sku v ON f.sku = v.sku"
+      joinClause = "LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku"
     } else if (groupBy === "destination") {
       const rule = await getSkuDestinationRule()
       selectClause = `${getDestinationSQL(rule)} as name`

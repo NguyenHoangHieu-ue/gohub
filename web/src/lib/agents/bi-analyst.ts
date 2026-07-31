@@ -189,12 +189,12 @@ export async function runBIAnalyst(
             let prodResult: any = null
             if (code.length === 13) {
               const { data } = await supabaseAdmin.from("skus")
-                .select("sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+                .select("sku_code,sku_ref,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,day_amount_unit,parents,frame,datapack,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,original_cost,reference_cost_vnd,final_cogs_included_vat_vnd,final_cogs_usd,expirations,wr_group,note")
                 .eq("sku_code", code).maybeSingle()
               prodResult = data
             } else if (code.length === 8) {
               const { data } = await supabaseAdmin.from("products")
-                .select("product_code,status,tenant,sim_esim,product_type,country_group,vendor")
+                .select("product_code,product_ref,status,tenant,sim_esim,product_type,vendor,vendor_code,data_policy_code,gc_purchase_type,sku_type,data_type,import_type,supported_countries,country_group,daily_reset_time,activation_time,network_type,onsite_carrier,local_phone_number,local_number_country,hotspot,kyc_code,kyc_needed,top_up_options,base_sim_esim_sku_code,apn,apn_original,telco_perks,note")
                 .eq("product_code", code).maybeSingle()
               prodResult = data
             }

@@ -12,6 +12,14 @@ import { guardCheck, canViewCogs }             from "@/lib/agents/guardian"
 import { getChannelFromRole }                  from "@/lib/agents/tools"
 import { runMulti, NOTICE_MULTI, ensureAnswer, isFailureText, guidanceFor } from "@/lib/agents/orchestrator"
 import type { Message, UserRole }              from "@/lib/agents/types"
+import { supabaseAdmin }                       from "@/lib/supabase"
+
+function logChat(email: string | null | undefined, role: string, agentId: string, msg: string) {
+  void supabaseAdmin.from("app_usage_events").insert({
+    event_type: "chat", user_email: email, user_role: role,
+    agent_id: agentId, user_message: msg.slice(0, 500),
+  })
+}
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
@@ -62,6 +70,9 @@ export async function POST(req: NextRequest) {
       })
       return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
     }
+
+    // Log chat event (fire-and-forget)
+    logChat(session.user.email, role, agentId, lastMsg)
 
     // Pre-execute tools, build context
     const channel = getChannelFromRole(role)

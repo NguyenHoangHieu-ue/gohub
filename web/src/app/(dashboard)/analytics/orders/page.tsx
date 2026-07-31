@@ -5,7 +5,8 @@ import {
   ClipboardList, Download, Search, X, ChevronLeft, ChevronRight,
   Calendar, RefreshCw,
 } from "lucide-react"
-import { exportToExcel } from "@/lib/export-excel"
+import { exportToExcel }      from "@/lib/export-excel"
+import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ interface OrderRow {
   staff_name:      string
   customer_name:   string
   order_code:      string
+  company_code:    string | null   // VN | US | SG | HK
   order_name:      string
   sim_type:        string
   channel_name:    string
@@ -22,6 +24,24 @@ interface OrderRow {
   total_revenue:   number
   gross_profit:    number
   price_list_name: string | null
+}
+
+const COMPANY_CFG: Record<string, { label: string; flag: string; bg: string; text: string }> = {
+  VN: { label: "VN", flag: "🇻🇳", bg: "bg-red-50",    text: "text-red-700"    },
+  US: { label: "US", flag: "🇺🇸", bg: "bg-blue-50",   text: "text-blue-700"  },
+  SG: { label: "SG", flag: "🇸🇬", bg: "bg-rose-50",   text: "text-rose-700"  },
+  HK: { label: "HK", flag: "🇭🇰", bg: "bg-red-50",    text: "text-red-800"   },
+}
+
+function CompanyBadge({ code }: { code: string | null }) {
+  if (!code) return null
+  const cfg = COMPANY_CFG[code.toUpperCase()]
+  if (!cfg) return <span className="text-[9px] font-bold text-slate-400">{code}</span>
+  return (
+    <span className={cn("text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-wider", cfg.bg, cfg.text)}>
+      {cfg.flag} {cfg.label}
+    </span>
+  )
 }
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
@@ -72,13 +92,17 @@ const PAGE_SIZE = 50
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function OrdersPage() {
   // Date state — empty until client sets it (avoid SSR hydration mismatch)
+  // Default: range mode (đầu tháng → hôm qua) để đồng bộ với Staff tab
   const [singleDate,   setSingleDate]   = useState("")
   const [startDate,    setStartDate]    = useState("")
   const [endDate,      setEndDate]      = useState("")
-  const [dateMode,     setDateMode]     = useState<"day" | "range">("day")
+  const [dateMode,     setDateMode]     = useState<"day" | "range">("range")
   const [dataSource,   setDataSource]   = useState("fulfilled")
 
   // Filter state
+  const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
+  const [includeShip,        setIncludeShip]        = useState(false)  // No (default) = loại shipping fee
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)  // No (default) = loại internal ops
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -89,6 +113,9 @@ export default function OrdersPage() {
   // Data state
   const [rows,    setRows]    = useState<OrderRow[]>([])
   const [total,   setTotal]   = useState(0)
+  const [sumRevenue, setSumRevenue] = useState(0)   // tổng toàn kỳ (từ API, không phải page)
+  const [sumGp,      setSumGp]      = useState(0)
+  const [sumQty,     setSumQty]     = useState(0)
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -102,13 +129,13 @@ export default function OrdersPage() {
   const datesReady = useRef(false)
 
   // ── Init dates on client ─────────────────────────────────────────────────
+  // Dùng getDefaultDateRange() để đồng bộ với Staff tab (đầu tháng → hôm qua)
   useEffect(() => {
+    const { startDate: s, endDate: e } = getDefaultDateRange()
     const today = new Date().toISOString().split("T")[0]
-    const monthAgo = new Date()
-    monthAgo.setDate(monthAgo.getDate() - 30)
     setSingleDate(today)
-    setStartDate(monthAgo.toISOString().split("T")[0])
-    setEndDate(today)
+    setStartDate(s)
+    setEndDate(e)
     datesReady.current = true
   }, [])
 
@@ -157,30 +184,37 @@ export default function OrdersPage() {
         qs.set("startDate", effectiveStart!)
         qs.set("endDate", effectiveEnd!)
       }
+      if (companyCode)        qs.set("companyCode", companyCode)
+      if (includeShip)        qs.set("includeShip", "1")
+      if (includeInternalOps) qs.set("includeInternalOps", "1")
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
       if (orderSource)  qs.set("orderSource", orderSource)
 
       const res  = await fetch(`/api/analytics/order-report?${qs}`)
-      if (!res.ok) { setRows([]); setTotal(0); return }
+      if (!res.ok) { setRows([]); setTotal(0); setSumRevenue(0); setSumGp(0); setSumQty(0); return }
       const json = await res.json()
       setRows(Array.isArray(json.rows) ? json.rows : [])
       setTotal(typeof json.total === "number" ? json.total : 0)
+      setSumRevenue(Number(json.totalRevenue) || 0)
+      setSumGp(Number(json.totalGp) || 0)
+      setSumQty(Number(json.totalQty) || 0)
       setPage(pg)
     } catch {
       setRows([])
       setTotal(0)
+      setSumRevenue(0); setSumGp(0); setSumQty(0)
     } finally {
       setLoading(false)
     }
   }
 
-  // ── Trigger fetch when dates are ready ───────────────────────────────────
+  // ── Trigger fetch when dates ready hoặc toggle phí ship đổi ───────────────
   useEffect(() => {
-    if (singleDate) doFetch(1)
+    if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [singleDate])
+  }, [startDate, endDate, includeShip, includeInternalOps])
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -194,8 +228,11 @@ export default function OrdersPage() {
     )
   }, [rows, search])
 
-  const kpiRevenue = filtered.reduce((s, r) => s + (r.total_revenue || 0), 0)
-  const kpiGp      = filtered.reduce((s, r) => s + (r.gross_profit  || 0), 0)
+  // KPI = tổng TOÀN KỲ (từ API aggregate), KHÔNG phải chỉ page hiện tại.
+  // Khi đang search (client-side, chỉ lọc page hiện tại) → hiển thị tổng của rows đang hiện.
+  const isSearching = search.trim().length > 0
+  const kpiRevenue = isSearching ? filtered.reduce((s, r) => s + (r.total_revenue || 0), 0) : sumRevenue
+  const kpiGp      = isSearching ? filtered.reduce((s, r) => s + (r.gross_profit  || 0), 0) : sumGp
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -203,25 +240,47 @@ export default function OrdersPage() {
     if (exporting) return
     setExporting(true)
     try {
-      const qs = new URLSearchParams({ dataSource, export: "1" })
-      if (dateMode === "day" && singleDate) {
-        qs.set("date", singleDate)
-      } else if (startDate && endDate) {
-        qs.set("startDate", startDate)
-        qs.set("endDate", endDate)
-      }
-      if (staffCode)    qs.set("staffCode", staffCode)
-      if (channelGroup) qs.set("channelGroup", channelGroup)
-      if (channel)      qs.set("channel", channel)
-      if (orderSource)  qs.set("orderSource", orderSource)
+      const EXPORT_PAGE = 5000  // khớp cap server-side/page
 
-      const res  = await fetch(`/api/analytics/order-report?${qs}`)
-      if (!res.ok) return
-      const json = await res.json()
-      if (!json.rows?.length) return
+      const buildQs = (pg: number) => {
+        const qs = new URLSearchParams({ dataSource, export: "1", page: String(pg), limit: String(EXPORT_PAGE) })
+        if (dateMode === "day" && singleDate) {
+          qs.set("date", singleDate)
+        } else if (startDate && endDate) {
+          qs.set("startDate", startDate)
+          qs.set("endDate", endDate)
+        }
+        if (companyCode)        qs.set("companyCode", companyCode)
+        if (includeShip)        qs.set("includeShip", "1")
+        if (includeInternalOps) qs.set("includeInternalOps", "1")
+        if (staffCode)    qs.set("staffCode", staffCode)
+        if (channelGroup) qs.set("channelGroup", channelGroup)
+        if (channel)      qs.set("channel", channel)
+        if (orderSource)  qs.set("orderSource", orderSource)
+        return qs
+      }
+
+      // Loop lấy TẤT CẢ đơn (không chỉ 1 page): fetch page 1 → biết total → fetch tiếp cho hết
+      const first = await fetch(`/api/analytics/order-report?${buildQs(1)}`)
+      if (!first.ok) return
+      const firstJson = await first.json()
+      const allRows: OrderRow[] = Array.isArray(firstJson.rows) ? firstJson.rows : []
+      const grandTotal = Number(firstJson.total) || allRows.length
+
+      const totalPages = Math.ceil(grandTotal / EXPORT_PAGE)
+      for (let pg = 2; pg <= totalPages; pg++) {
+        const r = await fetch(`/api/analytics/order-report?${buildQs(pg)}`)
+        if (!r.ok) break
+        const j = await r.json()
+        if (Array.isArray(j.rows) && j.rows.length) allRows.push(...j.rows)
+        else break
+      }
+
+      if (!allRows.length) return
 
       const cols = [
         { label: "Date",          key: "order_date"    },
+        { label: "Entity",        key: "company_code"  },
         { label: "PIC",           key: "staff_name"    },
         { label: "Order Name",    key: "order_name"    },
         { label: "Customer",      key: "customer_name" },
@@ -234,7 +293,7 @@ export default function OrdersPage() {
         { label: "GP (VND)",      key: "gross_profit"  },
         { label: "Tier",          key: "_tier"         },
       ]
-      const exportRows = json.rows.map((r: OrderRow) => ({
+      const exportRows = allRows.map((r: OrderRow) => ({
         ...r,
         order_date: fmtDate(r.order_date),
         _tier: classifyTier(r.price_list_name, tierKws),
@@ -271,8 +330,34 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-5 shadow-sm space-y-3">
-        {/* Row 1: date */}
+        {/* Row 1: Entity + date */}
         <div className="flex flex-wrap items-end gap-3">
+          {/* Entity pills — đầu dòng */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
+            <div className="flex gap-1">
+              {[
+                { code: "",   label: "All" },
+                { code: "VN", label: "🇻🇳 VN" },
+                { code: "US", label: "🇺🇸 US" },
+                { code: "SG", label: "🇸🇬 SG" },
+                { code: "HK", label: "🇭🇰 HK" },
+              ].map(({ code, label }) => (
+                <button key={code} onClick={() => setCompanyCode(code)}
+                  className={cn(
+                    "px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
+                    companyCode === code
+                      ? "bg-[#003B95] text-white border-[#003B95]"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95] hover:text-[#003B95]"
+                  )}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
             <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
@@ -318,6 +403,32 @@ export default function OrdersPage() {
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               <option value="fulfilled">Fulfilled</option>
               <option value="created">Created</option>
+            </select>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
+          {/* Include ShippingFee: Yes/No — default No (loại phí ship) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
+            <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeShip ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Include Internal Ops: Yes/No — default No (loại đơn nội bộ) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
+            <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeInternalOps ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                                   : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
             </select>
           </div>
         </div>
@@ -378,12 +489,17 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — tổng TOÀN KỲ (từ API), không phải chỉ trang hiện tại */}
+      {(() => {
+        const shipNote = (includeShip && includeInternalOps)
+          ? "gồm ship + internal ops (khớp báo cáo gốc)"
+          : `${includeShip ? "gồm ship" : "loại ship"} · ${includeInternalOps ? "gồm internal" : "loại internal"}`
+        return (
       <div className="grid grid-cols-3 gap-4 mb-5">
         {[
-          { label: "Total Orders",  value: total.toLocaleString("vi-VN"), sub: "orders" },
-          { label: "Total Revenue", value: fmtNum(kpiRevenue),             sub: "VND" },
-          { label: "Gross Profit",  value: fmtNum(kpiGp),                  sub: "VND" },
+          { label: "Total Orders",  value: (isSearching ? filtered.length : total).toLocaleString("vi-VN"),   sub: isSearching ? "trong kết quả search" : "orders (toàn kỳ)" },
+          { label: "Total Revenue", value: fmtNum(kpiRevenue),               sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
+          { label: "Gross Profit",  value: fmtNum(kpiGp),                    sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
         ].map(k => (
           <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{k.label}</p>
@@ -392,6 +508,8 @@ export default function OrdersPage() {
           </div>
         ))}
       </div>
+        )
+      })()}
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
@@ -399,7 +517,7 @@ export default function OrdersPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Tier"].map(h => (
+                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Entity","Tier"].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -407,7 +525,7 @@ export default function OrdersPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400">
+                  <td colSpan={13} className="py-10 text-center text-slate-400">
                     <div className="flex justify-center">
                       <div className="animate-spin h-5 w-5 border-2 border-[#003B95] border-t-transparent rounded-full" />
                     </div>
@@ -416,7 +534,7 @@ export default function OrdersPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={13} className="py-10 text-center text-slate-400 dark:text-slate-500">
                     No orders found.
                   </td>
                 </tr>
@@ -469,6 +587,9 @@ export default function OrdersPage() {
                       (r.gross_profit || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>
                       {fmtNum(r.gross_profit)}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <CompanyBadge code={r.company_code} />
                   </td>
                   <td className="px-3 py-2">
                     <TierBadge pln={r.price_list_name} kws={tierKws} />

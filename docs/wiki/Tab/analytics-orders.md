@@ -40,13 +40,26 @@ WHERE 1=1 <filters>;
 Totals: `COUNT(*)`, `SUM(revenueCol)`, `SUM(quantityCol)`.
 
 ## 3. Bộ lọc
-- **Kênh nhóm** (`s.group_name`), **kênh con**, **staff**, **khoảng ngày**, **thị trường** (company_code).
-- Loại nhiễu: `staff_name != 'Auto ESIM'` và `sku != 'SHIPPINGFEE0'`.
+- **Entity** (VN/US/SG/HK, `company_code`) — pills ở đầu Row 1, badge cột Entity trong bảng.
+- **Kênh nhóm** (`s.group_name`), **kênh con**, **staff (PIC)**, **source**, **khoảng ngày** (single day / range).
+- **2 field Yes/No (không hardcode)**:
+  - **Include ShippingFee** (default **No**): No → param bỏ qua, thêm `sku != 'SHIPPINGFEE0'` (loại phí ship). Yes → `includeShip=1` giữ phí ship.
+  - **Include Internal Ops** (default **No**): No → thêm `UPPER(s.group_name) != 'INTERNAL-TRANSACTION'` (loại đơn chuyển nội bộ, revenue=0 chỉ có COGS). Yes → `includeInternalOps=1` giữ.
+  - **Default (cả 2 = No)** = doanh thu SP thuần. **Bật cả 2 = Yes** = khớp báo cáo gốc (validate tổng không lệch). Đổi giá trị tự re-fetch ngay. KPI sub-label ghi rõ trạng thái từng filter.
+  - Đối chiếu T6/2026: cả 2 No = 8.978 tỷ · cả 2 Yes = 9.000 tỷ (30,570 dòng, = bảng raw).
+- Loại nhiễu cố định: `staff_name != 'Auto ESIM'`.
 - Với role Sales: bỏ join `dim_location` (không xem chi nhánh).
 
+## 3b. KPI & Số liệu (QUAN TRỌNG)
+- **KPI Total Revenue/GP = tổng TOÀN KỲ** (API trả `totalRevenue/totalGp/totalQty` qua aggregate SQL riêng), KHÔNG phải chỉ page hiện tại. Khi search (client-side, chỉ lọc page) → KPI đổi sang tổng của rows đang hiện + label "trong kết quả search".
+- **Total Orders** = `COUNT(DISTINCT order_code)` (số đơn duy nhất), khác "số dòng" line-item.
+- **Đối chiếu tháng 6/2026**: DEFAULT show all = 9.000 tỷ (29,048 đơn, khớp báo cáo gốc) · Bật "Loại shipping fee" = 8.978 tỷ (SP thuần, chênh ~21M phí ship). Bảng raw đếm theo dòng (30,570) nên rows cao hơn distinct orders.
+- **Export**: loop fetch tất cả page (5000/lần) → xuất ĐỦ mọi đơn, không chỉ 1 page. ORDER BY có tiebreaker `order_code` để phân trang ổn định. Cột Entity có trong file export.
+
 ## 4. Gotchas
-- 1 `order_code` có thể gồm nhiều dòng (nhiều SIM/SP) → totals đếm dòng, không phải đơn duy nhất; "orders" ở tab khác dùng `COUNT(DISTINCT order_code)`.
-- Export CSV qua `/api/orders/export` (cùng filter).
+- 1 `order_code` có thể gồm nhiều dòng (nhiều SIM/SP). Tab Orders GROUP BY order → mỗi đơn 1 row; KPI dùng aggregate toàn kỳ.
+- Phí ship (`SHIPPINGFEE0`) mặc định bị loại; toggle để gồm. Khi gồm, số đơn KHÔNG đổi (ship gắn vào đơn có sẵn) nhưng doanh thu tăng.
+- Export qua `/api/analytics/order-report?export=1` (loop nhiều page, cùng bộ filter gồm cả includeShip).
 
 ---
 
