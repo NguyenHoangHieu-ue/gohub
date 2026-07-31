@@ -6,9 +6,9 @@
 
 ## TRẠNG THÁI HIỆN TẠI (2026-07-31)
 
-- **Branch**: staging — `227ea41` (feat: GauPro upload/export nâng cấp toàn diện)
-- **Staging → main**: cần Hiếu duyệt trước khi merge
+- **Branch**: main == staging == `4c4c007` — ✅ ĐÃ MERGE lên main (2026-07-31), Vercel auto-deploy production
 - **Migrations chạy**: v30 ✅ | v30b ✅ (Hiếu đã chạy 2026-07-31)
+- Session này gồm: Usage Analytics tab · Gấu Pro upload/export nâng cấp · SunSpeedy fix · Orders (Entity filter + Include ShippingFee/Internal Ops Yes/No + KPI toàn kỳ + export all pages + dedupe dim_sku fan-out toàn hệ thống)
 
 ---
 
