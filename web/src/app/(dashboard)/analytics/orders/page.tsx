@@ -101,6 +101,7 @@ export default function OrdersPage() {
 
   // Filter state
   const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
+  const [includeShip,  setIncludeShip]  = useState(false)       // false = loại phí ship (mặc định)
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -183,6 +184,7 @@ export default function OrdersPage() {
         qs.set("endDate", effectiveEnd!)
       }
       if (companyCode)  qs.set("companyCode", companyCode)
+      if (includeShip)  qs.set("includeShip", "1")
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
@@ -206,11 +208,11 @@ export default function OrdersPage() {
     }
   }
 
-  // ── Trigger fetch when dates are ready ───────────────────────────────────
+  // ── Trigger fetch when dates ready hoặc toggle phí ship đổi ───────────────
   useEffect(() => {
     if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate])
+  }, [startDate, endDate, includeShip])
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -247,6 +249,7 @@ export default function OrdersPage() {
           qs.set("endDate", endDate)
         }
         if (companyCode)  qs.set("companyCode", companyCode)
+        if (includeShip)  qs.set("includeShip", "1")
         if (staffCode)    qs.set("staffCode", staffCode)
         if (channelGroup) qs.set("channelGroup", channelGroup)
         if (channel)      qs.set("channel", channel)
@@ -398,6 +401,26 @@ export default function OrdersPage() {
               <option value="fulfilled">Fulfilled</option>
               <option value="created">Created</option>
             </select>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
+          {/* Toggle gồm phí ship — mặc định TẮT (loại phí ship khỏi doanh thu) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Phí ship</label>
+            <button onClick={() => setIncludeShip(v => !v)}
+              title={includeShip ? "Đang GỒM phí ship vào doanh thu" : "Đang LOẠI phí ship (chuẩn: phí ship không phải doanh thu SP)"}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
+                includeShip
+                  ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95]"
+              )}>
+              <span className={cn("w-8 h-4 rounded-full relative transition-colors", includeShip ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-600")}>
+                <span className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", includeShip ? "left-4.5" : "left-0.5")} style={{ left: includeShip ? "18px" : "2px" }} />
+              </span>
+              {includeShip ? "Gồm phí ship" : "Loại phí ship"}
+            </button>
           </div>
         </div>
 

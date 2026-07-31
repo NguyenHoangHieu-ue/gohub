@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   const orderSource = p.get("orderSource") || ""
   const companyCode = p.get("companyCode") || "ALL"
   const dataSource  = p.get("dataSource") || "fulfilled"
+  const includeShip = p.get("includeShip") === "1"   // mặc định loại phí ship (SHIPPINGFEE0)
   const isExport    = p.get("export") === "1"
   const page        = Math.max(1, parseInt(p.get("page") || "1"))
   const limit       = isExport ? 5000 : Math.min(200, parseInt(p.get("limit") || "50"))
@@ -40,8 +41,9 @@ export async function GET(req: NextRequest) {
 
   const params: unknown[] = [startDate, endDate]
 
-  let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
-    AND f.sku != 'SHIPPINGFEE0'`
+  let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2`
+  // Mặc định loại phí ship (không tính vào doanh thu SP). includeShip=1 → gồm cả phí ship.
+  if (!includeShip) where += ` AND f.sku != 'SHIPPINGFEE0'`
 
   if (companyCode && companyCode !== "ALL") {
     params.push(companyCode)
