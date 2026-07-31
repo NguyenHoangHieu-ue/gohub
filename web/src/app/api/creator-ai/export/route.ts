@@ -4,8 +4,8 @@ import { authOptions }               from "@/lib/auth"
 import { getDbRole }                  from "@/lib/db-role"
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  HeadingLevel, AlignmentType, BorderStyle, WidthType, Header,
-  NumberFormat,
+  HeadingLevel, AlignmentType, BorderStyle, WidthType, Header, Footer,
+  NumberFormat, PageNumber,
 } from "docx"
 
 // Creator AI export endpoint — Word (.docx) generation
@@ -233,6 +233,19 @@ export async function POST(req: NextRequest) {
               new TextRun({ text: (title || "Gấu Pro Report") + "  ", font: "Times New Roman", size: 18, color: "666666" }),
             ],
             alignment: AlignmentType.RIGHT,
+          })],
+        }),
+      },
+      footers: {
+        default: new Footer({
+          children: [new Paragraph({
+            children: [
+              new TextRun({ text: "GoHub Intel — Trang ", font: "Times New Roman", size: 18, color: "999999" }),
+              new TextRun({ children: [PageNumber.CURRENT], font: "Times New Roman", size: 18, color: "999999" }),
+              new TextRun({ text: "/", font: "Times New Roman", size: 18, color: "999999" }),
+              new TextRun({ children: [PageNumber.TOTAL_PAGES], font: "Times New Roman", size: 18, color: "999999" }),
+            ],
+            alignment: AlignmentType.CENTER,
           })],
         }),
       },

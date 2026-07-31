@@ -129,21 +129,34 @@ function downloadText(content: string, filename: string, mime: string) {
   downloadBlob(new Blob(["﻿" + content], { type: mime + ";charset=utf-8" }), filename)
 }
 
+function parseCSVRows(csv: string): string[][] {
+  return csv.split("\n").filter(r => r.trim()).map(r => {
+    const result: string[] = []
+    let cur = "", inQ = false
+    for (let i = 0; i < r.length; i++) {
+      if (r[i] === '"') { inQ = !inQ }
+      else if (r[i] === "," && !inQ) { result.push(cur); cur = "" }
+      else cur += r[i]
+    }
+    result.push(cur)
+    return result
+  })
+}
+
 function downloadCSVAsExcel(csv: string, filename: string) {
   import("xlsx").then((XLSX) => {
-    const rows = csv.split("\n").map(r => {
-      // Parse quoted CSV properly
-      const result: string[] = []
-      let cur = "", inQ = false
-      for (let i = 0; i < r.length; i++) {
-        if (r[i] === '"') { inQ = !inQ }
-        else if (r[i] === "," && !inQ) { result.push(cur); cur = "" }
-        else cur += r[i]
-      }
-      result.push(cur)
-      return result
-    })
-    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const rows = parseCSVRows(csv)
+    const ws   = XLSX.utils.aoa_to_sheet(rows)
+
+    // Auto column width (max 50 chars)
+    if (rows.length) {
+      ws["!cols"] = rows[0].map((_, ci) => ({
+        wch: Math.min(50, Math.max(8, ...rows.map(r => String(r[ci] ?? "").length)) + 2),
+      }))
+    }
+    // Freeze header row
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 }
+
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Data")
     XLSX.writeFile(wb, filename)
@@ -325,16 +338,23 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
 
 // ─── File chip ────────────────────────────────────────────────────────────────
 
-const ACCEPT = ".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql"
-const MAX_MB = 20
+const ACCEPT = ".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql,.yaml,.yml,.toml,.xml,.html,.sh"
+const MAX_MB  = 20
+const MAX_FILES = 5
 
 function fileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() || ""
-  if (["png","jpg","jpeg","webp","gif","bmp"].includes(ext)) return <ImageIcon size={13} />
-  if (["xlsx","xls","csv"].includes(ext))                     return <FileSpreadsheet size={13} />
-  if (["docx","doc"].includes(ext))                           return <FileType size={13} />
-  if (ext === "json")                                          return <FileJson size={13} />
+  if (["png","jpg","jpeg","webp","gif","bmp","svg"].includes(ext)) return <ImageIcon size={13} />
+  if (["xlsx","xls","csv"].includes(ext))                          return <FileSpreadsheet size={13} />
+  if (["docx","doc"].includes(ext))                                return <FileType size={13} />
+  if (["pptx","ppt"].includes(ext))                                return <Package size={13} />
+  if (ext === "json")                                              return <FileJson size={13} />
   return <FileText size={13} />
+}
+
+function isImage(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  return ["png","jpg","jpeg","webp","gif","bmp"].includes(ext)
 }
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
@@ -496,9 +516,11 @@ export default function CreatorAIPage() {
   const [input,         setInput]         = useState("")
   const [loading,       setLoading]       = useState(false)
   const [elapsed,       setElapsed]       = useState(0)
-  const [attachedFile,  setAttachedFile]  = useState<File | null>(null)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [fileError,     setFileError]     = useState("")
+  const [dragging,      setDragging]      = useState(false)
   const [gpAllowed,     setGpAllowed]     = useState<boolean | null>(null) // null = loading
+  const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -558,53 +580,84 @@ export default function CreatorAIPage() {
   const clearConversation = useCallback(() => {
     setMessages([])
     setInput("")
-    setAttachedFile(null)
+    setAttachedFiles([])
     setFileError("")
+    setImgPreviews(new Map())
     try { localStorage.removeItem(LS_KEY) } catch {}
     inputRef.current?.focus()
   }, [])
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ""
-    if (!file) return
-    if (file.size > MAX_MB * 1024 * 1024) {
-      setFileError(`File quá lớn (${(file.size / 1024 / 1024).toFixed(1)} MB). Giới hạn ${MAX_MB} MB.`)
-      return
-    }
-    setFileError("")
-    setAttachedFile(file)
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const newFiles = Array.from(incoming)
+    const oversized = newFiles.filter(f => f.size > MAX_MB * 1024 * 1024)
+    const valid     = newFiles.filter(f => f.size <= MAX_MB * 1024 * 1024)
+
+    if (oversized.length) setFileError(`File quá lớn (>${MAX_MB}MB): ${oversized.map(f => f.name).join(", ")}`)
+    else setFileError("")
+
+    if (!valid.length) return
+    setAttachedFiles(prev => {
+      const merged = [...prev, ...valid]
+      return merged.slice(-MAX_FILES) // keep last MAX_FILES
+    })
+    // Build image previews
+    valid.filter(f => isImage(f.name)).forEach(f => {
+      const url = URL.createObjectURL(f)
+      setImgPreviews(prev => new Map(prev).set(f.name, url))
+    })
   }, [])
 
-  const removeFile = useCallback(() => {
-    setAttachedFile(null)
-    setFileError("")
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) addFiles(e.target.files)
+    e.target.value = ""
+  }, [addFiles])
+
+  const removeFile = useCallback((name: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.name !== name))
+    setImgPreviews(prev => { const m = new Map(prev); m.delete(name); return m })
+  }, [])
+
+  // Paste clipboard images (Ctrl+V)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
+
+  // Revoke object URLs on unmount to avoid memory leaks
+  useEffect(() => () => {
+    imgPreviews.forEach(url => URL.revokeObjectURL(url))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const send = useCallback(async (content: string) => {
     const text = content.trim()
-    if ((!text && !attachedFile) || loading) return
+    if ((!text && attachedFiles.length === 0) || loading) return
 
+    const fileNames = attachedFiles.map(f => f.name).join(", ")
     const userMsg: Message = {
       role:     "user",
-      content:  text || (attachedFile ? `[Gửi file: ${attachedFile.name}]` : ""),
-      fileName: attachedFile?.name,
+      content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
+      fileName: fileNames || undefined,
     }
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
-    const fileToSend = attachedFile
-    setAttachedFile(null)
+    const filesToSend = [...attachedFiles]
+    setAttachedFiles([])
+    setImgPreviews(new Map())
     setLoading(true)
 
     try {
       let res: Response
 
-      if (fileToSend) {
-        // Send as FormData when there's a file
+      if (filesToSend.length > 0) {
         const form = new FormData()
         form.append("messages", JSON.stringify(next.map(m => ({ role: m.role, content: m.content }))))
-        form.append("file", fileToSend)
+        filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
         res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
       } else {
         res = await fetch("/api/creator-ai/chat", {
@@ -631,7 +684,7 @@ export default function CreatorAIPage() {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [messages, loading, attachedFile])
+  }, [messages, loading, attachedFiles, addFiles, imgPreviews])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -646,12 +699,28 @@ export default function CreatorAIPage() {
   const thinkingMsg = elapsed > 0 ? ` (${elapsed}s)` : ""
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-slate-950">
+    <div
+      className="flex flex-col h-screen bg-gray-50 dark:bg-slate-950 relative"
+      onDragOver={e => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
+      onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="absolute inset-0 z-50 bg-violet-600/10 dark:bg-violet-400/10 border-4 border-dashed border-violet-400 rounded-none flex items-center justify-center pointer-events-none">
+          <div className="text-violet-600 dark:text-violet-300 text-xl font-bold flex flex-col items-center gap-2">
+            <Paperclip size={40} />
+            Thả file vào đây
+          </div>
+        </div>
+      )}
+
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
         type="file"
         accept={ACCEPT}
+        multiple
         className="hidden"
         onChange={handleFileSelect}
       />
@@ -809,15 +878,28 @@ export default function CreatorAIPage() {
       <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
         <div className="max-w-3xl mx-auto">
 
-          {/* Attached file chip */}
-          {attachedFile && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl">
-              <span className="text-violet-600 dark:text-violet-400">{fileIcon(attachedFile.name)}</span>
-              <span className="text-xs text-violet-700 dark:text-violet-300 flex-1 truncate">{attachedFile.name}</span>
-              <span className="text-[10px] text-violet-400">{(attachedFile.size / 1024).toFixed(0)} KB</span>
-              <button onClick={removeFile} className="text-violet-400 hover:text-red-500 transition-colors">
-                <X size={13} />
-              </button>
+          {/* Attached file chips */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {attachedFiles.map(f => {
+                const preview = imgPreviews.get(f.name)
+                return (
+                  <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl max-w-[220px]">
+                    {preview
+                      ? <img src={preview} alt={f.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                      : <span className="text-violet-600 dark:text-violet-400 shrink-0">{fileIcon(f.name)}</span>
+                    }
+                    <span className="text-xs text-violet-700 dark:text-violet-300 truncate flex-1">{f.name}</span>
+                    <span className="text-[10px] text-violet-400 shrink-0">{(f.size / 1024).toFixed(0)}KB</span>
+                    <button onClick={() => removeFile(f.name)} className="text-violet-300 hover:text-red-500 transition-colors shrink-0">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )
+              })}
+              {attachedFiles.length >= MAX_FILES && (
+                <span className="text-[10px] text-amber-500 self-center ml-1">Tối đa {MAX_FILES} file</span>
+              )}
             </div>
           )}
 
@@ -830,11 +912,16 @@ export default function CreatorAIPage() {
             {/* Attach file button */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
-              title="Đính kèm file (PDF, Excel, CSV, ảnh, code...)"
-              className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40"
+              disabled={loading || attachedFiles.length >= MAX_FILES}
+              title={`Đính kèm file (tối đa ${MAX_FILES}): PDF, DOCX, PPTX, Excel, CSV, ảnh, code... · Hoặc kéo thả / paste ảnh`}
+              className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
             >
               <Paperclip size={16} />
+              {attachedFiles.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {attachedFiles.length}
+                </span>
+              )}
             </button>
 
             <textarea
@@ -842,7 +929,7 @@ export default function CreatorAIPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={attachedFile ? "Hỏi gì về file này? (Enter gửi · Shift+Enter xuống dòng)" : "Hỏi về dữ liệu, code, business, web search... (Enter gửi · Shift+Enter xuống dòng)"}
+              placeholder={attachedFiles.length > 0 ? `Hỏi gì về ${attachedFiles.length} file này? (Enter gửi)` : "Hỏi về dữ liệu, code, business, web search... (Enter gửi · Shift+Enter xuống dòng · Kéo thả file)"}
               disabled={loading}
               rows={1}
               style={{ resize: "none" }}
@@ -855,7 +942,7 @@ export default function CreatorAIPage() {
             />
             <button
               onClick={() => send(input)}
-              disabled={(!input.trim() && !attachedFile) || loading}
+              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
               className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
             >
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
@@ -863,7 +950,7 @@ export default function CreatorAIPage() {
           </div>
 
           <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-            Gấu Pro · Toàn quyền truy cập · Số liệu từ database thật · Web search · Upload file (PDF/Excel/CSV/ảnh/code)
+            Gấu Pro · Full access · Upload tối đa {MAX_FILES} file (PDF/DOCX/PPTX/Excel/CSV/ảnh/code) · Kéo thả hoặc paste ảnh · Xuất PDF/Word/Excel
           </p>
         </div>
       </div>

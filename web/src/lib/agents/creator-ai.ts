@@ -15,10 +15,11 @@ import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
 export interface WebSource { title: string; url: string }
 
 export interface FileContext {
-  name:     string
-  type:     "text" | "image" | "pdf"
-  content:  string   // text content (for "text") or base64 (for "image"/"pdf")
-  mimeType?: string  // e.g. "image/png", "application/pdf"
+  name:      string
+  type:      "text" | "image" | "pdf"
+  content:   string    // text content (for "text") or base64 (for "image"/"pdf")
+  mimeType?: string    // e.g. "image/png", "application/pdf"
+  extraText?: string   // additional text from sibling files when binary + text combined
 }
 
 // ─── Tool declarations ───────────────────────────────────────────────────────
@@ -1139,15 +1140,19 @@ export async function runCreatorAI(
   const msgText = lastMsg || (fileContext ? `Phân tích file: ${fileContext.name}` : "")
   if (fileContext) {
     if (fileContext.type === "text") {
-      // Inject text content (CSV, Excel, TXT, JSON) directly into the prompt
-      const truncated = fileContext.content.length > 40000
-        ? fileContext.content.slice(0, 40000) + "\n... [truncated at 40k chars]"
-        : fileContext.content
+      // Inject text content (CSV, Excel, TXT, JSON, PPTX, DOCX) directly into the prompt
+      const raw       = fileContext.content
+      const truncated = raw.length > 50000
+        ? raw.slice(0, 50000) + `\n... [truncated — ${raw.length} chars total, showing first 50k]`
+        : raw
       userParts = [{ text: `${msgText}\n\n=== FILE ĐÍNH KÈM: ${fileContext.name} ===\n${truncated}` }]
     } else {
       // PDF or image — send as inline data (Gemini multimodal)
+      const extraSection = fileContext.extraText
+        ? `\n\n=== CÁC FILE VĂN BẢN KÈM THEO ===\n${fileContext.extraText.slice(0, 20000)}`
+        : ""
       userParts = [
-        { text: msgText },
+        { text: msgText + extraSection },
         { inlineData: { mimeType: fileContext.mimeType || "application/octet-stream", data: fileContext.content } },
       ]
     }
