@@ -10,6 +10,7 @@ import { tursoQuery } from "@/lib/turso"
 // → Dữ liệu luôn tươi (max TTL_L2 cũ), cold start không cần re-query gohub_dw.
 
 const _cache = new Map<string, { data: unknown; exp: number }>()
+const _inflight = new Map<string, Promise<unknown>>()
 const TTL_L1 = 5  * 60_000  // 5 phút in-memory
 const TTL_L2 = 10            // 10 phút trong Supabase (minutes)
 
@@ -39,26 +40,38 @@ export async function cachedQuery<T>(
     }
   } catch { /* Supabase unavailable → fall through to gohub_dw */ }
 
+  const pending = _inflight.get(key)
+  if (pending) return pending as Promise<T>
+
   // Cache miss: query gohub_dw
-  const data = await fn()
+  const pendingQuery = (async () => {
+    const data = await fn()
 
-  // Warm L1
-  _cache.set(key, { data, exp: Date.now() + TTL_L1 })
-  if (_cache.size > 200) {
-    const now = Date.now()
-    for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
-  }
+    // Warm L1
+    _cache.set(key, { data, exp: Date.now() + TTL_L1 })
+    if (_cache.size > 200) {
+      const now = Date.now()
+      for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
+    }
 
-  // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
-  // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
-  // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
+    // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
+    // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
+    // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
+    try {
+      await supabaseAdmin
+        .from("analytics_query_cache")
+        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+    } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
+
+    return data
+  })()
+
+  _inflight.set(key, pendingQuery)
   try {
-    await supabaseAdmin
-      .from("analytics_query_cache")
-      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
-  } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
-
-  return data
+    return await pendingQuery
+  } finally {
+    _inflight.delete(key)
+  }
 }
 
 // Xoá toàn bộ L2 cache (admin — gọi từ Settings)

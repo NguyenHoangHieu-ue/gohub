@@ -2,7 +2,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootConfigured, chatwootLeadsBreakdown } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
-import { adminGohubConfigured, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
+import { adminGohubConfigured, adminGohubCustomerChannelRows, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
 
@@ -305,53 +305,8 @@ async function loadRevenue(months: string[]) {
 }
 
 async function loadCustomerChannels(months: string[]) {
-  const windowStart = `${months[0]}-01`
-  const rows = await queryAnalytics<{ month: string; bucket: keyof CustomerChannelCell; type: string; revenue: string; count: string }>(
-    `WITH first_order AS (
-       SELECT f.customer_code,
-              MIN(to_char(f.fulfiled_date::date, 'YYYY-MM')) AS first_month
-       FROM fact_fulfillment_revenue f
-       JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE UPPER(s.group_name) = 'B2C'
-         AND f.customer_code IS NOT NULL
-       GROUP BY 1
-     ),
-     monthly_channel AS (
-       SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
-              f.customer_code,
-              COALESCE(f.company_code, 'NA')            AS market,
-              CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
-                   WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
-                   ELSE 'other' END                     AS ctype,
-              SUM(f.fulfilled_revenue_amount_vnd)       AS revenue
-       FROM fact_fulfillment_revenue f
-       JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1
-         AND f.customer_code IS NOT NULL
-       GROUP BY 1, 2, 3, 4
-     ),
-     typed AS (
-       SELECT m.*,
-              CASE WHEN m.month = fo.first_month THEN 'new' ELSE 'returning' END AS type
-       FROM monthly_channel m
-       JOIN first_order fo ON m.customer_code = fo.customer_code
-     )
-     SELECT month, bucket, type, SUM(revenue) AS revenue, COUNT(DISTINCT customer_code) AS count
-     FROM (
-       SELECT month, 'vnB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
-       UNION ALL
-       SELECT month, 'vnWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'VN' AND ctype = 'web'
-       UNION ALL
-       SELECT month, 'usB2c'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype IN ('web', 'app')
-       UNION ALL
-       SELECT month, 'usWeb'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'web'
-       UNION ALL
-       SELECT month, 'usApp'::text AS bucket, type, customer_code, revenue FROM typed WHERE market = 'US' AND ctype = 'app'
-     ) buckets
-     GROUP BY 1, 2, 3`,
-    [windowStart],
-  )
+  const startMonth = process.env.ADMIN_GOHUB_CUSTOMER_CHANNEL_START_MONTH || "2026-05"
+  const rows = adminGohubConfigured() ? await adminGohubCustomerChannelRows(months.filter(month => month >= startMonth)) : []
 
   const payloads: Record<string, CustomerChannelCell> = {}
   for (const month of months) payloads[month] = emptyCustomerChannelCell()

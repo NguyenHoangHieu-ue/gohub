@@ -564,8 +564,8 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     }
     return out
   }
-  const customerRevenueSplitSub = (row: CustRow) =>
-    `New ${formatCompactNumber(row.new.revenue)} · Returning ${formatCompactNumber(row.returning.revenue)}`
+  const customerSplitSub = (row: CustRow) =>
+    `${formatNumber(row.new.count)} mới · ${formatNumber(row.returning.count)} quay lại · ${formatNumber(row.total.count)} khách`
   const targetOf = (key: string): KpiTarget => ({
     vn: sumPlanningFor(key, m => data?.targets[m]?.vn ?? 0),
     us: sumPlanningFor(key, m => data?.targets[m]?.us ?? 0),
@@ -599,16 +599,18 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   }))
 
   // generic rolling-table renderer
-  const RollingTable = ({ rows, mtdCompare = false }: {
+  const RollingTable = ({ rows, mtdCompare = false, startMonth }: {
     rows: { key?: string; label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
     mtdCompare?: boolean
-  }) => (
-    <div className="overflow-x-auto">
+    startMonth?: string
+  }) => {
+    const visibleCompleted = startMonth && viewMode === "month" ? completed.filter(m => m >= startMonth) : completed
+    return <div className="overflow-x-auto">
       <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
             <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[180px]">Line</th>
-            {completed.map(m => {
+            {visibleCompleted.map(m => {
               const l = displayLabel(m)
               return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
@@ -629,9 +631,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
                   {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
-                {completed.map((m, i) => {
+                {visibleCompleted.map((m, i) => {
                   const v = row.get(m)
-                  const prev = i > 0 ? row.get(completed[i - 1]) : null
+                  const prev = i > 0 ? row.get(visibleCompleted[i - 1]) : null
                   return (
                     <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                       <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
@@ -657,7 +659,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         </tbody>
       </table>
     </div>
-  )
+  }
 
   // KPI tab — actual vs target (theo tháng × VN/US/Total). Target nhập ở Settings → b2c_kpi_targets.
   const KpiTable = () => {
@@ -1239,36 +1241,36 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   Admin API summary hiện có Total Customers/Revenue; New vs Returning cần snapshot item-level hoặc API summary breakdown riêng.
                 </div>
               )}
-              <RollingTable rows={[
+              <RollingTable startMonth="2026-05" rows={[
                 {
                   label: "VN B2C",
                   get: m => customerChannelOf(m).vnB2c.total.revenue,
-                  sub: m => customerRevenueSplitSub(customerChannelOf(m).vnB2c),
+                  sub: m => customerSplitSub(customerChannelOf(m).vnB2c),
                 },
                 {
                   key: "customer-vn-web",
                   label: "Web VN",
                   get: m => customerChannelOf(m).vnWeb.total.revenue,
-                  sub: m => customerRevenueSplitSub(customerChannelOf(m).vnWeb),
+                  sub: m => customerSplitSub(customerChannelOf(m).vnWeb),
                   breakdown: true,
                 },
                 {
                   label: "US B2C",
                   get: m => customerChannelOf(m).usB2c.total.revenue,
-                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usB2c),
+                  sub: m => customerSplitSub(customerChannelOf(m).usB2c),
                 },
                 {
                   key: "customer-us-web",
                   label: "Web",
                   get: m => customerChannelOf(m).usWeb.total.revenue,
-                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usWeb),
+                  sub: m => customerSplitSub(customerChannelOf(m).usWeb),
                   breakdown: true,
                 },
                 {
                   key: "customer-us-app",
                   label: "App",
                   get: m => customerChannelOf(m).usApp.total.revenue,
-                  sub: m => customerRevenueSplitSub(customerChannelOf(m).usApp),
+                  sub: m => customerSplitSub(customerChannelOf(m).usApp),
                   breakdown: true,
                 },
                 {

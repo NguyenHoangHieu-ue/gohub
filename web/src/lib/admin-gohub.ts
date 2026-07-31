@@ -59,6 +59,16 @@ export interface AdminCustomerRow {
   count: string
 }
 
+export type AdminCustomerChannelBucket = "vnB2c" | "vnWeb" | "usB2c" | "usWeb" | "usApp"
+
+export interface AdminCustomerChannelRow {
+  month: string
+  bucket: AdminCustomerChannelBucket
+  type: "new" | "returning"
+  revenue: string
+  count: string
+}
+
 export interface AdminCustomerMonthSnapshot {
   month: string
   rows: AdminCustomerRow[]
@@ -94,7 +104,7 @@ function summaryRevenueToVnd(buckets: Array<{ currency: string; totalRevenue: nu
   return revenueToVnd(buckets.map(bucket => ({ currency: bucket.currency, revenue: bucket.totalRevenue })))
 }
 
-async function fetchCustomerPage(month: string, page: number): Promise<CustomerRevenueResponse> {
+async function fetchCustomerPage(month: string, page: number, extraParams: Record<string, string> = {}): Promise<CustomerRevenueResponse> {
   const { dateFrom, dateTo } = monthRange(month)
   const url = new URL(`${BASE}/v1/internal/customers/revenue`)
   url.searchParams.set("page", String(page))
@@ -103,6 +113,9 @@ async function fetchCustomerPage(month: string, page: number): Promise<CustomerR
   url.searchParams.set("sortOrder", "desc")
   url.searchParams.set("dateFrom", dateFrom)
   url.searchParams.set("dateTo", dateTo)
+  for (const [key, value] of Object.entries(extraParams)) {
+    if (value) url.searchParams.set(key, value)
+  }
 
   const res = await fetch(url, {
     headers: {
@@ -117,6 +130,43 @@ async function fetchCustomerPage(month: string, page: number): Promise<CustomerR
     throw new Error(message)
   }
   return body
+}
+
+function tenantList(envKey: string, fallback: string): string[] {
+  return String(process.env[envKey] || fallback)
+    .split(",")
+    .map(v => v.trim())
+    .filter(Boolean)
+}
+
+function emptyBucketRows(month: string, bucket: AdminCustomerChannelBucket): AdminCustomerChannelRow[] {
+  return [
+    { month, bucket, type: "new", revenue: "0", count: "0" },
+    { month, bucket, type: "returning", revenue: "0", count: "0" },
+  ]
+}
+
+async function customerRowsForTenants(month: string, bucket: AdminCustomerChannelBucket, tenants: string[]): Promise<AdminCustomerChannelRow[]> {
+  if (tenants.length === 0) return emptyBucketRows(month, bucket)
+
+  const sums = {
+    new: { revenue: 0, count: 0 },
+    returning: { revenue: 0, count: 0 },
+  }
+
+  for (const tenantId of tenants) {
+    const response = await fetchCustomerPage(month, 1, { tenantId })
+    const byUserType = response.data?.summary?.byUserType
+    sums.new.revenue += summaryRevenueToVnd(byUserType?.new?.byCurrency ?? [])
+    sums.new.count += Number(byUserType?.new?.customerCount ?? 0)
+    sums.returning.revenue += summaryRevenueToVnd(byUserType?.returning?.byCurrency ?? [])
+    sums.returning.count += Number(byUserType?.returning?.customerCount ?? 0)
+  }
+
+  return [
+    { month, bucket, type: "new", revenue: String(sums.new.revenue), count: String(sums.new.count) },
+    { month, bucket, type: "returning", revenue: String(sums.returning.revenue), count: String(sums.returning.count) },
+  ]
 }
 
 function normalizeUserType(type: unknown): "new" | "returning" {
@@ -234,6 +284,47 @@ export async function adminGohubCustomerRows(months: string[]): Promise<AdminCus
       revenue: String(summaryRevenueToVnd(summary?.byCurrency ?? [])),
       count: String(Number(summary?.customerCount ?? response.pagination?.total ?? 0)),
     })
+  }
+
+  return rows
+}
+
+export async function adminGohubCustomerChannelRows(months: string[]): Promise<AdminCustomerChannelRow[]> {
+  if (!adminGohubConfigured()) return []
+
+  const tenantMap = {
+    vnWeb: tenantList("ADMIN_GOHUB_TENANT_VN_WEB", "gohub-vn"),
+    usWeb: tenantList("ADMIN_GOHUB_TENANT_US_WEB", "gohub-com"),
+    usApp: tenantList("ADMIN_GOHUB_TENANT_US_APP", "gohub-app"),
+  }
+
+  const rows: AdminCustomerChannelRow[] = []
+  for (const month of months) {
+    const vnWeb = await customerRowsForTenants(month, "vnWeb", tenantMap.vnWeb)
+    const usWeb = await customerRowsForTenants(month, "usWeb", tenantMap.usWeb)
+    const usApp = await customerRowsForTenants(month, "usApp", tenantMap.usApp)
+
+    const appendParent = (bucket: AdminCustomerChannelBucket, children: AdminCustomerChannelRow[][]) => {
+      const byType = {
+        new: { revenue: 0, count: 0 },
+        returning: { revenue: 0, count: 0 },
+      }
+      for (const childRows of children) {
+        for (const row of childRows) {
+          byType[row.type].revenue += Number(row.revenue) || 0
+          byType[row.type].count += Number(row.count) || 0
+        }
+      }
+      rows.push(
+        { month, bucket, type: "new", revenue: String(byType.new.revenue), count: String(byType.new.count) },
+        { month, bucket, type: "returning", revenue: String(byType.returning.revenue), count: String(byType.returning.count) },
+      )
+    }
+
+    appendParent("vnB2c", [vnWeb])
+    rows.push(...vnWeb)
+    appendParent("usB2c", [usWeb, usApp])
+    rows.push(...usWeb, ...usApp)
   }
 
   return rows
