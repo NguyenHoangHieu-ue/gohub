@@ -111,6 +111,9 @@ export default function OrdersPage() {
   // Data state
   const [rows,    setRows]    = useState<OrderRow[]>([])
   const [total,   setTotal]   = useState(0)
+  const [sumRevenue, setSumRevenue] = useState(0)   // tổng toàn kỳ (từ API, không phải page)
+  const [sumGp,      setSumGp]      = useState(0)
+  const [sumQty,     setSumQty]     = useState(0)
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -179,20 +182,25 @@ export default function OrdersPage() {
         qs.set("startDate", effectiveStart!)
         qs.set("endDate", effectiveEnd!)
       }
+      if (companyCode)  qs.set("companyCode", companyCode)
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
       if (orderSource)  qs.set("orderSource", orderSource)
 
       const res  = await fetch(`/api/analytics/order-report?${qs}`)
-      if (!res.ok) { setRows([]); setTotal(0); return }
+      if (!res.ok) { setRows([]); setTotal(0); setSumRevenue(0); setSumGp(0); setSumQty(0); return }
       const json = await res.json()
       setRows(Array.isArray(json.rows) ? json.rows : [])
       setTotal(typeof json.total === "number" ? json.total : 0)
+      setSumRevenue(Number(json.totalRevenue) || 0)
+      setSumGp(Number(json.totalGp) || 0)
+      setSumQty(Number(json.totalQty) || 0)
       setPage(pg)
     } catch {
       setRows([])
       setTotal(0)
+      setSumRevenue(0); setSumGp(0); setSumQty(0)
     } finally {
       setLoading(false)
     }
@@ -216,8 +224,11 @@ export default function OrdersPage() {
     )
   }, [rows, search])
 
-  const kpiRevenue = filtered.reduce((s, r) => s + (r.total_revenue || 0), 0)
-  const kpiGp      = filtered.reduce((s, r) => s + (r.gross_profit  || 0), 0)
+  // KPI = tổng TOÀN KỲ (từ API aggregate), KHÔNG phải chỉ page hiện tại.
+  // Khi đang search (client-side, chỉ lọc page hiện tại) → hiển thị tổng của rows đang hiện.
+  const isSearching = search.trim().length > 0
+  const kpiRevenue = isSearching ? filtered.reduce((s, r) => s + (r.total_revenue || 0), 0) : sumRevenue
+  const kpiGp      = isSearching ? filtered.reduce((s, r) => s + (r.gross_profit  || 0), 0) : sumGp
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   // ── Export ────────────────────────────────────────────────────────────────
@@ -428,12 +439,12 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — tổng TOÀN KỲ (từ API), không phải chỉ trang hiện tại */}
       <div className="grid grid-cols-3 gap-4 mb-5">
         {[
-          { label: "Total Orders",  value: total.toLocaleString("vi-VN"), sub: "orders" },
-          { label: "Total Revenue", value: fmtNum(kpiRevenue),             sub: "VND" },
-          { label: "Gross Profit",  value: fmtNum(kpiGp),                  sub: "VND" },
+          { label: "Total Orders",  value: (isSearching ? filtered.length : total).toLocaleString("vi-VN"),   sub: isSearching ? "trong kết quả search" : "orders (toàn kỳ)" },
+          { label: "Total Revenue", value: fmtNum(kpiRevenue),               sub: isSearching ? "trong kết quả search" : "VND (toàn kỳ)" },
+          { label: "Gross Profit",  value: fmtNum(kpiGp),                    sub: isSearching ? "trong kết quả search" : "VND (toàn kỳ)" },
         ].map(k => (
           <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{k.label}</p>

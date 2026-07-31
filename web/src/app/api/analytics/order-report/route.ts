@@ -97,17 +97,25 @@ export async function GET(req: NextRequest) {
   `
 
   const countSQL = `SELECT COUNT(*) AS total FROM (${baseSelect}) sub`
+  const aggrSQL  = `SELECT SUM(total_revenue) AS sum_revenue, SUM(gross_profit) AS sum_gp, SUM(quantity) AS sum_qty
+                    FROM (${baseSelect}) sub`
   const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC LIMIT ${limit} OFFSET ${offset}`
 
   try {
-    const [countRows, dataRows] = await Promise.all([
+    const [countRows, aggrRows, dataRows] = await Promise.all([
       isExport ? Promise.resolve([{ total: "0" }]) : queryAnalytics<{ total: string }>(countSQL, params),
+      isExport ? Promise.resolve([{ sum_revenue: "0", sum_gp: "0", sum_qty: "0" }]) : queryAnalytics(aggrSQL, params),
       queryAnalytics(dataSQL, params),
     ])
 
     const total = isExport
       ? (dataRows as any[]).length
       : parseInt((countRows as any[])[0]?.total || "0")
+
+    const aggr = (aggrRows as any[])[0] || {}
+    const totalRevenue = Number(aggr.sum_revenue) || 0
+    const totalGp      = Number(aggr.sum_gp)      || 0
+    const totalQty     = Number(aggr.sum_qty)      || 0
 
     const rows = (dataRows as any[]).map(r => ({
       order_date:      r.order_date,
@@ -128,7 +136,10 @@ export async function GET(req: NextRequest) {
       price_list_name: r.price_list_name || null,
     }))
 
-    return NextResponse.json({ rows, total, page, limit }, { headers: CACHE_HEADERS })
+    return NextResponse.json(
+      { rows, total, page, limit, totalRevenue, totalGp, totalQty },
+      { headers: CACHE_HEADERS },
+    )
   } catch (err: any) {
     console.error("[order-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
