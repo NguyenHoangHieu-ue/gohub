@@ -42,8 +42,11 @@ Totals: `COUNT(*)`, `SUM(revenueCol)`, `SUM(quantityCol)`.
 ## 3. Bộ lọc
 - **Entity** (VN/US/SG/HK, `company_code`) — pills ở đầu Row 1, badge cột Entity trong bảng.
 - **Kênh nhóm** (`s.group_name`), **kênh con**, **staff (PIC)**, **source**, **khoảng ngày** (single day / range).
-- **Filter khuyến nghị "Loại shipping fee"**: mặc định **TẮT → SHOW ALL** (không hardcode loại gì) để tổng khớp báo cáo gốc, giúp **validate số total không lệch**. Bật → param `excludeShip=1` thêm `sku != 'SHIPPINGFEE0'` → doanh thu SP thuần. Bật/tắt tự re-fetch ngay. KPI sub-label ghi rõ trạng thái ("SHOW ALL (gồm shipping)" vs "đã loại shipping fee").
-  - Lý do KHÔNG hardcode: các report khác báo full total (vd 9.00 tỷ); nếu Orders mặc định lặng lẽ loại ship → 8.98 tỷ thì gây nghi ngờ lệch. Để mặc định show-all + filter khuyến nghị giúp user tự đối chiếu.
+- **2 field Yes/No (không hardcode)**:
+  - **Include ShippingFee** (default **No**): No → param bỏ qua, thêm `sku != 'SHIPPINGFEE0'` (loại phí ship). Yes → `includeShip=1` giữ phí ship.
+  - **Include Internal Ops** (default **No**): No → thêm `UPPER(s.group_name) != 'INTERNAL-TRANSACTION'` (loại đơn chuyển nội bộ, revenue=0 chỉ có COGS). Yes → `includeInternalOps=1` giữ.
+  - **Default (cả 2 = No)** = doanh thu SP thuần. **Bật cả 2 = Yes** = khớp báo cáo gốc (validate tổng không lệch). Đổi giá trị tự re-fetch ngay. KPI sub-label ghi rõ trạng thái từng filter.
+  - Đối chiếu T6/2026: cả 2 No = 8.978 tỷ · cả 2 Yes = 9.000 tỷ (30,570 dòng, = bảng raw).
 - Loại nhiễu cố định: `staff_name != 'Auto ESIM'`.
 - Với role Sales: bỏ join `dim_location` (không xem chi nhánh).
 

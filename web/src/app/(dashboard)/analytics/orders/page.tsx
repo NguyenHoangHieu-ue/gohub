@@ -101,7 +101,8 @@ export default function OrdersPage() {
 
   // Filter state
   const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
-  const [excludeShip,  setExcludeShip]  = useState(false)       // false = show all (mặc định, khớp báo cáo gốc)
+  const [includeShip,        setIncludeShip]        = useState(false)  // No (default) = loại shipping fee
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)  // No (default) = loại internal ops
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -183,8 +184,9 @@ export default function OrdersPage() {
         qs.set("startDate", effectiveStart!)
         qs.set("endDate", effectiveEnd!)
       }
-      if (companyCode)  qs.set("companyCode", companyCode)
-      if (excludeShip)  qs.set("excludeShip", "1")
+      if (companyCode)        qs.set("companyCode", companyCode)
+      if (includeShip)        qs.set("includeShip", "1")
+      if (includeInternalOps) qs.set("includeInternalOps", "1")
       if (staffCode)    qs.set("staffCode", staffCode)
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
@@ -212,7 +214,7 @@ export default function OrdersPage() {
   useEffect(() => {
     if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, excludeShip])
+  }, [startDate, endDate, includeShip, includeInternalOps])
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -248,8 +250,9 @@ export default function OrdersPage() {
           qs.set("startDate", startDate)
           qs.set("endDate", endDate)
         }
-        if (companyCode)  qs.set("companyCode", companyCode)
-        if (excludeShip)  qs.set("excludeShip", "1")
+        if (companyCode)        qs.set("companyCode", companyCode)
+        if (includeShip)        qs.set("includeShip", "1")
+        if (includeInternalOps) qs.set("includeInternalOps", "1")
         if (staffCode)    qs.set("staffCode", staffCode)
         if (channelGroup) qs.set("channelGroup", channelGroup)
         if (channel)      qs.set("channel", channel)
@@ -405,24 +408,28 @@ export default function OrdersPage() {
 
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
 
-          {/* Filter khuyến nghị: Loại shipping fee — mặc định TẮT (show all để validate tổng) */}
+          {/* Include ShippingFee: Yes/No — default No (loại phí ship) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Filter khuyến nghị</label>
-            <button onClick={() => setExcludeShip(v => !v)}
-              title={excludeShip
-                ? "Đang LOẠI shipping fee → doanh thu SP thuần"
-                : "Đang SHOW ALL (gồm shipping) → khớp báo cáo gốc để validate tổng. Bật để loại shipping fee."}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
-                excludeShip
-                  ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
-                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95]"
-              )}>
-              <span className={cn("w-8 h-4 rounded-full relative transition-colors shrink-0", excludeShip ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")}>
-                <span className="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all" style={{ left: excludeShip ? "18px" : "2px" }} />
-              </span>
-              Loại shipping fee
-            </button>
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
+            <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeShip ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Include Internal Ops: Yes/No — default No (loại đơn nội bộ) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
+            <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeInternalOps ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                                   : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
           </div>
         </div>
 
@@ -484,7 +491,9 @@ export default function OrdersPage() {
 
       {/* KPI Cards — tổng TOÀN KỲ (từ API), không phải chỉ trang hiện tại */}
       {(() => {
-        const shipNote = excludeShip ? "đã loại shipping fee" : "SHOW ALL (gồm shipping — khớp báo cáo gốc)"
+        const shipNote = (includeShip && includeInternalOps)
+          ? "gồm ship + internal ops (khớp báo cáo gốc)"
+          : `${includeShip ? "gồm ship" : "loại ship"} · ${includeInternalOps ? "gồm internal" : "loại internal"}`
         return (
       <div className="grid grid-cols-3 gap-4 mb-5">
         {[

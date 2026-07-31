@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
   const orderSource = p.get("orderSource") || ""
   const companyCode = p.get("companyCode") || "ALL"
   const dataSource  = p.get("dataSource") || "fulfilled"
-  // Mặc định SHOW ALL (không filter) → khớp báo cáo gốc để validate tổng không lệch.
-  // excludeShip=1 → loại shipping fee (doanh thu SP thuần) — filter khuyến nghị, do user tự bật.
-  const excludeShip = p.get("excludeShip") === "1"
+  // 2 filter Yes/No — mặc định No (=loại) cho ra doanh thu SP thuần.
+  // Bật CẢ 2 = Yes → khớp báo cáo gốc (validate tổng không lệch).
+  const includeShip        = p.get("includeShip") === "1"          // No (default) → loại SHIPPINGFEE0
+  const includeInternalOps = p.get("includeInternalOps") === "1"   // No (default) → loại INTERNAL-TRANSACTION
   const isExport    = p.get("export") === "1"
   const page        = Math.max(1, parseInt(p.get("page") || "1"))
   const limit       = isExport ? 5000 : Math.min(200, parseInt(p.get("limit") || "50"))
@@ -44,8 +45,10 @@ export async function GET(req: NextRequest) {
   const params: unknown[] = [startDate, endDate]
 
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2`
-  // Mặc định KHÔNG loại gì (show all). Chỉ loại shipping fee khi user bật filter khuyến nghị.
-  if (excludeShip) where += ` AND f.sku != 'SHIPPINGFEE0'`
+  // Include ShippingFee = No (default) → loại phí ship khỏi doanh thu SP
+  if (!includeShip) where += ` AND f.sku != 'SHIPPINGFEE0'`
+  // Include Internal Ops = No (default) → loại đơn chuyển nội bộ (revenue=0, chỉ có COGS)
+  if (!includeInternalOps) where += ` AND (UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION')`
 
   if (companyCode && companyCode !== "ALL") {
     params.push(companyCode)
