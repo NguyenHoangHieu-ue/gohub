@@ -821,13 +821,16 @@ async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: strin
   }
 
   // ── 1b. JoyTel-specific: /zyfh/api/v1 + SHA1 password + JPEG captcha ─────────
+  // Endpoint: POST /zyfh/api/v1/access/login (NO Basic auth header needed)
+  // CAPTCHA: GET /zyfh/api/v1/access/kaptcha (JPEG, Content-Type: image/jpeg)
+  // Auth failure codes: 4003 (generic fail incl. wrong captcha), 4006 (expired), 4007 (wrong captcha)
   if (portal.url.includes("joytel")) {
     const apiV1 = `${baseUrl}/zyfh/api/v1`
-    // Retry up to 3 times (captcha OCR may misread, or expire)
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const captchaText = await solveImageCaptcha(`${apiV1}/access/kaptcha?rnd=${Date.now()}${attempt}`, {})
+    const pwSha1 = createHash("sha1").update(portal.password).digest("hex")
+    // Retry up to 4 times — 4003 may mean wrong captcha (system groups all auth errors)
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const captchaText = await solveImageCaptcha(`${apiV1}/access/kaptcha?rnd=${Date.now()}-${attempt}`, {})
       if (!captchaText) continue
-      const pwSha1 = createHash("sha1").update(portal.password).digest("hex")
       const r = await fetch(`${apiV1}/access/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "User-Agent": BROWSER_UA, "Origin": baseUrl, "Referer": baseUrl + "/" },
@@ -835,15 +838,14 @@ async function loginSPAPortal(portal: PortalCredential): Promise<{ token?: strin
         signal: AbortSignal.timeout(12000),
       })
       const body = await r.json().catch(() => null)
-      // Token nằm trong data.info.authc.principal.token hoặc data.token
       const token = body?.data?.info?.authc?.principal?.token || extractToken(body) || body?.data?.token
       if (body?.success && token) return { token, cookies: cookieJar }
-      // 4006 expired / 4007 wrong → retry với captcha mới
-      if (body?.code === 4006 || body?.code === 4007) continue
-      // Lỗi khác (sai mật khẩu...) → dừng
-      return { cookies: cookieJar, error: `JoyTel login: ${body?.message || JSON.stringify(body)}` }
+      // 4003/4006/4007 → retry (may be captcha OCR error, not credential error)
+      // 4020 = account locked → stop immediately
+      if (body?.code === 4020) return { cookies: cookieJar, error: `JoyTel: account locked — ${body.message}` }
+      // Other errors → retry with fresh captcha
     }
-    return { cookies: cookieJar, error: "JoyTel: CAPTCHA OCR thất bại sau 3 lần thử" }
+    return { cookies: cookieJar, error: "JoyTel login failed after 4 attempts" }
   }
 
   // ── 2. Configured login_api (Hiếu đã lấy từ DevTools) ───────────────────────

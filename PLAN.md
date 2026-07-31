@@ -30,9 +30,9 @@
 ### B1. Việc Hiếu cần làm (manual)
 
 - [x] **Chạy migration v30** — ✅ 2026-07-31 (bảng `app_usage_events` đã tồn tại)
-- [ ] **JoyTel auth_header**: F12 → đăng nhập joytelshop.com → Network tab → tìm request `/access/login` → copy header `Authorization: Basic xxx=` → nói Gấu Pro: *"Lưu portal JoyTel, auth_header=Basic xxx="*
+- [ ] **JoyTel auth_header**: đang xử lý — thử brute-force common SpringBlade clientId từ JS bundle
 - [ ] **Merge staging → main** khi sẵn sàng deploy
-- [ ] **Test Gấu Pro** thủ công (xem mục C.3)
+- [x] **Test Gấu Pro** thủ công — ✅ Hiếu đã test (2026-07-31)
 
 ### B2. Tech debt đã giải quyết
 
@@ -48,8 +48,8 @@
 
 - [x] SunSpeedy product catalog: không có endpoint riêng — lấy từ `/order/order/page` (order history chứa packageName). Gấu Pro đã biết path.
 - [x] Gấu Pro CAPTCHA solver: retry logic 3× đã implement trong code (verify trên Vercel khi dùng thực tế)
-- [ ] Product Automation Phase 1: test end-to-end *"Tìm gói eSIM Đài Loan WM chưa có, tạo template onboard"*
-- [ ] Gấu Pro Quality Test (nhóm A–E): test thủ công trên web (xem C.3)
+- [x] Product Automation Phase 1: ✅ Hiếu đã test (2026-07-31)
+- [x] Gấu Pro Quality Test (nhóm A–E): ✅ Hiếu đã test (2026-07-31)
 
 ---
 
