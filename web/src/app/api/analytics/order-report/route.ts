@@ -99,18 +99,18 @@ export async function GET(req: NextRequest) {
   const countSQL = `SELECT COUNT(*) AS total FROM (${baseSelect}) sub`
   const aggrSQL  = `SELECT SUM(total_revenue) AS sum_revenue, SUM(gross_profit) AS sum_gp, SUM(quantity) AS sum_qty
                     FROM (${baseSelect}) sub`
-  const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC LIMIT ${limit} OFFSET ${offset}`
+  // ORDER BY có tiebreaker order_code → phân trang ổn định (không trùng/sót khi export loop nhiều page)
+  const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC, f.order_code LIMIT ${limit} OFFSET ${offset}`
 
   try {
     const [countRows, aggrRows, dataRows] = await Promise.all([
-      isExport ? Promise.resolve([{ total: "0" }]) : queryAnalytics<{ total: string }>(countSQL, params),
+      // Đếm tổng đơn cho CẢ export (để client loop lấy hết) lẫn view thường
+      queryAnalytics<{ total: string }>(countSQL, params),
       isExport ? Promise.resolve([{ sum_revenue: "0", sum_gp: "0", sum_qty: "0" }]) : queryAnalytics(aggrSQL, params),
       queryAnalytics(dataSQL, params),
     ])
 
-    const total = isExport
-      ? (dataRows as any[]).length
-      : parseInt((countRows as any[])[0]?.total || "0")
+    const total = parseInt((countRows as any[])[0]?.total || "0")
 
     const aggr = (aggrRows as any[])[0] || {}
     const totalRevenue = Number(aggr.sum_revenue) || 0

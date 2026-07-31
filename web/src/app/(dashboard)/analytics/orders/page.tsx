@@ -236,23 +236,41 @@ export default function OrdersPage() {
     if (exporting) return
     setExporting(true)
     try {
-      const qs = new URLSearchParams({ dataSource, export: "1" })
-      if (dateMode === "day" && singleDate) {
-        qs.set("date", singleDate)
-      } else if (startDate && endDate) {
-        qs.set("startDate", startDate)
-        qs.set("endDate", endDate)
-      }
-      if (companyCode)  qs.set("companyCode", companyCode)
-      if (staffCode)    qs.set("staffCode", staffCode)
-      if (channelGroup) qs.set("channelGroup", channelGroup)
-      if (channel)      qs.set("channel", channel)
-      if (orderSource)  qs.set("orderSource", orderSource)
+      const EXPORT_PAGE = 5000  // khớp cap server-side/page
 
-      const res  = await fetch(`/api/analytics/order-report?${qs}`)
-      if (!res.ok) return
-      const json = await res.json()
-      if (!json.rows?.length) return
+      const buildQs = (pg: number) => {
+        const qs = new URLSearchParams({ dataSource, export: "1", page: String(pg), limit: String(EXPORT_PAGE) })
+        if (dateMode === "day" && singleDate) {
+          qs.set("date", singleDate)
+        } else if (startDate && endDate) {
+          qs.set("startDate", startDate)
+          qs.set("endDate", endDate)
+        }
+        if (companyCode)  qs.set("companyCode", companyCode)
+        if (staffCode)    qs.set("staffCode", staffCode)
+        if (channelGroup) qs.set("channelGroup", channelGroup)
+        if (channel)      qs.set("channel", channel)
+        if (orderSource)  qs.set("orderSource", orderSource)
+        return qs
+      }
+
+      // Loop lấy TẤT CẢ đơn (không chỉ 1 page): fetch page 1 → biết total → fetch tiếp cho hết
+      const first = await fetch(`/api/analytics/order-report?${buildQs(1)}`)
+      if (!first.ok) return
+      const firstJson = await first.json()
+      const allRows: OrderRow[] = Array.isArray(firstJson.rows) ? firstJson.rows : []
+      const grandTotal = Number(firstJson.total) || allRows.length
+
+      const totalPages = Math.ceil(grandTotal / EXPORT_PAGE)
+      for (let pg = 2; pg <= totalPages; pg++) {
+        const r = await fetch(`/api/analytics/order-report?${buildQs(pg)}`)
+        if (!r.ok) break
+        const j = await r.json()
+        if (Array.isArray(j.rows) && j.rows.length) allRows.push(...j.rows)
+        else break
+      }
+
+      if (!allRows.length) return
 
       const cols = [
         { label: "Date",          key: "order_date"    },
@@ -269,7 +287,7 @@ export default function OrdersPage() {
         { label: "GP (VND)",      key: "gross_profit"  },
         { label: "Tier",          key: "_tier"         },
       ]
-      const exportRows = json.rows.map((r: OrderRow) => ({
+      const exportRows = allRows.map((r: OrderRow) => ({
         ...r,
         order_date: fmtDate(r.order_date),
         _tier: classifyTier(r.price_list_name, tierKws),
