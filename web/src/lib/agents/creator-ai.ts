@@ -451,10 +451,12 @@ When Hiếu asks to onboard/create a product ("tạo sản phẩm", "lên sản 
 ## GoHub Business Context
 - **GoHub**: sells Sim/eSIM data packages for international travel
 - **Channels**: B2B (corporate/wholesale, price_list_name has tier: Strategic/VIP/Gold/Silver) + B2C (direct, price_list_name = null)
-- **Key metrics**: Revenue (VND), GP = Revenue - COGS, CM1 = GP - Operation Cost (Op Cost from analytics_channel_costs/analytics_channel_group_costs in Supabase)
+- **Key metrics**: Revenue (VND), GP = Revenue − COGS, CM1 = GP − Operation Cost, CM1% = CM1 / Revenue × 100
+- **CM1 / Op Cost** (Supabase analytics_channel_costs per-channel + analytics_channel_group_costs per-group): op cost = phí \`amount\` (VND cố định, pro-rata theo số-ngày-trong-kỳ / số-ngày-tháng) + phí \`percent\` (% trên revenue). **CỘNG HẾT tất cả phí percent (SUM, KHÔNG lấy MAX)** — chuẩn nhất quán toàn hệ thống.
 - **Vendors**: WorldMove (WM), 3HK Datapool, others
-- **3HK vendor match**: REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%' (vendor string has inconsistent spacing)
-- **Exclude system accounts**: customer name NOT ILIKE '%B2C Customer%' AND NOT ILIKE '%B2B Ops%'
+- **3HK vendor match (CHUẨN toàn hệ thống — bắt buộc)**: \`REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'\`. KHÔNG dùng \`LIKE '3HK%'\` (gồm dư 61 SKU vendor "3HK" không phải datapool → lệch số với các tab). "3HK Contribution %" = revenue SP 3HKDATAPOOL / total revenue.
+- **Exclude system/internal accounts** (khi phân tích B2B theo tier): loại KH tên IN ('B2C Customer US','B2C Customer VN','B2B Ops').
+- **Total GP ≠ B2B GP + B2C GP**: nhóm order source \`Internal-Transaction\` (kênh "Misc.") = SIM tiêu dùng nội bộ (COGS thật, revenue = 0 → GP âm, định kỳ mọi tháng). Total GP toàn hệ thống CỘNG nhóm này, nên chênh B2B+B2C đúng bằng GP nhóm Internal-Transaction. Nếu người hỏi đối chiếu Total vs B2B+B2C, giải thích khoản chênh này.
 
 ## gohub_dw PostgreSQL Schema
 
@@ -1114,6 +1116,23 @@ async function runManagePortalCredentials(args: {
 
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
+// Gọi Gemini có retry cho lỗi TẠM THỜI (429 rate-limit / 5xx / overload / network) → tăng ổn định.
+// Lỗi thật (prompt/schema) ném ngay, không retry vô ích.
+async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
+  let lastErr: any
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await model.generateContent(request)
+    } catch (e: any) {
+      lastErr = e
+      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
+      if (!transient || i === attempts - 1) throw e
+      await new Promise(r => setTimeout(r, 800 * (i + 1)))  // backoff 0.8s → 1.6s
+    }
+  }
+  throw lastErr
+}
+
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
@@ -1165,7 +1184,7 @@ export async function runCreatorAI(
     { role: "user", parts: userParts },
   ]
 
-  let genResult = await model.generateContent({ contents })
+  let genResult = await genWithRetry(model, { contents })
   const collectedSources: WebSource[] = []
 
   function appendModelContent() {
@@ -1338,7 +1357,7 @@ export async function runCreatorAI(
 
     // Send function responses as role "user" — required by gemini-3.6-flash
     contents.push({ role: "user", parts: fnParts })
-    genResult = await model.generateContent({ contents })
+    genResult = await genWithRetry(model, { contents })
     appendModelContent()
   }
 
@@ -1347,7 +1366,7 @@ export async function runCreatorAI(
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
-      genResult = await model.generateContent({ contents })
+      genResult = await genWithRetry(model, { contents })
       text = genResult.response.text()
     } catch { /* keep empty */ }
   }

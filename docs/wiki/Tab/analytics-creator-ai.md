@@ -105,13 +105,22 @@ AND   f.fulfiled_date::date <= CURRENT_DATE - 1
 -- dim_sku dùng cột "sku" (không phải sku_code)
 JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
 
--- 3HK vendor có khoảng trắng không nhất quán
-WHERE REPLACE(UPPER(TRIM(sk.vendor)),' ','') LIKE '3HK%'
+-- 3HK vendor: CHUẨN toàn hệ thống = '3HKDATAPOOL' (KHÔNG dùng LIKE '3HK%' — gồm dư 61 SKU vendor "3HK")
+WHERE REPLACE(UPPER(TRIM(sk.vendor)),' ','') = '3HKDATAPOOL'
 
--- Loại tài khoản hệ thống
-AND c.name NOT ILIKE '%B2C Customer%'
-AND c.name NOT ILIKE '%B2B Ops%'
+-- Loại tài khoản hệ thống (phân tích B2B theo tier)
+AND c.name NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')
 ```
+
+## Chuẩn nghiệp vụ trong system prompt (2026-08-02, đồng bộ audit s125/s126)
+
+- **3HK** = `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (không LIKE) → số 3HK của Gấu Pro khớp mọi tab.
+- **CM1 / Op Cost**: phí `amount` pro-rata theo ngày + phí `percent` **CỘNG HẾT (SUM, không MAX)** — nhất quán BOD/Channels/B2B/B2C/Quarterly.
+- **Total GP ≠ B2B GP + B2C GP**: nhóm order source `Internal-Transaction` (kênh "Misc.") = SIM tiêu dùng nội bộ (COGS thật, revenue 0 → GP âm). Total GP cộng nhóm này; prompt yêu cầu Gấu Pro giải thích khoản chênh khi người hỏi đối chiếu.
+
+## Ổn định (stability)
+
+- `genWithRetry` (creator-ai.ts): bọc mọi `model.generateContent` (initial + 20 vòng loop + fallback) → retry 3× backoff 0.8s/1.6s cho lỗi TẠM THỜI (429/quota/5xx/overload/timeout/network). Lỗi thật (prompt/schema) ném ngay. Trước đây 1 lỗi transient là hỏng cả request.
 
 ## Vận hành
 
@@ -129,3 +138,13 @@ AND c.name NOT ILIKE '%B2B Ops%'
 | Phân quyền | `web/src/app/api/creator-ai/chat/route.ts` → role check |
 | UI / quick prompts | `web/src/app/(dashboard)/analytics/creator/ai/page.tsx` |
 | Nav label/icon | `web/src/lib/nav.ts` → `CREATOR_GROUP` |
+
+## Tab liên quan: Usage Analytics (`/analytics/creator/usage`)
+
+Thống kê ai vào tab nào + Bé Gấu hỏi gì (chỉ creator). Nguồn: Supabase `app_usage_events` (ghi qua `/api/analytics/track`), đọc qua `/api/analytics/usage-stats`.
+
+**Fix 2026-08-02:**
+- **Định danh user** — trước dùng `session.user.email` nhưng nhiều user KHÔNG có email trong DB (auth `email: user.email || ""`) → mọi event gom vào 1 user rỗng, "Theo User"/top user hỏng. Nay `track/route.ts` + `chat/route.ts` dùng `email || username` (username luôn có).
+- **Chat event không lưu** — `logChat` trong `chat/route.ts` trước fire-and-forget (`void`); serverless không có waitUntil → insert bị cắt khi handler trả stream → 0 chat event. Nay `await logChat(...)` (thêm user_name) → tab Chatbot (phân bố agent/top câu hỏi/log) mới có dữ liệu.
+- **Export** — thêm nút Export (.xlsx) xuất toàn bộ event trong kỳ (thời gian/loại/user/role/tab/agent/câu hỏi).
+- LƯU Ý: 156 event lịch sử vẫn user rỗng (không backfill); event MỚI mới có định danh.
