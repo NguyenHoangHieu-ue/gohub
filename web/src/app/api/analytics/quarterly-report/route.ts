@@ -22,9 +22,11 @@ function computeChannelCost(
   revenue: number, startD: string, endD: string,
   sourceCode?: string,
 ): number {
-  // Consistent với gohub-report/gohub.py: amount costs được cộng dồn; percent costs chỉ lấy MAX.
-  // Dùng matchChannelCost: ưu tiên source_code (ổn định khi rename) → fallback channel name.
-  let amtCost = 0, maxPct = 0
+  // Op-cost nhất quán TOÀN hệ thống (BOD/Channels/B2B/B2C — bod-data.ts): amount cộng dồn (pro-rata theo
+  // ratio ngày), percent CỘNG HẾT tất cả loại phí % (KHÔNG lấy MAX). Trước đây lấy MAX theo gohub.py nhưng
+  // đã chốt SUM để CM1 cùng 1 kênh khớp giữa Quarterly và các tab (QUARTERLY-1, s126). Dùng matchChannelCost:
+  // ưu tiên source_code (ổn định khi rename) → fallback channel name.
+  let amtCost = 0, pctCost = 0
   const dim = getDaysInMonth(month)
   const ratio = dim > 0 ? getDaysInRange(startD, endD, month) / dim : 0
   matchChannelCost(channelCosts, channel, month, sourceCode).forEach(c => {
@@ -32,10 +34,10 @@ function computeChannelCost(
       const v = (c as any)[key]
       if (!v) return
       if (v.type === "amount") amtCost += (v.value || 0) * ratio
-      else maxPct = Math.max(maxPct, v.value || 0)
+      else pctCost += revenue * (v.value || 0) / 100
     })
   })
-  return amtCost + revenue * maxPct / 100
+  return amtCost + pctCost
 }
 
 export async function GET(req: NextRequest) {

@@ -58,6 +58,7 @@ Nhất quán với `gohub-report/gohub.py` (`save_quarter_targets` / `cm1_quarte
 
 ## 4. Công thức
 - **CM1 = Gross Profit − Channel Cost − Group Cost**.
+- **Channel Cost (op-cost)** — `computeChannelCost`: phí `amount` cộng dồn (pro-rata theo số ngày trong kỳ × `ratio`); phí `percent` **CỘNG HẾT** tất cả loại (ads/platformFee/sponsorProducts/media) trên revenue. **(2026-08-02, QUARTERLY-1) ĐÃ đổi từ `MAX(percent)` → `SUM(percent)`** để nhất quán với BOD/Channels/B2B/B2C (`bod-data.ts`) — CM1 cùng 1 kênh nay khớp giữa Quarterly và các tab. (Trước lấy MAX theo `gohub.py`; thời điểm đổi 0 tác động số vì chưa kênh nào có ≥2 phí %.)
 - **Pro-rata (PR)**: tháng hiện tại → `factor = dim / elapsed`; cột tháng hiện tại hiện cả **Actual** (số thực) và **PR** (projected, stacked).
 - **3HK%** = revenue SP vendor `3HKDATAPOOL` / total revenue.
 - **%QoQ(CM1)** (cập nhật 2026-07-24): `(CM1 monthly pro-rata quý này − CM1 thực tế quý trước) / |CM1 quý trước|`. Áp dụng thống nhất ở tất cả 3 vị trí: bảng Tổng Quý (B2B/B2C/Tổng), tier pivot, customer detail. **Monthly pro-rata** = Σ cm1 từng tháng (tháng hiện tại × `dim/elapsed`, tháng tương lai = 0) — KHÔNG dùng quarter-level factor (`qTotal/qElapsed`). CM1 quý trước = GP − channel cost − group cost (prevChannelRows + Supabase costs). Fix 2026-07-24: Tổng Quý trước dùng quarter-level (inflate QoQ đầu quý), nay đồng bộ sang monthly. Cache key API `v3 → v4`.
