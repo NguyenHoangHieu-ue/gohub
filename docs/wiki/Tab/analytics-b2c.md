@@ -43,6 +43,7 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **Op-cost percent nhân dư `* ratio` (B2C-1, 2026-08-02)**: `b2c/kpis` tính channel op-cost kiểu `percent` từng nhân thêm `ratio` (số-ngày-trong-kỳ/số-ngày-tháng) → sai khi range LẺ tháng (vd nửa tháng). percent phải áp thẳng trên revenue của kỳ (`rev` đã là doanh thu range) — bỏ `* ratio`, nhất quán `bod-data.ts`. Vô hại ở view nguyên tháng (ratio=1). amount vẫn × ratio (pro-rata đúng).
 - **Spend/leads thiếu nguồn (S67-70)**: GA4 2 property + leads ở omni riêng → thiết kế đọc đa nguồn (Chatwoot/GA4/Turso) thay vì chỉ gohub_dw.
 - **Không cache (S81)**: `b2c/{kpis,performance,trend,loss-skus}` trước gọi thẳng DB → chậm. Fix: `cachedQuery` 12h.
 - **Đổi term CM1 (S74)**: label margin đổi GP2→CM1, giữ key `gpm2`.

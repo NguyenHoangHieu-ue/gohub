@@ -112,7 +112,9 @@ export async function GET(req: NextRequest) {
             const ratio = getDaysInMonth(String(c.month)) > 0 ? getDaysInRange(rangeStart, rangeEnd, String(c.month)) / getDaysInMonth(String(c.month)) : 0
             ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
               const v = c[key]
-              if (v) add(v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100 * ratio)
+              // amount: pro-rata theo số ngày trong kỳ (× ratio). percent: áp thẳng trên revenue của kỳ (rev đã
+              // là doanh thu range) — KHÔNG × ratio (nhất quán bod-data.ts; B2C-1 s126: trước nhân dư → under-count kỳ lẻ tháng).
+              if (v) add(v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100)
             })
           })
         }
