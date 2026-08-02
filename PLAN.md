@@ -66,8 +66,8 @@
 - [x] 3HK-1: ✅ KHÔNG PHẢI BUG CODE — tab đã có smart-default `MAX(first_report_date)` (commit 6e945c6) tự trỏ tháng data mới nhất (T6). Audit đọc nhầm `getDefaultDateRange`. Verify live max=2026-06-30, T6 có 36.662 rows. (Xem T7 → Hiếu sync data phía DB.)
 
 **🟠 Trung bình:**
-- [ ] BUG-DASH-2: revenue-chart line Non-Strategic dùng `NOT ILIKE ANY` → đếm trùng Strategic. Fix: `NOT (channel_name ILIKE ANY(...))`.
-- [ ] QUARTERLY-1: op-cost dùng MAX(percent) trong khi BOD/Channels/B2B/B2C dùng SUM(percent) → CM1 lệch giữa tab. Chốt 1 phương pháp.
+- [x] BUG-DASH-2: ✅ FIX (s126) — `NOT ILIKE ANY` → `NOT (channel_name ILIKE ANY(...))`. Verify live T7: non-strat 26.680→23.068 (hết trùng 3.612 strategic).
+- [x] QUARTERLY-1: ✅ FIX (s126, Hiếu chốt SUM) — Quarterly op-cost `MAX(percent)` → `SUM(percent)` khớp toàn hệ thống. 0 tác động số hôm nay (0/293 kênh có ≥2 phí %).
 - [ ] DATA-QUALITY: group INTERNAL-TRANSACTION = 78 đơn T7, 0đ revenue, GP −14tr → nguồn chênh GP giữa các tab. Business xác minh bản chất; có loại khỏi GP toàn hệ thống?
 
 **🟡 Latent/nhẹ:** BOD-1 (group cost B2B đếm 2 lần — hiện vô hại), B2C-1 (percent `*ratio`), STAFF-1 (3HK `LIKE '3HK%'` vs `='3HKDATAPOOL'`), CUST-1 (`change` tuyệt đối vs %), BOD 2 nút Download chết, ISSUE-DASH-3/4/5.
