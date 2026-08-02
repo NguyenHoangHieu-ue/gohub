@@ -48,6 +48,7 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 
 ## 5. Gotchas
 - **B2B — Phân khúc** (trong "Performance by Channels", API `/api/analytics/b2b/tier-performance`): cột **"Unit Sold" (2026-08-02, BUG-DASH-1) ĐÃ sửa `COUNT(*)` → `SUM(fulfilled_quantity)`**. Trước đây đếm số DÒNG line-item nên units B2B thiếu ~49% (vd T7: hiện 26.677 vs thật 52.372). Phân loại tier từ `dim_customer.price_list_name`; exclude B2C Customer US/VN + B2B Ops.
+- **Line chart "Monthly Gross Revenue by Sources"** (`revenue-chart`): line **B2B Non-Strategic (2026-08-02, BUG-DASH-2) ĐÃ sửa** `channel_name NOT ILIKE ANY(...)` → `NOT (channel_name ILIKE ANY(...))`. Foot-gun cũ: `NOT ILIKE ANY` trả true khi kênh không khớp *ít nhất một* pattern → kênh Strategic bị đếm luôn vào Non-Strategic (line phồng). Verify live T7: cách cũ non-strat=26.680 (= toàn bộ B2B, trùng 3.612 strategic) → cách đúng 23.068 (3.612 + 23.068 = 26.680 total).
 - Region map: nước đích suy từ SKU + `country_codes` (Turso), KHÔNG dùng `dim_location`.
 - Toggle Fulfillment/Created + khoảng ngày áp cho tất cả khối.
 - Created mode → `marginCol = "0"` → GP/CM1 = 0 (fact_sales_revenue không có margin). Nên dùng Fulfillment khi cần CM1.

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
          SELECT
            TO_CHAR(f.date::date, 'DD/MM') as name,
            SUM(CASE WHEN s.group_name = 'B2B' AND s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[]) THEN f.revenue ELSE 0 END) as b2b_strategic,
-           SUM(CASE WHEN s.group_name = 'B2B' AND s.channel_name NOT ILIKE ANY(ARRAY[${strategicList}]::text[]) THEN f.revenue ELSE 0 END) as b2b_non_strategic,
+           SUM(CASE WHEN s.group_name = 'B2B' AND NOT (s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[])) THEN f.revenue ELSE 0 END) as b2b_non_strategic,
            SUM(CASE WHEN s.group_name = 'B2C' THEN f.revenue ELSE 0 END) as b2c,
            SUM(CASE WHEN s.group_name NOT IN ('B2B','B2C') OR s.group_name IS NULL THEN f.revenue ELSE 0 END) as other
          FROM filtered_f f
