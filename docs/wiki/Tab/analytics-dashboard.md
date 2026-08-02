@@ -47,6 +47,7 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 - API: `GET /api/analytics/quarterly-report?quarter=Q3&year=2026&dateColumn=fulfiled_date&companyCode=ALL`
 
 ## 5. Gotchas
+- **B2B — Phân khúc** (trong "Performance by Channels", API `/api/analytics/b2b/tier-performance`): cột **"Unit Sold" (2026-08-02, BUG-DASH-1) ĐÃ sửa `COUNT(*)` → `SUM(fulfilled_quantity)`**. Trước đây đếm số DÒNG line-item nên units B2B thiếu ~49% (vd T7: hiện 26.677 vs thật 52.372). Phân loại tier từ `dim_customer.price_list_name`; exclude B2C Customer US/VN + B2B Ops.
 - Region map: nước đích suy từ SKU + `country_codes` (Turso), KHÔNG dùng `dim_location`.
 - Toggle Fulfillment/Created + khoảng ngày áp cho tất cả khối.
 - Created mode → `marginCol = "0"` → GP/CM1 = 0 (fact_sales_revenue không có margin). Nên dùng Fulfillment khi cần CM1.

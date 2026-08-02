@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
           SUM(f.fulfilled_revenue_amount_vnd) AS revenue,
           SUM(f.gross_profit_vnd)             AS gp,
           COUNT(DISTINCT f.order_code)        AS orders,
-          COUNT(*)                            AS units
+          SUM(f.fulfilled_quantity)           AS units
         FROM fact_fulfillment_revenue f
         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
