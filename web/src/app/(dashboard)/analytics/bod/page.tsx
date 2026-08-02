@@ -173,6 +173,20 @@ export default function BODReport() {
     exportAOA(headers, rows, `channel_performance_${dateRange.start}_${dateRange.end}`, "Channel Perf")
   }
 
+  const exportRevenueCogsCSV = () => {
+    if (!data.length) return
+    const headers = ["Date", "Revenue", "COGS", "CM1"]
+    const rows: (string | number)[][] = data.map(r => [r.date, r.revenue, r.cogs, r.gpm2])
+    exportAOA(headers, rows, `revenue_vs_cogs_${dateRange.start}_${dateRange.end}`, "Revenue vs COGS")
+  }
+
+  const exportMarginAnalysisCSV = () => {
+    if (!data.length) return
+    const headers = ["Date", "Margin %", "CM1 %"]
+    const rows: (string | number)[][] = data.map(r => [r.date, `${(r.margin_percent || 0).toFixed(2)}%`, `${(r.gpm2_percent || 0).toFixed(2)}%`])
+    exportAOA(headers, rows, `margin_analysis_${dateRange.start}_${dateRange.end}`, "Margin Analysis")
+  }
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -503,7 +517,7 @@ export default function BODReport() {
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-3">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Revenue vs COGS</h3>
-            <button className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={exportRevenueCogsCSV} className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
@@ -600,7 +614,7 @@ export default function BODReport() {
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-3">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Margin Analysis (%)</h3>
-            <button className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={exportMarginAnalysisCSV} className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
