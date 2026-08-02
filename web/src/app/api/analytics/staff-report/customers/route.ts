@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
         COALESCE(dc.name, f.customer_code) AS customer_name,
         MAX(dc.price_list_name) AS price_list_name,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit,
         COUNT(DISTINCT f.order_code) AS order_count
       FROM ${mainTable} f
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         f.customer_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code

@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') AS staff_name,
         TRIM(f.staff_code) AS staff_code,
         SUM(f.${revCol}) AS total_revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit,
         SUM(CASE WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN f.${revCol} ELSE 0 END) AS b2b_revenue,
         SUM(CASE WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN f.${revCol} ELSE 0 END) AS b2c_revenue,
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         TRIM(f.staff_code) AS staff_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') LIKE '3HK%' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
       LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)

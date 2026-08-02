@@ -26,6 +26,7 @@ Leaderboard nhân viên theo doanh thu / số đơn / units. Dùng data model ch
 `staff_code`, `staff_name`, `total_revenue`, `total_orders`, `total_units` — sắp xếp giảm dần (leaderboard).
 
 ## 3. Gotchas
+- **3HK revenue (STAFF-1, 2026-08-02)**: định nghĩa 3HK dùng `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (chuẩn toàn hệ thống, 7.930 SKU). Trước đây dùng `LIKE '3HK%'` (7.991 SKU) → gồm dư 61 SKU vendor `3HK` (không phải datapool). Đã sửa cả 4 query (staff-report + staff-report/customers, summary + monthly). Chênh T7 = 0đ (61 SKU đó không có doanh thu T7) nhưng đảm bảo nhất quán về sau.
 - Loại nhân viên hệ thống: `staff_name != 'Auto ESIM'`; SKU nhiễu `SHIPPINGFEE0`.
 - Nhân viên không map → `TRIM(staff_code)` / "Unknown".
 - Từng có bug NaN khi staff null → đã COALESCE.
