@@ -16,9 +16,11 @@ export async function POST(req: NextRequest) {
 
     if (!event_type) return NextResponse.json({ ok: false })
 
-    const email = session.user.email ?? null
+    // Định danh: nhiều user KHÔNG có email trong DB (session.user.email = "") → dùng username làm khóa ổn định.
+    // Nếu không, mọi event gom vào 1 user rỗng → "Theo User" / top user / per-tab hỏng.
+    const email = session.user.email || (session.user as any).username || null
     const role  = session.user.role  ?? null
-    const name  = (user_name ?? session.user.name ?? null) as string | null
+    const name  = (user_name ?? session.user.name ?? (session.user as any).username ?? null) as string | null
 
     // ── Server-side dedup for page views ─────────────────────────────────────
     // Prevents counting the same user+tab multiple times within 30 min even

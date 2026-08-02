@@ -14,11 +14,15 @@ import { runMulti, NOTICE_MULTI, ensureAnswer, isFailureText, guidanceFor } from
 import type { Message, UserRole }              from "@/lib/agents/types"
 import { supabaseAdmin }                       from "@/lib/supabase"
 
-function logChat(email: string | null | undefined, role: string, agentId: string, msg: string) {
-  void supabaseAdmin.from("app_usage_events").insert({
-    event_type: "chat", user_email: email, user_role: role,
-    agent_id: agentId, user_message: msg.slice(0, 500),
-  })
+// Ghi 1 event chat cho Usage Analytics. PHẢI await: serverless không có waitUntil → fire-and-forget
+// (void) bị cắt khi handler trả stream xong → 0 chat event lưu được. Insert nhanh (~1 round-trip).
+async function logChat(identity: string | null | undefined, name: string | null, role: string, agentId: string, msg: string) {
+  try {
+    await supabaseAdmin.from("app_usage_events").insert({
+      event_type: "chat", user_email: identity || null, user_name: name || null, user_role: role,
+      agent_id: agentId, user_message: msg.slice(0, 500),
+    })
+  } catch { /* tracking không được làm vỡ chat */ }
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -71,8 +75,9 @@ export async function POST(req: NextRequest) {
       return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
     }
 
-    // Log chat event (fire-and-forget)
-    logChat(session.user.email, role, agentId, lastMsg)
+    // Log chat event — dùng username fallback (email thường rỗng) + await để insert kịp lưu trước khi stream.
+    const identity = session.user.email || (session.user as any).username || null
+    await logChat(identity, name, role, agentId, lastMsg)
 
     // Pre-execute tools, build context
     const channel = getChannelFromRole(role)

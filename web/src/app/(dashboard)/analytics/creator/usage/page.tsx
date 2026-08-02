@@ -7,7 +7,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts"
-import { Activity, MessageSquare, Users, Bot, Clock, Info } from "lucide-react"
+import { Activity, MessageSquare, Users, Bot, Clock, Info, Download } from "lucide-react"
+import { exportRawRows } from "@/lib/export-excel"
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,22 @@ export default function UsagePage() {
   // Recent chat log
   const recentChats = useMemo(() => chats.slice(0, 50), [chats])
 
+  // Export toàn bộ event trong kỳ ra .xlsx (2 sheet gộp: raw events — đủ để lọc/pivot ngoài Excel).
+  const handleExport = () => {
+    if (!events.length) return
+    const rows = events.map(e => ({
+      "Thời gian": fmt(e.created_at),
+      "Loại": e.event_type === "chat" ? "Chat" : "Xem tab",
+      "User": e.user_name || e.user_email || "?",
+      "Định danh": e.user_email || "",
+      "Role": e.user_role || "",
+      "Tab": e.tab_key ? toLabel(e.tab_key) : "",
+      "Agent": e.agent_id ? (AGENT_LABELS[e.agent_id] || e.agent_id) : "",
+      "Câu hỏi": e.user_message || "",
+    }))
+    exportRawRows(rows, `usage_${fromDate}_to_${toDate}`, "Usage Events")
+  }
+
   if (status === "loading" || !session) return null
   if (session.user.role !== "creator") return null
 
@@ -196,6 +213,10 @@ export default function UsagePage() {
               {d}d
             </button>
           ))}
+          <button onClick={handleExport} disabled={loading || events.length === 0}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#003B95] text-white rounded-lg hover:bg-[#002B70] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            <Download className="w-3.5 h-3.5" /> Export
+          </button>
         </div>
       </div>
 
