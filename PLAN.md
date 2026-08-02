@@ -76,7 +76,8 @@
 - [x] STAFF-1 ✅ 4 query staff-report `LIKE '3HK%'` → `='3HKDATAPOOL'`. Chênh T7=0.
 - [x] BOD-2 ✅ wire 2 nút Download chết (Revenue vs COGS + Margin Analysis) → export .xlsx.
 - [x] CUST-1 ✅ không phải bug — FE không render `change`. Ghi chú wiki.
-- [ ] **ISSUE-DASH-4/5 (CẦN HIẾU QUYẾT)**: DASH-4 = 2 định nghĩa "Strategic" (price_list_name ở tier-performance vs partner_tiers ở Business Groups/line chart) → chốt 1 nguồn sự thật. DASH-5 = Created mode: tier-performance + targets-summary hardcode cột fulfilled → trộn nguồn (chỉ ảnh hưởng chế độ Created).
+- [x] **ISSUE-DASH-5** ✅ FIX (s126) — tier-performance dùng `getAnalyticsSource(dateColumn)`: Created → sales table + created_date + GP=0 (hết trộn nguồn). Fulfillment không đổi. targets-summary luôn-fulfilled = cố ý (không sửa).
+- [~] **ISSUE-DASH-4** ✅ CHỐT hướng (Hiếu s126): giữ 2 lens (line chart=KÊNH partner_tiers vs bảng=KHÁCH price_list_name), ĐỔI NHÃN cho rõ → ⏳ **CHỜ anh BẢO duyệt nhãn** (UI Strict Lock) trước khi áp `analytics/page.tsx`. Đã ghi wiki + đề xuất diff.
 - [ ] **ISSUE-DASH-3 (UI, cần Bảo/Hiếu)**: nhóm "Other" (78 đơn, 0đ) bị loại khỏi bảng Business Groups → tổng đơn bảng < KPI card. Thêm dòng Other = đổi UI (Strict Lock) → chờ chỉ thị.
 
 ---

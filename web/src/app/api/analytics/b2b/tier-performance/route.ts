@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource } from "@/lib/analytics-helpers"
 
 // Phân loại tier từ price_list_name (nhất quán với quarterly-b2b-customers)
 function classifyTier(priceListName: string | null): string {
@@ -38,6 +38,10 @@ export async function GET(req: NextRequest) {
   const dateColumn = searchParams.get("dateColumn") === "created_date" ? "created_date" : "fulfiled_date"
   const companyCode = searchParams.get("companyCode") || "ALL"
 
+  // ISSUE-DASH-5: dùng getAnalyticsSource để Created mode đọc ĐÚNG nguồn (fact_sales_revenue + created_date,
+  // GP=0) thay vì trước hardcode cột fulfilled nhưng lọc theo created_date (trộn 2 nguồn). Fulfillment KHÔNG đổi.
+  const source = getAnalyticsSource(dateColumn)
+  const gpExpr = source.marginCol === "0" ? "0" : `SUM(f.${source.marginCol})`
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   const excludeList = EXCLUDED.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
   const cacheKey = `b2b_tier:${startDate}:${endDate}:${dateColumn}:${companyCode}`
@@ -55,15 +59,15 @@ export async function GET(req: NextRequest) {
         SELECT
           c.price_list_name,
           c.currency_code,
-          SUM(f.fulfilled_revenue_amount_vnd) AS revenue,
-          SUM(f.gross_profit_vnd)             AS gp,
-          COUNT(DISTINCT f.order_code)        AS orders,
-          SUM(f.fulfilled_quantity)           AS units
-        FROM fact_fulfillment_revenue f
+          SUM(f.${source.revenueCol}) AS revenue,
+          ${gpExpr}                   AS gp,
+          COUNT(DISTINCT f.order_code) AS orders,
+          SUM(f.${source.quantityCol}) AS units
+        FROM ${source.mainTable} f
         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-        WHERE f.${dateColumn}::date >= '${startDate}'
-          AND f.${dateColumn}::date <= '${endDate}'
+        WHERE f.${source.dateCol}::date >= '${startDate}'
+          AND f.${source.dateCol}::date <= '${endDate}'
           ${companyFilter}
           AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
           AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})

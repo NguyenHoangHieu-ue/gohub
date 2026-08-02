@@ -49,9 +49,15 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 ## 5. Gotchas
 - **B2B — Phân khúc** (trong "Performance by Channels", API `/api/analytics/b2b/tier-performance`): cột **"Unit Sold" (2026-08-02, BUG-DASH-1) ĐÃ sửa `COUNT(*)` → `SUM(fulfilled_quantity)`**. Trước đây đếm số DÒNG line-item nên units B2B thiếu ~49% (vd T7: hiện 26.677 vs thật 52.372). Phân loại tier từ `dim_customer.price_list_name`; exclude B2C Customer US/VN + B2B Ops.
 - **Line chart "Monthly Gross Revenue by Sources"** (`revenue-chart`): line **B2B Non-Strategic (2026-08-02, BUG-DASH-2) ĐÃ sửa** `channel_name NOT ILIKE ANY(...)` → `NOT (channel_name ILIKE ANY(...))`. Foot-gun cũ: `NOT ILIKE ANY` trả true khi kênh không khớp *ít nhất một* pattern → kênh Strategic bị đếm luôn vào Non-Strategic (line phồng). Verify live T7: cách cũ non-strat=26.680 (= toàn bộ B2B, trùng 3.612 strategic) → cách đúng 23.068 (3.612 + 23.068 = 26.680 total).
+- **⚠️ HAI định nghĩa "Strategic" khác grain (ISSUE-DASH-4, 2026-08-02)** — con số "B2B Strategic" ở 2 nơi KHÁC nhau vì cắt lát khác:
+  - **Line chart "Monthly Gross Revenue by Sources"** = theo **KÊNH BÁN** (`dim_order_source.channel_name` khớp `partner_tiers` Settings, vd Klook/Traveloka). Nghĩa: doanh thu B2B qua kênh đối tác chiến lược.
+  - **Bảng "B2B — Phân khúc"** (tier-performance) = theo **KHÁCH HÀNG** (`dim_customer.price_list_name` chứa STRATEGIC/VIP/GOLD/SILVER). Nghĩa: doanh thu từ khách ở bảng giá đó.
+  - Ví dụ: QQ Travel (bảng giá SILVER) bán qua Klook → line chart xếp **Strategic** (kênh), bảng xếp **Silver** (khách). KHÔNG phải sai số — là 2 lens khác nhau.
+  - **Chốt (Hiếu, 2026-08-02): GIỮ cả 2 lens, ĐỔI NHÃN cho rõ.** Nhãn line chart legend + Line name "B2B Strategic/Non-Strategic" → đề xuất "B2B Kênh Đối tác / B2B Kênh Khác". ⏳ **CHỜ anh Bảo duyệt** (UI Strict Lock) trước khi áp vào `analytics/page.tsx` (legend dòng ~393-394, Line name ~408-409). 0 đổi số tài chính.
 - Region map: nước đích suy từ SKU + `country_codes` (Turso), KHÔNG dùng `dim_location`.
 - Toggle Fulfillment/Created + khoảng ngày áp cho tất cả khối.
 - Created mode → `marginCol = "0"` → GP/CM1 = 0 (fact_sales_revenue không có margin). Nên dùng Fulfillment khi cần CM1.
+- **B2B — Phân khúc (tier-performance) — Created mode (ISSUE-DASH-5, 2026-08-02) ĐÃ sửa**: trước hardcode cột fulfilled nhưng lọc theo `created_date` → trộn nguồn. Nay dùng `getAnalyticsSource(dateColumn)`: Created → `fact_sales_revenue` + `created_date` + GP=0 (nhất quán strategic-performance/BOD). Fulfillment KHÔNG đổi. `targets-summary` cố ý luôn dùng fulfilled (targets = revenue-recognition, không theo toggle) — không phải bug.
 - `analytics_monthly_kpis` Supabase: bảng snapshot CM1 theo tháng, cron `refresh-monthly-kpis` chạy 00:00 UTC daily. Chatbot query bảng này để trả lời câu hỏi về CM1/revenue/3HK theo tháng cụ thể.
 
 ---
