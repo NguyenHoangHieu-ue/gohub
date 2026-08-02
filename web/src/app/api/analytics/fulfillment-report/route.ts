@@ -71,9 +71,6 @@ export async function GET(req: NextRequest) {
 
       const monthly = monthlyRows.map(r => {
         const grossOrders = parseInt(r.gross_orders || "0")
-        const cancel      = Math.round(grossOrders * 0.03)
-        const returns     = Math.round(grossOrders * 0.015)
-        const netOrders   = grossOrders - cancel - returns
 
         const categories: Record<string, {
           units: number; orders: number; revenue: number
@@ -98,13 +95,8 @@ export async function GET(req: NextRequest) {
         return {
           month: r.month,
           gross_orders: grossOrders,
-          cancel,
-          returns,
-          net_orders: netOrders,
           revenue: parseFloat(r.revenue || "0"),
           items_delivery: parseInt(r.items_delivery || "0"),
-          orders_delivery: Math.round(netOrders * 0.98),
-          orders_return: Math.round(netOrders * 0.012),
           categories,
           locations: locRows
             .filter(l => l.month === r.month)

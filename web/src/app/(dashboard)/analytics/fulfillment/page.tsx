@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line, ComposedChart,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart,
 } from "recharts"
-import { Truck, Package, Filter, Calendar, Download, AlertCircle, CheckCircle2, RotateCcw, MapPin, Tablet } from "lucide-react"
+import { Truck, Package, Filter, Calendar, Download, AlertCircle, RotateCcw, MapPin, Tablet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
@@ -28,8 +28,7 @@ function getDefaultDateRange() {
 
 interface FulfillmentData {
   monthly: {
-    month: string; gross_orders: number; cancel: number; returns: number; net_orders: number; revenue: number
-    items_delivery: number; orders_delivery: number; orders_return: number
+    month: string; gross_orders: number; revenue: number; items_delivery: number
     categories: Record<string, { units: number; orders: number; revenue: number; locations: Record<string, { units: number; orders: number; revenue: number }> }>
     locations: { name: string; orders: number; units: number; revenue: number }[]
   }[]
@@ -60,10 +59,9 @@ export default function FulfillmentReport() {
   }
 
   const totals = (data?.monthly || []).reduce((acc, curr) => ({
-    gross_orders: acc.gross_orders + curr.gross_orders, cancel: acc.cancel + curr.cancel, returns: acc.returns + curr.returns,
-    net_orders: acc.net_orders + curr.net_orders, revenue: acc.revenue + curr.revenue, items_delivery: acc.items_delivery + curr.items_delivery,
-    orders_delivery: acc.orders_delivery + curr.orders_delivery, orders_return: acc.orders_return + curr.orders_return,
-  }), { gross_orders: 0, cancel: 0, returns: 0, net_orders: 0, revenue: 0, items_delivery: 0, orders_delivery: 0, orders_return: 0 })
+    gross_orders: acc.gross_orders + curr.gross_orders, revenue: acc.revenue + curr.revenue,
+    items_delivery: acc.items_delivery + curr.items_delivery,
+  }), { gross_orders: 0, revenue: 0, items_delivery: 0 })
 
   const categoryKeys = Array.from(new Set((data?.monthly || []).flatMap(m => Object.keys(m.categories || {})))).sort()
   const allLocationNames = Array.from(new Set([
@@ -88,9 +86,8 @@ export default function FulfillmentReport() {
   const handleExportCSV = () => {
     if (!data || data.monthly.length === 0) return
     const rows = data.monthly.map(m => ({
-      "Month": m.month, "Gross Orders": m.gross_orders, "Cancel": m.cancel, "Return": m.returns,
-      "Net Orders": m.net_orders, "Revenue": m.revenue, "Items Delivery": m.items_delivery,
-      "Orders Delivery": m.orders_delivery, "Orders Return": m.orders_return,
+      "Month": m.month, "Gross Orders": m.gross_orders,
+      "Revenue": m.revenue, "Items Delivery": m.items_delivery,
     }))
     exportRawRows(rows, `fulfillment_${startDate}_to_${endDate}`, "Fulfillment")
   }
@@ -129,10 +126,9 @@ export default function FulfillmentReport() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           { label: "Gross Orders", value: totals.gross_orders, icon: Package, color: "blue" },
-          { label: "Net Orders", value: totals.net_orders, icon: CheckCircle2, color: "emerald" },
           { label: "Items Delivery", value: totals.items_delivery, icon: Truck, color: "indigo" },
           { label: "Total Revenue", value: totals.revenue, icon: RotateCcw, color: "amber", isCurrency: true },
         ].map((item, idx) => (
@@ -170,10 +166,7 @@ export default function FulfillmentReport() {
             <tbody>
               <tr className="bg-slate-100/30"><td className="px-6 py-2 font-bold text-slate-800 border-r border-slate-200" colSpan={100}>Summary (All Warehouses)</td></tr>
               {([
-                { label: "Gross Orders", key: "gross_orders" as const, indent: true },
-                { label: "Cancel", key: "cancel" as const, indent: true, color: "text-rose-500" },
-                { label: "Return", key: "returns" as const, indent: true, color: "text-amber-500" },
-                { label: "Net Orders", key: "net_orders" as const, indent: true, bold: true, borderBottom: true },
+                { label: "Gross Orders", key: "gross_orders" as const, indent: true, bold: true, borderBottom: true },
               ]).map((row, rIdx) => {
                 const lastValue = revMonths.length > 0 ? (revMonths[revMonths.length - 1][row.key] as number) : 0
                 const prevValue = revMonths.length > 1 ? (revMonths[revMonths.length - 2][row.key] as number) : 0
@@ -181,7 +174,7 @@ export default function FulfillmentReport() {
                 return (
                   <tr key={rIdx} className={cn("hover:bg-slate-50 transition-colors", row.borderBottom && "border-b-2 border-slate-200")}>
                     <td className={cn("px-6 py-2 border-r border-slate-100 font-medium text-slate-600", row.indent && "pl-10")}>{row.label}</td>
-                    {revMonths.map(m => <td key={m.month} className={cn("px-4 py-2 text-center border-r border-slate-100", row.bold ? "font-bold text-slate-900" : "text-slate-600", row.color)}>{formatNumber(m[row.key] as number)}</td>)}
+                    {revMonths.map(m => <td key={m.month} className={cn("px-4 py-2 text-center border-r border-slate-100", row.bold ? "font-bold text-slate-900" : "text-slate-600")}>{formatNumber(m[row.key] as number)}</td>)}
                     <td className={cn("px-4 py-2 text-center font-bold bg-slate-50/50", mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
                   </tr>
                 )
@@ -212,14 +205,15 @@ export default function FulfillmentReport() {
                     {revMonths.map(m => <td key={m.month} className="px-4 py-2 text-center border-r border-slate-100 text-[10px] font-bold text-slate-400">{m.month.split("-").reverse().join("_")}</td>)}
                     <td className="bg-slate-100/30"></td>
                   </tr>
-                  {([{ label: "Gross Orders", multiplier: 1.05 }, { label: "Cancel", multiplier: 0.035 }, { label: "Return", multiplier: 0.015 }, { label: "Net Orders", multiplier: 1, bold: true, borderBottom: true }]).map((row, rIdx) => {
-                    const lastVal = (revMonths.length > 0 ? (revMonths[revMonths.length - 1].categories[catKey]?.orders || 0) : 0) * row.multiplier
-                    const prevVal = (revMonths.length > 1 ? (revMonths[revMonths.length - 2].categories[catKey]?.orders || 0) : 0) * row.multiplier
+                  {([{ label: "Revenue", key: "revenue" as const, type: "currency" }, { label: "Items delivery", key: "units" as const }, { label: "Orders delivery", key: "orders" as const, bold: true, borderBottom: true }]).map((row, rIdx) => {
+                    const getVal = (m: FulfillmentData["monthly"][0]) => (m.categories[catKey]?.[row.key] || 0)
+                    const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
+                    const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
                     const mom = momPct(lastVal, prevVal)
                     return (
                       <tr key={rIdx} className={cn("hover:bg-slate-50", row.borderBottom && "border-b border-slate-200")}>
                         <td className="px-6 py-1.5 border-r border-slate-100 pl-12 text-xs text-slate-500">{row.label}</td>
-                        {revMonths.map(m => { const val = (m.categories[catKey]?.orders || 0) * row.multiplier; return <td key={m.month} className={cn("px-4 py-1.5 text-center border-r border-slate-100 text-xs", row.bold ? "font-bold text-slate-800" : "text-slate-500")}>{formatNumber(Math.round(val))}</td> })}
+                        {revMonths.map(m => { const val = getVal(m); return <td key={m.month} className={cn("px-4 py-1.5 text-center border-r border-slate-100 text-xs", row.bold ? "font-bold text-slate-800" : "text-slate-500")}>{row.type === "currency" ? formatCompactNumber(val) : formatNumber(Math.round(val))}</td> })}
                         <td className="px-4 py-1.5 text-center text-xs font-medium bg-slate-50/50">{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
                       </tr>
                     )
@@ -259,9 +253,7 @@ export default function FulfillmentReport() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-slate-900">Monthly Order Trend</h2>
             <div className="flex items-center gap-4 text-xs font-medium">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> Gross</div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-500 rounded-full"></div> Cancel</div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div> Net</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> Gross Orders</div>
             </div>
           </div>
           <div className="h-[300px]">
@@ -272,9 +264,7 @@ export default function FulfillmentReport() {
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
                   <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                  <Bar dataKey="gross_orders" name="Gross" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="cancel" name="Cancel" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Line type="monotone" dataKey="net_orders" name="Net" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981" }} />
+                  <Bar dataKey="gross_orders" name="Gross Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -306,24 +296,19 @@ export default function FulfillmentReport() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                {["Month", "Gross Orders", "Cancel", "Return", "Net Orders", "Revenue", "Items Deliv.", "Orders Deliv.", "Orders Ret."].map((h, i) => (
-                  <th key={h} className={cn("px-4 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100", i === 0 ? "px-6" : i === 5 ? "text-right" : "text-center")}>{h}</th>
+                {["Month", "Gross Orders", "Revenue", "Items Deliv."].map((h, i) => (
+                  <th key={h} className={cn("px-4 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100", i === 0 ? "px-6" : i === 2 ? "text-right" : "text-center")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? Array(3).fill(0).map((_, i) => (<tr key={i}>{Array(9).fill(0).map((_, j) => <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>)}</tr>)) : (
+              {loading ? Array(3).fill(0).map((_, i) => (<tr key={i}>{Array(4).fill(0).map((_, j) => <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>)}</tr>)) : (
                 (data?.monthly || []).map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 font-bold text-slate-800">{row.month}</td>
                     <td className="px-4 py-4 text-center font-medium text-slate-600">{formatNumber(row.gross_orders)}</td>
-                    <td className="px-4 py-4 text-center text-rose-500 font-medium">{formatNumber(row.cancel)}</td>
-                    <td className="px-4 py-4 text-center text-amber-500 font-medium">{formatNumber(row.returns)}</td>
-                    <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(row.net_orders)}</td>
                     <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(row.revenue)}</td>
                     <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.items_delivery)}</td>
-                    <td className="px-4 py-4 text-center text-emerald-600 font-medium">{formatNumber(row.orders_delivery)}</td>
-                    <td className="px-4 py-4 text-center text-slate-400">{formatNumber(row.orders_return)}</td>
                   </tr>
                 ))
               )}
@@ -333,13 +318,8 @@ export default function FulfillmentReport() {
                 <tr>
                   <td className="px-6 py-4 font-bold text-slate-900">Total</td>
                   <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.gross_orders)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-rose-600">{formatNumber(totals.cancel)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-amber-600">{formatNumber(totals.returns)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.net_orders)}</td>
                   <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.revenue)}</td>
                   <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.items_delivery)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-emerald-600">{formatNumber(totals.orders_delivery)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-400">{formatNumber(totals.orders_return)}</td>
                 </tr>
               </tfoot>
             )}
