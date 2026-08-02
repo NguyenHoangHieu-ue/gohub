@@ -4,11 +4,12 @@
 
 ---
 
-## TRẠNG THÁI HIỆN TẠI (2026-07-31)
+## TRẠNG THÁI HIỆN TẠI (2026-08-01)
 
-- **Branch**: main == staging == `4c4c007` — ✅ ĐÃ MERGE lên main (2026-07-31), Vercel auto-deploy production
+- **Branch**: main == staging == `82f040d` — production đang chạy
 - **Migrations chạy**: v30 ✅ | v30b ✅ (Hiếu đã chạy 2026-07-31)
-- Session này gồm: Usage Analytics tab · Gấu Pro upload/export nâng cấp · SunSpeedy fix · Orders (Entity filter + Include ShippingFee/Internal Ops Yes/No + KPI toàn kỳ + export all pages + dedupe dim_sku fan-out toàn hệ thống)
+- **s125 (2026-08-01)**: Audit toàn diện 15 tab analytics đối chiếu trực tiếp gohub_dw (READ-ONLY, chưa sửa code) → `docs/AUDIT_ANALYTICS.md` + `Bug.txt`. Số nền T7 KHỚP tuyệt đối; tìm 3 bug ảnh hưởng số + vài latent. Xem §B4.
+- Session trước gồm: Usage Analytics tab · Gấu Pro upload/export nâng cấp · SunSpeedy fix · Orders (Entity filter + Include ShippingFee/Internal Ops Yes/No + KPI toàn kỳ + export all pages + dedupe dim_sku fan-out toàn hệ thống)
 
 ---
 
@@ -53,6 +54,23 @@
 - [x] Gấu Pro CAPTCHA solver: retry logic 3× đã implement trong code (verify trên Vercel khi dùng thực tế)
 - [x] Product Automation Phase 1: ✅ Hiếu đã test (2026-07-31)
 - [x] Gấu Pro Quality Test (nhóm A–E): ✅ Hiếu đã test (2026-07-31)
+
+### B4. Audit Analytics s125 (2026-08-01) — bug CHỜ HIẾU DUYỆT rồi mới sửa
+
+> Chi tiết đối chiếu từng số: `docs/AUDIT_ANALYTICS.md` · danh sách bug: `Bug.txt` (2 file local, gitignored).
+> Số nền T7 KHỚP tuyệt đối across Dashboard/Channels/BOD/B2B+B2C; GP=Rev−COGS lệch 0.00; 0 fan-out.
+
+**🔴 Ảnh hưởng số ngay — ĐÃ XỬ LÝ (s126, 2026-08-02, Hiếu duyệt):**
+- [x] BUG-DASH-1: ✅ FIX — `COUNT(*)` → `SUM(f.fulfilled_quantity)` trong `b2b/tier-performance/route.ts`. Verify live T7: 26.677 → 52.372. tsc PASS.
+- [x] BUG-FULFILL-1: ✅ FIX (Hiếu chốt BỎ HẲN) — xoá cột Huỷ/Hoàn/Net/Giao/Trả (số bịa) khỏi API + FE; giữ số thật gross_orders/revenue/items_delivery. Wiki synced.
+- [x] 3HK-1: ✅ KHÔNG PHẢI BUG CODE — tab đã có smart-default `MAX(first_report_date)` (commit 6e945c6) tự trỏ tháng data mới nhất (T6). Audit đọc nhầm `getDefaultDateRange`. Verify live max=2026-06-30, T6 có 36.662 rows. (Xem T7 → Hiếu sync data phía DB.)
+
+**🟠 Trung bình:**
+- [ ] BUG-DASH-2: revenue-chart line Non-Strategic dùng `NOT ILIKE ANY` → đếm trùng Strategic. Fix: `NOT (channel_name ILIKE ANY(...))`.
+- [ ] QUARTERLY-1: op-cost dùng MAX(percent) trong khi BOD/Channels/B2B/B2C dùng SUM(percent) → CM1 lệch giữa tab. Chốt 1 phương pháp.
+- [ ] DATA-QUALITY: group INTERNAL-TRANSACTION = 78 đơn T7, 0đ revenue, GP −14tr → nguồn chênh GP giữa các tab. Business xác minh bản chất; có loại khỏi GP toàn hệ thống?
+
+**🟡 Latent/nhẹ:** BOD-1 (group cost B2B đếm 2 lần — hiện vô hại), B2C-1 (percent `*ratio`), STAFF-1 (3HK `LIKE '3HK%'` vs `='3HKDATAPOOL'`), CUST-1 (`change` tuyệt đối vs %), BOD 2 nút Download chết, ISSUE-DASH-3/4/5.
 
 ---
 
@@ -136,13 +154,14 @@
 
 Test thủ công trên web — so sánh số với baseline:
 
-**Baseline tháng 7/2026** (từ query thực):
-- Revenue: ~7.9 tỷ VND (B2B: 6.1 tỷ, B2C: 1.8 tỷ)
-- GP: ~2.8 tỷ | GP%: 36.2%
-- Đơn hàng: 28,722
-- 3HK%: 68% | 3HK Rev: ~5.4 tỷ
-- Top B2B kênh: VN-Wholesales > Momo > VN-Ecom > VN-B2B Portal > Shopeepay
-- ETL latest: 2026-07-30
+**Baseline tháng 7/2026** (verified full-month s125, 2026-07-01→31, đối chiếu gohub_dw):
+- Revenue: **8,099,914,406** VND (B2B: 6,263,171,682 · B2C: 1,836,742,724 · Other/internal 0đ)
+- GP: **2,944,819,968** | GP%: **36.36%**
+- Đơn hàng: **29,692** | Units (SUM qty): **58,830** | AOV ~272,798đ
+- 3HK%: **67.69%** | 3HK Rev: **5,482,544,099**
+- Top B2B kênh: VN-Wholesales > Momo > VN-Ecom > VN-B2B Portal > Shopeepay (chưa re-verify thứ tự ở s125)
+- ETL latest: 2026-07-31 (T7 đủ tháng)
+- ⚠️ Orders/Staff tab loại phí ship → tổng = 8,089,695,414 (−10,2tr); loại INTERNAL-TRANSACTION → 29,614 đơn.
 
 | Test | Câu hỏi | Pass nếu |
 |------|---------|---------|
@@ -188,7 +207,7 @@ BETWEEN '2026-07-01' AND LEAST('2026-07-31'::date, CURRENT_DATE - 1)
 
 - `fulfiled_date` ← chỉ 1 chữ "l" (KHÔNG phải "fulfilled")
 - `dim_sku.sku` ← KHÔNG phải `sku_code`
-- 3HK vendor: `REPLACE(UPPER(TRIM(vendor)),' ','') LIKE '3HK%'` (bắt cả '3HK DATAPOOL')
+- 3HK vendor: **chuẩn hệ thống = `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'`** (dùng ở Dashboard/BOD/monthly-kpis/Quarterly = 7,930 SKU). ⚠️ Staff-report đang dùng `LIKE '3HK%'` (7,991 SKU, dư 61) — cần thống nhất (STAFF-1).
 - `dim_customer` có 355k rows (99.7% B2C null) → JOIN B2B: `price_list_name IS NOT NULL`
 - Exclude: `f.sku != 'SHIPPINGFEE0'`
 - B2B filter: `UPPER(s.group_name) = 'B2B'` qua `dim_order_source`

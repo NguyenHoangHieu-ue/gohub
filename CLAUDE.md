@@ -28,6 +28,10 @@ Auto-loaded by Claude Code. Full details in `.ai/CLAUDE.md`, `.ai/RULES.md`, `.a
 | Phase/milestone | `WORK.md` |
 | Agent/prompt changes | `.ai/agents/AGENTS.md` |
 | Wiki tab | `docs/wiki/Tab/<tên-tab>.md` |
+| Audit / đối chiếu số analytics | `docs/AUDIT_ANALYTICS.md` (local, gitignored) |
+
+> ⚠️ **Audit s125 (2026-08-01):** Đã audit toàn diện 15 tab analytics đối chiếu gohub_dw → xem `docs/AUDIT_ANALYTICS.md` + `Bug.txt`.
+> ✅ **s126 (2026-08-02):** 3 bug CAO ĐÃ xử lý — BUG-DASH-1 (fix COUNT*→SUM qty), BUG-FULFILL-1 (Hiếu chốt bỏ cột huỷ/hoàn bịa), 3HK-1 (không phải bug: đã có smart-default). Còn bug TB/latent trong `Bug.txt` + PLAN.md §B4 chờ xử lý.
 
 ## Checklist cuối session
 
