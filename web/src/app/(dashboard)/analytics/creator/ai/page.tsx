@@ -83,16 +83,18 @@ function stripLatex(text: string): string {
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
-// Parse the ```export marker → { formats: Set, title }. Null if no marker (no buttons shown).
-function parseExportMarker(text: string): { formats: Set<string>; title: string } | null {
+// Parse the ```export marker → { formats: Set, title, sql? }. Null if no marker (no buttons shown).
+// sql (nếu có, đặt CUỐI marker) → Excel xuất FULL data từ server, không giới hạn 200 dòng.
+function parseExportMarker(text: string): { formats: Set<string>; title: string; sql?: string } | null {
   const m = text.match(/```export\s*([\s\S]*?)```/)
   if (!m) return null
   const body    = m[1]
   const fmtLine = body.match(/formats?\s*:\s*(.+)/i)?.[1] || ""
   const formats = new Set(fmtLine.split(",").map(s => s.trim().toLowerCase()).filter(Boolean))
   const title   = body.match(/title\s*:\s*(.+)/i)?.[1]?.trim() || "Báo cáo Gấu Pro"
+  const sql     = body.match(/sql\s*:\s*([\s\S]+)$/i)?.[1]?.trim() || undefined
   if (!formats.size) return null
-  return { formats, title }
+  return { formats, title, sql }
 }
 
 function extractCSVBlock(text: string) {
@@ -235,6 +237,18 @@ async function downloadPDF(contentEl: HTMLElement, title: string) {
   }
 }
 
+// Xuất Excel FULL data: server chạy lại chính câu SELECT (không giới hạn 200 dòng như ```csv của model).
+async function downloadServerExcel(sql: string, title: string) {
+  const res = await fetch("/api/creator-ai/export", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ sql, title, format: "xlsx" }),
+  })
+  if (!res.ok) { alert("Xuất Excel thất bại: " + (await res.text())); return }
+  const blob = await res.blob()
+  downloadBlob(blob, `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
 async function downloadWord(markdown: string, title: string) {
   const res = await fetch("/api/creator-ai/export", {
     method:  "POST",
@@ -249,14 +263,15 @@ async function downloadWord(markdown: string, title: string) {
 // ─── Export button bar ────────────────────────────────────────────────────────
 
 function ExportBar({ content, contentRef }: { content: string; contentRef: React.RefObject<HTMLDivElement | null> }) {
-  const [pdfLoading,  setPdfLoading]  = useState(false)
-  const [wordLoading, setWordLoading] = useState(false)
+  const [pdfLoading,   setPdfLoading]   = useState(false)
+  const [wordLoading,  setWordLoading]  = useState(false)
+  const [excelLoading, setExcelLoading] = useState(false)
 
   const marker = parseExportMarker(content)
   // NO buttons unless AI explicitly output an ```export marker (user requested export)
   if (!marker) return null
 
-  const { formats, title } = marker
+  const { formats, title, sql } = marker
   const stamp       = new Date().toISOString().slice(0, 10)
   const csvContent  = extractCSVBlock(content) || extractMarkdownTable(content)
   const jsonContent = extractJSONArray(content)
@@ -268,7 +283,7 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
     .trim()
 
   const showCSV   = formats.has("csv")   && csvContent
-  const showExcel = formats.has("excel") && csvContent
+  const showExcel = formats.has("excel") && (csvContent || sql)
   const showJSON  = formats.has("json")  && jsonContent
   const showPDF   = formats.has("pdf")
   const showWord  = formats.has("word")
@@ -287,10 +302,21 @@ function ExportBar({ content, contentRef }: { content: string; contentRef: React
       )}
       {showExcel && (
         <button
-          onClick={() => downloadCSVAsExcel(csvContent!, `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${stamp}.xlsx`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors"
+          disabled={excelLoading}
+          onClick={async () => {
+            // sql có → xuất FULL data từ server (không giới hạn 200 dòng). Nếu không, dùng ```csv preview.
+            if (sql) {
+              setExcelLoading(true)
+              try { await downloadServerExcel(sql, title) }
+              catch (e: unknown) { alert("Excel thất bại: " + String(e)) }
+              finally { setExcelLoading(false) }
+            } else {
+              downloadCSVAsExcel(csvContent!, `${title.replace(/[^a-z0-9À-ỿ]+/gi, "_")}_${stamp}.xlsx`)
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
         >
-          <FileSpreadsheet size={12} /> Excel
+          {excelLoading ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />} Excel
         </button>
       )}
       {showJSON && (

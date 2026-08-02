@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }          from "next-auth"
 import { authOptions }               from "@/lib/auth"
 import { getDbRole }                  from "@/lib/db-role"
+import { queryAnalytics }             from "@/lib/analytics-db"
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   HeadingLevel, AlignmentType, BorderStyle, WidthType, Header, Footer,
@@ -196,11 +197,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
 
-  const { markdown, title, format = "docx" } = await req.json()
+  const { markdown, title, format = "docx", sql } = await req.json()
+
+  // ── Excel export từ SQL (FULL data — không giới hạn 200 dòng như ```csv của model) ──
+  // Model chỉ thấy 200 dòng đầu; để xuất ĐỦ + đúng số, chạy lại chính câu SELECT server-side.
+  if (format === "xlsx") {
+    if (!sql || typeof sql !== "string") {
+      return NextResponse.json({ error: "sql required for xlsx export" }, { status: 400 })
+    }
+    const norm = sql.trim().toLowerCase()
+    if (!norm.startsWith("select") && !norm.startsWith("with")) {
+      return NextResponse.json({ error: "Only SELECT/WITH queries allowed" }, { status: 400 })
+    }
+    if (sql.includes(";") && sql.split(";").filter(s => s.trim()).length > 1) {
+      return NextResponse.json({ error: "Multiple statements not allowed" }, { status: 400 })
+    }
+    try {
+      const rows = await queryAnalytics<Record<string, unknown>>(sql)
+      const XLSX = await import("xlsx")
+      const ws   = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "(no data)": "" }])
+      const wb   = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Data")
+      const buf  = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer
+      const fname = `${(title || "export").replace(/[^a-z0-9À-ɏḀ-ỿ]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      return new NextResponse(new Uint8Array(buf) as unknown as BodyInit, {
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`,
+          "X-Row-Count": String(rows.length),
+        },
+      })
+    } catch (e: any) {
+      return NextResponse.json({ error: `SQL export failed: ${e.message}` }, { status: 400 })
+    }
+  }
+
   if (!markdown) return NextResponse.json({ error: "markdown required" }, { status: 400 })
 
   if (format !== "docx") {
-    return NextResponse.json({ error: "Only docx format is supported via this endpoint. PDF is generated client-side." }, { status: 400 })
+    return NextResponse.json({ error: "Only docx/xlsx formats are supported via this endpoint. PDF is generated client-side." }, { status: 400 })
   }
 
   const elements = markdownToDocx(markdown, title)

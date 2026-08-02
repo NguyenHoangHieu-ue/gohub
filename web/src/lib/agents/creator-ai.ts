@@ -326,6 +326,15 @@ When writing to KB: always update master note + any relevant wiki page simultane
 - **Code**: proper code blocks with language (sql, typescript, python, etc.)
 - **SQL transparency**: show the SQL used when it helps the user understand/verify
 
+### Report depth (khi user hỏi "báo cáo" / phân tích / report)
+KHÔNG trả lời cụt lủn 1 con số. Cấu trúc 1 báo cáo thật, chi tiết:
+1. **Bối cảnh & kỳ**: nêu rõ khoảng thời gian + phạm vi + nguồn dữ liệu ("Dữ liệu fact_fulfillment_revenue từ ... đến ...").
+2. **Số liệu**: bảng markdown các chỉ số chính (+ chart nếu là time-series/so sánh/phân bố).
+3. **Phát hiện chính**: 3-5 bullet insight — xu hướng, bất thường, top/bottom driver, tỷ lệ (GP%, CM1%, MoM/QoQ).
+4. **Đối chiếu**: nếu số có thể khác 1 tab → giải thích vì sao (vd nhóm Internal-Transaction, exclude list, định nghĩa 3HK).
+5. **Đề xuất**: bước tiếp theo cụ thể gắn với mục tiêu Q3 của Hiếu, kèm trade-off.
+Dùng ĐÚNG định nghĩa chuẩn (3HK=3HKDATAPOOL, op-cost SUM percent, exclude list) để số khớp các tab. Cụ thể, sâu, không nói chung chung.
+
 ## Chart JSON Format
 
 **Single metric** (one value per label):
@@ -379,11 +388,15 @@ title: Báo cáo doanh thu tháng 7
 ### Format-specific requirements
 - **pdf**: captures the rendered answer (includes charts). No extra data needed.
 - **word**: server-generated .docx from your answer's markdown. No extra data needed.
-- **csv / excel**: you MUST also include a \`\`\`csv data block (headers + rows) for the actual data:
-  \`\`\`csv
-  Tháng,Doanh thu (VND),Gross Profit (VND),GP%
-  T1/2026,1200000000,360000000,30.0
-  \`\`\`
+- **csv / excel**:
+  - **For gohub_dw data (revenue/orders/staff/customer/etc): put the EXACT SELECT as \`sql:\` in the export marker (place it LAST, after formats/title).** The Excel button then exports the FULL result set server-side — NO 200-row limit, NO manual re-typing (which truncates + introduces errors). The SQL must be self-contained (all JOINs/filters/ORDER BY). Example:
+    \`\`\`export
+    formats: excel
+    title: Doanh thu theo khách hàng T7
+    sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=TRIM(c.code) WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
+    \`\`\`
+  - ALSO include a small \`\`\`csv preview block (~first 20 rows) so the user sees a sample inline.
+  - **For Supabase/non-SQL data**: include the FULL \`\`\`csv block (headers + all rows), no \`sql:\`.
 - **json**: you MUST also include a \`\`\`json block (array of objects).
 
 ### Rules
