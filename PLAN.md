@@ -70,7 +70,14 @@
 - [x] QUARTERLY-1: ✅ FIX (s126, Hiếu chốt SUM) — Quarterly op-cost `MAX(percent)` → `SUM(percent)` khớp toàn hệ thống. 0 tác động số hôm nay (0/293 kênh có ≥2 phí %).
 - [ ] DATA-QUALITY: group INTERNAL-TRANSACTION = 78 đơn T7, 0đ revenue, GP −14tr → nguồn chênh GP giữa các tab. Business xác minh bản chất; có loại khỏi GP toàn hệ thống?
 
-**🟡 Latent/nhẹ:** BOD-1 (group cost B2B đếm 2 lần — hiện vô hại), B2C-1 (percent `*ratio`), STAFF-1 (3HK `LIKE '3HK%'` vs `='3HKDATAPOOL'`), CUST-1 (`change` tuyệt đối vs %), BOD 2 nút Download chết, ISSUE-DASH-3/4/5.
+**🟡 Latent/nhẹ — ĐÃ XỬ LÝ (s126, 2026-08-02):**
+- [x] BOD-1 ✅ chia group cost B2B theo revenue-share (bod-data ×2 + all-time); daily dedupe. 0 tác động số.
+- [x] B2C-1 ✅ bỏ `*ratio` cho percent op-cost (b2c/kpis). Nhất quán bod-data.
+- [x] STAFF-1 ✅ 4 query staff-report `LIKE '3HK%'` → `='3HKDATAPOOL'`. Chênh T7=0.
+- [x] BOD-2 ✅ wire 2 nút Download chết (Revenue vs COGS + Margin Analysis) → export .xlsx.
+- [x] CUST-1 ✅ không phải bug — FE không render `change`. Ghi chú wiki.
+- [ ] **ISSUE-DASH-4/5 (CẦN HIẾU QUYẾT)**: DASH-4 = 2 định nghĩa "Strategic" (price_list_name ở tier-performance vs partner_tiers ở Business Groups/line chart) → chốt 1 nguồn sự thật. DASH-5 = Created mode: tier-performance + targets-summary hardcode cột fulfilled → trộn nguồn (chỉ ảnh hưởng chế độ Created).
+- [ ] **ISSUE-DASH-3 (UI, cần Bảo/Hiếu)**: nhóm "Other" (78 đơn, 0đ) bị loại khỏi bảng Business Groups → tổng đơn bảng < KPI card. Thêm dòng Other = đổi UI (Strict Lock) → chờ chỉ thị.
 
 ---
 

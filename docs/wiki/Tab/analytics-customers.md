@@ -28,6 +28,7 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 - Thường lọc B2B (`group_name='B2B'`).
 
 ## 3. Gotchas
+- **KPI `change` (CUST-1, 2026-08-02)**: API trả `change = giá trị tuyệt đối` (currRev − prevRev), KHÁC các tab dùng % thay đổi. Đã kiểm FE: KPI card CHỈ render `label` + `value`, KHÔNG render `change`/`isPositive`/`lastPeriod` → không có lỗi hiển thị. Giữ nguyên (nếu sau này hiện `change` phải rõ là số tuyệt đối, không phải %).
 - Khách không map được → hiển thị `TRIM(customer_code)` hoặc "Unknown".
 - Created mode → margin = 0.
 
