@@ -106,6 +106,13 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
   const { channelCosts, groupCosts } = await fetchCosts(months)
 
   const groupNames = ["B2B-Strategic", "B2B-Non-Strategic", "B2C", "Other"]
+  // BOD-1: group cost theo tursoGroupName ('B2B' dùng chung cho Strategic+Non-Strategic) phải chia theo
+  // revenue-share giữa các subgroup để KHÔNG cộng ĐẦY ĐỦ 2 lần. Precompute tổng revenue mỗi tursoGroupName.
+  const groupRevenueMap: Record<string, number> = {}
+  groupNames.forEach(g => { groupRevenueMap[g] = rows.filter(r => r.group === g).reduce((s, r) => s + parseFloat(r.revenue || "0"), 0) })
+  const tursoRevenueMap: Record<string, number> = {}
+  groupNames.forEach(g => { const t = g.startsWith("B2B") ? "B2B" : g; tursoRevenueMap[t] = (tursoRevenueMap[t] || 0) + groupRevenueMap[g] })
+
   const finalData: BODGroup[] = groupNames.map(groupName => {
     const groupRows = rows.filter(r => r.group === groupName)
     const revenue = groupRows.reduce((s, r) => s + parseFloat(r.revenue || "0"), 0)
@@ -125,12 +132,14 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
         })
       })
     })
-    // group-level costs: web group_name = 'B2B' cho mọi B2B*, 'B2C' cho B2C
+    // group-level costs: web group_name = 'B2B' cho mọi B2B*, 'B2C' cho B2C.
+    // BOD-1: chia group cost theo revenue-share (B2B-Strategic vs B2B-Non-Strategic); B2C/Other share=1.
     const tursoGroupName = groupName.startsWith("B2B") ? "B2B" : groupName
+    const groupCostShare = tursoRevenueMap[tursoGroupName] > 0 ? revenue / tursoRevenueMap[tursoGroupName] : 0
     opCost += groupCosts.filter(c => c.group_name === tursoGroupName).reduce((s, c) => {
       const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
       return s + c.amount * ratio
-    }, 0)
+    }, 0) * groupCostShare
 
     const gpm2 = margin - opCost
     return {
@@ -276,8 +285,10 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
     })
 
     const dayGroups = Array.from(new Set(dayChannels.map(dc => getGroup(dc.channel, String(channelGroupMap.get(dc.channel) || "Other")))))
-    dayGroups.forEach(groupName => {
-      const tursoGroupName = groupName.startsWith("B2B") ? "B2B" : groupName
+    // BOD-1: dayOpCost là TỔNG toàn nhóm → cộng group cost mỗi tursoGroupName ĐÚNG 1 lần (dedupe). Trước lặp
+    // theo dayGroups nên B2B group cost bị cộng 2 lần khi cả B2B-Strategic + B2B-Non-Strategic cùng xuất hiện.
+    const dayTursoGroups = Array.from(new Set(dayGroups.map(g => g.startsWith("B2B") ? "B2B" : g)))
+    dayTursoGroups.forEach(tursoGroupName => {
       const totalGroupMonthCost = groupCosts.filter(c => c.group_name === tursoGroupName && c.month === month).reduce((s, c) => s + c.amount, 0)
       dayOpCost += totalGroupMonthCost / monthDays
     })

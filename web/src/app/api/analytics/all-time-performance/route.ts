@@ -107,15 +107,20 @@ export async function GET(req: NextRequest) {
           })
         })
 
-        // group costs: 1 lần/nhóm/tháng (web group_name 'B2B' cho B2B*, 'B2C', 'Other')
+        // group costs: 1 lần/nhóm/tháng (web group_name 'B2B' cho B2B*, 'B2C', 'Other').
+        // BOD-1: B2B group cost chia theo revenue-share giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng
+        // đầy đủ 2 lần). B2C/Other share=1.
         months.forEach(m => {
-          ["B2C", "B2B-Strategic", "B2B-Non-Strategic", "Other"].forEach(dg => {
-            const [yr, mo] = m.split("-")
-            const period = isQuarterly ? `${yr}-Q${Math.ceil(parseInt(mo) / 3)}` : m
+          const [yr, mo] = m.split("-")
+          const period = isQuarterly ? `${yr}-Q${Math.ceil(parseInt(mo) / 3)}` : m
+          const b2bTotalRev = (grouped.get(`${period}_B2B-Strategic`)?.revenue || 0) + (grouped.get(`${period}_B2B-Non-Strategic`)?.revenue || 0)
+          ;["B2C", "B2B-Strategic", "B2B-Non-Strategic", "Other"].forEach(dg => {
             const item = grouped.get(`${period}_${dg}`)
             if (item) {
               const costGroupName = dg === "B2C" ? "B2C" : (dg.startsWith("B2B") ? "B2B" : "Other")
-              item.op_costs += groupCosts.filter(c => c.group_name === costGroupName && c.month === m).reduce((s, c) => s + c.amount, 0)
+              const monthCost = groupCosts.filter(c => c.group_name === costGroupName && c.month === m).reduce((s, c) => s + c.amount, 0)
+              const share = dg.startsWith("B2B") ? (b2bTotalRev > 0 ? item.revenue / b2bTotalRev : 0) : 1
+              item.op_costs += monthCost * share
             }
           })
         })
