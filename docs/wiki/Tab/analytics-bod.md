@@ -45,6 +45,7 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 ## 5. Gotchas
 - **Group cost B2B (BOD-1, 2026-08-02)**: chi phí group-level `B2B` (Turso `analytics_channel_group_costs`) được **chia theo revenue-share** giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng đầy đủ vào cả 2 → tránh đếm 2 lần). Áp cho `fetchBODGroupMarginData` (revenue-share per group) và daily `fetchBODReportData` (dedupe theo tursoGroupName vì là TỔNG). Hiện Supabase chưa có B2B group cost → 0 tác động số; fix để đúng ngay khi nhập. Xem cả `all-time-performance`.
 - **Nút Download 2 chart (BOD-2, 2026-08-02)**: "Revenue vs COGS" + "Margin Analysis (%)" trước là nút chết (không onClick) → đã wire `exportRevenueCogsCSV` (Date/Revenue/COGS/CM1) + `exportMarginAnalysisCSV` (Date/Margin%/CM1%) xuất .xlsx.
+- **Total GP gồm "Internal Ops" (DATA-QUALITY, 2026-08-02)**: Total GP cộng cả nhóm `Internal-Transaction`/`Misc.` (SIM tiêu dùng nội bộ, COGS thật + revenue 0 → GP âm, vd T7 −14tr) → Total GP ≠ B2B+B2C GP. Chốt (Hiếu): GIỮ (chi phí thật), không loại. Orders tab mặc định loại (`includeInternalOps=No`).
 - Chế độ **Created** → margin/COGS = 0 (bảng sales không có) → GP/CM1/3HK-contribution chỉ có nghĩa ở **Fulfillment**.
 - 3HK match bằng `vendor ILIKE '3HKDATAPOOL'` (TRIM, ILIKE thẳng — tương đương REPLACE-space vì dữ liệu vendor 3HK).
 - Phân quyền nền: Admin, Creator, BOD, Manager.

@@ -68,7 +68,7 @@
 **🟠 Trung bình:**
 - [x] BUG-DASH-2: ✅ FIX (s126) — `NOT ILIKE ANY` → `NOT (channel_name ILIKE ANY(...))`. Verify live T7: non-strat 26.680→23.068 (hết trùng 3.612 strategic).
 - [x] QUARTERLY-1: ✅ FIX (s126, Hiếu chốt SUM) — Quarterly op-cost `MAX(percent)` → `SUM(percent)` khớp toàn hệ thống. 0 tác động số hôm nay (0/293 kênh có ≥2 phí %).
-- [ ] DATA-QUALITY: group INTERNAL-TRANSACTION = 78 đơn T7, 0đ revenue, GP −14tr → nguồn chênh GP giữa các tab. Business xác minh bản chất; có loại khỏi GP toàn hệ thống?
+- [x] DATA-QUALITY: ✅ ĐIỀU TRA + CHỐT (s126, Hiếu 2026-08-02) — Internal-Transaction/Misc. = SIM tiêu dùng nội bộ (COGS thật, revenue 0, GP âm, định kỳ mọi tháng). GIỮ trong Total GP (chi phí thật), không loại. Ghi wiki dashboard+bod giải thích chênh −14tr. Orders tab đã mặc định loại. ĐÓNG (không phải bug).
 
 **🟡 Latent/nhẹ — ĐÃ XỬ LÝ (s126, 2026-08-02):**
 - [x] BOD-1 ✅ chia group cost B2B theo revenue-share (bod-data ×2 + all-time); daily dedupe. 0 tác động số.

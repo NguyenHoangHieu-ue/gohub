@@ -58,6 +58,7 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 - Toggle Fulfillment/Created + khoảng ngày áp cho tất cả khối.
 - Created mode → `marginCol = "0"` → GP/CM1 = 0 (fact_sales_revenue không có margin). Nên dùng Fulfillment khi cần CM1.
 - **B2B — Phân khúc (tier-performance) — Created mode (ISSUE-DASH-5, 2026-08-02) ĐÃ sửa**: trước hardcode cột fulfilled nhưng lọc theo `created_date` → trộn nguồn. Nay dùng `getAnalyticsSource(dateColumn)`: Created → `fact_sales_revenue` + `created_date` + GP=0 (nhất quán strategic-performance/BOD). Fulfillment KHÔNG đổi. `targets-summary` cố ý luôn dùng fulfilled (targets = revenue-recognition, không theo toggle) — không phải bug.
+- **Total GP gồm nhóm "Internal Ops" (DATA-QUALITY, 2026-08-02)** — Total GP (vd T7 = 2.944.819.968đ) CỘNG cả nhóm `Internal-Transaction` (kênh `Misc.`): SIM/eSIM **tiêu dùng nội bộ** (khách US/VN Internal Ops, KhachLe...) có **COGS thật nhưng revenue = 0** → GP âm (T7 = −14.096.704,77đ; định kỳ mọi tháng). Vì vậy **Total GP ≠ B2B GP + B2C GP** (lệch đúng bằng GP nhóm này). ✅ CHỐT (Hiếu): GIỮ trong Total GP vì là chi phí THẬT (phản ánh lợi nhuận thực), KHÔNG loại. Tab **Orders** mặc định loại nhóm này (`includeInternalOps=No`). Không phải bug — dữ liệu đúng bản chất.
 - `analytics_monthly_kpis` Supabase: bảng snapshot CM1 theo tháng, cron `refresh-monthly-kpis` chạy 00:00 UTC daily. Chatbot query bảng này để trả lời câu hỏi về CM1/revenue/3HK theo tháng cụ thể.
 
 ---
