@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, IS_STRATEGIC_CUSTOMER_SQL, getCustomerExcludeSQL, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -19,13 +19,12 @@ export async function GET(req: NextRequest) {
   const customerTier = p.get("customerTier") || ""
   const channel      = p.get("channel")      || ""
 
-  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}`
+  // Strategic/Non theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
+  const { isStrategicSql, excludeSql: excludeList, hash } = await getCustomerStrategicSql()
+  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      // Strategic/Non theo KHÁCH (price_list_name) — nhất quán Dashboard/BOD (ISSUE-DASH-4, s131).
-      const excludeList = getCustomerExcludeSQL()
-
       let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1)`
 
       if (channelGroup) {
@@ -34,9 +33,9 @@ export async function GET(req: NextRequest) {
         if (grp === "B2B" && customerTier) {
           const tier = customerTier.toLowerCase()
           if (tier === "strategic") {
-            whereClause += ` AND ${IS_STRATEGIC_CUSTOMER_SQL} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
+            whereClause += ` AND ${isStrategicSql} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
           } else if (tier.includes("non")) {
-            whereClause += ` AND NOT ${IS_STRATEGIC_CUSTOMER_SQL} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
+            whereClause += ` AND NOT ${isStrategicSql} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
           }
         }
       }
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
            UPPER(COALESCE(s.group_name, 'Other')) as group_name,
            CASE
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excludeList}) THEN 'Excluded'
-             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${IS_STRATEGIC_CUSTOMER_SQL} THEN 'B2B-Strategic'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrategicSql} THEN 'B2B-Strategic'
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
              ELSE 'Other'

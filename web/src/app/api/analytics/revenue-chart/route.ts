@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard, IS_STRATEGIC_CUSTOMER_SQL, getCustomerExcludeSQL } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard, getCustomerStrategicSql } from "@/lib/analytics-helpers"
 
-// Phân loại B2B-Strategic theo price_list_name (KHÁCH) — dùng chung định nghĩa với bảng "Phân khúc"
-// (tier-performance), BOD & All-Time. Trước đây line chart dùng partner_tiers (KÊNH); config đó rỗng nên Strategic = 0.
+// Phân loại B2B-Strategic theo price_list_name (KHÁCH) — dùng CHUNG cấu hình quarterly-settings với Quarter Report,
+// bảng "Phân khúc" (tier-performance), BOD & All-Time. Trước đây line chart dùng partner_tiers (KÊNH) → rỗng → Strategic=0.
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -16,12 +16,13 @@ export async function GET(req: NextRequest) {
   const endDate     = searchParams.get("endDate")
   const dateColumn  = searchParams.get("dateColumn") || "fulfiled_date"
   const companyCode = searchParams.get("companyCode") || "ALL"
-  // v2: đổi định nghĩa Strategic (partner_tiers KÊNH → price_list_name KHÁCH) → bump key để không dùng cache cũ.
-  const cacheKey    = `revenue-chart2:${startDate}:${endDate}:${dateColumn}:${companyCode}`
 
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol, "30 days", companyCode)
-  const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${getCustomerExcludeSQL()})`
+  const { isStrategicSql, excludeSql, hash } = await getCustomerStrategicSql()
+  // hash = tier keywords + excluded (quarterly-settings) → cache tự tươi khi Hiếu đổi cấu hình.
+  const cacheKey = `revenue-chart2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}`
+  const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeSql})`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -32,8 +33,8 @@ export async function GET(req: NextRequest) {
          )
          SELECT
            TO_CHAR(f.date::date, 'DD/MM') as name,
-           SUM(CASE WHEN ${b2bReal} AND ${IS_STRATEGIC_CUSTOMER_SQL} THEN f.revenue ELSE 0 END) as b2b_strategic,
-           SUM(CASE WHEN ${b2bReal} AND NOT ${IS_STRATEGIC_CUSTOMER_SQL} THEN f.revenue ELSE 0 END) as b2b_non_strategic,
+           SUM(CASE WHEN ${b2bReal} AND ${isStrategicSql} THEN f.revenue ELSE 0 END) as b2b_strategic,
+           SUM(CASE WHEN ${b2bReal} AND NOT ${isStrategicSql} THEN f.revenue ELSE 0 END) as b2b_non_strategic,
            SUM(CASE WHEN s.group_name = 'B2C' THEN f.revenue ELSE 0 END) as b2c,
            SUM(CASE WHEN s.group_name NOT IN ('B2B','B2C') OR s.group_name IS NULL THEN f.revenue ELSE 0 END) as other
          FROM filtered_f f

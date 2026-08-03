@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
 // Port intel bod-summary: summary (rev/margin/gpm2 + %) lấy từ fetchBODGroupMarginData (gồm op-cost);
@@ -42,7 +42,8 @@ export async function GET(req: NextRequest) {
 
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
-    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}`
+    const stratHash = await getStrategicSettingsHash()
+    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}`
     const payload = await cachedQuery(key, async () => {
       const [groupResult, rawRows, cur3hk, targetData, prev, prevYear, prev3hk, ly3hk] = await Promise.all([
         fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters),

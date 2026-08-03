@@ -24,7 +24,7 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
 
 ## 2. Logic
 - Gom theo `period` (tháng/năm) × `derived_group`.
-- **`derived_group`** (s131, 2026-08-03): suy từ `group_name` + **KHÁCH `price_list_name`** → `B2B-Strategic` (NULL/không VIP-Gold-Silver), `B2B-Non-Strategic` (VIP/Gold/Silver), `B2C`. Exclude B2C Customer US/VN + B2B Ops. Nhất quán Dashboard/BOD/tier-performance (ISSUE-DASH-4). *Trước dùng `partner_tiers` (KÊNH) đang rỗng → Strategic=0.* Filter `customerTier` (Strategic/Non) cũng theo `price_list_name`.
+- **`derived_group`** (s131, 2026-08-03): suy từ `group_name` + **KHÁCH `price_list_name`** → `B2B-Strategic`, `B2B-Non-Strategic`, `B2C`. Đọc cấu hình chung **`quarterly-settings`** qua `getCustomerStrategicSql()` (CÙNG nguồn Quarter Report — chỉnh 1 chỗ mọi tab theo; cache key kèm hash config). Default: Strategic=NULL/không VIP-Gold-Silver; exclude B2C Customer US/VN + B2B Ops. Nhất quán Dashboard/BOD (ISSUE-DASH-4). *Trước dùng `partner_tiers` (KÊNH) đang rỗng → Strategic=0.* Filter `customerTier` cũng theo định nghĩa này.
 - Trả: `period`, `derived_group`, `channel_name`, `revenue`, `margin`, `tier`.
 
 ## 3. Gotchas

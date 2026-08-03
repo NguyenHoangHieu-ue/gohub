@@ -1,6 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getGroupCaseByCustomerSQL } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql } from "@/lib/analytics-helpers"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
 // CM1 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
@@ -86,8 +86,8 @@ export interface BODGroup {
 export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
-  // Strategic/Non phân theo KHÁCH (price_list_name) — nhất quán Dashboard/tier-performance (ISSUE-DASH-4, s131).
-  const groupCaseSQL = getGroupCaseByCustomerSQL()
+  // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
+  const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (

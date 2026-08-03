@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 
 // ── Two-level query cache ──────────────────────────────────────────────────────
 // L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
@@ -350,27 +351,54 @@ export function getGroupCaseSQL(strategicList: string): string {
   END`
 }
 
-// ── Phân loại B2B-Strategic/Non theo KHÁCH (price_list_name) — 1 định nghĩa dùng chung ────────────────────
-// Nhất quán với bảng tier-performance & Dashboard chart (ISSUE-DASH-4, s131). Dùng cho: revenue-chart, BOD
-// group-margin, All-Time (con số group-level). classifyTier==="Strategic" ⇔ price_list_name NULL hoặc KHÔNG
-// chứa VIP/GOLD/SILVER (STRATEGIC + không rõ đều → Strategic). Query PHẢI JOIN dim_order_source s + dim_customer c,
-// và có cột f.customer_code.
-export const EXCLUDED_B2B_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
-export function getCustomerExcludeSQL(): string {
-  return EXCLUDED_B2B_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+// ── Phân loại B2B-Strategic/Non theo KHÁCH (price_list_name) — 1 ĐỊNH NGHĨA DÙNG CHUNG ───────────────────
+// Nguồn: quarterly-settings (tierKeywords + excludedCustomers) — CÙNG cấu hình với Quarter Report (chỉnh 1 chỗ,
+// mọi tab theo: Dashboard chart, BOD group-margin, All-Time). Mirror makeClassifyTier: Strategic ⇔ price_list_name
+// NULL hoặc KHÔNG khớp keyword của tier NON-Strategic nào. Query PHẢI JOIN dim_order_source s + dim_customer c + có f.customer_code.
+export function buildIsStrategicSql(tierKeywords: Record<string, string[]>): string {
+  const nonStrat = Object.entries(tierKeywords)
+    .filter(([tier]) => tier !== "Strategic")
+    .flatMap(([, kws]) => kws)
+    .map(kw => kw.toUpperCase().replace(/'/g, "''"))
+  if (nonStrat.length === 0) return "(TRUE)"   // không có tier non-Strategic → mọi KH B2B đều Strategic
+  const conds = nonStrat.map(kw => `UPPER(c.price_list_name) NOT LIKE '%${kw}%'`).join(" AND ")
+  return `(c.price_list_name IS NULL OR (${conds}))`
 }
-export const IS_STRATEGIC_CUSTOMER_SQL = `(c.price_list_name IS NULL OR (UPPER(c.price_list_name) NOT LIKE '%VIP%' AND UPPER(c.price_list_name) NOT LIKE '%GOLD%' AND UPPER(c.price_list_name) NOT LIKE '%SILVER%'))`
-
-// Row bị loại (ops/B2C-in-B2B, doanh thu ~0) → 'Excluded' (caller lọc khỏi groupNames).
-export function getGroupCaseByCustomerSQL(): string {
-  const excl = getCustomerExcludeSQL()
+export function buildCustomerExcludeSql(excludedCustomers: string[]): string {
+  return excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+}
+// Row bị loại (ops/B2C-in-B2B) → 'Excluded' (caller lọc khỏi groupNames).
+export function buildGroupCaseByCustomerSql(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
+  const isStrat = buildIsStrategicSql(tierKeywords)
+  const excl = buildCustomerExcludeSql(excludedCustomers)
+  const exclLine = excl ? `WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excl}) THEN 'Excluded'` : ""
   return `CASE
-    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excl}) THEN 'Excluded'
-    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${IS_STRATEGIC_CUSTOMER_SQL} THEN 'B2B-Strategic'
+    ${exclLine}
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrat} THEN 'B2B-Strategic'
     WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
     WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
     ELSE 'Other'
   END`
+}
+
+// Fetch settings 1 lần → trả các mảnh SQL + hash (để nhét vào cache key, auto-invalidate khi đổi tier/exclude).
+export async function getCustomerStrategicSql(): Promise<{ isStrategicSql: string; excludeSql: string; groupCaseSql: string; hash: string }> {
+  const { tierKeywords, excludedCustomers } = await fetchQuarterlySettings()
+  return {
+    isStrategicSql: buildIsStrategicSql(tierKeywords),
+    excludeSql: buildCustomerExcludeSql(excludedCustomers),
+    groupCaseSql: buildGroupCaseByCustomerSql(tierKeywords, excludedCustomers),
+    hash: strategicSettingsHash(tierKeywords, excludedCustomers),
+  }
+}
+function strategicSettingsHash(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
+  const tierStr = Object.entries(tierKeywords).map(([t, k]) => `${t}=${[...k].sort().join("|")}`).sort().join(";")
+  return createHash("sha1").update(`${tierStr}::${exclHash(excludedCustomers)}`).digest("hex").slice(0, 10)
+}
+// Chỉ lấy hash (cho route chỉ cần cache key, không build SQL — vd bod-group-margin/bod-summary).
+export async function getStrategicSettingsHash(): Promise<string> {
+  const { tierKeywords, excludedCustomers } = await fetchQuarterlySettings()
+  return strategicSettingsHash(tierKeywords, excludedCustomers)
 }
 
 // Bộ lọc thực thể cho BOD (port từ gohub-intel getBODFilters): vendors / subChannels / channelGroups /

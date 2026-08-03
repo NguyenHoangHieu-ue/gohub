@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
 // Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const stratHash = await getStrategicSettingsHash()
+    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
