@@ -19,9 +19,11 @@ export function getAnalyticsPool(): pg.Pool {
       idleTimeoutMillis:  10000,
       connectionTimeoutMillis: 8000,
     })
+    // RÒ RỈ KẾT NỐI (fix s131): trước đây _pool=null ở đây → tạo pool MỚI ở lần gọi sau, nhưng pool CŨ vẫn
+    // giữ các kết nối gohub_dw đang mở → tích tụ nhiều pool "ma" → cạn slot. pg.Pool tự loại client idle lỗi,
+    // KHÔNG cần tạo lại pool. Chỉ log, GIỮ nguyên _pool.
     _pool.on("error", (err) => {
-      console.error("[analytics-db] Pool error:", err.message)
-      _pool = null
+      console.error("[analytics-db] Pool idle client error (bỏ qua, pg tự xử lý):", err.message)
     })
   }
   return _pool
