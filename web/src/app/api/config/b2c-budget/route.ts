@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 // b2c_budget = { [month "YYYY-MM"]: number } — ngân sách marketing B2C kế hoạch theo tháng (VND).
 // Dùng tính spend pace = spend / budget ở Section 5.
@@ -27,5 +28,7 @@ export async function POST(req: Request) {
     value: JSON.stringify(body ?? {}),
     category: "analytics",
   }, { onConflict: "key" })
+  // Nhất quán với b2c-kpi-targets: xoá cache để dashboard cập nhật ngay (dù b2c/monthly đọc budget tươi).
+  await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({ ok: true })
 }

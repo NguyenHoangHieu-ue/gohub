@@ -13,12 +13,11 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
-import { CostManagementModal } from "./cost-management-modal"
-import { useDbRole } from "@/lib/use-role-guard"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
-// + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs. Bỏ motion/react (dùng div thường),
-// bỏ animate-in dropdown (như các port khác). Inline getDefaultDateRange/formatDateToISO. CostManagementModal đã port.
+// + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs (CHỈ đọc để hiển thị CM1).
+// Nhập cost B2C nay ở tab "Manage Costs" (/analytics/targets). Bỏ motion/react (dùng div thường),
+// bỏ animate-in dropdown (như các port khác). Inline getDefaultDateRange/formatDateToISO.
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -182,9 +181,7 @@ export function B2CPerformance() {
     direction: "desc",
   })
 
-  // Cost Management State
-  const [showCostModal, setShowCostModal] = useState(false)
-  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
+  // Cost data — CHỈ đọc để tính/hiển thị CM1 trong bảng (nhập cost ở tab Manage Costs).
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<any[]>([])
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
