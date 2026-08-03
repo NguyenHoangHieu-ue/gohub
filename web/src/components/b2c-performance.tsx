@@ -53,6 +53,8 @@ interface TrendData {
 interface PerformanceData {
   name: string
   revenue: number
+  revenueVn?: number   // groupBy=customer: doanh thu thị trường VN
+  revenueUs?: number   // groupBy=customer: doanh thu thị trường US
   projected_revenue?: number
   margin: number
   projected_margin?: number
@@ -260,7 +262,9 @@ export function B2CPerformance() {
     }
   }
 
-  const fetchData = async (fresh = false) => {
+  // fresh mặc định = true: B2C Performance LUÔN lấy số tươi (nocache) để chi phí vừa nhập ở tab Manage Costs
+  // phản ánh ngay (Hiếu yêu cầu clear cache mỗi lần). Cost POST cũng đã flush cache server.
+  const fetchData = async (fresh = true) => {
     setLoading(true)
     setError(null)
     try {
@@ -268,7 +272,6 @@ export function B2CPerformance() {
       if (startDate) queryParams.append("startDate", startDate)
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
-      // fresh=true (sau khi lưu Cost/Target) → bỏ qua cache server, lấy số tươi ngay.
       if (fresh) queryParams.append("nocache", "1")
 
       // Add advanced filters
@@ -373,6 +376,8 @@ export function B2CPerformance() {
   const totals = React.useMemo(() => {
     const sum = performanceData.reduce((acc, curr) => {
       acc.revenue += curr.revenue
+      acc.revenueVn += curr.revenueVn || 0
+      acc.revenueUs += curr.revenueUs || 0
       acc.projected_revenue += curr.projected_revenue || curr.revenue
       acc.prev_revenue += curr.prev_revenue || 0
       acc.units += curr.units
@@ -381,7 +386,7 @@ export function B2CPerformance() {
       acc.gpm2 += curr.gpm2 || 0
       acc.projected_gpm2 += curr.projected_gpm2 || curr.gpm2 || 0
       return acc
-    }, { revenue: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
+    }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
     const totalGroupCosts = groupCosts.reduce((acc, gc) => acc + (gc.amount || 0), 0)
     // Since group costs might not have projection equivalent implemented locally, we just subtract them from both.
@@ -1065,10 +1070,16 @@ export function B2CPerformance() {
                     onClick={() => handleSort("revenue")}
                   >
                     <div className="flex items-center justify-end">
-                      Revenue
+                      {groupBy === "customer" ? "Revenue (All)" : "Revenue"}
                       <SortIcon column="revenue" />
                     </div>
                   </th>
+                  {groupBy === "customer" && (
+                    <>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">VN</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">US</th>
+                    </>
+                  )}
                   <th
                     className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors"
                     onClick={() => handleSort("units")}
@@ -1161,6 +1172,12 @@ export function B2CPerformance() {
                             </div>
                           )}
                         </td>
+                        {groupBy === "customer" && (
+                          <>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{formatCurrency(item.revenueVn || 0)}</td>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{formatCurrency(item.revenueUs || 0)}</td>
+                          </>
+                        )}
                         <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{item.units.toLocaleString()}</td>
                         <td className="px-6 py-4 text-right">
                           <div className={cn(
@@ -1292,6 +1309,12 @@ export function B2CPerformance() {
                           </div>
                         )}
                       </td>
+                      {groupBy === "customer" && (
+                        <>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{formatCurrency(totals.revenueVn)}</td>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{formatCurrency(totals.revenueUs)}</td>
+                        </>
+                      )}
                       <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{totals.units.toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
                         <div className={cn(
@@ -1384,7 +1407,7 @@ export function B2CPerformance() {
 
                 {sortedPerformanceData.length === 0 && (
                   <tr>
-                    <td colSpan={groupBy === "channel" ? 6 : 5} className="px-6 py-12 text-center text-slate-400 italic">
+                    <td colSpan={groupBy === "channel" ? 6 : groupBy === "customer" ? 7 : 5} className="px-6 py-12 text-center text-slate-400 italic">
                       No performance data found for this period.
                     </td>
                   </tr>

@@ -46,6 +46,11 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     joinClause = "LEFT JOIN dim_customer c ON TRIM(data.customer_code) = TRIM(c.code)"
   }
 
+  // groupBy=customer: tách thêm thị trường (All/US/VN) theo company_code.
+  const withMarket = groupBy === "customer"
+  const marketSelect = withMarket ? ", COALESCE(data.company_code, 'NA') as market" : ""
+  const groupByCols  = withMarket ? "1, 2, 3" : "1, 2"
+
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH b2c_data AS (
        SELECT f.*, TRIM(s.channel_name) as channel_name
@@ -53,23 +58,28 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${advancedFilter}
      )
-     SELECT ${selectClause},
+     SELECT ${selectClause}${marketSelect},
        TO_CHAR(data.${source.dateCol}::DATE, 'YYYY-MM') as month,
        SUM(data.${source.revenueCol}) as revenue,
        SUM(data.${source.marginCol}) as margin,
        SUM(data.${source.quantityCol}) as units
      FROM b2c_data data ${joinClause}
-     GROUP BY 1, 2`
+     GROUP BY ${groupByCols}`
   )
 
   const aggregated = new Map<string, any>()
   rows.forEach(r => {
     const key = r.name
-    if (!aggregated.has(key)) aggregated.set(key, { name: key, revenue: 0, margin: 0, units: 0, monthly_data: [] })
+    if (!aggregated.has(key)) aggregated.set(key, { name: key, revenue: 0, margin: 0, units: 0, revenueVn: 0, revenueUs: 0, monthly_data: [] })
     const item = aggregated.get(key)
-    item.revenue += parseFloat(r.revenue || "0")
+    const rev = parseFloat(r.revenue || "0")
+    item.revenue += rev
     item.margin += parseFloat(r.margin || "0")
     item.units += parseFloat(r.units || "0")
+    if (withMarket) {
+      if (r.market === "VN") item.revenueVn += rev
+      else if (r.market === "US") item.revenueUs += rev
+    }
     item.monthly_data.push(r)
   })
 
@@ -139,6 +149,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
       name: r.name, revenue, projected_revenue, margin, projected_margin, units: r.units,
       margin_percent: revenue > 0 ? (margin / revenue) * 100 : 0,
       gpm2, projected_gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
+      ...(withMarket ? { revenueVn: r.revenueVn || 0, revenueUs: r.revenueUs || 0 } : {}),
     }
   })
 }

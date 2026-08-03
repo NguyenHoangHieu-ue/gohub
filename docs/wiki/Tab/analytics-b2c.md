@@ -107,6 +107,8 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - **CAC / khách**: `Spend ÷ Khách mới`. KPI card và Acquisition table dùng cùng công thức total spend / total new customer.
 - **Tỷ lệ chốt**: `Customer ÷ Leads`.
 - **KPI cards hiện tại**: `Users`, `ROAS`, `Customers`, `CAC`, `Leads`, `CPL`; đã bỏ card Budget.
+- **(s131) Cost fresh**: chi phí nhập ở tab **Manage Costs** (`/analytics/targets` → nút "Chi phí B2C") → lưu vào `analytics_channel_costs`/`analytics_channel_group_costs` (POST đã flush cache). B2C Performance nay LUÔN fetch `nocache=1` (fetchData default fresh=true) → phản ánh ngay. Advanced đã luôn nocache.
+- **(s131) Customers × thị trường**: bảng Performance groupBy=customer thêm cột **VN + US** (Revenue = All). API `b2c/performance` khi groupBy=customer group thêm `company_code` → `revenueVn`/`revenueUs` mỗi KH (All = tổng, gồm cả company_code khác VN/US như NA/TN).
 
 ### Env vars cần set cho deploy
 - `ADMIN_GOHUB_API_BASE_URL`
