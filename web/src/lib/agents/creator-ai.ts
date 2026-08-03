@@ -589,7 +589,7 @@ async function runQuerySupabase(args: any): Promise<any> {
 
 // ─── Web search via Gemini Google Search grounding ────────────────────────────
 
-async function runWebSearch(query: string): Promise<{ result: string; sources: WebSource[] }> {
+export async function runWebSearch(query: string): Promise<{ result: string; sources: WebSource[] }> {
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     // Separate model instance with googleSearch — CANNOT combine with functionDeclarations
@@ -626,7 +626,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   notes:          "Ghi Chú Khác",
 }
 
-async function runReadKnowledgeBase(category?: string): Promise<any> {
+export async function runReadKnowledgeBase(category?: string): Promise<any> {
   try {
     let q = supabaseAdmin.from("creator_kb").select("key,category,title,content,updated_at")
       .neq("category", "_system")

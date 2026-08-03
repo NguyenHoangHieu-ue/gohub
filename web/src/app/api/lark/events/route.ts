@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse }  from "next/server"
 import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
-import { getRefCache }               from "@/lib/agents/cache"
-import { AGENTS }                    from "@/lib/agents/agents"
-import { route }                     from "@/lib/agents/router"
-import { GoogleGenerativeAI }        from "@google/generative-ai"
-import { buildToolContext }          from "@/lib/agents/context"
-import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
-import { runDataExplorer }           from "@/lib/agents/data-explorer"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
-import { runMulti, NOTICE_MULTI, ensureAnswer } from "@/lib/agents/orchestrator"
+import { runBeGau }                  from "@/lib/agents/be-gau"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
@@ -320,17 +313,12 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const history = await getLarkHistory(openId, threadId)
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
-    // Route + refCache + guardian + isCost in parallel
-    const [refCache, routed, guard, isCost] = await Promise.all([
-      getRefCache(),
-      route(userText, history, role),
-      // Lark group: KHÔNG phân biệt được role → chặn nội bộ hệ thống + PII khách hàng cho mọi người.
-      // (system_internal: code/prompt/schema; customer_pii: tên/SĐT/email khách cụ thể)
+    // Guardian (Lark group: KHÔNG phân biệt role → chặn nội bộ hệ thống + PII khách hàng cho mọi người)
+    // + quyền xem COGS — chạy song song.
+    const [guard, isCost] = await Promise.all([
       guardCheck(userText, role, undefined, { onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true }),
       canViewCogs(role),
     ])
-    const { agentId, params, needsClarification, clarificationQuestion, agentIds, multi } = routed
-    const agent    = AGENTS[agentId]
 
     // Log chat event for Usage Analytics (fire-and-forget, không block response)
     void supabaseAdmin.from("app_usage_events").insert({
@@ -338,7 +326,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       user_email:   `lark:${openId}`,
       user_name:    name || openId,
       user_role:    role,
-      agent_id:     agentId,
+      agent_id:     "be-gau",
       user_message: userText.slice(0, 500),
     })
 
@@ -351,21 +339,9 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       return
     }
 
-    // Bước HỎI LẠI (additive): câu hỏi quá mơ hồ (thiếu nước/khu vực/mã) → hỏi lại ngay, không gọi Gemini
-    if (needsClarification && clarificationQuestion) {
-      await replyLarkMessage(messageId, stripMarkdown(clarificationQuestion))
-      responseSent = true
-      saveLarkMessage(openId, threadId, "user",      userText)
-      saveLarkMessage(openId, threadId, "assistant", clarificationQuestion)
-      return
-    }
-
     const channel  = getChannelFromRole(role)
-
-    // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
-    const _now = new Date()
-    const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
-      ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
+    const priceDirective = channel
+      ? `\n\n(Nội bộ) Người dùng thuộc kênh ${channel}. Khi hỏi GIÁ BÁN, chỉ hiển thị giá kênh ${channel}.`
       : ""
 
     const larkHistory = history.map(m => ({
@@ -373,57 +349,16 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       parts: [{ text: m.content }],
     }))
 
-    // ── Đa-agent: báo user "đợi xíu" rồi tổng hợp N agent về 1 câu ──────────────
-    if (multi) {
-      await replyLarkMessage(messageId, stripMarkdown(NOTICE_MULTI))
-      const merged = await runMulti({
-        agentIds, params, refCache, isCost, role, name: name || openId, lastMsg: userText,
-        geminiHistory: larkHistory, channel, userSuffix: ", kênh: Lark", tempRule: _tempRule,
-      })
-      const split = splitTextAndTable(merged)
-      const table = split ? parseMarkdownTable(split.tableText) : null
-      if (table) {
-        const preText = split!.preText ? stripMarkdown(split!.preText) : ""
-        await replyLarkTable(messageId, chatId, preText, table.headers, table.rows)
-      } else {
-        await replyLarkMessage(messageId, stripMarkdown(merged))
-      }
-      responseSent = true
-      saveLarkMessage(openId, threadId, "user",      userText)
-      saveLarkMessage(openId, threadId, "assistant", merged)
-      return
+    // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
+    const beGau = await runBeGau({
+      geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId, isCost,
+      extraDirective: priceDirective + "\n\n(Nội bộ) Kênh trả lời: Lark — KHÔNG dùng khối \`\`\`chart (Lark không render được).",
+    })
+    let response = beGau.text.replace(/```chart[\s\S]*?```/g, "").trim()
+    if (beGau.sources.length) {
+      const uniq = Array.from(new Map(beGau.sources.map(s => [s.url, s])).values()).slice(0, 5)
+      response += "\n\nNguồn: " + uniq.map(s => `${s.title} (${s.url})`).join(" · ")
     }
-
-    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText, channel)
-
-    const systemInstruction = [
-      agent.systemPrompt,
-      toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
-      `\nNgười dùng: ${name || openId} (vai trò: ${role}, kênh: Lark)`,
-      _tempRule,
-    ].join("")
-
-    const geminiHistory = history.map(m => ({
-      role:  m.role === "user" ? "user" as const : "model" as const,
-      parts: [{ text: m.content }],
-    }))
-
-    // bi-analyst / data-explorer: dùng function calling (executeSQL/querySupabase) — giống web chatbot
-    let response: string
-    if (agentId === "data-explorer") {
-      response = await runDataExplorer(systemInstruction, geminiHistory, userText, role, isCost)
-    } else if (agentId === "bi-analyst") {
-      response = await runBIAnalyst(systemInstruction, geminiHistory, userText, role)
-    } else {
-      // Call Gemini (non-streaming for Lark)
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-      const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", systemInstruction })
-      const result = await model.startChat({ history: geminiHistory }).sendMessage(userText)
-      response = result.response.text()
-    }
-
-    // Đảm bảo có câu trả lời: rỗng/thất bại → gợi ý cách hỏi (từ capability graph)
-    response = ensureAnswer(response, agentId)
 
     // Nếu response có bảng → gửi card + xlsx, còn lại strip markdown
     const split = splitTextAndTable(response)

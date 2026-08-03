@@ -126,7 +126,7 @@ const listTablesDecl = {
 
 const ALLOWED_OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "ilike", "in", "is"])
 
-async function runQuerySupabase(args: any, role: string, isCost: boolean): Promise<any> {
+export async function runQuerySupabase(args: any, role: string, isCost: boolean): Promise<any> {
   const table: string = String(args?.table || "").trim()
   const priv = isPrivileged(role)
 
