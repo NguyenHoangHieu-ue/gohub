@@ -523,6 +523,12 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     "Khách mới": customerOf(m).new.revenue,
     "Quay lại":  customerOf(m).returning.revenue,
   }))
+  // Tách doanh thu New/Returning theo thị trường VN/US = doanh thu × tỷ trọng thị trường của kỳ
+  // (nhất quán cách xấp xỉ newVnOf ở bảng Acquisition; VN+US = phần VN+US của tổng, chênh nhỏ = thị trường khác NA/TN).
+  const mktRatio = (m: string, which: "vn" | "us") => {
+    const mk = marketOf(m)
+    return mk.total > 0 ? mk[which] / mk.total : 0
+  }
 
   // generic rolling-table renderer
   const RollingTable = ({ rows, mtdCompare = false }: {
@@ -1157,7 +1163,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · revenue + số khách"
+            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning × All/VN/US · revenue + số khách"
               source="admin"
 >
               {data.customerError && (
@@ -1171,11 +1177,17 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 </div>
               )}
 	              <RollingTable rows={data.customerBreakdown === "total-only" ? [
-	                { label: "Total", get: m => customerOf(m).total.revenue, sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
+	                { label: "Total (All)", get: m => customerOf(m).total.revenue, sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
+	                { label: "Total · VN",  breakdown: true, get: m => customerOf(m).total.revenue * mktRatio(m, "vn") },
+	                { label: "Total · US",  breakdown: true, get: m => customerOf(m).total.revenue * mktRatio(m, "us") },
 	              ] : [
-	                { label: "New",       get: m => customerOf(m).new.revenue,       sub: m => `${formatNumber(customerOf(m).new.count)} khách` },
-	                { label: "Returning", get: m => customerOf(m).returning.revenue, sub: m => `${formatNumber(customerOf(m).returning.count)} khách` },
-	                { label: "Total",     get: m => customerOf(m).total.revenue,     sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
+	                { label: "New (All)",       get: m => customerOf(m).new.revenue,       sub: m => `${formatNumber(customerOf(m).new.count)} khách` },
+	                { label: "New · VN",        breakdown: true, get: m => customerOf(m).new.revenue * mktRatio(m, "vn") },
+	                { label: "New · US",        breakdown: true, get: m => customerOf(m).new.revenue * mktRatio(m, "us") },
+	                { label: "Returning (All)", get: m => customerOf(m).returning.revenue, sub: m => `${formatNumber(customerOf(m).returning.count)} khách` },
+	                { label: "Returning · VN",  breakdown: true, get: m => customerOf(m).returning.revenue * mktRatio(m, "vn") },
+	                { label: "Returning · US",  breakdown: true, get: m => customerOf(m).returning.revenue * mktRatio(m, "us") },
+	                { label: "Total (All)",     get: m => customerOf(m).total.revenue,     sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
 	              ]} />
             </Section>
 

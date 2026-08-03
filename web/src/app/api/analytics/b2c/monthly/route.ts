@@ -9,7 +9,7 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerRows } from "@/lib/admin-gohub"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
+import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả dữ liệu từ tháng 1 đến tháng hiện tại MTD:
@@ -384,9 +384,9 @@ export async function GET(req: NextRequest) {
       }
     } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
 
-    // Chi phí marketing B2C theo tháng (Supabase analytics_channel_group_costs)
-    const spend: Record<string, number> = {}
-    for (const m of months) spend[m] = 0
+    // Chi phí nhóm B2C (analytics_channel_group_costs) — dùng PHÂN BỔ vào CM1 (profitByChannelFinal).
+    const groupSpend: Record<string, number> = {}
+    for (const m of months) groupSpend[m] = 0
     try {
       const { data: costRows } = await supabaseAdmin
         .from("analytics_channel_group_costs")
@@ -394,19 +394,30 @@ export async function GET(req: NextRequest) {
         .eq("group_name", "B2C")
         .gte("month", months[0])
       for (const r of costRows ?? []) {
-        if (spend[r.month] !== undefined) spend[r.month] += Number(r.amount) || 0
+        if (groupSpend[r.month] !== undefined) groupSpend[r.month] += Number(r.amount) || 0
       }
-    } catch (e) { console.error("[b2c/monthly] spend (supabase)", (e as Error).message) }
+    } catch (e) { console.error("[b2c/monthly] group spend (supabase)", (e as Error).message) }
+
+    // Chi phí kênh B2C (analytics_channel_costs: Ads/Platform/Sponsor/Media amount) — nhập ở Manage Cost.
+    // (Fix s131): "Chi phí MKT" hiển thị = group cost + chi phí kênh. Trước đây chỉ tính group cost nên cost
+    // nhập theo kênh KHÔNG hiện trong Advanced (Acquisition/Spend/ROAS/CAC). Phần % vẫn chỉ vào CM1, không phải spend cố định.
+    let channelSpend: Record<string, number> = {}
+    try { channelSpend = await getB2CChannelBudgetByMonth(months) } catch (e) { console.error("[b2c/monthly] channel spend", (e as Error).message) }
+
+    // spend HIỂN THỊ (Section Spend/ROAS/CAC/Acquisition) = group + kênh.
+    const spend: Record<string, number> = {}
+    for (const m of months) spend[m] = (groupSpend[m] || 0) + (channelSpend[m] || 0)
 
     // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
     const { leads, leadsByChannel } = skipLeads
       ? { leads: Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>, leadsByChannel: [] as { label: string; byMonth: Record<string, number> }[] }
       : await loadLeads()
 
-    // BUG1 FIX: Phân bổ Group Cost B2C vào CM1 theo revenue-share per channel
+    // BUG1 FIX: Phân bổ Group Cost B2C vào CM1 theo revenue-share per channel.
+    // CHỈ dùng groupSpend (chi phí kênh Ads/... đã nằm trong profitByChannel.opCost rồi → tránh đếm 2 lần).
     const profitByChannelFinal: typeof data.profitByChannel = {}
     for (const month of months) {
-      const gc = spend[month] || 0
+      const gc = groupSpend[month] || 0
       const channelData = data.profitByChannel?.[month] || {}
       if (!gc) { profitByChannelFinal[month] = channelData; continue }
       const ratio = month === currentMonth ? elapsedDays / totalDays : 1

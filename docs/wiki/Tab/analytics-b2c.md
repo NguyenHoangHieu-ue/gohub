@@ -108,7 +108,9 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - **Tỷ lệ chốt**: `Customer ÷ Leads`.
 - **KPI cards hiện tại**: `Users`, `ROAS`, `Customers`, `CAC`, `Leads`, `CPL`; đã bỏ card Budget.
 - **(s131) Cost fresh**: chi phí nhập ở tab **Manage Costs** (`/analytics/targets` → nút "Chi phí B2C") → lưu vào `analytics_channel_costs`/`analytics_channel_group_costs` (POST đã flush cache). B2C Performance nay LUÔN fetch `nocache=1` (fetchData default fresh=true) → phản ánh ngay. Advanced đã luôn nocache.
-- **(s131) Customers × thị trường**: bảng Performance groupBy=customer thêm cột **VN + US** (Revenue = All). API `b2c/performance` khi groupBy=customer group thêm `company_code` → `revenueVn`/`revenueUs` mỗi KH (All = tổng, gồm cả company_code khác VN/US như NA/TN).
+- **(s131) Customers × thị trường (Performance view)**: bảng groupBy=customer thêm cột **VN + US** (Revenue = All). API `b2c/performance` group thêm `company_code` → `revenueVn`/`revenueUs` mỗi KH (All = tổng, gồm cả NA/TN).
+- **(s131) Chi phí MKT map thiếu (Advanced)**: `spend` (Chi phí MKT/Spend/ROAS/CAC/CPL) trước CHỈ tính group cost (`analytics_channel_group_costs`), KHÔNG tính chi phí KÊNH (Ads/Platform/Sponsor/Media amount) → cost nhập theo kênh ở Manage Cost KHÔNG hiện. **Fix**: `spend` hiển thị = group + channel (`getB2CChannelBudgetByMonth`); CM1 vẫn phân bổ chỉ groupSpend (kênh đã ở opCost, tránh đếm 2 lần). Verify T7: +21,9tr chi phí kênh.
+- **(s131) Doanh thu theo Customers (Advanced)**: tách New/Returning **× All/VN/US** = doanh thu × tỷ trọng thị trường kỳ (`mktRatio`), nhất quán xấp xỉ `newVnOf`.
 
 ### Env vars cần set cho deploy
 - `ADMIN_GOHUB_API_BASE_URL`
