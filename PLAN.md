@@ -77,7 +77,7 @@
 - [x] BOD-2 ✅ wire 2 nút Download chết (Revenue vs COGS + Margin Analysis) → export .xlsx.
 - [x] CUST-1 ✅ không phải bug — FE không render `change`. Ghi chú wiki.
 - [x] **ISSUE-DASH-5** ✅ FIX (s126) — tier-performance dùng `getAnalyticsSource(dateColumn)`: Created → sales table + created_date + GP=0 (hết trộn nguồn). Fulfillment không đổi. targets-summary luôn-fulfilled = cố ý (không sửa).
-- [~] **ISSUE-DASH-4** ✅ CHỐT hướng (Hiếu s126): giữ 2 lens (line chart=KÊNH partner_tiers vs bảng=KHÁCH price_list_name), ĐỔI NHÃN cho rõ → ⏳ **CHỜ anh BẢO duyệt nhãn** (UI Strict Lock) trước khi áp `analytics/page.tsx`. Đã ghi wiki + đề xuất diff.
+- [x] **ISSUE-DASH-4** ✅ FIX s131 (Hiếu chốt, 2026-08-03): đổi Strategic sang định nghĩa theo KHÁCH `price_list_name` (helper chung `getGroupCaseByCustomerSQL`/`IS_STRATEGIC_CUSTOMER_SQL`) cho: Dashboard line chart (revenue-chart2), **BOD group-margin cards + bod-summary, All-Time, scheduled 【4】**. Đồng nhất bảng Phân khúc. Gốc lỗi Strategic=0: `partner_tiers` RỖNG. Verify T7: Strategic 5,22 tỷ/Non 1,04 tỷ, tổng B2B 6,26 tỷ giữ nguyên. GIỮ theo partner_tiers (Hiếu chốt): bảng chi tiết "Strategic Channels" per-đối-tác (b2b/strategic-performance). Nhãn tiếng Anh giữ nguyên.
 - [ ] **ISSUE-DASH-3 (UI, cần Bảo/Hiếu)**: nhóm "Other" (78 đơn, 0đ) bị loại khỏi bảng Business Groups → tổng đơn bảng < KPI card. Thêm dòng Other = đổi UI (Strict Lock) → chờ chỉ thị.
 
 ---
