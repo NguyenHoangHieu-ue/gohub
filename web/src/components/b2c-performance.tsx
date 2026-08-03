@@ -262,9 +262,10 @@ export function B2CPerformance() {
     }
   }
 
-  // fresh mặc định = true: B2C Performance LUÔN lấy số tươi (nocache) để chi phí vừa nhập ở tab Manage Costs
-  // phản ánh ngay (Hiếu yêu cầu clear cache mỗi lần). Cost POST cũng đã flush cache server.
-  const fetchData = async (fresh = true) => {
+  // fresh=false mặc định: DÙNG cache để tránh cạn kết nối gohub_dw (always-nocache = 5 query/lần load →
+  // góp phần lỗi 500 "remaining connection slots" ở tab nặng như Quarter Report). Chi phí VẪN phản ánh:
+  // Cost POST đã flush cache server + chi phí kênh (monthlyCosts) fetch trực tiếp Supabase (tươi).
+  const fetchData = async (fresh = false) => {
     setLoading(true)
     setError(null)
     try {
