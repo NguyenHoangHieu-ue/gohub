@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getStrategicPartnersList, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, IS_STRATEGIC_CUSTOMER_SQL, getCustomerExcludeSQL, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const strategicList = await getStrategicPartnersList()
+      // Strategic/Non theo KHÁCH (price_list_name) — nhất quán Dashboard/BOD (ISSUE-DASH-4, s131).
+      const excludeList = getCustomerExcludeSQL()
 
       let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1)`
 
@@ -33,9 +34,9 @@ export async function GET(req: NextRequest) {
         if (grp === "B2B" && customerTier) {
           const tier = customerTier.toLowerCase()
           if (tier === "strategic") {
-            whereClause += ` AND s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[])`
+            whereClause += ` AND ${IS_STRATEGIC_CUSTOMER_SQL} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
           } else if (tier.includes("non")) {
-            whereClause += ` AND NOT (s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[]))`
+            whereClause += ` AND NOT ${IS_STRATEGIC_CUSTOMER_SQL} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
           }
         }
       }
@@ -52,9 +53,10 @@ export async function GET(req: NextRequest) {
            TRIM(COALESCE(s.channel_name, 'Unknown')) as channel_name,
            UPPER(COALESCE(s.group_name, 'Other')) as group_name,
            CASE
-             WHEN UPPER(s.group_name) = 'B2B' AND s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[]) THEN 'B2B-Strategic'
-             WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic'
-             WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excludeList}) THEN 'Excluded'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${IS_STRATEGIC_CUSTOMER_SQL} THEN 'B2B-Strategic'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
              ELSE 'Other'
            END as derived_group,
            SUM(COALESCE(f.fulfilled_revenue_amount_vnd, 0)) as revenue,
@@ -82,11 +84,16 @@ export async function GET(req: NextRequest) {
         groupCosts = (gcData || []).map((r: any) => ({ group_name: r.group_name, month: String(r.month), amount: parseFloat(r.amount || "0") }))
       }
 
+      // Revenue-share theo (tháng, channel) để chia amount-type channel cost khi 1 channel span 2 tier KH.
+      const channelPeriodRev: Record<string, number> = {}
+      rows.forEach(r => { const k = `${r.period}_${r.channel_name}`; channelPeriodRev[k] = (channelPeriodRev[k] || 0) + parseFloat(r.revenue || "0") })
+
       // Group by period+derived_group (monthly and quarterly)
       function processRows(isQuarterly: boolean) {
         const grouped = new Map<string, { period: string; group_name: string; revenue: number; margin: number; op_costs: number }>()
 
         rows.forEach(row => {
+          if (row.derived_group === "Excluded") return   // ops/B2C-in-B2B (doanh thu ~0) — không tính vào group
           const [yr, mo] = row.period.split("-")
           const period = isQuarterly ? `${yr}-Q${Math.ceil(parseInt(mo) / 3)}` : row.period
           const key = `${period}_${row.derived_group}`
@@ -99,10 +106,13 @@ export async function GET(req: NextRequest) {
           item.revenue += rowRev
           item.margin  += parseFloat(row.margin  || "0")
 
+          // amount channel cost: chia theo revenue-share (channel span 2 tier trong tháng) → tránh cộng 2 lần.
+          const chShare = channelPeriodRev[`${row.period}_${row.channel_name}`] > 0 ? rowRev / channelPeriodRev[`${row.period}_${row.channel_name}`] : 0
           channelCosts.filter(c => c.channel === row.channel_name && c.month === row.period).forEach(c => {
             COST_KEYS.forEach(k => {
               const v = c[k]
-              if (v) item.op_costs += v.type === "amount" ? (v.value || 0) : (rowRev * (v.value || 0)) / 100
+              if (!v) return
+              item.op_costs += v.type === "amount" ? (v.value || 0) * chShare : (rowRev * (v.value || 0)) / 100
             })
           })
         })

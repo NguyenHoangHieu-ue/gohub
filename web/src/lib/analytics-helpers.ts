@@ -350,6 +350,29 @@ export function getGroupCaseSQL(strategicList: string): string {
   END`
 }
 
+// ── Phân loại B2B-Strategic/Non theo KHÁCH (price_list_name) — 1 định nghĩa dùng chung ────────────────────
+// Nhất quán với bảng tier-performance & Dashboard chart (ISSUE-DASH-4, s131). Dùng cho: revenue-chart, BOD
+// group-margin, All-Time (con số group-level). classifyTier==="Strategic" ⇔ price_list_name NULL hoặc KHÔNG
+// chứa VIP/GOLD/SILVER (STRATEGIC + không rõ đều → Strategic). Query PHẢI JOIN dim_order_source s + dim_customer c,
+// và có cột f.customer_code.
+export const EXCLUDED_B2B_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
+export function getCustomerExcludeSQL(): string {
+  return EXCLUDED_B2B_CUSTOMERS.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+}
+export const IS_STRATEGIC_CUSTOMER_SQL = `(c.price_list_name IS NULL OR (UPPER(c.price_list_name) NOT LIKE '%VIP%' AND UPPER(c.price_list_name) NOT LIKE '%GOLD%' AND UPPER(c.price_list_name) NOT LIKE '%SILVER%'))`
+
+// Row bị loại (ops/B2C-in-B2B, doanh thu ~0) → 'Excluded' (caller lọc khỏi groupNames).
+export function getGroupCaseByCustomerSQL(): string {
+  const excl = getCustomerExcludeSQL()
+  return `CASE
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excl}) THEN 'Excluded'
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${IS_STRATEGIC_CUSTOMER_SQL} THEN 'B2B-Strategic'
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
+    ELSE 'Other'
+  END`
+}
+
 // Bộ lọc thực thể cho BOD (port từ gohub-intel getBODFilters): vendors / subChannels / channelGroups /
 // productTypes. Trả chuỗi AND clauses (rỗng nếu không filter → giữ nguyên hành vi cũ). Dùng alias f cho
 // fact table. Append sau date filter trong WHERE. SELECT-only (chạy qua queryAnalytics).

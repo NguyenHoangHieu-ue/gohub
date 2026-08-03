@@ -1,6 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getGroupCaseByCustomerSQL } from "@/lib/analytics-helpers"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
 // CM1 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
@@ -86,24 +86,31 @@ export interface BODGroup {
 export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
-  const strategicList = await getStrategicPartnersList()
-  const groupCaseSQL = getGroupCaseSQL(strategicList)
+  // Strategic/Non phân theo KHÁCH (price_list_name) — nhất quán Dashboard/tier-performance (ISSUE-DASH-4, s131).
+  const groupCaseSQL = getGroupCaseByCustomerSQL()
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
-       SELECT order_source_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
+       SELECT order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
        FROM ${source.mainTable} f WHERE ${filter} ${extraFilters}
      )
      SELECT ${groupCaseSQL} as "group", TRIM(s.channel_name) as channel,
             SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.cogsCol}) as cogs,
             SUM(f.${source.marginCol}) as margin, SUM(f.${source.quantityCol}) as units,
             COUNT(DISTINCT f.order_code) as orders
-     FROM filtered_f f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+     FROM filtered_f f
+     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
      GROUP BY 1, 2`
   )
 
   const months = monthsBetween(startDate, endDate)
   const { channelCosts, groupCosts } = await fetchCosts(months)
+
+  // 1 channel có thể chứa cả KH Strategic lẫn Non → xuất hiện ở 2 group. Amount-type channel cost (cố định theo
+  // channel) chia theo revenue-share để KHÔNG cộng 2 lần; percent-type đã theo revenue nên đúng sẵn.
+  const channelTotalRev: Record<string, number> = {}
+  rows.forEach(r => { channelTotalRev[r.channel] = (channelTotalRev[r.channel] || 0) + parseFloat(r.revenue || "0") })
 
   const groupNames = ["B2B-Strategic", "B2B-Non-Strategic", "B2C", "Other"]
   // BOD-1: group cost theo tursoGroupName ('B2B' dùng chung cho Strategic+Non-Strategic) phải chia theo
@@ -124,11 +131,14 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
     let opCost = 0
     groupRows.forEach(row => {
       const rev = parseFloat(row.revenue || "0")
+      const chShare = channelTotalRev[row.channel] > 0 ? rev / channelTotalRev[row.channel] : 0
       channelCosts.filter(c => c.channel === row.channel).forEach(c => {
         const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
         COST_KEYS.forEach(key => {
           const v = (c as any)[key]
-          if (v) opCost += v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100
+          if (!v) return
+          // amount: chia theo chShare (channel span 2 tier); percent: theo revenue của row (đã đúng).
+          opCost += v.type === "amount" ? (v.value || 0) * ratio * chShare : (rev * (v.value || 0)) / 100
         })
       })
     })
