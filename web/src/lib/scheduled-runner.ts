@@ -30,13 +30,15 @@ export async function runScheduledMessage(
   const directive = `
 
 ━━━ CHẾ ĐỘ BÁO CÁO TỰ ĐỘNG (BẮT BUỘC TUÂN THỦ) ━━━
-Hôm nay: ${today} (giờ VN). "Tháng trước" = tháng dương lịch liền TRƯỚC tháng hiện tại.
-1. ⚠️ MỌI SỐ LIỆU ĐÃ ĐƯỢC TÍNH SẴN trong khối "DỮ LIỆU ĐÃ TÍNH SẴN" bên dưới. Nhiệm vụ của bạn CHỈ là TRÌNH BÀY/định dạng đúng các số đó theo bố cục prompt yêu cầu. TUYỆT ĐỐI KHÔNG tự gọi executeSQL, KHÔNG tự tính lại, KHÔNG bịa, KHÔNG đổi số. Số nào không có trong khối → ghi "Chưa có dữ liệu".
+Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Tháng trước" = tháng dương lịch liền TRƯỚC tháng hiện tại.
+1. ⚠️ MỌI SỐ LIỆU ĐÃ ĐƯỢC TÍNH SẴN trong khối "DỮ LIỆU ĐÃ TÍNH SẴN" bên dưới. Nhiệm vụ của bạn CHỈ là TRÌNH BÀY/định dạng đúng các số đó theo bố cục prompt yêu cầu. TUYỆT ĐỐI KHÔNG gọi bất kỳ tool nào (executeSQL/GA4/GSC/product), KHÔNG tự tính lại, KHÔNG bịa, KHÔNG đổi số. Số nào không có trong khối → ghi "Chưa có dữ liệu".
 2. VÀO THẲNG báo cáo — KHÔNG lời chào, KHÔNG giới thiệu bản thân (cấm "Chào bạn", "Gấu Bi-Ai...", "Dưới đây là..."). Bắt đầu bằng tiêu đề báo cáo.
 3. ⚠️ TÁCH THỊ TRƯỜNG: mọi mục doanh thu PHẢI trình bày theo 3 cột VN | US | Tổng (đúng như khối dữ liệu cung cấp). Dùng BẢNG markdown chuẩn (| Cột | ... | + dòng |---|). Trong ô bảng chỉ ghi giá trị thuần, KHÔNG bọc **đậm**/\`code\`.
-4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; không có dữ liệu/target → "Chưa có dữ liệu"/"Chưa có target". KHÔNG dùng lẫn "-", "N/A".
+4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; chưa nhập target → ghi ĐÚNG "Chưa nhập target tháng này". KHÔNG dùng lẫn "-", "N/A".
 5. Tiền: phân cách hàng nghìn + " VND" (số trong khối đã đúng định dạng — giữ nguyên). Phần trăm 1 chữ số.
 6. KHÔNG dùng khối \`\`\`chart (Lark không render được). Tiếng Việt, chuyên nghiệp, nhận xét NGẮN mỗi mục (1-2 câu, chỉ dựa trên số trong khối).
+7. ⚠️ PRO-RATA & TARGET: nếu prompt có nhắc tới pro-rata / dự phóng / target / kế hoạch / KPI / tiến độ → BẮT BUỘC trình bày ĐẦY ĐỦ mục 【3】 (MTD/thực tế, dự phóng cả tháng nếu có, target cả tháng, target theo kênh, % đạt target) và Target CM1% ở 【4】 + Target 3HK% ở 【5】 (nếu khối có). TUYỆT ĐỐI KHÔNG bỏ qua/rút gọn các dòng target hay pro-rata. Nếu target = "Chưa nhập target tháng này" thì ghi đúng câu đó, KHÔNG bỏ mục.
+8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY/WEEKLY = đang trong tháng → có MTD + dự phóng pro-rata cả tháng.
 
 ${dataBlock}`
 

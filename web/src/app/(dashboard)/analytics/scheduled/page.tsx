@@ -6,7 +6,8 @@ import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Gl
 import { useToast } from "@/components/toast"
 
 // Port intel ScheduledMessages — tab riêng (admin-only). Backend web /api/admin/scheduled-messages (+/[id]).
-// Cron tự chạy qua Vercel Cron → /api/cron/scheduled-messages (xem vercel.json).
+// Cron tự chạy qua GitHub Actions (*/15') + Vercel Cron backstop (0 0 * * *) → /api/cron/scheduled-messages.
+// Giờ cron nhập ở đây = GIỜ VIỆT NAM (ICT); matcher scheduled-cron.ts so theo ICT.
 
 interface ScheduledMessage {
   id: string
@@ -187,7 +188,7 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
             value={formData.name || ""} onChange={e => setFormData({ ...formData, name: e.target.value })} />
         </div>
         <div className="space-y-4">
-          <label className="text-sm font-bold text-slate-700">Tần suất &amp; Giờ</label>
+          <label className="text-sm font-bold text-slate-700">Tần suất &amp; Giờ <span className="font-normal text-slate-400">(giờ VN)</span></label>
           <div className="flex flex-col sm:flex-row gap-3">
             <select className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700"
               value={scheduleMode} onChange={e => setScheduleMode(e.target.value)}>

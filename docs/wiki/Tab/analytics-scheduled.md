@@ -5,7 +5,7 @@ is_hidden: true
 department: tech
 tags: [tab, admin, scheduled]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-08-03
 status: active
 ---
 
@@ -31,10 +31,12 @@ Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, ti
 ### A. Thiết Kế Cơ Sở Dữ Liệu
 Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong Supabase (Migration `v15`):
 - `id`: Định danh khóa chính.
-- `report_type`: Thể loại báo cáo cần gửi (Ví dụ: báo cáo doanh thu ngày, báo cáo tiến độ KPI tuần).
-- `cron_expression`: Chu kỳ thời gian lặp lại (Ví dụ: gửi lúc 8:00 sáng hàng ngày).
-- `chat_id` / `channel`: Định danh nhóm hoặc kênh chat đích trên Lark.
-- `is_active`: Trạng thái hoạt động của lịch gửi.
+- `name`: Tên lịch (freeform). Loại báo cáo suy từ `cron_expression` qua `inferPeriod()` (KHÔNG lưu report_type riêng).
+- `prompt`: Hướng dẫn cho AI (bố cục báo cáo mong muốn).
+- `cron_expression`: Chu kỳ lặp — **5 trường theo GIỜ VIỆT NAM (ICT/UTC+7)**, vd `0 8 * * *` = 08:00 hằng ngày.
+- `lark_webhook_url`: Webhook đích (để trống → gửi qua bot Lark mặc định `lark_notify_chat_id`).
+- `lark_keyword`: Keyword prefix tuỳ chọn cho bot bảo mật.
+- `is_active`: Trạng thái hoạt động của lịch gửi. `last_run_at`: slot đã chạy gần nhất (dedup).
 
 ### B. Quy Trình Vận Hành (Cron Pipeline)
 1. **Đặt lịch**: Người quản trị thiết lập khung giờ, loại báo cáo và chọn nhóm chat đích trên giao diện cài đặt.
@@ -46,9 +48,13 @@ Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong
    - `scheduled-report-data.ts` TÍNH SẴN toàn bộ số liệu bằng SQL cố định (đúng định nghĩa Dashboard, dùng chung
      helper `getDateFilter` / `fetchBODGroupMarginData`) — tách thị trường **VN / US / Tổng** theo `company_code`,
      kèm so sánh kỳ trước (MoM/WoW), pro-rata target, 3HK Contribution %; bản Daily thêm ma trận 3 ngày + top khách
-     B2B + kênh B2C. Kỳ (daily/weekly/monthly) suy từ `cron_expression`/tên lịch qua `inferPeriod()`.
-   - Khối số liệu này được nhồi vào prompt → **Gemini (BI Analyst) chỉ FORMAT, KHÔNG tự chạy SQL** (1 vòng gọi).
+     B2B + kênh B2C. Kỳ (daily/weekly/monthly) suy từ `inferPeriod()`.
+   - **`inferPeriod()` — CRON-FIRST (fix s131)**: xét `cron_expression` TRƯỚC (đây mới là lịch thực chạy): `dom` là 1 số cố định → monthly; `dow` là 1 số cố định → weekly; còn lại (`* * *`, hoặc `dow` dạng range/list như `1-5` = ngày làm việc) → daily. Tên lịch CHỈ dùng fallback khi cron không chuẩn 5 trường. *Trước đây xét TÊN trước → lịch monthly đặt tên có chữ "ngày"/"tuần" bị tính nhầm kỳ số liệu.*
+   - **Mục 【3】 Pro-rata & Target (fix s131)**: **DAILY/WEEKLY** (đang trong tháng) = MTD + dự phóng pro-rata cả tháng + `% tiến độ (MTD/Target)` + `% đạt target theo pro-rata (dự phóng/Target)`. **MONTHLY** (tháng đã đóng) = **số THỰC TẾ** cả tháng + `% đạt target (Thực tế/Target)`, KHÔNG pro-rata (đủ ngày → pro-rata vô nghĩa). Thiếu target → ghi "Chưa nhập target tháng này" (không bỏ mục).
+   - **Mục 【4】 CM1**: thêm **Target CM1%** (`target_gpm2`) cạnh CM1% thực tế cho B2B & B2C (khi đã nhập ở tab Targets). Target lấy từ Supabase `analytics_target_planning` (channel = "B2B"/"B2C", month = `YYYY-MM`).
+   - Khối số liệu này được nhồi vào prompt → **Gemini (BI Analyst) chỉ FORMAT, KHÔNG tự chạy SQL/tool** (1 vòng gọi).
      **Tại sao đổi**: trước đây để Gemini tự sinh SQL nhiều vòng → báo cáo Daily dễ timeout và số có thể lệch Dashboard.
+   - **Directive (fix s131)**: nếu prompt nhắc tới pro-rata/dự phóng/target/kế hoạch/KPI/tiến độ → **BẮT BUỘC** render đủ mục 【3】 + Target CM1%(【4】) + Target 3HK%(【5】), cấm bỏ qua/rút gọn. Cấm gọi mọi tool (số đã precompute). *Trước đây directive để Gemini tự chọn bố cục → hay bỏ mục pro-rata/target dù report yêu cầu.*
 4. **Gửi tin nhắn qua Lark Bot**:
    - Sử dụng helper kết nối Lark API `lib/lark.ts` để bắn thông điệp trực tiếp vào nhóm chat của công ty.
 
@@ -75,7 +81,9 @@ Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/
 
 | Column / Metric | Source Table | Formula / Note |
 |-----------------|-------------|----------------|
-| Scheduled messages list | Supabase `lark_scheduled_messages` | Migration v15; id, report_type, cron_expression, chat_id, is_active, created_by |
+| Scheduled messages list | Supabase `lark_scheduled_messages` | Migration v15; id, name, prompt, cron_expression (giờ VN), lark_webhook_url, is_active, created_by |
+| Kỳ báo cáo (daily/weekly/monthly) | `inferPeriod(cron_expression, name)` | Cron-first: dom số cố định→monthly · dow số cố định→weekly · còn lại→daily |
+| Target revenue / CM1% / 3HK% | Supabase `analytics_target_planning` | channel="B2B"/"B2C", month=YYYY-MM; target_revenue, target_gpm2 (CM1%), target_3hk_contribution |
 | Last run time | `lark_scheduled_messages.last_run_at` | Ghi theo slot time (không phải execution time); atomic claim UPDATE |
 | Report data (số liệu) | `fact_fulfillment_revenue` (qua `scheduled-report-data.ts`) | SQL cố định: Revenue/GP/CM1/3HK per company_code (VN/US/Tổng), MoM/WoW, top B2B KH, top kênh B2C |
 | Operation Cost | Supabase `analytics_channel_group_costs` | Dùng cho CM1 trong precomputed report |

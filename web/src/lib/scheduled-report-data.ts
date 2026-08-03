@@ -248,11 +248,18 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const b2bCm1 = (b2bStrat?.gpm2 || 0) + (b2bNon?.gpm2 || 0)
   const b2bMargin = (b2bStrat?.margin || 0) + (b2bNon?.margin || 0)
 
-  // Target tổng tháng + theo channel
+  // Target tổng tháng + theo channel (analytics_target_planning: channel = "B2B"/"B2C", month = YYYY-MM)
   const totalTargetMonth = targetRows.reduce((s, t) => s + Number(t.target_revenue || 0), 0)
   const target3hkPct = targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null
+  const NO_TGT = "Chưa nhập target tháng này"
   const targetByChannel = targetRows
-    .map(t => `${t.channel}=${vnd(Number(t.target_revenue || 0))}`).join(" · ") || "Chưa có target"
+    .map(t => `${t.channel}=${vnd(Number(t.target_revenue || 0))}`).join(" · ") || NO_TGT
+  // Target CM1% (target_gpm2) theo nhóm B2B/B2C — để so với CM1% thực tế ở 【4】.
+  const targetCm1Pct = (grp: string): number | null => {
+    const row = targetRows.find(t => (t.channel || "").toUpperCase() === grp)
+    return row && Number(row.target_gpm2) > 0 ? Number(row.target_gpm2) : null
+  }
+  const tgtCm1B2b = targetCm1Pct("B2B"), tgtCm1B2c = targetCm1Pct("B2C")
 
   // MoM/WoW %
   const momPct = (cur: number, prv: number) => prv > 0 ? ((cur - prv) / prv) * 100 : 0
@@ -275,18 +282,29 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   L.push(triLine("B2C kỳ trước", prevB2c))
   L.push(`  - B2C tăng/giảm Tổng: ${pct(momPct(b2cRev.total, prevB2c.total))}`)
   L.push(``)
-  L.push(`【3】PRO-RATA tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày):`)
-  L.push(triLine(`Doanh thu MTD (${r.mtdStart}→${r.mtdEnd})`, mtdTotal))
-  L.push(triLine("Pro-rata dự phóng cả tháng", proj))
-  L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : "Chưa có target"}`)
-  L.push(`  - Target theo kênh: ${targetByChannel}`)
-  L.push(`  - % đạt target theo pro-rata (Tổng): ${totalTargetMonth > 0 ? pct(ratio(proj.total, totalTargetMonth)) : "Chưa có target"}`)
+  if (isMonthly) {
+    // Tháng đã ĐÓNG → pro-rata vô nghĩa (đã đủ ngày). Dùng số THỰC TẾ so với target.
+    L.push(`【3】TIẾN ĐỘ TARGET tháng ${r.monthStr} (tháng đã đóng — số THỰC TẾ, không pro-rata):`)
+    L.push(triLine("Doanh thu thực tế cả tháng", mtdTotal))
+    L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : NO_TGT}`)
+    L.push(`  - Target theo kênh: ${targetByChannel}`)
+    L.push(`  - % đạt target (Thực tế/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
+  } else {
+    // Daily/Weekly → đang trong tháng chạy → pro-rata dự phóng cả tháng + tiến độ hiện tại.
+    L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày):`)
+    L.push(triLine(`Doanh thu MTD (${r.mtdStart}→${r.mtdEnd})`, mtdTotal))
+    L.push(triLine("Pro-rata dự phóng cả tháng", proj))
+    L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : NO_TGT}`)
+    L.push(`  - Target theo kênh: ${targetByChannel}`)
+    L.push(`  - % tiến độ hiện tại (MTD/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
+    L.push(`  - % đạt target theo pro-rata (dự phóng/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(proj.total, totalTargetMonth)) : NO_TGT}`)
+  }
   L.push(``)
   L.push(`【4】LỢI NHUẬN & CM1 (toàn công ty — cost/target không tách theo thị trường):`)
   L.push(`  - Gross Profit (GP) kỳ này: VN ${vnd(totalGp.vn)} | US ${vnd(totalGp.us)} | Tổng ${vnd(totalGp.total)}`)
   L.push(`  - GPM% (GP/Revenue) Tổng: ${pct(ratio(totalGp.total, totalRev.total))}`)
-  L.push(`  - B2B: Revenue ${vnd(b2bRevTot)} | GP ${vnd(b2bMargin)} | CM1 ${vnd(b2bCm1)} | CM1% ${pct(ratio(b2bCm1, b2bRevTot))}`)
-  if (b2cG) L.push(`  - B2C: Revenue ${vnd(b2cG.revenue)} | GP ${vnd(b2cG.margin)} | CM1 ${vnd(b2cG.gpm2)} | CM1% ${pct(ratio(b2cG.gpm2, b2cG.revenue))}`)
+  L.push(`  - B2B: Revenue ${vnd(b2bRevTot)} | GP ${vnd(b2bMargin)} | CM1 ${vnd(b2bCm1)} | CM1% ${pct(ratio(b2bCm1, b2bRevTot))}${tgtCm1B2b != null ? ` | Target CM1% ${pct(tgtCm1B2b)}` : ""}`)
+  if (b2cG) L.push(`  - B2C: Revenue ${vnd(b2cG.revenue)} | GP ${vnd(b2cG.margin)} | CM1 ${vnd(b2cG.gpm2)} | CM1% ${pct(ratio(b2cG.gpm2, b2cG.revenue))}${tgtCm1B2c != null ? ` | Target CM1% ${pct(tgtCm1B2c)}` : ""}`)
   if (b2bStrat) L.push(`  - B2B-Strategic: Revenue ${vnd(b2bStrat.revenue)} | CM1% ${pct(b2bStrat.gpm2_percent)}`)
   if (b2bNon) L.push(`  - B2B-Non-Strategic: Revenue ${vnd(b2bNon.revenue)} | CM1% ${pct(b2bNon.gpm2_percent)}`)
   L.push(``)
@@ -351,17 +369,20 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   return { block: L.join("\n"), ranges: r, raw }
 }
 
-// Suy period từ cron_expression hoặc tên message (fallback).
+// Suy period từ cron_expression (ƯU TIÊN — đây mới là lịch THỰC chạy). Tên chỉ dùng khi cron không chuẩn 5 trường.
+// Trước đây xét TÊN trước → 1 lịch monthly đặt tên có chữ "ngày"/"tuần" bị tính nhầm sang daily/weekly (sai kỳ số liệu).
 export function inferPeriod(cron: string, name?: string): Period {
-  const n = (name || "").toLowerCase()
-  if (n.includes("month") || n.includes("tháng")) return "monthly"
-  if (n.includes("week") || n.includes("tuần")) return "weekly"
-  if (n.includes("daily") || n.includes("ngày")) return "daily"
   const parts = (cron || "").trim().split(/\s+/)
   if (parts.length === 5) {
     const [, , dom, , dow] = parts
-    if (dom !== "*") return "monthly"
-    if (dow !== "*") return "weekly"
+    const isSingle = (f: string) => /^\d+$/.test(f)  // 1 ngày cố định — UI weekly/monthly luôn sinh dạng này
+    if (isSingle(dom)) return "monthly"               // vd "0 8 15 * *"
+    if (isSingle(dow)) return "weekly"                // vd "0 9 * * 1"
+    return "daily"                                     // "* * *" hoặc range/list dow (vd "1-5" = ngày làm việc → daily)
   }
+  // cron không chuẩn → fallback theo tên
+  const n = (name || "").toLowerCase()
+  if (n.includes("month") || n.includes("tháng")) return "monthly"
+  if (n.includes("week") || n.includes("tuần")) return "weekly"
   return "daily"
 }
