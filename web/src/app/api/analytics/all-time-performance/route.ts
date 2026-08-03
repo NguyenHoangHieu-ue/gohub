@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const customerTier = p.get("customerTier") || ""
   const channel      = p.get("channel")      || ""
 
-  const cacheKey = `all-time:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}`
+  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

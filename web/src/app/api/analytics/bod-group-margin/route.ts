@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const key = `bod-group-margin:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
