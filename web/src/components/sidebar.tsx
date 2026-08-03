@@ -73,7 +73,7 @@ const ANALYTICS_GROUPS = [
     label: "Analytics & Planning",
     items: [
       { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
-      { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
+      { href: "/analytics/targets",    label: "Manage Costs",       icon: Target    },
       { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
       { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     ],

@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   Target, Save, Calendar, AlertCircle, CheckCircle2,
-  TrendingUp, Sparkles, Zap, Lock,
+  TrendingUp, Sparkles, Zap, Lock, Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useSession } from "next-auth/react"
+import { CostManagementModal } from "@/components/cost-management-modal"
 
 interface PlanningData {
   channel: string
@@ -89,7 +90,7 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
                 </td>
               </tr>
             ) : (
-              ["B2C", "B2B"].map(group => {
+              ["B2C"].map(group => {   // B2B quản ở Quarter Report (cost per-KH) → chỉ giữ B2C ở đây
                 const item = data?.data?.find(d => d.group === group)
                 if (!item) return null
 
@@ -328,6 +329,7 @@ export default function TargetsPage() {
   }, [status, session?.user?.username])
 
   const [quarter, setQuarter] = useState(getDefaultQuarter)
+  const [showCostModal, setShowCostModal] = useState(false)   // nhập chi phí B2C (Ads/Platform/Sponsor/Media theo kênh + B2C group cost)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<PlanningResponse | null>(null)
@@ -414,15 +416,22 @@ export default function TargetsPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Target className="w-5 h-5 text-blue-600" />
-            Target Planning
+            Manage Costs
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-slate-500 text-sm">Đặt target doanh thu theo quý theo nhóm kênh</p>
+            <p className="text-slate-500 text-sm">Target &amp; chi phí B2C (B2B quản ở Quarter Report)</p>
             <SourceBadge source="admin" />
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {canEdit && (
+            <button onClick={() => setShowCostModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+              <Wallet className="w-4 h-4 text-blue-600" />
+              Chi phí B2C
+            </button>
+          )}
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
             <select value={quarter} onChange={e => setQuarter(e.target.value)}
@@ -513,6 +522,14 @@ export default function TargetsPage() {
           </div>
         ))}
       </div>
+
+      {/* Nhập chi phí B2C (Ads/Platform/Sponsor/Media theo kênh + B2C group cost) — gộp từ tab B2C cũ */}
+      <CostManagementModal
+        isOpen={showCostModal}
+        onClose={() => setShowCostModal(false)}
+        onSave={() => {}}
+        scope="b2c"
+      />
     </div>
   )
 }
