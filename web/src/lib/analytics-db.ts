@@ -12,11 +12,11 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      // gohub_dw max_connections=100 (chia cho NHIỀU serverless instance). Hạ max=3 + idle 10s + keepAlive để
-      // mỗi instance giữ RẤT ÍT kết nối, giải phóng nhanh, và phát hiện kết nối chết sớm. application_name để
-      // soi được app trong pg_stat_activity. Cache giảm hit nên tốc độ vẫn ổn.
+      // gohub_dw max_connections=100 (chia nhiều serverless instance). Gốc cạn kết nối = RÒ RỈ pool (đã fix) +
+      // max=10. Nay max=3 (footprint rất nhỏ/instance) + idle 30s để GIỮ ẤM kết nối (idle quá ngắn → đóng rồi
+      // mở lại, mà mở lại THẤT BẠI khi DB đầy → route lỗi). keepAlive phát hiện kết nối chết; application_name để soi.
       max:                3,
-      idleTimeoutMillis:  10000,
+      idleTimeoutMillis:  30000,
       connectionTimeoutMillis: 8000,
       keepAlive:          true,
       application_name:   "gohub-intel-web",
