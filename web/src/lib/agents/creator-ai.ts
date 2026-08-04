@@ -465,6 +465,21 @@ Dùng ĐÚNG định nghĩa chuẩn (3HK=3HKDATAPOOL, op-cost SUM percent, exclu
 
 Use chart_type "line" or "area" for time-series trends. For bar charts use "bars", for line/area charts use "lines". Pie charts use single-metric format only.
 
+**Stacked bar** (xếp chồng các thành phần, vd doanh thu theo kênh cộng dồn): multi-metric + \`"stacked": true\`.
+\`\`\`chart
+{"chart_type":"bar","title":"Doanh thu theo kênh","data":[{"month":"T7","shopee":5e8,"lazada":3e8}],"x_key":"month","stacked":true,"bars":[{"key":"shopee","label":"Shopee"},{"key":"lazada","label":"Lazada"}]}
+\`\`\`
+
+**Waterfall** (P&L breakdown: Revenue → -COGS → GP → -OpCost → CM1): single-metric, chart_type "waterfall". Giá trị âm = khoản trừ (đỏ), dương = cộng (xanh); cột tổng thêm \`"isTotal": true\` (xanh dương).
+\`\`\`chart
+{"chart_type":"waterfall","title":"P&L T7","data":[{"label":"Revenue","value":1500000000},{"label":"COGS","value":-900000000},{"label":"GP","value":0,"isTotal":true},{"label":"OpCost","value":-200000000},{"label":"CM1","value":0,"isTotal":true}]}
+\`\`\`
+
+**Scatter** (tương quan 2 chỉ số, vd revenue vs GP% từng KH): multi-metric, chart_type "scatter", \`x_key\` + \`y_key\`, mỗi điểm 1 object.
+\`\`\`chart
+{"chart_type":"scatter","title":"Revenue vs GP% theo KH","data":[{"name":"KH A","revenue":5e8,"gp_pct":22},{"name":"KH B","revenue":3e8,"gp_pct":18}],"x_key":"revenue","y_key":"gp_pct"}
+\`\`\`
+
 ## Follow-up Suggestions
 Sau MỖI câu trả lời có data/phân tích (không phải câu hỏi ngược lại user), thêm block ở CUỐI:
 \`\`\`followup
