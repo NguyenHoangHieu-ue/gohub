@@ -88,29 +88,32 @@ export async function GET(req: NextRequest) {
       const pEndString   = prevEnd.toISOString().split("T")[0]
 
       // 1. Per-channel costs (analytics_channel_costs)
+      // Lặp qua channelCosts (không phải channelRows) để KHÔNG bỏ sót channel nào
+      // dù channelRows bị lọc bởi sfx (ship/internalOps/excludeOps filters).
+      // Percent-type cost: cần revenue từ channelRows; amount-type: áp thẳng.
       const channelCosts = await getChannelCostsForMonths(allMonths)
+      const revMapCur: Record<string, number> = {}
+      const revMapPrv: Record<string, number> = {}
       channelRows.forEach(row => {
-        const ch = row.channel
-        const mo = row.month
-        const cRev = parseFloat(row.current_revenue || "0")
-        const pRev = parseFloat(row.prev_revenue || "0")
-
+        revMapCur[`${row.channel}_${row.month}`] = parseFloat(row.current_revenue || "0")
+        revMapPrv[`${row.channel}_${row.month}`] = parseFloat(row.prev_revenue || "0")
+      })
+      channelCosts.forEach(c => {
+        const mo = c.month
         if (currentMonths.includes(mo)) {
-          channelCosts.filter(c => c.channel === ch && c.month === mo).forEach(c => {
-            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
-            COST_KEYS.forEach(key => {
-              const cv = c[key]
-              if (cv) totalOpCost += cv.type === "amount" ? (cv.value || 0) * ratio : (cRev * (cv.value || 0)) / 100
-            })
+          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
+          const cRev = revMapCur[`${c.channel}_${mo}`] || 0
+          COST_KEYS.forEach(key => {
+            const cv = c[key]
+            if (cv && cv.value) totalOpCost += cv.type === "amount" ? cv.value * ratio : (cRev * cv.value) / 100
           })
         }
         if (prevMonths.includes(mo)) {
-          channelCosts.filter(c => c.channel === ch && c.month === mo).forEach(c => {
-            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
-            COST_KEYS.forEach(key => {
-              const cv = c[key]
-              if (cv) prevTotalOpCost += cv.type === "amount" ? (cv.value || 0) * ratio : (pRev * (cv.value || 0)) / 100
-            })
+          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
+          const pRev = revMapPrv[`${c.channel}_${mo}`] || 0
+          COST_KEYS.forEach(key => {
+            const cv = c[key]
+            if (cv && cv.value) prevTotalOpCost += cv.type === "amount" ? cv.value * ratio : (pRev * cv.value) / 100
           })
         }
       })

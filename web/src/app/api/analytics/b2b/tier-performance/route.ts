@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 
 // Phân loại tier từ price_list_name (nhất quán với quarterly-b2b-customers)
 function classifyTier(priceListName: string | null): string {
@@ -42,9 +42,12 @@ export async function GET(req: NextRequest) {
   // GP=0) thay vì trước hardcode cột fulfilled nhưng lọc theo created_date (trộn 2 nguồn). Fulfillment KHÔNG đổi.
   const source = getAnalyticsSource(dateColumn)
   const gpExpr = source.marginCol === "0" ? "0" : `SUM(f.${source.marginCol})`
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   const excludeList = EXCLUDED.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
-  const cacheKey = `b2b_tier:${startDate}:${endDate}:${dateColumn}:${companyCode}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
+  const cacheKey = `b2b_tier:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -71,6 +74,7 @@ export async function GET(req: NextRequest) {
           ${companyFilter}
           AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
           AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+          ${sfx}
         GROUP BY c.price_list_name, c.currency_code
       `)
 
