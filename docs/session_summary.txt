@@ -1,5 +1,34 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-04 (Session 133 — B2B Performance: CH.Cost + projection về backend + OOP plan).
+Cập nhật lần cuối: 2026-08-04 (Session 133 — OOP Analytics Refactor Phase 0–3: B2B fix + shared lib + Channels/BOD/B2C).
+
+## ══════ SESSION 133 bổ sung — OOP Analytics Refactor Phase 0–3 ══════
+
+### Phase 0 — Shared library `web/src/lib/analytics-engine/` (commit 43dba28)
+- projection.ts: getProjectionFactor() — cross-month → 1, MTD tháng hiện tại → factor
+- cost-engine.ts: calcChCostForPeriod/calcChannelOpCost/calcGroupOpCost pro-rata đúng
+- types.ts: AnalyticsComputedFields + AnalyticsKpiResult interface
+
+### Phase 1 — Channels tab (commit 43dba28)
+- channels/kpis/route.ts: thêm cm1, gpm2, cm1_percent, projection_factor (load costs multi-month, pro-rata)
+- channels/page.tsx: getProjectionInfo() dùng metrics.projection_factor từ BE; bỏ ~140 dòng FE cost computation
+
+### Fix B2B CH.Cost display (commit ff7eb76)
+- Gốc lỗi: ch_cost=0 (số) → ?? không trigger fallback → cột hiện 0; b2bCostMap bị bỏ → expand rỗng
+- BE: thêm cost_lines[] vào response (gom từ Turso tất cả tháng trong range)
+- FE: chCostActual = margin - cm1 (tổng cost deduction = channel+group+customer); costLines = row.cost_lines
+
+### Phase 2 — BOD tab (commit 37f16d0)
+- bod-summary/route.ts: thêm projection_factor vào response (1 dòng import + return)
+- bod/page.tsx getProjectionInfo(): dùng summary.projection_factor; projectedGpm2 = total_gpm2 × factor
+
+### Phase 3 — B2C Performance tab (commit f7ef6a6)
+- b2c/kpis route đã đúng hoàn toàn (pro-rata đúng, CM1 tại kpis[5])
+- b2c-performance.tsx getProjectionInfo(): thêm current-month check + projectedGpm2 = gpm2 × factor
+- b2c-advanced-dashboard: KHÔNG đụng (YTD server-side, không có user-range projection issue)
+
+### Trạng thái OOP Refactor:
+✅ B2B Performance, Channels, BOD, B2C (Performance view), Staff, All-Time, Quarterly, Fulfillment
+❌ Phase 4 cleanup nhỏ (Staff tier FE classification, All-Time weighted avg) — tùy chọn, không ảnh hưởng số
 
 ## ══════ SESSION 133 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 
