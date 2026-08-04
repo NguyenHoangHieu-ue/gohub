@@ -15,16 +15,14 @@ export async function GET(req: NextRequest) {
   const base = req.nextUrl.origin
   const redirectUri = `${base}/api/lark/oauth/callback`
   const state = randomBytes(16).toString("hex")
-  // Chỉ xin scope app đang có (task:task). Thêm "task:tasklist" nếu muốn duyệt Task List riêng
-  // (Hiếu phải bật scope đó trong Lark trước, nếu không authorize sẽ lỗi).
-  const scope = "task:task"
 
   const authUrl = new URL("https://accounts.larksuite.com/open-apis/authen/v1/authorize")
   authUrl.searchParams.set("client_id", process.env.LARK_APP_ID || "")
   authUrl.searchParams.set("redirect_uri", redirectUri)
-  authUrl.searchParams.set("scope", scope)
   authUrl.searchParams.set("response_type", "code")
   authUrl.searchParams.set("state", state)
+  // KHÔNG set scope → Lark tự cấp mọi user-scope app đã publish (tránh lệch tên scope).
+  // Nếu cần giới hạn, set: authUrl.searchParams.set("scope", "task:task")
 
   const res = NextResponse.redirect(authUrl.toString())
   // Lưu state qua cookie httpOnly để verify ở callback (chống CSRF)
