@@ -194,34 +194,31 @@ export function B2CPerformance() {
   const getProjectionInfo = () => {
     if (kpis.length < 7 || !startDate || !endDate) return null
 
+    const today = new Date(); today.setHours(0, 0, 0, 0)
     const start = new Date(startDate)
-    const end = new Date(endDate)
+    const end   = new Date(endDate)
 
-    // Only project if same month and year
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) {
-      return null
-    }
+    // Cross-month range → không project (snapshot lịch sử)
+    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
+    // Tháng đã hoàn thành → không project
+    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return null
 
-    const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const daysElapsed    = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) {
-      return null
-    }
+    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) return null
 
     const factor = lastDayOfMonth / daysElapsed
 
-    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1
+    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1 (từ BE, đã pro-rata đúng)
     const revenue = kpis[0]?.value || 0
-    const units = kpis[1]?.value || 0
-    const margin = kpis[2]?.value || 0
-    const gpm2 = kpis[5]?.value || 0
+    const units   = kpis[1]?.value || 0
+    const margin  = kpis[2]?.value || 0
+    const gpm2    = kpis[5]?.value || 0  // CM1 actual từ BE
 
-    const fullMonthOpCost = margin - gpm2
     const projectedRevenue = revenue * factor
-    const projectedMargin = margin * factor
-    const projectedGpm2 = projectedMargin - fullMonthOpCost
-    const projectedUnits = units * factor
+    const projectedMargin  = margin  * factor
+    const projectedGpm2    = gpm2    * factor  // CM1 actual × factor (không dùng fixed op cost)
+    const projectedUnits   = units   * factor
 
     // MoM Comparisons (vs Full Previous Month)
     const prevRevenue = prevMonthKpis.length > 0 ? (prevMonthKpis[0]?.value || 0) : 0

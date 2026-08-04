@@ -97,7 +97,7 @@
 | B2B Performance | ❌ (đã fix) | ❌ (đã fix) | BE hoàn toàn | ✅ s133 |
 | Channels | ✓ `getProjectionInfo()` | ✓ CM1 pro-rata | FE nặng | ✅ s133 |
 | BOD | ✓ `getProjectionInfo()` | ✓ projected CM1 | FE nặng | ✅ s133 |
-| B2C | ✓ `getProjectionInfo()` | ✓ CM1 + group cost | FE nặng | ❌ |
+| B2C | ✓ `getProjectionInfo()` | ✓ CM1 + group cost | FE nặng | ✅ s133 |
 | Staff | ✗ | ✗ | BE hoàn toàn | ✅ |
 | All-Time | ✗ | ✗ | BE hoàn toàn | ✅ |
 | Dashboard | ✗ | Một phần | Nhẹ | 〜 |
@@ -198,7 +198,7 @@ Fix nhỏ: thêm `projection_factor` + `cm1_actual` vào summary response, FE ch
 
 ---
 
-### Phase 3 — B2C tab ← LÀM TIẾP THEO
+### Phase 3 — B2C tab ✅ s133
 
 **File BE**: `web/src/app/api/analytics/b2c/kpis/route.ts` + `b2c/performance/route.ts`  
 **File FE**: `web/src/app/(dashboard)/analytics/b2c/page.tsx`
@@ -216,7 +216,7 @@ Fix nhỏ: thêm `projection_factor` + `cm1_actual` vào summary response, FE ch
 
 ---
 
-### Phase 4 — Cleanup nhỏ (sau 3 phase trên)
+### Phase 4 — Cleanup nhỏ ← LÀM TIẾP THEO (nếu cần)
 
 - **Staff**: Tier classification (Strategic/VIP/Gold) đang filter FE → move về `staff-report/route.ts` (thêm `tier` field vào response)
 - **All-Time**: weighted average % đang tính FE → có thể giữ nguyên (không sai, chỉ là display)
