@@ -94,3 +94,21 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 | Channel (B2B) | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
 | Strategic Partners | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` |
 | Units / Orders | `fact_fulfillment_revenue` | `SUM(fulfilled_quantity)` / `COUNT(DISTINCT order_code)` |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+

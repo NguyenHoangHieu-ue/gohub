@@ -112,3 +112,21 @@ Admin, Creator, BOD, Manager, Staff đều xem được. Không có role restric
 | CH.Cost per channel | Supabase `analytics_channel_costs` | `SUM(amount)` per `channel_name` × tháng (ads/platform/sponsor/media) |
 | Group Cost | Supabase `analytics_channel_group_costs` | `SUM(amount)` per `group_name` × tháng; phân bổ theo revenue share |
 | MoM% | `fact_fulfillment_revenue` kỳ trước | `(revenue_cur - revenue_prev) / revenue_prev × 100` |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+

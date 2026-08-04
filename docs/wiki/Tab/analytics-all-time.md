@@ -44,3 +44,21 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
 | Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
 | Derived Group | `dim_order_source.group_name` + Partner Tiers | B2B-Strategic / B2B-Non-Strategic / B2C |
 | Tier (B2B) | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` → Strategic |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+

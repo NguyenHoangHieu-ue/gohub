@@ -162,3 +162,21 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 | Website CR | Google Analytics 4 | 2 property: config `app_config['ga4_configs']` (Supabase `app_settings`) |
 | ROAS | Revenue B2C / Marketing Spend | Tính từ 2 cột trên |
 | CAC | Marketing Spend / New Customers | Tính từ 2 cột trên |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+

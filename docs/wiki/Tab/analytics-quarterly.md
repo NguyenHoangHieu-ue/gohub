@@ -113,3 +113,21 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | Target | Turso `target_planning_quarter` | `target_revenue`, `target_cm1`, `target_three_hk_pct` per B2B/B2C per quarter |
 | QoQ % | `fact_fulfillment_revenue` quý trước | `(CM1_cur_prorata − CM1_prev) / |CM1_prev| × 100`; monthly pro-rata |
 | Pro-rata | `fact_fulfillment_revenue` tháng hiện tại | `cm1_actual × (days_in_month / elapsed_days)` |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+
