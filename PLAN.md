@@ -96,7 +96,7 @@
 |-----|:---:|:---:|---|:---:|
 | B2B Performance | ❌ (đã fix) | ❌ (đã fix) | BE hoàn toàn | ✅ s133 |
 | Channels | ✓ `getProjectionInfo()` | ✓ CM1 pro-rata | FE nặng | ✅ s133 |
-| BOD | ✓ `getProjectionInfo()` | ✓ projected CM1 | FE nặng | ❌ |
+| BOD | ✓ `getProjectionInfo()` | ✓ projected CM1 | FE nặng | ✅ s133 |
 | B2C | ✓ `getProjectionInfo()` | ✓ CM1 + group cost | FE nặng | ❌ |
 | Staff | ✗ | ✗ | BE hoàn toàn | ✅ |
 | All-Time | ✗ | ✗ | BE hoàn toàn | ✅ |
@@ -178,7 +178,7 @@ getProjectionInfo():
 
 ---
 
-### Phase 2 — BOD tab ← LÀM TIẾP THEO
+### Phase 2 — BOD tab ✅ s133
 
 **File BE**: `web/src/app/api/analytics/bod/summary/route.ts` + `web/src/lib/bod-data.ts`  
 **File FE**: `web/src/app/(dashboard)/analytics/bod/page.tsx`
@@ -198,7 +198,7 @@ Fix nhỏ: thêm `projection_factor` + `cm1_actual` vào summary response, FE ch
 
 ---
 
-### Phase 3 — B2C tab
+### Phase 3 — B2C tab ← LÀM TIẾP THEO
 
 **File BE**: `web/src/app/api/analytics/b2c/kpis/route.ts` + `b2c/performance/route.ts`  
 **File FE**: `web/src/app/(dashboard)/analytics/b2c/page.tsx`

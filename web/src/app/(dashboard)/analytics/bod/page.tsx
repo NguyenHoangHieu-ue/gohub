@@ -39,7 +39,8 @@ interface BODSummary {
   total_revenue: number; total_cogs: number; total_margin: number; total_units: number
   avg_margin_percent: number; total_gpm2: number; avg_gpm2_percent: number
   total_3hk_revenue?: number; total_3hk_contribution?: number
-  total_target_revenue?: number; previous_period?: BODSummary; previous_year?: BODSummary
+  total_target_revenue?: number; projection_factor?: number
+  previous_period?: BODSummary; previous_year?: BODSummary
 }
 interface BODDataPoint {
   date: string; revenue: number; cogs: number; margin: number; margin_percent: number
@@ -124,35 +125,34 @@ export default function BODReport() {
 
   const getProjectionInfo = () => {
     if (!summary || !dateRange.start || !dateRange.end) return null
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const start = new Date(dateRange.start); const end = new Date(dateRange.end)
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
-    const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
-    const factor = targetDays / daysElapsed
+    // Factor từ BE (bod-summary trả projection_factor) — đã xử lý cross-month đúng.
+    const factor = summary.projection_factor ?? 1
     if (factor <= 1) return null
 
-    const fullMonthOpCost = (summary.total_margin || 0) - (summary.total_gpm2 || 0)
+    // CM1 projected = CM1 actual × factor (backend đã tính total_gpm2 pro-rata đúng).
     const projectedRevenue = (summary.total_revenue || 0) * factor
-    const projectedMargin = (summary.total_margin || 0) * factor
-    const projectedGpm2 = projectedMargin - fullMonthOpCost
-    const projectedUnits = (summary.total_units || 0) * factor
+    const projectedMargin  = (summary.total_margin  || 0) * factor
+    const projectedGpm2    = (summary.total_gpm2    || 0) * factor
+    const projectedUnits   = (summary.total_units   || 0) * factor
 
     const prevRevenue = prevMonthSummary?.total_revenue || 0
-    const prevUnits = prevMonthSummary?.total_units || 0
-    const prevMargin = prevMonthSummary?.total_margin || 0
-    const prevGpm2 = prevMonthSummary?.total_gpm2 || 0
+    const prevUnits   = prevMonthSummary?.total_units   || 0
+    const prevMargin  = prevMonthSummary?.total_margin  || 0
+    const prevGpm2    = prevMonthSummary?.total_gpm2    || 0
 
-    const revenueChange = prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0
-    const unitsChange = prevUnits > 0 ? ((projectedUnits - prevUnits) / prevUnits) * 100 : 0
-    const marginChange = prevMargin > 0 ? ((projectedMargin - prevMargin) / prevMargin) * 100 : 0
-    const gpm2Change = prevGpm2 > 0 ? ((projectedGpm2 - prevGpm2) / prevGpm2) * 100 : 0
+    const start = new Date(dateRange.start)
+    const daysElapsed = Math.max(1, Math.ceil((new Date(dateRange.end).getTime() - start.getTime()) / 86400000) + 1)
 
     return {
-      factor, daysElapsed, totalDays: targetDays,
+      factor,
+      daysElapsed,
+      totalDays: new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate(),
       revenue: projectedRevenue, units: projectedUnits, margin: projectedMargin, gpm2: projectedGpm2,
       gpm2Percent: projectedRevenue > 0 ? (projectedGpm2 / projectedRevenue) * 100 : 0,
-      revenueChange, unitsChange, marginChange, gpm2Change,
+      revenueChange: prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0,
+      unitsChange:   prevUnits   > 0 ? ((projectedUnits   - prevUnits)   / prevUnits)   * 100 : 0,
+      marginChange:  prevMargin  > 0 ? ((projectedMargin  - prevMargin)  / prevMargin)  * 100 : 0,
+      gpm2Change:    prevGpm2    > 0 ? ((projectedGpm2    - prevGpm2)    / prevGpm2)    * 100 : 0,
     }
   }
 
