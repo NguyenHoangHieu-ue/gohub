@@ -11,6 +11,30 @@ import {
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts, type CostRecord, type CostLine } from "@/lib/b2b-customer-cost"
+
+/**
+ * Tính CH.Cost thực tế cho 1 tháng (pro-rata đúng cả 2 loại):
+ * - percent: áp trên revenue thực kỳ (moRevenue đã lọc theo date range từ SQL)
+ * - amount:  nhân dayRatio (= days_in_range_for_month / days_in_month)
+ *
+ * Khác calcRecordCostProjected: hàm đó dùng factor cho cả 2 loại (sai với cross-month range).
+ * TODO (OOP refactor): chuyển hàm này vào class AnalyticsCostEngine dùng chung toàn hệ thống.
+ */
+function calcChCostForPeriod(rec: CostRecord, moRevenue: number, dayRatio: number): number {
+  let lines: CostLine[] = []
+  if (rec.cost_lines) {
+    try { lines = typeof rec.cost_lines === "string" ? JSON.parse(rec.cost_lines) : (rec.cost_lines as unknown as CostLine[]) } catch {}
+  }
+  if (lines.length > 0) {
+    return lines.reduce((tot, l) => {
+      const val = Number(l?.value) || 0
+      return tot + (l?.type === "percent" ? (val / 100) * moRevenue : val * dayRatio)
+    }, 0)
+  }
+  const cval = Number(rec.cost_value) || 0
+  return rec.cost_type === "percent" ? (cval / 100) * moRevenue : cval * dayRatio
+}
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -140,11 +164,14 @@ export async function GET(req: NextRequest) {
 
     // ── Costs (no day-ratio for non-strategic, matching intel) ──────────────────
     const months = startDate && endDate ? getMonthsInRange(startDate, endDate) : []
-    // 3 nguồn chi phí độc lập → chạy song song thay vì 3 await nối tiếp (giảm critical path)
-    const [channelCosts, settingsMap, groupCostsRaw] = await Promise.all([
+    // 4 nguồn chi phí độc lập → chạy song song (customer cost chỉ load khi groupBy=customer)
+    const [channelCosts, settingsMap, groupCostsRaw, customerCosts] = await Promise.all([
       getChannelCostsForMonths(months),
       getCostSettingsForMonths(months),
       getGroupCostsForMonths(months),
+      groupBy === "customer" && months.length > 0
+        ? fetchCustomerCosts(months)
+        : Promise.resolve(new Map<string, CostRecord>()),
     ])
     // Group-level B2B costs — phân bổ theo tỷ lệ revenue từng channel
     const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
@@ -233,6 +260,22 @@ export async function GET(req: NextRequest) {
         gpm2_percent: m.revenue > 0 ? (m.gpm2 / m.revenue) * 100 : 0,
       })).sort((a, b) => b.revenue - a.revenue)
 
+      // ── Customer-level CH.Cost từ Turso (chỉ cho groupBy=customer) ─────────────
+      // Pro-rata đúng: sum qua từng tháng × dayRatio (amount) hoặc × revenue thực (percent).
+      // TODO (OOP refactor): đưa lên class AnalyticsCostEngine.computeCustomerChCost()
+      let chCost = 0
+      if (groupBy === "customer" && r.customer_code) {
+        for (const mo of r.monthly_data) {
+          const rec = customerCosts.get(`${mo.month}_${r.customer_code}`)
+          if (!rec) continue
+          const dayRatio = getDaysInMonth(mo.month) > 0
+            ? getDaysInRange(startDate || "", endDate || "", mo.month) / getDaysInMonth(mo.month)
+            : 0
+          chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
+        }
+      }
+      const cm1 = gpm2 - chCost
+
       return {
         name: r.name, channel: r.channel,
         sub_group_name:  r.sub_group_name  || "",
@@ -242,6 +285,8 @@ export async function GET(req: NextRequest) {
         revenue, margin, units: r.units,
         margin_percent: revenue > 0 ? (margin / revenue) * 100 : 0,
         gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
+        ch_cost: chCost,
+        cm1, cm1_percent: revenue > 0 ? (cm1 / revenue) * 100 : 0,
         sub_channels,
       }
     })

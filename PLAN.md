@@ -82,6 +82,58 @@
 
 ---
 
+## B5. OOP Analytics Refactor — FUTURE PLAN (ghi chú 2026-08-04)
+
+> **Động cơ**: s133 fix B2B Performance — phát hiện FE đang tính CH.Cost, projection factor ở nhiều tab khác nhau → dễ sai, dễ lệch số giữa tab. Fix Hướng B (backend) cho B2B đã chứng minh pattern đúng.
+
+### Mục tiêu
+- **Toàn bộ tính toán analytics** (CH.Cost, projection factor, CM1, pro-rata) phải ở **backend**.
+- **FE chỉ display** — không có arithmetic nào trên client-side.
+- **Một hàm cho nhiều tab** — dùng chung, không để tab này số khác tab kia.
+
+### Kiến trúc đề xuất (OOP)
+
+```
+web/src/lib/analytics/
+├── AnalyticsCostEngine.ts    ← tính toán chi phí (channel + group + customer CH.Cost)
+│   ├── computeChannelCost(months, revenue, dayRatio)
+│   ├── computeGroupCost(months, revenue, share)
+│   └── computeCustomerChCost(months, customerCode, monthlyRevenue)   ← đã implement s133
+│
+├── AnalyticsProjection.ts    ← projection factor dùng chung
+│   └── getProjectionFactor(startDate, endDate, today)                ← đã implement s133
+│
+├── AnalyticsDateHelper.ts    ← (đã có trong analytics-helpers.ts, move vào class)
+│   ├── getDaysInRange()
+│   ├── getDaysInMonth()
+│   └── getMonthsInRange()
+│
+└── BaseAnalyticsRoute.ts     ← base class cho mọi route analytics
+    ├── protected loadCosts(months)   → [channelCosts, groupCosts, customerCosts]
+    ├── protected applyProjection()
+    └── abstract computeResult()     → route cụ thể implement
+```
+
+### Thứ tự migrate (từ cao rủi ro nhất đến thấp)
+
+| Priority | Tab / Route | Vấn đề hiện tại | Đã BE? |
+|---|---|---|---|
+| 1 | B2B Performance | CH.Cost + projection — ✅ FIX s133 | ✅ |
+| 2 | B2C Performance | projection factor dùng riêng, CH.Cost FE | ❌ |
+| 3 | BOD | group cost split, strategic classification FE | Một phần |
+| 4 | Staff Report | projection + CM1 FE | ❌ |
+| 5 | All-Time | group cost + CM1 FE | Một phần |
+| 6 | Channels | CH.Cost FE | ❌ |
+
+### Nguyên tắc khi migrate từng tab
+
+1. Backend route trả về `cm1`, `cm1_percent`, `ch_cost` trong response (thêm vào, không xóa field cũ).
+2. FE đọc backend fields, bỏ FE arithmetic dần từng tab.
+3. Shared helper `calcChCostForPeriod()` (đã có trong b2b/performance/route.ts) → move vào `AnalyticsCostEngine`.
+4. `getProjectionFactor()` (đã fix s133) → copy logic sang `AnalyticsProjection.ts`, mọi tab import từ đó.
+
+---
+
 ## C. GẤU PRO — Roadmap
 
 ### C.1 Capabilities hiện tại ✅
