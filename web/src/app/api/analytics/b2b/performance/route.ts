@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    // v2: thêm price_list_name, customer_code, sub_group_name vào response (cho tier grouping)
-    const key = `b2b-perf2:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    // v3: thêm ch_cost, cm1, cm1_percent, cost_lines (s133 — customer CH.Cost từ Turso, pro-rata đúng)
+    const key = `b2b-perf3:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
