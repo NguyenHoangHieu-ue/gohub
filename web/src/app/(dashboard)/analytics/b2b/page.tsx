@@ -226,8 +226,14 @@ export default function B2BPerformance() {
       // (internal ops có revenue=0 nhưng GP âm → làm lệch tổng)
       const perfWithRevenue = safeB2BPerfCustomer.filter((c: any) => (c.revenue || 0) > 0)
       const totalGPActual = perfWithRevenue.reduce((s: number, c: any) => s + (c.margin || 0), 0)
-      const totalGpm2Actual = perfWithRevenue.reduce((s: number, c: any) =>
-        s + (c.margin || 0) - calcChCostInline(c.customer_code, c.revenue || 0), 0)
+
+      // CH.Cost nhập vào = ước tính cả tháng → chia projectionFactor để lấy phần kỳ thực tế
+      // CM1 actual = GP actual - (CH.Cost / projectionFactor)
+      // CM1 projected = GP projected - CH.Cost (full month GP trừ full month cost)
+      const pf = projectionFactor > 0 ? projectionFactor : 1
+      const totalFullMonthCH = perfWithRevenue.reduce((s: number, c: any) =>
+        s + calcChCostInline(c.customer_code, c.revenue || 0), 0)
+      const totalGpm2Actual = totalGPActual - totalFullMonthCH / pf
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
@@ -236,8 +242,8 @@ export default function B2BPerformance() {
       const prevTotalRev = b2bPrevRev
       const totalGPProjected = totalGPActual * (isProjectable ? projectionFactor : 1)
       const prevTotalGP = b2bPrevGP
-      const fullMonthB2BOpCost = totalGPActual - totalGpm2Actual
-      const totalGpm2Projected = isProjectable ? totalGPProjected - fullMonthB2BOpCost : totalGpm2Actual
+      // Projected CM1 = projected GP - full month CH.Cost (CH.Cost đã là ước tính cả tháng)
+      const totalGpm2Projected = isProjectable ? totalGPProjected - totalFullMonthCH : totalGpm2Actual
       const prevTotalGpm2 = b2bPrevGpm2
 
       const kpis: any[] = [
