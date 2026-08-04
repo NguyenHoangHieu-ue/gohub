@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard } from "@/lib/analytics-helpers"
+import { analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
   const channel      = p.get("channel") || ""
   const companyCode  = p.get("companyCode") || "ALL"
   const dataSource   = p.get("dataSource") || "fulfilled"
+  const includeShip        = p.get("includeShip")        === "1"
+  const includeInternalOps = p.get("includeInternalOps") === "1"
 
   if (!staffCode) return NextResponse.json([], { status: 200 })
 
@@ -29,7 +31,8 @@ export async function GET(req: NextRequest) {
   const params: unknown[] = [startDate, endDate, staffCode]
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
     AND TRIM(f.staff_code) = $3
-    AND f.sku != 'SHIPPINGFEE0'
+    ${shipFilter(includeShip)}
+    ${internalOpsFilter(includeInternalOps)}
     AND f.customer_code IS NOT NULL`
 
   if (companyCode && companyCode !== "ALL") {

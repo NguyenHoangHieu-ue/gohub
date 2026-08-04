@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard, getCustomerStrategicSql } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 
 // Phân loại B2B-Strategic theo price_list_name (KHÁCH) — dùng CHUNG cấu hình quarterly-settings với Quarter Report,
 // bảng "Phân khúc" (tier-performance), BOD & All-Time. Trước đây line chart dùng partner_tiers (KÊNH) → rỗng → Strategic=0.
@@ -16,12 +16,15 @@ export async function GET(req: NextRequest) {
   const endDate     = searchParams.get("endDate")
   const dateColumn  = searchParams.get("dateColumn") || "fulfiled_date"
   const companyCode = searchParams.get("companyCode") || "ALL"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol, "30 days", companyCode)
   const { isStrategicSql, excludeSql, hash } = await getCustomerStrategicSql()
+  const sfxCte = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
   // hash = tier keywords + excluded (quarterly-settings) → cache tự tươi khi Hiếu đổi cấu hình.
-  const cacheKey = `revenue-chart2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}`
+  const cacheKey = `revenue-chart2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
   const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeSql})`
 
   try {
@@ -29,7 +32,7 @@ export async function GET(req: NextRequest) {
       const rows = await queryAnalytics<Record<string, string>>(
         `WITH filtered_f AS (
            SELECT ${source.dateCol} as date, order_source_code, customer_code, ${source.revenueCol} as revenue
-           FROM ${source.mainTable} f WHERE ${filter}
+           FROM ${source.mainTable} f WHERE ${filter} ${sfxCte}
          )
          SELECT
            TO_CHAR(f.date::date, 'DD/MM') as name,

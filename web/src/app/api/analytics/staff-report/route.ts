@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
+import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
   const channel      = p.get("channel") || ""
   const companyCode  = p.get("companyCode") || "ALL"
   const dataSource   = p.get("dataSource") || "fulfilled"
+  const includeShip        = p.get("includeShip")        === "1"
+  const includeInternalOps = p.get("includeInternalOps") === "1"
 
   const isSales   = dataSource === "created"
   const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
@@ -27,7 +29,8 @@ export async function GET(req: NextRequest) {
   const params: unknown[] = [startDate, endDate]
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
     AND COALESCE(st.name, TRIM(f.staff_code)) != 'Auto ESIM'
-    AND f.sku != 'SHIPPINGFEE0'
+    ${shipFilter(includeShip)}
+    ${internalOpsFilter(includeInternalOps)}
     AND f.staff_code IS NOT NULL AND TRIM(f.staff_code) != ''`
 
   if (companyCode && companyCode !== "ALL") {

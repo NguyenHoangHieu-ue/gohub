@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
   const year = parseInt(searchParams.get("year") || String(today.getFullYear()))
   const quarter = searchParams.get("quarter") || `Q${Math.ceil((today.getMonth() + 1) / 3)}`
   const companyCode = searchParams.get("companyCode") || "ALL"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   // Dùng fact_fulfillment_revenue + fulfiled_date — nhất quán với B2B/B2C Performance (cùng date semantics).
   // fulfiled_date = ngày hoàn thành đơn hàng (revenue recognition). created_date → fact_sales_revenue (không có GP).
@@ -77,11 +79,12 @@ export async function GET(req: NextRequest) {
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
   const refresh = noCache(req)
 
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
   // Load settings (excluded customers) — dynamic, không cache hoặc re-fetch mỗi request
   const { excludedCustomers } = await fetchQuarterlySettings()
   const EXCLUDE_CUST_SQL = makeExcludeSql(excludedCustomers)
   // Loại KH có bảng giá chứa "INACTIVE" (vd: "[INACTIVE] Sponsor") khỏi mọi tổng B2B/B2C
-  const INACTIVE_FILTER = "AND UPPER(COALESCE(c.price_list_name, '')) NOT LIKE '%INACTIVE%'"
+  const INACTIVE_FILTER = `AND UPPER(COALESCE(c.price_list_name, '')) NOT LIKE '%INACTIVE%' ${sfx}`
 
   // Previous quarter dates (cho QoQ)
   const qNum = parseInt(quarter.replace("Q", ""))
@@ -94,7 +97,7 @@ export async function GET(req: NextRequest) {
 
   // v4: thêm prevChannelRows + fetchCosts(prevQMonths) để tính CM1 quý trước cho QoQ
   // v5: fix GROUP BY split bug (source_code removed from GROUP BY) + matchChannelCost prefix fix
-  const rawCacheKey = `qreport_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  const rawCacheKey = `qreport_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs (hiện tại + quý trước) chạy SONG SONG ──

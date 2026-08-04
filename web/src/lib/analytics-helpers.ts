@@ -438,6 +438,38 @@ export function getBODFilters(searchParams: URLSearchParams): string {
   return filter
 }
 
+// ── Filter fragments chuẩn (dùng chung mọi route) ────────────────────────────
+// Đồng bộ theo chuẩn order-report: include=false (default) = loại khỏi doanh thu SP thuần.
+// Khi bật CẢ 2 + includeOpsCustomers=true → khớp số liệu gohub_dw raw.
+
+/** Loại SHIPPINGFEE0 (phí ship). Alias fact table = f. */
+export function shipFilter(include: boolean): string {
+  return include ? "" : "AND f.sku != 'SHIPPINGFEE0'"
+}
+
+/** Loại nhóm INTERNAL-TRANSACTION (đơn SIM nội bộ: revenue=0, GP âm). Alias dim_order_source = s. */
+export function internalOpsFilter(include: boolean): string {
+  return include ? "" : "AND UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION'"
+}
+
+/**
+ * Loại INTERNAL-TRANSACTION bằng subquery (dùng khi dim_order_source chưa JOIN, chỉ có f.order_source_code).
+ * Alias fact table = f.
+ */
+export function internalOpsFilterByCode(include: boolean): string {
+  return include ? "" : "AND f.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')"
+}
+
+/**
+ * Loại khách ops theo customer_code (không cần JOIN dim_customer với alias cụ thể).
+ * Dùng khi query không sẵn alias dim_customer = c (ví dụ trong CTE b2b_raw).
+ */
+export function excludeOpsByCode(excludedCustomers: string[]): string {
+  if (excludedCustomers.length === 0) return ""
+  const esc = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
+  return `AND COALESCE(TRIM(f.customer_code), '') NOT IN (SELECT TRIM(code) FROM dim_customer WHERE name IN (${esc}))`
+}
+
 // ── SKU destination (for region chart) ───────────────────────────────────────
 
 type DestRule = { prefix: string; codeLength: number; offset: number }

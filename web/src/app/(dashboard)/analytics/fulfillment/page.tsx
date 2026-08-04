@@ -41,13 +41,18 @@ export default function FulfillmentReport() {
   const [data, setData] = useState<FulfillmentData | null>(null)
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
   useEffect(() => { fetchFulfillmentData() }, []) // eslint-disable-line react-hooks/exhaustive-deps — lọc theo ngày chỉ chạy khi bấm "Lọc"
 
   const fetchFulfillmentData = async () => {
     setLoading(true); setError(null)
     try {
-      const res = await fetch(`/api/analytics/fulfillment-report?startDate=${startDate}&endDate=${endDate}`)
+      const params = new URLSearchParams({ startDate, endDate })
+      if (includeShip)        params.set("includeShip", "1")
+      if (includeInternalOps) params.set("includeInternalOps", "1")
+      const res = await fetch(`/api/analytics/fulfillment-report?${params}`)
       if (res.ok) setData(await res.json())
       else { const errorData = await res.json(); setError(errorData.message || errorData.error || "Failed to fetch fulfillment data") }
     } catch (err: any) {
@@ -110,6 +115,12 @@ export default function FulfillmentReport() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
+          {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+            <label key={label} className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+              <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+            </label>
+          ))}
           <button onClick={() => fetchFulfillmentData()} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
           <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
             <Download className="w-4 h-4" />Export

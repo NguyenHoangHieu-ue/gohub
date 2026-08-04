@@ -105,6 +105,9 @@ export function B2CPerformance() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [showAllPerformance, setShowAllPerformance] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
 
   const toggleVendor = (vendor: string) => {
     setSelectedVendors(prev =>
@@ -273,6 +276,9 @@ export function B2CPerformance() {
       if (startDate) queryParams.append("startDate", startDate)
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
+      if (includeShip)         queryParams.append("includeShip", "1")
+      if (includeInternalOps)  queryParams.append("includeInternalOps", "1")
+      if (includeOpsCustomers) queryParams.append("includeOpsCustomers", "1")
       if (fresh) queryParams.append("nocache", "1")
 
       // Add advanced filters
@@ -330,7 +336,7 @@ export function B2CPerformance() {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, groupBy, dateColumn])
+  }, [period, groupBy, dateColumn, includeShip, includeInternalOps, includeOpsCustomers])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value)
@@ -571,6 +577,19 @@ export function B2CPerformance() {
                   <option value="previous_period">Previous Period</option>
                   <option value="previous_year">Previous Year</option>
                 </select>
+              </div>
+
+              {/* Include filters: Phí ship / Đơn nội bộ / KH Ops */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
+                <div className="flex flex-col gap-1.5">
+                  {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps], ["KH Ops", includeOpsCustomers, setIncludeOpsCustomers]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                    <label key={label} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                      <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-1.5">

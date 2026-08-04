@@ -16,6 +16,8 @@ export async function GET(req: NextRequest) {
   const endDate    = searchParams.get("endDate")
   const dateColumn = searchParams.get("dateColumn") || "fulfiled_date"
   const extraFilters = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
@@ -43,18 +45,18 @@ export async function GET(req: NextRequest) {
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}`
+    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const [groupResult, rawRows, cur3hk, targetData, prev, prevYear, prev3hk, ly3hk] = await Promise.all([
-        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters),
+        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
         queryAnalytics<Record<string, string>>(
           `SELECT SUM(f.${source.cogsCol}) as total_cogs, SUM(f.${source.quantityCol}) as total_units
            FROM ${source.mainTable} f WHERE ${getDateFilter(startDate, endDate, source.dateCol)} ${extraFilters}`
         ),
         fetch3hkRev(startDate, endDate),
         getTargetSummary(startDate, endDate),
-        fetchBODGroupMarginData(iso(prevStart), iso(prevEnd), dateColumn, extraFilters),
-        fetchBODGroupMarginData(iso(lyStart), iso(lyEnd), dateColumn, extraFilters),
+        fetchBODGroupMarginData(iso(prevStart), iso(prevEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchBODGroupMarginData(iso(lyStart), iso(lyEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
         fetch3hkRev(iso(prevStart), iso(prevEnd)),
         fetch3hkRev(iso(lyStart), iso(lyEnd)),
       ])

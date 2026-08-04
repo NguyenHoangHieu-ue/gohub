@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
 // CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
   const endDate        = searchParams.get("endDate")
   const comparisonType = searchParams.get("comparisonType") || "none"
   const dateColumn     = searchParams.get("dateColumn") || "fulfiled_date"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
   if (!startDate || !endDate) return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
 
   const source         = getAnalyticsSource(dateColumn)
@@ -50,7 +54,9 @@ export async function GET(req: NextRequest) {
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const key = `b2c-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}`
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
+    const key = `b2c-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [aggRows, channelRows] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -58,13 +64,13 @@ export async function GET(req: NextRequest) {
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin,
                   COUNT(DISTINCT f.order_code) as orders, SUM(f.${source.quantityCol}) as units
            FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-           WHERE ${B2C_FILTER} AND ${filter} ${advancedFilter}
+           WHERE ${B2C_FILTER} AND ${filter} ${advancedFilter} ${sfx}
          ),
          previous_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin,
                   COUNT(DISTINCT f.order_code) as orders, SUM(f.${source.quantityCol}) as units
            FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-           WHERE ${B2C_FILTER} AND ${prevFilter} ${advancedFilter}
+           WHERE ${B2C_FILTER} AND ${prevFilter} ${advancedFilter} ${sfx}
          )
          SELECT c.revenue as current_revenue, p.revenue as prev_revenue,
                 c.margin as current_margin, p.margin as prev_margin,
@@ -78,7 +84,7 @@ export async function GET(req: NextRequest) {
                 SUM(CASE WHEN ${filter} THEN f.${source.revenueCol} ELSE 0 END) as current_revenue,
                 SUM(CASE WHEN ${prevFilter} THEN f.${source.revenueCol} ELSE 0 END) as prev_revenue
          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${B2C_FILTER} AND (${filter} OR ${prevFilter}) ${advancedFilter}
+         WHERE ${B2C_FILTER} AND (${filter} OR ${prevFilter}) ${advancedFilter} ${sfx}
          GROUP BY 1`
       ),
     ])

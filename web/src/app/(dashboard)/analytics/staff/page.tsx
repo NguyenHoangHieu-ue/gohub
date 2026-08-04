@@ -131,6 +131,8 @@ function StaffPageInner() {
 
   const applyFilters = () => { setApplied(draft); setUrlState(draft) }
 
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
   const [channels,     setChannels]     = useState<string[]>([])
   const [staffData,    setStaffData]    = useState<StaffRow[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -154,15 +156,18 @@ function StaffPageInner() {
   const fetchStaff = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch(`/api/analytics/staff-report?${new URLSearchParams({
+      const staffParams = new URLSearchParams({
         startDate: applied.startDate, endDate: applied.endDate,
         dataSource: applied.viewMode,
         channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
         channel: applied.channel, companyCode: applied.companyCode,
-      })}`)
+      })
+      if (includeShip)        staffParams.set("includeShip", "1")
+      if (includeInternalOps) staffParams.set("includeInternalOps", "1")
+      const r = await fetch(`/api/analytics/staff-report?${staffParams}`)
       if (r.ok) setStaffData(await r.json())
     } catch {} finally { setLoading(false) }
-  }, [applied])
+  }, [applied, includeShip, includeInternalOps])
 
   const fetchTierKeywords = useCallback(async () => {
     try {
@@ -445,6 +450,13 @@ function StaffPageInner() {
         </div>
         {staffDropOpen && <div className="fixed inset-0 z-40" onClick={() => setStaffDropOpen(false)} />}
 
+        {/* Ship / Internal Ops toggles */}
+        {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+          <label key={label} className="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+            <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+          </label>
+        ))}
         <button onClick={applyFilters}
           className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700",
             isDirty && "animate-pulse")}>

@@ -5,8 +5,10 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
-  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
+  getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
 // staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
@@ -25,7 +27,7 @@ function getDaysInRange(startDate: string, endDate: string, month: string) {
 }
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
-async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string) {
+async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
 
@@ -56,7 +58,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
        SELECT f.*, TRIM(s.channel_name) as channel_name
        FROM ${source.mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${advancedFilter}
+       WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${advancedFilter} ${sfx}
      )
      SELECT ${selectClause}${marketSelect},
        TO_CHAR(data.${source.dateCol}::DATE, 'YYYY-MM') as month,
@@ -164,15 +166,20 @@ export async function GET(req: NextRequest) {
   const dateColumn     = searchParams.get("dateColumn") || "fulfiled_date"
   const groupBy        = searchParams.get("groupBy") || "channel"
   const comparisonType = searchParams.get("comparisonType") || "none"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
   if (!startDate || !endDate) return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
 
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const key = `b2c-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}`
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
+    const key = `b2c-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
-        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
+        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)
       }
 
       const start = new Date(startDate); const end = new Date(endDate)
@@ -187,8 +194,8 @@ export async function GET(req: NextRequest) {
       }
       // Kỳ hiện tại + kỳ trước độc lập → fetch song song
       const [current, previous] = await Promise.all([
-        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn),
-        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn),
+        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
+        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
       ])
       return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
     }, QUERY_TTL_MIN, noCache(req))

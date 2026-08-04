@@ -7,8 +7,10 @@ import {
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
   getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
+  shipFilter, internalOpsFilter, excludeOpsByCode,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -21,13 +23,18 @@ export async function GET(req: NextRequest) {
   const endDate    = searchParams.get("endDate")   || ""
   const dateColumn = searchParams.get("dateColumn") || "fulfiled_date"
   const groupBy    = searchParams.get("groupBy")    || "channel"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
 
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate || null, endDate || null, source.dateCol)
 
   try {
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     // v2: thêm price_list_name, customer_code, sub_group_name vào response (cho tier grouping)
-    const key = `b2b-perf2:${dateColumn}:${startDate}:${endDate}:${groupBy}`
+    const key = `b2b-perf2:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
@@ -56,7 +63,7 @@ export async function GET(req: NextRequest) {
                 TRIM(COALESCE(s.sub_group_name, '')) as sub_group_name, TRIM(s.code) as source_code
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE UPPER(s.group_name) = 'B2B' AND ${filter}
+         WHERE UPPER(s.group_name) = 'B2B' AND ${filter} ${sfx}
        )
        SELECT ${selectClause},
               MAX(f.channel_name)    as channel,

@@ -55,6 +55,9 @@ export default function B2BPerformance() {
   const [error, setError] = useState<string | null>(null)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [b2bCostMap, setB2bCostMap] = useState<Record<string, { cost_lines: { label?: string; type: string; value: number }[] }>>({})
@@ -147,6 +150,9 @@ export default function B2BPerformance() {
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
       queryParams.append("comparisonType", "previous_period")
+      if (includeShip)        queryParams.append("includeShip", "1")
+      if (includeInternalOps) queryParams.append("includeInternalOps", "1")
+      if (includeOpsCustomers) queryParams.append("includeOpsCustomers", "1")
       // fresh=true (sau khi lưu Cost/Target) → bỏ qua cache server, lấy số tươi ngay.
       if (fresh) queryParams.append("nocache", "1")
       const nc = fresh ? "&nocache=1" : ""
@@ -214,7 +220,7 @@ export default function B2BPerformance() {
     }
   }
 
-  useEffect(() => { fetchData() }, [dateColumn, granularity]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [dateColumn, granularity, includeShip, includeInternalOps, includeOpsCustomers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value)
   const formatNumber = (value: number) => new Intl.NumberFormat("vi-VN").format(value)
@@ -327,6 +333,15 @@ export default function B2BPerformance() {
             <div className="flex bg-slate-100 p-1 rounded-lg">
               <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
               <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
+            </div>
+            {/* Filter: Include Ship / Internal Ops / Ops Customers */}
+            <div className="flex items-center gap-2">
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps], ["KH Ops", includeOpsCustomers, setIncludeOpsCustomers]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-1 cursor-pointer select-none">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+                  <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                </label>
+              ))}
             </div>
             <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters

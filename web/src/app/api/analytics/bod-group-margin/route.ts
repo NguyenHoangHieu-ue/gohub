@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
   const dateColumn     = searchParams.get("dateColumn")     || "fulfiled_date"
   const comparisonType = searchParams.get("comparisonType") || "none"
   const extraFilters   = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
@@ -22,10 +24,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}`
+    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
-        return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
+        return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)).groups
       }
 
       const s = new Date(startDate); const e = new Date(endDate)
@@ -39,8 +41,8 @@ export async function GET(req: NextRequest) {
       }
       // Kỳ hiện tại + kỳ trước độc lập → fetch song song
       const [currentRes, previousRes] = await Promise.all([
-        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters),
-        fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters),
+        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters, includeShip, includeInternalOps),
       ])
       const current = currentRes.groups
       const previous = previousRes.groups

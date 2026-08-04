@@ -177,6 +177,8 @@ function QuarterlyContent() {
   const today = new Date()
   const [selQ, setSelQ]       = useState(`Q${Math.ceil((today.getMonth() + 1) / 3)}`)
   const [selYear, setSelYear] = useState(today.getFullYear())
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
   const [report, setReport]   = useState<QReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving]   = useState(false)
@@ -242,12 +244,16 @@ function QuarterlyContent() {
   const fetchReport = useCallback(async (refresh = false) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/analytics/quarterly-report?quarter=${selQ}&year=${selYear}&companyCode=ALL${refresh ? "&nocache=1" : ""}`)
+      const qParams = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode: "ALL" })
+      if (refresh)           qParams.set("nocache", "1")
+      if (includeShip)       qParams.set("includeShip", "1")
+      if (includeInternalOps) qParams.set("includeInternalOps", "1")
+      const res = await fetch(`/api/analytics/quarterly-report?${qParams}`)
       if (!res.ok) throw new Error(`${res.status}`)
       setReport(await res.json())
     } catch (e: any) { notify(false, `Lỗi tải dữ liệu: ${e.message}`) }
     finally { setLoading(false) }
-  }, [selQ, selYear])
+  }, [selQ, selYear, includeShip, includeInternalOps])
 
   const loadTargets = useCallback(async () => {
     try {
@@ -399,6 +405,13 @@ function QuarterlyContent() {
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+          {/* Ship / Internal Ops toggles */}
+          {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+            <label key={label} className="flex items-center gap-1 cursor-pointer">
+              <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+              <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+            </label>
+          ))}
           <button onClick={() => fetchReport()} disabled={loading}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] hover:bg-[#00337f] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />

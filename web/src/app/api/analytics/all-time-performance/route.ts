@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -20,12 +20,14 @@ export async function GET(req: NextRequest) {
   const channel      = p.get("channel")      || ""
 
   // Strategic/Non theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
+  const includeShip        = p.get("includeShip")        === "1"
+  const includeInternalOps = p.get("includeInternalOps") === "1"
   const { isStrategicSql, excludeSql: excludeList, hash } = await getCustomerStrategicSql()
-  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}`
+  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1)`
+      let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1) ${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
 
       if (channelGroup) {
         const grp = channelGroup.toUpperCase().replace(/'/g, "''")

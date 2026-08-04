@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -14,10 +14,13 @@ export async function GET(req: NextRequest) {
   const dateColumn  = searchParams.get("dateColumn")  || "fulfiled_date"
   const channelName = searchParams.get("channel")     || ""
   const channelGroup = searchParams.get("channelGroup") || ""
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter = getPrevDateFilter(startDate, endDate, "none", source.dateCol)
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
 
   const chFilter = channelName
     ? `AND TRIM(s.channel_name) = '${channelName.replace(/'/g, "''")}'`
@@ -26,7 +29,7 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
-    const key = `ch-kpis:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}`
+    const key = `ch-kpis:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest) {
                 SUM(f.${source.quantityCol}) as units
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${filter} ${chFilter}`
+         WHERE ${filter} ${chFilter} ${sfx}`
       ),
       queryAnalytics<Record<string, string>>(
         `SELECT SUM(f.${source.revenueCol}) as revenue,
@@ -44,7 +47,7 @@ export async function GET(req: NextRequest) {
                 COUNT(DISTINCT f.order_code) as orders
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${prevFilter} ${chFilter}`
+         WHERE ${prevFilter} ${chFilter} ${sfx}`
       ),
     ])
 

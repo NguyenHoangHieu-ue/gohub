@@ -1,6 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
 // CM1 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
@@ -83,16 +83,17 @@ export interface BODGroup {
   margin_percent: number; gpm2: number; gpm2_percent: number
 }
 
-export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
+export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
   const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
-       SELECT order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
-       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters}
+       SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
+       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
      )
      SELECT ${groupCaseSQL} as "group", TRIM(s.channel_name) as channel,
             SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.cogsCol}) as cogs,

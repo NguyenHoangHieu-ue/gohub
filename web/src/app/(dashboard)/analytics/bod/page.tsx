@@ -71,6 +71,8 @@ export default function BODReport() {
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
@@ -156,7 +158,7 @@ export default function BODReport() {
 
   const projection = getProjectionInfo()
 
-  useEffect(() => { fetchData() }, [dateColumn]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [dateColumn, includeShip, includeInternalOps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportChannelPerformanceCSV = () => {
     if (!channelPerformance.length) return
@@ -194,6 +196,8 @@ export default function BODReport() {
         startDate: dateRange.start, endDate: dateRange.end, comparisonType,
         vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
         channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
+        ...(includeShip ? { includeShip: "1" } : {}),
+        ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
       })
       const fetchJson = async (url: string, name: string) => {
         const res = await fetch(url)
@@ -445,7 +449,15 @@ export default function BODReport() {
               )}
             </div>
           </div>
-          <div className="flex justify-end pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <div className="flex items-center gap-4">
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                  <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                </label>
+              ))}
+            </div>
             <button onClick={fetchData} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Apply Filters</button>
           </div>
         </div>

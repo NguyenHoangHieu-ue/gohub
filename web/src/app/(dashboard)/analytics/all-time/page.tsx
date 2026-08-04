@@ -47,6 +47,8 @@ export default function AllTimeReport() {
   const [selectedChannelGroup, setSelectedChannelGroup] = useState("")
   const [selectedCustomerTier, setSelectedCustomerTier] = useState("")
   const [showFilters, setShowFilters] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
   useEffect(() => { fetchChannels() }, [])
   useEffect(() => {
@@ -75,6 +77,8 @@ export default function AllTimeReport() {
         ...(selectedChannelGroup && { channelGroup: selectedChannelGroup }),
         ...(selectedCustomerTier && { customerTier: selectedCustomerTier }),
         ...(selectedChannel && { channel: selectedChannel }),
+        ...(includeShip ? { includeShip: "1" } : {}),
+        ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
       })
       const response = await fetch(`/api/analytics/all-time-performance?${params}`)
       const result = await response.json()
@@ -88,7 +92,7 @@ export default function AllTimeReport() {
     }
   }
 
-  useEffect(() => { fetchData() }, [selectedChannelGroup, selectedCustomerTier, selectedChannel]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [selectedChannelGroup, selectedCustomerTier, selectedChannel, includeShip, includeInternalOps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const processChartData = (perfData: PerformanceData[]) => {
     if (!perfData) return []
@@ -256,7 +260,15 @@ export default function AllTimeReport() {
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button onClick={() => { setSelectedChannelGroup(""); setSelectedCustomerTier(""); setSelectedChannel(""); setStartDate(getDefaultDateRange().startDate); setEndDate(getDefaultDateRange().endDate) }} className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Reset Filters</button>
+            <div className="flex items-center gap-4">
+              <button onClick={() => { setSelectedChannelGroup(""); setSelectedCustomerTier(""); setSelectedChannel(""); setStartDate(getDefaultDateRange().startDate); setEndDate(getDefaultDateRange().endDate) }} className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Reset Filters</button>
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                  <span className={val ? "text-xs font-semibold text-amber-600" : "text-xs font-semibold text-slate-500"}>{label}</span>
+                </label>
+              ))}
+            </div>
             <button onClick={() => { fetchData(); setShowFilters(false) }} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Apply Filters</button>
           </div>
         </div>
