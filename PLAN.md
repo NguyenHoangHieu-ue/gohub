@@ -4,11 +4,12 @@
 
 ---
 
-## TRẠNG THÁI HIỆN TẠI (2026-08-04)
+## TRẠNG THÁI HIỆN TẠI (2026-08-05)
 
-- **Branch**: staging `75ed89c` — CHƯA merge main (staging-only rule từ s132)
+- **Branch**: main = staging = `4def78c` — production đang chạy, đã khớp
 - **Migrations chạy**: v30 ✅ | v30b ✅ | v31 ⏳ Hiếu chưa chạy (`chatbot_learning_log`)
-- **s133 (2026-08-04)**: Fix B2B Performance — CH.Cost + projection về BE (Hướng B). Xem §B5.
+- **s133 (2026-08-04–05)**: OOP Analytics Refactor Phase 0–4 HOÀN THÀNH + cache fix B2B Performance. Xem §B5.
+- **Verify**: B2B Performance CH.Cost ✅ map đúng (Hiếu xác nhận 2026-08-05).
 - **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8.
 
 ---
