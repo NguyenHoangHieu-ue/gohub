@@ -157,15 +157,27 @@ export default function B2BPerformance() {
       if (fresh) queryParams.append("nocache", "1")
       const nc = fresh ? "&nocache=1" : ""
 
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
+      // Tính tháng trong range để load customer costs đầy đủ
+      const monthsInRange: string[] = []
+      if (startDate && endDate) {
+        let cur = new Date(startDate); cur.setDate(1)
+        const endD = new Date(endDate)
+        while (cur <= endD) {
+          monthsInRange.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`)
+          cur.setMonth(cur.getMonth()+1)
+        }
+      }
+
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings, ...costResults] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
-        // Load tier keywords từ quarterly-settings (giống Quarter Report)
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
+        // Load b2b customer costs cho TẤT CẢ tháng trong range — inline (không fire-and-forget)
+        ...monthsInRange.map(m => fetch(`/api/analytics/b2b-customer-costs?month=${m}`).then(r => r.ok ? r.json() : null).catch(() => null)),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -174,6 +186,27 @@ export default function B2BPerformance() {
       const safeTrend = Array.isArray(trend) ? trend : []
       const safeFeeChannels = Array.isArray(feeChannels) ? feeChannels : []
 
+      // Gộp customer costs từ tất cả tháng vào 1 map: customerCode → { cost_lines merged }
+      const inlineCostMap: Record<string, { cost_lines: { label?: string; type: string; value: number }[] }> = {}
+      for (const costRes of costResults) {
+        for (const row of (costRes?.rows || [])) {
+          if (!row.customer_code) continue
+          if (!inlineCostMap[row.customer_code]) inlineCostMap[row.customer_code] = { cost_lines: [] }
+          // Gộp cost_lines: cộng dồn amount, trung bình percent (hoặc cộng dồn đơn giản)
+          for (const line of (row.cost_lines_parsed || [])) {
+            inlineCostMap[row.customer_code].cost_lines.push(line)
+          }
+        }
+      }
+      setB2bCostMap(inlineCostMap)
+
+      // Helper tính CH.Cost per customer từ inlineCostMap
+      const calcChCostInline = (code: string | undefined, rev: number) => {
+        if (!code) return 0
+        const lines = inlineCostMap[code]?.cost_lines || []
+        return lines.reduce((s: number, l: any) => s + (l.type === "percent" ? (l.value / 100) * rev : (l.value || 0)), 0)
+      }
+
       setPartnerTiers(tiersData)
       if (quarterlySettings?.tierKeywords) setTierKeywords(quarterlySettings.tierKeywords)
       setWholesaleCustomers(safeB2BPerfCustomer)
@@ -181,25 +214,27 @@ export default function B2BPerformance() {
       setTrendData(safeTrend)
       setChannelsWithPlatformFee(safeFeeChannels)
 
-      fetchB2BCosts(startDate.slice(0, 7))
-
       const findKPI = (kpis: any[], label: string) => kpis.find(k => k.label === label)
+      // Revenue + Orders: vẫn từ b2b/kpis (có kỳ trước để so sánh)
       const b2bRev = findKPI(safeB2BKpis, "Total Revenue")?.value || 0
       const b2bPrevRev = findKPI(safeB2BKpis, "Total Revenue")?.lastPeriod || 0
-      const b2bGP = findKPI(safeB2BKpis, "Gross Profit")?.value || 0
       const b2bPrevGP = findKPI(safeB2BKpis, "Gross Profit")?.lastPeriod || 0
-      const b2bGpm2 = findKPI(safeB2BKpis, "CM1")?.value || 0
       const b2bPrevGpm2 = findKPI(safeB2BKpis, "CM1")?.lastPeriod || 0
+
+      // ── BIỆN PHÁP MẠNH: GP & CM1 tính trực tiếp từ wholesaleCustomers ──────────
+      // GP = tổng margin từng KH (cùng nguồn với cột GP trong bảng B2B Tier Performance)
+      // CM1 = GP - CH.Cost per KH (từ inlineCostMap đã load đầy đủ)
+      const totalGPActual = safeB2BPerfCustomer.reduce((s: number, c: any) => s + (c.margin || 0), 0)
+      const totalGpm2Actual = safeB2BPerfCustomer.reduce((s: number, c: any) =>
+        s + (c.margin || 0) - calcChCostInline(c.customer_code, c.revenue || 0), 0)
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
       const totalRevActual = b2bRev
       const totalRevProjected = totalRevActual * (isProjectable ? projectionFactor : 1)
       const prevTotalRev = b2bPrevRev
-      const totalGPActual = b2bGP
       const totalGPProjected = totalGPActual * (isProjectable ? projectionFactor : 1)
       const prevTotalGP = b2bPrevGP
-      const totalGpm2Actual = b2bGpm2
       const fullMonthB2BOpCost = totalGPActual - totalGpm2Actual
       const totalGpm2Projected = isProjectable ? totalGPProjected - fullMonthB2BOpCost : totalGpm2Actual
       const prevTotalGpm2 = b2bPrevGpm2

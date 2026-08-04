@@ -52,7 +52,20 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // Chặn truy cập thẳng URL trang chưa được cấp
   const pathname = headers().get("x-pathname") || ""
   const id = pathToAnalyticsId(pathname)
-  if (!granted.has(id)) redirect("/chatbot")
+  if (!granted.has(id)) {
+    // Ngoại lệ: /analytics/creator/* — user được cấp GP access trong gp_allowed_users
+    if (id === "creator") {
+      const { data: gpRow } = await supabaseAdmin
+        .from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle()
+      if (gpRow?.value) {
+        try {
+          const gpAllowed = JSON.parse(gpRow.value) as string[]
+          if (gpAllowed.includes(username)) return <>{children}</>
+        } catch {}
+      }
+    }
+    redirect("/chatbot")
+  }
 
   return <>{children}</>
 }
