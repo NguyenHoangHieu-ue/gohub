@@ -1349,8 +1349,9 @@ async function runLarkTask(action: string, args: any): Promise<any> {
     if (action === "createLarkTask") {
       const body: any = {
         summary: args.summary,
-        // Add creator as a member so they see it in "My Tasks"
-        members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "creator" }] : undefined,
+        // Gán Hiếu làm assignee để task hiện trong "My Tasks".
+        // Lark Task v2 role hợp lệ = "assignee" | "follower" ("creator" KHÔNG hợp lệ → gán fail).
+        members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "assignee" }] : undefined,
       }
       if (args.description) body.description = { content: args.description, content_type: "markdown" }
       if (args.due) body.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }
