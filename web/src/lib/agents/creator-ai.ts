@@ -1362,23 +1362,54 @@ async function genWithRetry(model: any, request: any, attempts = 3): Promise<any
   throw lastErr
 }
 
+// Ngày tháng theo giờ VN (ICT) → inject vào system prompt để Gấu tự hiểu "tháng này"/"hôm nay".
+function buildDateContext(): string {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }))
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+  const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+  const ytdStart = new Date(now.getFullYear(), 0, 1)
+  const dow = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"][now.getDay()]
+  return `\n\n━━━ NGÀY THÁNG (auto, giờ VN) ━━━
+Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(yesterday)} (ETL sáng ~08h ICT, hôm nay chưa đủ data).
+"tháng này" / "MTD" = ${fmt(mtdStart)} → ${fmt(yesterday)}
+"tháng trước" (đủ ngày) = ${fmt(lastMonthStart)} → ${fmt(lastMonthEnd)}
+"YTD" = ${fmt(ytdStart)} → ${fmt(yesterday)}
+→ Khi user nói "tháng này" / "gần đây" / "hôm nay" / "tháng trước" → DÙNG NGAY các mốc trên, KHÔNG hỏi lại ngày. Luôn cắt data tới ${fmt(yesterday)}.`
+}
+
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
   fileContext?: FileContext
 ): Promise<{ text: string; sources: WebSource[] }> {
-  const [partnerTierInfo, ga4SiteList] = await Promise.all([
+  // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
+  const isFreshConversation = geminiHistory.length <= 1
+  const [partnerTierInfo, ga4SiteList, kbInject] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
     }).catch(() => ""),
     ga4Sites().then(sites => sites.length ? "\n\nGA4 SITES: " + sites.map(s => `${s.id}="${s.name}" (${s.propertyId})`).join(", ") : "").catch(() => ""),
+    isFreshConversation
+      ? runReadKnowledgeBase().then((kb: any) => {
+          const entries = kb?.entries || kb?.result || kb
+          if (!entries || (Array.isArray(entries) && entries.length === 0)) return ""
+          const body = typeof entries === "string" ? entries : JSON.stringify(entries)
+          return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, 8000)}`
+        }).catch(() => "")
+      : Promise.resolve(""),
   ])
+
+  // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
+  const dateContext = buildDateContext()
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
-    systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
+    systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
     tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
