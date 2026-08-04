@@ -1,5 +1,30 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-04 (Session 132 — Analytics filter chuẩn + Bé Gấu self-learning + Gấu Pro draft quality).
+Cập nhật lần cuối: 2026-08-04 (Session 132 — Gấu Pro update 8 tính năng + B2B fixes + projection factor).
+
+## ══════ SESSION 132 bổ sung — Gấu Pro Comprehensive Update (Opus, staging-only) ══════
+
+STAGING-ONLY từ đây (Hiếu chốt): chỉ push staging, KHÔNG tự merge main.
+
+### B2B Performance fixes (đã merge main trước khi có rule staging-only):
+- GP/CM1 MTD: root cause dim_customer JOIN thiếu ::text → dùng excludeOpsByCode subquery (khớp tier table)
+- MTD GP loại customer revenue≤0 (khớp filter tier table) — GP = 158.5M khớp
+- Tier table CM1 = pro-rata GP - CH.Cost(projected revenue)
+- MTD CM1 actual = GP actual - CH.Cost/projectionFactor (CH.Cost nhập = ước tính cả tháng)
+- Projection factor bỏ clamp trần 10x → chạy đúng theo ngày filter (1/8-2/8 = 15.5x)
+
+### Gấu Pro 8 tính năng mới (staging, chưa merge main):
+1. Auto date context (buildDateContext) — Gấu biết "tháng này"/"hôm nay", không hỏi ngày
+2. Self-correction SQL retry (auto_retry_suggested + rule bắt buộc retry ≤2 lần)
+3. KB auto-lookup lượt đầu (nạp creator_kb vào system prompt khi conversation mới)
+4. Export marker auto cho bảng > 15 dòng
+5. Conversation summarization (compressHistory: >20 turns → tóm tắt 10 turns cũ)
+6. Follow-up chips (```followup block → chip UI click submit)
+7. Lark Base tool (queryLarkBase) — cần scope bitable:app:readonly
+8. Voice input (Web Speech API vi-VN, nút mic)
++ Lark task fix: X-Lark-Request-User-Open-Id (act on behalf of Hiếu)
++ Bé Gấu self-learning: creator Lark ID fallback lark_ou_e5af3c7f447984052c1c5a5c2f5
+
+### ⚠️ Hiếu cần: add scope bitable:app:readonly (Lark Base). Bỏ chart types mở rộng (làm sau).
 
 ## ══════ SESSION 132 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 
