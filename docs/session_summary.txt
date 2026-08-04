@@ -1,34 +1,85 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-04 (Session 133 — OOP Analytics Refactor Phase 0–3: B2B fix + shared lib + Channels/BOD/B2C).
+Cập nhật lần cuối: 2026-08-04 (Session 133 — OOP Analytics Refactor Phase 0–4 HOÀN THÀNH).
 
-## ══════ SESSION 133 bổ sung — OOP Analytics Refactor Phase 0–3 ══════
+## ══════ SESSION 133 — TỔNG KẾT ĐẦY ĐỦ (2026-08-04, Sonnet 4.6) ══════
 
-### Phase 0 — Shared library `web/src/lib/analytics-engine/` (commit 43dba28)
-- projection.ts: getProjectionFactor() — cross-month → 1, MTD tháng hiện tại → factor
-- cost-engine.ts: calcChCostForPeriod/calcChannelOpCost/calcGroupOpCost pro-rata đúng
-- types.ts: AnalyticsComputedFields + AnalyticsKpiResult interface
+### Bối cảnh
+PIC báo cáo tuần chọn 27/7–2/8 → B2B Performance CM1 sai (projection factor 4.43x, CH.Cost gộp 2 tháng).
+Root cause: FE tự tính projection + cost → cross-month range cho kết quả sai, không nhất quán giữa tab.
+Giải pháp: OOP Analytics Refactor — chuyển toàn bộ tính toán về BE, FE chỉ display.
 
-### Phase 1 — Channels tab (commit 43dba28)
-- channels/kpis/route.ts: thêm cm1, gpm2, cm1_percent, projection_factor (load costs multi-month, pro-rata)
-- channels/page.tsx: getProjectionInfo() dùng metrics.projection_factor từ BE; bỏ ~140 dòng FE cost computation
+---
+
+### Task 1: B2B Performance — Hướng B (commit f63a6a3)
+BE (`b2b/performance/route.ts`):
+- `calcChCostForPeriod()`: amount × dayRatio, percent × moRevenue (pro-rata đúng)
+- `fetchCustomerCosts(months)` song song channel/group costs
+- Trả `ch_cost`, `cm1`, `cm1_percent` trong response
+
+FE (`b2b/page.tsx`):
+- `getProjectionFactor()`: cross-month → factor=1, MTD hiện tại → factor đúng
+- Bỏ `calcChCost`, `calcChCostInline`, multi-month cost loading
 
 ### Fix B2B CH.Cost display (commit ff7eb76)
-- Gốc lỗi: ch_cost=0 (số) → ?? không trigger fallback → cột hiện 0; b2bCostMap bị bỏ → expand rỗng
-- BE: thêm cost_lines[] vào response (gom từ Turso tất cả tháng trong range)
-- FE: chCostActual = margin - cm1 (tổng cost deduction = channel+group+customer); costLines = row.cost_lines
+- Gốc lỗi: `ch_cost=0` (số) → `??` không trigger fallback → cột hiện 0; b2bCostMap bị bỏ → expand rỗng
+- BE: thêm `cost_lines[]` vào response (gom từ Turso tất cả tháng trong range)
+- FE: `chCostActual = margin − cm1` (tổng deduction = channel+group+customer); `costLines = row.cost_lines`; bỏ `b2bCostMap` state + fetch
+
+### Phase 0 — Shared library (commit 43dba28)
+`web/src/lib/analytics-engine/`:
+- `projection.ts`: `getProjectionFactor(start, end)` — cross-month → 1, MTD → factor
+- `cost-engine.ts`: `calcChCostForPeriod` / `calcChannelOpCost` / `calcGroupOpCost` pro-rata
+- `types.ts`: `AnalyticsComputedFields` + `AnalyticsKpiResult`
+
+### Phase 1 — Channels tab (commit 43dba28)
+- BE `channels/kpis/route.ts`: thêm `cm1`, `gpm2`, `cm1_percent`, `projection_factor` (multi-month cost, pro-rata)
+- FE `channels/page.tsx`: `getProjectionInfo()` dùng `metrics.projection_factor` từ BE; bỏ ~140 dòng FE cost computation
 
 ### Phase 2 — BOD tab (commit 37f16d0)
-- bod-summary/route.ts: thêm projection_factor vào response (1 dòng import + return)
-- bod/page.tsx getProjectionInfo(): dùng summary.projection_factor; projectedGpm2 = total_gpm2 × factor
+- BE `bod-summary/route.ts`: +`projection_factor` (1 import + 1 dòng)
+- FE `bod/page.tsx`: `projectedGpm2 = total_gpm2 × factor` (thay vì `projectedMargin − fixedOpCost`)
 
-### Phase 3 — B2C Performance tab (commit f7ef6a6)
-- b2c/kpis route đã đúng hoàn toàn (pro-rata đúng, CM1 tại kpis[5])
-- b2c-performance.tsx getProjectionInfo(): thêm current-month check + projectedGpm2 = gpm2 × factor
-- b2c-advanced-dashboard: KHÔNG đụng (YTD server-side, không có user-range projection issue)
+### Phase 3 — B2C Performance (commit f7ef6a6)
+- `b2c/kpis` đã đúng hoàn toàn → CM1 tại `kpis[5]` sẵn dùng
+- FE `b2c-performance.tsx`: +current-month check + `projectedGpm2 = gpm2 × factor`
+- `b2c-advanced-dashboard`: KHÔNG đụng (YTD server-side, khác use case)
 
-### Trạng thái OOP Refactor:
-✅ B2B Performance, Channels, BOD, B2C (Performance view), Staff, All-Time, Quarterly, Fulfillment
-❌ Phase 4 cleanup nhỏ (Staff tier FE classification, All-Time weighted avg) — tùy chọn, không ảnh hưởng số
+### Phase 4 — Staff tier classification (commit adbba79)
+- BE `staff-report/customers/route.ts`: thêm `tier` field từ `makeClassifyTier(tierKeywords)` (cùng nguồn Quarter Report)
+- FE `staff/page.tsx`: bỏ `tierKeywords` state, `fetchTierKeywords()`, `useEffect` quarterly-settings (1 API call ít hơn)
+- `TierBadge`: nhận `tier` string từ BE thay vì tính từ `pln+kws`
+
+---
+
+### Kết quả OOP Refactor
+
+| Tab | Projection | CM1/Cost | Status |
+|-----|:---:|:---:|:---:|
+| B2B Performance | ✅ BE | ✅ BE | Done s133 |
+| Channels | ✅ BE | ✅ BE | Done s133 |
+| BOD | ✅ BE | ✅ BE | Done s133 |
+| B2C Performance | ✅ BE | ✅ BE | Done s133 |
+| Staff | — | ✅ BE + tier BE | Done s133 |
+| All-Time | — | ✅ BE | Done trước |
+| Quarterly | — | ✅ BE | Done trước |
+| Fulfillment | — | ✅ BE | Done trước |
+
+Cross-month range (vd 27/7–2/8): tất cả tab không chiếu sai nữa.
+CM1 projected = CM1 actual × factor (nhất quán toàn hệ thống).
+
+### ⚠️ Hiếu cần làm (còn treo từ s132)
+1. Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor
+2. Thêm ENV `LARK_CREATOR_USER_ID` trên Vercel (Lark open_id đầy đủ)
+3. Cost T8 B2C: nhập lại value ≠ 0 trong Manage Costs
+4. Nhập target T7/T8 ở Manage Costs cho scheduled reports
+
+### ⚠️ Hiếu cần test trên staging
+- B2B Performance: chọn 27/7–2/8 → CH.Cost hiện đúng, không có "Projected" section
+- B2B Performance: MTD T8 → projection bình thường, CH.Cost khớp với Manage Costs
+- Channels: 27/7–2/8 → không project; CM1 trong KPI card khớp với bảng performance
+- BOD: 27/7–2/8 → không có "Projected"; MTD T8 → projected CM1 = actual × factor
+- B2C Performance: tháng T7 full → không project; MTD T8 → project đúng
+- Staff: expand 1 sales → customer list hiện tier badge đúng (Strategic/VIP/Gold/Silver/B2C)
 
 ## ══════ SESSION 133 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 
