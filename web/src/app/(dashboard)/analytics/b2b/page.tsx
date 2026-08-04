@@ -222,10 +222,11 @@ export default function B2BPerformance() {
       const b2bPrevGpm2 = findKPI(safeB2BKpis, "CM1")?.lastPeriod || 0
 
       // ── BIỆN PHÁP MẠNH: GP & CM1 tính trực tiếp từ wholesaleCustomers ──────────
-      // GP = tổng margin từng KH (cùng nguồn với cột GP trong bảng B2B Tier Performance)
-      // CM1 = GP - CH.Cost per KH (từ inlineCostMap đã load đầy đủ)
-      const totalGPActual = safeB2BPerfCustomer.reduce((s: number, c: any) => s + (c.margin || 0), 0)
-      const totalGpm2Actual = safeB2BPerfCustomer.reduce((s: number, c: any) =>
+      // Áp cùng filter với bảng B2B Tier Performance: loại customer revenue ≤ 0
+      // (internal ops có revenue=0 nhưng GP âm → làm lệch tổng)
+      const perfWithRevenue = safeB2BPerfCustomer.filter((c: any) => (c.revenue || 0) > 0)
+      const totalGPActual = perfWithRevenue.reduce((s: number, c: any) => s + (c.margin || 0), 0)
+      const totalGpm2Actual = perfWithRevenue.reduce((s: number, c: any) =>
         s + (c.margin || 0) - calcChCostInline(c.customer_code, c.revenue || 0), 0)
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
