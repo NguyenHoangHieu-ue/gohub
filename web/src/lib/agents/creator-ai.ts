@@ -155,7 +155,7 @@ const getLarkTaskDecl = {
 }
 const createLarkTaskDecl = {
   name: "createLarkTask",
-  description: "Create a new Lark task for Hiếu. Requires 'task:task:write' scope.",
+  description: "Tạo task Lark mới GÁN cho Hiếu (hiện trong My Tasks của Hiếu). Hoạt động tốt với app token. Requires 'task:task:write'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {

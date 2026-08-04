@@ -59,10 +59,11 @@ export async function replyLarkMessage(messageId: string, text: string) {
   })
 }
 
-// DM trực tiếp đến 1 user Lark (dùng user_id từ LARK_CREATOR_USER_ID)
-export async function sendLarkDM(userId: string, text: string): Promise<void> {
+// DM trực tiếp đến 1 user Lark bằng open_id (LARK_CREATOR_USER_ID = open_id).
+// LƯU Ý: phải dùng receive_id_type=open_id (không phải user_id) vì ta truyền open_id.
+export async function sendLarkDM(openId: string, text: string): Promise<void> {
   try {
-    await sendLarkMessage(userId, "user_id", text)
+    await sendLarkMessage(openId, "open_id", text)
   } catch { /* fire-and-forget — không block */ }
 }
 
