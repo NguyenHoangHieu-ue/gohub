@@ -182,9 +182,17 @@ Nâng cấp Gấu Pro thành assistant toàn năng — 8 tính năng mới:
    - **scatter**: multi-metric `chart_type:"scatter"` + `x_key`/`y_key`
    Cả 3 có nút tải PNG. System prompt Gấu Pro có ví dụ đủ 3 loại.
 
-### ENV cần (Hiếu)
-- `LARK_CREATOR_USER_ID` (đã set) — dùng cho Lark task + Lark Base (X-Lark-Request-User-Open-Id).
-- Scope Lark: `task:task:read/write` (đã thêm) + `bitable:app:readonly` (đã thêm) → Lark Base hoạt động.
+### Lark OAuth (duyệt task cá nhân)
+App token KHÔNG list được task/tasklist riêng của user (Lark trả 0) → cần **user_access_token** (OAuth).
+- Flow: nút "🔗 Kết nối Lark" (header Gấu Pro, creator only) → `/api/lark/oauth/start` → Lark authorize → `/api/lark/oauth/callback` đổi code→token → lưu `app_settings.lark_oauth_creator` (JSON access+refresh, auto refresh).
+- `getLarkUserToken()` (lark.ts) tự refresh; `runLarkTask` ưu tiên user token cho list/tasklist/get/create/update. Chưa kết nối → list báo "bấm Kết nối Lark".
+- create/update vẫn chạy được bằng app token nếu chưa OAuth (fallback).
+- **open_id thật của Hiếu = `ou_e5af3c7f447984052c1c5a5c2f594127`** (mã cũ `...c2f5` bị cắt cụt → "not a valid user id"). Lấy từ `users.lark_open_id` (role=creator).
+
+### ENV / scope cần (Hiếu)
+- `LARK_CREATOR_USER_ID` = `ou_e5af3c7f447984052c1c5a5c2f594127` (đầy đủ) — dùng cho DM tự học + fallback app token.
+- Scope Lark: `task:task` + `task:tasklist` + `bitable:app:readonly` (đã thêm).
+- **Redirect URL** trong Lark Security Settings: `<domain>/api/lark/oauth/callback` (staging + production).
 
 ### Ghi chú tham khảo
 - **Tỷ giá nội bộ** (nhập ở Admin → Tỷ Giá Nội Bộ) lưu ở Supabase `app_settings`, key prefix `fx.` (vd `fx.usd_vnd`, `fx.twd_usd`), `category="fx_rate"`. Ghi qua `PATCH /api/admin/settings`.

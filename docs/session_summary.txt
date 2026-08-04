@@ -29,6 +29,15 @@ STAGING-ONLY từ đây (Hiếu chốt): chỉ push staging, KHÔNG tự merge m
 - Lark Base: Hiếu ĐÃ add scope bitable:app:readonly → queryLarkBase hoạt động.
 - Tỷ giá Admin → lưu Supabase app_settings key prefix "fx." category "fx_rate".
 
+### Lark task/tasklist + OAuth (điều tra live + build, staging daf9cba):
+- open_id cũ (...c2f5) BỊ CẮT CỤT → "not a valid user id". Đúng = ou_e5af3c7f447984052c1c5a5c2f594127 (từ users.lark_open_id).
+  Fix: be-gau fallback đọc users(creator), sendLarkDM dùng open_id type. Hiếu SỬA Vercel env LARK_CREATOR_USER_ID = full.
+- Test live: app token create/get-by-guid/update/DM = OK; nhưng LIST task/tasklist trả 0 (Lark bắt user_access_token).
+- BUILD OAuth: lark.ts getLarkUserToken/saveLarkUserToken/exchangeLarkCode (lưu app_settings.lark_oauth_creator, auto refresh);
+  routes /api/lark/oauth/start|callback|status; runLarkTask ưu tiên user token; UI nút "Kết nối Lark" (creator only).
+- listLarkTasklists tool + tasklist_guid cho listLarkTasks (xem task trong Task List).
+- ⚠️ Hiếu cần: (1) Vercel env open_id full, (2) Lark Redirect URL <domain>/api/lark/oauth/callback, (3) scope task:tasklist.
+
 ## ══════ SESSION 132 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 
 ### Task 1: Analytics Filter Standardization (DONE — staging 35cfccf + cc2382e)
