@@ -176,7 +176,15 @@ Nâng cấp Gấu Pro thành assistant toàn năng — 8 tính năng mới:
 
 ### UX
 8. **Voice input** — nút mic (Web Speech API, vi-VN) cạnh nút gửi; feature-detect, ẩn nếu browser không hỗ trợ.
+9. **Chart types mở rộng** (`chat-chart.tsx`): ngoài bar/line/area/pie, thêm:
+   - **stacked bar**: multi-metric + `stacked:true`
+   - **waterfall**: single-series `chart_type:"waterfall"` (P&L breakdown, âm=đỏ/dương=xanh/`isTotal`=xanh dương)
+   - **scatter**: multi-metric `chart_type:"scatter"` + `x_key`/`y_key`
+   Cả 3 có nút tải PNG. System prompt Gấu Pro có ví dụ đủ 3 loại.
 
 ### ENV cần (Hiếu)
 - `LARK_CREATOR_USER_ID` (đã set) — dùng cho Lark task + Lark Base (X-Lark-Request-User-Open-Id).
-- Scope Lark: `task:task:read/write` (đã thêm) + `bitable:app:readonly` (cho Lark Base).
+- Scope Lark: `task:task:read/write` (đã thêm) + `bitable:app:readonly` (đã thêm) → Lark Base hoạt động.
+
+### Ghi chú tham khảo
+- **Tỷ giá nội bộ** (nhập ở Admin → Tỷ Giá Nội Bộ) lưu ở Supabase `app_settings`, key prefix `fx.` (vd `fx.usd_vnd`, `fx.twd_usd`), `category="fx_rate"`. Ghi qua `PATCH /api/admin/settings`.

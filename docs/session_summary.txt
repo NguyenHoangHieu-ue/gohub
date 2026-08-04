@@ -24,7 +24,10 @@ STAGING-ONLY từ đây (Hiếu chốt): chỉ push staging, KHÔNG tự merge m
 + Lark task fix: X-Lark-Request-User-Open-Id (act on behalf of Hiếu)
 + Bé Gấu self-learning: creator Lark ID fallback lark_ou_e5af3c7f447984052c1c5a5c2f5
 
-### ⚠️ Hiếu cần: add scope bitable:app:readonly (Lark Base). Bỏ chart types mở rộng (làm sau).
+### Chart types mở rộng (đã làm nốt, staging 7aae09e):
+9. stacked bar (stacked:true) + waterfall (P&L breakdown) + scatter (x_key/y_key) — chat-chart.tsx + system prompt ví dụ. Có nút PNG.
+- Lark Base: Hiếu ĐÃ add scope bitable:app:readonly → queryLarkBase hoạt động.
+- Tỷ giá Admin → lưu Supabase app_settings key prefix "fx." category "fx_rate".
 
 ## ══════ SESSION 132 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 
