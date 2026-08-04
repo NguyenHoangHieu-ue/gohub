@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import {
+  getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter,
+  getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+} from "@/lib/analytics-helpers"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -62,10 +68,58 @@ export async function GET(req: NextRequest) {
     const cUni = parseInt(c.units     || "0")
     const pct  = (a: number, b: number) => b === 0 ? 0 : ((a - b) / b) * 100
 
+    // ── CM1 = margin − channel op costs (pro-rata đúng từng tháng) ──────────────
+    // Load costs cho tất cả months trong range (xử lý đúng cross-month).
+    // Group costs: revShare=1 khi query theo group, channel costs theo channelName.
+    const months = getMonthsInRange(startDate || "", endDate || "")
+    let cm1 = cMar
+    if (months.length > 0) {
+      const [channelCosts, groupCostsRaw] = await Promise.all([
+        getChannelCostsForMonths(months),
+        getGroupCostsForMonths(months),
+      ])
+      const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
+      let opCost = 0
+
+      // Channel-level costs (theo channelName hoặc tất cả channels nếu không filter)
+      const relevantChannelCosts = channelName
+        ? channelCosts.filter(cc => cc.channel === channelName)
+        : channelCosts  // all channels (group aggregate)
+
+      relevantChannelCosts.forEach(cc => {
+        const dayRatio = getDaysInMonth(cc.month) > 0
+          ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+        COST_KEYS.forEach(key => {
+          const cv = cc[key]
+          // percent type: dùng cRev (tổng revenue kỳ) — xấp xỉ đủ cho KPI card
+          if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cRev * cv.value) / 100
+        })
+      })
+
+      // Group-level costs (B2B / B2C) — revShare=1 khi query toàn group
+      const tursoGroup = channelGroup === "B2B" ? "B2B" : channelGroup === "B2C" ? "B2C" : null
+      if (tursoGroup) {
+        groupCosts.filter(gc => gc.group_name === tursoGroup).forEach(gc => {
+          const dayRatio = getDaysInMonth(gc.month) > 0
+            ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+          opCost += parseFloat(gc.amount || "0") * dayRatio
+        })
+      }
+
+      cm1 = cMar - opCost
+    }
+
+    const projFactor = getProjectionFactor(startDate || "", endDate || "")
+
     return {
       revenue:        cRev,
       margin:         cMar,
       margin_percent: cRev > 0 ? (cMar / cRev) * 100 : 0,
+      gpm2:           cm1,
+      gpm2_percent:   cRev > 0 ? (cm1 / cRev) * 100 : 0,
+      cm1,
+      cm1_percent:    cRev > 0 ? (cm1 / cRev) * 100 : 0,
+      projection_factor: projFactor,
       orders:         cOrd,
       units:          cUni,
       prev_revenue:   pRev,

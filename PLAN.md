@@ -95,7 +95,7 @@
 | Tab | Projection FE | CM1/Cost FE | Kết luận | Status |
 |-----|:---:|:---:|---|:---:|
 | B2B Performance | ❌ (đã fix) | ❌ (đã fix) | BE hoàn toàn | ✅ s133 |
-| Channels | ✓ `getProjectionInfo()` | ✓ CM1 pro-rata | FE nặng | ❌ |
+| Channels | ✓ `getProjectionInfo()` | ✓ CM1 pro-rata | FE nặng | ✅ s133 |
 | BOD | ✓ `getProjectionInfo()` | ✓ projected CM1 | FE nặng | ❌ |
 | B2C | ✓ `getProjectionInfo()` | ✓ CM1 + group cost | FE nặng | ❌ |
 | Staff | ✗ | ✗ | BE hoàn toàn | ✅ |
@@ -151,7 +151,7 @@ web/src/lib/analytics-engine/
 
 ---
 
-### Phase 1 — Channels tab ← LÀM TIẾP THEO
+### Phase 1 — Channels tab ✅ s133
 
 **File BE**: `web/src/app/api/analytics/channels/kpis/route.ts`  
 **File FE**: `web/src/app/(dashboard)/analytics/channels/page.tsx`
@@ -178,7 +178,7 @@ getProjectionInfo():
 
 ---
 
-### Phase 2 — BOD tab
+### Phase 2 — BOD tab ← LÀM TIẾP THEO
 
 **File BE**: `web/src/app/api/analytics/bod/summary/route.ts` + `web/src/lib/bod-data.ts`  
 **File FE**: `web/src/app/(dashboard)/analytics/bod/page.tsx`
