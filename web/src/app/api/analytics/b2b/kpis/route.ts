@@ -5,10 +5,10 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
   getMonthsInRange, getChannelCostsForMonths, getDaysInRange, getDaysInMonth,
-  shipFilter, internalOpsFilter,
+  shipFilter, internalOpsFilter, excludeOpsByCode,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
-    const excludeSql = makeExcludeSql(excludedCustomers)
-    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeSql}`
+    // excludeOpsByCode: dùng subquery (không cần JOIN dim_customer) — nhất quán với b2b/performance
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     const key = `b2b-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [main, channelRows] = await Promise.all([
@@ -41,19 +41,17 @@ export async function GET(req: NextRequest) {
         `WITH current_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin, COUNT(DISTINCT f.order_code) as orders
            FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
            WHERE UPPER(s.group_name) = 'B2B' AND ${filter} ${sfx}
          ),
          previous_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin, COUNT(DISTINCT f.order_code) as orders
            FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
            WHERE UPPER(s.group_name) = 'B2B' AND ${prevFilter} ${sfx}
          )
-         SELECT c.revenue as current_revenue, p.revenue as prev_revenue,
-                c.margin as current_margin, p.margin as prev_margin,
-                c.orders as current_orders, p.orders as prev_orders
-         FROM current_period c, previous_period p`
+         SELECT cur.revenue as current_revenue, prv.revenue as prev_revenue,
+                cur.margin as current_margin, prv.margin as prev_margin,
+                cur.orders as current_orders, prv.orders as prev_orders
+         FROM current_period cur, previous_period prv`
       ),
       queryAnalytics<Record<string, string>>(
         `SELECT TRIM(s.channel_name) as channel,
@@ -61,7 +59,6 @@ export async function GET(req: NextRequest) {
                 SUM(CASE WHEN ${filter} THEN f.${source.revenueCol} ELSE 0 END) as current_revenue,
                 SUM(CASE WHEN ${prevFilter} THEN f.${source.revenueCol} ELSE 0 END) as prev_revenue
          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
          WHERE UPPER(s.group_name) = 'B2B' AND (${filter} OR ${prevFilter}) ${sfx}
          GROUP BY TRIM(s.channel_name), month`
       ),
