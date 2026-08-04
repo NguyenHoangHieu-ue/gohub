@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  Download, FileJson, FileType, Package,
+  Download, FileJson, FileType, Package, Mic,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -22,6 +22,7 @@ interface Message {
   content: string
   sources?: WebSource[]
   fileName?: string  // attached file name shown in user bubble
+  summarized?: boolean  // server nén lịch sử cũ cho lượt này
 }
 
 // ─── LaTeX → Unicode converter ───────────────────────────────────────────────
@@ -459,15 +460,28 @@ function SourceCitations({ sources }: { sources: WebSource[] }) {
   )
 }
 
+// Parse ```followup block → array các gợi ý (tối đa 3). Trả [] nếu không có.
+function extractFollowupChips(text: string): string[] {
+  const m = text.match(/```followup\s*([\s\S]*?)```/)
+  if (!m) return []
+  try {
+    const arr = JSON.parse(m[1].trim())
+    if (Array.isArray(arr)) return arr.filter(s => typeof s === "string" && s.trim()).slice(0, 3)
+  } catch {}
+  return []
+}
+
 // ─── MsgContent — assistant message with PDF ref ─────────────────────────────
 
-function MsgContent({ msg }: { msg: { content: string; sources?: WebSource[] } }) {
+function MsgContent({ msg, onFollowup }: { msg: { content: string; sources?: WebSource[] }; onFollowup?: (q: string) => void }) {
   const contentRef = useRef<HTMLDivElement>(null)
-  // Hide export helper blocks from the visible answer (they drive buttons, not display)
+  const chips = extractFollowupChips(msg.content)
+  // Hide export/followup helper blocks from the visible answer (they drive buttons, not display)
   const display = msg.content
     .replace(/```export\s[\s\S]*?```/g, "")
     .replace(/```csv[\s\S]*?```/g, "")
     .replace(/```json\s*\[[\s\S]*?```/g, "")
+    .replace(/```followup[\s\S]*?```/g, "")
     .trim()
   const chartResult = extractChartData(display)
   return (
@@ -483,6 +497,16 @@ function MsgContent({ msg }: { msg: { content: string; sources?: WebSource[] } }
       </div>
       <ExportBar content={msg.content} contentRef={contentRef} />
       {msg.sources && msg.sources.length > 0 && <SourceCitations sources={msg.sources} />}
+      {chips.length > 0 && onFollowup && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {chips.map((c, i) => (
+            <button key={i} onClick={() => onFollowup(c)}
+              className="px-3 py-1.5 text-xs font-medium text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-full hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors">
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -547,8 +571,11 @@ export default function CreatorAIPage() {
   const [dragging,      setDragging]      = useState(false)
   const [gpAllowed,     setGpAllowed]     = useState<boolean | null>(null) // null = loading
   const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
+  const [listening,     setListening]     = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<any>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -584,6 +611,32 @@ export default function CreatorAIPage() {
       else localStorage.removeItem(LS_KEY)
     } catch {}
   }, [messages])
+
+  // Setup Web Speech API (voice input) — feature-detect, ẩn nút nếu browser không hỗ trợ
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.lang = "vi-VN"
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+    rec.onresult = (e: any) => {
+      const transcript = e.results?.[0]?.[0]?.transcript || ""
+      if (transcript) setInput(prev => (prev ? prev + " " : "") + transcript)
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    recognitionRef.current = rec
+    setVoiceSupported(true)
+    return () => { try { rec.abort() } catch {} }
+  }, [])
+
+  const toggleVoice = useCallback(() => {
+    const rec = recognitionRef.current
+    if (!rec) return
+    if (listening) { try { rec.stop() } catch {}; setListening(false) }
+    else { try { rec.start(); setListening(true) } catch { setListening(false) } }
+  }, [listening])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -703,6 +756,7 @@ export default function CreatorAIPage() {
         role:    "assistant",
         content: data.text || "Không có nội dung trả về.",
         sources: Array.isArray(data.sources) ? data.sources : [],
+        summarized: data.summarized === true,
       }])
     } catch (e: any) {
       setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
@@ -855,13 +909,14 @@ export default function CreatorAIPage() {
                 }`}>
                   {msg.role === "user" ? (
                     <span className="whitespace-pre-wrap">{msg.content}</span>
-                  ) : (() => {
-                    const chartResult = extractChartData(msg.content)
-                    return (
-                      <MsgContent msg={msg} />
-
-                    )
-                  })()}
+                  ) : (
+                    <>
+                      {msg.summarized && (
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
+                      )}
+                      <MsgContent msg={msg} onFollowup={q => send(q)} />
+                    </>
+                  )}
                 </div>
               </div>
               {msg.role === "user" && (
@@ -966,6 +1021,20 @@ export default function CreatorAIPage() {
                 t.style.height = Math.min(t.scrollHeight, 140) + "px"
               }}
             />
+            {voiceSupported && (
+              <button
+                onClick={toggleVoice}
+                disabled={loading}
+                title={listening ? "Đang nghe... (bấm để dừng)" : "Nhập bằng giọng nói (tiếng Việt)"}
+                className={`flex-shrink-0 w-10 h-10 flex items-center justify-center border rounded-xl transition-colors disabled:opacity-40 ${
+                  listening
+                    ? "bg-red-500 text-white border-red-500 animate-pulse"
+                    : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border-gray-200 dark:border-slate-700"
+                }`}
+              >
+                <Mic size={16} />
+              </button>
+            )}
             <button
               onClick={() => send(input)}
               disabled={(!input.trim() && attachedFiles.length === 0) || loading}
