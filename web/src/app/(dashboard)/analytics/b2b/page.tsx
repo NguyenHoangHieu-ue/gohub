@@ -93,7 +93,8 @@ export default function B2BPerformance() {
     const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
     const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
     const factor = targetDays / daysElapsed
-    return Math.min(10, Math.max(1, factor))
+    // KHÔNG clamp trần 10x — factor chạy đúng theo ngày filter (vd 1/8-2/8 = 31/2 = 15.5x)
+    return Math.max(1, factor)
   }
 
   const projectionFactor = getProjectionFactor()
