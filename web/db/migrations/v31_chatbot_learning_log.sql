@@ -23,3 +23,9 @@ CREATE TABLE IF NOT EXISTS chatbot_learning_log (
 -- Index để query pending items nhanh
 CREATE INDEX IF NOT EXISTS chatbot_learning_log_status_idx ON chatbot_learning_log(status);
 CREATE INDEX IF NOT EXISTS chatbot_learning_log_created_idx ON chatbot_learning_log(created_at DESC);
+
+-- Lưu Lark user ID của creator để Bé Gấu gửi DM thông báo tự học
+-- Hiếu chạy dòng này nếu muốn lưu vào DB (code đã hardcode fallback rồi nên không bắt buộc)
+INSERT INTO app_settings (key, value)
+VALUES ('creator_lark_user_id', 'lark_ou_e5af3c7f447984052c1c5a5c2f5')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;

@@ -254,8 +254,12 @@ Trả JSON (KHÔNG giải thích gì khác):
     const sevLabel = severity === "HIGH" ? "⚠️ CAO" : severity === "MEDIUM" ? "🔵 TB" : "🔘 THẤP"
     const typeLabel = result.learning_type === "CONFLICT" ? "❌ MÂU THUẪN" : result.learning_type === "CONFIRM" ? "✅ XÁC NHẬN" : "🆕 MỚI"
 
-    // DM creator qua Lark
-    const creatorLarkId = process.env.LARK_CREATOR_USER_ID
+    // DM creator qua Lark — đọc từ ENV → app_settings → hardcode (theo thứ tự ưu tiên)
+    let creatorLarkId = process.env.LARK_CREATOR_USER_ID
+    if (!creatorLarkId) {
+      const { data: s } = await supabaseAdmin.from("app_settings").select("value").eq("key","creator_lark_user_id").maybeSingle()
+      creatorLarkId = s?.value || "lark_ou_e5af3c7f447984052c1c5a5c2f5"
+    }
     if (creatorLarkId) {
       const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
       let msg = `🔔 Bé Gấu phát hiện học liệu [${typeLabel}]\n${sevLabel}\n\n👤 User: ${userName || userId} (role: ${role})\n📅 ${now}\n💬 Nói: "${userMsg.slice(0, 200)}"\n\n🧠 Phát hiện: "${result.detected_info}"`

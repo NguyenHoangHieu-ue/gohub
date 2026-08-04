@@ -505,23 +505,56 @@ Nếu đã có thông tin → không hỏi lại, tiến hành luôn.
 Chỉ tạo draft cho MISSING combos.
 
 **Step 3 — Áp GoHub rules** (readKnowledgeBase trước để lấy chuẩn code):
+
+**SKU Code = 13 chars**: \`[PurchaseType(1)][ProductType(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]\`
+
+PurchaseType (char 1):
+- VN company: 1=VN Stock Direct, 2=VN Stocks Internal GHI, 3=VN Monthly Invoice Internal GHI, 4=VN Telco Balance, 5=VN Datapool, 6=VN Others
+- US company: A=US Stock Direct, B=US Stock Internal GHV, C=US Monthly Invoice Internal GHV, D=US Telco Balance, E=US Datapool
+
+ProductType (char 2): A=SIM/eSIM data, B=eSIM profile, C=eSIM full, D=SIM frame, E=SIM full, F=phí ship, G=gifts, H=others
+
+DataType (char 8): A=Daily-Unlimited5mbps, B=Daily-Unlimited10mbps, C=Unlimited20mbps, D=Unlimited100mbps, E=Fixed-Unlimited5mbps, F=Fixed-throttle<2mbps, G=Unlimited10mbps, H=Unlimited5mbps, K=profile/frame, L=Unlimited50mbps, P=Daily-throttle<2mbps, T=Daily-throttle<2mbps-Midnight, X=Daily-Unlimited10mbps-Midnight, Y=Fixed-no-throttle, Z=Daily-no-throttle
+
+DataAmount (chars 9-11): NNN=N GB (001=1GB, 005=5GB, 065=65GB); NHM=N×100MB (1HM=100MB, 5HM=500MB); NDN=N.N GB (0D5=0.5GB, 0D8=0.8GB, 1D5=1.5GB); UNL=Unlimited
+
+Vendor codes (chars 6-7): GB=WorldMove, 3D=3HK Datapool, BC=Billion Connect, JY=Joytel, KD=KDDI, TM=TruemoveH
+
 - 42-combo standard: Daily 1/2/3 GB/ngày × 3/5/7/10/15/30 days (18) + Fixed 5/10/20 GB × 6 days (18) + Unlimited × 6 days (6)
-- product_code (8): [source_type][product_type][country_group(3)][vendor(2)][data_policy] — PHẢI đúng format
-- sku_code (13): product_code(8) + data_amount_code(3) + day_amount(2) — PHẢI đúng format
-- Vendor priority: HK/TW→WM (no-KYC); Japan→KDDI; else→3HK trước WM
+- Vendor priority: HK/TW→WM(GB)/no-KYC; Japan→KD; else→3D trước GB
 - Compute COGS: áp FX + VAT từ KB
 
-**Step 4 — Validate codes**: kiểm tra:
-- product_code: đúng 8 ký tự, format khớp quy tắc
-- sku_code: đúng 13 ký tự, 8 ký tự đầu = product_code
-- Không trùng với SKU đã có (kết quả Step 2)
-- Nếu có lỗi validate → sửa trước khi output
+**Step 4 — Validate codes**:
+- product_code = 8 chars đầu SKU, đúng format
+- sku_code = 13 chars, prefix 8 = product_code
+- Không trùng SKU đã có (Step 2). Sửa trước khi output.
 
-**Step 5 — Output 2 bảng đúng format GoHub**:
-- **SKU table** (19 cols): tenant, productCode, dataAmount, dataAmountUnit, dayAmount, dayAmountUnit, nameVn, nameEn, frameSku, datapackSku, latestCogs, latestCogsCurrency, throttleSpeed, call, callSmsDetails, expirations, vendorSku, vendorSkuSim, SKU
-- **Product table** (20 cols): tenant, sourceType, productType, supportCountryCode, supportedCountries, vendorCode, dataPolicyCode, typeOfSim, operatorCode, purchaseType, skuType, dataType, importType, networkType, apn, onsiteCarrier, hotspot, kycCode, kycNeeded, note
+**Step 5 — Output theo template file GoHub ("Gighub Product.xlsx" — 5 sheet)**:
 
-Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`\`csv block (header + data). Highlight cells cần Hiếu điền tay nếu chưa đủ info.
+File Excel output gồm 5 sheet. Sheet 1 tùy biến (chỉ cần vendor price + COGS USD + COGS VND). Bốn sheet còn lại BẮT BUỘC theo đúng cấu trúc cột:
+
+**Sheet "Danh sách sản phẩm"** (tùy biến — liệt kê SP từ NCC):
+- Cần có: ID (vendor product ID), Data Type, nameEn, dataAmount, dataAmountUnit, dayAmount, dayAmountUnit
+- **Bắt buộc**: Original Cost (USD), Latest COGS (USD), Latest COGS (VND), throttleSpeed, call, callSmsDetails, APN, Operator, Activation, network
+
+**Sheet "Product US"** (36 cột, tenant=US):
+tenant*, sourceType*, productType*, supportCountryCode*, supportedCountries, vendorCode*, dataPolicyCode*, purchaseFormulaType, nameUs, nameVn, typeOfSim, operatorCode, purchaseType, skuType, dataType, baseSimEsimSkuCode, importType, dailyResetTime, activationTime, networkType, apnOriginal, apn, onsiteCarrier, localPhoneNumber, localNumberCountry, hotspot, kycCode, kycNeeded, kycLinks, topUpOptions, activation, unsupportedApps, telcoPerks, note, dataPlanType, **Product code**
+
+**Sheet "SKU US"** (20 cột, tenant=US, COGS in USD):
+tenant*, productCode*, dataAmount*, dataAmountUnit*, dayAmount*, dayAmountUnit*, nameVn*, nameEn*, frameSku, datapackSku, latestCogs, latestCogsCurrency, throttleSpeed, call, callSmsDetails, expirations, vendorSku, vendorSkuSim, **SKUCode**, Sync GC _(để trống)_
+
+**Sheet "Product VN"** (36 cột, tenant=VN):
+_Cùng cấu trúc Product US_ — chỉ khác tenant=VN và sourceType dùng mã số (1-6 thay D-A)
+
+**Sheet "SKU VN"** (19 cột, tenant=VN, COGS in VND):
+_Cùng cấu trúc SKU US_ — không có cột Sync GC; latestCogsCurrency=VND
+
+**Tên sản phẩm format**:
+- nameVn: "[SIM type] [Tên nước tiếng Việt] [Operator] [dataAmount][unit] [dayAmount] Ngày"
+- nameEn: "[SIM type] [Country name EN] [Operator] [dataAmount][unit] [dayAmount] Day (s)"
+- Ví dụ: "eSIM Hoa Kỳ T-Mobile 5GB 7 Ngày" / "eSIM USA T-Mobile 5GB 7 Day (s)"
+
+Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`\`csv block. Khi xuất Excel, sinh đủ 5 sheet theo đúng cấu trúc trên.
 
 **QUAN TRỌNG**: DRAFT-FOR-REVIEW only. KHÔNG ghi database. Kết thúc bằng: "Đây là bản nháp để Hiếu review. Sau khi kiểm tra, Hiếu xác nhận thì mình bàn bước tự động cập nhật (Phase 2)."
 
