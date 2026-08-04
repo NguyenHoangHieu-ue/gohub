@@ -1,9 +1,11 @@
 "use client"
 
+import { useRef, useState } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend,
 } from "recharts"
+import { Download, Loader2 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // Format A (legacy — bi-analyst / data-explorer): single series
@@ -67,9 +69,32 @@ function normalise(d: SingleSeriesData["data"]) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatChart({ data }: { data: ChartData }) {
+  const chartRef  = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function exportPNG() {
+    if (!chartRef.current) return
+    setLoading(true)
+    try {
+      const { default: html2canvas } = await import("html2canvas")
+      const canvas = await html2canvas(chartRef.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true })
+      const a = document.createElement("a")
+      a.href = canvas.toDataURL("image/png")
+      a.download = `${title || "chart"}_${new Date().toISOString().slice(0, 10)}.png`
+      a.click()
+    } catch (e) { console.error("Export PNG failed:", e) }
+    finally { setLoading(false) }
+  }
+
   if (!data?.data?.length) return null
 
   const { chart_type, title } = data
+  const PNGBtn = () => (
+    <button onClick={exportPNG} title="Tải PNG"
+      className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors">
+      {loading ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />} PNG
+    </button>
+  )
 
   if (isMultiSeries(data)) {
     // ── Multi-series ───────────────────────────────────────────────────────
@@ -97,8 +122,8 @@ export default function ChatChart({ data }: { data: ChartData }) {
         value: Number(r[pieKey]) || 0,
       }))
       return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[620px] overflow-hidden">
-          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h3>
+        <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[620px] overflow-hidden">
+          <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h3><PNGBtn /></div>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90}
@@ -117,7 +142,7 @@ export default function ChatChart({ data }: { data: ChartData }) {
     const isLine = chart_type === "line" || isArea
 
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[700px] overflow-hidden">
+      <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[700px] overflow-hidden">
         <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h3>
         <ResponsiveContainer width="100%" height={300}>
           {isLine ? (
@@ -197,7 +222,7 @@ export default function ChatChart({ data }: { data: ChartData }) {
   const chartData = normalise(single.data)
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[620px] overflow-hidden">
+    <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[620px] overflow-hidden">
       <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4">{title}</h3>
 
       {chart_type === "bar" && (

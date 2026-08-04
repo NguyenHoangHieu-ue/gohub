@@ -127,6 +127,55 @@ const webSearchDecl = {
   },
 }
 
+const listLarkTasksDecl = {
+  name: "listLarkTasks",
+  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Use to check task status, deadlines, and priorities. Requires 'task:task:read' scope on the Lark app.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      page_size: { type: SchemaType.NUMBER, description: "Max tasks (default 20, max 50)." },
+      page_token: { type: SchemaType.STRING, description: "Pagination token for next page." },
+    },
+  },
+}
+const getLarkTaskDecl = {
+  name: "getLarkTask",
+  description: "Get full details of 1 Lark task by task_guid (title, description, due date, status, sub-tasks).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: { task_guid: { type: SchemaType.STRING, description: "Task GUID from listLarkTasks." } },
+    required: ["task_guid"],
+  },
+}
+const createLarkTaskDecl = {
+  name: "createLarkTask",
+  description: "Create a new Lark task for Hiếu. Requires 'task:task:write' scope.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      summary:     { type: SchemaType.STRING, description: "Task title." },
+      description: { type: SchemaType.STRING, description: "Task description (markdown ok)." },
+      due:         { type: SchemaType.STRING, description: "Due date YYYY-MM-DD." },
+    },
+    required: ["summary"],
+  },
+}
+const updateLarkTaskDecl = {
+  name: "updateLarkTask",
+  description: "Update a Lark task (mark complete, change due date, update description). Requires 'task:task:write' scope.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      task_guid:   { type: SchemaType.STRING, description: "Task GUID." },
+      summary:     { type: SchemaType.STRING, description: "New title (optional)." },
+      description: { type: SchemaType.STRING, description: "New description (optional)." },
+      due:         { type: SchemaType.STRING, description: "New due date YYYY-MM-DD (optional)." },
+      complete:    { type: SchemaType.BOOLEAN, description: "true = mark done." },
+    },
+    required: ["task_guid"],
+  },
+}
+
 const reviewPendingLearningDecl = {
   name: "reviewPendingLearning",
   description: "Xem danh sách học liệu Bé Gấu phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
@@ -1224,6 +1273,50 @@ async function runManagePortalCredentials(args: {
   return { error: `Unknown action "${args.action}". Use: list | save | delete` }
 }
 
+// ─── Lark Task API ────────────────────────────────────────────────────────────
+import { getLarkToken } from "@/lib/lark"
+
+async function runLarkTask(action: string, args: any): Promise<any> {
+  const LARK = "https://open.larksuite.com/open-apis"
+  try {
+    const token = await getLarkToken()
+    const h = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+
+    if (action === "listLarkTasks") {
+      const ps = Math.min(args?.page_size || 20, 50)
+      const qs = new URLSearchParams({ page_size: String(ps) })
+      if (args?.page_token) qs.set("page_token", args.page_token)
+      const res = await fetch(`${LARK}/task/v2/tasks?${qs}`, { headers: h })
+      const d = await res.json()
+      return d.data || d
+    }
+    if (action === "getLarkTask") {
+      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { headers: h })
+      const d = await res.json()
+      return d.data || d
+    }
+    if (action === "createLarkTask") {
+      const body: any = { summary: args.summary }
+      if (args.description) body.description = { content: args.description, content_type: "markdown" }
+      if (args.due) body.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }
+      const res = await fetch(`${LARK}/task/v2/tasks`, { method: "POST", headers: h, body: JSON.stringify(body) })
+      const d = await res.json()
+      return d.data || d
+    }
+    if (action === "updateLarkTask") {
+      const body: any = { task: {}, update_fields: [] as string[] }
+      if (args.summary)     { body.task.summary = args.summary; body.update_fields.push("summary") }
+      if (args.description) { body.task.description = { content: args.description, content_type: "markdown" }; body.update_fields.push("description") }
+      if (args.due)         { body.task.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }; body.update_fields.push("due") }
+      if (args.complete)    { body.task.completed_at = String(Date.now() / 1000 | 0); body.update_fields.push("completed_at") }
+      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { method: "PATCH", headers: h, body: JSON.stringify(body) })
+      const d = await res.json()
+      return d.data || d
+    }
+    return { error: `Unknown action: ${action}` }
+  } catch (e: any) { return { error: e.message } }
+}
+
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 // Gọi Gemini có retry cho lỗi TẠM THỜI (429 rate-limit / 5xx / overload / network) → tăng ổn định.
@@ -1260,7 +1353,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1357,6 +1450,13 @@ export async function runCreatorAI(
         const a = call.args as any
         const { error } = await supabaseAdmin.from("chatbot_learning_log").update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: "creator", conflict_detail: a.reason || null }).eq("id", a.id)
         fnParts.push({ functionResponse: { name: "rejectLearning", response: { ok: !error } } })
+        continue
+      }
+
+      // ── Lark Task tools ──
+      if (call.name === "listLarkTasks" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
+        const resp = await runLarkTask(call.name, call.args as any)
+        fnParts.push({ functionResponse: { name: call.name, response: resp } })
         continue
       }
 
