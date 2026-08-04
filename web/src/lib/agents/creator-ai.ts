@@ -129,14 +129,20 @@ const webSearchDecl = {
 
 const listLarkTasksDecl = {
   name: "listLarkTasks",
-  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Use to check task status, deadlines, and priorities. Requires 'task:task:read' scope on the Lark app.",
+  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Nếu truyền tasklist_guid → chỉ lấy task trong Danh sách công việc (Task List) đó; bỏ trống → tất cả task của Hiếu. Requires 'task:task:read'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
+      tasklist_guid: { type: SchemaType.STRING, description: "GUID của Task List (từ listLarkTasklists) — bỏ trống để lấy mọi task." },
       page_size: { type: SchemaType.NUMBER, description: "Max tasks (default 20, max 50)." },
       page_token: { type: SchemaType.STRING, description: "Pagination token for next page." },
     },
   },
+}
+const listLarkTasklistsDecl = {
+  name: "listLarkTasklists",
+  description: "Liệt kê các Danh sách công việc (Task List) của Hiếu trong Lark — trả về guid + tên mỗi list. Dùng khi Hiếu hỏi về 'task list'/'danh sách công việc'; rồi gọi listLarkTasks với tasklist_guid để xem task bên trong. Requires 'task:tasklist:read'.",
+  parameters: { type: SchemaType.OBJECT, properties: {} },
 }
 const getLarkTaskDecl = {
   name: "getLarkTask",
@@ -1325,6 +1331,14 @@ async function runLarkTask(action: string, args: any): Promise<any> {
     // Pass user open_id so API returns that user's tasks, not the bot's tasks
     if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
 
+    if (action === "listLarkTasklists") {
+      const res = await fetch(`${LARK}/task/v2/tasklists?page_size=100&user_id_type=open_id`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d, note: "Cần scope task:tasklist:read." }
+      // Rút gọn: chỉ trả guid + name mỗi tasklist
+      const lists = (d.data?.items || []).map((t: any) => ({ guid: t.guid, name: t.name }))
+      return { tasklists: lists, hint: "Gọi listLarkTasks với tasklist_guid để xem task bên trong." }
+    }
     if (action === "listLarkTasks") {
       const ps = Math.min(args?.page_size || 20, 50)
       const qs = new URLSearchParams({
@@ -1332,7 +1346,11 @@ async function runLarkTask(action: string, args: any): Promise<any> {
         user_id_type: "open_id",
       })
       if (args?.page_token) qs.set("page_token", args.page_token)
-      const res = await fetch(`${LARK}/task/v2/tasks?${qs}`, { headers: h })
+      // Có tasklist_guid → lấy task TRONG danh sách công việc đó; không → mọi task của user
+      const url = args?.tasklist_guid
+        ? `${LARK}/task/v2/tasklists/${encodeURIComponent(args.tasklist_guid)}/tasks?${qs}`
+        : `${LARK}/task/v2/tasks?${qs}`
+      const res = await fetch(url, { headers: h })
       const d = await res.json()
       if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
@@ -1489,7 +1507,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1590,7 +1608,7 @@ export async function runCreatorAI(
       }
 
       // ── Lark Task tools ──
-      if (call.name === "listLarkTasks" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
+      if (call.name === "listLarkTasks" || call.name === "listLarkTasklists" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
         const resp = await runLarkTask(call.name, call.args as any)
         fnParts.push({ functionResponse: { name: call.name, response: resp } })
         continue
