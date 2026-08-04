@@ -4,12 +4,12 @@
 
 ---
 
-## TRẠNG THÁI HIỆN TẠI (2026-08-01)
+## TRẠNG THÁI HIỆN TẠI (2026-08-04)
 
-- **Branch**: main == staging == `82f040d` — production đang chạy
-- **Migrations chạy**: v30 ✅ | v30b ✅ (Hiếu đã chạy 2026-07-31)
-- **s125 (2026-08-01)**: Audit toàn diện 15 tab analytics đối chiếu trực tiếp gohub_dw (READ-ONLY, chưa sửa code) → `docs/AUDIT_ANALYTICS.md` + `Bug.txt`. Số nền T7 KHỚP tuyệt đối; tìm 3 bug ảnh hưởng số + vài latent. Xem §B4.
-- Session trước gồm: Usage Analytics tab · Gấu Pro upload/export nâng cấp · SunSpeedy fix · Orders (Entity filter + Include ShippingFee/Internal Ops Yes/No + KPI toàn kỳ + export all pages + dedupe dim_sku fan-out toàn hệ thống)
+- **Branch**: staging `75ed89c` — CHƯA merge main (staging-only rule từ s132)
+- **Migrations chạy**: v30 ✅ | v30b ✅ | v31 ⏳ Hiếu chưa chạy (`chatbot_learning_log`)
+- **s133 (2026-08-04)**: Fix B2B Performance — CH.Cost + projection về BE (Hướng B). Xem §B5.
+- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8.
 
 ---
 
@@ -82,55 +82,166 @@
 
 ---
 
-## B5. OOP Analytics Refactor — FUTURE PLAN (ghi chú 2026-08-04)
+## B5. OOP Analytics Refactor — ROADMAP (2026-08-04, cập nhật theo tiến độ)
 
-> **Động cơ**: s133 fix B2B Performance — phát hiện FE đang tính CH.Cost, projection factor ở nhiều tab khác nhau → dễ sai, dễ lệch số giữa tab. Fix Hướng B (backend) cho B2B đã chứng minh pattern đúng.
+> **Vấn đề gốc**: B2C/Channels/BOD đang tính projection factor + CM1 + cost pro-rata **trên FE** →
+> cross-month range cho kết quả sai, số giữa tab không nhất quán. B2B Performance đã fix (s133)
+> và là pattern mẫu cho toàn bộ refactor.
 
-### Mục tiêu
-- **Toàn bộ tính toán analytics** (CH.Cost, projection factor, CM1, pro-rata) phải ở **backend**.
-- **FE chỉ display** — không có arithmetic nào trên client-side.
-- **Một hàm cho nhiều tab** — dùng chung, không để tab này số khác tab kia.
+---
 
-### Kiến trúc đề xuất (OOP)
+### Trạng thái hiện tại (audit s133, 2026-08-04)
+
+| Tab | Projection FE | CM1/Cost FE | Kết luận | Status |
+|-----|:---:|:---:|---|:---:|
+| B2B Performance | ❌ (đã fix) | ❌ (đã fix) | BE hoàn toàn | ✅ s133 |
+| Channels | ✓ `getProjectionInfo()` | ✓ CM1 pro-rata | FE nặng | ❌ |
+| BOD | ✓ `getProjectionInfo()` | ✓ projected CM1 | FE nặng | ❌ |
+| B2C | ✓ `getProjectionInfo()` | ✓ CM1 + group cost | FE nặng | ❌ |
+| Staff | ✗ | ✗ | BE hoàn toàn | ✅ |
+| All-Time | ✗ | ✗ | BE hoàn toàn | ✅ |
+| Dashboard | ✗ | Một phần | Nhẹ | 〜 |
+| Quarterly | ✗ | ✗ | BE hoàn toàn | ✅ |
+| Fulfillment | ✗ | ✗ | BE hoàn toàn | ✅ |
+
+---
+
+### Kiến trúc đích (OOP)
 
 ```
-web/src/lib/analytics/
-├── AnalyticsCostEngine.ts    ← tính toán chi phí (channel + group + customer CH.Cost)
-│   ├── computeChannelCost(months, revenue, dayRatio)
-│   ├── computeGroupCost(months, revenue, share)
-│   └── computeCustomerChCost(months, customerCode, monthlyRevenue)   ← đã implement s133
+web/src/lib/analytics-engine/
 │
-├── AnalyticsProjection.ts    ← projection factor dùng chung
-│   └── getProjectionFactor(startDate, endDate, today)                ← đã implement s133
+├── projection.ts          ← DÙNG CHUNG — projection factor rule
+│   └── getProjectionFactor(startDate, endDate, today):
+│         - Cross-month range → return 1 (không project)
+│         - Tháng cũ (đã hoàn thành) → return 1
+│         - MTD tháng hiện tại (same month) → return daysInMonth / daysElapsed
+│         ✅ Logic đã viết trong b2b/page.tsx s133 → cần copy ra đây
 │
-├── AnalyticsDateHelper.ts    ← (đã có trong analytics-helpers.ts, move vào class)
-│   ├── getDaysInRange()
-│   ├── getDaysInMonth()
-│   └── getMonthsInRange()
+├── cost-engine.ts         ← DÙNG CHUNG — tính chi phí pro-rata
+│   ├── calcChannelCost(channelCosts, channel, month, mRev, startDate, endDate)
+│   ├── calcGroupCost(groupCosts, channel, totalRev, startDate, endDate)
+│   └── calcCustomerChCost(costMap, customerCode, monthlyData, startDate, endDate)
+│         ✅ calcChCostForPeriod đã viết trong b2b/performance/route.ts s133 → move ra đây
 │
-└── BaseAnalyticsRoute.ts     ← base class cho mọi route analytics
-    ├── protected loadCosts(months)   → [channelCosts, groupCosts, customerCosts]
-    ├── protected applyProjection()
-    └── abstract computeResult()     → route cụ thể implement
+└── types.ts               ← Interface chung
+    ├── AnalyticsResult { revenue, margin, gpm2, ch_cost, cm1, cm1_percent }
+    └── CostSources { channelCosts, groupCosts, customerCosts }
 ```
 
-### Thứ tự migrate (từ cao rủi ro nhất đến thấp)
+**Nguyên tắc bất biến:**
+- `amount` type cost → `value × dayRatio` (dayRatio = days_in_range_for_month / days_in_month)
+- `percent` type cost → `(value/100) × actual_revenue_in_period` (không nhân factor)
+- Projection: `cm1_projected = cm1_actual × factor` (cả GP và CH.Cost đều × factor)
+- Cross-month range (e.g. 27/7–2/8): KHÔNG project, chỉ hiện actual
 
-| Priority | Tab / Route | Vấn đề hiện tại | Đã BE? |
-|---|---|---|---|
-| 1 | B2B Performance | CH.Cost + projection — ✅ FIX s133 | ✅ |
-| 2 | B2C Performance | projection factor dùng riêng, CH.Cost FE | ❌ |
-| 3 | BOD | group cost split, strategic classification FE | Một phần |
-| 4 | Staff Report | projection + CM1 FE | ❌ |
-| 5 | All-Time | group cost + CM1 FE | Một phần |
-| 6 | Channels | CH.Cost FE | ❌ |
+---
 
-### Nguyên tắc khi migrate từng tab
+### Phase 0 — Foundation (làm 1 lần, trước khi migrate bất kỳ tab nào)
 
-1. Backend route trả về `cm1`, `cm1_percent`, `ch_cost` trong response (thêm vào, không xóa field cũ).
-2. FE đọc backend fields, bỏ FE arithmetic dần từng tab.
-3. Shared helper `calcChCostForPeriod()` (đã có trong b2b/performance/route.ts) → move vào `AnalyticsCostEngine`.
-4. `getProjectionFactor()` (đã fix s133) → copy logic sang `AnalyticsProjection.ts`, mọi tab import từ đó.
+**Việc cần làm**: Extract shared code thành `web/src/lib/analytics-engine/`
+
+| File | Nguồn gốc | Nội dung |
+|------|-----------|----------|
+| `projection.ts` | `b2b/page.tsx:getProjectionFactor()` s133 | Cross-month check + MTD logic |
+| `cost-engine.ts` | `b2b/performance/route.ts:calcChCostForPeriod()` s133 | Pro-rata amount+percent |
+| `types.ts` | Viết mới | Interface AnalyticsResult |
+
+**Verify**: `tsc --noEmit` PASS, import trong b2b/performance/route.ts chạy đúng.
+
+---
+
+### Phase 1 — Channels tab ← LÀM TIẾP THEO
+
+**File BE**: `web/src/app/api/analytics/channels/kpis/route.ts`  
+**File FE**: `web/src/app/(dashboard)/analytics/channels/page.tsx`
+
+**Vấn đề hiện tại (FE)**:
+```
+getProjectionInfo():
+  factor = lastDayOfMonth / daysElapsed  ← lỗi cross-month giống B2B cũ
+  fullMonthOpCost = margin - gpm2
+  projectedCm1 = margin × factor - fullMonthOpCost  ← sai với partial-month
+```
+
+**Fix BE** (`channels/kpis/route.ts`):
+- Import `cost-engine.ts` → tính channel cost pro-rata đúng từng tháng
+- Trả về `cm1`, `cm1_percent` trong response
+- Trả về `projection_factor` (tính từ `projection.ts`) để FE biết nhưng KHÔNG dùng để tính
+
+**Fix FE** (`channels/page.tsx`):
+- Xóa `getProjectionInfo()` — dùng `projection_factor` từ BE response
+- Xóa `fullMonthOpCost` calc — dùng `row.cm1` từ BE
+- Giữ nguyên UI, chỉ thay nguồn data
+
+**Verify**: 27/7–2/8 → không inflate, T7 full-month → CM1 khớp kpis route.
+
+---
+
+### Phase 2 — BOD tab
+
+**File BE**: `web/src/app/api/analytics/bod/summary/route.ts` + `web/src/lib/bod-data.ts`  
+**File FE**: `web/src/app/(dashboard)/analytics/bod/page.tsx`
+
+**Vấn đề hiện tại (FE)**:
+```
+getProjectionInfo():
+  factor = targetDays / daysElapsed  ← dùng targetDays (cuối tháng), không check cross-month
+  fullMonthOpCost = summary.total_margin - summary.total_gpm2
+  projectedGpm2 = projectedMargin - fullMonthOpCost  ← sai
+```
+
+**Ghi chú**: `bod-data.ts` đã làm nhiều ở BE (fetchBODGroupMarginData, fetchBODReportData).
+Fix nhỏ: thêm `projection_factor` + `cm1_actual` vào summary response, FE chỉ display.
+
+**Verify**: BOD projected section khớp với Quarterly tab cùng period.
+
+---
+
+### Phase 3 — B2C tab
+
+**File BE**: `web/src/app/api/analytics/b2c/kpis/route.ts` + `b2c/performance/route.ts`  
+**File FE**: `web/src/app/(dashboard)/analytics/b2c/page.tsx`
+
+**Phức tạp nhất** — B2C có nhiều nguồn: GA4, Chatwoot/Omni, analytics_channel_costs, analytics_channel_group_costs.
+
+**Vấn đề hiện tại (FE)**: `getProjectionInfo()` + group cost + spend calc.
+
+**Chiến lược**: 
+- `b2c/kpis` route đã có channel cost computation → thêm `cm1` field vào response
+- Spend/CAC/CPL (GA4/leads) giữ nguyên trên FE (các nguồn này không dùng được projection đơn giản)
+- Chỉ fix projection factor + CM1 core → tính BE; UI spend giữ nguyên
+
+**Verify**: B2C CM1 T7 full-month khớp BOD B2C group.
+
+---
+
+### Phase 4 — Cleanup nhỏ (sau 3 phase trên)
+
+- **Staff**: Tier classification (Strategic/VIP/Gold) đang filter FE → move về `staff-report/route.ts` (thêm `tier` field vào response)
+- **All-Time**: weighted average % đang tính FE → có thể giữ nguyên (không sai, chỉ là display)
+- **Dashboard**: minor — không có FE computation lớn
+
+---
+
+### Nguyên tắc cho dev khi migrate từng tab
+
+1. **Không xóa field BE cũ** — chỉ THÊM `cm1`, `ch_cost`, `projection_factor` vào response. FE backward-compat.
+2. **FE pattern sau migrate**:
+   ```tsx
+   // TRƯỚC: tính trên FE
+   const cm1 = row.margin * factor - (row.margin - row.gpm2)
+   
+   // SAU: đọc từ BE
+   const cm1Actual = row.cm1 ?? row.gpm2
+   const cm1Proj   = isProjectable ? cm1Actual * projectionFactor : cm1Actual
+   ```
+3. **isProjectable** = `projection_factor > 1` (từ BE) — FE KHÔNG tự tính factor nữa.
+4. **Cache key** phải bump khi đổi logic cost (vd: `b2b-perf2` → `ch-perf1`).
+5. **Test chuẩn cho mỗi tab**:
+   - Range cross-month (27/7–2/8): không inflate, không hiện "Projected" section
+   - Range MTD tháng hiện tại: projection đúng × factor
+   - Range tháng đã hoàn thành (full month): factor = 1, số khớp với audit T7
 
 ---
 
@@ -282,11 +393,25 @@ CM1% = CM1 / Revenue × 100
 - Channel_Cost: `analytics_channel_costs` (Supabase, JSON format)
 - Group_Cost: `analytics_channel_group_costs` (Supabase)
 
-### D.5 Pro-rata (Quarter Report)
+### D.5 Pro-rata — Chuẩn hệ thống (updated s133)
 
+**Projection factor** (logic đúng, dùng chung — xem `analytics-engine/projection.ts`):
+- Cross-month range (start.month ≠ end.month) → **factor = 1**, không project
+- Tháng đã hoàn thành (end.month ≠ current month) → **factor = 1**
+- MTD tháng hiện tại → **factor = daysInMonth / daysElapsed**
+
+**Cost pro-rata** (logic đúng, dùng chung — xem `analytics-engine/cost-engine.ts`):
+- `amount` type → `value × (days_in_range_for_month / days_in_month)` per month, sum qua tháng
+- `percent` type → `(value/100) × actual_revenue_in_period` (không nhân dayRatio — revenue đã filtered đúng)
+
+**Projection** (khi factor > 1):
+- `cm1_projected = cm1_actual × factor` (CM1 = GP - CH.Cost, linear → có thể scale)
+- `ch_cost_projected = ch_cost_actual × factor` (pro-rata actual × factor = ước lượng cả tháng)
+
+**Quarter Report** (khác — pro-rata riêng, không liên quan projection factor trên):
 - Monthly factor = totalDaysInMonth / daysElapsed (chỉ tháng đang chạy)
 - Quarter factor = totalDaysInQuarter / daysElapsedInQuarter
-- `amount` type cost: KHÔNG nhân factor
+- `amount` type cost: KHÔNG nhân factor (nhập cả tháng, dùng nguyên)
 - `percent` type cost: áp trên projected revenue (rawRevenue × factor)
 
 ---
