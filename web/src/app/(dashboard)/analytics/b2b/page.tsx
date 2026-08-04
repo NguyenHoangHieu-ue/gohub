@@ -743,13 +743,16 @@ export default function B2BPerformance() {
                         // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
-                        // Tính total CH.Cost + CM1 từ b2bCostMap (giống Quarter Report)
+                        // Tính total CH.Cost + CM1 — dùng projected revenue/margin
+                        const totalProjRev = isProjectable ? totals.revenue * projectionFactor : totals.revenue
+                        const totalProjMar = isProjectable ? totals.margin * projectionFactor : totals.margin
                         const totalChCost = sorted.reduce((acc, curr) => {
+                          const projRevRow = isProjectable ? curr.revenue * projectionFactor : curr.revenue
                           const has = !!(curr.customer_code && b2bCostMap[curr.customer_code]?.cost_lines?.length)
-                          return acc + (has ? calcChCost(curr.customer_code, curr.revenue) : (curr.margin - curr.gpm2))
+                          return acc + (has ? calcChCost(curr.customer_code, projRevRow) : (curr.margin - curr.gpm2))
                         }, 0)
-                        const totalCm1 = totals.margin - totalChCost
-                        const totalCm1Pct = totals.revenue > 0 ? (totalCm1 / totals.revenue) * 100 : 0
+                        const totalCm1 = totalProjMar - totalChCost
+                        const totalCm1Pct = totalProjRev > 0 ? (totalCm1 / totalProjRev) * 100 : 0
 
                         // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
                         const classifyTier = (pln?: string): string => {
@@ -782,9 +785,12 @@ export default function B2BPerformance() {
                         const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
                               const hasB2BCost = !!(row.customer_code && b2bCostMap[row.customer_code]?.cost_lines?.length)
-                              const chCost = hasB2BCost ? calcChCost(row.customer_code, row.revenue) : (row.margin - row.gpm2)
-                              const cm1 = row.margin - chCost
-                              const cm1Pct = row.revenue > 0 ? (cm1 / row.revenue) * 100 : 0
+                              // CM1 = pro-rata GP - CH.Cost (dùng projected revenue/margin)
+                              const projRev = isProjectable ? row.revenue * projectionFactor : row.revenue
+                              const projMar = isProjectable ? row.margin * projectionFactor : row.margin
+                              const chCost = hasB2BCost ? calcChCost(row.customer_code, projRev) : (row.margin - row.gpm2)
+                              const cm1 = projMar - chCost
+                              const cm1Pct = projRev > 0 ? (cm1 / projRev) * 100 : 0
                               const costLines = row.customer_code ? (b2bCostMap[row.customer_code]?.cost_lines || []) : []
                               return (
                                 <React.Fragment key={idx}>
@@ -815,10 +821,7 @@ export default function B2BPerformance() {
                                       </span>
                                     </td>
                                     <td className="px-8 py-4 text-right">
-                                      <div className="flex flex-col items-end">
-                                        <span className={cn("text-sm font-bold tracking-tight", cm1 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(cm1).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(cm1 * projectionFactor).replace("₫", "")}</span>}
-                                      </div>
+                                      <span className={cn("text-sm font-bold tracking-tight", cm1 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(Math.round(cm1)).replace("₫", "VND")}</span>
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{cm1Pct.toFixed(1)}%</span></td>
                                   </tr>
@@ -930,7 +933,6 @@ export default function B2BPerformance() {
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totalCm1)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totalCm1 * projectionFactor)).replace("₫", "")}</span>}
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{totalCm1Pct.toFixed(1)}%</td>
