@@ -38,7 +38,9 @@ STAGING-ONLY từ đây (Hiếu chốt): chỉ push staging, KHÔNG tự merge m
 - listLarkTasklists tool + tasklist_guid cho listLarkTasks (xem task trong Task List).
 - Hiếu ĐÃ: set Vercel env open_id full + có scope task:task + bitable:app:readonly. Staging domain: stg-intel-v2.gohub.cloud.
 - OAuth scope chỉ xin task:task (đủ list task); redirect_uri theo req.nextUrl.origin. (commit 06ecfca)
-- ⚠️ CÒN LẠI Hiếu: đăng ký Redirect URL https://stg-intel-v2.gohub.cloud/api/lark/oauth/callback trong Lark Security Settings → rồi bấm "Kết nối Lark" trong Gấu Pro.
+- Hiếu ĐÃ đăng ký Redirect URL https://stg-intel-v2.gohub.cloud/api/lark/oauth/callback.
+- ✅ OAuth ĐÃ CHẠY (staging). Fix cuối "thiếu quyền": bỏ scope param (commit af26ca8) + publish version Lark.
+  Gotcha: sau khi thêm quyền Lark phải PUBLISH VERSION MỚI (OAuth dùng version đã release, không phải nháp).
   (task:tasklist tùy chọn — chỉ cần nếu muốn duyệt Task List riêng.)
 
 ## ══════ SESSION 132 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════

@@ -194,7 +194,8 @@ App token KHÔNG list được task/tasklist riêng của user (Lark trả 0) �
 - Scope Lark: `task:task` (ĐÃ có) + `bitable:app:readonly` (ĐÃ có). `task:tasklist` = tùy chọn (chỉ cần nếu muốn duyệt Task List riêng — OAuth scope hiện chỉ xin `task:task`).
 - **Redirect URL** (Lark Security Settings): `https://stg-intel-v2.gohub.cloud/api/lark/oauth/callback` (staging). Thêm domain production khi merge main.
 - redirect_uri sinh động theo `req.nextUrl.origin` (khớp domain đang truy cập) — không phụ thuộc NEXTAUTH_URL.
-- Staging domain: `https://stg-intel-v2.gohub.cloud`.
+- Staging domain: `https://stg-intel-v2.gohub.cloud`. ✅ OAuth ĐÃ CHẠY (staging).
+- **Gotcha "thiếu quyền" khi authorize**: (1) bỏ tham số `scope` trong URL để Lark tự dùng scope app đã publish (tránh lệch tên scope); (2) sau khi thêm quyền trong Lark PHẢI **publish version mới** — OAuth dùng quyền của version đã release, không phải bản nháp.
 
 ### Ghi chú tham khảo
 - **Tỷ giá nội bộ** (nhập ở Admin → Tỷ Giá Nội Bộ) lưu ở Supabase `app_settings`, key prefix `fx.` (vd `fx.usd_vnd`, `fx.twd_usd`), `category="fx_rate"`. Ghi qua `PATCH /api/admin/settings`.
