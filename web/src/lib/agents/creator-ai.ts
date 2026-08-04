@@ -175,6 +175,19 @@ const updateLarkTaskDecl = {
     required: ["task_guid"],
   },
 }
+const queryLarkBaseDecl = {
+  name: "queryLarkBase",
+  description: "Đọc dữ liệu Lark Base (bảng tính Lark): CS ticket, inventory, tracking, danh sách. Gọi KHÔNG tham số để liệt kê các Base có sẵn; truyền app_token để liệt kê tables; truyền cả app_token + table_id để đọc records. Requires 'bitable:app:readonly' scope.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      app_token: { type: SchemaType.STRING, description: "Base app_token (bỏ trống để list các Base)." },
+      table_id:  { type: SchemaType.STRING, description: "Table ID trong Base (bỏ trống để list tables của Base)." },
+      filter:    { type: SchemaType.STRING, description: "Filter formula Lark (tùy chọn), vd: CurrentValue.[Status]=\"Open\"." },
+      page_size: { type: SchemaType.NUMBER, description: "Số records tối đa (default 50, max 200)." },
+    },
+  },
+}
 
 const reviewPendingLearningDecl = {
   name: "reviewPendingLearning",
@@ -1351,6 +1364,48 @@ async function runLarkTask(action: string, args: any): Promise<any> {
   } catch (e: any) { return { error: e.message } }
 }
 
+// ─── Lark Base (Bitable) ──────────────────────────────────────────────────────
+async function runLarkBase(args: any): Promise<any> {
+  const LARK = "https://open.larksuite.com/open-apis"
+  try {
+    const token = await getLarkToken()
+    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    const h: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    }
+    if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
+
+    // 1. Không app_token → list các Base
+    if (!args?.app_token) {
+      const res = await fetch(`${LARK}/bitable/v1/apps?page_size=50`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d, note: "Cần scope bitable:app:readonly." }
+      return { hint: "Truyền app_token để xem tables trong 1 Base.", ...(d.data || d) }
+    }
+    // 2. Có app_token, không table_id → list tables
+    if (!args?.table_id) {
+      const res = await fetch(`${LARK}/bitable/v1/apps/${encodeURIComponent(args.app_token)}/tables?page_size=100`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
+      return { hint: "Truyền cả app_token + table_id để đọc records.", ...(d.data || d) }
+    }
+    // 3. Có cả hai → đọc records
+    const ps = Math.min(args?.page_size || 50, 200)
+    const qs = new URLSearchParams({ page_size: String(ps) })
+    if (args?.filter) qs.set("filter", args.filter)
+    const res = await fetch(
+      `${LARK}/bitable/v1/apps/${encodeURIComponent(args.app_token)}/tables/${encodeURIComponent(args.table_id)}/records?${qs}`,
+      { headers: h }
+    )
+    const d = await res.json()
+    if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
+    // Rút gọn: chỉ trả fields của mỗi record (bỏ metadata cồng kềnh)
+    const records = (d.data?.items || []).map((r: any) => ({ record_id: r.record_id, ...r.fields }))
+    return { records, total: d.data?.total, has_more: d.data?.has_more, page_token: d.data?.page_token }
+  } catch (e: any) { return { error: e.message } }
+}
+
 // ─── Main runner ──────────────────────────────────────────────────────────────
 
 // Gọi Gemini có retry cho lỗi TẠM THỜI (429 rate-limit / 5xx / overload / network) → tăng ổn định.
@@ -1418,7 +1473,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1522,6 +1577,13 @@ export async function runCreatorAI(
       if (call.name === "listLarkTasks" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
         const resp = await runLarkTask(call.name, call.args as any)
         fnParts.push({ functionResponse: { name: call.name, response: resp } })
+        continue
+      }
+
+      // ── Lark Base ──
+      if (call.name === "queryLarkBase") {
+        const resp = await runLarkBase(call.args as any)
+        fnParts.push({ functionResponse: { name: "queryLarkBase", response: resp } })
         continue
       }
 
