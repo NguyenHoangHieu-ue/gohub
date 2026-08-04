@@ -375,11 +375,11 @@ When writing to KB: always update master note + any relevant wiki page simultane
 2. Report ONLY what the data actually returns. If 0 rows: say "không có dữ liệu cho query này" explicitly
 3. Run multiple queries when needed for comprehensive answers (up to 20 tool calls allowed)
 4. If a SQL query errors: FIX the SQL immediately and retry — do not stop and apologize
-5. **Self-verify after getting results**:
+5. **AUTO-RETRY (bắt buộc)**: Nếu function response có \`auto_retry_suggested: true\` → PHẢI sửa query theo \`retry_hint\` và CHẠY LẠI ngay, KHÔNG báo kết quả rỗng/sai vội. Tối đa 2 lần retry; sau đó mới kết luận "không có dữ liệu" (nếu vẫn 0 rows) hoặc báo số kèm cảnh báo.
+6. **Self-verify after getting results**:
    - Revenue in billions VND for a month → sanity check (GoHub monthly ~1-5 tỷ VND is normal)
    - If result looks suspiciously high/low → re-check query logic before reporting
    - Always state the time period clearly: "Dữ liệu từ [ngày] đến [ngày]"
-   - For 0 rows: try relaxing one filter at a time before concluding no data
 
 ### For multi-turn conversations (CRITICAL)
 - When user says "cái đó / nó / này / đó" → refers to the MOST RECENT entity discussed
@@ -1634,13 +1634,17 @@ export async function runCreatorAI(
           const limited = rows.slice(0, 200)
           const response: any = { result: limited, rowCount: rows.length }
           if (rows.length === 0) {
-            response.hint = "0 rows. Check: (1) fulfiled_date::DATE cast (one 'l'), (2) ILIKE instead of =, (3) remove one filter at a time, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue to see latest date."
+            response.auto_retry_suggested = true
+            response.retry_hint = "0 rows. Sửa & chạy lại: (1) fulfiled_date::DATE cast (một chữ 'l'), (2) ILIKE thay vì =, (3) bỏ bớt 1 filter, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue xem ngày mới nhất."
           }
           const firstRow = limited[0] as any
           if (firstRow) {
             const nums = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v)))).map(v => Number(v))
-            if (nums.some(n => n > 1e13)) response.warning = "Some values appear unusually large (>10 trillion VND). Check for missing JOIN condition causing row multiplication."
-            if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) response.warning = "Some revenue values are negative — may indicate data issue or incorrect aggregation."
+            if (nums.some(n => n > 1e12)) {
+              response.auto_retry_suggested = true
+              response.retry_hint = "Giá trị bất thường lớn (>1 nghìn tỷ VND) — nghi THIẾU JOIN gây nhân dòng (row multiplication). Kiểm tra JOIN + GROUP BY rồi chạy lại."
+            }
+            if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) response.warning = "Có revenue âm — nghi data issue hoặc aggregation sai."
           }
           fnParts.push({ functionResponse: { name: "executeSQL", response } })
         } catch (err: any) {
