@@ -5,7 +5,7 @@ import { exchangeLarkCode, saveLarkUserToken } from "@/lib/lark"
 
 // Lark redirect về đây kèm ?code&state. Đổi code → user token, lưu, quay về Gấu Pro.
 export async function GET(req: NextRequest) {
-  const base = process.env.NEXTAUTH_URL || ""
+  const base = req.nextUrl.origin  // khớp domain đang dùng (phải trùng redirect_uri lúc start)
   const done = (status: string) => NextResponse.redirect(`${base}/analytics/creator/ai?lark=${status}`)
 
   const session = await getServerSession(authOptions)

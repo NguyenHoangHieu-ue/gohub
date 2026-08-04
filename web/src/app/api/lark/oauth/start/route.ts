@@ -1,20 +1,23 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { randomBytes } from "crypto"
 
 // Khởi động OAuth: redirect creator sang trang cấp quyền Lark.
 // Chỉ creator (task cá nhân của Hiếu).
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || session.user.role !== "creator") {
     return NextResponse.json({ error: "Creator only" }, { status: 403 })
   }
 
-  const base = process.env.NEXTAUTH_URL || ""
+  // Base = origin request thực tế (khớp domain đang truy cập) → tránh lệch NEXTAUTH_URL
+  const base = req.nextUrl.origin
   const redirectUri = `${base}/api/lark/oauth/callback`
   const state = randomBytes(16).toString("hex")
-  const scope = "task:task task:tasklist"
+  // Chỉ xin scope app đang có (task:task). Thêm "task:tasklist" nếu muốn duyệt Task List riêng
+  // (Hiếu phải bật scope đó trong Lark trước, nếu không authorize sẽ lỗi).
+  const scope = "task:task"
 
   const authUrl = new URL("https://accounts.larksuite.com/open-apis/authen/v1/authorize")
   authUrl.searchParams.set("client_id", process.env.LARK_APP_ID || "")
