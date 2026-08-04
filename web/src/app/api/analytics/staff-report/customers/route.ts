@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -81,10 +82,12 @@ export async function GET(req: NextRequest) {
       ORDER BY f.customer_code, month
     `
 
-    const [summaryRows, monthlyRows] = await Promise.all([
+    const [summaryRows, monthlyRows, { tierKeywords }] = await Promise.all([
       queryAnalytics(summarySQL, params),
       queryAnalytics(monthlySQL, params),
+      fetchQuarterlySettings(),
     ])
+    const classifyTier = makeClassifyTier(tierKeywords)
 
     // Build monthly map per customer
     const monthlyMap: Record<string, { month: string; revenue: number; hk3_revenue: number; gross_profit: number }[]> = {}
@@ -99,16 +102,22 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    const result = (summaryRows as any[]).map(r => ({
-      customer_code:   r.customer_code,
-      customer_name:   r.customer_name,
-      price_list_name: r.price_list_name || null,
-      revenue:         Number(r.revenue) || 0,
-      hk3_revenue:     Number(r.hk3_revenue) || 0,
-      gross_profit:    Number(r.gross_profit) || 0,
-      order_count:     Number(r.order_count) || 0,
-      monthly:         monthlyMap[r.customer_code] || [],
-    }))
+    const result = (summaryRows as any[]).map(r => {
+      const pln = r.price_list_name || null
+      // null = B2C (không có price_list_name → không phải B2B tier)
+      const tier = pln === null ? "B2C" : classifyTier(pln)
+      return {
+        customer_code:   r.customer_code,
+        customer_name:   r.customer_name,
+        price_list_name: pln,
+        tier,
+        revenue:         Number(r.revenue) || 0,
+        hk3_revenue:     Number(r.hk3_revenue) || 0,
+        gross_profit:    Number(r.gross_profit) || 0,
+        order_count:     Number(r.order_count) || 0,
+        monthly:         monthlyMap[r.customer_code] || [],
+      }
+    })
 
     return NextResponse.json(result)
   } catch (err: any) {

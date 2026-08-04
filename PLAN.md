@@ -216,7 +216,7 @@ Fix nhỏ: thêm `projection_factor` + `cm1_actual` vào summary response, FE ch
 
 ---
 
-### Phase 4 — Cleanup nhỏ ← LÀM TIẾP THEO (nếu cần)
+### Phase 4 — Cleanup nhỏ ✅ s133
 
 - **Staff**: Tier classification (Strategic/VIP/Gold) đang filter FE → move về `staff-report/route.ts` (thêm `tier` field vào response)
 - **All-Time**: weighted average % đang tính FE → có thể giữ nguyên (không sai, chỉ là display)
