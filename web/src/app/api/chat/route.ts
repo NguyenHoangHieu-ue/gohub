@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
         try {
           controller.enqueue(encoder.encode(`__AGENT__:be-gau:Bé Gấu\n`))
           const { text, sources } = await runBeGau({
-            geminiHistory, lastMsg, role, name, isCost, extraDirective: priceDirective,
+            geminiHistory, lastMsg, role, name,
+            userId: identity || session.user.email || undefined,
+            sessionId: (session as any)?.sessionId || undefined,
+            isCost, extraDirective: priceDirective,
           })
           controller.enqueue(encoder.encode(text))
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.

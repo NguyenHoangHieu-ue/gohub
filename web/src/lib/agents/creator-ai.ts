@@ -127,6 +127,39 @@ const webSearchDecl = {
   },
 }
 
+const reviewPendingLearningDecl = {
+  name: "reviewPendingLearning",
+  description: "Xem danh sách học liệu Bé Gấu phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
+  parameters: { type: SchemaType.OBJECT, properties: { limit: { type: SchemaType.NUMBER, description: "Max records (default 20)." } } },
+}
+const approveLearningDecl = {
+  name: "approveLearning",
+  description: "Approve 1 learning record: ghi vào creator_kb + mark approved.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      id:          { type: SchemaType.STRING, description: "ID của chatbot_learning_log record." },
+      kb_key:      { type: SchemaType.STRING, description: "Unique slug cho creator_kb (snake_case)." },
+      kb_category: { type: SchemaType.STRING, description: "product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes" },
+      kb_title:    { type: SchemaType.STRING, description: "Tiêu đề ngắn." },
+      kb_content:  { type: SchemaType.STRING, description: "Nội dung cần lưu vào KB." },
+    },
+    required: ["id", "kb_key", "kb_category", "kb_title", "kb_content"],
+  },
+}
+const rejectLearningDecl = {
+  name: "rejectLearning",
+  description: "Reject 1 learning record (mark rejected).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      id:     { type: SchemaType.STRING, description: "ID của chatbot_learning_log record." },
+      reason: { type: SchemaType.STRING, description: "Lý do reject (tùy chọn)." },
+    },
+    required: ["id"],
+  },
+}
+
 const readKBDecl = {
   name: "readKnowledgeBase",
   description: "Read entries from Hiếu's private Creator Knowledge Base (creator_kb table). Always call this at the start of a conversation or when questions relate to product codes, SKU rules, exchange rates, COGS, vendors, or processes. Returns the configured definitions and rules.",
@@ -1163,7 +1196,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1226,6 +1259,40 @@ export async function runCreatorAI(
       if (call.name === "writeKnowledgeBase") {
         const resp = await runWriteKnowledgeBase(call.args as any)
         fnParts.push({ functionResponse: { name: "writeKnowledgeBase", response: resp } })
+        continue
+      }
+
+      // ── reviewPendingLearning ──
+      if (call.name === "reviewPendingLearning") {
+        const limit = (call.args as any)?.limit || 20
+        const { data, error } = await supabaseAdmin
+          .from("chatbot_learning_log")
+          .select("id,user_name,user_role,message_content,detected_info,learning_type,severity,existing_kb_key,conflict_detail,created_at")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(limit)
+        fnParts.push({ functionResponse: { name: "reviewPendingLearning", response: error ? { error: error.message } : { records: data || [], total: data?.length || 0 } } })
+        continue
+      }
+
+      // ── approveLearning ──
+      if (call.name === "approveLearning") {
+        const a = call.args as any
+        try {
+          const kbUpsert = await supabaseAdmin.from("creator_kb").upsert({ key: a.kb_key, category: a.kb_category, title: a.kb_title, content: a.kb_content, updated_at: new Date().toISOString() })
+          const logUpdate = await supabaseAdmin.from("chatbot_learning_log").update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: "creator" }).eq("id", a.id)
+          fnParts.push({ functionResponse: { name: "approveLearning", response: { ok: !kbUpsert.error && !logUpdate.error, kb_key: a.kb_key } } })
+        } catch (e: any) {
+          fnParts.push({ functionResponse: { name: "approveLearning", response: { error: e.message } } })
+        }
+        continue
+      }
+
+      // ── rejectLearning ──
+      if (call.name === "rejectLearning") {
+        const a = call.args as any
+        const { error } = await supabaseAdmin.from("chatbot_learning_log").update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: "creator", conflict_detail: a.reason || null }).eq("id", a.id)
+        fnParts.push({ functionResponse: { name: "rejectLearning", response: { ok: !error } } })
         continue
       }
 

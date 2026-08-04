@@ -351,7 +351,8 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
     // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
     const beGau = await runBeGau({
-      geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId, isCost,
+      geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId,
+      userId: openId, isCost,
       extraDirective: priceDirective + "\n\n(Nội bộ) Kênh trả lời: Lark — KHÔNG dùng khối \`\`\`chart (Lark không render được).",
     })
     let response = beGau.text.replace(/```chart[\s\S]*?```/g, "").trim()

@@ -7,6 +7,7 @@ import { SUPABASE_TABLES, SENSITIVE_TABLES, runQuerySupabase } from "./data-expl
 import { getRoleDataFilter }             from "./bi-analyst"
 import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource } from "./creator-ai"
+import { sendLarkDM }                    from "@/lib/lark"
 
 // ─── Bé Gấu ─────────────────────────────────────────────────────────────────────
 // Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). MÔ PHỎNG cơ chế Gấu Pro
@@ -185,16 +186,101 @@ async function execProduct(a: any): Promise<any> {
   } catch (e: any) { return { error: e.message } }
 }
 
+// ─── Self-learning: phát hiện thông tin từ non-creator users ────────────────────
+// Chạy AFTER trả response (fire-and-forget). Dùng LLM phân loại: NEW/CONFLICT/CONFIRM.
+// Kết quả lưu chatbot_learning_log + DM creator qua Lark.
+async function detectAndLogLearning(opts: {
+  userMsg:  string
+  role:     string
+  userId:   string
+  userName: string
+  sessionId?: string
+}): Promise<void> {
+  const { userMsg, role, userId, userName, sessionId } = opts
+  // Chỉ xử lý non-creator + message đủ dài (> 20 ký tự)
+  if (!userMsg || userMsg.length < 20 || role === "creator") return
+  // Bỏ qua câu hỏi (kết thúc bằng "?")
+  if (userMsg.trim().endsWith("?")) return
+
+  try {
+    // Đọc creator_kb để so sánh
+    const { data: kbRows } = await supabaseAdmin
+      .from("creator_kb")
+      .select("key,title,content")
+      .limit(50)
+    const kbSummary = (kbRows || []).map((r: any) => `[${r.key}] ${r.title}: ${r.content?.slice(0, 200)}`).join("\n")
+
+    // 1-shot LLM classify
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", generationConfig: { temperature: 0 } })
+    const prompt = `Phân tích xem câu sau của user có chứa THÔNG TIN THỰC TẾ có thể học không (không phải câu hỏi).
+
+User (role=${role}): "${userMsg.slice(0, 500)}"
+
+Kiến thức hiện có (creator_kb tóm tắt):
+${kbSummary}
+
+Trả JSON (KHÔNG giải thích gì khác):
+{
+  "should_log": true/false,
+  "learning_type": "NEW" | "CONFLICT" | "CONFIRM",
+  "detected_info": "mô tả ngắn thông tin user nêu",
+  "existing_kb_key": "key của KB entry liên quan hoặc null",
+  "conflict_detail": "mô tả mâu thuẫn hoặc null",
+  "severity": "HIGH" | "MEDIUM" | "LOW"
+}`
+
+    const res = await model.generateContent(prompt)
+    let raw = res.response.text().trim()
+    // Bóc JSON từ markdown code block nếu có
+    const jsonMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/)
+    if (jsonMatch) raw = jsonMatch[1]
+    const result = JSON.parse(raw)
+    if (!result.should_log) return
+
+    // Ghi vào chatbot_learning_log
+    const { data: inserted } = await supabaseAdmin.from("chatbot_learning_log").insert({
+      user_id: userId, user_role: role, user_name: userName, session_id: sessionId || null,
+      message_content: userMsg.slice(0, 2000),
+      detected_info: result.detected_info || "",
+      learning_type: result.learning_type || "NEW",
+      existing_kb_key: result.existing_kb_key || null,
+      conflict_detail: result.conflict_detail || null,
+      severity: result.severity || "MEDIUM",
+    }).select("id").single()
+
+    const id = (inserted as any)?.id || "unknown"
+    const severity = result.severity || "MEDIUM"
+    const sevLabel = severity === "HIGH" ? "⚠️ CAO" : severity === "MEDIUM" ? "🔵 TB" : "🔘 THẤP"
+    const typeLabel = result.learning_type === "CONFLICT" ? "❌ MÂU THUẪN" : result.learning_type === "CONFIRM" ? "✅ XÁC NHẬN" : "🆕 MỚI"
+
+    // DM creator qua Lark
+    const creatorLarkId = process.env.LARK_CREATOR_USER_ID
+    if (creatorLarkId) {
+      const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
+      let msg = `🔔 Bé Gấu phát hiện học liệu [${typeLabel}]\n${sevLabel}\n\n👤 User: ${userName || userId} (role: ${role})\n📅 ${now}\n💬 Nói: "${userMsg.slice(0, 200)}"\n\n🧠 Phát hiện: "${result.detected_info}"`
+      if (result.learning_type === "CONFLICT" && result.existing_kb_key) {
+        msg += `\n❌ Mâu thuẫn với KB[${result.existing_kb_key}]`
+        if (result.conflict_detail) msg += `: ${result.conflict_detail}`
+      }
+      msg += `\n\n→ Mở Gấu Pro → "review pending learning ${id}" để xử lý`
+      await sendLarkDM(creatorLarkId, msg)
+    }
+  } catch { /* learning detection không được làm chậm/break response */ }
+}
+
 // ─── Runner ─────────────────────────────────────────────────────────────────────
 export async function runBeGau(opts: {
   geminiHistory: any[]
   lastMsg: string
   role?: string
   name?: string
+  userId?: string
+  sessionId?: string
   isCost?: boolean          // canViewCogs
   extraDirective?: string   // vd quy tắc tạm thời
 }): Promise<{ text: string; sources: WebSource[] }> {
-  const { geminiHistory, lastMsg, role, name, isCost = false, extraDirective = "" } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "" } = opts
   const isPriv = priv(role)
 
   const [dataFilter, customRules, partnerTierInfo, ga4SiteList] = await Promise.all([
@@ -287,5 +373,15 @@ export async function runBeGau(opts: {
       text = genResult.response.text()
     } catch { /* keep */ }
   }
-  return { text: text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊", sources }
+  const finalText = text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
+
+  // Fire-and-forget learning detection (không block response)
+  if (userId && role && role !== "creator") {
+    void detectAndLogLearning({
+      userMsg: lastMsg, role, userId,
+      userName: name || userId, sessionId,
+    })
+  }
+
+  return { text: finalText, sources }
 }

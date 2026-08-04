@@ -59,6 +59,13 @@ export async function replyLarkMessage(messageId: string, text: string) {
   })
 }
 
+// DM trực tiếp đến 1 user Lark (dùng user_id từ LARK_CREATOR_USER_ID)
+export async function sendLarkDM(userId: string, text: string): Promise<void> {
+  try {
+    await sendLarkMessage(userId, "user_id", text)
+  } catch { /* fire-and-forget — không block */ }
+}
+
 // Reply with Lark Interactive Card (có bảng) + đính kèm xlsx
 export async function replyLarkTable(
   messageId: string,
