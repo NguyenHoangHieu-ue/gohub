@@ -1280,27 +1280,49 @@ async function runLarkTask(action: string, args: any): Promise<any> {
   const LARK = "https://open.larksuite.com/open-apis"
   try {
     const token = await getLarkToken()
-    const h = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+    // App access token + user open_id header = act on behalf of creator (Hiếu's tasks)
+    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    const h: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    }
+    // Pass user open_id so API returns that user's tasks, not the bot's tasks
+    if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
 
     if (action === "listLarkTasks") {
       const ps = Math.min(args?.page_size || 20, 50)
-      const qs = new URLSearchParams({ page_size: String(ps) })
+      const qs = new URLSearchParams({
+        page_size: String(ps),
+        user_id_type: "open_id",
+      })
       if (args?.page_token) qs.set("page_token", args.page_token)
       const res = await fetch(`${LARK}/task/v2/tasks?${qs}`, { headers: h })
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "getLarkTask") {
-      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { headers: h })
+      const res = await fetch(
+        `${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`,
+        { headers: h }
+      )
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "createLarkTask") {
-      const body: any = { summary: args.summary }
+      const body: any = {
+        summary: args.summary,
+        // Add creator as a member so they see it in "My Tasks"
+        members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "creator" }] : undefined,
+      }
       if (args.description) body.description = { content: args.description, content_type: "markdown" }
       if (args.due) body.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }
-      const res = await fetch(`${LARK}/task/v2/tasks`, { method: "POST", headers: h, body: JSON.stringify(body) })
+      const res = await fetch(`${LARK}/task/v2/tasks?user_id_type=open_id`, {
+        method: "POST", headers: h, body: JSON.stringify(body),
+      })
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "updateLarkTask") {
@@ -1309,8 +1331,12 @@ async function runLarkTask(action: string, args: any): Promise<any> {
       if (args.description) { body.task.description = { content: args.description, content_type: "markdown" }; body.update_fields.push("description") }
       if (args.due)         { body.task.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }; body.update_fields.push("due") }
       if (args.complete)    { body.task.completed_at = String(Date.now() / 1000 | 0); body.update_fields.push("completed_at") }
-      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { method: "PATCH", headers: h, body: JSON.stringify(body) })
+      const res = await fetch(
+        `${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`,
+        { method: "PATCH", headers: h, body: JSON.stringify(body) }
+      )
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     return { error: `Unknown action: ${action}` }
