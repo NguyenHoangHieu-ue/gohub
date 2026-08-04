@@ -262,8 +262,8 @@ export async function GET(req: NextRequest) {
 
       // ── Customer-level CH.Cost từ Turso (chỉ cho groupBy=customer) ─────────────
       // Pro-rata đúng: sum qua từng tháng × dayRatio (amount) hoặc × revenue thực (percent).
-      // TODO (OOP refactor): đưa lên class AnalyticsCostEngine.computeCustomerChCost()
       let chCost = 0
+      let costLinesDisplay: CostLine[] = []
       if (groupBy === "customer" && r.customer_code) {
         for (const mo of r.monthly_data) {
           const rec = customerCosts.get(`${mo.month}_${r.customer_code}`)
@@ -272,6 +272,14 @@ export async function GET(req: NextRequest) {
             ? getDaysInRange(startDate || "", endDate || "", mo.month) / getDaysInMonth(mo.month)
             : 0
           chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
+          // Gom cost_lines từ tất cả tháng để FE hiển thị breakdown
+          if (rec.cost_lines) {
+            try {
+              const lines: CostLine[] = typeof rec.cost_lines === "string"
+                ? JSON.parse(rec.cost_lines) : (rec.cost_lines as unknown as CostLine[])
+              costLinesDisplay.push(...lines)
+            } catch {}
+          }
         }
       }
       const cm1 = gpm2 - chCost
@@ -287,6 +295,7 @@ export async function GET(req: NextRequest) {
         gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
         ch_cost: chCost,
         cm1, cm1_percent: revenue > 0 ? (cm1 / revenue) * 100 : 0,
+        cost_lines: costLinesDisplay,  // cho FE hiển thị breakdown trong expand panel
         sub_channels,
       }
     })
