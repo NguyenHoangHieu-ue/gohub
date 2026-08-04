@@ -1,5 +1,38 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-04 (Session 132 — Gấu Pro update 8 tính năng + B2B fixes + projection factor).
+Cập nhật lần cuối: 2026-08-04 (Session 133 — B2B Performance: CH.Cost + projection về backend + OOP plan).
+
+## ══════ SESSION 133 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
+
+### Bối cảnh
+PIC báo cáo tuần chọn 27/7–2/8 → số CM1 sai. Audit toàn bộ cơ chế B2B Performance:
+phát hiện 3 lỗi logic khi cross-month range (projection factor 4.43x sai, CH.Cost gộp 2 tháng,
+percent CH.Cost áp trên projected revenue).
+
+### Fix (commit f63a6a3, staging):
+
+**Backend `b2b/performance/route.ts`:**
+- Thêm `calcChCostForPeriod()` — tính CH.Cost pro-rata đúng:
+  - amount: value × dayRatio (days_in_range/days_in_month per month)
+  - percent: (value/100) × moRevenue (revenue thực của đúng tháng đó, từ SQL)
+- Thêm `fetchCustomerCosts(months)` song song với channel/group costs
+- Trả về `ch_cost`, `cm1`, `cm1_percent` trong response (groupBy=customer)
+- Tất cả tính toán nay ở BE → đúng với mọi date range kể cả cross-month
+
+**Frontend `b2b/page.tsx`:**
+- `getProjectionFactor()`: thêm check cross-month → chỉ project khi range CÙNG tháng hiện tại
+  (27/7–2/8 = 2 tháng → factor=1, không hiện "Projected" section nữa)
+- Bỏ `calcChCost()`, `calcChCostInline()`, multi-month cost loading
+- FE dùng `row.ch_cost` + `row.cm1` từ backend cho mọi calculation
+- `b2bCostMap` chỉ còn cho hiển thị cost lines trong expand panel (1 tháng, display-only)
+
+**PLAN.md §B5:** Ghi chú OOP Analytics Refactor — roadmap chuyển toàn bộ tính toán về BE:
+- `AnalyticsCostEngine.ts`, `AnalyticsProjection.ts`, `BaseAnalyticsRoute.ts`
+- Thứ tự migrate: B2C → BOD → Staff → All-Time → Channels
+
+### ⚠️ Hiếu cần test trên staging:
+- Chọn range 27/7–2/8 → không còn "Projection Factor: 4.43x", không có section "Projected"
+- Chọn MTD tháng 8 (01/8–hôm qua) → vẫn hiện projection bình thường
+- CH.Cost trong bảng = đúng pro-rata actual (không inflate theo factor)
 
 ## ══════ SESSION 132 bổ sung — Gấu Pro Comprehensive Update (Opus, staging-only) ══════
 
