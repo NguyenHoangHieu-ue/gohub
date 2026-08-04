@@ -119,59 +119,39 @@ export default function ChannelPerformancePage() {
 
   const getProjectionInfo = () => {
     if (!metrics || !startDate || !endDate) return null
+    // factor từ BE (channels/kpis trả về projection_factor) — đã xử lý cross-month đúng.
+    const factor = metrics.projection_factor ?? 1
+    if (factor <= 1) return null
 
     const start = new Date(startDate)
-    const end = new Date(endDate)
-    const now = new Date()
-
-    const isCurrentMonth = end.getMonth() === now.getMonth() && end.getFullYear() === now.getFullYear()
-    if (!isCurrentMonth) return null
-
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) {
-      return null
-    }
-
-    const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const daysElapsed = Math.ceil((new Date(endDate).getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
 
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) {
-      return null
-    }
-
-    const factor = lastDayOfMonth / daysElapsed
-
     const projectedRevenue = (metrics.revenue || 0) * factor
-    const projectedOrders = (metrics.orders || 0) * factor
-    const projectedUnits = (metrics.units || 0) * factor
-    const projectedAOV = projectedOrders > 0 ? projectedRevenue / projectedOrders : 0
+    const projectedOrders  = (metrics.orders  || 0) * factor
+    const projectedUnits   = (metrics.units   || 0) * factor
+    const projectedAOV     = projectedOrders > 0 ? projectedRevenue / projectedOrders : 0
+    // CM1 projected = CM1 actual × factor (BE đã tính CM1 actual đúng pro-rata)
+    const projectedCm1 = (metrics.gpm2 || 0) * factor
 
     const prevRevenue = metrics.prevMonthRevenue || 0
-    const prevOrders = metrics.prevMonthOrders || 0
-    const prevUnits = metrics.prevMonthUnits || 0
-    const prevAOV = prevOrders > 0 ? prevRevenue / prevOrders : 0
-
-    const revenueChange = prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0
-    const ordersChange = prevOrders > 0 ? ((projectedOrders - prevOrders) / prevOrders) * 100 : 0
-    const unitsChange = prevUnits > 0 ? ((projectedUnits - prevUnits) / prevUnits) * 100 : 0
-    const aovChange = prevAOV > 0 ? ((projectedAOV - prevAOV) / prevAOV) * 100 : 0
-
-    // CM1 projection: opCost = fixed this month, chỉ GP mới scale theo factor
-    const fullMonthOpCost = (metrics.margin || 0) - (metrics.gpm2 || 0)
-    const projectedCm1 = (metrics.margin || 0) * factor - fullMonthOpCost
+    const prevOrders  = metrics.prevMonthOrders  || 0
+    const prevUnits   = metrics.prevMonthUnits   || 0
+    const prevAOV     = prevOrders > 0 ? prevRevenue / prevOrders : 0
 
     return {
       factor,
       daysElapsed,
-      totalDays: lastDayOfMonth,
-      revenue: projectedRevenue,
-      orders: projectedOrders,
-      units: projectedUnits,
-      aov: projectedAOV,
-      cm1: projectedCm1,
-      revenueChange,
-      ordersChange,
-      unitsChange,
-      aovChange,
+      totalDays:     lastDayOfMonth,
+      revenue:       projectedRevenue,
+      orders:        projectedOrders,
+      units:         projectedUnits,
+      aov:           projectedAOV,
+      cm1:           projectedCm1,
+      revenueChange: prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0,
+      ordersChange:  prevOrders  > 0 ? ((projectedOrders  - prevOrders)  / prevOrders)  * 100 : 0,
+      unitsChange:   prevUnits   > 0 ? ((projectedUnits   - prevUnits)   / prevUnits)   * 100 : 0,
+      aovChange:     prevAOV     > 0 ? ((projectedAOV     - prevAOV)     / prevAOV)     * 100 : 0,
     }
   }
 
@@ -737,135 +717,24 @@ export default function ChannelPerformancePage() {
       })))
 
       if (summaryObj) {
-        // Fetch costs to calculate GPM 2
-        let totalOpCost = 0
-        let prevTotalOpCost = 0
-        const opCostBreakdown = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0 }
+        // Lấy CM1 (gpm2) + projection_factor từ BE (channels/kpis) — pro-rata đúng mọi date range.
+        // Bỏ FE cost computation (đã chuyển về BE theo Hướng B — s133 pattern).
+        let currentGpm2 = currentMargin
+        let prevGpm2    = prevMargin
+        let projFactor  = 1
         try {
-          const startMonth = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}`
-
-          const [costRes, settingsRes] = await Promise.all([
-            fetch(`/api/channel-costs?month=${startMonth}`),
-            fetch(`/api/channel-cost-settings?month=${startMonth}`),
-          ])
-
-          if (costRes.ok && settingsRes.ok) {
-            const costsMap = await costRes.json()
-            const settingsMap = await settingsRes.json()
-            setChannelCostsMap(costsMap)
-            setChannelSettingsMap(settingsMap)
-            const mode = settingsMap[selectedChannel] || "total"
-
-            const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-            const diffTime = Math.abs(end.getTime() - start.getTime())
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-            const ratio = Math.min(1, diffDays / daysInMonth)
-
-            if (mode === "subchannels" && breakdownDataArr && breakdownDataArr.length > 0) {
-              const subChannelCosts = Object.values(costsMap).filter((c: any) => c.channel.startsWith(`${selectedChannel} - `))
-              subChannelCosts.forEach((c: any) => {
-                const subName = c.channel.replace(`${selectedChannel} - `, "")
-                const subMetrics = breakdownDataArr.find((r: any) => r.sub_channel === subName)
-                const subRev = subMetrics ? parseFloat(subMetrics.revenue || 0) : 0
-
-                ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                  if (c[key]) {
-                    let costVal = 0
-                    if (c[key].type === "amount") {
-                      costVal = (parseFloat(c[key].value) || 0) * ratio
-                    } else {
-                      costVal = (subRev * (parseFloat(c[key].value) || 0)) / 100
-                    }
-                    totalOpCost += costVal
-                    ;(opCostBreakdown as any)[key] += costVal
-                  }
-                })
-              })
-            } else {
-              const c = costsMap[selectedChannel]
-              if (c && Object.keys(c).length > 0) {
-                ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                  if (c[key]) {
-                    let costVal = 0
-                    if (c[key].type === "amount") {
-                      costVal = (parseFloat(c[key].value) || 0) * ratio
-                    } else {
-                      costVal = (currentRev * (parseFloat(c[key].value) || 0)) / 100
-                    }
-                    totalOpCost += costVal
-                    ;(opCostBreakdown as any)[key] += costVal
-                  }
-                })
-              }
-            }
+          const kpisParams = new URLSearchParams()
+          if (startDate) kpisParams.append("startDate", fmtLocal(start))
+          if (endDate)   kpisParams.append("endDate",   fmtLocal(end))
+          kpisParams.append("dateColumn", dateColumn)
+          kpisParams.append("channel", selectedChannel)
+          const kpisRes = await fetch(`/api/analytics/channels/kpis?${kpisParams}`)
+          if (kpisRes.ok) {
+            const kpisData = await kpisRes.json()
+            currentGpm2 = kpisData.gpm2  ?? kpisData.cm1 ?? currentMargin
+            projFactor  = kpisData.projection_factor ?? 1
           }
-
-          // Prev costs
-          if (comparisonType !== "none") {
-            const prevStart = new Date(start)
-            if (comparisonType === "previous_period") {
-              const diffTime = Math.abs(end.getTime() - start.getTime())
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-              prevStart.setDate(prevStart.getDate() - diffDays)
-            } else {
-              prevStart.setFullYear(prevStart.getFullYear() - 1)
-            }
-            const prevStartMonth = `${prevStart.getFullYear()}-${String(prevStart.getMonth()+1).padStart(2,"0")}`
-
-            const [pCostRes, pSettingsRes] = await Promise.all([
-              fetch(`/api/channel-costs?month=${prevStartMonth}`),
-              fetch(`/api/channel-cost-settings?month=${prevStartMonth}`),
-            ])
-
-            if (pCostRes.ok && pSettingsRes.ok) {
-              const pCostsMap = await pCostRes.json()
-              const pSettingsMap = await pSettingsRes.json()
-              const pMode = pSettingsMap[selectedChannel] || "total"
-
-              const daysInMonth = new Date(prevStart.getFullYear(), prevStart.getMonth() + 1, 0).getDate()
-              const diffTime = Math.abs(end.getTime() - start.getTime())
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-              const ratio = Math.min(1, diffDays / daysInMonth)
-
-              if (pMode === "subchannels" && breakdownDataArr && breakdownDataArr.length > 0) {
-                const pSubChannelCosts = Object.values(pCostsMap).filter((c: any) => c.channel.startsWith(`${selectedChannel} - `))
-                pSubChannelCosts.forEach((pc: any) => {
-                  const subName = pc.channel.replace(`${selectedChannel} - `, "")
-                  const pSubMetrics = breakdownDataArr.find((r: any) => r.sub_channel === subName)
-                  const pSubRev = pSubMetrics ? parseFloat(pSubMetrics.prev_revenue || 0) : 0
-
-                  ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                    if (pc[key]) {
-                      if (pc[key].type === "amount") {
-                        prevTotalOpCost += (parseFloat(pc[key].value) || 0) * ratio
-                      } else {
-                        prevTotalOpCost += (pSubRev * (parseFloat(pc[key].value) || 0)) / 100
-                      }
-                    }
-                  })
-                })
-              } else {
-                const pc = pCostsMap[selectedChannel]
-                if (pc && Object.keys(pc).length > 0) {
-                  ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                    if (pc[key]) {
-                      if (pc[key].type === "amount") {
-                        prevTotalOpCost += (parseFloat(pc[key].value) || 0) * ratio
-                      } else {
-                        prevTotalOpCost += (prevRev * (parseFloat(pc[key].value) || 0)) / 100
-                      }
-                    }
-                  })
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error(e)
-        }
-
-        const currentGpm2 = currentMargin - totalOpCost
-        const prevGpm2 = prevMargin - prevTotalOpCost
+        } catch (e) { console.error("channels/kpis fetch error:", e) }
 
         const revChange = prevRev > 0 ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
         const marginChange = prevMargin !== 0 ? Math.round(((currentMargin - prevMargin) / Math.abs(prevMargin)) * 100) : 0
@@ -878,23 +747,22 @@ export default function ChannelPerformancePage() {
         const aovChange = prevAov > 0 ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
 
         setMetrics({
-          revenue: currentRev,
-          revenueChange: revChange,
-          margin: currentMargin,
-          marginChange: marginChange,
-          gpm2: currentGpm2,
-          gpm2Change: gpm2Change,
-          totalOpCost: totalOpCost,
-          opCostBreakdown: opCostBreakdown,
-          orders: currentOrders,
-          ordersChange: orderChange,
-          units: currentUnits,
-          unitsChange: unitChange,
-          aov: currentAov,
-          aovChange: aovChange,
+          revenue:          currentRev,
+          revenueChange:    revChange,
+          margin:           currentMargin,
+          marginChange:     marginChange,
+          gpm2:             currentGpm2,   // BE-computed CM1 (pro-rata đúng)
+          gpm2Change:       gpm2Change,
+          projection_factor: projFactor,   // BE-provided — dùng bởi getProjectionInfo()
+          orders:           currentOrders,
+          ordersChange:     orderChange,
+          units:            currentUnits,
+          unitsChange:      unitChange,
+          aov:              currentAov,
+          aovChange:        aovChange,
           prevMonthRevenue: parseFloat(summaryObj.lm_revenue || 0),
-          prevMonthOrders: parseInt(summaryObj.lm_orders || 0),
-          prevMonthUnits: parseInt(summaryObj.lm_units || 0),
+          prevMonthOrders:  parseInt(summaryObj.lm_orders || 0),
+          prevMonthUnits:   parseInt(summaryObj.lm_units || 0),
         })
       }
     } catch (err) {

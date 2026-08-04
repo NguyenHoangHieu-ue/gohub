@@ -1,5 +1,160 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-04 (Session 132 — Analytics filter chuẩn + Bé Gấu self-learning + Gấu Pro draft quality).
+Cập nhật lần cuối: 2026-08-04 (Session 133 — OOP Analytics Refactor Phase 0–4 HOÀN THÀNH).
+
+## ══════ SESSION 133 — TỔNG KẾT ĐẦY ĐỦ (2026-08-04, Sonnet 4.6) ══════
+
+### Bối cảnh
+PIC báo cáo tuần chọn 27/7–2/8 → B2B Performance CM1 sai (projection factor 4.43x, CH.Cost gộp 2 tháng).
+Root cause: FE tự tính projection + cost → cross-month range cho kết quả sai, không nhất quán giữa tab.
+Giải pháp: OOP Analytics Refactor — chuyển toàn bộ tính toán về BE, FE chỉ display.
+
+---
+
+### Task 1: B2B Performance — Hướng B (commit f63a6a3)
+BE (`b2b/performance/route.ts`):
+- `calcChCostForPeriod()`: amount × dayRatio, percent × moRevenue (pro-rata đúng)
+- `fetchCustomerCosts(months)` song song channel/group costs
+- Trả `ch_cost`, `cm1`, `cm1_percent` trong response
+
+FE (`b2b/page.tsx`):
+- `getProjectionFactor()`: cross-month → factor=1, MTD hiện tại → factor đúng
+- Bỏ `calcChCost`, `calcChCostInline`, multi-month cost loading
+
+### Fix B2B CH.Cost display (commit ff7eb76)
+- Gốc lỗi: `ch_cost=0` (số) → `??` không trigger fallback → cột hiện 0; b2bCostMap bị bỏ → expand rỗng
+- BE: thêm `cost_lines[]` vào response (gom từ Turso tất cả tháng trong range)
+- FE: `chCostActual = margin − cm1` (tổng deduction = channel+group+customer); `costLines = row.cost_lines`; bỏ `b2bCostMap` state + fetch
+
+### Phase 0 — Shared library (commit 43dba28)
+`web/src/lib/analytics-engine/`:
+- `projection.ts`: `getProjectionFactor(start, end)` — cross-month → 1, MTD → factor
+- `cost-engine.ts`: `calcChCostForPeriod` / `calcChannelOpCost` / `calcGroupOpCost` pro-rata
+- `types.ts`: `AnalyticsComputedFields` + `AnalyticsKpiResult`
+
+### Phase 1 — Channels tab (commit 43dba28)
+- BE `channels/kpis/route.ts`: thêm `cm1`, `gpm2`, `cm1_percent`, `projection_factor` (multi-month cost, pro-rata)
+- FE `channels/page.tsx`: `getProjectionInfo()` dùng `metrics.projection_factor` từ BE; bỏ ~140 dòng FE cost computation
+
+### Phase 2 — BOD tab (commit 37f16d0)
+- BE `bod-summary/route.ts`: +`projection_factor` (1 import + 1 dòng)
+- FE `bod/page.tsx`: `projectedGpm2 = total_gpm2 × factor` (thay vì `projectedMargin − fixedOpCost`)
+
+### Phase 3 — B2C Performance (commit f7ef6a6)
+- `b2c/kpis` đã đúng hoàn toàn → CM1 tại `kpis[5]` sẵn dùng
+- FE `b2c-performance.tsx`: +current-month check + `projectedGpm2 = gpm2 × factor`
+- `b2c-advanced-dashboard`: KHÔNG đụng (YTD server-side, khác use case)
+
+### Phase 4 — Staff tier classification (commit adbba79)
+- BE `staff-report/customers/route.ts`: thêm `tier` field từ `makeClassifyTier(tierKeywords)` (cùng nguồn Quarter Report)
+- FE `staff/page.tsx`: bỏ `tierKeywords` state, `fetchTierKeywords()`, `useEffect` quarterly-settings (1 API call ít hơn)
+- `TierBadge`: nhận `tier` string từ BE thay vì tính từ `pln+kws`
+
+---
+
+### Kết quả OOP Refactor
+
+| Tab | Projection | CM1/Cost | Status |
+|-----|:---:|:---:|:---:|
+| B2B Performance | ✅ BE | ✅ BE | Done s133 |
+| Channels | ✅ BE | ✅ BE | Done s133 |
+| BOD | ✅ BE | ✅ BE | Done s133 |
+| B2C Performance | ✅ BE | ✅ BE | Done s133 |
+| Staff | — | ✅ BE + tier BE | Done s133 |
+| All-Time | — | ✅ BE | Done trước |
+| Quarterly | — | ✅ BE | Done trước |
+| Fulfillment | — | ✅ BE | Done trước |
+
+Cross-month range (vd 27/7–2/8): tất cả tab không chiếu sai nữa.
+CM1 projected = CM1 actual × factor (nhất quán toàn hệ thống).
+
+### ⚠️ Hiếu cần làm (còn treo từ s132)
+1. Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor
+2. Thêm ENV `LARK_CREATOR_USER_ID` trên Vercel (Lark open_id đầy đủ)
+3. Cost T8 B2C: nhập lại value ≠ 0 trong Manage Costs
+4. Nhập target T7/T8 ở Manage Costs cho scheduled reports
+
+### ⚠️ Hiếu cần test trên staging
+- B2B Performance: chọn 27/7–2/8 → CH.Cost hiện đúng, không có "Projected" section
+- B2B Performance: MTD T8 → projection bình thường, CH.Cost khớp với Manage Costs
+- Channels: 27/7–2/8 → không project; CM1 trong KPI card khớp với bảng performance
+- BOD: 27/7–2/8 → không có "Projected"; MTD T8 → projected CM1 = actual × factor
+- B2C Performance: tháng T7 full → không project; MTD T8 → project đúng
+- Staff: expand 1 sales → customer list hiện tier badge đúng (Strategic/VIP/Gold/Silver/B2C)
+
+## ══════ SESSION 133 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
+
+### Bối cảnh
+PIC báo cáo tuần chọn 27/7–2/8 → số CM1 sai. Audit toàn bộ cơ chế B2B Performance:
+phát hiện 3 lỗi logic khi cross-month range (projection factor 4.43x sai, CH.Cost gộp 2 tháng,
+percent CH.Cost áp trên projected revenue).
+
+### Fix (commit f63a6a3, staging):
+
+**Backend `b2b/performance/route.ts`:**
+- Thêm `calcChCostForPeriod()` — tính CH.Cost pro-rata đúng:
+  - amount: value × dayRatio (days_in_range/days_in_month per month)
+  - percent: (value/100) × moRevenue (revenue thực của đúng tháng đó, từ SQL)
+- Thêm `fetchCustomerCosts(months)` song song với channel/group costs
+- Trả về `ch_cost`, `cm1`, `cm1_percent` trong response (groupBy=customer)
+- Tất cả tính toán nay ở BE → đúng với mọi date range kể cả cross-month
+
+**Frontend `b2b/page.tsx`:**
+- `getProjectionFactor()`: thêm check cross-month → chỉ project khi range CÙNG tháng hiện tại
+  (27/7–2/8 = 2 tháng → factor=1, không hiện "Projected" section nữa)
+- Bỏ `calcChCost()`, `calcChCostInline()`, multi-month cost loading
+- FE dùng `row.ch_cost` + `row.cm1` từ backend cho mọi calculation
+- `b2bCostMap` chỉ còn cho hiển thị cost lines trong expand panel (1 tháng, display-only)
+
+**PLAN.md §B5:** Ghi chú OOP Analytics Refactor — roadmap chuyển toàn bộ tính toán về BE:
+- `AnalyticsCostEngine.ts`, `AnalyticsProjection.ts`, `BaseAnalyticsRoute.ts`
+- Thứ tự migrate: B2C → BOD → Staff → All-Time → Channels
+
+### ⚠️ Hiếu cần test trên staging:
+- Chọn range 27/7–2/8 → không còn "Projection Factor: 4.43x", không có section "Projected"
+- Chọn MTD tháng 8 (01/8–hôm qua) → vẫn hiện projection bình thường
+- CH.Cost trong bảng = đúng pro-rata actual (không inflate theo factor)
+
+## ══════ SESSION 132 bổ sung — Gấu Pro Comprehensive Update (Opus, staging-only) ══════
+
+STAGING-ONLY từ đây (Hiếu chốt): chỉ push staging, KHÔNG tự merge main.
+
+### B2B Performance fixes (đã merge main trước khi có rule staging-only):
+- GP/CM1 MTD: root cause dim_customer JOIN thiếu ::text → dùng excludeOpsByCode subquery (khớp tier table)
+- MTD GP loại customer revenue≤0 (khớp filter tier table) — GP = 158.5M khớp
+- Tier table CM1 = pro-rata GP - CH.Cost(projected revenue)
+- MTD CM1 actual = GP actual - CH.Cost/projectionFactor (CH.Cost nhập = ước tính cả tháng)
+- Projection factor bỏ clamp trần 10x → chạy đúng theo ngày filter (1/8-2/8 = 15.5x)
+
+### Gấu Pro 8 tính năng mới (staging, chưa merge main):
+1. Auto date context (buildDateContext) — Gấu biết "tháng này"/"hôm nay", không hỏi ngày
+2. Self-correction SQL retry (auto_retry_suggested + rule bắt buộc retry ≤2 lần)
+3. KB auto-lookup lượt đầu (nạp creator_kb vào system prompt khi conversation mới)
+4. Export marker auto cho bảng > 15 dòng
+5. Conversation summarization (compressHistory: >20 turns → tóm tắt 10 turns cũ)
+6. Follow-up chips (```followup block → chip UI click submit)
+7. Lark Base tool (queryLarkBase) — cần scope bitable:app:readonly
+8. Voice input (Web Speech API vi-VN, nút mic)
++ Lark task fix: X-Lark-Request-User-Open-Id (act on behalf of Hiếu)
++ Bé Gấu self-learning: creator Lark ID fallback lark_ou_e5af3c7f447984052c1c5a5c2f5
+
+### Chart types mở rộng (đã làm nốt, staging 7aae09e):
+9. stacked bar (stacked:true) + waterfall (P&L breakdown) + scatter (x_key/y_key) — chat-chart.tsx + system prompt ví dụ. Có nút PNG.
+- Lark Base: Hiếu ĐÃ add scope bitable:app:readonly → queryLarkBase hoạt động.
+- Tỷ giá Admin → lưu Supabase app_settings key prefix "fx." category "fx_rate".
+
+### Lark task/tasklist + OAuth (điều tra live + build, staging daf9cba):
+- open_id cũ (...c2f5) BỊ CẮT CỤT → "not a valid user id". Đúng = ou_e5af3c7f447984052c1c5a5c2f594127 (từ users.lark_open_id).
+  Fix: be-gau fallback đọc users(creator), sendLarkDM dùng open_id type. Hiếu SỬA Vercel env LARK_CREATOR_USER_ID = full.
+- Test live: app token create/get-by-guid/update/DM = OK; nhưng LIST task/tasklist trả 0 (Lark bắt user_access_token).
+- BUILD OAuth: lark.ts getLarkUserToken/saveLarkUserToken/exchangeLarkCode (lưu app_settings.lark_oauth_creator, auto refresh);
+  routes /api/lark/oauth/start|callback|status; runLarkTask ưu tiên user token; UI nút "Kết nối Lark" (creator only).
+- listLarkTasklists tool + tasklist_guid cho listLarkTasks (xem task trong Task List).
+- Hiếu ĐÃ: set Vercel env open_id full + có scope task:task + bitable:app:readonly. Staging domain: stg-intel-v2.gohub.cloud.
+- OAuth scope chỉ xin task:task (đủ list task); redirect_uri theo req.nextUrl.origin. (commit 06ecfca)
+- Hiếu ĐÃ đăng ký Redirect URL https://stg-intel-v2.gohub.cloud/api/lark/oauth/callback.
+- ✅ OAuth ĐÃ CHẠY (staging). Fix cuối "thiếu quyền": bỏ scope param (commit af26ca8) + publish version Lark.
+  Gotcha: sau khi thêm quyền Lark phải PUBLISH VERSION MỚI (OAuth dùng version đã release, không phải nháp).
+  (task:tasklist tùy chọn — chỉ cần nếu muốn duyệt Task List riêng.)
 
 ## ══════ SESSION 132 — TỔNG KẾT (2026-08-04, Sonnet 4.6) ══════
 

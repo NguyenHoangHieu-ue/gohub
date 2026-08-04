@@ -129,14 +129,20 @@ const webSearchDecl = {
 
 const listLarkTasksDecl = {
   name: "listLarkTasks",
-  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Use to check task status, deadlines, and priorities. Requires 'task:task:read' scope on the Lark app.",
+  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Nếu truyền tasklist_guid → chỉ lấy task trong Danh sách công việc (Task List) đó; bỏ trống → tất cả task của Hiếu. Requires 'task:task:read'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
+      tasklist_guid: { type: SchemaType.STRING, description: "GUID của Task List (từ listLarkTasklists) — bỏ trống để lấy mọi task." },
       page_size: { type: SchemaType.NUMBER, description: "Max tasks (default 20, max 50)." },
       page_token: { type: SchemaType.STRING, description: "Pagination token for next page." },
     },
   },
+}
+const listLarkTasklistsDecl = {
+  name: "listLarkTasklists",
+  description: "Liệt kê các Danh sách công việc (Task List) của Hiếu trong Lark — trả về guid + tên mỗi list. Dùng khi Hiếu hỏi về 'task list'/'danh sách công việc'; rồi gọi listLarkTasks với tasklist_guid để xem task bên trong. Requires 'task:tasklist:read'.",
+  parameters: { type: SchemaType.OBJECT, properties: {} },
 }
 const getLarkTaskDecl = {
   name: "getLarkTask",
@@ -149,7 +155,7 @@ const getLarkTaskDecl = {
 }
 const createLarkTaskDecl = {
   name: "createLarkTask",
-  description: "Create a new Lark task for Hiếu. Requires 'task:task:write' scope.",
+  description: "Tạo task Lark mới GÁN cho Hiếu (hiện trong My Tasks của Hiếu). Hoạt động tốt với app token. Requires 'task:task:write'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -173,6 +179,19 @@ const updateLarkTaskDecl = {
       complete:    { type: SchemaType.BOOLEAN, description: "true = mark done." },
     },
     required: ["task_guid"],
+  },
+}
+const queryLarkBaseDecl = {
+  name: "queryLarkBase",
+  description: "Đọc dữ liệu Lark Base (bảng tính Lark): CS ticket, inventory, tracking, danh sách. Gọi KHÔNG tham số để liệt kê các Base có sẵn; truyền app_token để liệt kê tables; truyền cả app_token + table_id để đọc records. Requires 'bitable:app:readonly' scope.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      app_token: { type: SchemaType.STRING, description: "Base app_token (bỏ trống để list các Base)." },
+      table_id:  { type: SchemaType.STRING, description: "Table ID trong Base (bỏ trống để list tables của Base)." },
+      filter:    { type: SchemaType.STRING, description: "Filter formula Lark (tùy chọn), vd: CurrentValue.[Status]=\"Open\"." },
+      page_size: { type: SchemaType.NUMBER, description: "Số records tối đa (default 50, max 200)." },
+    },
   },
 }
 
@@ -375,11 +394,11 @@ When writing to KB: always update master note + any relevant wiki page simultane
 2. Report ONLY what the data actually returns. If 0 rows: say "không có dữ liệu cho query này" explicitly
 3. Run multiple queries when needed for comprehensive answers (up to 20 tool calls allowed)
 4. If a SQL query errors: FIX the SQL immediately and retry — do not stop and apologize
-5. **Self-verify after getting results**:
+5. **AUTO-RETRY (bắt buộc)**: Nếu function response có \`auto_retry_suggested: true\` → PHẢI sửa query theo \`retry_hint\` và CHẠY LẠI ngay, KHÔNG báo kết quả rỗng/sai vội. Tối đa 2 lần retry; sau đó mới kết luận "không có dữ liệu" (nếu vẫn 0 rows) hoặc báo số kèm cảnh báo.
+6. **Self-verify after getting results**:
    - Revenue in billions VND for a month → sanity check (GoHub monthly ~1-5 tỷ VND is normal)
    - If result looks suspiciously high/low → re-check query logic before reporting
    - Always state the time period clearly: "Dữ liệu từ [ngày] đến [ngày]"
-   - For 0 rows: try relaxing one filter at a time before concluding no data
 
 ### For multi-turn conversations (CRITICAL)
 - When user says "cái đó / nó / này / đó" → refers to the MOST RECENT entity discussed
@@ -452,6 +471,29 @@ Dùng ĐÚNG định nghĩa chuẩn (3HK=3HKDATAPOOL, op-cost SUM percent, exclu
 
 Use chart_type "line" or "area" for time-series trends. For bar charts use "bars", for line/area charts use "lines". Pie charts use single-metric format only.
 
+**Stacked bar** (xếp chồng các thành phần, vd doanh thu theo kênh cộng dồn): multi-metric + \`"stacked": true\`.
+\`\`\`chart
+{"chart_type":"bar","title":"Doanh thu theo kênh","data":[{"month":"T7","shopee":5e8,"lazada":3e8}],"x_key":"month","stacked":true,"bars":[{"key":"shopee","label":"Shopee"},{"key":"lazada","label":"Lazada"}]}
+\`\`\`
+
+**Waterfall** (P&L breakdown: Revenue → -COGS → GP → -OpCost → CM1): single-metric, chart_type "waterfall". Giá trị âm = khoản trừ (đỏ), dương = cộng (xanh); cột tổng thêm \`"isTotal": true\` (xanh dương).
+\`\`\`chart
+{"chart_type":"waterfall","title":"P&L T7","data":[{"label":"Revenue","value":1500000000},{"label":"COGS","value":-900000000},{"label":"GP","value":0,"isTotal":true},{"label":"OpCost","value":-200000000},{"label":"CM1","value":0,"isTotal":true}]}
+\`\`\`
+
+**Scatter** (tương quan 2 chỉ số, vd revenue vs GP% từng KH): multi-metric, chart_type "scatter", \`x_key\` + \`y_key\`, mỗi điểm 1 object.
+\`\`\`chart
+{"chart_type":"scatter","title":"Revenue vs GP% theo KH","data":[{"name":"KH A","revenue":5e8,"gp_pct":22},{"name":"KH B","revenue":3e8,"gp_pct":18}],"x_key":"revenue","y_key":"gp_pct"}
+\`\`\`
+
+## Follow-up Suggestions
+Sau MỖI câu trả lời có data/phân tích (không phải câu hỏi ngược lại user), thêm block ở CUỐI:
+\`\`\`followup
+["Drill down theo kênh?", "So với tháng trước?", "Xuất Excel?"]
+\`\`\`
+- Tối đa 3 gợi ý, mỗi câu ≤ 8 từ, là câu hỏi/hành động tiếp theo HỢP LÝ dựa trên câu vừa trả lời.
+- KHÔNG thêm block này nếu bạn đang HỎI NGƯỢC user (cần làm rõ) hoặc câu trả lời chỉ là trò chuyện.
+
 ## File Export Rules (STRICT)
 
 **Download buttons ONLY appear when you output an \`\`\`export marker. Output it ONLY when the user explicitly asks to export/download/save a file (keywords: "xuất", "download", "tải", "export", "lưu file", "file PDF/Word/Excel").**
@@ -482,10 +524,10 @@ title: Báo cáo doanh thu tháng 7
 - **json**: you MUST also include a \`\`\`json block (array of objects).
 
 ### Rules
-- Confirm before exporting: "Tôi sẽ xuất [nội dung] dạng [format]..."
 - Numbers in CSV: raw (no thousand separators). Vietnamese: UTF-8.
 - If user asks "xuất báo cáo" without specifying format → default to \`formats: pdf, word\`.
-- If user asks "xuất Excel/bảng" → \`formats: csv, excel\` + include \`\`\`csv block.
+- If user asks "xuất Excel/bảng/tải/download/cho tôi file" → \`formats: excel, csv\`; nếu data từ gohub_dw thì PHẢI kèm \`sql:\` (xuất FULL). Nếu Supabase thì kèm \`\`\`csv block.
+- **AUTO-EXPORT bảng lớn**: khi câu trả lời chứa bảng dữ liệu > 15 dòng (dù user không yêu cầu) → TỰ thêm \`\`\`export (formats: excel + \`sql:\` nếu là gohub_dw) và ghi 1 dòng "📎 Gấu đã chuẩn bị file Excel để tải bên dưới." Bảng ≤ 15 dòng → không cần marker trừ khi được yêu cầu.
 
 ## File Analysis (when user uploads a file)
 - Analyze the file content carefully and answer questions about it
@@ -1274,33 +1316,76 @@ async function runManagePortalCredentials(args: {
 }
 
 // ─── Lark Task API ────────────────────────────────────────────────────────────
-import { getLarkToken } from "@/lib/lark"
+import { getLarkToken, getLarkUserToken } from "@/lib/lark"
 
 async function runLarkTask(action: string, args: any): Promise<any> {
   const LARK = "https://open.larksuite.com/open-apis"
   try {
-    const token = await getLarkToken()
-    const h = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+    // User token (OAuth) = danh nghĩa Hiếu → duyệt được task/tasklist cá nhân.
+    // Nếu chưa kết nối → dùng app token (chỉ tạo/sửa/xem-theo-guid được, KHÔNG list).
+    const userToken = await getLarkUserToken()
+    const appToken  = await getLarkToken()
+    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    const h: Record<string, string> = {
+      "Authorization": `Bearer ${userToken || appToken}`,
+      "Content-Type": "application/json",
+    }
+    // Chỉ cần header open_id khi dùng app token (user token đã mang danh nghĩa user)
+    if (!userToken && creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
 
+    // list/tasklist cần user token — app token trả rỗng
+    const needsUserToken = action === "listLarkTasks" || action === "listLarkTasklists"
+    if (needsUserToken && !userToken) {
+      return { error: "Chưa kết nối Lark để duyệt task cá nhân. Vào Gấu Pro bấm 'Kết nối Lark' để cấp quyền, rồi thử lại." }
+    }
+
+    if (action === "listLarkTasklists") {
+      const res = await fetch(`${LARK}/task/v2/tasklists?page_size=100&user_id_type=open_id`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d, note: "Cần scope task:tasklist:read." }
+      // Rút gọn: chỉ trả guid + name mỗi tasklist
+      const lists = (d.data?.items || []).map((t: any) => ({ guid: t.guid, name: t.name }))
+      return { tasklists: lists, hint: "Gọi listLarkTasks với tasklist_guid để xem task bên trong." }
+    }
     if (action === "listLarkTasks") {
       const ps = Math.min(args?.page_size || 20, 50)
-      const qs = new URLSearchParams({ page_size: String(ps) })
+      const qs = new URLSearchParams({
+        page_size: String(ps),
+        user_id_type: "open_id",
+      })
       if (args?.page_token) qs.set("page_token", args.page_token)
-      const res = await fetch(`${LARK}/task/v2/tasks?${qs}`, { headers: h })
+      // Có tasklist_guid → lấy task TRONG danh sách công việc đó; không → mọi task của user
+      const url = args?.tasklist_guid
+        ? `${LARK}/task/v2/tasklists/${encodeURIComponent(args.tasklist_guid)}/tasks?${qs}`
+        : `${LARK}/task/v2/tasks?${qs}`
+      const res = await fetch(url, { headers: h })
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "getLarkTask") {
-      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { headers: h })
+      const res = await fetch(
+        `${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`,
+        { headers: h }
+      )
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "createLarkTask") {
-      const body: any = { summary: args.summary }
+      const body: any = {
+        summary: args.summary,
+        // Gán Hiếu làm assignee để task hiện trong "My Tasks".
+        // Lark Task v2 role hợp lệ = "assignee" | "follower" ("creator" KHÔNG hợp lệ → gán fail).
+        members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "assignee" }] : undefined,
+      }
       if (args.description) body.description = { content: args.description, content_type: "markdown" }
       if (args.due) body.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }
-      const res = await fetch(`${LARK}/task/v2/tasks`, { method: "POST", headers: h, body: JSON.stringify(body) })
+      const res = await fetch(`${LARK}/task/v2/tasks?user_id_type=open_id`, {
+        method: "POST", headers: h, body: JSON.stringify(body),
+      })
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     if (action === "updateLarkTask") {
@@ -1309,11 +1394,57 @@ async function runLarkTask(action: string, args: any): Promise<any> {
       if (args.description) { body.task.description = { content: args.description, content_type: "markdown" }; body.update_fields.push("description") }
       if (args.due)         { body.task.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }; body.update_fields.push("due") }
       if (args.complete)    { body.task.completed_at = String(Date.now() / 1000 | 0); body.update_fields.push("completed_at") }
-      const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}`, { method: "PATCH", headers: h, body: JSON.stringify(body) })
+      const res = await fetch(
+        `${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`,
+        { method: "PATCH", headers: h, body: JSON.stringify(body) }
+      )
       const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
       return d.data || d
     }
     return { error: `Unknown action: ${action}` }
+  } catch (e: any) { return { error: e.message } }
+}
+
+// ─── Lark Base (Bitable) ──────────────────────────────────────────────────────
+async function runLarkBase(args: any): Promise<any> {
+  const LARK = "https://open.larksuite.com/open-apis"
+  try {
+    const token = await getLarkToken()
+    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    const h: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    }
+    if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
+
+    // 1. Không app_token → list các Base
+    if (!args?.app_token) {
+      const res = await fetch(`${LARK}/bitable/v1/apps?page_size=50`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d, note: "Cần scope bitable:app:readonly." }
+      return { hint: "Truyền app_token để xem tables trong 1 Base.", ...(d.data || d) }
+    }
+    // 2. Có app_token, không table_id → list tables
+    if (!args?.table_id) {
+      const res = await fetch(`${LARK}/bitable/v1/apps/${encodeURIComponent(args.app_token)}/tables?page_size=100`, { headers: h })
+      const d = await res.json()
+      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
+      return { hint: "Truyền cả app_token + table_id để đọc records.", ...(d.data || d) }
+    }
+    // 3. Có cả hai → đọc records
+    const ps = Math.min(args?.page_size || 50, 200)
+    const qs = new URLSearchParams({ page_size: String(ps) })
+    if (args?.filter) qs.set("filter", args.filter)
+    const res = await fetch(
+      `${LARK}/bitable/v1/apps/${encodeURIComponent(args.app_token)}/tables/${encodeURIComponent(args.table_id)}/records?${qs}`,
+      { headers: h }
+    )
+    const d = await res.json()
+    if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
+    // Rút gọn: chỉ trả fields của mỗi record (bỏ metadata cồng kềnh)
+    const records = (d.data?.items || []).map((r: any) => ({ record_id: r.record_id, ...r.fields }))
+    return { records, total: d.data?.total, has_more: d.data?.has_more, page_token: d.data?.page_token }
   } catch (e: any) { return { error: e.message } }
 }
 
@@ -1336,24 +1467,55 @@ async function genWithRetry(model: any, request: any, attempts = 3): Promise<any
   throw lastErr
 }
 
+// Ngày tháng theo giờ VN (ICT) → inject vào system prompt để Gấu tự hiểu "tháng này"/"hôm nay".
+function buildDateContext(): string {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }))
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+  const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+  const ytdStart = new Date(now.getFullYear(), 0, 1)
+  const dow = ["Chủ nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"][now.getDay()]
+  return `\n\n━━━ NGÀY THÁNG (auto, giờ VN) ━━━
+Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(yesterday)} (ETL sáng ~08h ICT, hôm nay chưa đủ data).
+"tháng này" / "MTD" = ${fmt(mtdStart)} → ${fmt(yesterday)}
+"tháng trước" (đủ ngày) = ${fmt(lastMonthStart)} → ${fmt(lastMonthEnd)}
+"YTD" = ${fmt(ytdStart)} → ${fmt(yesterday)}
+→ Khi user nói "tháng này" / "gần đây" / "hôm nay" / "tháng trước" → DÙNG NGAY các mốc trên, KHÔNG hỏi lại ngày. Luôn cắt data tới ${fmt(yesterday)}.`
+}
+
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
   fileContext?: FileContext
 ): Promise<{ text: string; sources: WebSource[] }> {
-  const [partnerTierInfo, ga4SiteList] = await Promise.all([
+  // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
+  const isFreshConversation = geminiHistory.length <= 1
+  const [partnerTierInfo, ga4SiteList, kbInject] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
     }).catch(() => ""),
     ga4Sites().then(sites => sites.length ? "\n\nGA4 SITES: " + sites.map(s => `${s.id}="${s.name}" (${s.propertyId})`).join(", ") : "").catch(() => ""),
+    isFreshConversation
+      ? runReadKnowledgeBase().then((kb: any) => {
+          const entries = kb?.entries || kb?.result || kb
+          if (!entries || (Array.isArray(entries) && entries.length === 0)) return ""
+          const body = typeof entries === "string" ? entries : JSON.stringify(entries)
+          return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, 8000)}`
+        }).catch(() => "")
+      : Promise.resolve(""),
   ])
+
+  // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
+  const dateContext = buildDateContext()
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
-    systemInstruction: SYSTEM_PROMPT + partnerTierInfo + ga4SiteList,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1454,9 +1616,16 @@ export async function runCreatorAI(
       }
 
       // ── Lark Task tools ──
-      if (call.name === "listLarkTasks" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
+      if (call.name === "listLarkTasks" || call.name === "listLarkTasklists" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
         const resp = await runLarkTask(call.name, call.args as any)
         fnParts.push({ functionResponse: { name: call.name, response: resp } })
+        continue
+      }
+
+      // ── Lark Base ──
+      if (call.name === "queryLarkBase") {
+        const resp = await runLarkBase(call.args as any)
+        fnParts.push({ functionResponse: { name: "queryLarkBase", response: resp } })
         continue
       }
 
@@ -1577,13 +1746,17 @@ export async function runCreatorAI(
           const limited = rows.slice(0, 200)
           const response: any = { result: limited, rowCount: rows.length }
           if (rows.length === 0) {
-            response.hint = "0 rows. Check: (1) fulfiled_date::DATE cast (one 'l'), (2) ILIKE instead of =, (3) remove one filter at a time, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue to see latest date."
+            response.auto_retry_suggested = true
+            response.retry_hint = "0 rows. Sửa & chạy lại: (1) fulfiled_date::DATE cast (một chữ 'l'), (2) ILIKE thay vì =, (3) bỏ bớt 1 filter, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue xem ngày mới nhất."
           }
           const firstRow = limited[0] as any
           if (firstRow) {
             const nums = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v)))).map(v => Number(v))
-            if (nums.some(n => n > 1e13)) response.warning = "Some values appear unusually large (>10 trillion VND). Check for missing JOIN condition causing row multiplication."
-            if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) response.warning = "Some revenue values are negative — may indicate data issue or incorrect aggregation."
+            if (nums.some(n => n > 1e12)) {
+              response.auto_retry_suggested = true
+              response.retry_hint = "Giá trị bất thường lớn (>1 nghìn tỷ VND) — nghi THIẾU JOIN gây nhân dòng (row multiplication). Kiểm tra JOIN + GROUP BY rồi chạy lại."
+            }
+            if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) response.warning = "Có revenue âm — nghi data issue hoặc aggregation sai."
           }
           fnParts.push({ functionResponse: { name: "executeSQL", response } })
         } catch (err: any) {

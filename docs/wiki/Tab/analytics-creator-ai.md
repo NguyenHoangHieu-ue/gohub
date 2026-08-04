@@ -156,3 +156,46 @@ Thống kê ai vào tab nào + Bé Gấu hỏi gì (chỉ creator). Nguồn: Sup
 - **Chat event không lưu** — `logChat` trong `chat/route.ts` trước fire-and-forget (`void`); serverless không có waitUntil → insert bị cắt khi handler trả stream → 0 chat event. Nay `await logChat(...)` (thêm user_name) → tab Chatbot (phân bố agent/top câu hỏi/log) mới có dữ liệu.
 - **Export** — thêm nút Export (.xlsx) xuất toàn bộ event trong kỳ (thời gian/loại/user/role/tab/agent/câu hỏi).
 - LƯU Ý: 156 event lịch sử vẫn user rỗng (không backfill); event MỚI mới có định danh.
+
+---
+
+## § Gấu Pro Update s132 (2026-08-04)
+
+Nâng cấp Gấu Pro thành assistant toàn năng — 8 tính năng mới:
+
+### Intelligence & Data Accuracy
+1. **Auto date context** (`buildDateContext()` creator-ai.ts) — inject ngày hôm nay / MTD / tháng trước / YTD (giờ VN) vào system prompt. Gấu tự hiểu "tháng này"/"hôm nay" không hỏi lại ngày; luôn cắt data tới hôm qua (CURRENT_DATE-1).
+2. **Self-correction SQL retry** — `execSQL` khi 0 rows hoặc value > 1e12 → trả `auto_retry_suggested:true` + `retry_hint`; system prompt bắt buộc Gấu sửa query & chạy lại (tối đa 2 lần) trước khi kết luận.
+3. **KB auto-lookup lượt đầu** — conversation mới (history≤1) → tự nạp `creator_kb` vào system prompt (nguồn sự thật, override training data). Không nạp lại ở multi-turn.
+4. **Export marker auto** — bảng > 15 dòng → tự thêm ```export (excel + `sql:` nếu gohub_dw); user nói "xuất/tải/download" → luôn có marker.
+
+### Context & Conversation
+5. **Conversation summarization** (`compressHistory()` chat/route.ts) — > 20 turns hoặc > 30k chars → tóm tắt 10 turns cũ nhất bằng 1 Gemini call, giữ 10 turns gần nhất. Badge "Lịch sử cũ đã tóm tắt" trên UI.
+6. **Follow-up chips** — Gấu trả ```followup block (3 gợi ý ≤8 từ); UI render chip dưới message, click → submit ngay.
+7. **Lark Base** (`queryLarkBase` tool) — đọc dữ liệu Lark Base (CS ticket/inventory/tracking). Không app_token→list Base; +app_token→list tables; +table_id→đọc records. Cần scope `bitable:app:readonly`.
+
+### UX
+8. **Voice input** — nút mic (Web Speech API, vi-VN) cạnh nút gửi; feature-detect, ẩn nếu browser không hỗ trợ.
+9. **Chart types mở rộng** (`chat-chart.tsx`): ngoài bar/line/area/pie, thêm:
+   - **stacked bar**: multi-metric + `stacked:true`
+   - **waterfall**: single-series `chart_type:"waterfall"` (P&L breakdown, âm=đỏ/dương=xanh/`isTotal`=xanh dương)
+   - **scatter**: multi-metric `chart_type:"scatter"` + `x_key`/`y_key`
+   Cả 3 có nút tải PNG. System prompt Gấu Pro có ví dụ đủ 3 loại.
+
+### Lark OAuth (duyệt task cá nhân)
+App token KHÔNG list được task/tasklist riêng của user (Lark trả 0) → cần **user_access_token** (OAuth).
+- Flow: nút "🔗 Kết nối Lark" (header Gấu Pro, creator only) → `/api/lark/oauth/start` → Lark authorize → `/api/lark/oauth/callback` đổi code→token → lưu `app_settings.lark_oauth_creator` (JSON access+refresh, auto refresh).
+- `getLarkUserToken()` (lark.ts) tự refresh; `runLarkTask` ưu tiên user token cho list/tasklist/get/create/update. Chưa kết nối → list báo "bấm Kết nối Lark".
+- create/update vẫn chạy được bằng app token nếu chưa OAuth (fallback).
+- **open_id thật của Hiếu = `ou_e5af3c7f447984052c1c5a5c2f594127`** (mã cũ `...c2f5` bị cắt cụt → "not a valid user id"). Lấy từ `users.lark_open_id` (role=creator).
+
+### ENV / scope cần (Hiếu)
+- `LARK_CREATOR_USER_ID` = `ou_e5af3c7f447984052c1c5a5c2f594127` (đầy đủ) — ĐÃ set Vercel. Dùng cho DM tự học + fallback app token.
+- Scope Lark: `task:task` (ĐÃ có) + `bitable:app:readonly` (ĐÃ có). `task:tasklist` = tùy chọn (chỉ cần nếu muốn duyệt Task List riêng — OAuth scope hiện chỉ xin `task:task`).
+- **Redirect URL** (Lark Security Settings): `https://stg-intel-v2.gohub.cloud/api/lark/oauth/callback` (staging). Thêm domain production khi merge main.
+- redirect_uri sinh động theo `req.nextUrl.origin` (khớp domain đang truy cập) — không phụ thuộc NEXTAUTH_URL.
+- Staging domain: `https://stg-intel-v2.gohub.cloud`. ✅ OAuth ĐÃ CHẠY (staging).
+- **Gotcha "thiếu quyền" khi authorize**: (1) bỏ tham số `scope` trong URL để Lark tự dùng scope app đã publish (tránh lệch tên scope); (2) sau khi thêm quyền trong Lark PHẢI **publish version mới** — OAuth dùng quyền của version đã release, không phải bản nháp.
+
+### Ghi chú tham khảo
+- **Tỷ giá nội bộ** (nhập ở Admin → Tỷ Giá Nội Bộ) lưu ở Supabase `app_settings`, key prefix `fx.` (vd `fx.usd_vnd`, `fx.twd_usd`), `category="fx_rate"`. Ghi qua `PATCH /api/admin/settings`.

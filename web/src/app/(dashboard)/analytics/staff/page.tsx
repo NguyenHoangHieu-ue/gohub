@@ -38,6 +38,7 @@ interface CustomerRow {
   customer_code:   string
   customer_name:   string
   price_list_name: string | null
+  tier:            string  // BE-computed: "B2C" | "Strategic" | "VIP" | "Gold" | "Silver"
   revenue:         number
   hk3_revenue:     number
   gross_profit:    number
@@ -67,20 +68,10 @@ const TIER_CONFIG: Record<string, { bg: string; text: string }> = {
 function fck(n: number) { return formatCompactNumber(n) }
 function pct(n: number) { return n.toFixed(1) + "%" }
 
-function TierBadge({ pln, kws }: { pln: string | null; kws: Record<string, string[]> }) {
-  // B2C: không có price_list_name (theo chuẩn Quarter Report: null → Strategic cho B2B,
-  // nhưng Staff tab gặp cả B2C nên null = B2C)
-  if (!pln) {
-    return <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0 bg-emerald-100 text-emerald-700">B2C</span>
-  }
-  // B2B: classify theo tierKeywords (null price_list_name đã handled trên)
-  const up = pln.toUpperCase()
-  let tier = ""
-  for (const [t, ks] of Object.entries(kws)) {
-    if ((ks as string[]).some(k => up.includes(k.toUpperCase()))) { tier = t; break }
-  }
-  if (!tier) tier = "Strategic"   // B2B không khớp keyword → Strategic (chuẩn Quarter Report)
-  const c = TIER_CONFIG[tier]; if (!c) return null
+// tier từ BE (staff-report/customers trả về, dùng makeClassifyTier giống Quarter Report)
+function TierBadge({ tier }: { tier: string }) {
+  const c = TIER_CONFIG[tier]
+  if (!c) return null
   return (
     <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", c.bg, c.text)}>
       {tier}
@@ -136,9 +127,6 @@ function StaffPageInner() {
   const [channels,     setChannels]     = useState<string[]>([])
   const [staffData,    setStaffData]    = useState<StaffRow[]>([])
   const [loading,      setLoading]      = useState(true)
-  const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
-    Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
-  })
   const [staffSearch,   setStaffSearch]   = useState("")
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [staffDropOpen, setStaffDropOpen] = useState(false)
@@ -169,16 +157,8 @@ function StaffPageInner() {
     } catch {} finally { setLoading(false) }
   }, [applied, includeShip, includeInternalOps])
 
-  const fetchTierKeywords = useCallback(async () => {
-    try {
-      const r = await fetch("/api/analytics/quarterly-settings")
-      if (r.ok) { const d = await r.json(); if (d?.tierKeywords) setTierKeywords(d.tierKeywords) }
-    } catch {}
-  }, [])
-
-  useEffect(() => { fetchChannels() },     [fetchChannels])
-  useEffect(() => { fetchStaff() },        [fetchStaff])
-  useEffect(() => { fetchTierKeywords() }, [fetchTierKeywords])
+  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => { fetchStaff() },   [fetchStaff])
 
   const toggleExpand = async (code: string) => {
     if (expandedStaff === code) { setExpandedStaff(null); setCustomers([]); return }
@@ -330,13 +310,7 @@ function StaffPageInner() {
     if (!customers.length) return
     const rows = customers.map((c, i) => ({
       Rank: i + 1, "Customer Code": c.customer_code, "Customer Name": c.customer_name,
-      "Tier": (() => {
-        if (!c.price_list_name) return "B2C"
-        const up = c.price_list_name.toUpperCase()
-        for (const [t, ks] of Object.entries(tierKeywords))
-          if ((ks as string[]).some(k => up.includes(k.toUpperCase()))) return t
-        return "Strategic"
-      })(),
+      "Tier": c.tier,  // BE-computed
       "Revenue": c.revenue, "3HK Revenue": c.hk3_revenue,
       "3HK %": c.revenue > 0 ? +((c.hk3_revenue/c.revenue)*100).toFixed(1) : 0,
       "Gross Profit": c.gross_profit, "Orders": c.order_count,
@@ -748,7 +722,7 @@ function StaffPageInner() {
                                           <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
                                           <td className="px-4 py-2">
                                             <div className="flex items-center gap-1">
-                                              <TierBadge pln={c.price_list_name} kws={tierKeywords} />
+                                              <TierBadge tier={c.tier} />
                                               <div>
                                                 <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
                                                 <p className="text-[9px] text-slate-400">{c.customer_code}</p>

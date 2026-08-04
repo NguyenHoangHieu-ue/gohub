@@ -4,17 +4,18 @@ import { useRef, useState } from "react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend,
+  ScatterChart, Scatter, ZAxis,
 } from "recharts"
 import { Download, Loader2 } from "lucide-react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // Format A (legacy — bi-analyst / data-explorer): single series
 interface SingleSeriesData {
-  chart_type: "bar" | "line" | "pie"
+  chart_type: "bar" | "line" | "pie" | "waterfall"
   title:      string
   x_axis?:    string
   y_axis?:    string
-  data:       { label: string; value: number }[]
+  data:       { label: string; value: number; isTotal?: boolean }[]
 }
 
 // Format B (multi-series — Creator AI / advanced): multiple bars or lines
@@ -24,10 +25,12 @@ interface SeriesDef {
   color?: string
 }
 interface MultiSeriesData {
-  chart_type: "bar" | "line" | "area" | "pie"
+  chart_type: "bar" | "line" | "area" | "pie" | "scatter"
   title:      string
   data:       Record<string, any>[]
   x_key:      string
+  y_key?:     string      // scatter: trục Y
+  stacked?:   boolean     // bar: xếp chồng
   bars?:      SeriesDef[]
   lines?:     SeriesDef[]
 }
@@ -111,6 +114,30 @@ export default function ChatChart({ data }: { data: ChartData }) {
       : Object.keys(rows[0] || {})
           .filter(k => k !== x_key && typeof rows[0][k] === "number")
           .map((k, i) => ({ key: k, label: k, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length] }))
+
+    // ── Scatter (phân tán): x_key + y_key ──────────────────────────────────
+    if (chart_type === "scatter") {
+      const yKey = data.y_key || resolvedSeries[0]?.key || "value"
+      const scatterData = rows.map(r => ({ x: Number(r[x_key]) || 0, y: Number(r[yKey]) || 0, name: String(r.name ?? r[x_key] ?? "") }))
+      return (
+        <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[700px] overflow-hidden">
+          <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h3><PNGBtn /></div>
+          <ResponsiveContainer width="100%" height={300}>
+            <ScatterChart margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis type="number" dataKey="x" name={x_key} axisLine={false} tickLine={false}
+                tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={fmtVal} />
+              <YAxis type="number" dataKey="y" name={yKey} axisLine={false} tickLine={false}
+                tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={fmtVal} width={52} />
+              <ZAxis range={[60, 60]} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ strokeDasharray: "3 3" }}
+                formatter={(v: any, n: string) => [fmtVal(v), n === "x" ? x_key : yKey]} />
+              <Scatter data={scatterData} fill="#7c3aed" />
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
 
     const isPie = chart_type === "pie"
 
@@ -205,9 +232,12 @@ export default function ChatChart({ data }: { data: ChartData }) {
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
               {resolvedSeries.map((s, i) => {
                 const col = s.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]
+                // stacked → cùng stackId; radius bo góc chỉ ở series trên cùng
+                const isLast = i === resolvedSeries.length - 1
                 return (
                   <Bar key={s.key} dataKey={s.key} name={s.label}
-                    fill={col} radius={[4, 4, 0, 0]} />
+                    stackId={data.stacked ? "a" : undefined} fill={col}
+                    radius={data.stacked ? (isLast ? [4, 4, 0, 0] : [0, 0, 0, 0]) : [4, 4, 0, 0]} />
                 )
               })}
             </BarChart>
@@ -220,6 +250,40 @@ export default function ChatChart({ data }: { data: ChartData }) {
   // ── Single-series (legacy format) ─────────────────────────────────────────
   const single = data as SingleSeriesData
   const chartData = normalise(single.data)
+
+  // ── Waterfall (P&L breakdown): running total, xanh/đỏ theo +/- ────────────
+  if (chart_type === "waterfall") {
+    let running = 0
+    const wf = chartData.map((d: any) => {
+      const isTotal = d.isTotal === true
+      if (isTotal) {
+        // Cột tổng: từ 0 đến giá trị hiện tại (running)
+        const total = d.value !== 0 ? d.value : running
+        return { label: d.label, base: 0, delta: total, raw: total, kind: "total" }
+      }
+      const start = running
+      running += d.value
+      return { label: d.label, base: d.value >= 0 ? start : running, delta: Math.abs(d.value), raw: d.value, kind: d.value >= 0 ? "pos" : "neg" }
+    })
+    const colorOf = (k: string) => k === "total" ? "#3b82f6" : k === "pos" ? "#10b981" : "#ef4444"
+    return (
+      <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[700px] overflow-hidden">
+        <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h3><PNGBtn /></div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={wf} margin={{ top: 8, right: 16, left: 8, bottom: 24 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} dy={8} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={fmtVal} width={52} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(_v: any, _n: string, p: any) => [fmtVal(p?.payload?.raw), single.y_axis || "Giá trị"]} />
+            <Bar dataKey="base" stackId="w" fill="transparent" />
+            <Bar dataKey="delta" stackId="w" radius={[4, 4, 0, 0]}>
+              {wf.map((d, i) => <Cell key={i} fill={colorOf(d.kind)} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
 
   return (
     <div ref={chartRef} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 my-3 shadow-sm w-full max-w-[620px] overflow-hidden">

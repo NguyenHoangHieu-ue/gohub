@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port intel bod-summary: summary (rev/margin/gpm2 + %) lấy từ fetchBODGroupMarginData (gồm op-cost);
 // total_units/total_cogs từ raw query; total_target_revenue prorate; previous_period + previous_year.
@@ -70,7 +71,12 @@ export async function GET(req: NextRequest) {
       ;(prev.summary as any).total_3hk_contribution = prev.summary.total_revenue > 0 ? (prev3hk / prev.summary.total_revenue) * 100 : 0
       ;(prevYear.summary as any).total_3hk_contribution = prevYear.summary.total_revenue > 0 ? (ly3hk / prevYear.summary.total_revenue) * 100 : 0
 
-      return { ...current, previous_period: prev.summary, previous_year: prevYear.summary }
+      return {
+        ...current,
+        projection_factor: getProjectionFactor(startDate, endDate),
+        previous_period: prev.summary,
+        previous_year: prevYear.summary,
+      }
     }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })

@@ -44,6 +44,9 @@ interface PerformanceData {
   customer_code?: string; price_list_name?: string; currency_code?: string
   revenue: number; margin: number; margin_percent: number
   gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number
+  // Backend-computed (groupBy=customer): CH.Cost pro-rata đúng, cm1 = gpm2 - ch_cost
+  ch_cost?: number; cm1?: number; cm1_percent?: number
+  cost_lines?: Array<{ label?: string; type: string; value: number }> // từ Turso, để hiển thị expand
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
 }
 
@@ -60,7 +63,6 @@ export default function B2BPerformance() {
   const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
-  const [b2bCostMap, setB2bCostMap] = useState<Record<string, { cost_lines: { label?: string; type: string; value: number }[] }>>({})
 
   const [combinedKpis, setCombinedKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<any[]>([])
@@ -89,36 +91,19 @@ export default function B2BPerformance() {
   const getProjectionFactor = () => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const start = new Date(startDate); const end = new Date(endDate)
+    // Chỉ project khi range trong CÙNG 1 THÁNG HIỆN TẠI.
+    // Cross-month range (vd 27/7–2/8) = snapshot lịch sử → factor=1, không chiếu.
+    // TODO (OOP refactor): đưa logic này vào class AnalyticsProjection.getProjectionFactor()
+    //   dùng chung mọi tab (B2B, B2C, BOD, Staff, Channels).
+    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return 1
+    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return 1
     const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
-    const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
-    const factor = targetDays / daysElapsed
-    return Math.min(10, Math.max(1, factor))
+    const targetDays  = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+    return Math.max(1, targetDays / daysElapsed)
   }
 
   const projectionFactor = getProjectionFactor()
   const isProjectable = projectionFactor > 1
-
-  const fetchB2BCosts = async (month: string) => {
-    try {
-      const res = await fetch(`/api/analytics/b2b-customer-costs?month=${month}`)
-      if (!res.ok) return
-      const data = await res.json()
-      const map: Record<string, { cost_lines: { label?: string; type: string; value: number }[] }> = {}
-      for (const row of data.rows || []) {
-        if (!row.customer_code) continue
-        map[row.customer_code] = { cost_lines: row.cost_lines_parsed || [] }
-      }
-      setB2bCostMap(map)
-    } catch (e) { console.error("Error fetching b2b costs:", e) }
-  }
-
-  const calcChCost = (customerCode: string | undefined, revenue: number): number => {
-    if (!customerCode) return 0
-    const lines = b2bCostMap[customerCode]?.cost_lines
-    if (!lines?.length) return 0
-    return lines.reduce((s, l) => s + (l.type === "percent" ? (l.value / 100) * revenue : l.value), 0)
-  }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
     exportToExcel(data as Record<string, unknown>[], columns.map(c => ({ label: c.label, key: String(c.key) })),
@@ -157,18 +142,9 @@ export default function B2BPerformance() {
       if (fresh) queryParams.append("nocache", "1")
       const nc = fresh ? "&nocache=1" : ""
 
-      // Tính tháng trong range để load customer costs đầy đủ
-      const monthsInRange: string[] = []
-      if (startDate && endDate) {
-        let cur = new Date(startDate); cur.setDate(1)
-        const endD = new Date(endDate)
-        while (cur <= endD) {
-          monthsInRange.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`)
-          cur.setMonth(cur.getMonth()+1)
-        }
-      }
-
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings, ...costResults] = await Promise.all([
+      // cost_lines hiển thị trong expand panel nay do backend b2b/performance trả trực tiếp.
+      // Không cần fetch b2b-customer-costs riêng nữa.
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
@@ -176,8 +152,6 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
-        // Load b2b customer costs cho TẤT CẢ tháng trong range — inline (không fire-and-forget)
-        ...monthsInRange.map(m => fetch(`/api/analytics/b2b-customer-costs?month=${m}`).then(r => r.ok ? r.json() : null).catch(() => null)),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -185,27 +159,6 @@ export default function B2BPerformance() {
       const safeStrategicPerf = Array.isArray(strategicPerf) ? strategicPerf : []
       const safeTrend = Array.isArray(trend) ? trend : []
       const safeFeeChannels = Array.isArray(feeChannels) ? feeChannels : []
-
-      // Gộp customer costs từ tất cả tháng vào 1 map: customerCode → { cost_lines merged }
-      const inlineCostMap: Record<string, { cost_lines: { label?: string; type: string; value: number }[] }> = {}
-      for (const costRes of costResults) {
-        for (const row of (costRes?.rows || [])) {
-          if (!row.customer_code) continue
-          if (!inlineCostMap[row.customer_code]) inlineCostMap[row.customer_code] = { cost_lines: [] }
-          // Gộp cost_lines: cộng dồn amount, trung bình percent (hoặc cộng dồn đơn giản)
-          for (const line of (row.cost_lines_parsed || [])) {
-            inlineCostMap[row.customer_code].cost_lines.push(line)
-          }
-        }
-      }
-      setB2bCostMap(inlineCostMap)
-
-      // Helper tính CH.Cost per customer từ inlineCostMap
-      const calcChCostInline = (code: string | undefined, rev: number) => {
-        if (!code) return 0
-        const lines = inlineCostMap[code]?.cost_lines || []
-        return lines.reduce((s: number, l: any) => s + (l.type === "percent" ? (l.value / 100) * rev : (l.value || 0)), 0)
-      }
 
       setPartnerTiers(tiersData)
       if (quarterlySettings?.tierKeywords) setTierKeywords(quarterlySettings.tierKeywords)
@@ -221,29 +174,24 @@ export default function B2BPerformance() {
       const b2bPrevGP = findKPI(safeB2BKpis, "Gross Profit")?.lastPeriod || 0
       const b2bPrevGpm2 = findKPI(safeB2BKpis, "CM1")?.lastPeriod || 0
 
-      // ── BIỆN PHÁP MẠNH: GP & CM1 tính trực tiếp từ wholesaleCustomers ──────────
-      // Áp cùng filter với bảng B2B Tier Performance: loại customer revenue ≤ 0
-      // (internal ops có revenue=0 nhưng GP âm → làm lệch tổng)
+      // ── KPI tổng — dùng backend values (pro-rata đúng, kể cả cross-month range) ─
+      // Loại customer revenue ≤ 0 (internal ops có revenue=0, GP âm → làm lệch tổng)
       const perfWithRevenue = safeB2BPerfCustomer.filter((c: any) => (c.revenue || 0) > 0)
-      const totalGPActual = perfWithRevenue.reduce((s: number, c: any) => s + (c.margin || 0), 0)
-
-      // CH.Cost nhập vào = ước tính cả tháng → chia projectionFactor để lấy phần kỳ thực tế
-      // CM1 actual = GP actual - (CH.Cost / projectionFactor)
-      // CM1 projected = GP projected - CH.Cost (full month GP trừ full month cost)
-      const pf = projectionFactor > 0 ? projectionFactor : 1
-      const totalFullMonthCH = perfWithRevenue.reduce((s: number, c: any) =>
-        s + calcChCostInline(c.customer_code, c.revenue || 0), 0)
-      const totalGpm2Actual = totalGPActual - totalFullMonthCH / pf
+      const totalGPActual   = perfWithRevenue.reduce((s: number, c: any) => s + (c.margin || 0), 0)
+      // CM1 actual = sum backend cm1 (backend đã trừ ch_cost pro-rata đúng từng tháng)
+      const totalGpm2Actual = perfWithRevenue.reduce((s: number, c: any) => s + (c.cm1 ?? c.gpm2 ?? 0), 0)
+      // CH.Cost display (tổng) — cho KPI info
+      const totalChCostActual = perfWithRevenue.reduce((s: number, c: any) => s + (c.ch_cost || 0), 0)
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
-      const totalRevActual = b2bRev
-      const totalRevProjected = totalRevActual * (isProjectable ? projectionFactor : 1)
-      const prevTotalRev = b2bPrevRev
-      const totalGPProjected = totalGPActual * (isProjectable ? projectionFactor : 1)
-      const prevTotalGP = b2bPrevGP
-      // Projected CM1 = projected GP - full month CH.Cost (CH.Cost đã là ước tính cả tháng)
-      const totalGpm2Projected = isProjectable ? totalGPProjected - totalFullMonthCH : totalGpm2Actual
+      const totalRevActual    = b2bRev
+      const totalRevProjected = totalRevActual  * (isProjectable ? projectionFactor : 1)
+      const prevTotalRev      = b2bPrevRev
+      const totalGPProjected  = totalGPActual   * (isProjectable ? projectionFactor : 1)
+      const prevTotalGP       = b2bPrevGP
+      // CM1 projected = CM1 actual × factor (vì CM1 = GP - CH.Cost, cả 2 scale theo factor)
+      const totalGpm2Projected = isProjectable ? totalGpm2Actual * projectionFactor : totalGpm2Actual
       const prevTotalGpm2 = b2bPrevGpm2
 
       const kpis: any[] = [
@@ -749,15 +697,16 @@ export default function B2BPerformance() {
                         // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
-                        // Tính total CH.Cost + CM1 — dùng projected revenue/margin
+                        // Total CM1: dùng backend cm1 (pro-rata đúng) rồi × factor nếu cần project
                         const totalProjRev = isProjectable ? totals.revenue * projectionFactor : totals.revenue
-                        const totalProjMar = isProjectable ? totals.margin * projectionFactor : totals.margin
-                        const totalChCost = sorted.reduce((acc, curr) => {
-                          const projRevRow = isProjectable ? curr.revenue * projectionFactor : curr.revenue
-                          const has = !!(curr.customer_code && b2bCostMap[curr.customer_code]?.cost_lines?.length)
-                          return acc + (has ? calcChCost(curr.customer_code, projRevRow) : (curr.margin - curr.gpm2))
+                        const totalProjMar = isProjectable ? totals.margin  * projectionFactor : totals.margin
+                        const totalCm1Actual = sorted.reduce((acc, curr) => acc + (curr.cm1 ?? curr.gpm2 ?? 0), 0)
+                        const totalChCost    = sorted.reduce((acc, curr) => {
+                          const cm1a = curr.cm1 ?? curr.gpm2 ?? 0
+                          const ca   = curr.margin - cm1a  // total cost = margin - cm1
+                          return acc + (isProjectable ? ca * projectionFactor : ca)
                         }, 0)
-                        const totalCm1 = totalProjMar - totalChCost
+                        const totalCm1    = isProjectable ? totalCm1Actual * projectionFactor : totalCm1Actual
                         const totalCm1Pct = totalProjRev > 0 ? (totalCm1 / totalProjRev) * 100 : 0
 
                         // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
@@ -790,14 +739,18 @@ export default function B2BPerformance() {
 
                         const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
-                              const hasB2BCost = !!(row.customer_code && b2bCostMap[row.customer_code]?.cost_lines?.length)
-                              // CM1 = pro-rata GP - CH.Cost (dùng projected revenue/margin)
+                              // CH.Cost = tổng chi phí trừ khỏi GP để ra CM1 (channel+group+customer).
+                              // = margin − cm1 (backend đã tính đúng pro-rata mọi loại cost).
+                              const cm1Actual    = row.cm1 ?? row.gpm2
+                              const chCostActual = row.margin - cm1Actual  // total cost deduction
+                              // Projected: cả GP và CM1 đều × factor (linear)
                               const projRev = isProjectable ? row.revenue * projectionFactor : row.revenue
-                              const projMar = isProjectable ? row.margin * projectionFactor : row.margin
-                              const chCost = hasB2BCost ? calcChCost(row.customer_code, projRev) : (row.margin - row.gpm2)
-                              const cm1 = projMar - chCost
-                              const cm1Pct = projRev > 0 ? (cm1 / projRev) * 100 : 0
-                              const costLines = row.customer_code ? (b2bCostMap[row.customer_code]?.cost_lines || []) : []
+                              const projMar = isProjectable ? row.margin  * projectionFactor : row.margin
+                              const chCost  = isProjectable ? chCostActual * projectionFactor : chCostActual
+                              const cm1     = isProjectable ? cm1Actual    * projectionFactor : cm1Actual
+                              const cm1Pct  = projRev > 0 ? (cm1 / projRev) * 100 : 0
+                              // cost_lines từ backend (Turso) — hiển thị breakdown customer CH.Cost
+                              const costLines = row.cost_lines || []
                               return (
                                 <React.Fragment key={idx}>
                                   <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-blue-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
