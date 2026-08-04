@@ -573,6 +573,8 @@ export default function CreatorAIPage() {
   const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
   const [listening,     setListening]     = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
+  const isCreatorRole = session?.user?.role === "creator"
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -630,6 +632,20 @@ export default function CreatorAIPage() {
     setVoiceSupported(true)
     return () => { try { rec.abort() } catch {} }
   }, [])
+
+  // Lark OAuth: đọc trạng thái kết nối + xử lý ?lark=connected|error khi quay về
+  useEffect(() => {
+    if (!isCreatorRole) return
+    const params = new URLSearchParams(window.location.search)
+    const lark = params.get("lark")
+    if (lark) {
+      // dọn query param khỏi URL
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+    fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
+      setLarkConnected(!!d?.connected)
+    }).catch(() => setLarkConnected(false))
+  }, [isCreatorRole])
 
   const toggleVoice = useCallback(() => {
     const rec = recognitionRef.current
@@ -817,6 +833,19 @@ export default function CreatorAIPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isCreatorRole && larkConnected !== null && (
+            larkConnected ? (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title="Gấu Pro xem được task Lark của bạn">
+                🔗 Đã kết nối Lark
+              </span>
+            ) : (
+              <a href="/api/lark/oauth/start"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
+                title="Cấp quyền để Gấu Pro xem task/task list Lark của bạn">
+                🔗 Kết nối Lark
+              </a>
+            )
+          )}
           {loading && (
             <span className="flex items-center gap-1.5 text-xs text-violet-500">
               <Loader2 size={13} className="animate-spin" />

@@ -1316,20 +1316,28 @@ async function runManagePortalCredentials(args: {
 }
 
 // ─── Lark Task API ────────────────────────────────────────────────────────────
-import { getLarkToken } from "@/lib/lark"
+import { getLarkToken, getLarkUserToken } from "@/lib/lark"
 
 async function runLarkTask(action: string, args: any): Promise<any> {
   const LARK = "https://open.larksuite.com/open-apis"
   try {
-    const token = await getLarkToken()
-    // App access token + user open_id header = act on behalf of creator (Hiếu's tasks)
+    // User token (OAuth) = danh nghĩa Hiếu → duyệt được task/tasklist cá nhân.
+    // Nếu chưa kết nối → dùng app token (chỉ tạo/sửa/xem-theo-guid được, KHÔNG list).
+    const userToken = await getLarkUserToken()
+    const appToken  = await getLarkToken()
     const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
     const h: Record<string, string> = {
-      "Authorization": `Bearer ${token}`,
+      "Authorization": `Bearer ${userToken || appToken}`,
       "Content-Type": "application/json",
     }
-    // Pass user open_id so API returns that user's tasks, not the bot's tasks
-    if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
+    // Chỉ cần header open_id khi dùng app token (user token đã mang danh nghĩa user)
+    if (!userToken && creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
+
+    // list/tasklist cần user token — app token trả rỗng
+    const needsUserToken = action === "listLarkTasks" || action === "listLarkTasklists"
+    if (needsUserToken && !userToken) {
+      return { error: "Chưa kết nối Lark để duyệt task cá nhân. Vào Gấu Pro bấm 'Kết nối Lark' để cấp quyền, rồi thử lại." }
+    }
 
     if (action === "listLarkTasklists") {
       const res = await fetch(`${LARK}/task/v2/tasklists?page_size=100&user_id_type=open_id`, { headers: h })
