@@ -5,13 +5,22 @@ is_hidden: true
 department: all
 tags: [tab, analytics, b2c]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-08-05
 status: active
 ---
 
 # B2C Performance (Hiệu Suất Bán Lẻ B2C)
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
+
+> ⚠️ **CẬP NHẬT s135 (2026-08-05):**
+> - **Bỏ GA4 Conversion Rate Charts** (Section 4) khỏi tab Advanced (giữ GA4 Users KPI card). GA4 chi tiết ở tab Website.
+> - **B2C Marketing Budget tách VN/US/Total**: model `app_settings.b2c_budget` đổi `{month:number}` → `{month:{vn,us}}`
+>   (backward-compat đọc format cũ = gán hết VN). `b2c/monthly` trả `budgetByMarket{vn,us,total}`. Nhập ở Manage Cost
+>   (`/analytics/targets` → B2CMarketingBudgetSection): VN + US riêng, Total tự cộng.
+> - **B2C Performance (tab "Performance")**: FE dùng `Promise.allSettled` (trước `Promise.all` → 1 endpoint lỗi làm
+>   RỖNG toàn bộ bảng + không export được). Projection dùng `getProjectionFactor` shared (guard cross-month đúng).
+> - 🟡 CÒN LẠI (Manage Cost rewrite): toggle 2 chế độ Cost B2C (kênh/group loại trừ lẫn nhau) + dịch nốt tiếng Anh.
 
 ---
 

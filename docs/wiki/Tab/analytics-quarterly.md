@@ -5,13 +5,35 @@ is_hidden: true
 department: all
 tags: [tab, analytics, quarterly, cm1, target, qoq]
 created: 2026-07-21
-updated: 2026-07-24
+updated: 2026-08-05
 status: active
 ---
 
 # Quarter Report (Báo Cáo CM1 Theo Quý)
 
 Tab riêng dưới Dashboard (tách khỏi modal "Báo cáo Quý" cũ). Báo cáo hiệu suất Revenue / Gross Margin / **CM1** theo quý, tách B2B + B2C, có **nhập & so sánh Target quý**, pro-rata cho tháng hiện tại. Thiết kế port từ `gohub-report/` (gohub.py + code.html).
+
+> ⚠️ **CẬP NHẬT s135 (2026-08-05) — projection thống nhất + fix nhất quán 2 route.** Đọc §"Projection & Nhất quán" cuối trang.
+
+## Projection & Nhất quán (s135 — QUAN TRỌNG)
+
+**1 kiểu chiếu duy nhất = PER-MONTH** (dùng chung `web/src/lib/analytics-engine/quarter-projection.ts` → `buildQuarterMonthMeta`):
+- Tháng đã hoàn thành → `factor=1` (actual). Tháng tương lai → elapsed=0 (loại khỏi summary). Tháng hiện tại →
+  chỉ chiếu khi **elapsed ≥ MIN_PROJECT_DAYS (=7)**, `factor = dim/elapsed`. < 7 ngày → giữ actual (tránh nhảy số).
+- **PR (pro-rata) cả quý = TỔNG per-month projected** (tháng xong = actual + tháng hiện tại × factor). KHÔNG dùng
+  `raw × qFactor` (quarter-level) nữa — cách cũ scale nhầm tháng đã xong → KPI cards lệch ~50% vs bảng tháng.
+- KPI cards, "Tổng hợp theo Tháng", "Tổng cả Quý", tier "B2B Chi tiết theo Nhóm" → CÙNG kiểu chiếu → số nhất quán.
+- **%QoQ(CM1)** = CM1 prorata Q(này) vs CM1 thực tế Q(trước). "Đạt TT" = raw actual, "Đạt PR"/"Est." = per-month projected.
+
+**Filter PHẢI khớp giữa 2 route** (quarterly-report summary ↔ quarterly-b2b-customers tier):
+- Cùng áp `shipFilter` (mặc định loại `sku='SHIPPINGFEE0'`) + `internalOpsFilter` + exclude customers + INACTIVE.
+  Page truyền `includeShip`/`includeInternalOps` cho CẢ 2 route. (Bug s135: tier trước thiếu → lệch 2,6tr phí ship.)
+
+**Chi phí B2B** = per-customer (Turso `b2b_customer_cost_monthly`, nhập ở "Sửa chi tiết" trong tier) + group cost
+(Supabase, phân bổ vào tier theo revenue-share). "Tổng hợp theo tháng" đọc CẢ Turso customer cost (percent × revenue
+KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) + group cost.
+🟡 CÒN TREO: B2C pivot "Chi tiết theo Kênh" CM1 chưa gồm B2C group cost (per-channel không chứa group) → không khớp
+   summary nếu cộng kênh (chờ quyết phân bổ như B2B tier).
 
 ---
 

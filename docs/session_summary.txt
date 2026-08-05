@@ -1,5 +1,46 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-05 (Session 134 — Audit toàn hệ thống post-OOP refactor, fix 3 cross-month projection bug).
+Cập nhật lần cuối: 2026-08-05 (Session 135 — Quarter Report audit sâu + fix connection cạn slot + B2C/Manage Cost p1).
+
+## ══════ SESSION 135 — TỔNG KẾT (2026-08-05, Opus 4.8) ══════
+
+### A. Hạ tầng connection gohub_dw (điều tra + fix triệt để)
+Triệu chứng: FUNCTION_INVOCATION_TIMEOUT + "load hoài" + "remaining connection slots reserved for superuser".
+Điều tra (đo trực tiếp gohub_dw): bảng fact chỉ 571K rows, 1 query ~1-2s (KHÔNG nặng); fulfiled_date là TEXT,
+chỉ index trên id. 5 query SONG SONG → cạn slot. Test cũ: 5 query treo 36 PHÚT (không statement_timeout).
+Root cause: query treo GIAM connection vô hạn + pool max bị nâng 3→8 (regression) + idle 30s + idle_session_timeout=0
+(Vercel FREEZE instance → timer pool không chạy → conn idle sống tới khi instance chết, đo được 9 conn idle 3-6 phút).
+FIX (analytics-db.ts): +statement_timeout=25s +query_timeout=25s (query fail nhanh, không treo) · max 8→3 ·
+idleTimeoutMillis 30s→8s · +options '-c idle_session_timeout=90000' (Postgres tự đóng session idle 90s dù instance
+freeze) · quarterly-report runLimited(2) chạy 5 query concurrency 2 · maxDuration=60 + vercel.json.
+⚠️ NGOÀI CODE: gohub_dw có nguồn KHÁC chiếm conn — postgres@35.224.33.213 (GCP, nghi ETL/BI) 3 idle. App nay
+fail-mềm khi cạn slot thay vì treo. Nếu DB đầy do tích tụ cũ → cần DBA restart Cloud SQL 1 lần.
+
+### B. Quarter Report — audit sâu "nhảy số" + fix 6 vấn đề
+1. THỐNG NHẤT PROJECTION: KPI cards + Tổng cả Quý trước dùng raw × qFactor (quarter-level 92/35) → scale nhầm
+   tháng ĐÃ XONG (Jul ×2.63) → lệch ~50% vs bảng "Tổng hợp theo tháng" (per-month). Nay PR = per-month projected sum.
+2. NGƯỠNG NGÀY: MIN_PROJECT_DAYS=7 — tháng hiện tại < 7 ngày KHÔNG chiếu (factor tránh vọt 31) → hết nhảy đầu tháng.
+3. OOP: tách buildQuarterMonthMeta() vào analytics-engine/quarter-projection.ts — 2 route dùng chung (hết trùng lặp).
+4. B2B GROUP COST: phân bổ vào tier theo revenue-share → tier CM1 khớp summary (latent, group cost hiện=0).
+5. SHIP/OPS FILTER (tìm khi soi lại): tier B2B KHÔNG áp shipFilter/internalOpsFilter mà summary có → tier gồm phí
+   ship B2B (Q3 = 2,625,000đ) → lệch. Fix: tier +sfx + page truyền toggle. Cache qb2b_raw_v4→v5.
+6. %QoQ(CM1) + Tổng Quý tier: prorata theo tháng đúng (bỏ scale nhầm tháng xong). Tổng hợp theo tháng nay hiện
+   chi phí B2B per-customer (Turso b2b_customer_cost_monthly — trước chỉ đọc Supabase → T8 không hiện dù nhập 8 dòng).
+   Cache qreport_raw_v6→v7.
+🟡 CÒN TREO (chờ Hiếu quyết): B2C pivot "Chi tiết theo Kênh" CM1 chưa gồm B2C group cost (150tr/tháng) — by-design
+   (group không thuộc kênh) nhưng không khớp summary nếu cộng kênh. Chờ quyết có phân bổ như B2B tier không.
+
+### C. B2C + Manage Cost (bắt đầu rewrite)
+- B2C Performance: Promise.all → allSettled (1 endpoint lỗi KHÔNG làm rỗng toàn bộ bảng + export). Verify 4 query OK.
+- Bỏ GA4 Conversion Rate Charts (Section 4) khỏi B2C Advanced (giữ GA4 Users KPI).
+- B2C fix cross-month projection (getProjectionFactor) — Dashboard + Products cũng fix guard cross-month.
+- Manage Cost p1: B2C Marketing Budget tách VN/US/Total (model b2c_budget {month:number}→{month:{vn,us}} +
+   backward-compat; b2c/monthly trả budgetByMarket; section nhập VN+US, Total auto; dịch tiếng Anh).
+🟡 CÒN LẠI (Hiếu chốt thiết kế: toggle 2 chế độ + budget VN/US auto): Toggle Cost B2C (kênh/group loại trừ lẫn
+   nhau, group=tổng kênh) + dịch nốt tiếng Anh cost modal + audit toàn bộ query B2C dashboard.
+
+### Trạng thái: main = staging = 5b8ef59 (đã deploy). ⚠️ Test Quarter Report bấm "Tải lại mới" xóa cache cũ.
+
+## ══════ SESSION 134 — TỔNG KẾT (2026-08-05, Sonnet 4.6) ══════
 
 ## ══════ SESSION 134 — TỔNG KẾT (2026-08-05, Sonnet 4.6) ══════
 
