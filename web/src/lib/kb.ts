@@ -44,13 +44,6 @@ export async function embedText(text: string): Promise<number[]> {
   return result.embedding.values
 }
 
-export const DEPARTMENTS = ["all", "sales", "product", "tech", "finance"] as const
-export type Department = typeof DEPARTMENTS[number]
-
-export const DEPT_LABELS: Record<Department, string> = {
-  all:     "Tất cả",
-  sales:   "Sales",
-  product: "Product",
-  tech:    "Tech",
-  finance: "Finance",
-}
+// Re-export constants từ file client-safe để server route giữ nguyên import "@/lib/kb".
+// (Client component PHẢI import trực tiếp từ "@/lib/kb-constants" để không kéo pdf-parse vào bundle.)
+export { DEPARTMENTS, DEPT_LABELS, type Department } from "@/lib/kb-constants"

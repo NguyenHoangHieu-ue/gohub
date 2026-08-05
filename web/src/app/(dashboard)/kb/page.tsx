@@ -10,7 +10,7 @@ import {
   Brain, CheckCircle2, XCircle,
 } from "lucide-react"
 import type { MrpPlan } from "@/lib/mrp"
-import { DEPT_LABELS, type Department } from "@/lib/kb"
+import { DEPT_LABELS, type Department } from "@/lib/kb-constants"
 import { ConfirmModal } from "@/components/confirm-modal"
 import { MermaidBlock  } from "@/components/mermaid-block"
 import { SkeletonTable } from "@/components/skeleton"
