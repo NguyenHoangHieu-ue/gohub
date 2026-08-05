@@ -7,8 +7,8 @@ import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
-// Route nặng (per-customer B2B + Turso costs) → cho 60s tránh 504 treo FE.
-export const maxDuration = 60
+// Route nặng (per-customer B2B + Turso costs) → cho 300s tránh 504 treo FE.
+export const maxDuration = 300
 export const dynamic = "force-dynamic"
 
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
@@ -97,16 +97,19 @@ export async function GET(req: NextRequest) {
             COALESCE(TRIM(s.channel_name), '') as channel_name,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue,
             SUM(f.gross_profit_vnd) as gm,
-            SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)),' ','') = '3HKDATAPOOL'
-                THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
+            SUM(CASE WHEN sk.sku IS NOT NULL THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-          LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON f.sku = sk.sku
+          LEFT JOIN (
+            SELECT DISTINCT TRIM(sku) as sku FROM dim_sku
+            WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+          ) sk ON TRIM(f.sku) = sk.sku
           WHERE f.fulfiled_date::date >= '${qStartDate}'
             AND f.fulfiled_date::date <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+            AND NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')
             ${exclFilter}
           GROUP BY 1, 2, 3, 4, 5, 6
           ORDER BY 1, 2

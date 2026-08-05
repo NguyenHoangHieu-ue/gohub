@@ -8,7 +8,7 @@ import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterl
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
-export const maxDuration = 60
+export const maxDuration = 300
 export const dynamic = "force-dynamic"
 
 function getQuarterMonths(quarter: string, year: number): string[] {
@@ -89,7 +89,8 @@ export async function GET(req: NextRequest) {
 
   const rawCacheKey = `qreport_raw_v6:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
-  // CTE TỐI ƯU: Đưa inactive customer và list SKU 3HK lên CTE dùng chung
+  // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
+  // inactive_cust: LEFT JOIN + IS NULL thay NOT IN. hk3_skus: JOIN trực tiếp.
   const CTE_PREAMBLE = `
     WITH inactive_cust AS (
       SELECT TRIM(code) as code FROM dim_customer WHERE UPPER(COALESCE(price_list_name, '')) LIKE '%INACTIVE%'
@@ -98,6 +99,8 @@ export async function GET(req: NextRequest) {
       SELECT DISTINCT TRIM(sku) as sku FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
     )
   `
+  // Filter SQL dùng NOT EXISTS thay NOT IN (tránh NULL-trap, nhanh hơn với list lớn)
+  const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
   try {
     const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
@@ -115,7 +118,7 @@ export async function GET(req: NextRequest) {
           WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
-            AND TRIM(f.customer_code) NOT IN (SELECT code FROM inactive_cust)
+            ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1, 2
@@ -130,14 +133,15 @@ export async function GET(req: NextRequest) {
             MIN(TRIM(s.code)) as source_code,
             SUM(f.${REV_COL}) as revenue,
             SUM(f.${GP_COL}) as gp,
-            SUM(CASE WHEN TRIM(f.sku) IN (SELECT sku FROM hk3_skus) THEN f.${REV_COL} ELSE 0 END) as hk3
+            SUM(CASE WHEN hk.sku IS NOT NULL THEN f.${REV_COL} ELSE 0 END) as hk3
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN hk3_skus hk ON hk.sku = TRIM(f.sku)
           WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
-            AND TRIM(f.customer_code) NOT IN (SELECT code FROM inactive_cust)
+            ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1, 2, 3
@@ -147,12 +151,13 @@ export async function GET(req: NextRequest) {
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,
-            SUM(CASE WHEN TRIM(f.sku) IN (SELECT sku FROM hk3_skus) THEN f.${REV_COL} ELSE 0 END) as hk3
+            SUM(CASE WHEN hk.sku IS NOT NULL THEN f.${REV_COL} ELSE 0 END) as hk3
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN hk3_skus hk ON hk.sku = TRIM(f.sku)
           WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
             ${companyFilter}
-            AND TRIM(f.customer_code) NOT IN (SELECT code FROM inactive_cust)
+            ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1
@@ -166,7 +171,7 @@ export async function GET(req: NextRequest) {
           WHERE f.${DATE_COL} >= '${prevQStartDate}' AND f.${DATE_COL} <= '${prevQEndDate}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name,'OTHER')) IN ('B2B','B2C')
-            AND TRIM(f.customer_code) NOT IN (SELECT code FROM inactive_cust)
+            ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1
@@ -185,7 +190,7 @@ export async function GET(req: NextRequest) {
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
             AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
-            AND TRIM(f.customer_code) NOT IN (SELECT code FROM inactive_cust)
+            ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1, 2, 3
