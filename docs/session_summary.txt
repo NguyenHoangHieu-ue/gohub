@@ -1,5 +1,38 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-05 (Session 133 — OOP Refactor Phase 0–4 + cache fix + merge main, verify CH.Cost OK).
+Cập nhật lần cuối: 2026-08-05 (Session 134 — Audit toàn hệ thống post-OOP refactor, fix 3 cross-month projection bug).
+
+## ══════ SESSION 134 — TỔNG KẾT (2026-08-05, Sonnet 4.6) ══════
+
+### Bối cảnh
+Audit 3 tab sau OOP refactor lớn (s133): B2B Performance, B2C Performance, Manage Cost — đảm bảo
+dữ liệu đúng, công thức đúng, projection không sai sau khi chuyển tất cả tính toán về BE.
+
+### Kết quả Audit
+
+**Manage Cost (cost-management-modal.tsx):** ✅ OK hoàn toàn
+- Fetch/save channel costs, group costs, sub-channel mode: đúng
+- Dirty tracking, toast feedback: đúng
+
+**B2B Performance:** ✅ Logic đúng
+- BE: calcChCostForPeriod pro-rata đúng (percent×moRevenue, amount×dayRatio), cm1=gpm2-chCost ✅
+- Group cost chia revenue-share ✅, channel cost dayRatio ✅
+- FE: projection cross-month guard ✅, tier classification từ price_list_name ✅
+- Strategic table: partner_tiers rỗng → ẩn bảng (chủ ý theo s131) ✅
+- Note: calcChCostForPeriod bị duplicate trong route vs cost-engine.ts — code smell, không phải bug
+
+**B2C Performance:** 🐛 1 BUG đã fix
+- BUG: isCurrentMonth chỉ check end.getMonth()===now.getMonth(), thiếu cross-month guard
+  → range 27/7–2/8 khi T8 là tháng hiện tại: daysElapsed=7, factor=4.43× → projected_* sai
+  → bảng Performance hiển thị "DP:" row với giá trị sai (FE section projection đã ẩn đúng)
+- FIX (commit 33d76ed): import getProjectionFactor() từ analytics-engine/projection (shared library)
+  thay isCurrentMonth logic cục bộ. Cross-month → factor=1 → projected_*=actual → không hiển thị DP.
+  tsc PASS. Push staging.
+
+### ⚠️ Hiếu cần làm (còn treo từ s132)
+1. Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor
+2. Thêm ENV `LARK_CREATOR_USER_ID` trên Vercel (Lark open_id đầy đủ)
+3. Cost T8 B2C: nhập lại value ≠ 0 trong Manage Costs
+4. Nhập target T7/T8 ở Manage Costs cho scheduled reports
 
 ## ══════ SESSION 133 — TỔNG KẾT ĐẦY ĐỦ (2026-08-04, Sonnet 4.6) ══════
 
@@ -80,8 +113,29 @@ CM1 projected = CM1 actual × factor (nhất quán toàn hệ thống).
 - ✅ Hiếu xác nhận CH.Cost đã hiện đúng trên tab B2B Performance.
 
 ### Trạng thái deploy (2026-08-05)
-- main = staging = `4def78c` — đã khớp, Vercel deploy thành công.
+- main = staging = `4def78c` → sau s134 = staging `0546fcd` (chưa merge main).
 - ✅ Verify: B2B Performance CH.Cost map đúng với Manage Costs.
+
+### Audit toàn hệ thống — tabs bị ảnh hưởng bởi OOP refactor (s134 phần 2)
+
+Grep `isCurrentMonth|projectionRatio|getProjectionFactor` trên toàn bộ analytics pages + routes.
+
+| Tab | Projection | Cross-month guard | Trạng thái |
+|-----|:---:|:---:|:---:|
+| Channels | BE projection_factor | ✅ shared lib | ✅ OK |
+| BOD | BE projection_factor | ✅ shared lib | ✅ OK |
+| B2C Performance | BE projFactor | ✅ fixed s134 | ✅ OK |
+| B2B Performance | FE local | ✅ check đúng | ✅ OK |
+| Vendors | FE local | ✅ check đúng | ✅ OK |
+| B2C Advanced | YTD từ BE | N/A | ✅ OK |
+| All-Time / Quarterly / Fulfillment / Staff | Không có projection | N/A | ✅ OK |
+| **Dashboard** | FE local | ❌ → **FIX** commit 0546fcd | ✅ fixed |
+| **Products** | FE local | ❌ → **FIX** commit 0546fcd | ✅ fixed |
+
+Root cause: `isCurrentMonth = end.getMonth()===now.getMonth()` thiếu check `start.getMonth()===end.getMonth()`
+→ cross-month 27/7–2/8 (end=T8 hiện tại) → factor=4.43× sai. Fix: thêm cross-month guard đầu hàm.
+
+Tổng: 3 files fixed (B2C perf route + Dashboard FE + Products FE). tsc PASS. Push staging `0546fcd`.
 
 ### ⚠️ Hiếu cần làm (còn treo từ s132)
 1. Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor

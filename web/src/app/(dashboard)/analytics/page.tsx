@@ -61,6 +61,8 @@ export default function DashboardHome() {
     if (kpis.length < 4 || !startDate || !endDate) return null
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const start = new Date(startDate); const end = new Date(endDate)
+    // Cross-month range → snapshot lịch sử, không project (tránh factor 4.43× sai)
+    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
     const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
     const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
     const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed

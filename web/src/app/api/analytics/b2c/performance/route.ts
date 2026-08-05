@@ -9,6 +9,7 @@ import {
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
 // staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
@@ -123,14 +124,12 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     }
 
     let projected_revenue = revenue; let projected_margin = margin; let projected_gpm2 = gpm2
-    const end = new Date(endDate); const now = new Date()
-    const isCurrentMonth = end.getFullYear() === now.getFullYear() && end.getMonth() === now.getMonth()
-    if (isCurrentMonth) {
-      const totalDaysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-      const daysElapsed = Math.max(1, Math.ceil((end.getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)
-      const projectionRatio = daysElapsed > 0 ? totalDaysInMonth / daysElapsed : 1
-      projected_revenue = revenue * projectionRatio
-      projected_margin = margin * projectionRatio
+    // Dùng shared getProjectionFactor (cross-month → 1, tháng hiện tại MTD → factor đúng).
+    // Cách cũ chỉ check end.getMonth()===now.getMonth() → sai khi cross-month (vd 27/7–2/8: factor=4.43×).
+    const projFactor = getProjectionFactor(startDate, endDate)
+    if (projFactor > 1) {
+      projected_revenue = revenue * projFactor
+      projected_margin = margin * projFactor
       if (isChannelGroup) {
         projected_gpm2 = projected_margin
         r.monthly_data.forEach((monthRow: any) => {
@@ -141,7 +140,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
           })
         })
       } else {
-        // Intel pattern: op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
+        // op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
         const opCostFixed = margin - gpm2
         projected_gpm2 = projected_margin - opCostFixed
       }

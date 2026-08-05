@@ -431,6 +431,8 @@ export default function ProductPerformancePage() {
     const start = new Date(startDate)
     const end = new Date(endDate)
     const now = new Date()
+    // Cross-month range → snapshot lịch sử, không project
+    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
     const isCurrentMonth = end.getMonth() === now.getMonth() && end.getFullYear() === now.getFullYear()
     if (!isCurrentMonth) return null
     const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
