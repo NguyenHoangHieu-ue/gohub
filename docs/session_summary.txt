@@ -1,5 +1,30 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-05 (Session 136 — Audit 3 tab Quarter/B2B/B2C + 5 bug fixes).
+Cập nhật lần cuối: 2026-08-05 (Session 136 — Quarter Report deep fix: 3 bugs BE + 3 bugs FE + tooltips).
+
+## ══════ SESSION 136b — TỔNG KẾT (2026-08-05, Sonnet 4.6 cont.) ══════
+
+### Quarter Report — 6 bugs tổng cộng trong session này
+
+**3 BE bugs (đã push trước đó):**
+1. elapsedRatio bị swap (d466ba7): monthCost/rawCc args đảo → PR CH.Cost tháng hiện tại bị pro-rate nhỏ thay vì full, actual hiển thị full thay vì pro-rate.
+2. per-customer Tổng Quý PR dùng actRev×qFactor thay vì c.revenue (BE projected sum).
+3. Group Cost không pro-rate khi < MIN_PROJECT_DAYS: T8 ngày 4 → B2C GC=150Tr full, CM1 B2C âm -33Tr. Fix: isCurrent = elapsed<dim.
+
+**3 FE bugs (commit 5e41e2b):**
+4. KPI cards PRO-RATA = ACTUAL: MIN_PROJECT_DAYS ngăn projection cho bảng tháng (đúng), nhưng không nên ngăn KPI card. Fix: `kpiPrFactor = dim/elapsed` cho mọi tháng đang chạy.
+5. Ch.Cost expanded per-customer chỉ hiện PR, không hiện Act khi isProjected. Fix: show prLine + actLine giống Revenue/GM/CM1.
+6. ColInfo tooltips: thêm vào mọi column header (4 bảng) → creator hover/click "i" để xem công thức, nguồn dữ liệu, cách tính.
+
+**Data sau fix (ước tính T8 ngày 4/31):**
+- B2C CM1 T8: từ -33Tr → +97Tr (group cost pro-rated đúng)
+- KPI B2C CM1 ACTUAL: từ 850Tr → ~980Tr
+- KPI PRO-RATA B2B Rev: từ =ACTUAL → projected (factor=31/4≈7.75× T8)
+
+### Commits trong session 136:
+- 9b3a216: 5 bug fixes audit (B2B/B2C/Quarter)
+- d4b3485: fix elapsedRatio swap quarterly-b2b-customers
+- 5d0c9f9: fix group cost pro-rata < MIN_DAYS
+- 5e41e2b: KPI PRO-RATA + tooltips + Ch.Cost actual display
 
 ## ══════ SESSION 136 — TỔNG KẾT (2026-08-05, Sonnet 4.6) ══════
 
