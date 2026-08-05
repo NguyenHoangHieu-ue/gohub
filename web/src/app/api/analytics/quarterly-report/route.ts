@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
 
       // Summary table
       const summary = monthMeta.filter(mr => !mr.isFuture).map(mr => {
-        const { month, mStart, actualEnd, isProjected, factor } = mr
+        const { month, mStart, actualEnd, isProjected, factor, elapsed, dim } = mr
 
         const b2bR = groupRows.find(row => row.month === month && row.bg === "B2B")
         const b2cR = groupRows.find(row => row.month === month && row.bg === "B2C")
@@ -257,15 +257,20 @@ export async function GET(req: NextRequest) {
         const b2cRev = r(b2cRevAct * factor); const b2cGp = r(b2cGpAct * factor)
         const b2bCC = r(isProjected ? b2bCCAct * factor : b2bCCAct)
         const b2cCC = r(isProjected ? b2cCCAct * factor : b2cCCAct)
-        // Group cost: scale theo factor cho tháng hiện tại (giống reference gohub.py scale(gc))
-        const b2bGC = r(isProjected ? b2bGCBudget * factor : b2bGCBudget)
-        const b2cGC = r(isProjected ? b2cGCBudget * factor : b2cGCBudget)
+        // Group cost: monthly budget là giá trị CẢ THÁNG → projected giữ nguyên budget (không nhân factor).
+        // Nhân factor sẽ thổi phồng sai (vd budget 10tr × factor 6.2 = 62tr thay vì 10tr).
+        const b2bGC = r(b2bGCBudget)
+        const b2cGC = r(b2cGCBudget)
         const b2bCm1 = b2bGp - b2bCC - b2bGC
         const b2cCm1 = b2cGp - b2cCC - b2cGC
 
-        // Actual CM1 (before factor)
-        const b2bCm1Act = b2bGpAct - b2bCCAct - b2bGCBudget
-        const b2cCm1Act = b2cGpAct - b2cCCAct - b2cGCBudget
+        // Actual group cost: pro-rate theo elapsed/dim cho tháng đang chạy (partial month)
+        const gcElapsedRatio = isProjected && dim > 0 ? elapsed / dim : 1
+        const b2bGCAct = r(b2bGCBudget * gcElapsedRatio)
+        const b2cGCAct = r(b2cGCBudget * gcElapsedRatio)
+        // Actual CM1 (trừ group cost pro-rated, không phải full budget)
+        const b2bCm1Act = b2bGpAct - b2bCCAct - b2bGCAct
+        const b2cCm1Act = b2cGpAct - b2cCCAct - b2cGCAct
 
         const totRev = b2bRev + b2cRev; const totGp = b2bGp + b2cGp
         const totCC  = b2bCC  + b2cCC;  const totGC  = b2bGC  + b2cGC
@@ -306,11 +311,11 @@ export async function GET(req: NextRequest) {
           actualHk3: r(hk3Act),
           total: row(totRev, totGp, totCC, totGC, totCm1, hk3Rev,
                      b2bRevAct + b2cRevAct, b2bGpAct + b2cGpAct, b2bCCAct + b2cCCAct,
-                     b2bGCBudget + b2cGCBudget, b2bCm1Act + b2cCm1Act, hk3Act),
+                     b2bGCAct + b2cGCAct, b2bCm1Act + b2cCm1Act, hk3Act),
           b2b: row(b2bRev, b2bGp, b2bCC, b2bGC, b2bCm1, b2bHk3Rev,
-                   b2bRevAct, b2bGpAct, b2bCCAct, b2bGCBudget, b2bCm1Act, b2bHk3Act),
+                   b2bRevAct, b2bGpAct, b2bCCAct, b2bGCAct, b2bCm1Act, b2bHk3Act),
           b2c: row(b2cRev, b2cGp, b2cCC, b2cGC, b2cCm1, b2cHk3Rev,
-                   b2cRevAct, b2cGpAct, b2cCCAct, b2cGCBudget, b2cCm1Act, b2cHk3Act),
+                   b2cRevAct, b2cGpAct, b2cCCAct, b2cGCAct, b2cCm1Act, b2cHk3Act),
         }
       })
 

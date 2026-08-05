@@ -982,7 +982,6 @@ export function B2CPerformance() {
                   <Legend />
                   <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="left" dataKey="margin" name="Gross Profit" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="left" type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
