@@ -12,15 +12,18 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      // gohub_dw HAY cạn slot ("remaining connection slots reserved for superuser") vì DB dùng chung nhiều
-      // service + nhiều Vercel instance. App phải là GOOD CITIZEN — dùng ÍT kết nối:
-      //   max=4: đủ cho route nặng nhất (quarterly chạy ≤2 query đồng thời) + headroom; KHÔNG ngốn slot DB.
-      //     (từng nâng lên 8 → làm cạn slot NHANH hơn → sai lầm, đã hạ lại.)
+      // ⚠️ TOÁN CONNECTION TRÊN SERVERLESS: Vercel chạy NHIỀU instance, MỖI instance có pool RIÊNG.
+      // Tổng kết nối gohub_dw ≈ (số instance ấm) × max. gohub_dw dùng chung nhiều service → slot hữu hạn →
+      // "remaining connection slots reserved for superuser". App phải dùng ÍT + NHẢ NHANH:
+      //   max=3: route nặng bắn 5-8 query song song sẽ TỰ cap ở 3 (pool xếp hàng phần dư) → KHÔNG cần đổi
+      //     từng route. quarterly runLimited(2) ⊂ 3. (Nâng 8 = sai lầm "mấy bữa nay" → cạn slot nhanh, đã hạ.)
+      //   idleTimeoutMillis=8s: NHẢ kết nối idle SAU 8s (trước để 30s → giữ quá lâu, tích tụ across-instance →
+      //     góp phần làm DB đầy → vòng luẩn quẩn). Reconnect SSL ~vài trăm ms, chấp nhận được để đổi lấy footprint nhỏ.
       //   statement_timeout=25s + query_timeout=25s: query KHÔNG treo vô hạn khi DB contended → route fail
       //     nhanh, trả lỗi rõ thay vì để Vercel giết ở maxDuration (FUNCTION_INVOCATION_TIMEOUT). ⭐ FIX GỐC.
-      //   connectionTimeoutMillis=8s: chờ slot pool tối đa 8s rồi lỗi (kèm retry backoff ở queryAnalytics).
-      max:                4,
-      idleTimeoutMillis:  30000,
+      //   connectionTimeoutMillis=8s: chờ slot tối đa 8s rồi lỗi (kèm retry backoff ở queryAnalytics).
+      max:                3,
+      idleTimeoutMillis:  8000,
       connectionTimeoutMillis: 8000,
       statement_timeout:  25000,
       query_timeout:      25000,
