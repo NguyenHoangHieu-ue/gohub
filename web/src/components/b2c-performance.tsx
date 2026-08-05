@@ -304,20 +304,26 @@ export function B2CPerformance() {
       selectedSubChannels.forEach(s => prevQueryParams.append("subChannels", s))
       selectedProductTypes.forEach(t => prevQueryParams.append("productTypes", t))
 
-      // 5 query độc lập → bắn song song
-      const [kpiData, trendDataRes, perfData, lossData, prevKpiRes] = await Promise.all([
+      // 5 query độc lập → allSettled: 1 endpoint lỗi KHÔNG làm rỗng toàn bộ (trước dùng Promise.all →
+      // chỉ cần trend/loss lỗi là cả bảng Performance + KPI biến mất). Mỗi phần set độc lập.
+      const [kpiR, trendR, perfR, lossR, prevKpiR] = await Promise.allSettled([
         fetchJson(`/api/analytics/b2c/kpis?${queryParams.toString()}`),
         fetchJson(`/api/analytics/b2c/trend?${queryParams.toString()}&period=${period}`),
         fetchJson(`/api/analytics/b2c/performance?${queryParams.toString()}&groupBy=${groupBy}`),
         fetchJson(`/api/analytics/b2c/loss-skus?${queryParams.toString()}`),
-        fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`).catch(() => null),
+        fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
-      setKpis(kpiData)
-      setTrendData(trendDataRes)
-      setPerformanceData(perfData)
-      setLossSkus(lossData)
-      if (prevKpiRes && (prevKpiRes as Response).ok) setPrevMonthKpis(await (prevKpiRes as Response).json())
+      const pick = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" && r.value != null ? r.value : fallback
+      setKpis(pick(kpiR, []))
+      setTrendData(pick(trendR, []))
+      setPerformanceData(pick(perfR, []))
+      setLossSkus(pick(lossR, []))
+      setPrevMonthKpis(pick(prevKpiR, []))
+
+      // báo lỗi CHỈ khi phần quan trọng (performance/kpis) fail — không chặn phần còn lại
+      const failed = [kpiR, perfR].filter(r => r.status === "rejected").length
+      if (failed > 0) setError("Một phần dữ liệu B2C tải chưa xong, thử lại sau giây lát")
 
       // Fetch costs for the current month to show in breakdown
       const startMonth = startDate.slice(0, 7)

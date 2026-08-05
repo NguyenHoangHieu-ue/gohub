@@ -1211,52 +1211,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               )}
             </Section>
 
-            {/* Section 4 — GA4 Charts: Purchase + Revenue + CR% + Traffic (theo spec) */}
-            <Section icon={<TrendingUp className="w-5 h-5" />} title="GA4 Conversion Rate Charts" desc="Purchase · Revenue · CR% · Traffic · monthly trend" source="ga4"
-              action={<a href="/analytics/website" className="text-[12px] font-[600] text-[#0071e3] hover:underline">Xem chi tiết →</a>}>
-              {ga4 === null ? (
-                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4…</div>
-              ) : ga4.length === 0 ? (
-                <AwaitingData note="GA4 chưa cấu hình hoặc không có dữ liệu. Vào Admin → Cài đặt để kết nối GA4." />
-              ) : (
-                <div className="space-y-1 px-5 pb-5 pt-3">
-                  {ga4.map(s => (
-                    <div key={s.name} className="rounded-lg border border-black/[0.06] overflow-hidden" style={{ background: "rgba(255,255,255,0.72)" }}>
-                      <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.05]">
-                        <h4 className="text-[14px] font-[650] text-[#6e6e73]">{s.name}</h4>
-                        <div className="flex items-center gap-3 text-[11px]">
-                          <span className="text-[#6e6e73]">Sessions</span>
-                          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#d93025] inline-block" />Revenue</span>
-                          <span className="font-[650] text-[#2f9d55]">CR {s.cr.toFixed(2)}%</span>
-                        </div>
-                      </div>
-                      <div className="h-[280px] px-2 pt-2 pb-1">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={s.series} margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
-                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} interval="preserveStartEnd" />
-                            <YAxis yAxisId="traffic" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
-                            <YAxis yAxisId="rev" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
-                            <YAxis yAxisId="cr" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#2f9d55", fontSize: 10 }} tickFormatter={v => `${v.toFixed(1)}%`} width={36} hide />
-                            <Tooltip
-                              contentStyle={{ borderRadius: "8px", border: "1px solid rgba(0,0,0,0.09)", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.07)", fontSize: 12 }}
-                              formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : n === "Revenue" ? formatCurrency(v) : formatNumber(Math.round(v))}
-                            />
-                            <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                            <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill="#d93025" fillOpacity={0.18} radius={[2, 2, 0, 0]} barSize={12} />
-                            <Line yAxisId="traffic" type="monotone" dataKey="sessions" name="Traffic" stroke="#0071e3" strokeWidth={1.8} dot={false} />
-                            <Line yAxisId="traffic" type="monotone" dataKey="purchases" name="Purchase" stroke="#00a6a6" strokeWidth={1.8} dot={false} strokeDasharray="4 2" />
-                            <Line yAxisId="cr" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2.2} dot={{ r: 2 }}>
-                              <LabelList dataKey="cr" position="top" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "#2f9d55", fontSize: 10, fontWeight: 600 }} />
-                            </Line>
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Section>
+            {/* Section 4 (GA4 Conversion Rate Charts) — ĐÃ BỎ theo yêu cầu (2026-08-05). GA4 chi tiết ở tab Website. */}
 
             {/* Section 5 — Spend & ROAS (Budget · Spend MTD · Spend Pace · Spend Prorata · ROAS) */}
             <Section
