@@ -5,7 +5,6 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -101,8 +100,8 @@ export async function GET(req: NextRequest) {
   const rawCacheKey = `qreport_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
-    // ── Phần 1 + 2 + 3: gohub_dw (cache) + Supabase costs + Turso customer costs chạy SONG SONG ──
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap] = await Promise.all([
+    // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs (hiện tại + quý trước) chạy SONG SONG ──
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
       const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
@@ -202,9 +201,8 @@ export async function GET(req: NextRequest) {
 
       return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows }
     }, QUERY_TTL_MIN, refresh),
-    fetchCosts(months),                   // Supabase channel + group costs hiện tại
-    fetchCosts(prevQMonths),              // Supabase costs quý trước (cho CM1 QoQ)
-    fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),  // Turso B2B customer costs
+    fetchCosts(months),       // Supabase costs hiện tại
+    fetchCosts(prevQMonths),  // Supabase costs quý trước (cho CM1 QoQ)
     ])
 
     // ── Phần 3: Compute ────────────────────────────────────────────────────────
@@ -252,29 +250,6 @@ export async function GET(req: NextRequest) {
           const hk3 = parseFloat(row.hk3 || "0")
           if (row.bg === "B2B") { b2bCCAct += cc; b2bHk3Act += hk3 }
           else { b2cCCAct += cc; b2cHk3Act += hk3 }
-        })
-
-        // B2B customer-level CH.Cost (từ b2b_customer_cost_monthly — Turso primary, Supabase fallback).
-        // Cộng vào b2bCCAct để quarterly CM1 nhất quán với B2B Performance tab.
-        // amount: pro-rata theo gcElapsedRatio (giống calcChCostForPeriod trong B2B Performance).
-        // percent: áp trên b2bRevAct (actual revenue elapsed, xấp xỉ vì không có per-customer revenue ở đây).
-        customerCostMap.forEach((rec, key) => {
-          const [costMonth] = key.split("_")
-          if (costMonth !== month) return
-          if (rec.cost_lines) {
-            try {
-              const lines: Array<{ label?: string; type: string; value: number }> = JSON.parse(rec.cost_lines)
-              if (Array.isArray(lines) && lines.length > 0) {
-                lines.forEach(l => {
-                  const val = Number(l?.value) || 0
-                  b2bCCAct += l?.type === "percent" ? (val / 100) * b2bRevAct : val * gcElapsedRatio
-                })
-                return
-              }
-            } catch {}
-          }
-          const cval = Number(rec.cost_value) || 0
-          b2bCCAct += rec.cost_type === "percent" ? (cval / 100) * b2bRevAct : cval * gcElapsedRatio
         })
 
         // Group-level costs: monthly budget là giá trị CẢ THÁNG → projected giữ nguyên budget
