@@ -8,8 +8,26 @@ import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterl
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
-export const maxDuration = 300
+export const maxDuration = 60
 export const dynamic = "force-dynamic"
+
+// Chạy các thunk với GIỚI HẠN ĐỒNG THỜI (limit) — tránh mở quá nhiều kết nối gohub_dw cùng lúc
+// (DB hay cạn slot "remaining connection slots reserved for superuser"). Giữ đúng thứ tự + tuple type.
+async function runLimited<T extends readonly (() => Promise<unknown>)[]>(
+  limit: number, thunks: [...T],
+): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
+  const results = new Array(thunks.length)
+  let next = 0
+  async function worker() {
+    while (true) {
+      const i = next++
+      if (i >= thunks.length) return
+      results[i] = await thunks[i]()
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, thunks.length) }, worker))
+  return results as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }
+}
 
 function getQuarterMonths(quarter: string, year: number): string[] {
   const q = parseInt(quarter.replace("Q", ""))
@@ -105,8 +123,10 @@ export async function GET(req: NextRequest) {
   try {
     const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await Promise.all([
-          queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
+        // GIỚI HẠN 2 query đồng thời (thay vì cả 5) → giảm connection footprint trên gohub_dw.
+        // Mỗi query ~2s → 5 query / 2 luồng ≈ 6s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
+        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await runLimited(2, [
+          () => queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,
@@ -124,7 +144,7 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2
           ORDER BY 1, 2
         `),
-          queryAnalytics<{ month: string; bg: string; channel: string; source_code: string; revenue: string; gp: string; hk3: string }>(`
+          () => queryAnalytics<{ month: string; bg: string; channel: string; source_code: string; revenue: string; gp: string; hk3: string }>(`
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,
@@ -147,7 +167,7 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2, 3
           ORDER BY 1, 2, 3
         `),
-          queryAnalytics<{ month: string; hk3: string }>(`
+          () => queryAnalytics<{ month: string; hk3: string }>(`
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,
@@ -162,7 +182,7 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1
         `),
-          queryAnalytics<{ bg: string; revenue: string; gp: string }>(`
+          () => queryAnalytics<{ bg: string; revenue: string; gp: string }>(`
           ${CTE_PREAMBLE}
           SELECT UPPER(COALESCE(s.group_name,'OTHER')) as bg,
             SUM(f.${REV_COL}) as revenue, SUM(f.${GP_COL}) as gp
@@ -176,7 +196,7 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1
         `),
-          queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string }>(`
+          () => queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string }>(`
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,

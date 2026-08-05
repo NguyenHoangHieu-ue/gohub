@@ -12,14 +12,18 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      // gohub_dw max_connections=300 (chia nhiều serverless instance). Gốc cạn kết nối = RÒ RỈ pool (đã fix).
-      // max=8: quarterly route bắn 5 query song song CÙNG LÚC → cần ≥5 slot + headroom cho retry/overlap
-      // (b2b-customers, targets có thể cùng instance). App dùng ~9 kết nối tổng → 8/instance vẫn rất an toàn.
-      // connectionTimeoutMillis=15000: query nặng có thể chờ 10-12s mới lấy slot → buffer (maxDuration route=60s).
-      // idleTimeoutMillis=30s để GIỮ ẤM kết nối; keepAlive phát hiện kết nối chết; application_name để soi log.
-      max:                8,
+      // gohub_dw HAY cạn slot ("remaining connection slots reserved for superuser") vì DB dùng chung nhiều
+      // service + nhiều Vercel instance. App phải là GOOD CITIZEN — dùng ÍT kết nối:
+      //   max=4: đủ cho route nặng nhất (quarterly chạy ≤2 query đồng thời) + headroom; KHÔNG ngốn slot DB.
+      //     (từng nâng lên 8 → làm cạn slot NHANH hơn → sai lầm, đã hạ lại.)
+      //   statement_timeout=25s + query_timeout=25s: query KHÔNG treo vô hạn khi DB contended → route fail
+      //     nhanh, trả lỗi rõ thay vì để Vercel giết ở maxDuration (FUNCTION_INVOCATION_TIMEOUT). ⭐ FIX GỐC.
+      //   connectionTimeoutMillis=8s: chờ slot pool tối đa 8s rồi lỗi (kèm retry backoff ở queryAnalytics).
+      max:                4,
       idleTimeoutMillis:  30000,
-      connectionTimeoutMillis: 15000,
+      connectionTimeoutMillis: 8000,
+      statement_timeout:  25000,
+      query_timeout:      25000,
       keepAlive:          true,
       application_name:   "gohub-intel-web",
     })
