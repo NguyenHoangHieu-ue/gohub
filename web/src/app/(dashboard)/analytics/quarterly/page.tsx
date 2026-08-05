@@ -146,7 +146,7 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
 
 // ─── Table header row ─────────────────────────────────────────────────────────
 
-const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "3HK%"]
+const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "%QoQ CM1", "3HK%"]
 const QT_COLS = ["Chỉ số Quý", "Revenue", "Proj.Rev", "GP", "GP%", "Ch.Cost", "Gr.Cost", "CM1", "Proj.CM1", "CM1%", "3HK%", "QoQ"]
 
 function TableHead({ cols, compact = false }: { cols: string[]; compact?: boolean }) {
@@ -656,10 +656,11 @@ function QuarterlyContent() {
                         </td>
                         <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(m.total.cm1))}>{m.isProjected ? fc(m.total.cm1) : <span className="text-slate-300">—</span>}</td>
                         <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
+                        <td className="px-4 py-3 text-right text-slate-300">—</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                       </tr>
-                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} momRev={mom.b2bRev} momCm1={mom.b2bCm1} />
-                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} momRev={mom.b2cRev} momCm1={mom.b2cCm1} />
+                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} momRev={mom.b2bRev} momCm1={mom.b2bCm1} qoqCm1={b2bQoQ} />
+                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} momRev={mom.b2cRev} momCm1={mom.b2cCm1} qoqCm1={b2cQoQ} />
                     </React.Fragment>
                   )
                 })}
@@ -783,9 +784,9 @@ function MomBadge({ v }: { v: number | null }) {
 }
 
 // ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
-function MonthSubRow({ label, stats, isProjected, momRev, momCm1 }: {
+function MonthSubRow({ label, stats, isProjected, momRev, momCm1, qoqCm1 }: {
   label: string; stats: MonthStats; isProjected?: boolean
-  momRev?: number | null; momCm1?: number | null
+  momRev?: number | null; momCm1?: number | null; qoqCm1?: number | null
 }) {
   const actRev = stats.actualRevenue ?? stats.revenue
   const actGp  = stats.actualGp     ?? stats.gp
@@ -814,6 +815,10 @@ function MonthSubRow({ label, stats, isProjected, momRev, momCm1 }: {
       </td>
       <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(stats.cm1))}>{isProjected ? fc(stats.cm1) : <span className="text-slate-300">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
+      <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
+        qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
+        {qoqCm1 != null ? `${qoqCm1 >= 0 ? "+" : ""}${qoqCm1.toFixed(1)}%` : "—"}
+      </td>
       <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
     </tr>
   )
