@@ -6,12 +6,9 @@ import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shi
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
+import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
-
-// Ngưỡng ngày tối thiểu để CHIẾU tháng hiện tại. < 7 ngày → factor quá lớn (dim/elapsed, vd 31/3=10.3) →
-// số dự kiến nhảy dữ dội mỗi ngày + mẫu quá nhỏ không tin cậy → giữ ACTUAL (factor=1) cho tới khi đủ 7 ngày.
-const MIN_PROJECT_DAYS = 7
 
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
@@ -272,19 +269,7 @@ export async function GET(req: NextRequest) {
       return tot
     }
 
-    const monthMeta = months.map(m => {
-      const mStart = `${m}-01`
-      const mEndDate = new Date(parseInt(m.split("-")[0]), parseInt(m.split("-")[1]), 0)
-      const mEnd = mEndDate.toISOString().split("T")[0]
-      const actualEnd = mEnd < todayStr ? mEnd : todayStr
-      const dim = getDaysInMonth(m)
-      const isFuture = new Date(mStart) > asOf
-      const isCurrent = !isFuture && mEndDate >= asOf
-      const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
-      const isProjected = isCurrent && elapsed >= MIN_PROJECT_DAYS && elapsed < dim
-      const factor = isProjected ? dim / elapsed : 1
-      return { month: m, mStart, mEnd, actualEnd, dim, elapsed, isProjected, factor, isFuture }
-    })
+    const monthMeta = buildQuarterMonthMeta(months, asOf, todayStr)
 
     const pct = (num: number, den: number) => den > 0 ? Math.round(num / den * 1000) / 10 : 0
     const r = Math.round
