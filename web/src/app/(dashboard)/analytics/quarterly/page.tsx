@@ -245,16 +245,20 @@ function QuarterlyContent() {
 
   const fetchReport = useCallback(async (refresh = false) => {
     setLoading(true)
+    // Abort sau 65s để FE KHÔNG treo loading vô hạn nếu server 504/hang → hiện lỗi rõ ràng.
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 65000)
     try {
       const qParams = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
       if (refresh)           qParams.set("nocache", "1")
       if (includeShip)       qParams.set("includeShip", "1")
       if (includeInternalOps) qParams.set("includeInternalOps", "1")
-      const res = await fetch(`/api/analytics/quarterly-report?${qParams}`)
+      const res = await fetch(`/api/analytics/quarterly-report?${qParams}`, { signal: ctrl.signal })
       if (!res.ok) throw new Error(`${res.status}`)
       setReport(await res.json())
-    } catch (e: any) { notify(false, `Lỗi tải dữ liệu: ${e.message}`) }
-    finally { setLoading(false) }
+    } catch (e: any) {
+      notify(false, e.name === "AbortError" ? "Tải dữ liệu quá lâu (>65s) — thử bấm 'Tải lại mới' hoặc đợi giây lát" : `Lỗi tải dữ liệu: ${e.message}`)
+    } finally { clearTimeout(timer); setLoading(false) }
   }, [selQ, selYear, includeShip, includeInternalOps, companyCode])
 
   const loadTargets = useCallback(async () => {

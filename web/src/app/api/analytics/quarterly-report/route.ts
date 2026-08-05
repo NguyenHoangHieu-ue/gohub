@@ -8,6 +8,11 @@ import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterl
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
+// Route nặng: 5 query gohub_dw song song + Supabase costs. Default Vercel 10s không đủ khi
+// cold start / DB bận → 504 → FE treo loading. Cho 60s (khớp crons trong vercel.json).
+export const maxDuration = 60
+export const dynamic = "force-dynamic"
+
 function getQuarterMonths(quarter: string, year: number): string[] {
   const q = parseInt(quarter.replace("Q", ""))
   const start = (q - 1) * 3 + 1

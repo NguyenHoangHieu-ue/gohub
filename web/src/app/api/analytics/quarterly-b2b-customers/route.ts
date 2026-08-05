@@ -7,6 +7,10 @@ import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
+// Route nặng (per-customer B2B + Turso costs) → cho 60s tránh 504 treo FE.
+export const maxDuration = 60
+export const dynamic = "force-dynamic"
+
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
   const p = (priceListName || "").toUpperCase()
   const c = (currencyCode || "").toUpperCase()

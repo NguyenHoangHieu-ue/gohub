@@ -13,10 +13,11 @@ export function getAnalyticsPool(): pg.Pool {
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
       // gohub_dw max_connections=300 (chia nhiều serverless instance). Gốc cạn kết nối = RÒ RỈ pool (đã fix).
-      // max=5: quarterly route bắn 5 query song song → cần ≥5 slot/instance, tránh "timeout exceeded" khi chờ slot.
-      // connectionTimeoutMillis=15000: quarterly query nặng có thể chờ 10-12s mới lấy được slot → tăng buffer.
+      // max=8: quarterly route bắn 5 query song song CÙNG LÚC → cần ≥5 slot + headroom cho retry/overlap
+      // (b2b-customers, targets có thể cùng instance). App dùng ~9 kết nối tổng → 8/instance vẫn rất an toàn.
+      // connectionTimeoutMillis=15000: query nặng có thể chờ 10-12s mới lấy slot → buffer (maxDuration route=60s).
       // idleTimeoutMillis=30s để GIỮ ẤM kết nối; keepAlive phát hiện kết nối chết; application_name để soi log.
-      max:                5,
+      max:                8,
       idleTimeoutMillis:  30000,
       connectionTimeoutMillis: 15000,
       keepAlive:          true,

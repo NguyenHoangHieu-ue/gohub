@@ -21,6 +21,12 @@
     },
     "src/app/api/cron/refresh-monthly-kpis/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/analytics/quarterly-report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/quarterly-b2b-customers/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
