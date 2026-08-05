@@ -188,6 +188,8 @@ function QuarterlyContent() {
   const [expandB2B, setExpandB2B] = useState(true)
   const [expandB2C, setExpandB2C] = useState(false)
   const [b2bRegion, setB2bRegion] = useState<"ALL" | "VN" | "US">("ALL")
+  const [companyCode, setCompanyCode] = useState<"ALL" | "VN" | "US">("ALL")
+  const setTenantFilter = (code: "ALL" | "VN" | "US") => { setCompanyCode(code); setB2bRegion(code) }
   const [b2bTiers, setB2bTiers]   = useState<any>(null)
   const [b2bTiersLoading, setB2bTiersLoading] = useState(false)
   const [userRole, setUserRole] = useState<string>("")
@@ -244,7 +246,7 @@ function QuarterlyContent() {
   const fetchReport = useCallback(async (refresh = false) => {
     setLoading(true)
     try {
-      const qParams = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode: "ALL" })
+      const qParams = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
       if (refresh)           qParams.set("nocache", "1")
       if (includeShip)       qParams.set("includeShip", "1")
       if (includeInternalOps) qParams.set("includeInternalOps", "1")
@@ -253,7 +255,7 @@ function QuarterlyContent() {
       setReport(await res.json())
     } catch (e: any) { notify(false, `Lỗi tải dữ liệu: ${e.message}`) }
     finally { setLoading(false) }
-  }, [selQ, selYear, includeShip, includeInternalOps])
+  }, [selQ, selYear, includeShip, includeInternalOps, companyCode])
 
   const loadTargets = useCallback(async () => {
     try {
@@ -304,6 +306,27 @@ function QuarterlyContent() {
   const quarters = ["Q1", "Q2", "Q3", "Q4"]
   const summary  = report?.summary ?? []
   const qt       = report?.quarterTotal
+
+  // MoM: so sánh tháng hiện tại vs tháng trước trong cùng quý
+  const momData = useMemo(() => {
+    const chg = (a: number, b: number) => b > 0 ? ((a - b) / b) * 100 : null
+    return summary.map((m, i) => {
+      if (i === 0) return { rev: null as number | null, cm1: null as number | null, b2bRev: null as number | null, b2bCm1: null as number | null, b2cRev: null as number | null, b2cCm1: null as number | null }
+      const p = summary[i - 1]
+      const aR   = m.total.actualRevenue ?? m.total.revenue
+      const pR   = p.total.actualRevenue ?? p.total.revenue
+      const aC   = m.total.actualCm1 ?? m.total.cm1
+      const pC   = p.total.actualCm1 ?? p.total.cm1
+      return {
+        rev:    chg(aR, pR),
+        cm1:    chg(aC, pC),
+        b2bRev: chg(m.b2b.actualRevenue ?? m.b2b.revenue, p.b2b.actualRevenue ?? p.b2b.revenue),
+        b2bCm1: chg(m.b2b.actualCm1 ?? m.b2b.cm1, p.b2b.actualCm1 ?? p.b2b.cm1),
+        b2cRev: chg(m.b2c.actualRevenue ?? m.b2c.revenue, p.b2c.actualRevenue ?? p.b2c.revenue),
+        b2cCm1: chg(m.b2c.actualCm1 ?? m.b2c.cm1, p.b2c.actualCm1 ?? p.b2c.cm1),
+      }
+    })
+  }, [summary])
   const activeMonths = summary.map(m => m.month)
 
   // ── Reference computeSummary() logic (gohub.html) ─────────────────────────
@@ -404,6 +427,16 @@ function QuarterlyContent() {
               className="px-2 py-1.5 text-xs font-semibold bg-transparent text-slate-700 outline-none cursor-pointer">
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
+          </div>
+          {/* Tenant segment filter: ALL / VN / US */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
+            {(["ALL", "VN", "US"] as const).map(code => (
+              <button key={code} onClick={() => setTenantFilter(code)}
+                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                  companyCode === code ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                {code === "VN" ? "🇻🇳 VN" : code === "US" ? "🇺🇸 US" : "ALL"}
+              </button>
+            ))}
           </div>
           {/* Ship / Internal Ops toggles */}
           {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
@@ -592,9 +625,10 @@ function QuarterlyContent() {
             <table className="w-full text-[12px] border-collapse">
               <thead><TableHead cols={TH_COLS} /></thead>
               <tbody>
-                {summary.map(m => {
+                {summary.map((m, mi) => {
                   const [y, mo] = m.month.split("-")
                   const label  = `T${parseInt(mo)}/${y}`
+                  const mom    = momData[mi]
                   return (
                     <React.Fragment key={m.month}>
                       {/* Revenue/GM/CM1 = actual; PR Rev/PR CM1 = monthly projected (chỉ tháng đang chạy) */}
@@ -603,19 +637,29 @@ function QuarterlyContent() {
                           {label}
                           {m.isProjected && <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR ×{m.factor}</span>}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">{fc(m.total.actualRevenue ?? m.total.revenue)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">
+                          <div className="flex flex-col items-end gap-0.5">
+                            {fc(m.total.actualRevenue ?? m.total.revenue)}
+                            <MomBadge v={mom.rev} />
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-500">{m.isProjected ? fc(m.total.revenue) : <span className="text-slate-300">—</span>}</td>
                         <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.actualGp ?? m.total.gp)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.total.gpPct)}</td>
                         <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.actualCc ?? m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
                         <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.groupCost > 0 ? fc(m.total.actualGc ?? m.total.groupCost) : <span className="text-slate-300">—</span>}</td>
-                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.actualCm1 ?? m.total.cm1))}>{fc(m.total.actualCm1 ?? m.total.cm1)}</td>
+                        <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.actualCm1 ?? m.total.cm1))}>
+                          <div className="flex flex-col items-end gap-0.5">
+                            {fc(m.total.actualCm1 ?? m.total.cm1)}
+                            <MomBadge v={mom.cm1} />
+                          </div>
+                        </td>
                         <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(m.total.cm1))}>{m.isProjected ? fc(m.total.cm1) : <span className="text-slate-300">—</span>}</td>
                         <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                         <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                       </tr>
-                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} />
-                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} />
+                      <MonthSubRow label="B2B" stats={m.b2b} isProjected={m.isProjected} momRev={mom.b2bRev} momCm1={mom.b2bCm1} />
+                      <MonthSubRow label="B2C" stats={m.b2c} isProjected={m.isProjected} momRev={mom.b2cRev} momCm1={mom.b2cCm1} />
                     </React.Fragment>
                   )
                 })}
@@ -727,8 +771,22 @@ function QuarterlyContent() {
   )
 }
 
+// ─── MoM badge helper ────────────────────────────────────────────────────────
+function MomBadge({ v }: { v: number | null }) {
+  if (v === null) return <span className="text-[8px] text-slate-300">N/A</span>
+  const pos = v >= 0
+  return (
+    <span className={`text-[8px] font-bold leading-none ${pos ? "text-[#10B981]" : "text-[#EF4444]"}`}>
+      {pos ? "▲" : "▼"} {Math.abs(v).toFixed(1)}%
+    </span>
+  )
+}
+
 // ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
-function MonthSubRow({ label, stats, isProjected }: { label: string; stats: MonthStats; isProjected?: boolean }) {
+function MonthSubRow({ label, stats, isProjected, momRev, momCm1 }: {
+  label: string; stats: MonthStats; isProjected?: boolean
+  momRev?: number | null; momCm1?: number | null
+}) {
   const actRev = stats.actualRevenue ?? stats.revenue
   const actGp  = stats.actualGp     ?? stats.gp
   const actCc  = stats.actualCc     ?? stats.channelCost
@@ -737,13 +795,23 @@ function MonthSubRow({ label, stats, isProjected }: { label: string; stats: Mont
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
+      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">
+        <div className="flex flex-col items-end gap-0.5">
+          {fc(actRev)}
+          {momRev !== undefined && <MomBadge v={momRev ?? null} />}
+        </div>
+      </td>
       <td className="px-4 py-2 text-right tabular-nums text-slate-400">{isProjected ? fc(stats.revenue) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actGp)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actCc > 0 ? fc(actCc) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actGc > 0 ? fc(actGc) : <span className="text-slate-300">—</span>}</td>
-      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>{fc(actCm1)}</td>
+      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>
+        <div className="flex flex-col items-end gap-0.5">
+          {fc(actCm1)}
+          {momCm1 !== undefined && <MomBadge v={momCm1 ?? null} />}
+        </div>
+      </td>
       <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(stats.cm1))}>{isProjected ? fc(stats.cm1) : <span className="text-slate-300">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
