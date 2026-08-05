@@ -272,13 +272,13 @@ export async function GET(req: NextRequest) {
         const isProj = meta?.isProjected ?? false
 
         // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31)
-        const elapsedRatio = isProj && meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
+        const elapsedRatio = meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
 
         // 1. Projected CH.Cost (dự phóng cả tháng): lấy 100% amount (elapsedRatio = 1)
-        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor, 1) : 0
+        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor, elapsedRatio) : 0
 
         // 2. Actual CH.Cost (thực tế tới hôm nay): amount nhân pro-rata theo ngày (elapsedRatio = elapsed / dim)
-        const rawCc = md ? calcRecordCostProjected(rec, md.rawRevenue, 1, elapsedRatio) : 0
+        const rawCc = md ? calcRecordCostProjected(rec, md.rawRevenue, 1, 1) : 0
 
         monthsCost[m] = {
           cost_lines: rec?.cost_lines ?? "[]",
