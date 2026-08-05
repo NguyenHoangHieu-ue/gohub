@@ -1333,7 +1333,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
                         ]
                       })}
-                      {/* Tổng Quý: PR = actualYTD × qFactor (quarter-level), Act = actualYTD */}
+                      {/* Tổng Quý: PR = BE per-month projected sum, Act = actualYTD */}
                       <td className="px-2 py-2.5 text-right border-l border-blue-200 bg-blue-50/60">{dual(qPrRev, hasProjectedMonth ? qActRev : undefined, "text-slate-700")}</td>
                       <td className="px-2 py-2.5 text-right bg-blue-50/60">{dual(qPrGm, hasProjectedMonth ? qActGm : undefined, "text-slate-600")}</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{qPrCc > 0 ? dual(qPrCc, hasProjectedMonth ? qActCc : undefined, "text-slate-500") : "—"}</td>

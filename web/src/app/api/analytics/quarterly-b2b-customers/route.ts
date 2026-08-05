@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
   const prevQMonths = [0, 1, 2].map(i => `${prevYear}-${String(prevQFirstMonth + i).padStart(2, "0")}`)
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  // v4: đổi created_date → fulfiled_date để đồng nhất với B2B Performance
-  const rawCacheKey = `qb2b_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  // v6: fix elapsedRatio swap (monthCost/rawCc args bị đảo nhau từ commit d466ba7)
+  const rawCacheKey = `qb2b_raw_v6:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
@@ -274,11 +274,13 @@ export async function GET(req: NextRequest) {
         // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31)
         const elapsedRatio = meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
 
-        // 1. Projected CH.Cost (dự phóng cả tháng): lấy 100% amount (elapsedRatio = 1)
-        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor, elapsedRatio) : 0
+        // 1. Projected CH.Cost (dự phóng cả tháng): amount GIỮ NGUYÊN (elapsedRatio=1),
+        //    percent áp trên projected revenue (rawRevenue × factor).
+        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor, 1) : 0
 
-        // 2. Actual CH.Cost (thực tế tới hôm nay): amount nhân pro-rata theo ngày (elapsedRatio = elapsed / dim)
-        const rawCc = md ? calcRecordCostProjected(rec, md.rawRevenue, 1, 1) : 0
+        // 2. Actual CH.Cost (thực tế tới hôm nay): amount × elapsedRatio (pro-rata ngày đã qua),
+        //    percent áp trên actual revenue.
+        const rawCc = md ? calcRecordCostProjected(rec, md.rawRevenue, 1, elapsedRatio) : 0
 
         monthsCost[m] = {
           cost_lines: rec?.cost_lines ?? "[]",
