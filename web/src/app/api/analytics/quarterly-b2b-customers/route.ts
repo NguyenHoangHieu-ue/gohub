@@ -350,13 +350,12 @@ export async function GET(req: NextRequest) {
       const totRev     = custs.reduce((s, c) => s + c.revenue, 0)
       const totGm      = custs.reduce((s, c) => s + c.gm, 0)
       const totCc      = custs.reduce((s, c) => s + c.cc, 0)
-      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0)
+      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0)   // CM1 prorata Q3 (chiếu theo tháng, ĐÚNG)
       const totHk3     = custs.reduce((s, c) => s + c.hk3Rev, 0)
-      // QoQ tier: dùng PR CM1 quarter-level (nhất quán với bảng Tổng Quý)
-      const totActCm1  = custs.reduce((s, c) => s + c.actualCm1, 0)
-      const totCm1Pr   = hasProjected ? Math.round(totActCm1 * qFactor) : totCm1
+      // QoQ: CM1 prorata Q3 (totCm1 — tháng ĐÃ XONG dùng actual, tháng hiện tại chiếu theo ngày) vs CM1 thực tế Q2.
+      // Trước dùng totActCm1 × qFactor (raw × quarter-factor) → SCALE NHẦM cả tháng đã xong (Jul) → QoQ quá cao.
       const prevTotCm1 = custs.reduce((s, c) => s + (prevCm1Map.get(c.code) ?? 0), 0)
-      const qoqPct     = prevTotCm1 !== 0 ? Math.round((totCm1Pr - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
+      const qoqPct     = prevTotCm1 !== 0 ? Math.round((totCm1 - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),

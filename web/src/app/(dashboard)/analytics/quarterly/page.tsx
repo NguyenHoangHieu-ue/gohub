@@ -1271,19 +1271,20 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                   const colors = TIER_COLORS[tierRaw.tier] || TIER_COLORS.Strategic
                   const isSel = selectedTier === tierRaw.tier
 
-                  // Tính actual totals YTD cho từng tier (dùng tính Quarter PR = actualYTD × qFactor)
+                  // Tổng Quý: PR = tier.total* (BE đã chiếu theo THÁNG — tháng xong dùng actual, tháng hiện tại
+                  // chiếu theo ngày). ĐỒNG BỘ với các dòng tháng + %QoQ. (Trước dùng actualYTD × qFactor → scale
+                  // nhầm cả tháng đã xong → Tổng Quý và QoQ đều cao ảo.)
                   const tierMonths: any[] = tier.months ?? []
                   const hasProjectedMonth = tierMonths.some((d: any) => d.isProjected && d.hasData)
                   const qActRev = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualRevenue ?? d.revenue) : d.revenue), 0)
                   const qActGm  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualGm  ?? d.gm)  : d.gm),  0)
                   const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCc  ?? d.cc)  : d.cc),  0)
                   const qActCm1 = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCm1 ?? d.cm1) : d.cm1), 0)
-                  // Quarter PR = actualYTD × qFactor (project đến hết quý, không phải hết tháng)
                   const r2 = Math.round
-                  const qPrRev  = hasProjectedMonth ? r2(qActRev  * qFactor) : tier.totalRevenue
-                  const qPrGm   = hasProjectedMonth ? r2(qActGm   * qFactor) : tier.totalGm
-                  const qPrCc   = hasProjectedMonth ? r2(qActCc   * qFactor) : tier.totalCc
-                  const qPrCm1  = hasProjectedMonth ? r2(qActCm1  * qFactor) : tier.totalCm1
+                  const qPrRev  = tier.totalRevenue
+                  const qPrGm   = tier.totalGm
+                  const qPrCc   = tier.totalCc
+                  const qPrCm1  = tier.totalCm1
 
                   // Helper: stacked PR (blue) / Actual (slate) — dùng fc() cho số đầy đủ, font nhỏ
                   const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
