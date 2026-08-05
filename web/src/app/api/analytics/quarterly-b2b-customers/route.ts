@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
-import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
   const rawCacheKey = `qb2b_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
 
   try {
-    // ── Phần 1+2+3: gohub_dw (cache), current costs, prev quarter costs — SONG SONG ──
-    const [rawData, costMap, prevCostMap] = await Promise.all([
+    // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
+    const [rawData, costMap, prevCostMap, { groupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
       // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
       const exclFilter = excludedCustomers.length > 0
@@ -135,6 +135,7 @@ export async function GET(req: NextRequest) {
     }, QUERY_TTL_MIN, refresh),
     fetchCustomerCosts(months),          // current quarter Turso costs
     fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
+    fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number }> })),  // Supabase group costs
   ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
@@ -334,12 +335,22 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // #4 NHẤT QUÁN GROUP COST: chi phí group B2B (Supabase) phân bổ vào tier theo revenue-share → tier CM1
+    // khớp bảng "Tổng hợp theo tháng" (summary trừ group cost, trước tier KHÔNG trừ → lệch khi có group cost).
+    // Tổng group cost B2B = sum budget các tháng không tương lai (không scale factor — nhất quán summary).
+    const totalB2BGroupCost = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) =>
+      s + (groupCosts as Array<{ group_name: string; month: string; amount: number }>)
+        .filter(gc => gc.group_name === "B2B" && gc.month === mr.month).reduce((a, gc) => a + (gc.amount || 0), 0), 0)
+    let grandTotalRev = 0
+    tierMap.forEach(t => t.custList.forEach(c => { grandTotalRev += c.revenue }))
+
     // helper: tổng từ 1 danh sách customer + QoQ% (PR CM1 quý này vs CM1 thực tế quý trước)
     const buildTotals = (custs: CustRow[]) => {
       const totRev     = custs.reduce((s, c) => s + c.revenue, 0)
       const totGm      = custs.reduce((s, c) => s + c.gm, 0)
-      const totCc      = custs.reduce((s, c) => s + c.cc, 0)
-      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0)   // CM1 prorata Q3 (chiếu theo tháng, ĐÚNG)
+      const groupShare = grandTotalRev > 0 ? (totRev / grandTotalRev) * totalB2BGroupCost : 0
+      const totCc      = custs.reduce((s, c) => s + c.cc, 0) + groupShare   // + group cost phân bổ
+      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0) - groupShare  // CM1 prorata Q3 − group share
       const totHk3     = custs.reduce((s, c) => s + c.hk3Rev, 0)
       // QoQ: CM1 prorata Q3 (totCm1 — tháng ĐÃ XONG dùng actual, tháng hiện tại chiếu theo ngày) vs CM1 thực tế Q2.
       // Trước dùng totActCm1 × qFactor (raw × quarter-factor) → SCALE NHẦM cả tháng đã xong (Jul) → QoQ quá cao.
