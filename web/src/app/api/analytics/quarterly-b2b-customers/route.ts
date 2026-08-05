@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
@@ -40,6 +40,10 @@ export async function GET(req: NextRequest) {
   const quarter = searchParams.get("quarter") || `Q${Math.ceil((today.getMonth() + 1) / 3)}`
   const regionFilter = searchParams.get("region") || "ALL"  // ALL | VN | US
   const companyCode = searchParams.get("companyCode") || "ALL"
+  // Ship/InternalOps filter — PHẢI khớp quarterly-report để tier B2B = summary B2B (mặc định loại phí ship).
+  const includeShip = searchParams.get("includeShip") === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
 
   const months = getQuarterMonths(quarter, year)
   // Mốc dữ liệu = HÔM QUA (trước hiện tại 1 ngày) — nhất quán với quarterly-report.
@@ -73,7 +77,7 @@ export async function GET(req: NextRequest) {
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   // v4: đổi created_date → fulfiled_date để đồng nhất với B2B Performance
-  const rawCacheKey = `qb2b_raw_v4:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+  const rawCacheKey = `qb2b_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
@@ -112,6 +116,7 @@ export async function GET(req: NextRequest) {
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
             AND NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')
             ${exclFilter}
+            ${sfx}
           GROUP BY 1, 2, 3, 4, 5, 6
           ORDER BY 1, 2
         `),
@@ -127,6 +132,7 @@ export async function GET(req: NextRequest) {
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
             ${exclFilter}
+            ${sfx}
           GROUP BY 1
         `),
       ])

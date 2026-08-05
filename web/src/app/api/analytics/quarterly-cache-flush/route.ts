@@ -10,7 +10,7 @@ export async function POST() {
 
   await flushAnalyticsCacheByPrefixes([
     "qreport_raw_v7:", "qreport_raw_v6:", "qreport_raw_v5:", "qreport_raw_v4:", "qreport_raw_v3:", "qreport_raw_v2:", "qreport_raw_v1:",
-    "qb2b_raw_v4:", "qb2b_raw_v3:", "qb2b_raw_v2:",
+    "qb2b_raw_v5:", "qb2b_raw_v4:", "qb2b_raw_v3:", "qb2b_raw_v2:",
   ]).catch(() => {})
   return NextResponse.json({ ok: true })
 }

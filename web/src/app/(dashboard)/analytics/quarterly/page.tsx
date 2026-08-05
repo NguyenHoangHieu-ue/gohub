@@ -278,10 +278,15 @@ function QuarterlyContent() {
     setB2bTiersLoading(true)
     try {
       // Không truyền region — server trả đủ VN+US, filter ALL/VN/US xử lý client-side (tức thì, không re-fetch)
-      const res = await fetch(`/api/analytics/quarterly-b2b-customers?quarter=${selQ}&year=${selYear}&companyCode=ALL${refresh ? "&refresh=1" : ""}`)
+      // PHẢI truyền includeShip/includeInternalOps để tier B2B khớp summary (cùng loại/gồm phí ship + nội bộ).
+      const tp = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode: "ALL" })
+      if (refresh)            tp.set("refresh", "1")
+      if (includeShip)        tp.set("includeShip", "1")
+      if (includeInternalOps) tp.set("includeInternalOps", "1")
+      const res = await fetch(`/api/analytics/quarterly-b2b-customers?${tp}`)
       if (res.ok) setB2bTiers(await res.json())
     } catch {} finally { setB2bTiersLoading(false) }
-  }, [selQ, selYear])
+  }, [selQ, selYear, includeShip, includeInternalOps])
 
   const refreshAll = useCallback(async () => {
     // Xóa L2 Supabase cache quarterly trước, sau đó fetch fresh
