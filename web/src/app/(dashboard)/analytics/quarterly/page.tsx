@@ -1464,11 +1464,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   // Metrics rows: label | T1 | T2 | T3 | Tổng Quý
                                   // Tháng projected → 2 dòng: "Pr. xxx" (pro-rata xanh) + "Act. xxx" (actual đậm)
                                   type MRow = { label: string; vals: (m: any) => React.ReactNode; tot: React.ReactNode }
-                                  // Quarter PR per-customer = actualYTD × qFactor
-                                  const cPrRev = hp ? Math.round(actRev * qFactor) : actRev
-                                  const cPrGm  = hp ? Math.round(actGm  * qFactor) : actGm
-                                  const cPrCc  = hp ? Math.round(actCc  * qFactor) : actCc
-                                  const cPrCm1 = hp ? Math.round(actCm1 * qFactor) : actCm1
+                                  // Quarter PR per-customer = c.revenue (BE per-month projected sum, đồng bộ
+                                  // tier-level dùng tier.totalRevenue). KHÔNG dùng actRev × qFactor vì qFactor là
+                                  // quarter-level scale → thổi phồng cả tháng đã xong.
+                                  const cPrRev = c.revenue
+                                  const cPrGm  = c.gm
+                                  const cPrCc  = c.cc
+                                  const cPrCm1 = c.cm1
                                   const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
                                       <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>

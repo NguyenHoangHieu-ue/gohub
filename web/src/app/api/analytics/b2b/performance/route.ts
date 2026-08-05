@@ -11,32 +11,8 @@ import {
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
-import { fetchCustomerCosts, type CostRecord, type CostLine } from "@/lib/b2b-customer-cost"
-
-/**
- * Tính CH.Cost thực tế cho 1 tháng (pro-rata đúng cả 2 loại):
- * - percent: áp trên revenue thực kỳ (moRevenue đã lọc theo date range từ SQL)
- * - amount:  nhân dayRatio (= days_in_range_for_month / days_in_month)
- *
- * Khác calcRecordCostProjected: hàm đó dùng factor cho cả 2 loại (sai với cross-month range).
- * TODO (OOP refactor): chuyển hàm này vào class AnalyticsCostEngine dùng chung toàn hệ thống.
- */
-function calcChCostForPeriod(rec: CostRecord, moRevenue: number, dayRatio: number): number {
-  let lines: CostLine[] = []
-  if (rec.cost_lines) {
-    try { lines = typeof rec.cost_lines === "string" ? JSON.parse(rec.cost_lines) : (rec.cost_lines as unknown as CostLine[]) } catch {}
-  }
-  if (lines.length > 0) {
-    return lines.reduce((tot, l) => {
-      const val = Number(l?.value) || 0
-      return tot + (l?.type === "percent" ? (val / 100) * moRevenue : val * dayRatio)
-    }, 0)
-  }
-  const cval = Number(rec.cost_value) || 0
-  return rec.cost_type === "percent" ? (cval / 100) * moRevenue : cval * dayRatio
-}
-
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod, COST_KEYS, type CostRecord, type CostLine } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -57,8 +33,9 @@ export async function GET(req: NextRequest) {
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    // v3: thêm ch_cost, cm1, cm1_percent, cost_lines (s133 — customer CH.Cost từ Turso, pro-rata đúng)
-    const key = `b2b-perf3:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    // v4: thêm excludedCustomers hash (v3 thiếu → đổi config không invalidate cache)
+    const exclHash = excludedCustomers.length ? excludedCustomers.slice().sort().join(",") : ""
+    const key = `b2b-perf4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""

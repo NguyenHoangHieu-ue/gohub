@@ -6,7 +6,7 @@
  *   percent type → (value/100) × moRevenue  (moRevenue = revenue thực kỳ từ SQL, không nhân dayRatio)
  *
  * Import bởi:
- *   - b2b/performance/route.ts (calcChCostForPeriod — customer-level CH.Cost)
+ *   - b2b/performance/route.ts (calcChCostForPeriod, COST_KEYS)
  *   - channels/kpis/route.ts (calcChannelOpCost — channel-level op cost)
  *   - Các route analytics khác khi migrate về BE
  */
