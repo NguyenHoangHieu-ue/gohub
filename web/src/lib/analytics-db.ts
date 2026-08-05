@@ -17,16 +17,20 @@ export function getAnalyticsPool(): pg.Pool {
       // "remaining connection slots reserved for superuser". App phải dùng ÍT + NHẢ NHANH:
       //   max=3: route nặng bắn 5-8 query song song sẽ TỰ cap ở 3 (pool xếp hàng phần dư) → KHÔNG cần đổi
       //     từng route. quarterly runLimited(2) ⊂ 3. (Nâng 8 = sai lầm "mấy bữa nay" → cạn slot nhanh, đã hạ.)
-      //   idleTimeoutMillis=8s: NHẢ kết nối idle SAU 8s (trước để 30s → giữ quá lâu, tích tụ across-instance →
-      //     góp phần làm DB đầy → vòng luẩn quẩn). Reconnect SSL ~vài trăm ms, chấp nhận được để đổi lấy footprint nhỏ.
+      //   ⭐ options '-c idle_session_timeout=90000': ép POSTGRES tự đóng session idle >90s. GỐC của tích tụ
+      //     connection: Vercel FREEZE instance sau request → timer idleTimeoutMillis của pool KHÔNG chạy → conn
+      //     idle sống mãi tới khi instance chết (đo thực tế: 9 conn app idle 3-6 PHÚT). idle_session_timeout là
+      //     server-side → đóng được conn dù client đóng băng → nhả slot. (idleTimeoutMillis chỉ hiệu quả khi
+      //     instance còn thức.) Conn bị đóng → lần dùng sau pool tự reconnect (retry ở queryAnalytics).
       //   statement_timeout=25s + query_timeout=25s: query KHÔNG treo vô hạn khi DB contended → route fail
-      //     nhanh, trả lỗi rõ thay vì để Vercel giết ở maxDuration (FUNCTION_INVOCATION_TIMEOUT). ⭐ FIX GỐC.
+      //     nhanh, trả lỗi rõ thay vì để Vercel giết ở maxDuration (FUNCTION_INVOCATION_TIMEOUT).
       //   connectionTimeoutMillis=8s: chờ slot tối đa 8s rồi lỗi (kèm retry backoff ở queryAnalytics).
       max:                3,
       idleTimeoutMillis:  8000,
       connectionTimeoutMillis: 8000,
       statement_timeout:  25000,
       query_timeout:      25000,
+      options:            "-c idle_session_timeout=90000",
       keepAlive:          true,
       application_name:   "gohub-intel-web",
     })
