@@ -243,15 +243,20 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
   )
 }
 
-// Ngân sách Marketing B2C theo tháng (VND) — app_settings b2c_budget; dùng tính spend pace.
+// B2C Marketing budget per month × market (VN / US / Total) — app_settings b2c_budget = {month:{vn,us}}.
+// Total = VN + US (auto). Dùng tính spend pace ở Section 5 /analytics/b2c.
+type BudgetCell = { vn: number; us: number }
 function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify: (ok: boolean, text: string) => void }) {
   const months = last6Months()
-  const [budget, setBudget] = useState<Record<string, number>>({})
+  const [budget, setBudget] = useState<Record<string, BudgetCell>>({})
   const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const dirty = JSON.stringify(budget) !== savedSnap
+  const cellOf = (m: string): BudgetCell => budget[m] || { vn: 0, us: 0 }
+  const setCell = (m: string, patch: Partial<BudgetCell>) =>
+    setBudget(b => ({ ...b, [m]: { ...cellOf(m), ...patch } }))
 
   useEffect(() => {
     fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setSavedSnap(JSON.stringify(d || {})); setLoading(false) }).catch(() => setLoading(false))
@@ -259,22 +264,31 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
 
   const save = async () => {
     setSaving(true)
-    const cleaned: Record<string, number> = {}
-    for (const [m, v] of Object.entries(budget)) if (v > 0) cleaned[m] = v
+    const cleaned: Record<string, BudgetCell> = {}
+    for (const [m, v] of Object.entries(budget)) if ((v?.vn || 0) > 0 || (v?.us || 0) > 0) cleaned[m] = { vn: v.vn || 0, us: v.us || 0 }
     const res = await fetch("/api/config/b2c-budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
     if (res.ok) setSavedSnap(JSON.stringify(budget))
     setSaving(false)
-    onNotify(res.ok, res.ok ? "Đã lưu ngân sách Marketing B2C" : "Hiếu đang fix, vui lòng đợi")
+    onNotify(res.ok, res.ok ? "B2C marketing budget saved" : "Hiếu đang fix, vui lòng đợi")
   }
 
-  const total = months.reduce((s, m) => s + (budget[m] || 0), 0)
+  const totVn = months.reduce((s, m) => s + (cellOf(m).vn || 0), 0)
+  const totUs = months.reduce((s, m) => s + (cellOf(m).us || 0), 0)
+
+  const numInput = (m: string, mk: "vn" | "us") => (
+    <div className="flex justify-end">
+      <input type="number" min={0} step="any" value={cellOf(m)[mk] || ""} placeholder="0"
+        onChange={e => setCell(m, { [mk]: parseFloat(e.target.value) || 0 })}
+        className="w-36 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+    </div>
+  )
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-slate-900 text-sm">Ngân sách Marketing B2C</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Ngân sách kế hoạch theo tháng (VND) — Section 5 /analytics/b2c tính spend pace = chi phí thực tế ÷ ngân sách.</p>
+          <h2 className="font-bold text-slate-900 text-sm">B2C Marketing Budget</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Planned budget per month × market (VND). Total = VN + US (auto). Used for spend pace in /analytics/b2c.</p>
         </div>
         {canEdit && <SaveBtn onClick={save} saving={saving} dirty={dirty} />}
       </div>
@@ -283,27 +297,29 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">Ngân sách (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Month</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">🇻🇳 VN (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">🇺🇸 US (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-700 uppercase tracking-widest text-right bg-slate-100">Total (VND)</th>
               </tr>
             </thead>
             <tbody>
-              {months.map(m => (
-                <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
-                  <td className="px-5 py-3 text-right bg-blue-50/20">
-                    {canEdit ? (
-                      <div className="flex justify-end">
-                        <input type="number" min={0} step="any" value={budget[m] || ""} onChange={e => setBudget(b => ({ ...b, [m]: parseFloat(e.target.value) || 0 }))} placeholder="0"
-                          className="w-40 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
-                      </div>
-                    ) : <span className="text-sm font-bold text-slate-700">{formatCurrency(budget[m] || 0)}</span>}
-                  </td>
-                </tr>
-              ))}
+              {months.map(m => {
+                const c = cellOf(m)
+                return (
+                  <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
+                    <td className="px-5 py-3 text-right bg-blue-50/20">{canEdit ? numInput(m, "vn") : <span className="text-sm font-bold text-slate-700">{formatCurrency(c.vn || 0)}</span>}</td>
+                    <td className="px-5 py-3 text-right bg-blue-50/20">{canEdit ? numInput(m, "us") : <span className="text-sm font-bold text-slate-700">{formatCurrency(c.us || 0)}</span>}</td>
+                    <td className="px-5 py-3 text-right bg-slate-50 text-sm font-bold text-slate-800">{formatCurrency((c.vn || 0) + (c.us || 0))}</td>
+                  </tr>
+                )
+              })}
               <tr className="border-t-2 border-slate-200 bg-slate-50/50">
-                <td className="px-5 py-3 text-sm font-bold text-slate-900">Tổng 6 tháng</td>
-                <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(total)}</td>
+                <td className="px-5 py-3 text-sm font-bold text-slate-900">6-month total</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(totVn)}</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(totUs)}</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-slate-900 bg-slate-100">{formatCurrency(totVn + totUs)}</td>
               </tr>
             </tbody>
           </table>

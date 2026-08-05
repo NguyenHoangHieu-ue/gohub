@@ -372,14 +372,23 @@ export async function GET(req: NextRequest) {
     // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
     let targets: Record<string, { vn: number; us: number; total: number }> = {}
     let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+    const budgetByMarket = Object.fromEntries(months.map(m => [m, { vn: 0, us: 0, total: 0 }])) as Record<string, { vn: number; us: number; total: number }>
     try {
       const { data: rows } = await supabaseAdmin
         .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
       for (const r of rows ?? []) {
         if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
         if (r.key === "b2c_budget" && r.value) {
-          const saved: Record<string, number> = JSON.parse(r.value)
-          for (const m of months) if (saved[m]) budget[m] = saved[m]
+          // model mới { [month]: {vn, us} }; backward-compat format cũ { [month]: number } → gán hết vào VN.
+          const saved: Record<string, unknown> = JSON.parse(r.value)
+          for (const m of months) {
+            const cell = saved[m]
+            let vn = 0, us = 0
+            if (typeof cell === "number") vn = cell
+            else if (cell && typeof cell === "object") { vn = Number((cell as any).vn) || 0; us = Number((cell as any).us) || 0 }
+            budget[m] = vn + us
+            budgetByMarket[m] = { vn, us, total: vn + us }
+          }
         }
       }
     } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
@@ -439,7 +448,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         months, currentMonth, elapsedDays, totalDays,
-        targets, budget, spend, leads, leadsByChannel,
+        targets, budget, budgetByMarket, spend, leads, leadsByChannel,
         dataAsOf: windowEnd,
         isLive: forceRefresh,
         refreshTimestamp: new Date().toISOString(),
