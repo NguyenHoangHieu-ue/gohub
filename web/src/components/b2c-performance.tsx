@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
 // + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs (CHỈ đọc để hiển thị CM1).
@@ -194,20 +195,14 @@ export function B2CPerformance() {
   const getProjectionInfo = () => {
     if (kpis.length < 7 || !startDate || !endDate) return null
 
-    const today = new Date(); today.setHours(0, 0, 0, 0)
+    // Dùng shared lib — đồng bộ với BE route + B2B/Channels/BOD
+    const factor = getProjectionFactor(startDate, endDate)
+    if (factor <= 1) return null
+
     const start = new Date(startDate)
     const end   = new Date(endDate)
-
-    // Cross-month range → không project (snapshot lịch sử)
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
-    // Tháng đã hoàn thành → không project
-    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return null
-
     const daysElapsed    = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) return null
-
-    const factor = lastDayOfMonth / daysElapsed
 
     // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1 (từ BE, đã pro-rata đúng)
     const revenue = kpis[0]?.value || 0
