@@ -83,17 +83,17 @@ export async function GET(req: NextRequest) {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
     const [rawData, costMap, prevCostMap, { groupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-      // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
-      const exclFilter = excludedCustomers.length > 0
-        ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
-        : ""
+        // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
+        const exclFilter = excludedCustomers.length > 0
+          ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
+          : ""
 
-      const [customerRows, prevQuarterRows] = await Promise.all([
-        queryAnalytics<{
-          month: string; customer_code: string; customer_name: string
-          price_list_name: string | null; currency_code: string | null; channel_name: string
-          revenue: string; gm: string; hk3: string
-        }>(`
+        const [customerRows, prevQuarterRows] = await Promise.all([
+          queryAnalytics<{
+            month: string; customer_code: string; customer_name: string
+            price_list_name: string | null; currency_code: string | null; channel_name: string
+            revenue: string; gm: string; hk3: string
+          }>(`
           SELECT
             TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
             TRIM(f.customer_code) as customer_code,
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2, 3, 4, 5, 6
           ORDER BY 1, 2
         `),
-        queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
+          queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
           SELECT TRIM(f.customer_code) as customer_code,
             SUM(f.gross_profit_vnd) as gm,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
@@ -135,24 +135,24 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1
         `),
-      ])
+        ])
 
-      return { customerRows, prevQuarterRows }
-    }, QUERY_TTL_MIN, refresh),
-    fetchCustomerCosts(months),          // current quarter Turso costs
-    fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
-    fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number }> })),  // Supabase group costs
-  ])
+        return { customerRows, prevQuarterRows }
+      }, QUERY_TTL_MIN, refresh),
+      fetchCustomerCosts(months),          // current quarter Turso costs
+      fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
+      fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number }> })),  // Supabase group costs
+    ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
     const { customerRows, prevQuarterRows } = rawData
 
     // Previous quarter: GP map và CM1 map (QoQ so sánh bằng CM1 = GP - CH.Cost quý trước)
     const prevQuarterMap = new Map<string, { gm: number; revenue: number }>()
-    const prevCm1Map    = new Map<string, number>()
+    const prevCm1Map = new Map<string, number>()
     prevQuarterRows.forEach((r: any) => {
       const code = r.customer_code
-      const prevGm  = parseFloat(r.gm  || "0")
+      const prevGm = parseFloat(r.gm || "0")
       const prevRev = parseFloat(r.revenue || "0")
       prevQuarterMap.set(code, { gm: prevGm, revenue: prevRev })
       // Tính CM1 quý trước = GP − CH.Cost (Turso), phân bổ revenue đều 3 tháng
@@ -168,10 +168,10 @@ export async function GET(req: NextRequest) {
     const monthMeta = buildQuarterMonthMeta(months, asOf, todayStr)
 
     // Quarter-level factor — dùng cho %QoQ tier (nhất quán với Tổng Quý)
-    const elapsedQDays  = monthMeta.reduce((s, mr) => s + mr.elapsed, 0)
-    const quarterQDays  = monthMeta.reduce((s, mr) => s + getDaysInMonth(mr.month), 0)
-    const qFactor       = elapsedQDays > 0 ? quarterQDays / elapsedQDays : 1
-    const hasProjected  = monthMeta.some(mr => mr.isProjected)
+    const elapsedQDays = monthMeta.reduce((s, mr) => s + mr.elapsed, 0)
+    const quarterQDays = monthMeta.reduce((s, mr) => s + getDaysInMonth(mr.month), 0)
+    const qFactor = elapsedQDays > 0 ? quarterQDays / elapsedQDays : 1
+    const hasProjected = monthMeta.some(mr => mr.isProjected)
 
     // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue/rawGm (actual, để tính actual vs PR).
     interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; factor: number }
@@ -203,16 +203,16 @@ export async function GET(req: NextRequest) {
       const { factor } = mr
 
       const revAct = parseFloat(row.revenue || "0")
-      const gmAct  = parseFloat(row.gm   || "0")
-      const hk3Act = parseFloat(row.hk3  || "0")
+      const gmAct = parseFloat(row.gm || "0")
+      const hk3Act = parseFloat(row.hk3 || "0")
 
       const existing = cust.months.get(row.month)
       if (existing) {
-        existing.revenue    += revAct * factor
-        existing.gm         += gmAct  * factor
-        existing.hk3        += hk3Act * factor
+        existing.revenue += revAct * factor
+        existing.gm += gmAct * factor
+        existing.hk3 += hk3Act * factor
         existing.rawRevenue += revAct
-        existing.rawGm      += gmAct
+        existing.rawGm += gmAct
       } else {
         cust.months.set(row.month, {
           revenue: revAct * factor, gm: gmAct * factor, hk3: hk3Act * factor,
@@ -268,15 +268,23 @@ export async function GET(req: NextRequest) {
       months.forEach(m => {
         const md = cust.months.get(m)
         const rec = costMap.get(`${m}_${cust.code}`)
-        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor) : 0
-        const rawCc     = md ? calcRecordCostProjected(rec, md.rawRevenue, 1) : 0
         const meta = monthMeta.find(x => x.month === m)
         const isProj = meta?.isProjected ?? false
+
+        // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31)
+        const elapsedRatio = isProj && meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
+
+        // 1. Projected CH.Cost (dự phóng cả tháng): lấy 100% amount (elapsedRatio = 1)
+        const monthCost = md ? calcRecordCostProjected(rec, md.rawRevenue, md.factor, 1) : 0
+
+        // 2. Actual CH.Cost (thực tế tới hôm nay): amount nhân pro-rata theo ngày (elapsedRatio = elapsed / dim)
+        const rawCc = md ? calcRecordCostProjected(rec, md.rawRevenue, 1, elapsedRatio) : 0
+
         monthsCost[m] = {
           cost_lines: rec?.cost_lines ?? "[]",
-          cost_type:  rec?.cost_type  ?? "amount",
+          cost_type: rec?.cost_type ?? "amount",
           cost_value: rec?.cost_value ?? 0,
-          revenue:    md ? r2(md.revenue) : 0,
+          revenue: md ? r2(md.revenue) : 0,
         }
         if (md) {
           const mCm1 = md.gm - monthCost
@@ -352,16 +360,16 @@ export async function GET(req: NextRequest) {
 
     // helper: tổng từ 1 danh sách customer + QoQ% (PR CM1 quý này vs CM1 thực tế quý trước)
     const buildTotals = (custs: CustRow[]) => {
-      const totRev     = custs.reduce((s, c) => s + c.revenue, 0)
-      const totGm      = custs.reduce((s, c) => s + c.gm, 0)
+      const totRev = custs.reduce((s, c) => s + c.revenue, 0)
+      const totGm = custs.reduce((s, c) => s + c.gm, 0)
       const groupShare = grandTotalRev > 0 ? (totRev / grandTotalRev) * totalB2BGroupCost : 0
-      const totCc      = custs.reduce((s, c) => s + c.cc, 0) + groupShare   // + group cost phân bổ
-      const totCm1     = custs.reduce((s, c) => s + c.cm1, 0) - groupShare  // CM1 prorata Q3 − group share
-      const totHk3     = custs.reduce((s, c) => s + c.hk3Rev, 0)
+      const totCc = custs.reduce((s, c) => s + c.cc, 0) + groupShare   // + group cost phân bổ
+      const totCm1 = custs.reduce((s, c) => s + c.cm1, 0) - groupShare  // CM1 prorata Q3 − group share
+      const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
       // QoQ: CM1 prorata Q3 (totCm1 — tháng ĐÃ XONG dùng actual, tháng hiện tại chiếu theo ngày) vs CM1 thực tế Q2.
       // Trước dùng totActCm1 × qFactor (raw × quarter-factor) → SCALE NHẦM cả tháng đã xong (Jul) → QoQ quá cao.
       const prevTotCm1 = custs.reduce((s, c) => s + (prevCm1Map.get(c.code) ?? 0), 0)
-      const qoqPct     = prevTotCm1 !== 0 ? Math.round((totCm1 - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
+      const qoqPct = prevTotCm1 !== 0 ? Math.round((totCm1 - prevTotCm1) / Math.abs(prevTotCm1) * 1000) / 10 : null
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
