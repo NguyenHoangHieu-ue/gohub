@@ -12,12 +12,13 @@ export function getAnalyticsPool(): pg.Pool {
       user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
       password:           process.env.ANALYTICS_DB_PASSWORD,
       ssl:                { rejectUnauthorized: false },
-      // gohub_dw max_connections=100 (chia nhiều serverless instance). Gốc cạn kết nối = RÒ RỈ pool (đã fix) +
-      // max=10. Nay max=3 (footprint rất nhỏ/instance) + idle 30s để GIỮ ẤM kết nối (idle quá ngắn → đóng rồi
-      // mở lại, mà mở lại THẤT BẠI khi DB đầy → route lỗi). keepAlive phát hiện kết nối chết; application_name để soi.
-      max:                3,
+      // gohub_dw max_connections=300 (chia nhiều serverless instance). Gốc cạn kết nối = RÒ RỈ pool (đã fix).
+      // max=5: quarterly route bắn 5 query song song → cần ≥5 slot/instance, tránh "timeout exceeded" khi chờ slot.
+      // connectionTimeoutMillis=15000: quarterly query nặng có thể chờ 10-12s mới lấy được slot → tăng buffer.
+      // idleTimeoutMillis=30s để GIỮ ẤM kết nối; keepAlive phát hiện kết nối chết; application_name để soi log.
+      max:                5,
       idleTimeoutMillis:  30000,
-      connectionTimeoutMillis: 8000,
+      connectionTimeoutMillis: 15000,
       keepAlive:          true,
       application_name:   "gohub-intel-web",
     })
