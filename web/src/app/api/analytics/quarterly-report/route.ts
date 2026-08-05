@@ -9,6 +9,10 @@ import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
+// Ngưỡng ngày tối thiểu để CHIẾU tháng hiện tại. < 7 ngày → factor quá lớn (dim/elapsed, vd 31/3=10.3) →
+// số dự kiến nhảy dữ dội mỗi ngày + mẫu quá nhỏ không tin cậy → giữ ACTUAL (factor=1) cho tới khi đủ 7 ngày.
+const MIN_PROJECT_DAYS = 7
+
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
 
@@ -277,7 +281,7 @@ export async function GET(req: NextRequest) {
       const isFuture = new Date(mStart) > asOf
       const isCurrent = !isFuture && mEndDate >= asOf
       const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
-      const isProjected = isCurrent && elapsed > 0 && elapsed < dim
+      const isProjected = isCurrent && elapsed >= MIN_PROJECT_DAYS && elapsed < dim
       const factor = isProjected ? dim / elapsed : 1
       return { month: m, mStart, mEnd, actualEnd, dim, elapsed, isProjected, factor, isFuture }
     })

@@ -7,9 +7,12 @@ import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 
-// Route nặng (per-customer B2B + Turso costs) → cho 300s tránh 504 treo FE.
-export const maxDuration = 300
+// Route nặng (per-customer B2B + Turso costs) → cho 60s (khớp vercel.json) tránh 504 treo FE.
+export const maxDuration = 60
 export const dynamic = "force-dynamic"
+
+// Ngưỡng ngày tối thiểu để chiếu tháng hiện tại — nhất quán với quarterly-report (giảm nhảy số đầu tháng).
+const MIN_PROJECT_DAYS = 7
 
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
   const p = (priceListName || "").toUpperCase()
@@ -166,7 +169,7 @@ export async function GET(req: NextRequest) {
       const isFuture = new Date(mStart) > asOf
       const isCurrent = !isFuture && mEndDate >= asOf
       const elapsed = isFuture ? 0 : getDaysInRange(mStart, actualEnd, m)
-      const isProjected = isCurrent && elapsed > 0 && elapsed < dim
+      const isProjected = isCurrent && elapsed >= MIN_PROJECT_DAYS && elapsed < dim
       const factor = isProjected ? dim / elapsed : 1
       return { month: m, mStart, actualEnd, isProjected, factor, elapsed }
     })

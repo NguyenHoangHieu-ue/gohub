@@ -340,8 +340,10 @@ function QuarterlyContent() {
   const qFactor  = qElapsed > 0 ? qTotal / qElapsed : 1
   const expectedPct = qTotal > 0 ? qElapsed / qTotal * 100 : 0  // kỳ vọng pro-rata cho marker KPI
 
-  // rev_act = sum projected monthly (reference "Actual" trong KPI cards)
-  // rev_raw = sum actual monthly (reference "Revenue" trong bảng quý)
+  // PROJECTION THỐNG NHẤT (#1): PR = tổng per-month projected (m.b2b.revenue: tháng xong=actual, tháng hiện
+  // tại=chiếu theo ngày) — KHỚP bảng "Tổng hợp theo tháng". Trước dùng raw × qFactor (quarter-level) → scale
+  // nhầm tháng đã xong → KPI cards & Quarter Total lệch ~50% so với bảng tháng ("nhảy số").
+  //   ...Raw = actual so far (Đạt TT) · ...Act/...Pr = per-month projected full quarter (Đạt PR).
   const b2bRevAct  = summary.reduce((s, m) => s + m.b2b.revenue, 0)
   const b2bRevRaw  = summary.reduce((s, m) => s + (m.b2b.actualRevenue ?? m.b2b.revenue), 0)
   const b2bGmRaw   = summary.reduce((s, m) => s + (m.b2b.actualGp ?? m.b2b.gp), 0)
@@ -350,8 +352,8 @@ function QuarterlyContent() {
   const b2bCm1Raw  = summary.reduce((s, m) => s + (m.b2b.actualCm1 ?? m.b2b.cm1), 0)
   const b2bCm1Act  = summary.reduce((s, m) => s + m.b2b.cm1, 0)
   const b2bThkAct  = summary.reduce((s, m) => s + (m.b2b.actualHk3 ?? 0), 0)
-  const b2bRevPr   = b2bRevRaw * qFactor
-  const b2bCm1Pr   = b2bCm1Raw * qFactor
+  const b2bRevPr   = b2bRevAct   // per-month projected (= tổng bảng tháng), KHÔNG × qFactor
+  const b2bCm1Pr   = b2bCm1Act
   const b2bThkPct  = b2bRevRaw > 0 ? b2bThkAct / b2bRevRaw * 100 : 0
 
   const b2cRevAct  = summary.reduce((s, m) => s + m.b2c.revenue, 0)
@@ -362,8 +364,8 @@ function QuarterlyContent() {
   const b2cCm1Raw  = summary.reduce((s, m) => s + (m.b2c.actualCm1 ?? m.b2c.cm1), 0)
   const b2cCm1Act  = summary.reduce((s, m) => s + m.b2c.cm1, 0)
   const b2cThkAct  = summary.reduce((s, m) => s + (m.b2c.actualHk3 ?? 0), 0)
-  const b2cRevPr   = b2cRevRaw * qFactor
-  const b2cCm1Pr   = b2cCm1Raw * qFactor
+  const b2cRevPr   = b2cRevAct
+  const b2cCm1Pr   = b2cCm1Act
   const b2cThkPct  = b2cRevRaw > 0 ? b2cThkAct / b2cRevRaw * 100 : 0
 
   const totRevAct  = b2bRevAct + b2cRevAct
@@ -373,8 +375,8 @@ function QuarterlyContent() {
   const totGcRaw   = b2bGcRaw + b2cGcRaw
   const totCm1Raw  = b2bCm1Raw + b2cCm1Raw
   const totCm1Act  = b2bCm1Act + b2cCm1Act
-  const totRevPr   = totRevRaw * qFactor
-  const totCm1Pr   = totCm1Raw * qFactor
+  const totRevPr   = totRevAct
+  const totCm1Pr   = totCm1Act
   const totThkPct  = totRevRaw > 0 ? (b2bThkAct + b2cThkAct) / totRevRaw * 100 : 0
 
   // QoQ(CM1): so sánh CM1 pro-rata quý này vs CM1 thực tế quý trước
@@ -696,8 +698,8 @@ function QuarterlyContent() {
                     {targets.b2bRev > 0 && (
                       <QtTargetRow
                         label="↳ Target B2B"
-                        targetRev={targets.b2bRev} revPr={b2bRevPr} revAct={b2bRevAct}
-                        targetCm1={targets.b2bCm1} cm1Pr={b2bCm1Pr} cm1Act={b2bCm1Act}
+                        targetRev={targets.b2bRev} revPr={b2bRevPr} revAct={b2bRevRaw}
+                        targetCm1={targets.b2bCm1} cm1Pr={b2bCm1Pr} cm1Act={b2bCm1Raw}
                       />
                     )}
                   </>
@@ -714,8 +716,8 @@ function QuarterlyContent() {
                     {targets.b2cRev > 0 && (
                       <QtTargetRow
                         label="↳ Target B2C"
-                        targetRev={targets.b2cRev} revPr={b2cRevPr} revAct={b2cRevAct}
-                        targetCm1={targets.b2cCm1} cm1Pr={b2cCm1Pr} cm1Act={b2cCm1Act}
+                        targetRev={targets.b2cRev} revPr={b2cRevPr} revAct={b2cRevRaw}
+                        targetCm1={targets.b2cCm1} cm1Pr={b2cCm1Pr} cm1Act={b2cCm1Raw}
                       />
                     )}
                   </>
