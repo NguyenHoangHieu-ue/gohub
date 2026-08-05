@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
-  const rawCacheKey = `qreport_raw_v6:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `qreport_raw_v7:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
   // inactive_cust: LEFT JOIN + IS NULL thay NOT IN. hk3_skus: JOIN trực tiếp.
@@ -121,11 +122,11 @@ export async function GET(req: NextRequest) {
   const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
   try {
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
         // GIỚI HẠN 2 query đồng thời (thay vì cả 5) → giảm connection footprint trên gohub_dw.
         // Mỗi query ~2s → 5 query / 2 luồng ≈ 6s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
-        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await runLimited(2, [
+        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows] = await runLimited(2, [
           () => queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           ${CTE_PREAMBLE}
           SELECT
@@ -215,15 +216,57 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1, 2, 3
         `),
+          // Revenue B2B theo KH×tháng — để áp chi phí per-customer (Turso) đúng: percent×revenue KH đó.
+          () => queryAnalytics<{ month: string; customer_code: string; revenue: string }>(`
+          ${CTE_PREAMBLE}
+          SELECT
+            LEFT(f.${DATE_COL}, 7) as month,
+            TRIM(f.customer_code) as customer_code,
+            SUM(f.${REV_COL}) as revenue
+          FROM ${MAIN_TABLE} f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B'
+            ${INACTIVE_FILTER}
+            ${EXCLUDE_CUST_SQL}
+            ${sfx}
+          GROUP BY 1, 2
+        `),
         ])
 
-        return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows }
+        return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows }
       }, QUERY_TTL_MIN, refresh),
       fetchCosts(months),
       fetchCosts(prevQMonths),
+      fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),  // Turso B2B customer costs (safe)
     ])
 
-    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows } = rawData
+    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows } = rawData
+
+    // Index revenue B2B theo `${month}_${code}` để áp chi phí per-customer đúng (percent × revenue KH đó).
+    const custRevMap = new Map<string, number>()
+    ;(custRevRows as Array<{ month: string; customer_code: string; revenue: string }>).forEach(r => {
+      custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0"))
+    })
+    // Tổng chi phí B2B per-customer (Turso) theo tháng — amount pro-rata ngày, percent × revenue KH.
+    const b2bCustCostByMonth = (month: string, dayRatio: number): number => {
+      let tot = 0
+      customerCostMap.forEach((rec, key) => {
+        const [cm, code] = [key.slice(0, 7), key.slice(8)]
+        if (cm !== month) return
+        const custRev = custRevMap.get(`${month}_${code}`) || 0
+        let lines: Array<{ type: string; value: number }> = []
+        if (rec.cost_lines) { try { lines = JSON.parse(rec.cost_lines) } catch {} }
+        if (lines.length > 0) {
+          lines.forEach(l => { const v = Number(l?.value) || 0; tot += l?.type === "percent" ? (v / 100) * custRev : v * dayRatio })
+        } else {
+          const v = Number(rec.cost_value) || 0
+          tot += rec.cost_type === "percent" ? (v / 100) * custRev : v * dayRatio
+        }
+      })
+      return tot
+    }
 
     const monthMeta = months.map(m => {
       const mStart = `${m}-01`
@@ -264,6 +307,8 @@ export async function GET(req: NextRequest) {
         if (row.bg === "B2B") { b2bCCAct += cc; b2bHk3Act += hk3 }
         else { b2cCCAct += cc; b2cHk3Act += hk3 }
       })
+      // Cộng chi phí B2B per-customer nhập tay (Turso) → khớp tổng bảng "B2B Chi tiết theo Nhóm × Tháng".
+      b2bCCAct += b2bCustCostByMonth(month, gcElapsedRatio)
 
       const b2bGCBudget = groupCosts.filter(c => c.group_name === "B2B" && c.month === month).reduce((s, c) => s + c.amount, 0)
       const b2cGCBudget = groupCosts.filter(c => c.group_name === "B2C" && c.month === month).reduce((s, c) => s + c.amount, 0)
