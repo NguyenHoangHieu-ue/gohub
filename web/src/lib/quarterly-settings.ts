@@ -32,11 +32,17 @@ export async function fetchQuarterlySettings(): Promise<QuarterlySettings> {
   }
 }
 
-/** Tạo SQL fragment loại KH khỏi nhánh B2B. */
+/** Tạo SQL fragment loại KH khỏi nhánh B2B.
+ *  Dùng correlated NOT EXISTS tự chứa `dim_customer c` → chạy được KỂ CẢ khi outer query KHÔNG join
+ *  dim_customer (quarterly-report sau refactor CTE chỉ join dim_order_source s → dùng c.name trực tiếp sẽ
+ *  lỗi "missing FROM-clause entry for table c"). Chỉ cần outer có alias f (fact) + s (order_source). */
 export function makeExcludeSql(excludedCustomers: string[]): string {
   if (excludedCustomers.length === 0) return ""
   const escaped = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
-  return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND COALESCE(c.name, '') IN (${escaped}))`
+  return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND EXISTS (
+    SELECT 1 FROM dim_customer c
+    WHERE TRIM(c.code::text) = TRIM(f.customer_code) AND COALESCE(c.name, '') IN (${escaped})
+  ))`
 }
 
 /** Hash ngắn của exclusion list để đưa vào cache key (auto-invalidate khi list thay đổi). */
