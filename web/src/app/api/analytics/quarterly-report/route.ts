@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -100,8 +101,8 @@ export async function GET(req: NextRequest) {
   const rawCacheKey = `qreport_raw_v5:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
-    // ── Phần 1 + 2: gohub_dw (cache) và Supabase costs (hiện tại + quý trước) chạy SONG SONG ──
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }] = await Promise.all([
+    // ── Phần 1 + 2 + 3: gohub_dw (cache) + Supabase costs + Turso customer costs chạy SONG SONG ──
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
       const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows] = await Promise.all([
         queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
@@ -201,8 +202,9 @@ export async function GET(req: NextRequest) {
 
       return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows }
     }, QUERY_TTL_MIN, refresh),
-    fetchCosts(months),       // Supabase costs hiện tại
-    fetchCosts(prevQMonths),  // Supabase costs quý trước (cho CM1 QoQ)
+    fetchCosts(months),                   // Supabase channel + group costs hiện tại
+    fetchCosts(prevQMonths),              // Supabase costs quý trước (cho CM1 QoQ)
+    fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),  // Turso B2B customer costs
     ])
 
     // ── Phần 3: Compute ────────────────────────────────────────────────────────
@@ -238,6 +240,9 @@ export async function GET(req: NextRequest) {
         const b2cRevAct = parseFloat(b2cR?.revenue  || "0")
         const b2cGpAct  = parseFloat(b2cR?.gp       || "0")
 
+        // Tỉ lệ ngày elapsed trong tháng (dùng cho amount costs pro-rata của partial month)
+        const gcElapsedRatio = isProjected && dim > 0 ? elapsed / dim : 1
+
         // Channel costs + per-group 3HK (from channelRows which now has hk3)
         let b2bCCAct = 0, b2cCCAct = 0
         let b2bHk3Act = 0, b2cHk3Act = 0
@@ -249,7 +254,30 @@ export async function GET(req: NextRequest) {
           else { b2cCCAct += cc; b2cHk3Act += hk3 }
         })
 
-        // Group-level costs: nhất quán với gohub-report/gohub.py — scale theo factor (cùng với GP, CC)
+        // B2B customer-level CH.Cost (từ b2b_customer_cost_monthly — Turso primary, Supabase fallback).
+        // Cộng vào b2bCCAct để quarterly CM1 nhất quán với B2B Performance tab.
+        // amount: pro-rata theo gcElapsedRatio (giống calcChCostForPeriod trong B2B Performance).
+        // percent: áp trên b2bRevAct (actual revenue elapsed, xấp xỉ vì không có per-customer revenue ở đây).
+        customerCostMap.forEach((rec, key) => {
+          const [costMonth] = key.split("_")
+          if (costMonth !== month) return
+          if (rec.cost_lines) {
+            try {
+              const lines: Array<{ label?: string; type: string; value: number }> = JSON.parse(rec.cost_lines)
+              if (Array.isArray(lines) && lines.length > 0) {
+                lines.forEach(l => {
+                  const val = Number(l?.value) || 0
+                  b2bCCAct += l?.type === "percent" ? (val / 100) * b2bRevAct : val * gcElapsedRatio
+                })
+                return
+              }
+            } catch {}
+          }
+          const cval = Number(rec.cost_value) || 0
+          b2bCCAct += rec.cost_type === "percent" ? (cval / 100) * b2bRevAct : cval * gcElapsedRatio
+        })
+
+        // Group-level costs: monthly budget là giá trị CẢ THÁNG → projected giữ nguyên budget
         const b2bGCBudget = groupCosts.filter(c => c.group_name === "B2B" && c.month === month).reduce((s, c) => s + c.amount, 0)
         const b2cGCBudget = groupCosts.filter(c => c.group_name === "B2C" && c.month === month).reduce((s, c) => s + c.amount, 0)
 
@@ -258,14 +286,12 @@ export async function GET(req: NextRequest) {
         const b2bCC = r(isProjected ? b2bCCAct * factor : b2bCCAct)
         const b2cCC = r(isProjected ? b2cCCAct * factor : b2cCCAct)
         // Group cost: monthly budget là giá trị CẢ THÁNG → projected giữ nguyên budget (không nhân factor).
-        // Nhân factor sẽ thổi phồng sai (vd budget 10tr × factor 6.2 = 62tr thay vì 10tr).
         const b2bGC = r(b2bGCBudget)
         const b2cGC = r(b2cGCBudget)
         const b2bCm1 = b2bGp - b2bCC - b2bGC
         const b2cCm1 = b2cGp - b2cCC - b2cGC
 
-        // Actual group cost: pro-rate theo elapsed/dim cho tháng đang chạy (partial month)
-        const gcElapsedRatio = isProjected && dim > 0 ? elapsed / dim : 1
+        // Actual group cost: pro-rate theo elapsed/dim cho tháng đang chạy
         const b2bGCAct = r(b2bGCBudget * gcElapsedRatio)
         const b2cGCAct = r(b2cGCBudget * gcElapsedRatio)
         // Actual CM1 (trừ group cost pro-rated, không phải full budget)

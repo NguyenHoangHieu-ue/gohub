@@ -72,8 +72,14 @@ export function matchChannelCost(
     if (byCode.length > 0) return byCode
   }
 
-  // 3. Exact name match (original behavior — aggregate or unchanged channel)
-  return channelCosts.filter(c => c.month === month && c.channel === channel)
+  // 3. Exact name match
+  const exact = channelCosts.filter(c => c.month === month && c.channel === channel)
+  if (exact.length > 0) return exact
+
+  // 4. Case-insensitive fallback — xử lý tên kênh khác case giữa analytics_channel_costs và dim_order_source
+  //    (vd "VN-Ecom" vs "vn-ecom" hoặc "Traveloka" vs "TRAVELOKA")
+  const norm = channel.toLowerCase().trim()
+  return channelCosts.filter(c => c.month === month && c.channel.toLowerCase().trim() === norm)
 }
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
