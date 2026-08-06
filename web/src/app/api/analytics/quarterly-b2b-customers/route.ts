@@ -240,6 +240,7 @@ export async function GET(req: NextRequest) {
       code: string; name: string; region: string; priceListName: string | null
       revenue: number; gm: number; gmPct: number; cc: number; cm1: number
       cm1Pct: number; qoqPct: number | null; hk3Rev: number; hk3Pct: number
+      prevCm1: number   // CM1 quý trước (để FE recompute QoQ với CM1 gồm ước tính T9)
       monthsCost: Record<string, CustMonthCost>
       monthSummary: Record<string, CustMonthSummary>   // per-month breakdown
       hasProjected: boolean
@@ -334,6 +335,7 @@ export async function GET(req: NextRequest) {
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
         cc: r2(ccForSummary), cm1: r2(cm1ForSummary), cm1Pct: pct(cm1ForSummary, totRev),
         qoqPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
+        prevCm1: r2(prevCm1 ?? 0),
         monthsCost, monthSummary,
         hasProjected,
         actualRevenue: r2(totActRev), actualGm: r2(totActGm),
@@ -394,6 +396,7 @@ export async function GET(req: NextRequest) {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
         totalHk3Pct: pct(totHk3, totRev), qoqPct,
+        prevCm1: r2(prevTotCm1),  // để FE recompute QoQ với CM1 đã gồm ước tính T9 (futureScale)
       }
     }
 
