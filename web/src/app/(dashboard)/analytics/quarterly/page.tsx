@@ -841,6 +841,7 @@ function QuarterlyContent() {
         notify={notify}
         quarterLabel={`${selQ}-${selYear}`}
         qFactor={qFactor}
+        summary={summary}
       />
 
       {/* ── B2C channel pivot ── */}
@@ -1023,9 +1024,9 @@ function lineTotal(lines: CostLine[], revenue: number): number {
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
-function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1 }:
+function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [] }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number }) {
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[] }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
@@ -1056,6 +1057,27 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   }
 
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
+
+  // kpiPrFactor per tháng — project mọi tháng đang chạy kể cả elapsed < MIN_PROJECT_DAYS (giống KPI cards).
+  const monthKpiFactor = useMemo(() => {
+    const m: Record<string, number> = {}
+    summary.forEach(s => { m[s.month] = s.elapsed > 0 && s.elapsed < s.dim ? s.dim / s.elapsed : 1 })
+    return m
+  }, [summary])
+
+  // PR values của 1 KH: Σ (actual_monthly × kpiPrFactor) — dùng cho main customer row.
+  const custPr = (c: any) => {
+    let prRev = 0, prGm = 0, prCm1 = 0
+    quarterMonths.forEach(m => {
+      const f = monthKpiFactor[m] ?? 1
+      const ms = c.monthSummary?.[m]
+      if (!ms) return
+      prRev  += Math.round((ms.actualRevenue ?? ms.revenue) * f)
+      prGm   += Math.round((ms.actualGm  ?? ms.gm)  * f)
+      prCm1  += Math.round((ms.actualCm1 ?? ms.cm1) * f)
+    })
+    return { prRev, prGm, prCm1, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0 }
+  }
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
   // Load customer targets khi đổi quý
@@ -1501,8 +1523,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const actGm  = hp ? (c.actualGm  ?? c.gm)  : c.gm
                             const actCc  = hp ? (c.actualCc  ?? c.cc)  : c.cc
                             const actCm1 = hp ? (c.actualCm1 ?? c.cm1) : c.cm1
-                            // Main row mặc định: Pro-rata values
-                            const prGmPct  = c.revenue > 0 ? c.gm  / c.revenue * 100 : 0
+                            // Main row: Pro-rata values (kpiPrFactor — project tháng hiện tại kể cả < MIN_PROJECT_DAYS)
+                            const pr = custPr(c)
+                            const prGmPct = pr.prGmPct
                             // Target
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
                             const isEditingTgt = editingTargetCode === c.code
@@ -1525,8 +1548,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       {c.priceListName ? <span className="text-[9px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
-                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(c.revenue)}</td>
-                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(c.gm)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(pr.prGm)}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
                                   <td className="px-3 py-2 text-right tabular-nums text-[10px]">
                                     {editMode && canEditCost
@@ -1535,8 +1558,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         </button>
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
-                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
-                                  <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
+                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
                                 </tr>
