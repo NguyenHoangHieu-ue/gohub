@@ -6,11 +6,11 @@
 
 ## TRẠNG THÁI HIỆN TẠI (2026-08-05)
 
-- **Branch**: main = staging = `4def78c` — production đang chạy, đã khớp
+- **Branch**: staging = `46b77e7` — **CHƯA merge main** (nhiều commit quan trọng chờ Hiếu duyệt)
+- **main** = `4def78c` (cũ hơn staging nhiều session)
 - **Migrations chạy**: v30 ✅ | v30b ✅ | v31 ⏳ Hiếu chưa chạy (`chatbot_learning_log`)
-- **s133 (2026-08-04–05)**: OOP Analytics Refactor Phase 0–4 HOÀN THÀNH + cache fix B2B Performance. Xem §B5.
-- **Verify**: B2B Performance CH.Cost ✅ map đúng (Hiếu xác nhận 2026-08-05).
-- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8.
+- **s136 (2026-08-05)**: Audit sâu + deep fix Quarter Report (6 bugs), B2B, B2C. Xem §B6.
+- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8, **bấm "Tải lại mới" Quarter Report để flush cache**.
 
 ---
 
@@ -80,6 +80,25 @@
 - [x] **ISSUE-DASH-5** ✅ FIX (s126) — tier-performance dùng `getAnalyticsSource(dateColumn)`: Created → sales table + created_date + GP=0 (hết trộn nguồn). Fulfillment không đổi. targets-summary luôn-fulfilled = cố ý (không sửa).
 - [x] **ISSUE-DASH-4** ✅ FIX s131 (Hiếu chốt, 2026-08-03): đổi Strategic sang định nghĩa theo KHÁCH `price_list_name` (helper chung `getGroupCaseByCustomerSQL`/`IS_STRATEGIC_CUSTOMER_SQL`) cho: Dashboard line chart (revenue-chart2), **BOD group-margin cards + bod-summary, All-Time, scheduled 【4】**. Đồng nhất bảng Phân khúc. Gốc lỗi Strategic=0: `partner_tiers` RỖNG. Verify T7: Strategic 5,22 tỷ/Non 1,04 tỷ, tổng B2B 6,26 tỷ giữ nguyên. GIỮ theo partner_tiers (Hiếu chốt): bảng chi tiết "Strategic Channels" per-đối-tác (b2b/strategic-performance). Nhãn tiếng Anh giữ nguyên.
 - [ ] **ISSUE-DASH-3 (UI, cần Bảo/Hiếu)**: nhóm "Other" (78 đơn, 0đ) bị loại khỏi bảng Business Groups → tổng đơn bảng < KPI card. Thêm dòng Other = đổi UI (Strict Lock) → chờ chỉ thị.
+
+---
+
+## B6. Quarter Report Deep Fix — s136 (2026-08-05) ✅ HOÀN THÀNH
+
+> Audit toàn tab Quarter Report từ ảnh chụp Hiếu. Phát hiện và fix 6 bugs.
+
+**3 BE bugs (quarterly-report/route.ts + quarterly-b2b-customers/route.ts):**
+- [x] **elapsedRatio swap** (commit d4b3485): `monthCost/rawCc` args bị đảo từ commit d466ba7 → PR CH.Cost tháng hiện tại quá nhỏ, CM1 B2B tier bị thổi phồng.
+- [x] **Group Cost không pro-rate < MIN_DAYS** (commit 5d0c9f9): T8 ngày 4 → GC B2C = 150Tr full budget → CM1 B2C = -33Tr âm. Fix: `isCurrent = elapsed < dim`, GC = budget × elapsed/dim.
+- [x] **per-customer Tổng Quý PR** (commit 9b3a216): dùng `actRev × qFactor` thay vì `c.revenue` (BE projected). Fix: dùng `c.revenue`.
+
+**3 FE bugs (quarterly/page.tsx, commit 5e41e2b):**
+- [x] **KPI cards PRO-RATA = ACTUAL**: `kpiPrFactor` cũ không project tháng < MIN_PROJECT_DAYS. Fix: project MỌI tháng chưa xong `kpiPrFactor = dim/elapsed`.
+- [x] **Ch.Cost expanded** chỉ hiện PR, không hiện Act khi isProjected. Fix: show prLine + actLine.
+- [x] **Column info tooltips**: thêm `ColInfo` component + tooltip cho 12 cột (4 bảng). Creator hover "i" xem công thức.
+
+**Còn treo (chờ Hiếu):**
+- [ ] B2C per-channel CM1 thiếu group cost (~150Tr/tháng) — FE chỉ patch TOTAL row. Cần Hiếu chốt có phân bổ vào kênh như B2B không.
 
 ---
 

@@ -825,7 +825,7 @@ export default function B2BPerformance() {
                                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
                                                   <p className="text-xs font-bold text-slate-700">
                                                     {line.type === "percent"
-                                                      ? `${line.value}% → ${formatNumber(Math.round((line.value / 100) * row.revenue))}`
+                                                      ? `${line.value}%`
                                                       : formatNumber(Math.round(line.value))}
                                                   </p>
                                                 </div>

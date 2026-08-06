@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
 // + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs (CHỈ đọc để hiển thị CM1).
@@ -194,20 +195,14 @@ export function B2CPerformance() {
   const getProjectionInfo = () => {
     if (kpis.length < 7 || !startDate || !endDate) return null
 
-    const today = new Date(); today.setHours(0, 0, 0, 0)
+    // Dùng shared lib — đồng bộ với BE route + B2B/Channels/BOD
+    const factor = getProjectionFactor(startDate, endDate)
+    if (factor <= 1) return null
+
     const start = new Date(startDate)
     const end   = new Date(endDate)
-
-    // Cross-month range → không project (snapshot lịch sử)
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
-    // Tháng đã hoàn thành → không project
-    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return null
-
     const daysElapsed    = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) return null
-
-    const factor = lastDayOfMonth / daysElapsed
 
     // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1 (từ BE, đã pro-rata đúng)
     const revenue = kpis[0]?.value || 0
@@ -249,14 +244,29 @@ export function B2CPerformance() {
 
   const projection = getProjectionInfo()
 
-  const fetchCosts = async (month: string) => {
+  const fetchCosts = async (startDate: string, endDate: string) => {
     try {
-      const [res, groupRes] = await Promise.all([
-        fetch(`/api/channel-costs?month=${month}`),
-        fetch(`/api/channel-group-costs?month=${month}&group=B2C`),
+      // Tính đủ tháng trong range để groupCosts phản ánh đúng tổng kỳ (không chỉ tháng đầu)
+      const months: string[] = []
+      const cur = new Date(startDate.slice(0, 7) + "-01")
+      const last = new Date(endDate.slice(0, 7) + "-01")
+      while (cur <= last) {
+        months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`)
+        cur.setMonth(cur.getMonth() + 1)
+      }
+      if (months.length === 0) return
+
+      const [chanRes, ...groupReses] = await Promise.all([
+        fetch(`/api/channel-costs?month=${months[0]}`),
+        ...months.map(m => fetch(`/api/channel-group-costs?month=${m}&group=B2C`)),
       ])
-      if (res.ok) setMonthlyCosts(await res.json())
-      if (groupRes.ok) setGroupCosts(await groupRes.json())
+      if (chanRes.ok) setMonthlyCosts(await chanRes.json())
+      // Sum group costs across all months in range
+      const allGroupCosts: any[] = []
+      for (const r of groupReses) {
+        if (r.ok) allGroupCosts.push(...(await r.json()))
+      }
+      setGroupCosts(allGroupCosts)
     } catch (err) {
       console.error("Error fetching costs:", err)
     }
@@ -325,9 +335,8 @@ export function B2CPerformance() {
       const failed = [kpiR, perfR].filter(r => r.status === "rejected").length
       if (failed > 0) setError("Một phần dữ liệu B2C tải chưa xong, thử lại sau giây lát")
 
-      // Fetch costs for the current month to show in breakdown
-      const startMonth = startDate.slice(0, 7)
-      fetchCosts(startMonth)
+      // Fetch costs for all months in range (groupCosts dùng để patch totals.gpm2)
+      fetchCosts(startDate, endDate)
     } catch (err: any) {
       console.error("Error fetching B2C data:", err)
       setError(err.message)

@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { createPortal } from "react-dom"
 import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -146,22 +147,91 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
 
 // ─── Table header row ─────────────────────────────────────────────────────────
 
-const TH_COLS = ["Tháng", "Revenue", "PR Rev", "Gross Margin", "GM%", "Channel Cost", "Group Cost", "CM1", "PR CM1", "CM1%", "%QoQ CM1", "3HK%"]
-const QT_COLS = ["Chỉ số Quý", "Revenue", "Proj.Rev", "GP", "GP%", "Ch.Cost", "Gr.Cost", "CM1", "Proj.CM1", "CM1%", "3HK%", "QoQ"]
+const TH_COLS: { label: string; tip: string }[] = [
+  { label: "Tháng",        tip: "Tháng trong quý (T7, T8, T9)" },
+  { label: "Revenue",      tip: "Doanh thu thực tế (Đạt TT)\nNguồn: gohub_dw SUM(fulfilled_revenue_amount_vnd)\nfilter: fulfiled_date trong kỳ" },
+  { label: "PR Rev",       tip: "Revenue chiếu cả tháng (Đạt PR)\nCT: Revenue_TT × factor\nfactor = ngày_trong_tháng / ngày_đã_trôi_qua\nChỉ hiện khi elapsed ≥ 7 ngày" },
+  { label: "Gross Margin", tip: "GP = Revenue - COGS (thực tế)\nNguồn: gohub_dw SUM(gross_profit_vnd)" },
+  { label: "GM%",          tip: "GP / Revenue × 100%\nDùng số thực tế (actual)\nNếu tháng đang chiếu: GP_act / Rev_act" },
+  { label: "Channel Cost", tip: "Chi phí kênh (thực tế)\nNguồn: Supabase analytics_channel_costs\namount → × dayRatio (ngày_trong_kỳ / ngày_trong_tháng)\npercent → × Revenue thực tế" },
+  { label: "Group Cost",   tip: "Chi phí nhóm B2B/B2C (thực tế)\nNguồn: Supabase analytics_channel_group_costs\nTháng đang chạy (< 7 ngày): × (elapsed/dim)\nTháng đang chiếu: full budget\nTháng hoàn thành: full budget" },
+  { label: "CM1",          tip: "CM1 = GP - Channel Cost - Group Cost (thực tế)\nSố thực (actual): elapsed=0..dim-1\nActual = GP_act - CC_act - GC_act" },
+  { label: "PR CM1",       tip: "CM1 chiếu cả tháng\nCT: CM1_actual × factor\nChỉ hiện khi elapsed ≥ 7 ngày\nfactor = dim / elapsed" },
+  { label: "CM1%",         tip: "CM1 / Revenue × 100%\nDùng CM1 thực tế / Revenue thực tế" },
+  { label: "%QoQ CM1",     tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nCT: (CM1_PR_Q_này - CM1_TT_Q_trước) / |CM1_TT_Q_trước|\nCùng hàng cho tất cả tháng (quarter-level)" },
+  { label: "3HK%",         tip: "Doanh thu 3HK / Tổng Revenue × 100%\nNguồn: dim_sku WHERE vendor='3HKDATAPOOL'" },
+]
 
-function TableHead({ cols, compact = false }: { cols: string[]; compact?: boolean }) {
+const QT_COLS: { label: string; tip: string }[] = [
+  { label: "Chỉ số Quý", tip: "Chỉ số tổng hợp cả quý" },
+  { label: "Revenue",    tip: "Tổng Revenue thực tế\n= Σ(Revenue_tháng_actual)" },
+  { label: "Proj.Rev",   tip: "Revenue chiếu cả quý\n= Σ(Rev_actual_tháng × kpiPrFactor)\nkpiPrFactor: dim/elapsed (tháng chưa xong), 1 (tháng xong)" },
+  { label: "GP",         tip: "Tổng GP thực tế\n= Σ(GP_tháng_actual)" },
+  { label: "GP%",        tip: "GP / Revenue (actual)" },
+  { label: "Ch.Cost",    tip: "Tổng Channel Cost thực tế\n= Σ(CC_tháng_actual)" },
+  { label: "Gr.Cost",    tip: "Tổng Group Cost thực tế\n= Σ(GC_tháng_actual)\nPro-rata theo số ngày tháng đang chạy" },
+  { label: "CM1",        tip: "CM1 thực tế = GP - Ch.Cost - Gr.Cost (actual)" },
+  { label: "Proj.CM1",   tip: "CM1 chiếu cả quý\n= Σ(CM1_actual_tháng × kpiPrFactor)\nkpiPrFactor: dim/elapsed (tháng chưa xong), 1 (tháng xong)" },
+  { label: "CM1%",       tip: "CM1 / Revenue (actual) × 100%" },
+  { label: "3HK%",       tip: "3HK Revenue / Total Revenue × 100% (actual)" },
+  { label: "QoQ",        tip: "QoQ(CM1) = (CM1_PR_quý_này - CM1_TT_quý_trước) / |CM1_TT_quý_trước|\nDùng Proj.CM1 quý này vs CM1 actual quý trước" },
+]
+
+function TableHead({ cols, compact = false }: { cols: { label: string; tip?: string }[]; compact?: boolean }) {
   return (
     <tr className="bg-[#003B95]">
-      {cols.map((h, i) => (
-        <th key={h} className={cn(
-          compact ? "px-2 py-2" : "px-4 py-2.5",
-          "text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
-          i === 0 ? "text-left" : "text-right"
-        )}>
-          {h}
-        </th>
-      ))}
+      {cols.map((col, i) => {
+        const h = col.label
+        const tip = col.tip
+        return (
+          <th key={h} className={cn(
+            compact ? "px-2 py-2" : "px-4 py-2.5",
+            "text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
+            i === 0 ? "text-left" : "text-right"
+          )}>
+            {h}{tip && <ColInfo tip={tip} />}
+          </th>
+        )
+      })}
     </tr>
+  )
+}
+
+// ─── ColInfo — tooltip công thức cột ──────────────────────────────────────────
+// Dùng createPortal + position:fixed để thoát overflow-hidden của parent container.
+function ColInfo({ tip }: { tip: string }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  const show = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ top: r.top - 6, left: r.left + r.width / 2 })
+    }
+    setOpen(true)
+  }
+
+  return (
+    <span className="inline-flex items-center align-middle ml-1">
+      <button
+        ref={btnRef}
+        onMouseEnter={show}
+        onMouseLeave={() => setOpen(false)}
+        onClick={e => { e.stopPropagation(); if (!open) show(); else setOpen(false) }}
+        className="w-3 h-3 rounded-full bg-blue-400/25 text-[7px] font-black text-blue-200 hover:bg-blue-400/60 transition-colors inline-flex items-center justify-center leading-none select-none"
+      >i</button>
+      {open && typeof window !== "undefined" && createPortal(
+        <div
+          style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translate(-50%, -100%)", zIndex: 9999 }}
+          className="w-56 bg-slate-900 text-white text-[10px] rounded-lg shadow-2xl p-2.5 leading-relaxed whitespace-pre-line pointer-events-none"
+        >
+          {tip}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+        </div>,
+        document.body,
+      )}
+    </span>
   )
 }
 
@@ -345,6 +415,12 @@ function QuarterlyContent() {
   const qFactor  = qElapsed > 0 ? qTotal / qElapsed : 1
   const expectedPct = qTotal > 0 ? qElapsed / qTotal * 100 : 0  // kỳ vọng pro-rata cho marker KPI
 
+  // KPI card PRO-RATA: project mọi tháng đang chạy kể cả < MIN_PROJECT_DAYS.
+  // Khác bảng tháng (chỉ project khi >= 7 ngày để tránh nhảy số).
+  // kpiPrFactor: dim/elapsed cho tháng chưa xong; 1 cho tháng xong/tương lai.
+  const kpiPrFactor = (m: MonthSummary): number =>
+    m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1
+
   // PROJECTION THỐNG NHẤT (#1): PR = tổng per-month projected (m.b2b.revenue: tháng xong=actual, tháng hiện
   // tại=chiếu theo ngày) — KHỚP bảng "Tổng hợp theo tháng". Trước dùng raw × qFactor (quarter-level) → scale
   // nhầm tháng đã xong → KPI cards & Quarter Total lệch ~50% so với bảng tháng ("nhảy số").
@@ -357,8 +433,8 @@ function QuarterlyContent() {
   const b2bCm1Raw  = summary.reduce((s, m) => s + (m.b2b.actualCm1 ?? m.b2b.cm1), 0)
   const b2bCm1Act  = summary.reduce((s, m) => s + m.b2b.cm1, 0)
   const b2bThkAct  = summary.reduce((s, m) => s + (m.b2b.actualHk3 ?? 0), 0)
-  const b2bRevPr   = b2bRevAct   // per-month projected (= tổng bảng tháng), KHÔNG × qFactor
-  const b2bCm1Pr   = b2bCm1Act
+  const b2bRevPr   = summary.reduce((s, m) => s + Math.round((m.b2b.actualRevenue ?? m.b2b.revenue) * kpiPrFactor(m)), 0)
+  const b2bCm1Pr   = summary.reduce((s, m) => s + Math.round((m.b2b.actualCm1 ?? m.b2b.cm1) * kpiPrFactor(m)), 0)
   const b2bThkPct  = b2bRevRaw > 0 ? b2bThkAct / b2bRevRaw * 100 : 0
 
   const b2cRevAct  = summary.reduce((s, m) => s + m.b2c.revenue, 0)
@@ -369,8 +445,8 @@ function QuarterlyContent() {
   const b2cCm1Raw  = summary.reduce((s, m) => s + (m.b2c.actualCm1 ?? m.b2c.cm1), 0)
   const b2cCm1Act  = summary.reduce((s, m) => s + m.b2c.cm1, 0)
   const b2cThkAct  = summary.reduce((s, m) => s + (m.b2c.actualHk3 ?? 0), 0)
-  const b2cRevPr   = b2cRevAct
-  const b2cCm1Pr   = b2cCm1Act
+  const b2cRevPr   = summary.reduce((s, m) => s + Math.round((m.b2c.actualRevenue ?? m.b2c.revenue) * kpiPrFactor(m)), 0)
+  const b2cCm1Pr   = summary.reduce((s, m) => s + Math.round((m.b2c.actualCm1 ?? m.b2c.cm1) * kpiPrFactor(m)), 0)
   const b2cThkPct  = b2cRevRaw > 0 ? b2cThkAct / b2cRevRaw * 100 : 0
 
   const totRevAct  = b2bRevAct + b2cRevAct
@@ -380,8 +456,8 @@ function QuarterlyContent() {
   const totGcRaw   = b2bGcRaw + b2cGcRaw
   const totCm1Raw  = b2bCm1Raw + b2cCm1Raw
   const totCm1Act  = b2bCm1Act + b2cCm1Act
-  const totRevPr   = totRevAct
-  const totCm1Pr   = totCm1Act
+  const totRevPr   = b2bRevPr + b2cRevPr
+  const totCm1Pr   = b2bCm1Pr + b2cCm1Pr
   const totThkPct  = totRevRaw > 0 ? (b2bThkAct + b2cThkAct) / totRevRaw * 100 : 0
 
   // QoQ(CM1): so sánh CM1 pro-rata quý này vs CM1 thực tế quý trước
@@ -1039,7 +1115,16 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b2bTiers])
 
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK%"]
+  const SUB_COLS: { label: string; tip: string }[] = [
+    { label: "Revenue",      tip: "Doanh thu tier (PR)\nCT: Σ(actual_rev_KH × factor)\nfactor = dim/elapsed cho tháng đang chạy" },
+    { label: "Gross Margin", tip: "GP tier (PR)\nCT: Σ(actual_GP_KH × factor)" },
+    { label: "Ch.Cost",      tip: "Customer CH.Cost nhập tay (PR)\nTừ Turso b2b_customer_cost_monthly\namount: giữ nguyên (full budget tháng)\npercent: × revenue × factor\nKHÔNG gồm Group Cost (GC ở cột Tổng Quý)" },
+    { label: "CM1",          tip: "CM1 tier per-month (PR)\n= GM - CH.Cost (customer-level)\nKHÔNG gồm Group Cost\nGroup Cost được khấu trừ ở cột Tổng Quý" },
+    { label: "%CM1",         tip: "CM1 / Revenue × 100%\nDùng số PR (projected)" },
+    { label: "%QoQ(CM1)",    tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nMức tier-level (aggregate toàn tier)\nCT: (CM1_PR - CM1_prev) / |CM1_prev|" },
+    { label: "3HK%",         tip: "3HK Revenue / Tier Revenue × 100%" },
+  ]
+  const SUB = SUB_COLS.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
   const colCount = SUB.length
 
   // Lấy view theo region hiện tại: ALL → dùng tổng tier; VN/US → dùng byRegion
@@ -1247,19 +1332,19 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                     )
                   })}
                   <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a4a9e] whitespace-nowrap bg-[#1e3a8a]">
-                    Tổng Quý
+                    Tổng Quý<ColInfo tip={"Tổng Quý (PR)\nRevenue: Σ(PR monthly)\nGM: Σ(GP × factor)\nCh.Cost: Σ(custCost) + GroupCost × (tier_rev/total_B2B_rev)\nCM1: Σ(custCM1) - GroupCost × revenue-share"} />
                   </th>
                 </tr>
                 <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
-                  {quarterMonths.flatMap(m => SUB.map((h, i) => (
-                    <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
-                      {h}
+                  {quarterMonths.flatMap(m => SUB_COLS.map((col, i) => (
+                    <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", col.label === "CM1" && "text-blue-300")}>
+                      {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   )))}
-                  {SUB.map((h, i) => (
-                    <th key={`qt-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#162d74]", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
-                      {h}
+                  {SUB_COLS.map((col, i) => (
+                    <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#162d74]", i === 0 && "border-l border-[#1a56b0]", col.label === "CM1" && "text-blue-300")}>
+                      {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   ))}
                 </tr>
@@ -1326,14 +1411,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,
-                          <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (pr && d.actualCc != null ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.cc)) : "—"}</td>,
+                          <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (d.actualCc != null ? (pr ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.actualCc)) : fc(d.cc)) : "—"}</td>,
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                           <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
                         ]
                       })}
-                      {/* Tổng Quý: PR = actualYTD × qFactor (quarter-level), Act = actualYTD */}
+                      {/* Tổng Quý: PR = BE per-month projected sum, Act = actualYTD */}
                       <td className="px-2 py-2.5 text-right border-l border-blue-200 bg-blue-50/60">{dual(qPrRev, hasProjectedMonth ? qActRev : undefined, "text-slate-700")}</td>
                       <td className="px-2 py-2.5 text-right bg-blue-50/60">{dual(qPrGm, hasProjectedMonth ? qActGm : undefined, "text-slate-600")}</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{qPrCc > 0 ? dual(qPrCc, hasProjectedMonth ? qActCc : undefined, "text-slate-500") : "—"}</td>
@@ -1464,11 +1549,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   // Metrics rows: label | T1 | T2 | T3 | Tổng Quý
                                   // Tháng projected → 2 dòng: "Pr. xxx" (pro-rata xanh) + "Act. xxx" (actual đậm)
                                   type MRow = { label: string; vals: (m: any) => React.ReactNode; tot: React.ReactNode }
-                                  // Quarter PR per-customer = actualYTD × qFactor
-                                  const cPrRev = hp ? Math.round(actRev * qFactor) : actRev
-                                  const cPrGm  = hp ? Math.round(actGm  * qFactor) : actGm
-                                  const cPrCc  = hp ? Math.round(actCc  * qFactor) : actCc
-                                  const cPrCm1 = hp ? Math.round(actCm1 * qFactor) : actCm1
+                                  // Quarter PR per-customer = c.revenue (BE per-month projected sum, đồng bộ
+                                  // tier-level dùng tier.totalRevenue). KHÔNG dùng actRev × qFactor vì qFactor là
+                                  // quarter-level scale → thổi phồng cả tháng đã xong.
+                                  const cPrRev = c.revenue
+                                  const cPrGm  = c.gm
+                                  const cPrCc  = c.cc
+                                  const cPrCm1 = c.cm1
                                   const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
                                       <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
@@ -1493,8 +1580,22 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(m.gm)}</span>,
                                       tot: hp ? <>{prLine(fc(cPrGm), "text-blue-700")}{actLine(fc(actGm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(actGm)}</span> },
                                     { label: "Ch.Cost",
-                                      vals: (m: any) => m && m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>,
-                                      tot: <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(cPrCc) : "—"}</span> },
+                                      vals: (m: any) => {
+                                        if (!m) return <span className="text-slate-200">—</span>
+                                        if (m.isProjected) return (
+                                          <>{prLine(fc(m.cc), "text-slate-500")}{actLine(fc(m.actualCc ?? m.cc), "text-slate-500")}</>
+                                        )
+                                        // Tháng đang chạy nhưng elapsed < MIN_PROJECT_DAYS: cc = full budget,
+                                        // actualCc = thực tế pro-rata (amount × elapsed/dim). Hiện actual.
+                                        if (m.actualCc != null) return m.actualCc > 0
+                                          ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.actualCc)}</span>
+                                          : <span className="text-slate-200">—</span>
+                                        return m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>
+                                      },
+                                      tot: hp
+                                        ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</>
+                                        : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span>
+                                    },
                                     { label: "CM1",
                                       vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
                                         ? <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>

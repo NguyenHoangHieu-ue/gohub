@@ -1,5 +1,61 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-05 (Session 135 — Quarter Report audit sâu + fix connection cạn slot + B2C/Manage Cost p1).
+Cập nhật lần cuối: 2026-08-05 (Session 136 — Quarter Report deep fix: 3 bugs BE + 3 bugs FE + tooltips).
+
+## ══════ SESSION 136b — TỔNG KẾT (2026-08-05, Sonnet 4.6 cont.) ══════
+
+### Quarter Report — 6 bugs tổng cộng trong session này
+
+**3 BE bugs (đã push trước đó):**
+1. elapsedRatio bị swap (d466ba7): monthCost/rawCc args đảo → PR CH.Cost tháng hiện tại bị pro-rate nhỏ thay vì full, actual hiển thị full thay vì pro-rate.
+2. per-customer Tổng Quý PR dùng actRev×qFactor thay vì c.revenue (BE projected sum).
+3. Group Cost không pro-rate khi < MIN_PROJECT_DAYS: T8 ngày 4 → B2C GC=150Tr full, CM1 B2C âm -33Tr. Fix: isCurrent = elapsed<dim.
+
+**3 FE bugs (commit 5e41e2b):**
+4. KPI cards PRO-RATA = ACTUAL: MIN_PROJECT_DAYS ngăn projection cho bảng tháng (đúng), nhưng không nên ngăn KPI card. Fix: `kpiPrFactor = dim/elapsed` cho mọi tháng đang chạy.
+5. Ch.Cost expanded per-customer chỉ hiện PR, không hiện Act khi isProjected. Fix: show prLine + actLine giống Revenue/GM/CM1.
+6. ColInfo tooltips: thêm vào mọi column header (4 bảng) → creator hover/click "i" để xem công thức, nguồn dữ liệu, cách tính.
+
+**Data sau fix (ước tính T8 ngày 4/31):**
+- B2C CM1 T8: từ -33Tr → +97Tr (group cost pro-rated đúng)
+- KPI B2C CM1 ACTUAL: từ 850Tr → ~980Tr
+- KPI PRO-RATA B2B Rev: từ =ACTUAL → projected (factor=31/4≈7.75× T8)
+
+### Commits trong session 136:
+- 9b3a216: 5 bug fixes audit (B2B/B2C/Quarter)
+- d4b3485: fix elapsedRatio swap quarterly-b2b-customers
+- 5d0c9f9: fix group cost pro-rata < MIN_DAYS
+- 5e41e2b: KPI PRO-RATA + tooltips + Ch.Cost actual display
+
+## ══════ SESSION 136 — TỔNG KẾT (2026-08-05, Sonnet 4.6) ══════
+
+### Audit toàn diện 3 tab chính (3 agent song song)
+
+Audit 3 chiều: OOP compliance, công thức số liệu, data mapping FE↔BE, hiển thị.
+
+**Quarter Report — 1 bug thật + 3 nghi vấn:**
+- ❌ BUG FIX: per-customer expand "Tổng Quý PR" dùng `actRev × qFactor` (quarter-level) → thổi phồng
+  tháng đã xong. Fix: dùng `c.revenue` (BE per-month projected sum, đồng bộ tier-level). (page.tsx:1468)
+- ✅ Revenue×factor, amount không nhân factor, percent×rawRev×factor, CM1=GP−cc−gc, %QoQ, ship filter: đúng
+- ⚠️ Nghi vấn: company_code vs currency_code filter VN/US summary (không fix, cần confirm)
+- ⚠️ Debt: computeChannelCost inline (chưa migrate về cost-engine)
+- ⚠️ Prev-quarter CH.Cost tính revenue ÷ 3 (xấp xỉ — ghi nhận, không sửa)
+
+**B2B Performance — 1 display bug + 2 OOP fixes:**
+- ❌ DISPLAY FIX: cost_lines percent type hiển thị `(val/100)×row.revenue` (tổng period) →
+  sai multi-month. Fix: chỉ show `${val}%`. (page.tsx:828)
+- ✅ OOP FIX: xóa calcChCostForPeriod/COST_KEYS inline route.ts → import từ cost-engine
+- ✅ CACHE FIX: bump v3→v4 + thêm excludedCustomers hash vào key
+- ✅ Pro-rata dayRatio riêng từng tháng, CM1=gpm2−chCost, group cost revenue-share, tier NULL→Strategic: đúng
+- ⚠️ Debt: projection_factor chưa trong response (FE tự tính), cm1_percent BE bị FE bỏ qua
+
+**B2C Performance — 1 data bug + OOP debt:**
+- ❌ GROUP COST FIX: fetchCosts chỉ fetch 1 tháng → groupCosts patch totals.gpm2 sai multi-month.
+  Fix: compute months in range, fetch group costs tất cả tháng, sum. (b2c-performance.tsx:252)
+- ✅ getProjectionFactor import đúng (fix s134), Promise.allSettled (fix s135), * ratio bug (fix s126): đúng
+- 🟡 Known issue (chờ Hiếu): B2C per-channel CM1 thiếu group cost (~150tr/tháng) — FE chỉ patch TOTAL row
+- ⚠️ Debt: getProjectionInfo() FE duplicate logic, b2c routes không dùng cost-engine shared lib
+
+### Commit: 9b3a216 staging — tsc PASS
 
 ## ══════ SESSION 135 — TỔNG KẾT (2026-08-05, Opus 4.8) ══════
 

@@ -285,7 +285,13 @@ export async function GET(req: NextRequest) {
       const b2cRevAct = parseFloat(b2cR?.revenue || "0")
       const b2cGpAct = parseFloat(b2cR?.gp || "0")
 
-      const gcElapsedRatio = isProjected && dim > 0 ? elapsed / dim : 1
+      // isCurrent: tháng chưa kết thúc (elapsed < dim). Khác isProjected — isProjected thêm điều kiện
+      // elapsed >= MIN_PROJECT_DAYS để tránh factor quá lớn. isCurrent dùng cho pro-rate group/customer cost.
+      const isCurrent = elapsed < dim
+      // gcElapsedRatio: pro-rate cho MỌI tháng hiện tại (không chỉ tháng đang chiếu).
+      // Sửa bug: khi T8 ngày 4 < MIN_PROJECT_DAYS=7, isProjected=false → ratio cũ=1 → Group Cost = full 150Tr
+      // áp cho chỉ 4 ngày data → CM1 B2C âm -33tr. Fix: dùng isCurrent thay isProjected.
+      const gcElapsedRatio = isCurrent && dim > 0 ? elapsed / dim : 1
 
       let b2bCCAct = 0, b2cCCAct = 0
       let b2bHk3Act = 0, b2cHk3Act = 0
@@ -306,8 +312,10 @@ export async function GET(req: NextRequest) {
       const b2cRev = r(b2cRevAct * factor); const b2cGp = r(b2cGpAct * factor)
       const b2bCC = r(isProjected ? b2bCCAct * factor : b2bCCAct)
       const b2cCC = r(isProjected ? b2cCCAct * factor : b2cCCAct)
-      const b2bGC = r(b2bGCBudget)
-      const b2cGC = r(b2cGCBudget)
+      // Group Cost: projected dùng full budget; tháng hoàn thành cũng full budget (gcRatio=1);
+      // tháng hiện tại chưa chiếu (< MIN_DAYS) → dùng pro-rata thực tế (gcRatio=elapsed/dim).
+      const b2bGC = r(isProjected ? b2bGCBudget : b2bGCBudget * gcElapsedRatio)
+      const b2cGC = r(isProjected ? b2cGCBudget : b2cGCBudget * gcElapsedRatio)
       const b2bCm1 = b2bGp - b2bCC - b2bGC
       const b2cCm1 = b2cGp - b2cCC - b2cGC
 

@@ -14,21 +14,23 @@ export interface CostRecord {
 
 /** Tính tổng chi phí của 1 record theo doanh thu raw (không có factor — dùng cho tháng đã hoàn thành). */
 export function calcRecordCost(rec: CostRecord | undefined, rawRevenue: number): number {
-  return calcRecordCostProjected(rec, rawRevenue, 1)
+  return calcRecordCostProjected(rec, rawRevenue, 1, 1)
 }
 
 /**
  * Tính chi phí với pro-rata projection:
- * - amount (tiền cố định): KHÔNG nhân factor — người dùng nhập bao nhiêu hiện bấy nhiêu.
- * - percent: áp dụng trên projected revenue (= rawRevenue × factor).
- *
- * Lý do: cost loại "amount" là chi phí đã phát sinh/cam kết cả tháng nên không scale theo ngày đã trôi qua.
- * Cost loại "percent" (vd: 5% hoa hồng) cần ước tính cả tháng nên dùng projected revenue làm base.
+ * - amount (tiền cố định):
+ *   + Thực tế tới hôm nay (isActual): val * elapsedRatio (phân bổ theo số ngày đã qua).
+ *   + Dự phóng trọn tháng (Projected): val * 1 (giữ nguyên tiền cố định cả tháng).
+ * - percent:
+ *   + Thực tế tới hôm nay: (val / 100) * rawRevenue.
+ *   + Dự phóng trọn tháng: (val / 100) * rawRevenue * factor.
  */
 export function calcRecordCostProjected(
   rec: CostRecord | undefined,
   rawRevenue: number,
   factor: number,
+  elapsedRatio: number = 1,
 ): number {
   if (!rec) return 0
   if (rec.cost_lines) {
@@ -38,14 +40,14 @@ export function calcRecordCostProjected(
         let tot = 0
         for (const l of lines) {
           const val = Number(l?.value) || 0
-          tot += l?.type === "percent" ? (val / 100) * rawRevenue * factor : val
+          tot += l?.type === "percent" ? (val / 100) * rawRevenue * factor : val * elapsedRatio
         }
         return tot
       }
     } catch { /* fallthrough */ }
   }
   const cval = Number(rec.cost_value) || 0
-  return rec.cost_type === "percent" ? (cval / 100) * rawRevenue * factor : cval
+  return rec.cost_type === "percent" ? (cval / 100) * rawRevenue * factor : cval * elapsedRatio
 }
 
 /** Đọc toàn bộ chi phí KH của các tháng trong quý → Map key `${month}_${code}`.
@@ -57,7 +59,7 @@ export async function fetchCustomerCosts(months: string[]): Promise<Map<string, 
 
   const parseRow = (r: { month: string; customer_code: string; cost_type?: string | null; cost_value?: number | null; cost_lines?: unknown }) => {
     map.set(`${r.month}_${r.customer_code}`, {
-      cost_type:  (r.cost_type  as string) ?? "amount",
+      cost_type: (r.cost_type as string) ?? "amount",
       cost_value: Number(r.cost_value) || 0,
       cost_lines: typeof r.cost_lines === "string" ? r.cost_lines : JSON.stringify(r.cost_lines ?? []),
     })
@@ -81,7 +83,7 @@ export async function fetchCustomerCosts(months: string[]): Promise<Map<string, 
       .from("b2b_customer_cost_monthly")
       .select("month, customer_code, cost_type, cost_value, cost_lines")
       .in("month", months)
-    ;(data ?? []).forEach(parseRow)
+      ; (data ?? []).forEach(parseRow)
   } catch { /* bảng đã bị drop (v22) hoặc không tồn tại */ }
 
   return map
