@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
-  const rawCacheKey = `qreport_raw_v8:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `qreport_raw_v9:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
   // inactive_cust: LEFT JOIN + IS NULL thay NOT IN. hk3_skus: JOIN trực tiếp.
@@ -252,12 +252,17 @@ export async function GET(req: NextRequest) {
       custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0"))
     })
     // Tổng chi phí B2B per-customer (Turso) theo tháng — amount pro-rata ngày, percent × revenue KH.
+    // Chỉ tính chi phí cho customer CÓ ORDERS trong tháng đó (custRev > 0).
+    // Lý do: nếu customer có Turso cost entry nhưng không có đơn hàng trong tháng, quarterly-b2b-customers
+    // KHÔNG đưa họ vào customerMap (chỉ query từ fact orders) → cost đó không xuất hiện trong Bảng 3.
+    // Để đồng nhất: bỏ amount cost của customer không có orders trong tháng đó.
     const b2bCustCostByMonth = (month: string, dayRatio: number): number => {
       let tot = 0
       customerCostMap.forEach((rec, key) => {
         const [cm, code] = [key.slice(0, 7), key.slice(8)]
         if (cm !== month) return
         const custRev = custRevMap.get(`${month}_${code}`) || 0
+        if (custRev === 0) return  // skip KH không có orders tháng này → nhất quán với Bảng 3
         let lines: Array<{ type: string; value: number }> = []
         if (rec.cost_lines) { try { lines = JSON.parse(rec.cost_lines) } catch {} }
         if (lines.length > 0) {
