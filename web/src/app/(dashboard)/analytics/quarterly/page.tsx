@@ -423,6 +423,16 @@ function QuarterlyContent() {
   const kpiPrFactor = (m: MonthSummary): number =>
     m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1
 
+  // ── ƯỚC TÍNH THÁNG TƯƠNG LAI (T9) trong Tổng Quý ──────────────────────────────
+  // Số liệu tổng quý PR phải gồm ước tính các tháng CHƯA TỚI (không có trong summary).
+  // CT: T9_est = (Σ per-month projected của tháng đã có) / (Σ ngày tháng đã có) × (Σ ngày tháng tương lai)
+  //   → quarter_estimate = existing_projected × (quarter_days / existing_days)
+  //   (existing_projected = actual T7 + prorata T8; existing_days = 31+31; quarter_days = 92)
+  // Áp cho MỌI số liệu absolute (Rev/GM/Cost/CM1/3HK). Tỉ lệ (%) không đổi vì tử & mẫu cùng scale.
+  const existingDays = summary.reduce((s, m) => s + m.dim, 0)
+  const quarterDays  = report?.quarter_days ?? existingDays
+  const futureScale  = existingDays > 0 ? quarterDays / existingDays : 1
+
   // PROJECTION THỐNG NHẤT (#1): PR = tổng per-month projected (m.b2b.revenue: tháng xong=actual, tháng hiện
   // tại=chiếu theo ngày) — KHỚP bảng "Tổng hợp theo tháng". Trước dùng raw × qFactor (quarter-level) → scale
   // nhầm tháng đã xong → KPI cards & Quarter Total lệch ~50% so với bảng tháng ("nhảy số").
@@ -435,8 +445,9 @@ function QuarterlyContent() {
   const b2bCm1Raw  = summary.reduce((s, m) => s + (m.b2b.actualCm1 ?? m.b2b.cm1), 0)
   const b2bCm1Act  = summary.reduce((s, m) => s + m.b2b.cm1, 0)
   const b2bThkAct  = summary.reduce((s, m) => s + (m.b2b.actualHk3 ?? 0), 0)
-  const b2bRevPr   = summary.reduce((s, m) => s + Math.round((m.b2b.actualRevenue ?? m.b2b.revenue) * kpiPrFactor(m)), 0)
-  const b2bCm1Pr   = summary.reduce((s, m) => s + Math.round((m.b2b.actualCm1 ?? m.b2b.cm1) * kpiPrFactor(m)), 0)
+  // PR = existing_projected × futureScale (gồm ước tính T9)
+  const b2bRevPr   = Math.round(summary.reduce((s, m) => s + (m.b2b.actualRevenue ?? m.b2b.revenue) * kpiPrFactor(m), 0) * futureScale)
+  const b2bCm1Pr   = Math.round(summary.reduce((s, m) => s + (m.b2b.actualCm1 ?? m.b2b.cm1) * kpiPrFactor(m), 0) * futureScale)
   const b2bThkPct  = b2bRevRaw > 0 ? b2bThkAct / b2bRevRaw * 100 : 0
 
   const b2cRevAct  = summary.reduce((s, m) => s + m.b2c.revenue, 0)
@@ -447,8 +458,8 @@ function QuarterlyContent() {
   const b2cCm1Raw  = summary.reduce((s, m) => s + (m.b2c.actualCm1 ?? m.b2c.cm1), 0)
   const b2cCm1Act  = summary.reduce((s, m) => s + m.b2c.cm1, 0)
   const b2cThkAct  = summary.reduce((s, m) => s + (m.b2c.actualHk3 ?? 0), 0)
-  const b2cRevPr   = summary.reduce((s, m) => s + Math.round((m.b2c.actualRevenue ?? m.b2c.revenue) * kpiPrFactor(m)), 0)
-  const b2cCm1Pr   = summary.reduce((s, m) => s + Math.round((m.b2c.actualCm1 ?? m.b2c.cm1) * kpiPrFactor(m)), 0)
+  const b2cRevPr   = Math.round(summary.reduce((s, m) => s + (m.b2c.actualRevenue ?? m.b2c.revenue) * kpiPrFactor(m), 0) * futureScale)
+  const b2cCm1Pr   = Math.round(summary.reduce((s, m) => s + (m.b2c.actualCm1 ?? m.b2c.cm1) * kpiPrFactor(m), 0) * futureScale)
   const b2cThkPct  = b2cRevRaw > 0 ? b2cThkAct / b2cRevRaw * 100 : 0
 
   const totRevAct  = b2bRevAct + b2cRevAct
@@ -902,6 +913,7 @@ function QuarterlyContent() {
         quarterLabel={`${selQ}-${selYear}`}
         qFactor={qFactor}
         summary={summary}
+        futureScale={futureScale}
       />
 
       {/* ── B2C channel pivot ── */}
@@ -1086,9 +1098,9 @@ function lineTotal(lines: CostLine[], revenue: number): number {
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
-function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [] }:
+function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [], futureScale = 1 }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[] }) {
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[]; futureScale?: number }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
@@ -1127,19 +1139,29 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     return m
   }, [summary])
 
-  // PR values của 1 KH: Σ (actual_monthly × kpiPrFactor) — dùng cho main customer row.
+  // PR values của 1 KH: existing projected (Σ actual_monthly × kpiPrFactor) rồi × futureScale (gồm ước tính T9).
+  // ex* = existing projected (chưa ×futureScale) → dùng để tính từng tháng tương lai trong bảng chi tiết.
   const custPr = (c: any) => {
-    let prRev = 0, prGm = 0, prCm1 = 0
+    let exRev = 0, exGm = 0, exCm1 = 0
     quarterMonths.forEach(m => {
       const f = monthKpiFactor[m] ?? 1
       const ms = c.monthSummary?.[m]
       if (!ms) return
-      prRev  += Math.round((ms.actualRevenue ?? ms.revenue) * f)
-      prGm   += Math.round((ms.actualGm  ?? ms.gm)  * f)
-      prCm1  += Math.round((ms.actualCm1 ?? ms.cm1) * f)
+      exRev  += (ms.actualRevenue ?? ms.revenue) * f
+      exGm   += (ms.actualGm  ?? ms.gm)  * f
+      exCm1  += (ms.actualCm1 ?? ms.cm1) * f
     })
-    return { prRev, prGm, prCm1, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0 }
+    const exCc = exGm - exCm1
+    const prRev = Math.round(exRev * futureScale), prGm = Math.round(exGm * futureScale), prCm1 = Math.round(exCm1 * futureScale)
+    // QoQ: PR CM1 (gồm T9) vs CM1 quý trước (BE trả prevCm1)
+    const prevCm1 = c.prevCm1 ?? 0
+    const qoqPct = prevCm1 !== 0 ? Math.round((prCm1 - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
+    return { prRev, prGm, prCm1, exRev, exGm, exCm1, exCc, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0, qoqPct }
   }
+  // Ngày trong tháng "YYYY-MM" + tháng tương lai (chưa có trong summary) → để ước tính T9.
+  const daysInMonthFE = (ym: string) => { const [yy, mm] = ym.split("-").map(Number); return new Date(yy, mm, 0).getDate() }
+  const existingDaysFE = summary.reduce((s, m) => s + m.dim, 0)
+  const futureMonthsFE = quarterMonths.filter(m => !summary.some(s => s.month === m))
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
   // Load customer targets khi đổi quý
@@ -1457,10 +1479,11 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                   const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.actualCc ?? d.cc), 0) // luôn dùng actualCc khi có (pro-rated cho mọi tháng đang chạy)
                   const qActCm1 = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCm1 ?? d.cm1) : d.cm1), 0)
                   const r2 = Math.round
-                  const qPrRev  = tier.totalRevenue
-                  const qPrGm   = tier.totalGm
-                  const qPrCc   = tier.totalCc
-                  const qPrCm1  = tier.totalCm1
+                  // Tổng Quý PR = existing_projected (BE) × futureScale (gồm ước tính T9 tháng chưa tới).
+                  const qPrRev  = r2(tier.totalRevenue * futureScale)
+                  const qPrGm   = r2(tier.totalGm * futureScale)
+                  const qPrCc   = r2(tier.totalCc * futureScale)
+                  const qPrCm1  = r2(tier.totalCm1 * futureScale)
 
                   // Helper: stacked PR (blue) / Actual (slate) — dùng fc() cho số đầy đủ, font nhỏ
                   const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
@@ -1507,10 +1530,16 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       <td className="px-2 py-2.5 text-right bg-blue-50/60">{dual(qPrGm, hasProjectedMonth ? qActGm : undefined, "text-slate-600")}</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{qPrCc > 0 ? dual(qPrCc, hasProjectedMonth ? qActCc : undefined, "text-slate-500") : "—"}</td>
                       <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(qPrCm1))}>{dual(qPrCm1, hasProjectedMonth ? qActCm1 : undefined, cm1Color(qPrCm1))}</td>
-                      <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(tier.totalCm1))}>{pct(tier.totalCm1Pct)}</td>
-                      <td className={cn("px-2 py-2.5 text-right font-semibold tabular-nums bg-blue-50/60", tier.qoqPct == null ? "text-slate-300" : tier.qoqPct >= 0 ? "text-green-600" : "text-red-500")}>
-                        {tier.qoqPct != null ? `${tier.qoqPct >= 0 ? "+" : ""}${tier.qoqPct.toFixed(1)}%` : "—"}
-                      </td>
+                      <td className={cn("px-2 py-2.5 text-right bg-blue-50/60", cm1Color(qPrCm1))}>{pct(qPrRev > 0 ? qPrCm1 / qPrRev * 100 : 0)}</td>
+                      {(() => {
+                        // QoQ: PR CM1 (gồm T9) vs CM1 quý trước (BE trả prevCm1)
+                        const tierQoQ = tier.prevCm1 && tier.prevCm1 !== 0 ? Math.round((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 1000) / 10 : null
+                        return (
+                          <td className={cn("px-2 py-2.5 text-right font-semibold tabular-nums bg-blue-50/60", tierQoQ == null ? "text-slate-300" : tierQoQ >= 0 ? "text-green-600" : "text-red-500")}>
+                            {tierQoQ != null ? `${tierQoQ >= 0 ? "+" : ""}${tierQoQ.toFixed(1)}%` : "—"}
+                          </td>
+                        )
+                      })()}
                       <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60">{pct(tier.totalHk3Pct)}</td>
                     </tr>
                   )
@@ -1578,16 +1607,16 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           {custs.map((c: any, i: number) => {
                             const isExpanded = expandedCusts.has(c.code)
                             const toggleExpand = () => setExpandedCusts(prev => { const s = new Set(prev); s.has(c.code) ? s.delete(c.code) : s.add(c.code); return s })
-                            const qoqCls = c.qoqPct == null ? "text-slate-300" : c.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             const hp = c.hasProjected === true
                             // Actual YTD (dùng trong expanded sub-row + target progress)
                             const actRev = hp ? (c.actualRevenue ?? c.revenue) : c.revenue
                             const actGm  = hp ? (c.actualGm  ?? c.gm)  : c.gm
                             const actCc  = hp ? (c.actualCc  ?? c.cc)  : c.cc
                             const actCm1 = hp ? (c.actualCm1 ?? c.cm1) : c.cm1
-                            // Main row: Pro-rata values (kpiPrFactor — project tháng hiện tại kể cả < MIN_PROJECT_DAYS)
+                            // Main row: Pro-rata values (kpiPrFactor + futureScale gồm ước tính T9)
                             const pr = custPr(c)
                             const prGmPct = pr.prGmPct
+                            const qoqCls = pr.qoqPct == null ? "text-slate-300" : pr.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             // Target
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
                             const isEditingTgt = editingTargetCode === c.code
@@ -1622,7 +1651,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   </td>
                                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
-                                  <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
+                                  <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
                                 </tr>
 
@@ -1631,16 +1660,16 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   const ms: Record<string, any> = c.monthSummary ?? {}
                                   const qm: string[] = quarterMonths
                                   const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
-                                  // Metrics rows: label | T1 | T2 | T3 | Tổng Quý
-                                  // Tháng projected → 2 dòng: "Pr. xxx" (pro-rata xanh) + "Act. xxx" (actual đậm)
-                                  type MRow = { label: string; vals: (m: any) => React.ReactNode; tot: React.ReactNode }
-                                  // Quarter PR per-customer = c.revenue (BE per-month projected sum, đồng bộ
-                                  // tier-level dùng tier.totalRevenue). KHÔNG dùng actRev × qFactor vì qFactor là
-                                  // quarter-level scale → thổi phồng cả tháng đã xong.
-                                  const cPrRev = c.revenue
-                                  const cPrGm  = c.gm
-                                  const cPrCc  = c.cc
-                                  const cPrCm1 = c.cm1
+                                  // Metrics rows: label | T7 | T8 | T9(ước tính) | Tổng Quý
+                                  // vals nhận month KEY → tra ms[mk]; tháng tương lai (không data) → hiện ước tính T9.
+                                  type MRow = { label: string; vals: (mk: string) => React.ReactNode; tot: React.ReactNode }
+                                  // Tổng Quý per-customer = pr.* (existing projected × futureScale, GỒM ước tính T9).
+                                  const cPrRev = pr.prRev
+                                  const cPrGm  = pr.prGm
+                                  const cPrCc  = pr.prGm - pr.prCm1  // = exCc × futureScale
+                                  const cPrCm1 = pr.prCm1
+                                  // Tỷ lệ ngày để ước tính 1 tháng tương lai từ daily rate hiện có
+                                  const futRatio = (mk: string) => existingDaysFE > 0 ? daysInMonthFE(mk) / existingDaysFE : 0
                                   const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
                                       <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
@@ -1653,48 +1682,55 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       <span className={cn("tabular-nums font-semibold text-[9px] whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
+                                  // Dòng ước tính tháng tương lai (T9)
+                                  const estLine = (val: React.ReactNode, cls = "text-amber-600") => (
+                                    <div className="flex items-baseline justify-end gap-1 leading-snug">
+                                      <span className="text-[9px] font-bold text-amber-400 flex-shrink-0">~ƯT</span>
+                                      <span className={cn("tabular-nums font-semibold text-[10px] italic whitespace-nowrap", cls)}>{val}</span>
+                                    </div>
+                                  )
+                                  const isFut = (mk: string) => futureMonthsFE.includes(mk)
                                   const mRows: MRow[] = [
                                     { label: "Revenue",
-                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
-                                        ? <>{prLine(fc(m.revenue))}{actLine(fc(m.actualRevenue ?? m.revenue))}</>
-                                        : <span className="tabular-nums text-slate-700 text-[10px] font-semibold whitespace-nowrap">{fc(m.revenue)}</span>,
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) return m.isProjected ? <>{prLine(fc(m.revenue))}{actLine(fc(m.actualRevenue ?? m.revenue))}</> : <span className="tabular-nums text-slate-700 text-[10px] font-semibold whitespace-nowrap">{fc(m.revenue)}</span>
+                                        return isFut(mk) ? estLine(fc(Math.round(pr.exRev * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
                                       tot: hp ? <>{prLine(fc(cPrRev))}{actLine(fc(actRev))}</> : <span className="tabular-nums text-slate-700 text-[10px] font-semibold whitespace-nowrap">{fc(actRev)}</span> },
                                     { label: "G.Margin",
-                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
-                                        ? <>{prLine(fc(m.gm), "text-blue-700")}{actLine(fc(m.actualGm ?? m.gm), "text-slate-600")}</>
-                                        : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(m.gm)}</span>,
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) return m.isProjected ? <>{prLine(fc(m.gm), "text-blue-700")}{actLine(fc(m.actualGm ?? m.gm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(m.gm)}</span>
+                                        return isFut(mk) ? estLine(fc(Math.round(pr.exGm * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
                                       tot: hp ? <>{prLine(fc(cPrGm), "text-blue-700")}{actLine(fc(actGm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(actGm)}</span> },
                                     { label: "Ch.Cost",
-                                      vals: (m: any) => {
-                                        if (!m) return <span className="text-slate-200">—</span>
-                                        if (m.isProjected) return (
-                                          <>{prLine(fc(m.cc), "text-slate-500")}{actLine(fc(m.actualCc ?? m.cc), "text-slate-500")}</>
-                                        )
-                                        // Tháng đang chạy nhưng elapsed < MIN_PROJECT_DAYS: cc = full budget,
-                                        // actualCc = thực tế pro-rata (amount × elapsed/dim). Hiện actual.
-                                        if (m.actualCc != null) return m.actualCc > 0
-                                          ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.actualCc)}</span>
-                                          : <span className="text-slate-200">—</span>
-                                        return m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>
-                                      },
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) {
+                                          if (m.isProjected) return <>{prLine(fc(m.cc), "text-slate-500")}{actLine(fc(m.actualCc ?? m.cc), "text-slate-500")}</>
+                                          if (m.actualCc != null) return m.actualCc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.actualCc)}</span> : <span className="text-slate-200">—</span>
+                                          return m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>
+                                        }
+                                        return isFut(mk) && pr.exCc > 0 ? estLine(fc(Math.round(pr.exCc * futRatio(mk))), "text-slate-500") : <span className="text-slate-200">—</span> },
                                       tot: hp
                                         ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</>
                                         : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span>
                                     },
                                     { label: "CM1",
-                                      vals: (m: any) => {
-                                        if (!m) return <span className="text-slate-200">—</span>
-                                        if (m.isProjected) return <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
-                                        // Tháng đang chạy (elapsed < MIN_PROJECT_DAYS): actualCm1 = GM_actual - CC_actual (khớp CH.COST hiện)
-                                        const v = m.actualCm1 ?? m.cm1
-                                        return <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(v))}>{fc(v)}</span>
-                                      },
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) {
+                                          if (m.isProjected) return <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
+                                          const v = m.actualCm1 ?? m.cm1
+                                          return <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(v))}>{fc(v)}</span>
+                                        }
+                                        return isFut(mk) ? estLine(fc(Math.round(pr.exCm1 * futRatio(mk))), cm1Color(pr.exCm1)) : <span className="text-slate-200">—</span> },
                                       tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(actCm1))}>{fc(actCm1)}</span> },
                                     { label: "CM1%",
-                                      vals: (m: any) => m ? <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span> : <span className="text-slate-200">—</span>,
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>
+                                        return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className={cn("text-[10px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
                                     { label: "3HK%",
-                                      vals: (m: any) => m ? <span className="tabular-nums text-slate-500 text-[10px]">{pct(m.hk3Pct)}</span> : <span className="text-slate-200">—</span>,
+                                      vals: (mk: string) => { const m = ms[mk]
+                                        if (m) return <span className="tabular-nums text-slate-500 text-[10px]">{pct(m.hk3Pct)}</span>
+                                        return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className="tabular-nums text-slate-500 text-[10px]">{pct(c.hk3Pct)}</span> },
                                   ]
                                   // Creator orders explorer state
@@ -1714,7 +1750,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                   <th className="px-3 py-1.5 text-left text-[10px] text-slate-300 font-semibold uppercase w-20"></th>
                                                   {qm.map(m => (
                                                     <th key={m} className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1a4d99]">
-                                                      {fmtM(m)}{ms[m]?.isProjected ? <sup className="text-blue-300 text-[8px] ml-0.5">PR</sup> : ""}
+                                                      {fmtM(m)}{ms[m]?.isProjected ? <sup className="text-blue-300 text-[8px] ml-0.5">PR</sup> : futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[8px] ml-0.5">ƯT</sup> : ""}
                                                     </th>
                                                   ))}
                                                   <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold border-l border-[#1a4d99] bg-[#1e3a8a]">Tổng Quý</th>
@@ -1725,7 +1761,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                   <tr key={row.label} className={ri % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
                                                     <td className="px-3 py-1.5 font-bold text-slate-500 uppercase text-[9px] tracking-wider whitespace-nowrap">{row.label}</td>
                                                     {qm.map(m => (
-                                                      <td key={m} className="px-3 py-1.5 text-right border-l border-slate-100">{row.vals(ms[m])}</td>
+                                                      <td key={m} className="px-3 py-1.5 text-right border-l border-slate-100">{row.vals(m)}</td>
                                                     ))}
                                                     <td className="px-3 py-1.5 text-right border-l border-blue-200 bg-blue-50/60">{row.tot}</td>
                                                   </tr>
