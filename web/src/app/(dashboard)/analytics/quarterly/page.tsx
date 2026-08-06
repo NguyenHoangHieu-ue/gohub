@@ -1392,7 +1392,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                   const hasProjectedMonth = tierMonths.some((d: any) => d.isProjected && d.hasData)
                   const qActRev = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualRevenue ?? d.revenue) : d.revenue), 0)
                   const qActGm  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualGm  ?? d.gm)  : d.gm),  0)
-                  const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCc  ?? d.cc)  : d.cc),  0)
+                  const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.actualCc ?? d.cc), 0) // luôn dùng actualCc khi có (pro-rated cho mọi tháng đang chạy)
                   const qActCm1 = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCm1 ?? d.cm1) : d.cm1), 0)
                   const r2 = Math.round
                   const qPrRev  = tier.totalRevenue

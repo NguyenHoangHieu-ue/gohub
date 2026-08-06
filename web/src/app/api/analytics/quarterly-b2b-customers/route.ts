@@ -318,17 +318,21 @@ export async function GET(req: NextRequest) {
         }
       })
 
-      const totCm1 = totGm - totCc
+      // c.cc / c.cm1: dùng actual (pro-rated cho tháng đang chạy) thay vì full budget.
+      // → Bảng 3 Ch.Cost Tổng Quý khớp với Bảng 1 (Tổng hợp theo Tháng) cho T8 pro-rated.
+      // (totCc = Σ monthCost = full budget cho T8 amount; totActCc = Σ rawCc = actual pro-rated)
+      const ccForSummary = totActCc  // actual pro-rated — dùng cho c.cc
+      const cm1ForSummary = totActGm - totActCc
       const hasProjected = monthMeta.some(mr => mr.isProjected)
-      // QoQ: so sánh CM1 (projected cả quý) vs CM1 thực tế quý trước
+      // QoQ: so sánh CM1 (actual pro-rated) vs CM1 thực tế quý trước
       const prevCm1 = prevCm1Map.get(cust.code) ?? null
-      const qoqPct = prevCm1 !== null && prevCm1 !== 0 ? Math.round((totCm1 - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
+      const qoqPct = prevCm1 !== null && prevCm1 !== 0 ? Math.round((cm1ForSummary - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
 
       tier.custList.push({
         code: cust.code, name: cust.name,
         region: reg, priceListName: cust.priceListName,
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
-        cc: r2(totCc), cm1: r2(totCm1), cm1Pct: pct(totCm1, totRev),
+        cc: r2(ccForSummary), cm1: r2(cm1ForSummary), cm1Pct: pct(cm1ForSummary, totRev),
         qoqPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
         monthsCost, monthSummary,
         hasProjected,
@@ -361,12 +365,14 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // #4 NHẤT QUÁN GROUP COST: chi phí group B2B (Supabase) phân bổ vào tier theo revenue-share → tier CM1
-    // khớp bảng "Tổng hợp theo tháng" (summary trừ group cost, trước tier KHÔNG trừ → lệch khi có group cost).
-    // Tổng group cost B2B = sum budget các tháng không tương lai (không scale factor — nhất quán summary).
-    const totalB2BGroupCost = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) =>
-      s + (groupCosts as Array<{ group_name: string; month: string; amount: number }>)
-        .filter(gc => gc.group_name === "B2B" && gc.month === mr.month).reduce((a, gc) => a + (gc.amount || 0), 0), 0)
+    // #4 NHẤT QUÁN GROUP COST: chi phí group B2B phân bổ vào tier theo revenue-share.
+    // Pro-rate tháng đang chạy (gcRatio = elapsed/dim) — nhất quán với quarterly-report route.
+    const totalB2BGroupCost = monthMeta.filter(mr => !mr.isFuture).reduce((s, mr) => {
+      const budget = (groupCosts as Array<{ group_name: string; month: string; amount: number }>)
+        .filter(gc => gc.group_name === "B2B" && gc.month === mr.month).reduce((a, gc) => a + (gc.amount || 0), 0)
+      const gcRatio = mr.elapsed > 0 && mr.elapsed < mr.dim ? mr.elapsed / mr.dim : 1
+      return s + budget * gcRatio
+    }, 0)
     let grandTotalRev = 0
     tierMap.forEach(t => t.custList.forEach(c => { grandTotalRev += c.revenue }))
 
@@ -375,8 +381,10 @@ export async function GET(req: NextRequest) {
       const totRev = custs.reduce((s, c) => s + c.revenue, 0)
       const totGm = custs.reduce((s, c) => s + c.gm, 0)
       const groupShare = grandTotalRev > 0 ? (totRev / grandTotalRev) * totalB2BGroupCost : 0
-      const totCc = custs.reduce((s, c) => s + c.cc, 0) + groupShare   // + group cost phân bổ
-      const totCm1 = custs.reduce((s, c) => s + c.cm1, 0) - groupShare  // CM1 prorata Q3 − group share
+      // totalCc = Turso per-customer costs only (KHÔNG gồm Group Cost) — nhất quán với Bảng Tổng hợp theo Tháng
+      // (Bảng 1/2 hiện Ch.Cost + Group Cost tách biệt, nên Bảng 3 cũng không cộng Group vào Ch.Cost)
+      const totCc = custs.reduce((s, c) => s + c.cc, 0)
+      const totCm1 = custs.reduce((s, c) => s + c.cm1, 0) - groupShare  // CM1 vẫn trừ Group Cost
       const totHk3 = custs.reduce((s, c) => s + c.hk3Rev, 0)
       // QoQ: CM1 prorata Q3 (totCm1 — tháng ĐÃ XONG dùng actual, tháng hiện tại chiếu theo ngày) vs CM1 thực tế Q2.
       // Trước dùng totActCm1 × qFactor (raw × quarter-factor) → SCALE NHẦM cả tháng đã xong (Jul) → QoQ quá cao.
