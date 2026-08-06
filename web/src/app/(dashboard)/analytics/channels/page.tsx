@@ -94,6 +94,7 @@ export default function ChannelPerformancePage() {
   const [b2bTierFilter, setB2bTierFilter] = useState<string>("ALL")
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
   const [loadingB2B, setLoadingB2B] = useState(false)
+  const [countryMap, setCountryMap] = useState<Record<string, string>>({})
 
   const [channels, setChannels] = useState<{ channel_id: string, channel_name: string }[]>([])
   const [selectedChannel, setSelectedChannel] = useState<string>("")
@@ -313,6 +314,16 @@ export default function ChannelPerformancePage() {
   useEffect(() => {
     fetchVendors()
     fetchProductTypes()
+    fetch("/api/config/country-codes")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const m: Record<string, string> = {}
+          d.forEach((row: { code: string; country: string }) => { m[row.code?.toUpperCase()] = row.country })
+          setCountryMap(m)
+        }
+      })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -657,12 +668,7 @@ export default function ChannelPerformancePage() {
         SELECT
           ${mt}.sku as product_name,
           MAX(sk.category_name) as category,
-          CASE
-            WHEN ${mt}.sku ~ '^[1-6]'              THEN UPPER(SUBSTRING(${mt}.sku, 3, 3))
-            WHEN ${mt}.sku ~ '^E'                  THEN UPPER(SUBSTRING(${mt}.sku, 2, 3))
-            WHEN ${mt}.sku ~ '^[A-DF-Z]{3}[0-9]'  THEN UPPER(SUBSTRING(${mt}.sku, 1, 3))
-            ELSE UPPER(SUBSTRING(${mt}.sku, 1, 3))
-          END as destination,
+          UPPER(SUBSTRING(${mt}.sku, 3, 3)) as destination,
           SUM(${mt}.${revenueCol}) as revenue,
           SUM(${mt}.${marginCol}) as margin,
           COUNT(DISTINCT ${mt}.order_code) as orders,
@@ -1146,7 +1152,7 @@ export default function ChannelPerformancePage() {
 
           {selectedCustomer ? (
             /* Customer detail: top channels + top products for this customer */
-            <B2BCustomerDetail customer={selectedCustomer} startDate={startDate} endDate={endDate} dateColumn={dateColumn} />
+            <B2BCustomerDetail customer={selectedCustomer} startDate={startDate} endDate={endDate} dateColumn={dateColumn} countryMap={countryMap} />
           ) : (
             /* Tier summary cards + customer table */
             <div>
@@ -1792,7 +1798,9 @@ export default function ChannelPerformancePage() {
                         <span className="text-sm font-bold text-slate-900 truncate max-w-[260px]">{product.product_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-xs font-bold text-slate-700 whitespace-nowrap">{product.destination || "—"}</td>
+                    <td className="px-4 py-4 text-xs font-bold text-slate-700 whitespace-nowrap" title={product.destination || ""}>
+                      {product.destination ? (countryMap[product.destination] || product.destination) : "—"}
+                    </td>
                     <td className="px-4 py-4 text-xs text-slate-500 whitespace-nowrap max-w-[120px] truncate">{product.category || "—"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.orders)}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.units)}</td>
@@ -1831,8 +1839,8 @@ export default function ChannelPerformancePage() {
 }
 
 // ─── B2BCustomerDetail ────────────────────────────────────────────────────────
-function B2BCustomerDetail({ customer, startDate, endDate, dateColumn }: {
-  customer: any; startDate: string; endDate: string; dateColumn: string
+function B2BCustomerDetail({ customer, startDate, endDate, dateColumn, countryMap }: {
+  customer: any; startDate: string; endDate: string; dateColumn: string; countryMap: Record<string, string>
 }) {
   const [channels, setChannels] = React.useState<any[]>([])
   const [products, setProducts] = React.useState<any[]>([])
@@ -1863,9 +1871,7 @@ function B2BCustomerDetail({ customer, startDate, endDate, dateColumn }: {
           body: JSON.stringify({ sql: `
             SELECT f.sku as product_name,
               MAX(sk.category_name) as category,
-              CASE WHEN f.sku ~ '^[1-6]' THEN UPPER(SUBSTRING(f.sku,3,3))
-                   WHEN f.sku ~ '^E' THEN UPPER(SUBSTRING(f.sku,2,3))
-                   ELSE UPPER(SUBSTRING(f.sku,1,3)) END as destination,
+              UPPER(SUBSTRING(f.sku, 3, 3)) as destination,
               SUM(f.fulfilled_revenue_amount_vnd) as revenue,
               SUM(f.fulfilled_quantity) as units
             FROM fact_fulfillment_revenue f
@@ -1923,7 +1929,7 @@ function B2BCustomerDetail({ customer, startDate, endDate, dateColumn }: {
             {products.map((p, i) => (
               <tr key={i} className="hover:bg-slate-50">
                 <td className="px-5 py-2.5 font-mono text-[11px] text-slate-700 truncate max-w-[140px]">{p.product_name}</td>
-                <td className="px-3 py-2.5 font-bold text-[11px] text-slate-600">{p.destination || "—"}</td>
+                <td className="px-3 py-2.5 font-bold text-[11px] text-slate-600" title={p.destination || ""}>{p.destination ? (countryMap[p.destination] || p.destination) : "—"}</td>
                 <td className="px-3 py-2.5 text-[11px] text-slate-400 truncate max-w-[100px]">{p.category || "—"}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(p.revenue)}</td>
                 <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(p.units)}</td>
