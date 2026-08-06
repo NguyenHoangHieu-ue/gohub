@@ -1411,7 +1411,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,
-                          <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (pr && d.actualCc != null ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.cc)) : "—"}</td>,
+                          <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (d.actualCc != null ? (pr ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.actualCc)) : fc(d.cc)) : "—"}</td>,
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                           <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
@@ -1585,6 +1585,11 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         if (m.isProjected) return (
                                           <>{prLine(fc(m.cc), "text-slate-500")}{actLine(fc(m.actualCc ?? m.cc), "text-slate-500")}</>
                                         )
+                                        // Tháng đang chạy nhưng elapsed < MIN_PROJECT_DAYS: cc = full budget,
+                                        // actualCc = thực tế pro-rata (amount × elapsed/dim). Hiện actual.
+                                        if (m.actualCc != null) return m.actualCc > 0
+                                          ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.actualCc)}</span>
+                                          : <span className="text-slate-200">—</span>
                                         return m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>
                                       },
                                       tot: hp

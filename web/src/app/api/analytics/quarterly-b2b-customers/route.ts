@@ -290,11 +290,17 @@ export async function GET(req: NextRequest) {
         }
         if (md) {
           const mCm1 = md.gm - monthCost
+          // isRunning = tháng đang chạy (không phải tương lai, chưa kết thúc) — bao gồm cả elapsed < MIN_PROJECT_DAYS.
+          // Cần set actualCc cho MỌI tháng đang chạy (không chỉ isProjected) vì cc = full budget khi elapsedRatio=1.
+          const isRunning = !!(meta && !meta.isFuture && meta.elapsed > 0 && meta.elapsed < meta.dim)
           monthSummary[m] = {
             revenue: r2(md.revenue), gm: r2(md.gm), cc: r2(monthCost),
             cm1: r2(mCm1), cm1Pct: pct(mCm1, md.revenue), hk3Pct: pct(md.hk3, md.revenue),
             isProjected: isProj,
-            ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm), actualCc: r2(rawCc), actualCm1: r2(md.rawGm - rawCc) }),
+            ...(isRunning && {
+              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm), actualCm1: r2(md.rawGm - rawCc) }),
+              actualCc: r2(rawCc),
+            }),
           }
           totRev += md.revenue; totGm += md.gm; totCc += monthCost; totHk3 += md.hk3
           totActRev += md.rawRevenue; totActGm += md.rawGm; totActCc += rawCc
@@ -337,16 +343,19 @@ export async function GET(req: NextRequest) {
       const meta = monthMeta.find(x => x.month === m)
       const isProjected = meta?.isProjected ?? false
       if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, hk3Pct: 0, hasData: false, isProjected }
+      const isRunning = !!(meta && !meta.isFuture && meta.elapsed > 0 && meta.elapsed < meta.dim)
       return {
         month: m, hasData: true, isProjected,
         revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
         cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
         hk3Pct: pct(ma.hk3, ma.revenue),
-        ...(isProjected && {
-          actualRevenue: r2(ma.rawRevenue),
-          actualGm: r2(ma.rawGm),
+        ...(isRunning && {
+          ...(isProjected && {
+            actualRevenue: r2(ma.rawRevenue),
+            actualGm: r2(ma.rawGm),
+            actualCm1: r2(ma.rawGm - ma.rawCc),
+          }),
           actualCc: r2(ma.rawCc),
-          actualCm1: r2(ma.rawGm - ma.rawCc),
         }),
       }
     })
