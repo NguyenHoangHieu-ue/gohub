@@ -284,6 +284,8 @@ function QuarterlyContent() {
   const [settingsDirty, setSettingsDirty] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [newExcluded, setNewExcluded] = useState("")
+  const [custSuggestions, setCustSuggestions] = useState<{code: string; name: string}[]>([])
+  const [loadingSugg, setLoadingSugg] = useState(false)
 
   useEffect(() => {
     if (!canEditSettings) return
@@ -579,26 +581,72 @@ function QuarterlyContent() {
 
           {/* Excluded customers */}
           <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[10px] text-slate-400 mb-2">Lưu theo mã KH (ổn định khi đổi tên). Tìm theo tên hoặc mã → click để thêm.</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {qSettings.excludedCustomers.map(name => (
-                <span key={name} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
-                  {name}
-                  <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== name) })}
+              {qSettings.excludedCustomers.map(entry => (
+                <span key={entry} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                  {entry}
+                  <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== entry) })}
                     className="hover:text-red-900 ml-0.5"><X className="w-3 h-3" /></button>
                 </span>
               ))}
               {qSettings.excludedCustomers.length === 0 && <span className="text-slate-400 text-xs italic">Chưa có KH nào bị loại</span>}
             </div>
-            <div className="flex gap-2">
-              <input value={newExcluded} onChange={e => setNewExcluded(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
-                placeholder="Tên KH cần loại (Enter để thêm)"
-                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
-              <button onClick={() => { if (newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all border border-slate-200">
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+            <div className="relative">
+              <div className="flex gap-2">
+                <input value={newExcluded}
+                  onChange={async e => {
+                    setNewExcluded(e.target.value)
+                    const q = e.target.value.trim()
+                    if (q.length < 2) { setCustSuggestions([]); return }
+                    setLoadingSugg(true)
+                    try {
+                      const res = await fetch(`/api/analytics/quarterly-settings/search-customers?q=${encodeURIComponent(q)}`)
+                      if (res.ok) setCustSuggestions(await res.json())
+                    } finally { setLoadingSugg(false) }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && newExcluded.trim() && !qSettings.excludedCustomers.includes(newExcluded.trim())) {
+                      updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] })
+                      setNewExcluded(""); setCustSuggestions([])
+                    }
+                    if (e.key === "Escape") setCustSuggestions([])
+                  }}
+                  placeholder="Tìm tên hoặc mã KH…"
+                  className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
+                <button onClick={() => {
+                  if (newExcluded.trim() && !qSettings.excludedCustomers.includes(newExcluded.trim())) {
+                    updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] })
+                    setNewExcluded(""); setCustSuggestions([])
+                  }
+                }} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all border border-slate-200">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Dropdown suggestions */}
+              {(custSuggestions.length > 0 || loadingSugg) && (
+                <div className="absolute z-50 top-full left-0 right-8 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {loadingSugg && <div className="px-3 py-2 text-xs text-slate-400 italic">Đang tìm…</div>}
+                  {custSuggestions.map(s => {
+                    const alreadyAdded = qSettings.excludedCustomers.includes(s.code)
+                    return (
+                      <button key={s.code} disabled={alreadyAdded}
+                        onClick={() => {
+                          if (!alreadyAdded) {
+                            updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, s.code] })
+                            setNewExcluded(""); setCustSuggestions([])
+                          }
+                        }}
+                        className={cn("w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors",
+                          alreadyAdded ? "opacity-40 cursor-not-allowed" : "cursor-pointer")}>
+                        <span className="font-medium text-slate-800 truncate">{s.name}</span>
+                        <span className="font-mono text-[10px] text-slate-400 flex-shrink-0">{s.code}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
