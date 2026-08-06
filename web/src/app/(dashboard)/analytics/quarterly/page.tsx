@@ -284,6 +284,8 @@ function QuarterlyContent() {
   const [settingsDirty, setSettingsDirty] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [newExcluded, setNewExcluded] = useState("")
+  const [custSuggestions, setCustSuggestions] = useState<{code: string; name: string}[]>([])
+  const [loadingSugg, setLoadingSugg] = useState(false)
 
   useEffect(() => {
     if (!canEditSettings) return
@@ -579,26 +581,72 @@ function QuarterlyContent() {
 
           {/* Excluded customers */}
           <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[10px] text-slate-400 mb-2">Lưu theo mã KH (ổn định khi đổi tên). Tìm theo tên hoặc mã → click để thêm.</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {qSettings.excludedCustomers.map(name => (
-                <span key={name} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
-                  {name}
-                  <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== name) })}
+              {qSettings.excludedCustomers.map(entry => (
+                <span key={entry} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                  {entry}
+                  <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== entry) })}
                     className="hover:text-red-900 ml-0.5"><X className="w-3 h-3" /></button>
                 </span>
               ))}
               {qSettings.excludedCustomers.length === 0 && <span className="text-slate-400 text-xs italic">Chưa có KH nào bị loại</span>}
             </div>
-            <div className="flex gap-2">
-              <input value={newExcluded} onChange={e => setNewExcluded(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
-                placeholder="Tên KH cần loại (Enter để thêm)"
-                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
-              <button onClick={() => { if (newExcluded.trim()) { updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] }); setNewExcluded("") }}}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all border border-slate-200">
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+            <div className="relative">
+              <div className="flex gap-2">
+                <input value={newExcluded}
+                  onChange={async e => {
+                    setNewExcluded(e.target.value)
+                    const q = e.target.value.trim()
+                    if (q.length < 2) { setCustSuggestions([]); return }
+                    setLoadingSugg(true)
+                    try {
+                      const res = await fetch(`/api/analytics/quarterly-settings/search-customers?q=${encodeURIComponent(q)}`)
+                      if (res.ok) setCustSuggestions(await res.json())
+                    } finally { setLoadingSugg(false) }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && newExcluded.trim() && !qSettings.excludedCustomers.includes(newExcluded.trim())) {
+                      updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] })
+                      setNewExcluded(""); setCustSuggestions([])
+                    }
+                    if (e.key === "Escape") setCustSuggestions([])
+                  }}
+                  placeholder="Tìm tên hoặc mã KH…"
+                  className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
+                <button onClick={() => {
+                  if (newExcluded.trim() && !qSettings.excludedCustomers.includes(newExcluded.trim())) {
+                    updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] })
+                    setNewExcluded(""); setCustSuggestions([])
+                  }
+                }} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-all border border-slate-200">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Dropdown suggestions */}
+              {(custSuggestions.length > 0 || loadingSugg) && (
+                <div className="absolute z-50 top-full left-0 right-8 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {loadingSugg && <div className="px-3 py-2 text-xs text-slate-400 italic">Đang tìm…</div>}
+                  {custSuggestions.map(s => {
+                    const alreadyAdded = qSettings.excludedCustomers.includes(s.code)
+                    return (
+                      <button key={s.code} disabled={alreadyAdded}
+                        onClick={() => {
+                          if (!alreadyAdded) {
+                            updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, s.code] })
+                            setNewExcluded(""); setCustSuggestions([])
+                          }
+                        }}
+                        className={cn("w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors",
+                          alreadyAdded ? "opacity-40 cursor-not-allowed" : "cursor-pointer")}>
+                        <span className="font-medium text-slate-800 truncate">{s.name}</span>
+                        <span className="font-mono text-[10px] text-slate-400 flex-shrink-0">{s.code}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -841,6 +889,7 @@ function QuarterlyContent() {
         notify={notify}
         quarterLabel={`${selQ}-${selYear}`}
         qFactor={qFactor}
+        summary={summary}
       />
 
       {/* ── B2C channel pivot ── */}
@@ -1023,9 +1072,9 @@ function lineTotal(lines: CostLine[], revenue: number): number {
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
 
-function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1 }:
+function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [] }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number }) {
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[] }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
@@ -1056,6 +1105,27 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   }
 
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
+
+  // kpiPrFactor per tháng — project mọi tháng đang chạy kể cả elapsed < MIN_PROJECT_DAYS (giống KPI cards).
+  const monthKpiFactor = useMemo(() => {
+    const m: Record<string, number> = {}
+    summary.forEach(s => { m[s.month] = s.elapsed > 0 && s.elapsed < s.dim ? s.dim / s.elapsed : 1 })
+    return m
+  }, [summary])
+
+  // PR values của 1 KH: Σ (actual_monthly × kpiPrFactor) — dùng cho main customer row.
+  const custPr = (c: any) => {
+    let prRev = 0, prGm = 0, prCm1 = 0
+    quarterMonths.forEach(m => {
+      const f = monthKpiFactor[m] ?? 1
+      const ms = c.monthSummary?.[m]
+      if (!ms) return
+      prRev  += Math.round((ms.actualRevenue ?? ms.revenue) * f)
+      prGm   += Math.round((ms.actualGm  ?? ms.gm)  * f)
+      prCm1  += Math.round((ms.actualCm1 ?? ms.cm1) * f)
+    })
+    return { prRev, prGm, prCm1, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0 }
+  }
   const allTiers: any[] = b2bTiers?.tiers ?? []
 
   // Load customer targets khi đổi quý
@@ -1370,7 +1440,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                   const hasProjectedMonth = tierMonths.some((d: any) => d.isProjected && d.hasData)
                   const qActRev = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualRevenue ?? d.revenue) : d.revenue), 0)
                   const qActGm  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualGm  ?? d.gm)  : d.gm),  0)
-                  const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCc  ?? d.cc)  : d.cc),  0)
+                  const qActCc  = tierMonths.reduce((s: number, d: any) => s + (d.actualCc ?? d.cc), 0) // luôn dùng actualCc khi có (pro-rated cho mọi tháng đang chạy)
                   const qActCm1 = tierMonths.reduce((s: number, d: any) => s + (d.isProjected ? (d.actualCm1 ?? d.cm1) : d.cm1), 0)
                   const r2 = Math.round
                   const qPrRev  = tier.totalRevenue
@@ -1501,8 +1571,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const actGm  = hp ? (c.actualGm  ?? c.gm)  : c.gm
                             const actCc  = hp ? (c.actualCc  ?? c.cc)  : c.cc
                             const actCm1 = hp ? (c.actualCm1 ?? c.cm1) : c.cm1
-                            // Main row mặc định: Pro-rata values
-                            const prGmPct  = c.revenue > 0 ? c.gm  / c.revenue * 100 : 0
+                            // Main row: Pro-rata values (kpiPrFactor — project tháng hiện tại kể cả < MIN_PROJECT_DAYS)
+                            const pr = custPr(c)
+                            const prGmPct = pr.prGmPct
                             // Target
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
                             const isEditingTgt = editingTargetCode === c.code
@@ -1525,8 +1596,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       {c.priceListName ? <span className="text-[9px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
-                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(c.revenue)}</td>
-                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(c.gm)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
+                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(pr.prGm)}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
                                   <td className="px-3 py-2 text-right tabular-nums text-[10px]">
                                     {editMode && canEditCost
@@ -1535,8 +1606,8 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         </button>
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
-                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(c.cm1))}>{fc(c.cm1)}</td>
-                                  <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(c.cm1))}>{pct(c.cm1Pct)}</td>
+                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{c.qoqPct != null ? `${c.qoqPct >= 0 ? "+" : ""}${c.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
                                 </tr>
@@ -1597,9 +1668,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span>
                                     },
                                     { label: "CM1",
-                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
-                                        ? <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
-                                        : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(m.cm1))}>{fc(m.cm1)}</span>,
+                                      vals: (m: any) => {
+                                        if (!m) return <span className="text-slate-200">—</span>
+                                        if (m.isProjected) return <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
+                                        // Tháng đang chạy (elapsed < MIN_PROJECT_DAYS): actualCm1 = GM_actual - CC_actual (khớp CH.COST hiện)
+                                        const v = m.actualCm1 ?? m.cm1
+                                        return <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(v))}>{fc(v)}</span>
+                                      },
                                       tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(actCm1))}>{fc(actCm1)}</span> },
                                     { label: "CM1%",
                                       vals: (m: any) => m ? <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span> : <span className="text-slate-200">—</span>,

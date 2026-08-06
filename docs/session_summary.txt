@@ -1,5 +1,61 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-05 (Session 136 — Quarter Report deep fix: 3 bugs BE + 3 bugs FE + tooltips).
+Cập nhật lần cuối: 2026-08-06 (Session 137 — Quarter Report audit + fix + Channels B2B tier + destination map).
+
+## ══════ SESSION 137 — TỔNG KẾT (2026-08-06, Sonnet 4.6) ══════
+
+### A. Quarter Report — 6 fix / cải tiến
+
+**1. ColInfo tooltip thoát overflow-hidden (commit 0e580ed)**
+- Tooltip "i" bị cắt bởi overflow-hidden container → dùng createPortal + position:fixed tính từ getBoundingClientRect.
+
+**2. CH.Cost T8 hiện actual thay vì full budget (commit 60b55c1)**
+- Khi elapsed < MIN_PROJECT_DAYS: cc = full budget, không phải thực tế pro-rata.
+- BE: set actualCc=rawCc cho mọi tháng isRunning. FE sub-table: dùng actualCc khi != null.
+
+**3. quarterly-report double-count B2B channel cost (commit b3d9dca)**
+- Điều tra: Supabase analytics_channel_costs T7+T8 = TẤT CẢ GIÁ TRỊ 0 → không phải double-count.
+- B2B CM1 = 373M là đúng — Turso per-customer costs (26% fee + ads) rất lớn ăn gần hết GP.
+- Fix vẫn chuẩn: B2B chỉ dùng Turso (nhất quán tier pivot). Cache key v7→v8.
+
+**4. CM1 sub-table per-KH dùng actualCm1 (commit 3852cc3)**
+- CM1 hiển thị trong "Chi tiết theo Tháng" dùng full-budget CC thay vì actual CC → không khớp.
+- BE: set actualCm1 = rawGm - rawCc cho mọi tháng isRunning. FE: dùng m.actualCm1 ?? m.cm1.
+
+**5. quarterly-report-formulas.md — điền đầy đủ công thức (local, gitignored)**
+- Phân rõ 3 hệ số: monthly_factor (bảng tháng, ngưỡng 7 ngày), kpiPrFactor (KPI cards, không ngưỡng), qFactor (chỉ dùng cho expectedPct marker).
+
+**6. Main customer row hiển thị pro-rata (commit fef45ea)**
+- c.revenue/gm/cm1 với factor=1 (elapsed<7) = actual → user thấy là số actual.
+- Fix: thêm custPr(c) helper dùng kpiPrFactor, truyền summary prop xuống B2BTierSection.
+- Main row: PR. Sub-row "Chi tiết theo Tháng" (khi click KH): actual/PR per tháng → giữ nguyên.
+
+### B. Tab Channels Performance — 3 cải tiến
+
+**7. B2B tier Strategic/VIP/Gold/Silver + customer drill-down (commit 40299cb)**
+- Thêm tier tab bar (All/Strategic/VIP/Gold/Silver) thay dropdown 2 option.
+- Tier summary cards: revenue/GP/customer count per tier, click để filter.
+- Customer table → click tên KH → xem kênh bán + top products (B2BCustomerDetail component).
+- Back button từ customer detail về tier view.
+- API mới: /api/analytics/channels/b2b-customers (B2B customers + tier classification từ price_list_name).
+
+**8. Top Products: cột Destination + Category (commit 40299cb)**
+- SQL join dim_sku → MAX(category_name) + SUBSTRING(sku, 3, 3) as destination.
+- Hiển thị category và destination code trong bảng.
+
+**9. Destination map tên nước (commit f3383c6)**
+- Từ CASE WHEN phức tạp → UPPER(SUBSTRING(sku, 3, 3)) (chars 3-5 theo yêu cầu).
+- Fetch /api/config/country-codes (Turso, 332 entries) một lần → map code → tên nước.
+- Hiển thị "Japan" thay vì "JPN", hover title = code gốc.
+
+### C. Verify Q3 KPI numbers từ gohub_dw
+- B2B Rev = 7.118T | GP = 2.190T (GP% = 30.8%)
+- B2C Rev = 2.080T | GP = 1.173T (GP% = 56.4%)
+- B2B CM1 = 373M ← ĐÚNG (không phải bug). Turso costs: 26% fee + ads lớn cho Shopee, TikTok, etc.
+- Supabase analytics_channel_costs = tất cả 0 cho T7+T8.
+
+### Trạng thái
+- staging = fef45ea (merged main e8d4ef3 trước đó trong session này)
+- Pending Hiếu: chạy migration v31, set LARK_CREATOR_USER_ID, nhập Cost T8 B2C≠0, bấm "Tải lại mới" Quarter Report
 
 ## ══════ SESSION 136b — TỔNG KẾT (2026-08-05, Sonnet 4.6 cont.) ══════
 

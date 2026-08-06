@@ -4,13 +4,12 @@
 
 ---
 
-## TRẠNG THÁI HIỆN TẠI (2026-08-05)
+## TRẠNG THÁI HIỆN TẠI (2026-08-06)
 
-- **Branch**: staging = `46b77e7` — **CHƯA merge main** (nhiều commit quan trọng chờ Hiếu duyệt)
-- **main** = `4def78c` (cũ hơn staging nhiều session)
+- **Branch**: staging = `fef45ea` | **main** = `e8d4ef3` (đã merge s136–s137a giữa session)
 - **Migrations chạy**: v30 ✅ | v30b ✅ | v31 ⏳ Hiếu chưa chạy (`chatbot_learning_log`)
-- **s136 (2026-08-05)**: Audit sâu + deep fix Quarter Report (6 bugs), B2B, B2C. Xem §B6.
-- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8, **bấm "Tải lại mới" Quarter Report để flush cache**.
+- **s137 (2026-08-06)**: ColInfo portal fix, CH.Cost actual, CM1 sub-table, main row PR, Channels B2B tier + destination map. Xem §B7.
+- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8, **bấm "Tải lại mới" Quarter Report để flush cache qb2b_v5/qreport_raw_v8**.
 
 ---
 
@@ -80,6 +79,24 @@
 - [x] **ISSUE-DASH-5** ✅ FIX (s126) — tier-performance dùng `getAnalyticsSource(dateColumn)`: Created → sales table + created_date + GP=0 (hết trộn nguồn). Fulfillment không đổi. targets-summary luôn-fulfilled = cố ý (không sửa).
 - [x] **ISSUE-DASH-4** ✅ FIX s131 (Hiếu chốt, 2026-08-03): đổi Strategic sang định nghĩa theo KHÁCH `price_list_name` (helper chung `getGroupCaseByCustomerSQL`/`IS_STRATEGIC_CUSTOMER_SQL`) cho: Dashboard line chart (revenue-chart2), **BOD group-margin cards + bod-summary, All-Time, scheduled 【4】**. Đồng nhất bảng Phân khúc. Gốc lỗi Strategic=0: `partner_tiers` RỖNG. Verify T7: Strategic 5,22 tỷ/Non 1,04 tỷ, tổng B2B 6,26 tỷ giữ nguyên. GIỮ theo partner_tiers (Hiếu chốt): bảng chi tiết "Strategic Channels" per-đối-tác (b2b/strategic-performance). Nhãn tiếng Anh giữ nguyên.
 - [ ] **ISSUE-DASH-3 (UI, cần Bảo/Hiếu)**: nhóm "Other" (78 đơn, 0đ) bị loại khỏi bảng Business Groups → tổng đơn bảng < KPI card. Thêm dòng Other = đổi UI (Strict Lock) → chờ chỉ thị.
+
+---
+
+## B7. Quarter Report + Channels — s137 (2026-08-06) ✅ HOÀN THÀNH
+
+**Quarter Report fixes:**
+- [x] ColInfo tooltip: createPortal + position:fixed thoát overflow-hidden
+- [x] CH.Cost T8: hiện actual (rawCc = amount×elapsed/dim) thay vì full budget
+- [x] CM1 sub-table per-KH: actualCm1 = rawGm - rawCc (khớp CH.Cost hiển thị)
+- [x] Main customer row: hiển thị PR (kpiPrFactor) thay vì actual YTD
+- [x] quarterly-report-formulas.md: điền đầy đủ 3 hệ số + công thức mọi bảng
+- [x] Verify Q3 KPI: B2B CM1=373M là đúng (Turso costs 26% fee lớn); Supabase channel costs=0
+
+**Channels tab:**
+- [x] B2B tier tabs: Strategic/VIP/Gold/Silver (từ price_list_name)
+- [x] Customer table + drill-down (kênh + top products per KH)
+- [x] Top Products: cột Destination (chars 3-5) + Category (dim_sku)
+- [x] Destination map code→tên nước từ /api/config/country-codes (Turso)
 
 ---
 
