@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
-  const rawCacheKey = `qreport_raw_v7:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `qreport_raw_v8:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
   // inactive_cust: LEFT JOIN + IS NULL thay NOT IN. hk3_skus: JOIN trực tiếp.
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
   const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
   try {
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap] = await Promise.all([
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap, prevCustomerCostMap] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
         // GIỚI HẠN 2 query đồng thời (thay vì cả 5) → giảm connection footprint trên gohub_dw.
         // Mỗi query ~2s → 5 query / 2 luồng ≈ 6s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
@@ -240,7 +240,8 @@ export async function GET(req: NextRequest) {
       }, QUERY_TTL_MIN, refresh),
       fetchCosts(months),
       fetchCosts(prevQMonths),
-      fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),  // Turso B2B customer costs (safe)
+      fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),      // Turso B2B customer costs current Q
+      fetchCustomerCosts(prevQMonths).catch(() => new Map<string, CostRecord>()), // Turso B2B customer costs prev Q (QoQ)
     ])
 
     const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows } = rawData
@@ -297,13 +298,20 @@ export async function GET(req: NextRequest) {
       let b2bHk3Act = 0, b2cHk3Act = 0
       channelRows.filter(row => row.month === month).forEach(row => {
         const rev = parseFloat(row.revenue || "0")
-        const cc = computeChannelCost(channelCosts, row.channel, month, rev, mStart, actualEnd, row.source_code)
         const hk3 = parseFloat(row.hk3 || "0")
-        if (row.bg === "B2B") { b2bCCAct += cc; b2bHk3Act += hk3 }
-        else { b2cCCAct += cc; b2cHk3Act += hk3 }
+        if (row.bg === "B2B") {
+          // B2B: KHÔNG dùng Supabase analytics_channel_costs (double-count với Turso per-customer).
+          // Supabase lưu platform fee/commission theo kênh; Turso lưu cùng loại chi phí theo KH.
+          // Nếu cộng cả 2: b2bCCAct bị inflate 2x → CM1 âm ảo. Chỉ dùng 1 nguồn duy nhất (Turso).
+          b2bHk3Act += hk3
+        } else {
+          const cc = computeChannelCost(channelCosts, row.channel, month, rev, mStart, actualEnd, row.source_code)
+          b2cCCAct += cc
+          b2cHk3Act += hk3
+        }
       })
-      // Cộng chi phí B2B per-customer nhập tay (Turso) → khớp tổng bảng "B2B Chi tiết theo Nhóm × Tháng".
-      b2bCCAct += b2bCustCostByMonth(month, gcElapsedRatio)
+      // B2B channel cost: CHỈ dùng Turso per-customer costs → nhất quán với bảng "B2B Chi tiết theo Nhóm × Tháng".
+      b2bCCAct = b2bCustCostByMonth(month, gcElapsedRatio)
 
       const b2bGCBudget = groupCosts.filter(c => c.group_name === "B2B" && c.month === month).reduce((s, c) => s + c.amount, 0)
       const b2cGCBudget = groupCosts.filter(c => c.group_name === "B2C" && c.month === month).reduce((s, c) => s + c.amount, 0)
@@ -448,17 +456,35 @@ export async function GET(req: NextRequest) {
     const prevB2B = (prevGroupRows as any[]).find((row: any) => row.bg === "B2B")
     const prevB2C = (prevGroupRows as any[]).find((row: any) => row.bg === "B2C")
 
+    // prevB2BCm1/prevB2CCm1: dùng Supabase channel costs cho B2C (nhất quán current Q).
+    // B2B prev Q: dùng Turso per-customer costs (amount only, vì không có per-customer revenue Q trước).
+    // Nếu Turso Q trước không có data → prevB2BCm1 = GP (không trừ cost), QoQ sẽ lệch — chấp nhận.
     let prevB2BCm1 = 0, prevB2CCm1 = 0
+    const prevB2BGpByMonth = new Map<string, number>()
       ; (prevChannelRows as any[]).forEach((row: any) => {
         const mStart = `${row.month}-01`
         const mEnd = new Date(parseInt(row.month.split("-")[0]), parseInt(row.month.split("-")[1]), 0).toISOString().split("T")[0]
         const rev = parseFloat(row.revenue || "0")
         const gp = parseFloat(row.gp || "0")
-        const cc = computeChannelCost(prevChannelCosts, row.channel, row.month, rev, mStart, mEnd)
-        if (row.bg === "B2B") prevB2BCm1 += gp - cc
-        else prevB2CCm1 += gp - cc
+        if (row.bg === "B2B") {
+          prevB2BGpByMonth.set(row.month, (prevB2BGpByMonth.get(row.month) ?? 0) + gp)
+        } else {
+          const cc = computeChannelCost(prevChannelCosts, row.channel, row.month, rev, mStart, mEnd)
+          prevB2CCm1 += gp - cc
+        }
       })
+    prevB2BGpByMonth.forEach((gp) => { prevB2BCm1 += gp })
     prevQMonths.forEach(m => {
+      // Trừ Turso B2B customer costs quý trước (amount type only — không có per-customer revenue Q trước)
+      prevCustomerCostMap.forEach((rec: CostRecord, key: string) => {
+        if (key.slice(0, 7) !== m) return
+        let lines: Array<{ type: string; value: number }> = []
+        if (rec.cost_lines) { try { lines = JSON.parse(rec.cost_lines) } catch {} }
+        const amountCost = lines.length > 0
+          ? lines.filter(l => l?.type === "amount").reduce((s, l) => s + (Number(l?.value) || 0), 0)
+          : (rec.cost_type === "amount" ? (Number(rec.cost_value) || 0) : 0)
+        prevB2BCm1 -= amountCost
+      })
       prevB2BCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2B" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
       prevB2CCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2C" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
     })
