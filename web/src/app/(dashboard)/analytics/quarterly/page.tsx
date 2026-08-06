@@ -760,21 +760,22 @@ function QuarterlyContent() {
             <table className="w-full text-[12px] border-collapse">
               <thead><TableHead cols={TH_COLS} /></thead>
               <tbody>
-                {summary.map((m, mi) => {
+                {/* hasCurrentMonth: quý có tháng đang chạy → hiện cột PR cho MỌI tháng (tháng xong: PR = actual vì
+                    factor=1) → cột PR cộng lại = KPI card PR (nếu chỉ hiện PR tháng hiện tại thì cột không cộng khớp card). */}
+                {(() => { const hasCurrentMonth = summary.some(m => m.elapsed > 0 && m.elapsed < m.dim); return summary.map((m, mi) => {
                   const [y, mo] = m.month.split("-")
                   const label  = `T${parseInt(mo)}/${y}`
                   const mom    = momData[mi]
                   return (
                     <React.Fragment key={m.month}>
-                      {/* Revenue/GM/CM1 = actual; PR Rev/PR CM1 = kpiPrFactor cho mọi tháng đang chạy (kể cả elapsed < MIN_PROJECT_DAYS) */}
+                      {/* Revenue/GM/CM1 = actual; PR = actual × kpiFactor (factor=1 cho tháng đã xong → PR=actual) */}
                       {(() => {
                         const isCurrent = m.elapsed > 0 && m.elapsed < m.dim
                         const kpiFactor = isCurrent ? m.dim / m.elapsed : 1
-                        const prRevTotal = isCurrent ? Math.round((m.total.actualRevenue ?? m.total.revenue) * kpiFactor) : 0
-                        const prCm1Total = isCurrent ? Math.round((m.total.actualCm1 ?? m.total.cm1) * kpiFactor) : 0
-                        const factorLabel = isCurrent && !m.isProjected
-                          ? `×${kpiFactor.toFixed(1)}`
-                          : m.isProjected ? `×${m.factor}` : null
+                        const showPr = hasCurrentMonth  // hiện PR mọi tháng khi quý đang chạy → cột cộng khớp card
+                        const prRevTotal = Math.round((m.total.actualRevenue ?? m.total.revenue) * kpiFactor)
+                        const prCm1Total = Math.round((m.total.actualCm1 ?? m.total.cm1) * kpiFactor)
+                        const factorLabel = isCurrent ? `×${kpiFactor.toFixed(1)}` : null
                         return (
                           <tr className={cn("border-b border-slate-100", isCurrent ? "bg-blue-50/30" : "bg-white hover:bg-slate-50")}>
                             <td className="px-4 py-3 font-semibold text-slate-800">
@@ -787,7 +788,7 @@ function QuarterlyContent() {
                                 <MomBadge v={mom.rev} />
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-500">{isCurrent ? fc(prRevTotal) : <span className="text-slate-300">—</span>}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-500">{showPr ? fc(prRevTotal) : <span className="text-slate-300">—</span>}</td>
                             <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.actualGp ?? m.total.gp)}</td>
                             <td className="px-4 py-3 text-right text-slate-500">{pct(m.total.gpPct)}</td>
                             <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.actualCc ?? m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
@@ -798,18 +799,18 @@ function QuarterlyContent() {
                                 <MomBadge v={mom.cm1} />
                               </div>
                             </td>
-                            <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(prCm1Total))}>{isCurrent ? fc(prCm1Total) : <span className="text-slate-300">—</span>}</td>
+                            <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(prCm1Total))}>{showPr ? fc(prCm1Total) : <span className="text-slate-300">—</span>}</td>
                             <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
                             <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
                           </tr>
                         )
                       })()}
-                      <MonthSubRow label="B2B" stats={m.b2b} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} isCurrent={m.elapsed > 0 && m.elapsed < m.dim} momRev={mom.b2bRev} momCm1={mom.b2bCm1} qoqCm1={b2bQoQ} />
-                      <MonthSubRow label="B2C" stats={m.b2c} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} isCurrent={m.elapsed > 0 && m.elapsed < m.dim} momRev={mom.b2cRev} momCm1={mom.b2cCm1} qoqCm1={b2cQoQ} />
+                      <MonthSubRow label="B2B" stats={m.b2b} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2bRev} momCm1={mom.b2bCm1} qoqCm1={b2bQoQ} />
+                      <MonthSubRow label="B2C" stats={m.b2c} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2cRev} momCm1={mom.b2cCm1} qoqCm1={b2cQoQ} />
                     </React.Fragment>
                   )
-                })}
+                }) })()}
               </tbody>
             </table>
           </div>
@@ -931,8 +932,8 @@ function MomBadge({ v }: { v: number | null }) {
 }
 
 // ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
-function MonthSubRow({ label, stats, isCurrent = false, kpiFactor = 1, momRev, momCm1, qoqCm1 }: {
-  label: string; stats: MonthStats; isCurrent?: boolean; kpiFactor?: number
+function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRev, momCm1, qoqCm1 }: {
+  label: string; stats: MonthStats; showPr?: boolean; kpiFactor?: number
   momRev?: number | null; momCm1?: number | null; qoqCm1?: number | null
 }) {
   const actRev = stats.actualRevenue ?? stats.revenue
@@ -940,8 +941,8 @@ function MonthSubRow({ label, stats, isCurrent = false, kpiFactor = 1, momRev, m
   const actCc  = stats.actualCc     ?? stats.channelCost
   const actGc  = stats.actualGc     ?? stats.groupCost
   const actCm1 = stats.actualCm1    ?? stats.cm1
-  const prRev  = isCurrent ? Math.round(actRev  * kpiFactor) : 0
-  const prCm1  = isCurrent ? Math.round(actCm1  * kpiFactor) : 0
+  const prRev  = Math.round(actRev  * kpiFactor)
+  const prCm1  = Math.round(actCm1  * kpiFactor)
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
@@ -951,7 +952,7 @@ function MonthSubRow({ label, stats, isCurrent = false, kpiFactor = 1, momRev, m
           {momRev !== undefined && <MomBadge v={momRev ?? null} />}
         </div>
       </td>
-      <td className="px-4 py-2 text-right tabular-nums text-slate-400">{isCurrent ? fc(prRev) : <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-2 text-right tabular-nums text-slate-400">{showPr ? fc(prRev) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actGp)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actCc > 0 ? fc(actCc) : <span className="text-slate-300">—</span>}</td>
@@ -962,7 +963,7 @@ function MonthSubRow({ label, stats, isCurrent = false, kpiFactor = 1, momRev, m
           {momCm1 !== undefined && <MomBadge v={momCm1 ?? null} />}
         </div>
       </td>
-      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(prCm1))}>{isCurrent ? fc(prCm1) : <span className="text-slate-300">—</span>}</td>
+      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(prCm1))}>{showPr ? fc(prCm1) : <span className="text-slate-300">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
         qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
