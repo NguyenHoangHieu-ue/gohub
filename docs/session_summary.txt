@@ -1,5 +1,52 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-06 (Session 137 — Quarter Report audit + fix + Channels B2B tier + destination map).
+Cập nhật lần cuối: 2026-08-06 (Session 137b — Quarter Report: nhất quán 3 bảng, loại KH theo mã, ước tính T9, 2 sub-cột Act/PR).
+
+## ══════ SESSION 137b — TỔNG KẾT (2026-08-06, Opus 4.8 cont.) ══════
+
+> Tiếp s137: audit sâu đối chiếu 3 bảng Tổng Quý + xử lý loạt yêu cầu Hiếu về Quarter Report.
+> Đã merge main 2 lần: afc1263 (tới b2cd195). Commit mới nhất staging = 70f4070 (chờ merge).
+
+### A. Nhất quán chi phí giữa 3 bảng (fe5224d, 86791c5)
+1. **Ch.Cost Tổng Quý lệch** (fe5224d): buildTotals cộng groupShare vào totalCc + T8 amount dùng full budget.
+   Fix: totalCc = Turso only (không gộp group); c.cc = totActCc (actual pro-rated); totalB2BGroupCost pro-rate T8.
+2. **Cost T7 Bảng 1 vs Bảng 3 lệch** (86791c5): B2BCustomerVnShopee/TikTok có Turso cost T7 (51.6M+38.8M)
+   nhưng KHÔNG có orders T7 → Bảng 1 (b2bCustCostByMonth) cộng, Bảng 3 (build từ fact) không.
+   Fix: `if (custRev===0) return` skip KH không có đơn. Cache v8→v9.
+
+### B. Loại KH khỏi B2B report — dùng MÃ thay tên (4e8c4e1)
+- Root cause: makeExcludeSql match c.name → KH đổi tên → filter bỏ sót âm thầm.
+- Fix: dual match — code (alphanumeric)→TRIM(f.customer_code) IN; tên (có space)→dim_customer.name (backward-compat).
+- API mới /api/analytics/quarterly-settings/search-customers (tìm KH theo tên/mã).
+- UI Settings: autocomplete → click chọn → lưu CODE. (KH lưu tên cũ bị lỗi: xóa + search chọn lại theo code)
+
+### C. Main customer row hiển thị PRO-RATA (fef45ea)
+- elapsed<7 → factor=1 → c.revenue = actual → nhìn như số actual. Fix: custPr() dùng kpiPrFactor (project mọi tháng chạy).
+- Main row = PR; sub-row "Chi tiết theo Tháng" = actual/PR per tháng.
+
+### D. Monthly table + KPI cards reconcile (fbea72c, 7641ba2)
+- Tổng hợp theo Tháng: hiện PR Rev/PR CM1 cho T8 (kpiPrFactor, kể cả elapsed<7).
+- Khi quý đang chạy → hiện PR MỌI tháng (tháng xong PR=actual factor 1) → cột PR cộng = KPI card.
+
+### E. ƯỚC TÍNH THÁNG TƯƠNG LAI T9 trong Tổng Quý (b2cd195) — BUG NGHIÊM TRỌNG
+- Quarter totals chỉ = actual T7 + prorata T8, THIẾU T9 → progress % vs target sai thấp (27%).
+- CT: quarter_est = existing_projected × (quarter_days/existing_days) = ×(92/62). Tỉ lệ % không đổi.
+- Áp TOÀN BỘ: KPI cards, Tổng hợp cả Quý, tier pivot Tổng Quý + QoQ, per-customer main row + QoQ,
+  per-customer "Chi tiết theo Tháng" (cột T9 hiện ước tính ~ƯT → reconcile).
+- BE quarterly-b2b-customers trả prevCm1 (tier + per-customer) để FE recompute QoQ với CM1 gồm T9.
+- Verify DB: B2B CM1 PR 2.08T→3.08T, Tổng CM1 PR 5.48T/target 7.81T = 70% (trước 27%).
+
+### F. Chi tiết per-KH: cột tháng hiện tại tách 2 sub-cột Act/PR (70f4070)
+- T8 tách 2 cột con: Act (thực tế tới nay) + PR (actual × dim/elapsed). T7/T9 giữ 1 cột.
+- Guard KH không có data tháng hiện tại → "—".
+
+### Verify Q3 (query trực tiếp gohub_dw, 1/7→5/8, asOf 5/8)
+- B2B Rev=7.118T GP=2.190T (30.8%) | B2C Rev=2.080T GP=1.173T (56.4%)
+- Supabase analytics_channel_costs T7+T8 = TẤT CẢ 0 (không double-count). B2B cost từ Turso 26% fee + ads.
+- B2B CM1 373Tr ở ảnh cũ = pre-fix double-count; sau fix + cache flush = 1.25T actual.
+
+### Trạng thái: main=afc1263 | staging=70f4070 (chờ merge F). Hiếu bấm "Tải lại mới" flush cache qreport_raw_v9/qb2b.
+
+
 
 ## ══════ SESSION 137 — TỔNG KẾT (2026-08-06, Sonnet 4.6) ══════
 
