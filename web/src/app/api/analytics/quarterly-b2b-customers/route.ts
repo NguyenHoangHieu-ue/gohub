@@ -298,8 +298,9 @@ export async function GET(req: NextRequest) {
             cm1: r2(mCm1), cm1Pct: pct(mCm1, md.revenue), hk3Pct: pct(md.hk3, md.revenue),
             isProjected: isProj,
             ...(isRunning && {
-              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm), actualCm1: r2(md.rawGm - rawCc) }),
+              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm) }),
               actualCc: r2(rawCc),
+              actualCm1: r2(md.rawGm - rawCc),  // luôn set: CM1 = GM_actual - CC_actual (khớp CH.COST hiển thị)
             }),
           }
           totRev += md.revenue; totGm += md.gm; totCc += monthCost; totHk3 += md.hk3

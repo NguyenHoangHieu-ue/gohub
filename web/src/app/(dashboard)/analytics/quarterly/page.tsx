@@ -1597,9 +1597,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                         : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span>
                                     },
                                     { label: "CM1",
-                                      vals: (m: any) => !m ? <span className="text-slate-200">—</span> : m.isProjected
-                                        ? <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
-                                        : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(m.cm1))}>{fc(m.cm1)}</span>,
+                                      vals: (m: any) => {
+                                        if (!m) return <span className="text-slate-200">—</span>
+                                        if (m.isProjected) return <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
+                                        // Tháng đang chạy (elapsed < MIN_PROJECT_DAYS): actualCm1 = GM_actual - CC_actual (khớp CH.COST hiện)
+                                        const v = m.actualCm1 ?? m.cm1
+                                        return <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(v))}>{fc(v)}</span>
+                                      },
                                       tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(actCm1))}>{fc(actCm1)}</span> },
                                     { label: "CM1%",
                                       vals: (m: any) => m ? <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span> : <span className="text-slate-200">—</span>,
