@@ -90,6 +90,10 @@ export default function ChannelPerformancePage() {
 
   const [channelGroup, setChannelGroup] = useState<"All" | "B2B" | "B2C">("All")
   const [b2bTier, setB2bTier] = useState<"All" | "Strategic" | "Non-Strategic">("All")
+  const [b2bCustomers, setB2bCustomers] = useState<any[]>([])
+  const [b2bTierFilter, setB2bTierFilter] = useState<string>("ALL")
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [loadingB2B, setLoadingB2B] = useState(false)
 
   const [channels, setChannels] = useState<{ channel_id: string, channel_name: string }[]>([])
   const [selectedChannel, setSelectedChannel] = useState<string>("")
@@ -327,9 +331,25 @@ export default function ChannelPerformancePage() {
 
   useEffect(() => {
     if (selectedChannel) fetchChannelData()
-    else fetchAllChannels()
+    else {
+      fetchAllChannels()
+      if (channelGroup === "B2B") fetchB2BCustomers()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, showAllProducts])
+  }, [selectedChannel, showAllProducts, channelGroup, startDate, endDate, dateColumn])
+
+  const fetchB2BCustomers = async () => {
+    setLoadingB2B(true)
+    try {
+      const params = new URLSearchParams({ startDate, endDate, dateColumn })
+      const res = await fetch(`/api/analytics/channels/b2b-customers?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setB2bCustomers(data.customers || [])
+      }
+    } catch (e) { console.error("fetchB2BCustomers error:", e) }
+    finally { setLoadingB2B(false) }
+  }
 
   const fetchVendors = async () => {
     try {
@@ -632,20 +652,29 @@ export default function ChannelPerformancePage() {
       setTrendData(combinedTrend)
 
       // 3. Top Products
+      const mt = mainTable  // alias ngắn để dùng trong template
       const productsSql = `
         SELECT
-          sku as product_name,
-          SUM(${revenueCol}) as revenue,
-          SUM(${marginCol}) as margin,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${quantityCol}) as units
-        FROM ${mainTable}
+          ${mt}.sku as product_name,
+          MAX(sk.category_name) as category,
+          CASE
+            WHEN ${mt}.sku ~ '^[1-6]'              THEN UPPER(SUBSTRING(${mt}.sku, 3, 3))
+            WHEN ${mt}.sku ~ '^E'                  THEN UPPER(SUBSTRING(${mt}.sku, 2, 3))
+            WHEN ${mt}.sku ~ '^[A-DF-Z]{3}[0-9]'  THEN UPPER(SUBSTRING(${mt}.sku, 1, 3))
+            ELSE UPPER(SUBSTRING(${mt}.sku, 1, 3))
+          END as destination,
+          SUM(${mt}.${revenueCol}) as revenue,
+          SUM(${mt}.${marginCol}) as margin,
+          COUNT(DISTINCT ${mt}.order_code) as orders,
+          SUM(${mt}.${quantityCol}) as units
+        FROM ${mt}
+        LEFT JOIN dim_sku sk ON TRIM(${mt}.sku) = TRIM(sk.sku)
         WHERE ${channelFilter}
         ${dateFilter}
         ${vendorFilter}
         ${productTypeFilter}
-        GROUP BY 1
-        ORDER BY 2 DESC
+        GROUP BY 1, 3
+        ORDER BY 4 DESC
         ${showAllProducts ? "" : "LIMIT 10"}
       `
       const productsData = await runQuery(productsSql)
@@ -805,17 +834,15 @@ export default function ChannelPerformancePage() {
             </select>
           </div>
 
-          {channelGroup === "B2B" && (
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
-              <select
-                value={b2bTier}
-                onChange={(e) => setB2bTier(e.target.value as any)}
-                className="bg-transparent text-sm font-medium focus:outline-none min-w-[100px]"
-              >
-                <option value="All">All Partners</option>
-                <option value="Strategic">Strategic Partners</option>
-                <option value="Non-Strategic">Non-Strategic Partners</option>
-              </select>
+          {channelGroup === "B2B" && !selectedChannel && (
+            <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+              {(["ALL","Strategic","VIP","Gold","Silver"] as const).map(t => (
+                <button key={t} onClick={() => { setB2bTierFilter(t); setSelectedCustomer(null) }}
+                  className={cn("px-2.5 py-1 text-xs font-bold rounded-lg transition-all",
+                    b2bTierFilter === t ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                  {t === "ALL" ? "Tất cả" : t}
+                </button>
+              ))}
             </div>
           )}
 
@@ -1088,7 +1115,131 @@ export default function ChannelPerformancePage() {
       )}
 
       {!selectedChannel ? (
-        /* All Channels Overview */
+        /* All Channels Overview — B2B shows tier/customer view, others show channel table */
+        channelGroup === "B2B" ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              {selectedCustomer ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-[#003B95] hover:underline">
+                    ← Quay lại
+                  </button>
+                  <span className="text-slate-300">/</span>
+                  <h3 className="text-lg font-bold text-slate-900">{selectedCustomer.customer_name}</h3>
+                  <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                    selectedCustomer.tier === "VIP" ? "bg-purple-50 text-purple-600" :
+                    selectedCustomer.tier === "Gold" ? "bg-amber-50 text-amber-600" :
+                    selectedCustomer.tier === "Silver" ? "bg-slate-100 text-slate-500" : "bg-blue-50 text-blue-700")}>
+                    {selectedCustomer.tier}
+                  </span>
+                </div>
+              ) : (
+                <h3 className="text-lg font-bold text-slate-900">B2B Customers — {b2bTierFilter === "ALL" ? "Tất cả tier" : b2bTierFilter}</h3>
+              )}
+              {!selectedCustomer && <p className="text-sm text-slate-500">Click vào tên KH để xem performance theo kênh</p>}
+            </div>
+            <button onClick={fetchB2BCustomers} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
+              <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingB2B && "animate-spin")} />
+            </button>
+          </div>
+
+          {selectedCustomer ? (
+            /* Customer detail: top channels + top products for this customer */
+            <B2BCustomerDetail customer={selectedCustomer} startDate={startDate} endDate={endDate} dateColumn={dateColumn} />
+          ) : (
+            /* Tier summary cards + customer table */
+            <div>
+              {/* Tier summary cards */}
+              {!loadingB2B && b2bCustomers.length > 0 && (() => {
+                const tiers = ["Strategic", "VIP", "Gold", "Silver"] as const
+                const tierColors: Record<string, string> = {
+                  Strategic: "border-l-blue-500",
+                  VIP: "border-l-purple-500",
+                  Gold: "border-l-amber-500",
+                  Silver: "border-l-slate-400",
+                }
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 border-b border-slate-100">
+                    {tiers.map(tier => {
+                      const custs = b2bCustomers.filter(c => c.tier === tier)
+                      const rev = custs.reduce((s, c) => s + c.revenue, 0)
+                      const gp = custs.reduce((s, c) => s + c.margin, 0)
+                      return (
+                        <button key={tier} onClick={() => setB2bTierFilter(b2bTierFilter === tier ? "ALL" : tier)}
+                          className={cn("text-left p-4 rounded-xl border-l-4 border border-slate-100 hover:border-slate-200 transition-all",
+                            tierColors[tier], b2bTierFilter === tier ? "bg-blue-50/60 border-slate-200" : "bg-slate-50/50")}>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{tier}</p>
+                          <p className="text-lg font-black text-slate-900 tabular-nums mt-0.5">
+                            {rev >= 1e9 ? `${(rev/1e9).toFixed(1)} Tỷ` : `${(rev/1e6).toFixed(0)} Tr`}
+                          </p>
+                          <p className="text-xs text-slate-400">{custs.length} KH · GP {gp >= 1e9 ? `${(gp/1e9).toFixed(1)}T` : `${(gp/1e6).toFixed(0)}Tr`}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+              {/* Customer table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#003B95]">
+                      <th className="px-5 py-3 text-xs font-bold text-slate-300 uppercase">Khách hàng</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Tier</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Bảng giá</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Revenue</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">GP</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">GP%</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Orders</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Units</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingB2B ? (
+                      Array(5).fill(0).map((_, i) => (
+                        <tr key={i}>{Array(8).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20 ml-auto" /></td>)}</tr>
+                      ))
+                    ) : (
+                      (b2bTierFilter === "ALL" ? b2bCustomers : b2bCustomers.filter(c => c.tier === b2bTierFilter))
+                        .map((c, i) => {
+                          const tierBadge: Record<string, string> = {
+                            Strategic: "bg-blue-50 text-blue-700",
+                            VIP: "bg-purple-50 text-purple-700",
+                            Gold: "bg-amber-50 text-amber-700",
+                            Silver: "bg-slate-100 text-slate-600",
+                          }
+                          const gpm = c.revenue > 0 ? (c.margin / c.revenue * 100) : 0
+                          return (
+                            <tr key={i} className="hover:bg-blue-50/20 transition-colors cursor-pointer"
+                              onClick={() => setSelectedCustomer(c)}>
+                              <td className="px-5 py-3">
+                                <span className="text-sm font-bold text-slate-900 hover:text-[#003B95]">{c.customer_name}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", tierBadge[c.tier] || "bg-slate-100 text-slate-500")}>{c.tier}</span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-500 font-mono">{c.price_list_name || "—"}</td>
+                              <td className="px-4 py-3 text-sm font-bold text-slate-900 text-right tabular-nums">{formatCurrency(c.revenue)}</td>
+                              <td className="px-4 py-3 text-right"><span className={cn("text-sm font-bold tabular-nums", c.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(c.margin)}</span></td>
+                              <td className="px-4 py-3 text-sm text-slate-500 text-right">{gpm.toFixed(1)}%</td>
+                              <td className="px-4 py-3 text-sm text-slate-600 text-right tabular-nums">{formatNumber(c.orders)}</td>
+                              <td className="px-4 py-3 text-sm text-slate-600 text-right tabular-nums">{formatNumber(c.units)}</td>
+                            </tr>
+                          )
+                        })
+                    )}
+                    {!loadingB2B && b2bCustomers.length === 0 && (
+                      <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-400 italic text-sm">Chọn Apply Filters để tải dữ liệu B2B</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+        ) : (
+        /* Non-B2B: original All Channels table */
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <div>
@@ -1184,6 +1335,7 @@ export default function ChannelPerformancePage() {
             </table>
           </div>
         </div>
+        )  /* end non-B2B div */
       ) : (
       <>
       {/* Pro-rata Projection */}
@@ -1597,6 +1749,8 @@ export default function ChannelPerformancePage() {
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product Name</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Category</th>
                 {([
                   { key: "orders", label: "Orders" },
                   { key: "units", label: "Units Sold" },
@@ -1622,7 +1776,7 @@ export default function ChannelPerformancePage() {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <tr key={i}>
-                    {Array(7).fill(0).map((_, j) => (
+                    {Array(9).fill(0).map((_, j) => (
                       <td key={j} className="px-6 py-4"><Skeleton className="h-4 w-20 ml-auto" /></td>
                     ))}
                   </tr>
@@ -1635,9 +1789,11 @@ export default function ChannelPerformancePage() {
                         <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400">
                           <Package className="w-4 h-4" />
                         </div>
-                        <span className="text-sm font-bold text-slate-900 truncate max-w-[300px]">{product.product_name}</span>
+                        <span className="text-sm font-bold text-slate-900 truncate max-w-[260px]">{product.product_name}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-4 text-xs font-bold text-slate-700 whitespace-nowrap">{product.destination || "—"}</td>
+                    <td className="px-4 py-4 text-xs text-slate-500 whitespace-nowrap max-w-[120px] truncate">{product.category || "—"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.orders)}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.units)}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(product.revenue)}</td>
@@ -1651,7 +1807,7 @@ export default function ChannelPerformancePage() {
               )}
               {topProducts.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 italic">
                     No product data available for this period
                   </td>
                 </tr>
@@ -1670,6 +1826,113 @@ export default function ChannelPerformancePage() {
 
       </>
       )}
+    </div>
+  )
+}
+
+// ─── B2BCustomerDetail ────────────────────────────────────────────────────────
+function B2BCustomerDetail({ customer, startDate, endDate, dateColumn }: {
+  customer: any; startDate: string; endDate: string; dateColumn: string
+}) {
+  const [channels, setChannels] = React.useState<any[]>([])
+  const [products, setProducts] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const dateF = `${dateColumn}::date >= '${startDate}' AND ${dateColumn}::date <= '${endDate}'`
+      const custF = `TRIM(customer_code) = '${customer.customer_code.replace(/'/g, "''")}'`
+
+      const [chRows, prRows] = await Promise.all([
+        fetch("/api/analytics/query", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: `
+            SELECT COALESCE(TRIM(s.channel_name), 'Other') as channel,
+              SUM(f.fulfilled_revenue_amount_vnd) as revenue,
+              SUM(f.gross_profit_vnd) as margin,
+              COUNT(DISTINCT f.order_code) as orders
+            FROM fact_fulfillment_revenue f
+            LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+            WHERE ${custF} AND f.${dateF}
+              AND f.sku != 'SHIPPINGFEE0'
+            GROUP BY 1 ORDER BY 2 DESC LIMIT 10` }),
+        }).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+        fetch("/api/analytics/query", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: `
+            SELECT f.sku as product_name,
+              MAX(sk.category_name) as category,
+              CASE WHEN f.sku ~ '^[1-6]' THEN UPPER(SUBSTRING(f.sku,3,3))
+                   WHEN f.sku ~ '^E' THEN UPPER(SUBSTRING(f.sku,2,3))
+                   ELSE UPPER(SUBSTRING(f.sku,1,3)) END as destination,
+              SUM(f.fulfilled_revenue_amount_vnd) as revenue,
+              SUM(f.fulfilled_quantity) as units
+            FROM fact_fulfillment_revenue f
+            LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
+            WHERE ${custF} AND f.${dateF} AND f.sku != 'SHIPPINGFEE0'
+            GROUP BY 1, 3 ORDER BY 4 DESC LIMIT 10` }),
+        }).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+      ])
+      setChannels(chRows.map((r: any) => ({ ...r, revenue: parseFloat(r.revenue||0), margin: parseFloat(r.margin||0), orders: parseInt(r.orders||0) })))
+      setProducts(prRows.map((r: any) => ({ ...r, revenue: parseFloat(r.revenue||0), units: parseInt(r.units||0) })))
+      setLoading(false)
+    }
+    load()
+  }, [customer.customer_code, startDate, endDate, dateColumn])
+
+  if (loading) return <div className="p-8 text-center text-slate-400 text-sm"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải...</div>
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-x divide-slate-100">
+      {/* Channels */}
+      <div>
+        <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Kênh bán hàng</p>
+        <table className="w-full text-[12px] border-collapse">
+          <thead><tr className="bg-slate-50 border-b border-slate-100">
+            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Kênh</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">GP</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Orders</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-50">
+            {channels.map((c, i) => (
+              <tr key={i} className="hover:bg-slate-50">
+                <td className="px-5 py-2.5 font-semibold text-slate-800">{c.channel}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(c.revenue)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 font-semibold">{formatCurrency(c.margin)}</td>
+                <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(c.orders)}</td>
+              </tr>
+            ))}
+            {channels.length === 0 && <tr><td colSpan={4} className="px-5 py-6 text-center text-slate-400 italic">Không có dữ liệu</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {/* Products */}
+      <div>
+        <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Top sản phẩm</p>
+        <table className="w-full text-[12px] border-collapse">
+          <thead><tr className="bg-slate-50 border-b border-slate-100">
+            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">SKU</th>
+            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Dest</th>
+            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Category</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
+            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Units</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-50">
+            {products.map((p, i) => (
+              <tr key={i} className="hover:bg-slate-50">
+                <td className="px-5 py-2.5 font-mono text-[11px] text-slate-700 truncate max-w-[140px]">{p.product_name}</td>
+                <td className="px-3 py-2.5 font-bold text-[11px] text-slate-600">{p.destination || "—"}</td>
+                <td className="px-3 py-2.5 text-[11px] text-slate-400 truncate max-w-[100px]">{p.category || "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(p.revenue)}</td>
+                <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(p.units)}</td>
+              </tr>
+            ))}
+            {products.length === 0 && <tr><td colSpan={5} className="px-5 py-6 text-center text-slate-400 italic">Không có dữ liệu</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
