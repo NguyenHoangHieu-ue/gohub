@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { analyticsGuard, shipFilter, internalOpsFilter, getMonthsInRange, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -82,10 +84,13 @@ export async function GET(req: NextRequest) {
       ORDER BY f.customer_code, month
     `
 
-    const [summaryRows, monthlyRows, { tierKeywords }] = await Promise.all([
+    const months = startDate && endDate ? getMonthsInRange(startDate, endDate) : []
+
+    const [summaryRows, monthlyRows, { tierKeywords }, customerCosts] = await Promise.all([
       queryAnalytics(summarySQL, params),
       queryAnalytics(monthlySQL, params),
       fetchQuarterlySettings(),
+      months.length ? fetchCustomerCosts(months) : Promise.resolve(new Map<string, any>()),
     ])
     const classifyTier = makeClassifyTier(tierKeywords)
 
@@ -104,18 +109,39 @@ export async function GET(req: NextRequest) {
 
     const result = (summaryRows as any[]).map(r => {
       const pln = r.price_list_name || null
-      // null = B2C (không có price_list_name → không phải B2B tier)
+      // null = B2C; có price_list_name → B2B 4 tier (Strategic/VIP/Gold/Silver)
       const tier = pln === null ? "B2C" : classifyTier(pln)
+
+      const monthly       = monthlyMap[r.customer_code] || []
+      const grossProfit   = Number(r.gross_profit) || 0
+      const revenue       = Number(r.revenue) || 0
+
+      // CH.Cost từ Turso (b2b_customer_cost_monthly) — B2C KH không có → 0
+      let chCost = 0
+      for (const mo of monthly) {
+        const rec = (customerCosts as Map<string, any>).get(`${mo.month}_${r.customer_code}`)
+        if (!rec) continue
+        const dayRatio = getDaysInMonth(mo.month) > 0
+          ? getDaysInRange(startDate, endDate, mo.month) / getDaysInMonth(mo.month)
+          : 0
+        chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
+      }
+
+      const cm1 = grossProfit - chCost
+
       return {
         customer_code:   r.customer_code,
         customer_name:   r.customer_name,
         price_list_name: pln,
         tier,
-        revenue:         Number(r.revenue) || 0,
+        revenue,
         hk3_revenue:     Number(r.hk3_revenue) || 0,
-        gross_profit:    Number(r.gross_profit) || 0,
+        gross_profit:    grossProfit,
+        ch_cost:         chCost,
+        cm1,
+        cm1_pct:         revenue > 0 ? (cm1 / revenue) * 100 : 0,
         order_count:     Number(r.order_count) || 0,
-        monthly:         monthlyMap[r.customer_code] || [],
+        monthly,
       }
     })
 
