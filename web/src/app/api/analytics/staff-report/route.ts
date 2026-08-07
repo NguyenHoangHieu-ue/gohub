@@ -25,15 +25,18 @@ export async function GET(req: NextRequest) {
   const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
   const dateCol   = isSales ? "created_date" : "fulfiled_date"
   const revCol    = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
-  // fact_sales_revenue không có gross_profit_vnd — trả 0
   const gpCol     = isSales ? "0" : "f.gross_profit_vnd"
+
+  // staff_key: ưu tiên dim_customer.sales_pic_code (B2B account manager),
+  // fallback f.staff_code (B2C hoặc B2B chưa gán pic)
+  const staffKey = `COALESCE(NULLIF(TRIM(dc.sales_pic_code),''), NULLIF(TRIM(f.staff_code),''))`
 
   const params: unknown[] = [startDate, endDate]
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
-    AND COALESCE(st.name, TRIM(f.staff_code)) != 'Auto ESIM'
+    AND COALESCE(st.name, ${staffKey}) != 'Auto ESIM'
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
-    AND f.staff_code IS NOT NULL AND TRIM(f.staff_code) != ''`
+    AND ${staffKey} IS NOT NULL`
 
   if (companyCode && companyCode !== "ALL") {
     params.push(companyCode); where += ` AND f.company_code = $${params.length}`
@@ -44,12 +47,19 @@ export async function GET(req: NextRequest) {
     params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
 
+  const baseJoins = `
+    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_staff st    ON TRIM(${staffKey}) = TRIM(st.code)
+    LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
+
+  const skuJoin = `LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)`
+
   try {
-    // Q1: staff-level aggregates (+ GP + per-group revenue để tính CM1)
+    // Q1: staff-level aggregates
     const summarySQL = `
       SELECT
-        COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') AS staff_name,
-        TRIM(f.staff_code) AS staff_code,
+        COALESCE(st.name, ${staffKey}, 'Chưa gán NV') AS staff_name,
+        ${staffKey} AS staff_code,
         SUM(f.${revCol}) AS total_revenue,
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit,
@@ -58,28 +68,26 @@ export async function GET(req: NextRequest) {
         COUNT(DISTINCT f.customer_code) AS customer_count,
         COUNT(DISTINCT f.order_code) AS total_orders
       FROM ${mainTable} f
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
-      GROUP BY COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV'), TRIM(f.staff_code)
+      GROUP BY COALESCE(st.name, ${staffKey}, 'Chưa gán NV'), ${staffKey}
       ORDER BY total_revenue DESC
     `
 
-    // Q2: monthly breakdown per staff (+ GP)
+    // Q2: monthly breakdown per staff
     const monthlySQL = `
       SELECT
-        TRIM(f.staff_code) AS staff_code,
+        ${staffKey} AS staff_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
-      GROUP BY TRIM(f.staff_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
+      GROUP BY ${staffKey}, TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
       ORDER BY staff_code, month
     `
 
@@ -89,8 +97,7 @@ export async function GET(req: NextRequest) {
         UPPER(COALESCE(s.group_name, 'OTHER')) AS grp,
         SUM(f.${revCol}) AS total_rev
       FROM ${mainTable} f
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+      ${baseJoins}
       ${where}
       GROUP BY 1
     `
@@ -100,16 +107,15 @@ export async function GET(req: NextRequest) {
     // Q4: revenue per staff × customer × month — để tính customer CH.Cost từ Turso
     const custBreakdownSQL = `
       SELECT
-        TRIM(f.staff_code) AS staff_code,
+        ${staffKey} AS staff_code,
         TRIM(f.customer_code) AS customer_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue
       FROM ${mainTable} f
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+      ${baseJoins}
       ${where}
       AND f.customer_code IS NOT NULL AND TRIM(f.customer_code) != ''
-      GROUP BY TRIM(f.staff_code), TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
+      GROUP BY ${staffKey}, TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
     `
 
     const [summaryRows, monthlyRows, groupTotalRows, groupCostsRaw, custBreakdownRows, customerCosts] = await Promise.all([
@@ -131,14 +137,12 @@ export async function GET(req: NextRequest) {
       else if (gc.group_name === "B2C") totalB2CCost += gc.amount * ratio
     }
 
-    // Tổng revenue B2B / B2C toàn hệ thống trong kỳ
     let sysTotalB2B = 0, sysTotalB2C = 0
     for (const r of groupTotalRows as any[]) {
       if (r.grp === "B2B") sysTotalB2B = Number(r.total_rev) || 0
       else if (r.grp === "B2C") sysTotalB2C = Number(r.total_rev) || 0
     }
 
-    // Build monthly map per staff
     const monthlyMap: Record<string, { month: string; revenue: number; hk3_revenue: number; gross_profit: number }[]> = {}
     for (const r of monthlyRows as any[]) {
       const code = r.staff_code || ""
@@ -151,7 +155,6 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // Build customer breakdown map: staff_code → [{customer_code, month, revenue}]
     const custBreakdownMap: Record<string, Array<{ customer_code: string; month: string; revenue: number }>> = {}
     for (const r of custBreakdownRows as any[]) {
       const code = r.staff_code || ""
@@ -169,12 +172,10 @@ export async function GET(req: NextRequest) {
       const b2bRev = Number(r.b2b_revenue) || 0
       const b2cRev = Number(r.b2c_revenue) || 0
 
-      // Phân bổ chi phí nhóm theo tỷ lệ revenue
       const b2bShare       = sysTotalB2B > 0 ? b2bRev / sysTotalB2B : 0
       const b2cShare       = sysTotalB2C > 0 ? b2cRev / sysTotalB2C : 0
       const groupCostShare = b2bShare * totalB2BCost + b2cShare * totalB2CCost
 
-      // CH.Cost từng KH (Turso b2b_customer_cost_monthly) — trừ cho sales phụ trách KH đó
       let chCost = 0
       for (const cr of custBreakdownMap[r.staff_code] || []) {
         const rec = (customerCosts as Map<string, any>).get(`${cr.month}_${cr.customer_code}`)
