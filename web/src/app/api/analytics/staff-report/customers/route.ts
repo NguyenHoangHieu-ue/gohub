@@ -31,10 +31,12 @@ export async function GET(req: NextRequest) {
   const revCol    = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
   const gpCol     = isSales ? "0" : "f.gross_profit_vnd"
 
-  // Filter theo dim_customer.sales_pic_code (nhất quán với route.ts)
+  // Nhất quán với route.ts: staffKey = sales_pic_code ưu tiên, fallback f.staff_code
+  const staffKey = `COALESCE(NULLIF(TRIM(dc.sales_pic_code),''), NULLIF(TRIM(f.staff_code),''))`
+
   const params: unknown[] = [startDate, endDate, staffCode]
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
-    AND TRIM(dc.sales_pic_code) = $3
+    AND ${staffKey} = $3
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
     AND f.customer_code IS NOT NULL`
@@ -48,6 +50,13 @@ export async function GET(req: NextRequest) {
     params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
 
+  // dim_customer join cần có trong cả summary lẫn monthly (where tham chiếu dc)
+  const baseJoins = `
+    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
+
+  const skuJoin = `LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)`
+
   try {
     // Q1: customer-level aggregates
     const summarySQL = `
@@ -60,16 +69,15 @@ export async function GET(req: NextRequest) {
         SUM(${gpCol}) AS gross_profit,
         COUNT(DISTINCT f.order_code) AS order_count
       FROM ${mainTable} f
-      LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
       GROUP BY f.customer_code, COALESCE(dc.name, f.customer_code)
       ORDER BY revenue DESC
       LIMIT 50
     `
 
-    // Q2: monthly breakdown per customer (cần dim_customer join vì where tham chiếu dc.sales_pic_code)
+    // Q2: monthly breakdown per customer
     const monthlySQL = `
       SELECT
         f.customer_code,
@@ -78,9 +86,8 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
-      LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
       GROUP BY f.customer_code, TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
       ORDER BY f.customer_code, month
@@ -96,7 +103,6 @@ export async function GET(req: NextRequest) {
     ])
     const classifyTier = makeClassifyTier(tierKeywords)
 
-    // Build monthly map per customer
     const monthlyMap: Record<string, { month: string; revenue: number; hk3_revenue: number; gross_profit: number }[]> = {}
     for (const r of monthlyRows as any[]) {
       const code = r.customer_code || ""
@@ -111,14 +117,12 @@ export async function GET(req: NextRequest) {
 
     const result = (summaryRows as any[]).map(r => {
       const pln = r.price_list_name || null
-      // null = B2C; có price_list_name → B2B 4 tier (Strategic/VIP/Gold/Silver)
       const tier = pln === null ? "B2C" : classifyTier(pln)
 
-      const monthly       = monthlyMap[r.customer_code] || []
-      const grossProfit   = Number(r.gross_profit) || 0
-      const revenue       = Number(r.revenue) || 0
+      const monthly     = monthlyMap[r.customer_code] || []
+      const grossProfit = Number(r.gross_profit) || 0
+      const revenue     = Number(r.revenue) || 0
 
-      // CH.Cost từ Turso (b2b_customer_cost_monthly) — B2C KH không có → 0
       let chCost = 0
       for (const mo of monthly) {
         const rec = (customerCosts as Map<string, any>).get(`${mo.month}_${r.customer_code}`)
