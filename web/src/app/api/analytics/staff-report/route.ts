@@ -25,15 +25,16 @@ export async function GET(req: NextRequest) {
   const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
   const dateCol   = isSales ? "created_date" : "fulfiled_date"
   const revCol    = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
-  // fact_sales_revenue không có gross_profit_vnd — trả 0
   const gpCol     = isSales ? "0" : "f.gross_profit_vnd"
 
+  // ── Mapping: dùng dim_customer.sales_pic_code (nhân viên phụ trách tài khoản) thay vì
+  //    f.staff_code (cấp đơn hàng) → ổn định hơn sau mỗi lần ETL chạy lại pipeline ──
   const params: unknown[] = [startDate, endDate]
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
-    AND COALESCE(st.name, TRIM(f.staff_code)) != 'Auto ESIM'
+    AND COALESCE(st.name, TRIM(dc.sales_pic_code)) != 'Auto ESIM'
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
-    AND f.staff_code IS NOT NULL AND TRIM(f.staff_code) != ''`
+    AND dc.sales_pic_code IS NOT NULL AND TRIM(dc.sales_pic_code) != ''`
 
   if (companyCode && companyCode !== "ALL") {
     params.push(companyCode); where += ` AND f.company_code = $${params.length}`
@@ -44,12 +45,20 @@ export async function GET(req: NextRequest) {
     params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
 
+  // JOIN chung cho tất cả query — dim_customer phải có trước where vì where tham chiếu dc.sales_pic_code
+  const baseJoins = `
+    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_staff st    ON TRIM(dc.sales_pic_code) = TRIM(st.code)
+    LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
+
+  const skuJoin = `LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)`
+
   try {
-    // Q1: staff-level aggregates (+ GP + per-group revenue để tính CM1)
+    // Q1: staff-level aggregates
     const summarySQL = `
       SELECT
-        COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') AS staff_name,
-        TRIM(f.staff_code) AS staff_code,
+        COALESCE(st.name, NULLIF(NULLIF(TRIM(dc.sales_pic_code), ''), 'NaN'), 'Chưa gán NV') AS staff_name,
+        TRIM(dc.sales_pic_code) AS staff_code,
         SUM(f.${revCol}) AS total_revenue,
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit,
@@ -58,28 +67,26 @@ export async function GET(req: NextRequest) {
         COUNT(DISTINCT f.customer_code) AS customer_count,
         COUNT(DISTINCT f.order_code) AS total_orders
       FROM ${mainTable} f
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
-      GROUP BY COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV'), TRIM(f.staff_code)
+      GROUP BY COALESCE(st.name, NULLIF(NULLIF(TRIM(dc.sales_pic_code), ''), 'NaN'), 'Chưa gán NV'), TRIM(dc.sales_pic_code)
       ORDER BY total_revenue DESC
     `
 
-    // Q2: monthly breakdown per staff (+ GP)
+    // Q2: monthly breakdown per staff
     const monthlySQL = `
       SELECT
-        TRIM(f.staff_code) AS staff_code,
+        TRIM(dc.sales_pic_code) AS staff_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
         SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)
+      ${baseJoins}
+      ${skuJoin}
       ${where}
-      GROUP BY TRIM(f.staff_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
+      GROUP BY TRIM(dc.sales_pic_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
       ORDER BY staff_code, month
     `
 
@@ -89,8 +96,7 @@ export async function GET(req: NextRequest) {
         UPPER(COALESCE(s.group_name, 'OTHER')) AS grp,
         SUM(f.${revCol}) AS total_rev
       FROM ${mainTable} f
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+      ${baseJoins}
       ${where}
       GROUP BY 1
     `
@@ -100,16 +106,15 @@ export async function GET(req: NextRequest) {
     // Q4: revenue per staff × customer × month — để tính customer CH.Cost từ Turso
     const custBreakdownSQL = `
       SELECT
-        TRIM(f.staff_code) AS staff_code,
+        TRIM(dc.sales_pic_code) AS staff_code,
         TRIM(f.customer_code) AS customer_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue
       FROM ${mainTable} f
-      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+      ${baseJoins}
       ${where}
       AND f.customer_code IS NOT NULL AND TRIM(f.customer_code) != ''
-      GROUP BY TRIM(f.staff_code), TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
+      GROUP BY TRIM(dc.sales_pic_code), TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
     `
 
     const [summaryRows, monthlyRows, groupTotalRows, groupCostsRaw, custBreakdownRows, customerCosts] = await Promise.all([
