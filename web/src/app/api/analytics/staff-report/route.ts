@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -95,11 +97,28 @@ export async function GET(req: NextRequest) {
 
     const months = startDate && endDate ? getMonthsInRange(startDate, endDate) : []
 
-    const [summaryRows, monthlyRows, groupTotalRows, groupCostsRaw] = await Promise.all([
+    // Q4: revenue per staff × customer × month — để tính customer CH.Cost từ Turso
+    const custBreakdownSQL = `
+      SELECT
+        TRIM(f.staff_code) AS staff_code,
+        TRIM(f.customer_code) AS customer_code,
+        TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
+        SUM(f.${revCol}) AS revenue
+      FROM ${mainTable} f
+      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+      LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
+      ${where}
+      AND f.customer_code IS NOT NULL AND TRIM(f.customer_code) != ''
+      GROUP BY TRIM(f.staff_code), TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
+    `
+
+    const [summaryRows, monthlyRows, groupTotalRows, groupCostsRaw, custBreakdownRows, customerCosts] = await Promise.all([
       queryAnalytics(summarySQL, params),
       queryAnalytics(monthlySQL, params),
       queryAnalytics(groupTotalSQL, params),
       months.length ? getGroupCostsForMonths(months) : Promise.resolve([]),
+      queryAnalytics(custBreakdownSQL, params),
+      months.length ? fetchCustomerCosts(months) : Promise.resolve(new Map<string, any>()),
     ])
 
     // Tính tổng chi phí nhóm B2B / B2C theo kỳ (có pro-rata ratio)
@@ -119,7 +138,7 @@ export async function GET(req: NextRequest) {
       else if (r.grp === "B2C") sysTotalB2C = Number(r.total_rev) || 0
     }
 
-    // Build monthly map
+    // Build monthly map per staff
     const monthlyMap: Record<string, { month: string; revenue: number; hk3_revenue: number; gross_profit: number }[]> = {}
     for (const r of monthlyRows as any[]) {
       const code = r.staff_code || ""
@@ -132,6 +151,18 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    // Build customer breakdown map: staff_code → [{customer_code, month, revenue}]
+    const custBreakdownMap: Record<string, Array<{ customer_code: string; month: string; revenue: number }>> = {}
+    for (const r of custBreakdownRows as any[]) {
+      const code = r.staff_code || ""
+      if (!custBreakdownMap[code]) custBreakdownMap[code] = []
+      custBreakdownMap[code].push({
+        customer_code: r.customer_code,
+        month:         r.month,
+        revenue:       Number(r.revenue) || 0,
+      })
+    }
+
     const result = (summaryRows as any[]).map(r => {
       const rev    = Number(r.total_revenue) || 0
       const gp     = Number(r.gross_profit) || 0
@@ -139,11 +170,23 @@ export async function GET(req: NextRequest) {
       const b2cRev = Number(r.b2c_revenue) || 0
 
       // Phân bổ chi phí nhóm theo tỷ lệ revenue
-      const b2bShare = sysTotalB2B > 0 ? b2bRev / sysTotalB2B : 0
-      const b2cShare = sysTotalB2C > 0 ? b2cRev / sysTotalB2C : 0
-      const opCost   = b2bShare * totalB2BCost + b2cShare * totalB2CCost
-      const cm1      = gp - opCost
-      const cm1Pct   = rev > 0 ? (cm1 / rev) * 100 : 0
+      const b2bShare       = sysTotalB2B > 0 ? b2bRev / sysTotalB2B : 0
+      const b2cShare       = sysTotalB2C > 0 ? b2cRev / sysTotalB2C : 0
+      const groupCostShare = b2bShare * totalB2BCost + b2cShare * totalB2CCost
+
+      // CH.Cost từng KH (Turso b2b_customer_cost_monthly) — trừ cho sales phụ trách KH đó
+      let chCost = 0
+      for (const cr of custBreakdownMap[r.staff_code] || []) {
+        const rec = (customerCosts as Map<string, any>).get(`${cr.month}_${cr.customer_code}`)
+        if (!rec) continue
+        const dayRatio = getDaysInMonth(cr.month) > 0
+          ? getDaysInRange(startDate, endDate, cr.month) / getDaysInMonth(cr.month)
+          : 0
+        chCost += calcChCostForPeriod(rec, cr.revenue, dayRatio)
+      }
+
+      const cm1    = gp - chCost - groupCostShare
+      const cm1Pct = rev > 0 ? (cm1 / rev) * 100 : 0
 
       return {
         staff_name:     r.staff_name,
@@ -151,6 +194,7 @@ export async function GET(req: NextRequest) {
         total_revenue:  rev,
         hk3_revenue:    Number(r.hk3_revenue) || 0,
         gross_profit:   gp,
+        ch_cost:        chCost,
         cm1,
         cm1_pct:        cm1Pct,
         customer_count: Number(r.customer_count) || 0,

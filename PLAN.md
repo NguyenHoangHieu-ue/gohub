@@ -6,10 +6,10 @@
 
 ## TRẠNG THÁI HIỆN TẠI (2026-08-06)
 
-- **Branch**: staging = `fef45ea` | **main** = `e8d4ef3` (đã merge s136–s137a giữa session)
+- **Branch**: staging = `70f4070` | **main** = `afc1263` (đã merge tới b2cd195; commit F=70f4070 chờ merge)
 - **Migrations chạy**: v30 ✅ | v30b ✅ | v31 ⏳ Hiếu chưa chạy (`chatbot_learning_log`)
-- **s137 (2026-08-06)**: ColInfo portal fix, CH.Cost actual, CM1 sub-table, main row PR, Channels B2B tier + destination map. Xem §B7.
-- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8, **bấm "Tải lại mới" Quarter Report để flush cache qb2b_v5/qreport_raw_v8**.
+- **s137b (2026-08-06)**: nhất quán 3 bảng cost, loại KH theo mã, **ước tính T9 trong Tổng Quý**, 2 sub-cột Act/PR. Xem §B7.
+- **Pending Hiếu**: chạy migration v31, set ENV LARK_CREATOR_USER_ID, nhập Cost T8 B2C ≠0, nhập target T7/T8, **bấm "Tải lại mới" Quarter Report để flush cache qreport_raw_v9/qb2b**.
 
 ---
 
@@ -97,6 +97,15 @@
 - [x] Customer table + drill-down (kênh + top products per KH)
 - [x] Top Products: cột Destination (chars 3-5) + Category (dim_sku)
 - [x] Destination map code→tên nước từ /api/config/country-codes (Turso)
+
+**s137b — nhất quán số + ước tính T9:**
+- [x] Ch.Cost nhất quán 3 bảng (bỏ groupShare khỏi totalCc, c.cc=actual pro-rated, group cost pro-rate T8)
+- [x] Cost T7 Bảng 1 vs Bảng 3 khớp (skip KH Turso-cost không có orders). Cache v9.
+- [x] Loại KH khỏi B2B dùng MÃ (dual match code/name) + autocomplete search API
+- [x] Main customer row = PR (kpiPrFactor)
+- [x] Monthly table hiện PR mọi tháng khi quý đang chạy → cộng khớp KPI card
+- [x] **Ước tính T9 trong MỌI Tổng Quý** (× 92/62): cards, quarter table, tier pivot, per-customer + QoQ
+- [x] Chi tiết per-KH: cột tháng hiện tại tách 2 sub-cột Act/PR; cột T9 hiện ước tính ~ƯT
 
 ---
 

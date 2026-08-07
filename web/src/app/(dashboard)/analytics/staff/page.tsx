@@ -42,6 +42,9 @@ interface CustomerRow {
   revenue:         number
   hk3_revenue:     number
   gross_profit:    number
+  ch_cost:         number
+  cm1:             number
+  cm1_pct:         number
   order_count:     number
   monthly:         MonthlyItem[]
 }
@@ -310,10 +313,14 @@ function StaffPageInner() {
     if (!customers.length) return
     const rows = customers.map((c, i) => ({
       Rank: i + 1, "Customer Code": c.customer_code, "Customer Name": c.customer_name,
-      "Tier": c.tier,  // BE-computed
+      "Tier": c.tier,
       "Revenue": c.revenue, "3HK Revenue": c.hk3_revenue,
       "3HK %": c.revenue > 0 ? +((c.hk3_revenue/c.revenue)*100).toFixed(1) : 0,
-      "Gross Profit": c.gross_profit, "Orders": c.order_count,
+      "Gross Profit": c.gross_profit,
+      "CH.Cost": +c.ch_cost.toFixed(0),
+      "CM1": +c.cm1.toFixed(0),
+      "CM1 %": +c.cm1_pct.toFixed(1),
+      "Orders": c.order_count,
     }))
     exportRawRows(rows, `Staff_${staffName}_Customers_${applied.startDate}_${applied.endDate}`, "Customers")
   }
@@ -618,7 +625,7 @@ function StaffPageInner() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
           <h3 className="text-sm font-black text-slate-900">Chi tiết từng Sales</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Click hàng để xem breakdown KH · CM1 = GP trừ chi phí nhóm kênh (B2B/B2C)</p>
+          <p className="text-xs text-slate-500 mt-0.5">Click hàng để xem breakdown KH · CM1 = GP − CH.Cost từng KH (Turso) − chi phí nhóm B2B/B2C</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -707,7 +714,7 @@ function StaffPageInner() {
                                 <table className="w-full text-left border-collapse">
                                   <thead>
                                     <tr className="bg-blue-50 border-b border-blue-100">
-                                      {["#","Khách hàng","Revenue","3HK Rev","3HK%","GP","% of Sales"].map(h => (
+                                      {["#","Khách hàng","Revenue","3HK Rev","3HK%","GP","CM1","CM1%","% of Sales"].map(h => (
                                         <th key={h} className={cn("px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider",
                                           h !== "#" && h !== "Khách hàng" && "text-right")}>{h}</th>
                                       ))}
@@ -735,6 +742,13 @@ function StaffPageInner() {
                                             <span className={cn("text-[10px] font-black", h3p >= 50 ? "text-orange-600" : "text-slate-400")}>{pct(h3p)}</span>
                                           </td>
                                           <td className="px-4 py-2 text-right text-xs font-bold text-emerald-600">{fck(c.gross_profit)}</td>
+                                          <td className="px-4 py-2 text-right text-xs font-bold text-indigo-600">{fck(c.cm1)}</td>
+                                          <td className="px-4 py-2 text-right">
+                                            <span className={cn("text-[10px] font-black",
+                                              c.cm1_pct >= 10 ? "text-indigo-600" : c.cm1_pct > 0 ? "text-slate-500" : "text-rose-500")}>
+                                              {pct(c.cm1_pct)}
+                                            </span>
+                                          </td>
                                           <td className="px-4 py-2 text-right">
                                             <div className="flex items-center justify-end gap-1.5">
                                               <div className="w-12 h-1 bg-blue-100 rounded-full overflow-hidden">

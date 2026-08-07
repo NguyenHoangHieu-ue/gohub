@@ -1660,16 +1660,28 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   const ms: Record<string, any> = c.monthSummary ?? {}
                                   const qm: string[] = quarterMonths
                                   const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
-                                  // Metrics rows: label | T7 | T8 | T9(ước tính) | Tổng Quý
-                                  // vals nhận month KEY → tra ms[mk]; tháng tương lai (không data) → hiện ước tính T9.
-                                  type MRow = { label: string; vals: (mk: string) => React.ReactNode; tot: React.ReactNode }
+                                  // Metrics rows: label | T7 | T8[Actual|Pro-rata] | T9(ước tính) | Tổng Quý
+                                  // Tháng hiện tại (mf>1) → 2 sub-cột Actual & Pro-rata. Tháng xong/tương lai → 1 cột.
+                                  type MRow = { label: string
+                                    actCell: (mk: string) => React.ReactNode   // T8 — Actual
+                                    prCell: (mk: string) => React.ReactNode      // T8 — Pro-rata
+                                    single: (mk: string) => React.ReactNode      // tháng xong / tương lai
+                                    tot: React.ReactNode }
                                   // Tổng Quý per-customer = pr.* (existing projected × futureScale, GỒM ước tính T9).
                                   const cPrRev = pr.prRev
                                   const cPrGm  = pr.prGm
                                   const cPrCc  = pr.prGm - pr.prCm1  // = exCc × futureScale
                                   const cPrCm1 = pr.prCm1
-                                  // Tỷ lệ ngày để ước tính 1 tháng tương lai từ daily rate hiện có
                                   const futRatio = (mk: string) => existingDaysFE > 0 ? daysInMonthFE(mk) / existingDaysFE : 0
+                                  const mf = (mk: string) => monthKpiFactor[mk] ?? 1        // hệ số chiếu tháng đó (>1 = tháng hiện tại)
+                                  const isCurDetail = (mk: string) => (monthKpiFactor[mk] ?? 1) > 1
+                                  const isFut = (mk: string) => futureMonthsFE.includes(mk)
+                                  // accessor actual per metric (tháng hiện tại)
+                                  const aRev = (m: any) => m.actualRevenue ?? m.revenue
+                                  const aGm  = (m: any) => m.actualGm ?? m.gm
+                                  const aCc  = (m: any) => m.actualCc ?? m.cc
+                                  const aCm1 = (m: any) => m.actualCm1 ?? m.cm1
+                                  const numC = (v: number, cls = "text-slate-700") => <span className={cn("tabular-nums text-[10px] font-semibold whitespace-nowrap", cls)}>{fc(v)}</span>
                                   const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
                                       <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
@@ -1682,55 +1694,42 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       <span className={cn("tabular-nums font-semibold text-[9px] whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
-                                  // Dòng ước tính tháng tương lai (T9)
                                   const estLine = (val: React.ReactNode, cls = "text-amber-600") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
                                       <span className="text-[9px] font-bold text-amber-400 flex-shrink-0">~ƯT</span>
                                       <span className={cn("tabular-nums font-semibold text-[10px] italic whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
-                                  const isFut = (mk: string) => futureMonthsFE.includes(mk)
                                   const mRows: MRow[] = [
                                     { label: "Revenue",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) return m.isProjected ? <>{prLine(fc(m.revenue))}{actLine(fc(m.actualRevenue ?? m.revenue))}</> : <span className="tabular-nums text-slate-700 text-[10px] font-semibold whitespace-nowrap">{fc(m.revenue)}</span>
-                                        return isFut(mk) ? estLine(fc(Math.round(pr.exRev * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
-                                      tot: hp ? <>{prLine(fc(cPrRev))}{actLine(fc(actRev))}</> : <span className="tabular-nums text-slate-700 text-[10px] font-semibold whitespace-nowrap">{fc(actRev)}</span> },
+                                      actCell: (mk) => numC(Math.round(aRev(ms[mk])), "text-slate-600"),
+                                      prCell:  (mk) => numC(Math.round(aRev(ms[mk]) * mf(mk)), "text-blue-700"),
+                                      single:  (mk) => { const m = ms[mk]; return m ? numC(Math.round(m.revenue), "text-slate-700") : isFut(mk) ? estLine(fc(Math.round(pr.exRev * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
+                                      tot: hp ? <>{prLine(fc(cPrRev))}{actLine(fc(actRev))}</> : numC(actRev, "text-slate-700") },
                                     { label: "G.Margin",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) return m.isProjected ? <>{prLine(fc(m.gm), "text-blue-700")}{actLine(fc(m.actualGm ?? m.gm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(m.gm)}</span>
-                                        return isFut(mk) ? estLine(fc(Math.round(pr.exGm * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
-                                      tot: hp ? <>{prLine(fc(cPrGm), "text-blue-700")}{actLine(fc(actGm), "text-slate-600")}</> : <span className="tabular-nums text-slate-600 text-[10px] whitespace-nowrap">{fc(actGm)}</span> },
+                                      actCell: (mk) => numC(Math.round(aGm(ms[mk])), "text-slate-600"),
+                                      prCell:  (mk) => numC(Math.round(aGm(ms[mk]) * mf(mk)), "text-blue-700"),
+                                      single:  (mk) => { const m = ms[mk]; return m ? numC(Math.round(m.gm), "text-slate-600") : isFut(mk) ? estLine(fc(Math.round(pr.exGm * futRatio(mk))), "text-slate-600") : <span className="text-slate-200">—</span> },
+                                      tot: hp ? <>{prLine(fc(cPrGm), "text-blue-700")}{actLine(fc(actGm), "text-slate-600")}</> : numC(actGm, "text-slate-600") },
                                     { label: "Ch.Cost",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) {
-                                          if (m.isProjected) return <>{prLine(fc(m.cc), "text-slate-500")}{actLine(fc(m.actualCc ?? m.cc), "text-slate-500")}</>
-                                          if (m.actualCc != null) return m.actualCc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.actualCc)}</span> : <span className="text-slate-200">—</span>
-                                          return m.cc > 0 ? <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.cc)}</span> : <span className="text-slate-200">—</span>
-                                        }
-                                        return isFut(mk) && pr.exCc > 0 ? estLine(fc(Math.round(pr.exCc * futRatio(mk))), "text-slate-500") : <span className="text-slate-200">—</span> },
-                                      tot: hp
-                                        ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</>
-                                        : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span>
-                                    },
+                                      actCell: (mk) => { const v = Math.round(aCc(ms[mk])); return v > 0 ? numC(v, "text-slate-500") : <span className="text-slate-200">—</span> },
+                                      prCell:  (mk) => { const v = Math.round(aCc(ms[mk]) * mf(mk)); return v > 0 ? numC(v, "text-slate-500") : <span className="text-slate-200">—</span> },
+                                      single:  (mk) => { const m = ms[mk]; if (m) { const v = m.actualCc ?? m.cc; return v > 0 ? numC(Math.round(v), "text-slate-500") : <span className="text-slate-200">—</span> } return isFut(mk) && pr.exCc > 0 ? estLine(fc(Math.round(pr.exCc * futRatio(mk))), "text-slate-500") : <span className="text-slate-200">—</span> },
+                                      tot: hp ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</> : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span> },
                                     { label: "CM1",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) {
-                                          if (m.isProjected) return <>{prLine(fc(m.cm1), cm1Color(m.cm1))}{actLine(fc(m.actualCm1 ?? m.cm1), cm1Color(m.actualCm1 ?? m.cm1))}</>
-                                          const v = m.actualCm1 ?? m.cm1
-                                          return <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(v))}>{fc(v)}</span>
-                                        }
-                                        return isFut(mk) ? estLine(fc(Math.round(pr.exCm1 * futRatio(mk))), cm1Color(pr.exCm1)) : <span className="text-slate-200">—</span> },
-                                      tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cm1Color(actCm1))}>{fc(actCm1)}</span> },
+                                      actCell: (mk) => { const v = Math.round(aCm1(ms[mk])); return numC(v, cm1Color(v)) },
+                                      prCell:  (mk) => { const v = Math.round(aCm1(ms[mk]) * mf(mk)); return numC(v, cm1Color(v)) },
+                                      single:  (mk) => { const m = ms[mk]; if (m) { const v = m.actualCm1 ?? m.cm1; return numC(Math.round(v), cm1Color(v)) } return isFut(mk) ? estLine(fc(Math.round(pr.exCm1 * futRatio(mk))), cm1Color(pr.exCm1)) : <span className="text-slate-200">—</span> },
+                                      tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : numC(actCm1, cm1Color(actCm1)) },
                                     { label: "CM1%",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>
-                                        return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
+                                      actCell: (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[10px]", cm1Color(r))}>{pct(r)}</span> },
+                                      prCell:  (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[10px]", cm1Color(r))}>{pct(r)}</span> },
+                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>; return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className={cn("text-[10px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
                                     { label: "3HK%",
-                                      vals: (mk: string) => { const m = ms[mk]
-                                        if (m) return <span className="tabular-nums text-slate-500 text-[10px]">{pct(m.hk3Pct)}</span>
-                                        return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
+                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px]">{pct(ms[mk].hk3Pct)}</span>,
+                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px]">{pct(ms[mk].hk3Pct)}</span>,
+                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[10px]">{pct(m.hk3Pct)}</span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className="tabular-nums text-slate-500 text-[10px]">{pct(c.hk3Pct)}</span> },
                                   ]
                                   // Creator orders explorer state
@@ -1748,9 +1747,14 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                               <thead>
                                                 <tr className="bg-[#003B95]">
                                                   <th className="px-3 py-1.5 text-left text-[10px] text-slate-300 font-semibold uppercase w-20"></th>
-                                                  {qm.map(m => (
+                                                  {qm.map(m => isCurDetail(m) ? (
+                                                    <React.Fragment key={m}>
+                                                      <th className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1a4d99]">{fmtM(m)}<sup className="text-slate-400 text-[8px] ml-0.5">Act</sup></th>
+                                                      <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold whitespace-nowrap">{fmtM(m)}<sup className="text-blue-300 text-[8px] ml-0.5">PR</sup></th>
+                                                    </React.Fragment>
+                                                  ) : (
                                                     <th key={m} className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1a4d99]">
-                                                      {fmtM(m)}{ms[m]?.isProjected ? <sup className="text-blue-300 text-[8px] ml-0.5">PR</sup> : futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[8px] ml-0.5">ƯT</sup> : ""}
+                                                      {fmtM(m)}{futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[8px] ml-0.5">ƯT</sup> : ""}
                                                     </th>
                                                   ))}
                                                   <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold border-l border-[#1a4d99] bg-[#1e3a8a]">Tổng Quý</th>
@@ -1760,8 +1764,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                 {mRows.map((row, ri) => (
                                                   <tr key={row.label} className={ri % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
                                                     <td className="px-3 py-1.5 font-bold text-slate-500 uppercase text-[9px] tracking-wider whitespace-nowrap">{row.label}</td>
-                                                    {qm.map(m => (
-                                                      <td key={m} className="px-3 py-1.5 text-right border-l border-slate-100">{row.vals(m)}</td>
+                                                    {qm.map(m => isCurDetail(m) ? (
+                                                      <React.Fragment key={m}>
+                                                        <td className="px-3 py-1.5 text-right border-l border-slate-100">{ms[m] ? row.actCell(m) : <span className="text-slate-200">—</span>}</td>
+                                                        <td className="px-3 py-1.5 text-right bg-blue-50/40">{ms[m] ? row.prCell(m) : <span className="text-slate-200">—</span>}</td>
+                                                      </React.Fragment>
+                                                    ) : (
+                                                      <td key={m} className="px-3 py-1.5 text-right border-l border-slate-100">{row.single(m)}</td>
                                                     ))}
                                                     <td className="px-3 py-1.5 text-right border-l border-blue-200 bg-blue-50/60">{row.tot}</td>
                                                   </tr>
