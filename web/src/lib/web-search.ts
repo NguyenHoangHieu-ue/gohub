@@ -9,7 +9,7 @@ export async function runWebSearch(query: string): Promise<{ result: string; sou
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const searchModel = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       tools: [{ googleSearch: {} } as any],
     })
     const result = await searchModel.generateContent({

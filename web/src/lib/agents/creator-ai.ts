@@ -127,6 +127,25 @@ const webSearchDecl = {
   },
 }
 
+const generateImageDecl = {
+  name: "generateImage",
+  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      prompt: {
+        type: SchemaType.STRING,
+        description: "Detailed image description in English. Include: subject, style (photorealistic/illustration/3D render), composition, lighting, colors, mood. For TikTok add 'vertical 9:16 format'.",
+      },
+      aspect_ratio: {
+        type: SchemaType.STRING,
+        description: "Aspect ratio hint: '1:1' (square, default) | '9:16' (TikTok/Reels vertical) | '16:9' (landscape/YouTube) | '4:3'",
+      },
+    },
+    required: ["prompt"],
+  },
+}
+
 const getTrendSnapshotsDecl = {
   name: "getTrendSnapshots",
   description: "Read GoHub's stored daily trend snapshots — travel SIM/eSIM trends, competitor TikTok content, viral topics. ALWAYS call this FIRST when Hiếu asks about trends, content ideas, script generation, or competitor analysis. Falls back to webSearch if snapshots are stale.",
@@ -742,6 +761,20 @@ Key tables for analytics/config:
 - kb_wiki_pages: internal wiki pages
 - trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
 
+## Image Generation
+
+Khi Hiếu nhắc đến **"tạo ảnh", "vẽ", "design", "thumbnail", "banner", "mockup", "ảnh minh họa", "storyboard frame"**:
+
+1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + composition + lighting + colors)
+2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn (chứa base64 image UI sẽ render)
+3. Sau ảnh: đề xuất 2-3 biến thể prompt, ghi chú kỹ thuật nếu cần
+
+**Prompt templates hay dùng:**
+- TikTok thumbnail 9:16: *"vertical TikTok thumbnail, [subject], vibrant saturated colors, bold text space at top, [mood], professional social media quality"*
+- Product mockup: *"[product] on clean white background, professional product photography, studio lighting, sharp details"*
+- Travel visual: *"[destination] landscape, golden hour, cinematic photography, travel aesthetic, [season]"*
+- Storyboard: *"storyboard frame [N], [scene description], flat illustration style, clean lines"*
+
 ## Content Creator Intelligence
 
 Khi Hiếu nhắc đến **"xu hướng", "trend", "kịch bản", "script", "content", "video", "TikTok", "topview", "lên ý tưởng content"**:
@@ -845,6 +878,44 @@ async function runQuerySupabase(args: any): Promise<any> {
     return { rows, rowCount: rows.length, total: count }
   } catch (e: any) {
     return { error: e.message }
+  }
+}
+
+// ─── Image generation (Gemini 2.0 Flash) ─────────────────────────────────────
+
+async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
+  const ar = args.aspect_ratio || "1:1"
+  let prompt = args.prompt.trim()
+  if (ar === "9:16")  prompt += ". Vertical portrait format 9:16, TikTok style."
+  if (ar === "16:9")  prompt += ". Landscape format 16:9, cinematic wide shot."
+
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp-image-generation" })
+    const resp = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"] } as any,
+    })
+
+    const parts = resp.response.candidates?.[0]?.content?.parts || []
+    let text = ""
+    let imgBase64 = ""
+    let imgMime  = "image/png"
+
+    for (const p of parts as any[]) {
+      if (p.text)       text      += p.text
+      if (p.inlineData) { imgBase64 = p.inlineData.data; imgMime = p.inlineData.mimeType || "image/png" }
+    }
+
+    if (!imgBase64) return { markdown: text || "Không tạo được ảnh.", error: "No image returned" }
+
+    const dataUrl = `data:${imgMime};base64,${imgBase64}`
+    const note = text ? `\n\n${text}` : ""
+    return {
+      markdown: `![Ảnh Gấu Pro tạo](${dataUrl})${note}\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh" | Prompt: *${args.prompt.slice(0, 120)}*`,
+    }
+  } catch (e: any) {
+    return { markdown: "", error: `Tạo ảnh thất bại: ${e.message}` }
   }
 }
 
@@ -1594,7 +1665,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1720,6 +1791,18 @@ export async function runCreatorAI(
       if (call.name === "managePortalCredentials") {
         const resp = await runManagePortalCredentials(call.args as any)
         fnParts.push({ functionResponse: { name: "managePortalCredentials", response: resp } })
+        continue
+      }
+
+      // ── generateImage ──
+      if (call.name === "generateImage") {
+        const resp = await runGenerateImage(call.args as any)
+        fnParts.push({ functionResponse: { name: "generateImage", response: {
+          ...resp,
+          instruction: resp.error
+            ? `Image generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
+            : "Include the markdown field EXACTLY as-is in your response — it contains the base64 image that the UI will render. Do NOT modify or truncate it.",
+        } } })
         continue
       }
 

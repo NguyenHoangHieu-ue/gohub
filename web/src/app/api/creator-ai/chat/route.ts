@@ -37,6 +37,12 @@ async function compressHistory(
   }
 }
 
+// Strip base64 image data URLs from message text trước khi đưa vào lịch sử Gemini.
+// Ảnh base64 có thể ~1-3MB mỗi cái → bỏ vào history sẽ làm context bùng nổ.
+function stripBase64Images(text: string): string {
+  return text.replace(/!\[([^\]]*)\]\(data:image\/[^)]{20,}\)/g, "[📸 Ảnh Gấu Pro đã tạo — xem ở trên]")
+}
+
 // ─── File parser ─────────────────────────────────────────────────────────────
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB per file
@@ -214,7 +220,7 @@ export async function POST(req: NextRequest) {
 
   const rawHistory = messages.slice(0, -1).map(m => ({
     role:  m.role === "user" ? "user" : "model",
-    parts: [{ text: m.content }],
+    parts: [{ text: stripBase64Images(m.content) }],
   }))
   const { history, summarized } = await compressHistory(rawHistory)
   const lastMsg = messages[messages.length - 1]?.content || ""
