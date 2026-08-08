@@ -881,38 +881,43 @@ async function runQuerySupabase(args: any): Promise<any> {
   }
 }
 
-// ─── Image generation (Gemini 2.0 Flash) ─────────────────────────────────────
+// ─── Image generation (Imagen 3 via REST API) ────────────────────────────────
+// Dùng imagen-3.0-generate-002 qua Gemini REST (cùng GEMINI_KEY).
+// SDK không hỗ trợ Imagen trực tiếp → fetch REST đáng tin cậy hơn.
 
 async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
-  const ar = args.aspect_ratio || "1:1"
-  let prompt = args.prompt.trim()
-  if (ar === "9:16")  prompt += ". Vertical portrait format 9:16, TikTok style."
-  if (ar === "16:9")  prompt += ". Landscape format 16:9, cinematic wide shot."
+  const ar     = (args.aspect_ratio || "1:1").replace(":", ":")  // "9:16", "1:1", "16:9", "3:4"
+  const prompt = args.prompt.trim()
 
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp-image-generation" })
-    const resp = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["TEXT", "IMAGE"] } as any,
-    })
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${process.env.GEMINI_KEY}`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances:  [{ prompt }],
+          parameters: { sampleCount: 1, aspectRatio: ar, safetyFilterLevel: "block_few" },
+        }),
+        signal: AbortSignal.timeout(60000),
+      }
+    )
 
-    const parts = resp.response.candidates?.[0]?.content?.parts || []
-    let text = ""
-    let imgBase64 = ""
-    let imgMime  = "image/png"
-
-    for (const p of parts as any[]) {
-      if (p.text)       text      += p.text
-      if (p.inlineData) { imgBase64 = p.inlineData.data; imgMime = p.inlineData.mimeType || "image/png" }
+    if (!res.ok) {
+      const errText = await res.text()
+      return { markdown: "", error: `Imagen API ${res.status}: ${errText.slice(0, 300)}` }
     }
 
-    if (!imgBase64) return { markdown: text || "Không tạo được ảnh.", error: "No image returned" }
+    const data       = await res.json()
+    const prediction = data.predictions?.[0]
+    if (!prediction?.bytesBase64Encoded) {
+      return { markdown: "", error: `Không có ảnh trong response: ${JSON.stringify(data).slice(0, 200)}` }
+    }
 
-    const dataUrl = `data:${imgMime};base64,${imgBase64}`
-    const note = text ? `\n\n${text}` : ""
+    const mime    = prediction.mimeType || "image/png"
+    const dataUrl = `data:${mime};base64,${prediction.bytesBase64Encoded}`
     return {
-      markdown: `![Ảnh Gấu Pro tạo](${dataUrl})${note}\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh" | Prompt: *${args.prompt.slice(0, 120)}*`,
+      markdown: `![Ảnh Gấu Pro tạo](${dataUrl})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${prompt.slice(0, 120)}*`,
     }
   } catch (e: any) {
     return { markdown: "", error: `Tạo ảnh thất bại: ${e.message}` }
