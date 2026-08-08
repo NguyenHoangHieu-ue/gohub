@@ -5,14 +5,14 @@ import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
+import { runWebSearch as _runWebSearch, type WebSource } from "@/lib/web-search"
+export { runWebSearch, type WebSource } from "@/lib/web-search"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
 // Full access: gohub_dw + Supabase + GA4 + GSC + Web Search.
 // No guardian, no role filter, no restrictions.
 // Quality > Speed — max 20 function-calling iterations.
-
-export interface WebSource { title: string; url: string }
 
 export interface FileContext {
   name:      string
@@ -134,7 +134,7 @@ const getTrendSnapshotsDecl = {
     type: SchemaType.OBJECT,
     properties: {
       days:     { type: SchemaType.NUMBER, description: "Look back N days (default 7, max 30)." },
-      category: { type: SchemaType.STRING, description: "Filter: 'travel_sim' | 'competitor' | 'travel' | 'general' | 'all' (default: all)" },
+      category: { type: SchemaType.STRING, description: "Filter: 'travel_sim' | 'competitor' | 'travel' | 'content_format' | 'technology' | 'seasonal' | 'all' (default: all)" },
       platform: { type: SchemaType.STRING, description: "Filter: 'tiktok' | 'google' | 'all' (default: all)" },
     },
   },
@@ -879,32 +879,7 @@ async function runGetTrendSnapshots(args: any): Promise<any> {
   }
 }
 
-// ─── Web search via Gemini Google Search grounding ────────────────────────────
-
-export async function runWebSearch(query: string): Promise<{ result: string; sources: WebSource[] }> {
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    // Separate model instance with googleSearch — CANNOT combine with functionDeclarations
-    const searchModel = genAI.getGenerativeModel({
-      model: "gemini-3.6-flash",
-      tools: [{ googleSearch: {} } as any],
-    })
-    const result = await searchModel.generateContent({
-      contents: [{ role: "user", parts: [{ text: `${query}\n\nProvide a comprehensive, factual answer with citations.` }] }],
-    })
-    const text = result.response.text()
-    const meta = (result.response.candidates?.[0] as any)?.groundingMetadata
-    const sources: WebSource[] = (meta?.groundingChunks || [])
-      .map((c: any) => ({ title: c.web?.title || "Web source", url: c.web?.uri || "" }))
-      .filter((s: WebSource) => s.url)
-    return { result: text, sources }
-  } catch (e: any) {
-    return {
-      result: `Web search failed: ${e.message}. Please answer from your training knowledge and note that this may not reflect the latest information.`,
-      sources: [],
-    }
-  }
-}
+// runWebSearch re-exported từ @/lib/web-search (lightweight, không import module nặng)
 
 // ─── Knowledge Base helpers ───────────────────────────────────────────────────
 
@@ -1759,7 +1734,7 @@ export async function runCreatorAI(
       if (call.name === "webSearch") {
         const { query } = call.args as { query: string }
         console.log(`[CreatorAI] webSearch: ${query}`)
-        const { result, sources } = await runWebSearch(query)
+        const { result, sources } = await _runWebSearch(query)
         collectedSources.push(...sources)
         const sourcesText = sources.length
           ? "\n\nSources:\n" + sources.map((s, i) => `[${i + 1}] ${s.title}: ${s.url}`).join("\n")
