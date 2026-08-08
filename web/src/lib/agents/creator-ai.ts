@@ -881,46 +881,24 @@ async function runQuerySupabase(args: any): Promise<any> {
   }
 }
 
-// ─── Image generation (Imagen 3 via REST API) ────────────────────────────────
-// Dùng imagen-3.0-generate-002 qua Gemini REST (cùng GEMINI_KEY).
-// SDK không hỗ trợ Imagen trực tiếp → fetch REST đáng tin cậy hơn.
+// ─── Image generation (Pollinations AI — FLUX model, free, no API key) ───────
+// URL-based: browser tải ảnh trực tiếp → không có base64 bloat trong history.
+// Pollinations dùng FLUX (state-of-the-art open source model, tương đương DALL-E 3).
 
 async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
-  const ar     = (args.aspect_ratio || "1:1").replace(":", ":")  // "9:16", "1:1", "16:9", "3:4"
-  const prompt = args.prompt.trim()
+  const ar = args.aspect_ratio || "1:1"
+  let width = 1024, height = 1024
+  if (ar === "9:16") { width = 576;  height = 1024 }
+  if (ar === "16:9") { width = 1024; height = 576  }
+  if (ar === "4:3")  { width = 1024; height = 768  }
+  if (ar === "3:4")  { width = 768;  height = 1024 }
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${process.env.GEMINI_KEY}`,
-      {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instances:  [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio: ar, safetyFilterLevel: "block_few" },
-        }),
-        signal: AbortSignal.timeout(60000),
-      }
-    )
+  const seed    = Date.now() % 999983
+  const encoded = encodeURIComponent(args.prompt.trim())
+  const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`
 
-    if (!res.ok) {
-      const errText = await res.text()
-      return { markdown: "", error: `Imagen API ${res.status}: ${errText.slice(0, 300)}` }
-    }
-
-    const data       = await res.json()
-    const prediction = data.predictions?.[0]
-    if (!prediction?.bytesBase64Encoded) {
-      return { markdown: "", error: `Không có ảnh trong response: ${JSON.stringify(data).slice(0, 200)}` }
-    }
-
-    const mime    = prediction.mimeType || "image/png"
-    const dataUrl = `data:${mime};base64,${prediction.bytesBase64Encoded}`
-    return {
-      markdown: `![Ảnh Gấu Pro tạo](${dataUrl})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${prompt.slice(0, 120)}*`,
-    }
-  } catch (e: any) {
-    return { markdown: "", error: `Tạo ảnh thất bại: ${e.message}` }
+  return {
+    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(Ảnh tải trong vài giây — FLUX model)*`,
   }
 }
 
