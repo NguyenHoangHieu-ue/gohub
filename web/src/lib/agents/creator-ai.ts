@@ -127,6 +127,19 @@ const webSearchDecl = {
   },
 }
 
+const getTrendSnapshotsDecl = {
+  name: "getTrendSnapshots",
+  description: "Read GoHub's stored daily trend snapshots — travel SIM/eSIM trends, competitor TikTok content, viral topics. ALWAYS call this FIRST when Hiếu asks about trends, content ideas, script generation, or competitor analysis. Falls back to webSearch if snapshots are stale.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      days:     { type: SchemaType.NUMBER, description: "Look back N days (default 7, max 30)." },
+      category: { type: SchemaType.STRING, description: "Filter: 'travel_sim' | 'competitor' | 'travel' | 'general' | 'all' (default: all)" },
+      platform: { type: SchemaType.STRING, description: "Filter: 'tiktok' | 'google' | 'all' (default: all)" },
+    },
+  },
+}
+
 const listLarkTasksDecl = {
   name: "listLarkTasks",
   description: "List Hiếu's Lark tasks (To-do / in-progress / done). Nếu truyền tasklist_guid → chỉ lấy task trong Danh sách công việc (Task List) đó; bỏ trống → tất cả task của Hiếu. Requires 'task:task:read'.",
@@ -727,6 +740,66 @@ Key tables for analytics/config:
 - app_settings: system config (role_filters, access_policy, partner_tiers, etc.)
 - lark_cs_tickets: CS tickets from Lark
 - kb_wiki_pages: internal wiki pages
+- trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
+
+## Content Creator Intelligence
+
+Khi Hiếu nhắc đến **"xu hướng", "trend", "kịch bản", "script", "content", "video", "TikTok", "topview", "lên ý tưởng content"**:
+
+### Bước 1 — Thu thập trend data
+1. Gọi \`getTrendSnapshots()\` để đọc data trend đã lưu (cron cập nhật 8h ICT mỗi ngày)
+2. Nếu snapshot rỗng hoặc cũ hơn 3 ngày → gọi thêm \`webSearch()\` với query cụ thể:
+   - "xu hướng TikTok du lịch [nước] tháng [tháng/năm]"
+   - "viral travel content TikTok Vietnam 2026"
+   - "[Airalo/Simify/Holafly] TikTok content strategy 2026"
+
+### Bước 2 — Tổng hợp & đánh giá
+Trình bày báo cáo xu hướng có cấu trúc:
+- **Top trends**: 3-5 chủ đề hot nhất liên quan GoHub (du lịch + SIM/eSIM)
+- **Competitor content**: Airalo, Simify, Holafly đang làm gì trên TikTok/YouTube
+- **Content gap**: Chủ đề viral mà GoHub chưa khai thác
+- **Cross-check nội bộ**: gọi executeSQL để xem nước nào đang có đơn nhiều nhất tháng này → ưu tiên content cho đúng thị trường
+
+### Bước 3 — Kịch bản TikTok (khi được yêu cầu hoặc khi viết script)
+
+Luôn dùng đúng cấu trúc này:
+
+---
+**📌 KỊCH BẢN:** [Tên ngắn mô tả nội dung]
+**🎯 Target:** [VD: Người Việt 25-35 chuẩn bị du lịch Nhật/Hàn/...]
+**⏱ Thời lượng:** [15s / 30s / 60s]
+**📱 Format:** Dọc 9:16 (TikTok/Reels/Shorts)
+
+**🎣 HOOK (0–3s)**
+> [Câu mở đầu gây sốc hoặc tạo tò mò — phải dừng ngón tay scroll. VD: "Đi Nhật mà dùng data roaming là TIÊU hết 500k/ngày đấy 😱"]
+
+**📍 CONTEXT (3–10s)**
+> [Vấn đề mà viewer đồng cảm — nói như bạn bè, không như quảng cáo. VD: "Mình cũng từng bị thế này, về VN nhận bill điện thoại muốn xỉu..."]
+
+**💡 SOLUTION (10–45s)**
+> Scene 1: [Giới thiệu SP cụ thể — tên đầy đủ, dung lượng, số ngày, giá chính xác]
+> Scene 2: [Demo/proof — tốc độ test thực tế, screenshot speed test, chỗ nào dùng được]
+> Scene 3: [So sánh số liệu thuyết phục — roaming vs eSIM GoHub, tiết kiệm bao nhiêu]
+
+**📲 CTA (45–60s)**
+> [Kêu gọi rõ + tạo urgency. VD: "Order trên GoHub trước 6 tiếng là nhận eSIM ngay — link trong bio!"]
+
+**#️⃣ HASHTAGS** (12-15 tags)
+> #eSIMdulich #SIMNhat #dulichNhat2026 #gohub #eSIM #simdulich [thêm tag nước + tag trend]
+
+**🎬 STORYBOARD CHI TIẾT**
+| Cảnh | Giây | Hình ảnh/Góc quay | Text overlay | Nhạc/Audio |
+|------|------|-------------------|--------------|------------|
+| 1 | 0–3 | ... | ... | ... |
+
+**💡 GHI CHÚ SẢN XUẤT**
+- B-roll gợi ý: [loại cảnh quay cụ thể]
+- Style nhạc: [upbeat / trending sound / lo-fi]
+- Màu/filter: [gợi ý tone brand GoHub — xanh navy #003B95]
+- Biến thể hook A/B: [2 hook thay thế để test]
+---
+
+Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
 `
 
 // ─── Supabase query helper (same logic as data-explorer, full access) ─────────
@@ -772,6 +845,37 @@ async function runQuerySupabase(args: any): Promise<any> {
     return { rows, rowCount: rows.length, total: count }
   } catch (e: any) {
     return { error: e.message }
+  }
+}
+
+// ─── Trend snapshots (Content Intelligence) ──────────────────────────────────
+
+async function runGetTrendSnapshots(args: any): Promise<any> {
+  const days = Math.min(Math.max(parseInt(args?.days) || 7, 1), 30)
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  const sinceStr = since.toISOString().slice(0, 10)
+  try {
+    let q = supabaseAdmin.from("trend_snapshots")
+      .select("date,platform,category,summary,raw_sources,created_at")
+      .gte("date", sinceStr)
+      .order("date", { ascending: false })
+      .limit(20)
+    if (args?.category && args.category !== "all") q = q.eq("category", args.category)
+    if (args?.platform && args.platform !== "all") q = q.eq("platform", args.platform)
+    const { data, error } = await q
+    if (error) return { error: error.message }
+    if (!data?.length) return {
+      message: `Chưa có trend snapshot trong ${days} ngày qua (cron chạy 8h ICT mỗi ngày).`,
+      snapshots: [],
+      hint: "Gọi webSearch() với query xu hướng cụ thể để lấy data live thay thế.",
+    }
+    return { snapshots: data, count: data.length, period: `${sinceStr} → hôm nay` }
+  } catch (e: any) {
+    return {
+      error: e.message,
+      hint: "Table trend_snapshots chưa tồn tại — Hiếu cần chạy migration v18 trong Supabase SQL Editor.",
+    }
   }
 }
 
@@ -1515,7 +1619,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1641,6 +1745,13 @@ export async function runCreatorAI(
       if (call.name === "managePortalCredentials") {
         const resp = await runManagePortalCredentials(call.args as any)
         fnParts.push({ functionResponse: { name: "managePortalCredentials", response: resp } })
+        continue
+      }
+
+      // ── getTrendSnapshots ──
+      if (call.name === "getTrendSnapshots") {
+        const resp = await runGetTrendSnapshots(call.args as any)
+        fnParts.push({ functionResponse: { name: "getTrendSnapshots", response: resp } })
         continue
       }
 
