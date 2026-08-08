@@ -1,5 +1,41 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-06 (Session 137b — Quarter Report: nhất quán 3 bảng, loại KH theo mã, ước tính T9, 2 sub-cột Act/PR).
+Cập nhật lần cuối: 2026-08-08 (Session 138 — Tab Staff audit + Gấu Pro: Trend Intelligence + Image Generation).
+
+## ══════ SESSION 138 — TỔNG KẾT (2026-08-08, Sonnet 4.6) ══════
+
+### A. Audit tab Staff
+- Bug thật: FE không pass `includeShip`/`includeInternalOps` vào customers endpoint → KH breakdown không khớp staff summary khi bật filter (chưa fix, chờ Hiếu xác nhận sửa)
+- Design gap: Σ(customer.cm1) > staff.cm1 vì customer không trừ group cost share (by design, ghi nhận)
+- Wiki analytics-staff.md lỗi thời (API cũ) — chưa update (Hiếu chưa yêu cầu)
+
+### B. Looker Studio / Power BI kết nối gohub_dw
+- Đề xuất: Looker Studio (native GCP connector) — DB owner tạo read-only user + bật public IP + whitelist
+- ⏳ CHỜ HIẾU: liên hệ DB owner thực hiện
+
+### C. Gấu Pro Wave 1 — Trend Intelligence (commit 638515e → bce75a3)
+**Trend collection (tự động hàng ngày 8h ICT):**
+- Cron `/api/cron/refresh-trends` — 11 queries / 6 categories: travel_sim, travel, competitor, content_format, technology, seasonal
+- Lưu vào Supabase `trend_snapshots` (migration v18 — Hiếu đã chạy)
+- Tool `getTrendSnapshots` trong Gấu Pro đọc snapshot + webSearch live
+
+**Script generation:**
+- System prompt: format kịch bản TikTok chuẩn (Hook→Context→Solution→CTA→Hashtags→Storyboard)
+- Gấu Pro tự động đề xuất 2 biến thể hook A/B
+
+**Image generation (Pollinations AI — FLUX model):**
+- Tool `generateImage(prompt, aspect_ratio)` — 1:1/9:16/16:9/4:3
+- URL-based (không base64 bloat trong history)
+- Ảnh hiện ra trong UI ✅ — chất lượng chưa đẹp, cần cải thiện prompt engineering
+
+**Kỹ thuật:**
+- Tách `runWebSearch` → `web-search.ts` (lightweight, tránh import creator-ai.ts trong cron)
+- Strip base64 khỏi rawHistory trước khi gửi Gemini
+
+### D. Pending session tiếp theo
+- Cải thiện chất lượng ảnh Pollinations (prompt template tốt hơn, negative prompts, style tuning)
+- Video generation: Kling AI API key (`KLING_API_KEY`) — Hiếu đăng ký klingai.com
+- Fix bug Staff: pass includeShip/includeInternalOps vào customers endpoint
+- Update wiki analytics-staff.md
 
 ## ══════ SESSION 137b — TỔNG KẾT (2026-08-06, Opus 4.8 cont.) ══════
 
