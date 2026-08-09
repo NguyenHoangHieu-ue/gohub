@@ -19,6 +19,10 @@ describe("TOOL_STATUS", () => {
     expect(TOOL_STATUS.writeKnowledgeBase).toBeTruthy()
     expect(TOOL_STATUS.getTrendSnapshots).toBeTruthy()
     expect(TOOL_STATUS.listLarkTasks).toBeTruthy()
+    // Phase 4 tools
+    expect(TOOL_STATUS.sendLarkMessage).toBeTruthy()
+    expect(TOOL_STATUS.compareVendorQuotes).toBeTruthy()
+    expect(TOOL_STATUS.trackSKUWinRate).toBeTruthy()
     expect(TOOL_STATUS.browsePortal).toBeUndefined()  // handled specially
     expect(TOOL_STATUS.webSearch).toBeUndefined()     // handled specially
   })
@@ -33,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 22 declarations", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(22)
+  it("có đúng 25 declarations (22 gốc + 3 Phase 4)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(25)
   })
 
   it("mỗi declaration có name, description, parameters", () => {
@@ -53,27 +57,27 @@ describe("ALL_TOOL_DECLARATIONS", () => {
 
   it("executeSQL có required = ['sql']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "executeSQL")
-    expect(decl?.parameters?.required).toContain("sql")
+    expect((decl?.parameters as any)?.required).toContain("sql")
   })
 
   it("querySupabase có required = ['table']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "querySupabase")
-    expect(decl?.parameters?.required).toContain("table")
+    expect((decl?.parameters as any)?.required).toContain("table")
   })
 
   it("generateImage có required = ['prompt']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "generateImage")
-    expect(decl?.parameters?.required).toContain("prompt")
+    expect((decl?.parameters as any)?.required).toContain("prompt")
   })
 
   it("browsePortal có required = ['portal_name']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "browsePortal")
-    expect(decl?.parameters?.required).toContain("portal_name")
+    expect((decl?.parameters as any)?.required).toContain("portal_name")
   })
 
   it("managePortalCredentials có required = ['action']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "managePortalCredentials")
-    expect(decl?.parameters?.required).toContain("action")
+    expect((decl?.parameters as any)?.required).toContain("action")
   })
 
   it("danh sách tools gồm đủ Lark tools", () => {

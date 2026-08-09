@@ -111,11 +111,15 @@ export const generateImageDecl = {
     properties: {
       prompt: {
         type: SchemaType.STRING,
-        description: "Detailed image description in English. Structure: [subject] + [style: photorealistic/cinematic/flat illustration/3D render] + [composition] + [lighting: golden hour/studio/dramatic] + [colors/mood] + [quality suffix: highly detailed, 8K, masterpiece, professional quality, no text, no watermark]. The more specific, the better.",
+        description: "Detailed image description in English. Structure: [subject] + [style: photorealistic/cinematic/flat illustration/3D render] + [composition] + [lighting: golden hour/studio/dramatic] + [colors/mood]. The style_preset will auto-inject quality suffixes.",
       },
       aspect_ratio: {
         type: SchemaType.STRING,
         description: "Aspect ratio: '1:1' (square 1024×1024, default) | '9:16' (TikTok/Reels 864×1536) | '16:9' (landscape 1536×864) | '4:3' (standard 1024×768)",
+      },
+      style_preset: {
+        type: SchemaType.STRING,
+        description: "Optional style preset that auto-injects quality/style suffixes: 'commercial_photo' | 'tiktok_thumb' | 'travel_cinematic' | 'flat_illustration' | 'three_d_product' | 'storyboard'. Omit for custom prompts.",
       },
     },
     required: ["prompt"],
@@ -317,6 +321,62 @@ export const managePortalCredsDecl = {
   },
 }
 
+export const sendLarkMessageDecl = {
+  name: "sendLarkMessage",
+  description: "Gửi message vào Lark group hoặc DM cho Hiếu. Dùng khi Hiếu muốn share báo cáo/kết quả phân tích qua Lark, hoặc khi cần gửi thông báo tự động. chat_id='me' để gửi DM cho Hiếu.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      chat_id:  { type: SchemaType.STRING, description: "Lark chat_id của group (lấy từ Lark group settings) hoặc 'me' để gửi DM cho Hiếu." },
+      content:  { type: SchemaType.STRING, description: "Nội dung message (markdown được hỗ trợ)." },
+      title:    { type: SchemaType.STRING, description: "Tiêu đề optional — sẽ được in đậm ở đầu message." },
+    },
+    required: ["chat_id", "content"],
+  },
+}
+
+export const compareVendorQuotesDecl = {
+  name: "compareVendorQuotes",
+  description: "So sánh báo giá NCC mới với COGS hiện tại trong hệ thống. Input: danh sách quotes. Output: bảng delta COGS (USD + VND + %), recommendation update hay không. Dùng khi Hiếu nhận được báo giá mới từ 3HK/WorldMove/JoyTel/CMLink.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      quotes: {
+        type: SchemaType.ARRAY,
+        description: "Danh sách báo giá cần so sánh.",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            country:   { type: SchemaType.STRING, description: "ISO code hoặc tên nước (vd: JP, VN, 'Japan')." },
+            vendor:    { type: SchemaType.STRING, description: "Tên vendor (vd: '3HK', 'WorldMove', 'JoyTel')." },
+            data_gb:   { type: SchemaType.NUMBER, description: "Dung lượng GB — GB/ngày nếu is_daily=true, hoặc tổng GB nếu false." },
+            days:      { type: SchemaType.NUMBER, description: "Số ngày của gói." },
+            is_daily:  { type: SchemaType.BOOLEAN, description: "true = gói daily (data_gb là GB/ngày), false = gói fixed." },
+            cogs_usd:  { type: SchemaType.NUMBER, description: "Giá vendor quote (USD)." },
+          },
+          required: ["country", "vendor", "data_gb", "days", "cogs_usd"],
+        },
+      },
+      fx_rate_usd_vnd: { type: SchemaType.NUMBER, description: "Tỷ giá USD/VND (optional, lấy từ app_settings nếu không truyền)." },
+    },
+    required: ["quotes"],
+  },
+}
+
+export const trackSKUWinRateDecl = {
+  name: "trackSKUWinRate",
+  description: "Báo cáo Win Rate SKU mới: SKU nào đạt ≥5 đơn trong 14 ngày đầu (WIN), đang tracking (PENDING), hay không đạt (FAILED). KPI Q3 của GoHub. Dùng để theo dõi hiệu quả onboarding sản phẩm mới.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      days_since_created: { type: SchemaType.NUMBER, description: "Xem SKU tạo trong N ngày gần nhất (default 90, max 365)." },
+      vendor:             { type: SchemaType.STRING, description: "Filter theo vendor (optional, vd: 'GB' cho WorldMove, '3D' cho 3HK)." },
+      win_threshold:      { type: SchemaType.NUMBER, description: "Số đơn để tính là WIN (default 5)." },
+      win_days:           { type: SchemaType.NUMBER, description: "Cửa sổ ngày tính win rate (default 14)." },
+    },
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -324,4 +384,6 @@ export const ALL_TOOL_DECLARATIONS = [
   queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl,
   queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl,
   managePortalCredsDecl,
+  // Phase 4 tools
+  sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,
 ]

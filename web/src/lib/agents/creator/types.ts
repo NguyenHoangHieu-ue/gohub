@@ -36,4 +36,7 @@ export const TOOL_STATUS: Record<string, string> = {
   reviewPendingLearning:   "🔍 Đang đọc pending learning...",
   approveLearning:         "✅ Đang approve learning...",
   rejectLearning:          "❌ Đang reject learning...",
+  sendLarkMessage:         "📨 Đang gửi Lark message...",
+  compareVendorQuotes:     "💱 Đang so sánh báo giá NCC...",
+  trackSKUWinRate:         "📊 Đang tính Win Rate SKU...",
 }

@@ -1,6 +1,16 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-export async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
+// Style preset suffixes — Gấu tự inject vào cuối prompt
+const STYLE_SUFFIXES: Record<string, string> = {
+  commercial_photo:   "photorealistic, soft studio lighting, commercial quality, clean background, 8K, professional product photography, no text, no watermark",
+  tiktok_thumb:       "vertical 9:16 TikTok thumbnail, vibrant saturated colors, bold composition with text space at top, eye-catching, professional social media quality, 8K ultra-detailed, no text, no watermark",
+  travel_cinematic:   "cinematic wide-angle photography, golden hour warm light, travel aesthetic, photorealistic, stunning landscape, 8K, professional travel photography, no text",
+  flat_illustration:  "flat vector illustration, minimal clean design, geometric shapes, Dribbble quality, modern corporate style, pastel colors, no text",
+  three_d_product:    "3D render, product mockup, clean white background, professional studio lighting, crisp sharp details, commercial quality, 4K, no shadows, no text",
+  storyboard:         "storyboard panel, flat illustration style, clean lines, muted neutral colors, professional animation storyboard, clear scene composition",
+}
+
+export async function runGenerateImage(args: { prompt: string; aspect_ratio?: string; style_preset?: string }): Promise<{ markdown: string; error?: string }> {
   const ar = args.aspect_ratio || "1:1"
   let width = 1024, height = 1024
   if (ar === "9:16") { width = 864;  height = 1536 }
@@ -8,12 +18,18 @@ export async function runGenerateImage(args: { prompt: string; aspect_ratio?: st
   if (ar === "4:3")  { width = 1024; height = 768  }
   if (ar === "3:4")  { width = 768;  height = 1024 }
 
+  // Inject style suffix nếu có preset
+  const base    = args.prompt.trim()
+  const suffix  = args.style_preset ? (STYLE_SUFFIXES[args.style_preset] ?? "") : ""
+  const prompt  = suffix ? `${base}, ${suffix}` : base
+
   const seed    = Date.now() % 999983
-  const encoded = encodeURIComponent(args.prompt.trim())
+  const encoded = encodeURIComponent(prompt)
   const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=flux`
 
+  const presetLabel = args.style_preset ? ` | Style: \`${args.style_preset}\`` : ""
   return {
-    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(${width}×${height}px — FLUX + AI enhance)*`,
+    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..."${presetLabel}\n> *Prompt: ${base.slice(0, 100)}*\n> *(${width}×${height}px — FLUX + AI enhance)*`,
   }
 }
 
