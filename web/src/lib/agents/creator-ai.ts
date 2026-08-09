@@ -129,17 +129,17 @@ const webSearchDecl = {
 
 const generateImageDecl = {
   name: "generateImage",
-  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality.",
+  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality. Pollinations will AI-enhance the prompt automatically (enhance=true).",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       prompt: {
         type: SchemaType.STRING,
-        description: "Detailed image description in English. Include: subject, style (photorealistic/illustration/3D render), composition, lighting, colors, mood. For TikTok add 'vertical 9:16 format'.",
+        description: "Detailed image description in English. Structure: [subject] + [style: photorealistic/cinematic/flat illustration/3D render] + [composition] + [lighting: golden hour/studio/dramatic] + [colors/mood] + [quality suffix: highly detailed, 8K, masterpiece, professional quality, no text, no watermark]. The more specific, the better.",
       },
       aspect_ratio: {
         type: SchemaType.STRING,
-        description: "Aspect ratio hint: '1:1' (square, default) | '9:16' (TikTok/Reels vertical) | '16:9' (landscape/YouTube) | '4:3'",
+        description: "Aspect ratio: '1:1' (square 1024×1024, default) | '9:16' (TikTok/Reels 864×1536) | '16:9' (landscape 1536×864) | '4:3' (standard 1024×768)",
       },
     },
     required: ["prompt"],
@@ -765,15 +765,23 @@ Key tables for analytics/config:
 
 Khi Hiếu nhắc đến **"tạo ảnh", "vẽ", "design", "thumbnail", "banner", "mockup", "ảnh minh họa", "storyboard frame"**:
 
-1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + composition + lighting + colors)
-2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn (chứa base64 image UI sẽ render)
-3. Sau ảnh: đề xuất 2-3 biến thể prompt, ghi chú kỹ thuật nếu cần
+1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + subject + composition + lighting + colors + mood)
+2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn
+3. Sau ảnh: đề xuất 2-3 biến thể prompt khác nhau về style/mood để thử
+
+**Cách viết prompt HIỆU QUẢ cho FLUX (Pollinations sẽ AI-enhance thêm):**
+- Luôn kết thúc bằng quality modifiers: *"highly detailed, 8K, masterpiece, professional quality"*
+- Mô tả ánh sáng cụ thể: *"golden hour light / soft studio lighting / dramatic rim light / neon glow"*
+- Nêu rõ style: *"photorealistic / cinematic photography / digital art / flat vector illustration / 3D render"*
+- Thêm negative hints cuối prompt: *"no text, no watermarks, no blur, sharp focus"*
 
 **Prompt templates hay dùng:**
-- TikTok thumbnail 9:16: *"vertical TikTok thumbnail, [subject], vibrant saturated colors, bold text space at top, [mood], professional social media quality"*
-- Product mockup: *"[product] on clean white background, professional product photography, studio lighting, sharp details"*
-- Travel visual: *"[destination] landscape, golden hour, cinematic photography, travel aesthetic, [season]"*
-- Storyboard: *"storyboard frame [N], [scene description], flat illustration style, clean lines"*
+- TikTok thumbnail 9:16: *"vertical 9:16 TikTok thumbnail, [subject], vibrant saturated colors, bold composition with text space at top, [mood], eye-catching, professional social media quality, 8K ultra-detailed, no text, no watermark"*
+- Travel visual/banner: *"[destination] iconic landmark, cinematic wide-angle photography, golden hour warm light, travel aesthetic, [season], photorealistic, stunning landscape, 8K, professional travel photography"*
+- Product mockup: *"[product] on clean white background, professional product photography, soft studio lighting, crisp sharp details, commercial quality, 4K, no shadows, no reflections"*
+- Person/lifestyle: *"young Vietnamese woman, [action], [location], natural light, candid lifestyle photography, Sony A7 35mm, bokeh background, professional quality"*
+- Brand/graphic: *"[concept], flat minimalist design, [brand colors], clean geometric composition, modern corporate style, vector art"*
+- Storyboard: *"storyboard panel [N/total], [scene description], [camera angle], flat illustration style, clean lines, muted colors, professional animation storyboard"*
 
 ## Content Creator Intelligence
 
@@ -888,17 +896,18 @@ async function runQuerySupabase(args: any): Promise<any> {
 async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
   const ar = args.aspect_ratio || "1:1"
   let width = 1024, height = 1024
-  if (ar === "9:16") { width = 576;  height = 1024 }
-  if (ar === "16:9") { width = 1024; height = 576  }
+  if (ar === "9:16") { width = 864;  height = 1536 }  // TikTok native resolution
+  if (ar === "16:9") { width = 1536; height = 864  }
   if (ar === "4:3")  { width = 1024; height = 768  }
   if (ar === "3:4")  { width = 768;  height = 1024 }
 
   const seed    = Date.now() % 999983
   const encoded = encodeURIComponent(args.prompt.trim())
-  const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`
+  // enhance=true: Pollinations dùng LLM cải thiện prompt trước khi gửi FLUX → chất lượng tốt hơn rõ rệt
+  const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=flux`
 
   return {
-    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(Ảnh tải trong vài giây — FLUX model)*`,
+    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(${width}×${height}px — FLUX + AI enhance)*`,
   }
 }
 
