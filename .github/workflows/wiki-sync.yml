@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "docs/wiki/**"
+  workflow_dispatch:  # cho phép trigger thủ công từ GitHub Actions UI để test
 
 jobs:
   sync:
