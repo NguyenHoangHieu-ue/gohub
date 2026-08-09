@@ -2,7 +2,7 @@ import { NextRequest, NextResponse }  from "next/server"
 import { getServerSession }           from "next-auth"
 import { authOptions }                from "@/lib/auth"
 import { supabaseAdmin }              from "@/lib/supabase"
-import { runCreatorAI, FileContext }  from "@/lib/agents/creator-ai"
+import { runCreatorAI, FileContext, type GPEvent } from "@/lib/agents/creator-ai"
 import { classifySensitivity }        from "@/lib/agents/guardian-classify"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
 
@@ -228,48 +228,62 @@ export async function POST(req: NextRequest) {
   const { history, summarized } = await compressHistory(rawHistory)
   const lastMsg = messages[messages.length - 1]?.content || ""
 
-  // Pass single or multiple file contexts
-  const fileContext = fileContexts.length === 1 ? fileContexts[0]
-    : fileContexts.length > 1  ? combineFileContexts(fileContexts)
-    : undefined
+  const encoder = new TextEncoder()
+  const GP_PREFIX = "[GP] "
 
-  try {
-    const { text, sources } = await runCreatorAI(history, lastMsg, fileContext)
-
-    // Tạo conversation nếu chưa có (đồng bộ — cần convId trước khi return)
-    const GP_PREFIX = "[GP] "
-    let savedConvId = conversationId
-    try {
-      if (!savedConvId) {
-        const { data: conv } = await supabaseAdmin
-          .from("conversations")
-          .insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) })
-          .select("id").single()
-        savedConvId = conv?.id ?? null
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (event: GPEvent) => {
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)) } catch {}
       }
-      if (savedConvId) {
-        // Lưu messages + bump updated_at (fire-and-forget — không block response)
-        void (async () => {
-          try {
-            await supabaseAdmin.from("chat_messages").insert([
-              { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
-              { conversation_id: savedConvId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
-            ])
-            await supabaseAdmin.from("conversations")
-              .update({ updated_at: new Date().toISOString() })
-              .eq("id", savedConvId!)
-          } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
-        })()
-      }
-    } catch (e) {
-      console.error("[CreatorAI] save conversation:", e)
-    }
+      try {
+        const { text, sources } = await runCreatorAI(
+          history, lastMsg,
+          fileContexts.length > 0 ? fileContexts : undefined,
+          emit,
+        )
 
-    return NextResponse.json({ text, sources, summarized, conversationId: savedConvId })
-  } catch (e: any) {
-    console.error("[CreatorAI] Error:", e.message)
-    return NextResponse.json({ error: e.message }, { status: 500 })
-  }
+        // Tạo/cập nhật conversation (đồng bộ để có convId trước khi gửi done)
+        let savedConvId = conversationId
+        try {
+          if (!savedConvId) {
+            const { data: conv } = await supabaseAdmin
+              .from("conversations")
+              .insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) })
+              .select("id").single()
+            savedConvId = conv?.id ?? null
+          }
+          if (savedConvId) {
+            void (async () => {
+              try {
+                await supabaseAdmin.from("chat_messages").insert([
+                  { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
+                  { conversation_id: savedConvId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
+                ])
+                await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", savedConvId!)
+              } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
+            })()
+          }
+        } catch (e) { console.error("[CreatorAI] save conversation:", e) }
+
+        emit({ type: "text",    content: text })
+        emit({ type: "done",   conversationId: savedConvId, sources, summarized })
+      } catch (e: any) {
+        console.error("[CreatorAI] Error:", e.message)
+        emit({ type: "error", message: e.message })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type":  "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection":    "keep-alive",
+    },
+  })
 }
 
 // Combine multiple FileContexts into one for Gemini.

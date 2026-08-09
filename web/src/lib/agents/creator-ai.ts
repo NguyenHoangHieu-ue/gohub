@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
-import { createHash }                     from "crypto"
+import { createHash, createCipheriv, createDecipheriv, randomBytes } from "crypto"
 import { queryAnalytics }                 from "@/lib/analytics-db"
+import { cachedQuery }                    from "@/lib/analytics-helpers"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 import { getPartnerTiers }               from "@/lib/analytics-helpers"
@@ -20,6 +21,35 @@ export interface FileContext {
   content:   string    // text content (for "text") or base64 (for "image"/"pdf")
   mimeType?: string    // e.g. "image/png", "application/pdf"
   extraText?: string   // additional text from sibling files when binary + text combined
+}
+
+export type GPEvent =
+  | { type: "status"; text: string }
+  | { type: "text"; content: string }
+  | { type: "done"; conversationId: string | null; sources: WebSource[]; summarized: boolean }
+  | { type: "error"; message: string }
+
+const TOOL_STATUS: Record<string, string> = {
+  executeSQL:              "⚙️ Đang query analytics database...",
+  querySupabase:           "📊 Đang đọc dữ liệu Supabase...",
+  listSupabaseTables:      "📋 Đang liệt kê tables...",
+  queryGA4:                "📈 Đang query Google Analytics...",
+  queryGSC:                "🔍 Đang query Google Search Console...",
+  queryProduct:            "📦 Đang tra cứu sản phẩm...",
+  generateImage:           "🎨 Đang tạo ảnh...",
+  getTrendSnapshots:       "📡 Đang đọc trend data...",
+  listLarkTasks:           "✅ Đang đọc Lark tasks...",
+  listLarkTasklists:       "✅ Đang đọc Lark task lists...",
+  getLarkTask:             "✅ Đang đọc task detail...",
+  createLarkTask:          "✅ Đang tạo Lark task...",
+  updateLarkTask:          "✅ Đang cập nhật Lark task...",
+  queryLarkBase:           "📋 Đang đọc Lark Base...",
+  managePortalCredentials: "🔑 Đang quản lý credentials...",
+  readKnowledgeBase:       "📚 Đang đọc Knowledge Base...",
+  writeKnowledgeBase:      "💾 Đang cập nhật Knowledge Base...",
+  reviewPendingLearning:   "🔍 Đang đọc pending learning...",
+  approveLearning:         "✅ Đang approve learning...",
+  rejectLearning:          "❌ Đang reject learning...",
 }
 
 // ─── Tool declarations ───────────────────────────────────────────────────────
@@ -1051,19 +1081,47 @@ interface PortalCredential {
 }
 
 const PORTAL_SETTINGS_KEY = "portal_credentials"
+
+// AES-256-GCM encryption cho portal password. Cần ENV PORTAL_CRED_KEY (32 chars).
+// Graceful fallback: nếu key chưa set → lưu plain text (backward-compatible).
+const _CRED_KEY = process.env.PORTAL_CRED_KEY
+  ? Buffer.from(process.env.PORTAL_CRED_KEY.padEnd(32, "0").slice(0, 32))
+  : null
+
+function encryptPassword(plain: string): string {
+  if (!_CRED_KEY || plain.startsWith("enc:")) return plain
+  const iv  = randomBytes(12)
+  const c   = createCipheriv("aes-256-gcm", _CRED_KEY, iv)
+  const enc = Buffer.concat([c.update(plain, "utf8"), c.final()])
+  return `enc:${iv.toString("hex")}:${c.getAuthTag().toString("hex")}:${enc.toString("hex")}`
+}
+
+function decryptPassword(stored: string): string {
+  if (!stored.startsWith("enc:") || !_CRED_KEY) return stored
+  try {
+    const [, ivH, tagH, encH] = stored.split(":")
+    const d = createDecipheriv("aes-256-gcm", _CRED_KEY, Buffer.from(ivH, "hex"))
+    d.setAuthTag(Buffer.from(tagH, "hex"))
+    return d.update(Buffer.from(encH, "hex")).toString("utf8") + d.final("utf8")
+  } catch { return stored }
+}
+
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 async function loadPortalCreds(): Promise<PortalCredential[]> {
   try {
     const { data } = await supabaseAdmin.from("app_settings")
       .select("value").eq("key", PORTAL_SETTINGS_KEY).maybeSingle()
-    return data?.value ? JSON.parse(data.value) : []
+    if (!data?.value) return []
+    const creds: PortalCredential[] = JSON.parse(data.value)
+    return creds.map(c => ({ ...c, password: decryptPassword(c.password) }))
   } catch { return [] }
 }
 
 async function savePortalCreds(creds: PortalCredential[]): Promise<void> {
+  const encrypted = creds.map(c => ({ ...c, password: encryptPassword(c.password) }))
   await supabaseAdmin.from("app_settings").upsert(
-    { key: PORTAL_SETTINGS_KEY, value: JSON.stringify(creds) },
+    { key: PORTAL_SETTINGS_KEY, value: JSON.stringify(encrypted) },
     { onConflict: "key" }
   )
 }
@@ -1630,7 +1688,8 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
-  fileContext?: FileContext
+  fileContexts?: FileContext[],
+  onEvent?: (e: GPEvent) => void,
 ): Promise<{ text: string; sources: WebSource[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
@@ -1644,8 +1703,20 @@ export async function runCreatorAI(
       ? runReadKnowledgeBase().then((kb: any) => {
           const entries = kb?.entries || kb?.result || kb
           if (!entries || (Array.isArray(entries) && entries.length === 0)) return ""
-          const body = typeof entries === "string" ? entries : JSON.stringify(entries)
-          return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, 8000)}`
+          const PRIORITY_CATS = ["product_codes","sku_rules","exchange_rates","cogs","vendors","processes","notes"]
+          const sorted = Array.isArray(entries)
+            ? [...entries].sort((a: any, b: any) => {
+                const ai = PRIORITY_CATS.indexOf(a.category); const bi = PRIORITY_CATS.indexOf(b.category)
+                return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+              })
+            : entries
+          const body = typeof sorted === "string" ? sorted : JSON.stringify(sorted)
+          const MAX_KB = 8000
+          const truncated = body.length > MAX_KB
+          const suffix = truncated
+            ? `\n[⚠️ KB còn ${Array.isArray(entries) ? entries.length : "?"} entries — một số bị cắt. Gọi readKnowledgeBase(category) để xem đầy đủ]`
+            : ""
+          return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, MAX_KB)}${suffix}`
         }).catch(() => "")
       : Promise.resolve(""),
   ])
@@ -1661,26 +1732,30 @@ export async function runCreatorAI(
     generationConfig: { temperature: 0 },
   })
 
-  // Build user message parts — include file if attached
+  // Build user message parts — support multiple files (text + binary)
   let userParts: any[]
-  const msgText = lastMsg || (fileContext ? `Phân tích file: ${fileContext.name}` : "")
-  if (fileContext) {
-    if (fileContext.type === "text") {
-      // Inject text content (CSV, Excel, TXT, JSON, PPTX, DOCX) directly into the prompt
-      const raw       = fileContext.content
-      const truncated = raw.length > 50000
-        ? raw.slice(0, 50000) + `\n... [truncated — ${raw.length} chars total, showing first 50k]`
-        : raw
-      userParts = [{ text: `${msgText}\n\n=== FILE ĐÍNH KÈM: ${fileContext.name} ===\n${truncated}` }]
-    } else {
-      // PDF or image — send as inline data (Gemini multimodal)
-      const extraSection = fileContext.extraText
-        ? `\n\n=== CÁC FILE VĂN BẢN KÈM THEO ===\n${fileContext.extraText.slice(0, 20000)}`
-        : ""
+  const files = fileContexts || []
+  const texts   = files.filter(f => f.type === "text")
+  const binaries = files.filter(f => f.type !== "text")
+  const msgText = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
+
+  if (files.length > 0) {
+    const textContent = texts.map(f => {
+      const raw = f.content.length > 50000
+        ? f.content.slice(0, 50000) + `\n... [truncated — ${f.content.length} chars, showing first 50k]`
+        : f.content
+      return `=== FILE: ${f.name} ===\n${raw}`
+    }).join("\n\n---\n\n")
+
+    if (binaries.length > 0) {
+      // Gửi tất cả binary files như inlineData parts + text content appended vào message text
       userParts = [
-        { text: msgText + extraSection },
-        { inlineData: { mimeType: fileContext.mimeType || "application/octet-stream", data: fileContext.content } },
+        { text: msgText + (textContent ? `\n\n=== CÁC FILE VĂN BẢN KÈM THEO ===\n${textContent.slice(0, 20000)}` : "") },
+        ...binaries.map(b => ({ inlineData: { mimeType: b.mimeType || "application/octet-stream", data: b.content } })),
       ]
+    } else {
+      // Chỉ text files
+      userParts = [{ text: `${msgText}\n\n${textContent}` }]
     }
   } else {
     userParts = [{ text: msgText }]
@@ -1700,109 +1775,102 @@ export async function runCreatorAI(
   }
   appendModelContent()
 
-  // Function calling loop — max 20 iterations (quality > speed)
+  // Function calling loop — max 20 iterations. Tools run in parallel per turn.
   for (let i = 0; i < 20; i++) {
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts: any[] = []
+    const fnParts = await Promise.all(calls.map(async (call: any): Promise<any> => {
+      // Emit status event
+      const statusMsg = call.name === "webSearch"
+        ? `🌐 Đang tìm kiếm: "${((call.args as any)?.query || "").slice(0, 60)}"`
+        : call.name === "browsePortal"
+          ? `🔗 Đang truy cập portal ${(call.args as any)?.portal_name || ""}...`
+          : TOOL_STATUS[call.name] ?? "⚙️ Đang xử lý..."
+      onEvent?.({ type: "status", text: statusMsg })
 
-    for (const call of calls) {
       // ── readKnowledgeBase ──
       if (call.name === "readKnowledgeBase") {
-        const a = call.args as any
-        const resp = await runReadKnowledgeBase(a?.category)
-        fnParts.push({ functionResponse: { name: "readKnowledgeBase", response: resp } })
-        continue
+        const resp = await runReadKnowledgeBase((call.args as any)?.category)
+        return { functionResponse: { name: "readKnowledgeBase", response: resp } }
       }
 
       // ── writeKnowledgeBase ──
       if (call.name === "writeKnowledgeBase") {
         const resp = await runWriteKnowledgeBase(call.args as any)
-        fnParts.push({ functionResponse: { name: "writeKnowledgeBase", response: resp } })
-        continue
+        return { functionResponse: { name: "writeKnowledgeBase", response: resp } }
       }
 
       // ── reviewPendingLearning ──
       if (call.name === "reviewPendingLearning") {
-        const limit = (call.args as any)?.limit || 20
         const { data, error } = await supabaseAdmin
           .from("chatbot_learning_log")
           .select("id,user_name,user_role,message_content,detected_info,learning_type,severity,existing_kb_key,conflict_detail,created_at")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(limit)
-        fnParts.push({ functionResponse: { name: "reviewPendingLearning", response: error ? { error: error.message } : { records: data || [], total: data?.length || 0 } } })
-        continue
+          .eq("status", "pending").order("created_at", { ascending: false })
+          .limit((call.args as any)?.limit || 20)
+        return { functionResponse: { name: "reviewPendingLearning", response: error ? { error: error.message } : { records: data || [], total: data?.length || 0 } } }
       }
 
       // ── approveLearning ──
       if (call.name === "approveLearning") {
         const a = call.args as any
         try {
-          const kbUpsert = await supabaseAdmin.from("creator_kb").upsert({ key: a.kb_key, category: a.kb_category, title: a.kb_title, content: a.kb_content, updated_at: new Date().toISOString() })
+          const kbUpsert  = await supabaseAdmin.from("creator_kb").upsert({ key: a.kb_key, category: a.kb_category, title: a.kb_title, content: a.kb_content, updated_at: new Date().toISOString() })
           const logUpdate = await supabaseAdmin.from("chatbot_learning_log").update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: "creator" }).eq("id", a.id)
-          fnParts.push({ functionResponse: { name: "approveLearning", response: { ok: !kbUpsert.error && !logUpdate.error, kb_key: a.kb_key } } })
+          return { functionResponse: { name: "approveLearning", response: { ok: !kbUpsert.error && !logUpdate.error, kb_key: a.kb_key } } }
         } catch (e: any) {
-          fnParts.push({ functionResponse: { name: "approveLearning", response: { error: e.message } } })
+          return { functionResponse: { name: "approveLearning", response: { error: e.message } } }
         }
-        continue
       }
 
       // ── rejectLearning ──
       if (call.name === "rejectLearning") {
         const a = call.args as any
-        const { error } = await supabaseAdmin.from("chatbot_learning_log").update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: "creator", conflict_detail: a.reason || null }).eq("id", a.id)
-        fnParts.push({ functionResponse: { name: "rejectLearning", response: { ok: !error } } })
-        continue
+        const { error } = await supabaseAdmin.from("chatbot_learning_log")
+          .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: "creator", conflict_detail: a.reason || null }).eq("id", a.id)
+        return { functionResponse: { name: "rejectLearning", response: { ok: !error } } }
       }
 
       // ── Lark Task tools ──
-      if (call.name === "listLarkTasks" || call.name === "listLarkTasklists" || call.name === "getLarkTask" || call.name === "createLarkTask" || call.name === "updateLarkTask") {
+      if (["listLarkTasks","listLarkTasklists","getLarkTask","createLarkTask","updateLarkTask"].includes(call.name)) {
         const resp = await runLarkTask(call.name, call.args as any)
-        fnParts.push({ functionResponse: { name: call.name, response: resp } })
-        continue
+        return { functionResponse: { name: call.name, response: resp } }
       }
 
       // ── Lark Base ──
       if (call.name === "queryLarkBase") {
         const resp = await runLarkBase(call.args as any)
-        fnParts.push({ functionResponse: { name: "queryLarkBase", response: resp } })
-        continue
+        return { functionResponse: { name: "queryLarkBase", response: resp } }
       }
 
       // ── browsePortal ──
       if (call.name === "browsePortal") {
         console.log(`[CreatorAI] browsePortal: ${(call.args as any).portal_name}`)
         const resp = await runBrowsePortal(call.args as any)
-        fnParts.push({ functionResponse: { name: "browsePortal", response: resp } })
-        continue
+        return { functionResponse: { name: "browsePortal", response: resp } }
       }
 
       // ── managePortalCredentials ──
       if (call.name === "managePortalCredentials") {
         const resp = await runManagePortalCredentials(call.args as any)
-        fnParts.push({ functionResponse: { name: "managePortalCredentials", response: resp } })
-        continue
+        return { functionResponse: { name: "managePortalCredentials", response: resp } }
       }
 
       // ── generateImage ──
       if (call.name === "generateImage") {
         const resp = await runGenerateImage(call.args as any)
-        fnParts.push({ functionResponse: { name: "generateImage", response: {
+        return { functionResponse: { name: "generateImage", response: {
           ...resp,
           instruction: resp.error
             ? `Image generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
             : "Include the markdown field EXACTLY as-is in your response — it contains the base64 image that the UI will render. Do NOT modify or truncate it.",
-        } } })
-        continue
+        } } }
       }
 
       // ── getTrendSnapshots ──
       if (call.name === "getTrendSnapshots") {
         const resp = await runGetTrendSnapshots(call.args as any)
-        fnParts.push({ functionResponse: { name: "getTrendSnapshots", response: resp } })
-        continue
+        return { functionResponse: { name: "getTrendSnapshots", response: resp } }
       }
 
       // ── webSearch ──
@@ -1814,43 +1882,33 @@ export async function runCreatorAI(
         const sourcesText = sources.length
           ? "\n\nSources:\n" + sources.map((s, i) => `[${i + 1}] ${s.title}: ${s.url}`).join("\n")
           : ""
-        fnParts.push({ functionResponse: { name: "webSearch", response: {
+        return { functionResponse: { name: "webSearch", response: {
           result: result + sourcesText,
           instruction: "MUST cite the source URLs listed above when using this information.",
-        } } })
-        continue
+        } } }
       }
 
       // ── listSupabaseTables ──
       if (call.name === "listSupabaseTables") {
-        fnParts.push({ functionResponse: { name: "listSupabaseTables", response: { tables: ALL_TABLES } } })
-        continue
+        return { functionResponse: { name: "listSupabaseTables", response: { tables: ALL_TABLES } } }
       }
 
       // ── querySupabase ──
       if (call.name === "querySupabase") {
         const resp = await runQuerySupabase(call.args)
-        fnParts.push({ functionResponse: { name: "querySupabase", response: resp } })
-        continue
+        return { functionResponse: { name: "querySupabase", response: resp } }
       }
 
       // ── queryGA4 ──
       if (call.name === "queryGA4") {
         try {
           const a = call.args as any
-          const report = await runGA4Report({
-            siteId: a.siteId, startDate: a.startDate, endDate: a.endDate,
-            metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50,
-          })
-          const rows = (report.rows || []).slice(0, 100).map((r: any) => ({
-            dimensions: r.dimensionValues?.map((d: any) => d.value),
-            metrics:    r.metricValues?.map((m: any) => m.value),
-          }))
-          fnParts.push({ functionResponse: { name: "queryGA4", response: { rows, rowCount: report.rowCount } } })
+          const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
+          const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
+          return { functionResponse: { name: "queryGA4", response: { rows, rowCount: report.rowCount } } }
         } catch (e: any) {
-          fnParts.push({ functionResponse: { name: "queryGA4", response: { error: e.message } } })
+          return { functionResponse: { name: "queryGA4", response: { error: e.message } } }
         }
-        continue
       }
 
       // ── queryGSC ──
@@ -1858,11 +1916,10 @@ export async function runCreatorAI(
         try {
           const a = call.args as any
           const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
-          fnParts.push({ functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 100) } } })
+          return { functionResponse: { name: "queryGSC", response: { rows: rows.slice(0, 100) } } }
         } catch (e: any) {
-          fnParts.push({ functionResponse: { name: "queryGSC", response: { error: e.message } } })
+          return { functionResponse: { name: "queryGSC", response: { error: e.message } } }
         }
-        continue
       }
 
       // ── queryProduct ──
@@ -1872,38 +1929,30 @@ export async function runCreatorAI(
           const code: string = (a.sku_code || a.product_code || "").trim().toUpperCase()
           let prodResult: any = null
           if (code.length === 13) {
-            const { data } = await supabaseAdmin.from("skus")
-              .select("sku_code,sku_ref,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,day_amount_unit,parents,frame,datapack,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,original_cost,reference_cost_vnd,final_cogs_included_vat_vnd,final_cogs_usd,expirations,wr_group,note")
-              .eq("sku_code", code).maybeSingle()
+            const { data } = await supabaseAdmin.from("skus").select("sku_code,sku_ref,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,day_amount_unit,parents,frame,datapack,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency,original_cost,reference_cost_vnd,final_cogs_included_vat_vnd,final_cogs_usd,expirations,wr_group,note").eq("sku_code", code).maybeSingle()
             prodResult = data
           } else if (code.length === 8) {
-            const { data } = await supabaseAdmin.from("products")
-              .select("product_code,product_ref,status,tenant,sim_esim,product_type,vendor,vendor_code,data_policy_code,gc_purchase_type,sku_type,data_type,import_type,supported_countries,country_group,daily_reset_time,activation_time,network_type,onsite_carrier,local_phone_number,local_number_country,hotspot,kyc_code,kyc_needed,top_up_options,base_sim_esim_sku_code,apn,apn_original,telco_perks,note")
-              .eq("product_code", code).maybeSingle()
+            const { data } = await supabaseAdmin.from("products").select("product_code,product_ref,status,tenant,sim_esim,product_type,vendor,vendor_code,data_policy_code,gc_purchase_type,sku_type,data_type,import_type,supported_countries,country_group,daily_reset_time,activation_time,network_type,onsite_carrier,local_phone_number,local_number_country,hotspot,kyc_code,kyc_needed,top_up_options,base_sim_esim_sku_code,apn,apn_original,telco_perks,note").eq("product_code", code).maybeSingle()
             prodResult = data
           }
-          fnParts.push({ functionResponse: { name: "queryProduct", response: prodResult ?? { error: "Product not found" } } })
+          return { functionResponse: { name: "queryProduct", response: prodResult ?? { error: "Product not found" } } }
         } catch (e: any) {
-          fnParts.push({ functionResponse: { name: "queryProduct", response: { error: e.message } } })
+          return { functionResponse: { name: "queryProduct", response: { error: e.message } } }
         }
-        continue
       }
 
-      // ── executeSQL ──
+      // ── executeSQL (cached 5 min) ──
       if (call.name === "executeSQL") {
         const sql = (call.args as any)?.sql as string || ""
         const norm = sql.trim().toLowerCase()
-        if (!norm.startsWith("select") && !norm.startsWith("with")) {
-          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Only SELECT and WITH queries are allowed." } } })
-          continue
-        }
-        if (sql.includes(";") && sql.split(";").filter((s: string) => s.trim()).length > 1) {
-          fnParts.push({ functionResponse: { name: "executeSQL", response: { error: "Multiple statements not allowed." } } })
-          continue
-        }
+        if (!norm.startsWith("select") && !norm.startsWith("with"))
+          return { functionResponse: { name: "executeSQL", response: { error: "Only SELECT and WITH queries are allowed." } } }
+        if (sql.includes(";") && sql.split(";").filter((s: string) => s.trim()).length > 1)
+          return { functionResponse: { name: "executeSQL", response: { error: "Multiple statements not allowed." } } }
         try {
           console.log(`[CreatorAI] SQL: ${sql.substring(0, 200)}`)
-          const rows = await queryAnalytics(sql)
+          const sqlHash = createHash("md5").update(sql).digest("hex").slice(0, 16)
+          const rows = await cachedQuery(`gp-sql:${sqlHash}`, () => queryAnalytics(sql), 5)
           const limited = rows.slice(0, 200)
           const response: any = { result: limited, rowCount: rows.length }
           if (rows.length === 0) {
@@ -1913,25 +1962,18 @@ export async function runCreatorAI(
           const firstRow = limited[0] as any
           if (firstRow) {
             const nums = Object.values(firstRow).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v)))).map(v => Number(v))
-            if (nums.some(n => n > 1e12)) {
-              response.auto_retry_suggested = true
-              response.retry_hint = "Giá trị bất thường lớn (>1 nghìn tỷ VND) — nghi THIẾU JOIN gây nhân dòng (row multiplication). Kiểm tra JOIN + GROUP BY rồi chạy lại."
-            }
+            if (nums.some(n => n > 1e12)) { response.auto_retry_suggested = true; response.retry_hint = "Giá trị bất thường lớn (>1 nghìn tỷ VND) — nghi THIẾU JOIN gây nhân dòng (row multiplication). Kiểm tra JOIN + GROUP BY rồi chạy lại." }
             if (nums.some(n => n < 0 && sql.toLowerCase().includes("revenue"))) response.warning = "Có revenue âm — nghi data issue hoặc aggregation sai."
           }
-          fnParts.push({ functionResponse: { name: "executeSQL", response } })
+          return { functionResponse: { name: "executeSQL", response } }
         } catch (err: any) {
           console.error("[CreatorAI] SQL error:", err.message)
-          fnParts.push({ functionResponse: { name: "executeSQL", response: {
-            error: err.message,
-            fix_hint: "Fix the SQL error and retry immediately. Common causes: wrong column name (query information_schema.columns to check), missing ::DATE cast on fulfiled_date, using sku_code instead of sku in dim_sku.",
-          } } })
+          return { functionResponse: { name: "executeSQL", response: { error: err.message, fix_hint: "Fix the SQL error and retry immediately. Common causes: wrong column name (query information_schema.columns to check), missing ::DATE cast on fulfiled_date, using sku_code instead of sku in dim_sku." } } }
         }
-        continue
       }
 
-      fnParts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
-    }
+      return { functionResponse: { name: call.name, response: { error: "Unknown tool" } } }
+    }))
 
     // Send function responses as role "user" — required by gemini-3.6-flash
     contents.push({ role: "user", parts: fnParts })
