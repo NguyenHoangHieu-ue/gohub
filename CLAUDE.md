@@ -13,7 +13,7 @@
 | tsc | PASS · vitest 80/80 |
 
 **Hiếu cần làm (chưa xong):**
-- [ ] Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor (chưa chạy)
+- [x] ✅ Chạy `web/db/migrations/v31_chatbot_learning_log.sql` — XONG (2026-08-09)
 - [x] ✅ Chạy `web/db/migrations/v32_be_gau_ai_response.sql` — XONG (2026-08-09)
 - [ ] Set ENV `LARK_CREATOR_USER_ID` = `ou_e5af3c7f447984052c1c5a5c2f594127` trên Vercel
 - [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
