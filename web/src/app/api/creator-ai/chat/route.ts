@@ -236,31 +236,36 @@ export async function POST(req: NextRequest) {
   try {
     const { text, sources } = await runCreatorAI(history, lastMsg, fileContext)
 
-    // Save exchange to Supabase (fire-and-forget — không block response)
-    void (async () => {
-      try {
-        const GP_PREFIX = "[GP] "
-        let convId = conversationId
-        if (!convId) {
-          const { data: conv } = await supabaseAdmin
-            .from("conversations")
-            .insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) })
-            .select("id").single()
-          convId = conv?.id ?? null
-        }
-        if (convId) {
-          await supabaseAdmin.from("chat_messages").insert([
-            { conversation_id: convId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
-            { conversation_id: convId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
-          ])
-          conversationId = convId
-        }
-      } catch (e) {
-        console.error("[CreatorAI] save conversation:", e)
+    // Tạo conversation nếu chưa có (đồng bộ — cần convId trước khi return)
+    const GP_PREFIX = "[GP] "
+    let savedConvId = conversationId
+    try {
+      if (!savedConvId) {
+        const { data: conv } = await supabaseAdmin
+          .from("conversations")
+          .insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) })
+          .select("id").single()
+        savedConvId = conv?.id ?? null
       }
-    })()
+      if (savedConvId) {
+        // Lưu messages + bump updated_at (fire-and-forget — không block response)
+        void (async () => {
+          try {
+            await supabaseAdmin.from("chat_messages").insert([
+              { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
+              { conversation_id: savedConvId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
+            ])
+            await supabaseAdmin.from("conversations")
+              .update({ updated_at: new Date().toISOString() })
+              .eq("id", savedConvId!)
+          } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
+        })()
+      }
+    } catch (e) {
+      console.error("[CreatorAI] save conversation:", e)
+    }
 
-    return NextResponse.json({ text, sources, summarized, conversationId })
+    return NextResponse.json({ text, sources, summarized, conversationId: savedConvId })
   } catch (e: any) {
     console.error("[CreatorAI] Error:", e.message)
     return NextResponse.json({ error: e.message }, { status: 500 })

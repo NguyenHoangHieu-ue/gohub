@@ -604,7 +604,12 @@ export default function CreatorAIPage() {
       const saved = localStorage.getItem(LS_KEY)
       if (saved) {
         const parsed = JSON.parse(saved) as Message[]
-        if (Array.isArray(parsed) && parsed.length > 0) { setMessages(parsed); loaded = true }
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+          const savedConvId = localStorage.getItem(LS_KEY + "_id")
+          if (savedConvId) setConvId(savedConvId)
+          loaded = true
+        }
       }
     } catch {}
     // Load past conversations list + last conversation if nothing in localStorage
@@ -619,13 +624,18 @@ export default function CreatorAIPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist conversation to localStorage on every change
+  // Persist conversation + convId to localStorage on every change
   useEffect(() => {
     try {
-      if (messages.length > 0) localStorage.setItem(LS_KEY, JSON.stringify(messages))
-      else localStorage.removeItem(LS_KEY)
+      if (messages.length > 0) {
+        localStorage.setItem(LS_KEY, JSON.stringify(messages))
+        if (convId) localStorage.setItem(LS_KEY + "_id", convId)
+      } else {
+        localStorage.removeItem(LS_KEY)
+        localStorage.removeItem(LS_KEY + "_id")
+      }
     } catch {}
-  }, [messages])
+  }, [messages, convId, LS_KEY])
 
   // Setup Web Speech API (voice input) — feature-detect, ẩn nút nếu browser không hỗ trợ
   useEffect(() => {
