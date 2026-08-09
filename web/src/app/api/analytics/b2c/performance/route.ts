@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
   getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
+  getDaysInMonth, getDaysInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
@@ -16,17 +17,6 @@ import { calcGroupOpCost } from "@/lib/analytics-engine/cost-engine"
 // staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
 // projected_* khi end ∈ tháng hiện tại. prev_revenue khi comparisonType != none.
 
-function getDaysInMonth(month: string) {
-  const d = new Date(`${month}-01`)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-}
-function getDaysInRange(startDate: string, endDate: string, month: string) {
-  const rangeStart = new Date(startDate); const rangeEnd = new Date(endDate)
-  const mStart = new Date(`${month}-01`); const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0)
-  const iStart = rangeStart > mStart ? rangeStart : mStart
-  const iEnd = rangeEnd < mEnd ? rangeEnd : mEnd
-  return iStart <= iEnd ? Math.ceil((iEnd.getTime() - iStart.getTime()) / 86400000) + 1 : 0
-}
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
 async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
