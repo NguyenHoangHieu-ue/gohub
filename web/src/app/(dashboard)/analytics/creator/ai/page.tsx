@@ -574,6 +574,9 @@ export default function CreatorAIPage() {
   const [listening,     setListening]     = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
   const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
+  const [convId,        setConvId]        = useState<string | null>(null)
+  const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
+  const [showConvList,  setShowConvList]  = useState(false)
   const isCreatorRole = session?.user?.role === "creator"
 
   const bottomRef    = useRef<HTMLDivElement>(null)
@@ -594,15 +597,25 @@ export default function CreatorAIPage() {
     }).catch(() => router.replace("/analytics"))
   }, [session, status, router])
 
-  // Restore conversation from localStorage on mount
+  // Restore conversation: localStorage first (instant), then Supabase (persistent across devices)
   useEffect(() => {
+    let loaded = false
     try {
       const saved = localStorage.getItem(LS_KEY)
       if (saved) {
         const parsed = JSON.parse(saved) as Message[]
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed)
+        if (Array.isArray(parsed) && parsed.length > 0) { setMessages(parsed); loaded = true }
       }
     } catch {}
+    // Load past conversations list + last conversation if nothing in localStorage
+    fetch("/api/creator-ai/conversations")
+      .then(r => r.ok ? r.json() : [])
+      .then((list: { id: string; title: string; updated_at: string }[]) => {
+        if (!Array.isArray(list)) return
+        setPastConvs(list)
+        if (!loaded && list.length > 0) loadConversation(list[0].id)
+      })
+      .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -672,11 +685,26 @@ export default function CreatorAIPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [loading])
 
+  const loadConversation = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`/api/chat/conversations/${id}`)
+      if (!r.ok) return
+      const msgs = await r.json() as { role: string; content: string }[]
+      if (!Array.isArray(msgs) || msgs.length === 0) return
+      const converted: Message[] = msgs.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+      setMessages(converted)
+      setConvId(id)
+      setShowConvList(false)
+      try { localStorage.setItem(LS_KEY, JSON.stringify(converted)) } catch {}
+    } catch {}
+  }, [LS_KEY])
+
   const clearConversation = useCallback(() => {
     setMessages([])
     setInput("")
     setAttachedFiles([])
     setFileError("")
+    setConvId(null)
     setImgPreviews(new Map())
     try { localStorage.removeItem(LS_KEY) } catch {}
     inputRef.current?.focus()
@@ -749,16 +777,18 @@ export default function CreatorAIPage() {
     try {
       let res: Response
 
+      const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
       if (filesToSend.length > 0) {
         const form = new FormData()
-        form.append("messages", JSON.stringify(next.map(m => ({ role: m.role, content: m.content }))))
+        form.append("messages", JSON.stringify(serializedMsgs))
+        if (convId) form.append("conversation_id", convId)
         filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
         res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
       } else {
         res = await fetch("/api/creator-ai/chat", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ messages: next.map(m => ({ role: m.role, content: m.content })) }),
+          body:    JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
         })
       }
 
@@ -768,6 +798,16 @@ export default function CreatorAIPage() {
       }
 
       const data = await res.json()
+      if (data.conversationId && !convId) {
+        setConvId(data.conversationId)
+        // Refresh conversation list
+        fetch("/api/creator-ai/conversations")
+          .then(r => r.ok ? r.json() : [])
+          .then((list: { id: string; title: string; updated_at: string }[]) => {
+            if (Array.isArray(list)) setPastConvs(list)
+          })
+          .catch(() => {})
+      }
       setMessages([...next, {
         role:    "assistant",
         content: data.text || "Không có nội dung trả về.",
@@ -860,6 +900,35 @@ export default function CreatorAIPage() {
               <Plus size={13} />
               Cuộc trò chuyện mới
             </button>
+          )}
+          {pastConvs.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowConvList(v => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+                title="Lịch sử hội thoại"
+              >
+                <Database size={13} />
+                Lịch sử
+              </button>
+              {showConvList && (
+                <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3">
+                    Hội thoại gần đây
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {pastConvs.map(c => (
+                      <button key={c.id} onClick={() => loadConversation(c.id)}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors ${convId === c.id ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300" : "text-gray-700 dark:text-slate-300"}`}
+                      >
+                        <div className="truncate font-medium">{c.title || "Cuộc trò chuyện"}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{new Date(c.updated_at).toLocaleDateString("vi-VN")}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

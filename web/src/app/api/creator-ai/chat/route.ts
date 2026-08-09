@@ -163,6 +163,7 @@ export async function POST(req: NextRequest) {
 
   let messages: { role: string; content: string }[] = []
   let fileContexts: FileContext[] = []
+  let conversationId: string | null = null
 
   try {
     const contentType = req.headers.get("content-type") || ""
@@ -171,6 +172,7 @@ export async function POST(req: NextRequest) {
       const form = await req.formData()
       const raw  = form.get("messages")
       messages   = JSON.parse(typeof raw === "string" ? raw : "[]")
+      conversationId = form.get("conversation_id") as string || null
 
       // Support multiple files: file_0, file_1, ... or single "file"
       const fileEntries: File[] = []
@@ -197,7 +199,8 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const body = await req.json()
-      messages   = Array.isArray(body.messages) ? body.messages : []
+      messages        = Array.isArray(body.messages) ? body.messages : []
+      conversationId  = body.conversation_id ?? null
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Invalid request" }, { status: 400 })
@@ -232,7 +235,32 @@ export async function POST(req: NextRequest) {
 
   try {
     const { text, sources } = await runCreatorAI(history, lastMsg, fileContext)
-    return NextResponse.json({ text, sources, summarized })
+
+    // Save exchange to Supabase (fire-and-forget — không block response)
+    void (async () => {
+      try {
+        const GP_PREFIX = "[GP] "
+        let convId = conversationId
+        if (!convId) {
+          const { data: conv } = await supabaseAdmin
+            .from("conversations")
+            .insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) })
+            .select("id").single()
+          convId = conv?.id ?? null
+        }
+        if (convId) {
+          await supabaseAdmin.from("chat_messages").insert([
+            { conversation_id: convId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
+            { conversation_id: convId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
+          ])
+          conversationId = convId
+        }
+      } catch (e) {
+        console.error("[CreatorAI] save conversation:", e)
+      }
+    })()
+
+    return NextResponse.json({ text, sources, summarized, conversationId })
   } catch (e: any) {
     console.error("[CreatorAI] Error:", e.message)
     return NextResponse.json({ error: e.message }, { status: 500 })
