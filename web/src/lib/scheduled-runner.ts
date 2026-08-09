@@ -37,8 +37,8 @@ Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Thán
 4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; chưa nhập target → ghi ĐÚNG "Chưa nhập target tháng này". KHÔNG dùng lẫn "-", "N/A".
 5. Tiền: phân cách hàng nghìn + " VND" (số trong khối đã đúng định dạng — giữ nguyên). Phần trăm 1 chữ số.
 6. KHÔNG dùng khối \`\`\`chart (Lark không render được). Tiếng Việt, chuyên nghiệp, nhận xét NGẮN mỗi mục (1-2 câu, chỉ dựa trên số trong khối).
-7. ⚠️ PRO-RATA & TARGET: nếu prompt có nhắc tới pro-rata / dự phóng / target / kế hoạch / KPI / tiến độ → BẮT BUỘC trình bày ĐẦY ĐỦ mục 【3】 (MTD/thực tế, dự phóng cả tháng nếu có, target cả tháng, target theo kênh, % đạt target) và Target CM1% ở 【4】 + Target 3HK% ở 【5】 (nếu khối có). TUYỆT ĐỐI KHÔNG bỏ qua/rút gọn các dòng target hay pro-rata. Nếu target = "Chưa nhập target tháng này" thì ghi đúng câu đó, KHÔNG bỏ mục.
-8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY/WEEKLY = đang trong tháng → có MTD + dự phóng pro-rata cả tháng.
+7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.
+8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY = 1 ngày (hôm qua) so ngày liền trước; WEEKLY = 7 ngày gần nhất. DAILY/WEEKLY đang trong tháng → vẫn có MTD + dự phóng pro-rata cả tháng ở 【3】.
 
 ${dataBlock}`
 

@@ -9,6 +9,10 @@ import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
 import { runWebSearch as _runWebSearch, type WebSource } from "@/lib/web-search"
 export { runWebSearch, type WebSource } from "@/lib/web-search"
 
+// ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
+import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
+import { dispatchTool }          from "./creator/tools/dispatch"
+
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
 // Full access: gohub_dw + Supabase + GA4 + GSC + Web Search.
@@ -871,6 +875,36 @@ Luôn dùng đúng cấu trúc này:
 ---
 
 Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
+
+## Image Style Presets
+
+Khi dùng \`generateImage()\`, có thể thêm \`style_preset\` để tự động inject quality suffix phù hợp:
+
+| Preset | Dùng cho |
+|---|---|
+| \`commercial_photo\` | Ảnh sản phẩm/thương mại, nền trắng, ánh sáng studio |
+| \`tiktok_thumb\` | Thumbnail TikTok 9:16, màu sắc nổi bật, không có text |
+| \`travel_cinematic\` | Ảnh du lịch, ánh sáng golden hour, wide-angle |
+| \`flat_illustration\` | Illustration vector phẳng, tối giản, Dribbble style |
+| \`three_d_product\` | 3D render sản phẩm, nền sạch, ánh sáng studio |
+| \`storyboard\` | Storyboard TikTok/video, flat illustration, muted colors |
+
+Khi Hiếu yêu cầu ảnh nhưng không chỉ định style → gợi ý preset phù hợp trước khi tạo.
+
+## Product Intelligence Tools
+
+**\`compareVendorQuotes()\`** — Nhận báo giá NCC mới, so sánh tự động với COGS hiện tại:
+- Tìm SKU tương đương trong Supabase (cùng nước, vendor, spec)
+- Tính delta (USD + VND + %), đưa ra recommendation
+- Dùng ngay khi Hiếu nhận quote từ 3HK/WorldMove/JoyTel/CMLink
+
+**\`trackSKUWinRate()\`** — KPI Q3 tracking: SKU nào WIN (≥5 đơn/14 ngày), PENDING, FAILED:
+- Tự join Supabase SKU catalog + gohub_dw order history
+- Gọi khi Hiếu hỏi về hiệu quả sản phẩm mới, win rate, product performance
+
+**\`sendLarkMessage()\`** — Gửi báo cáo/kết quả phân tích vào Lark:
+- \`chat_id="me"\` = DM cho Hiếu; hoặc truyền chat_id của group
+- Dùng sau khi generate báo cáo nếu Hiếu muốn share vào Lark
 `
 
 // ─── Supabase query helper (same logic as data-explorer, full access) ─────────
@@ -1728,7 +1762,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: ALL_TOOL_DECLARATIONS }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1780,8 +1814,10 @@ export async function runCreatorAI(
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts = await Promise.all(calls.map(async (call: any): Promise<any> => {
-      // Emit status event
+    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources)))
+    // Legacy inline dispatch removed — delegated to creator/tools/dispatch.ts
+    if (false) await Promise.all(calls.map(async (call: any): Promise<any> => {
+      // Emit status event (kept as dead code reference)
       const statusMsg = call.name === "webSearch"
         ? `🌐 Đang tìm kiếm: "${((call.args as any)?.query || "").slice(0, 60)}"`
         : call.name === "browsePortal"
