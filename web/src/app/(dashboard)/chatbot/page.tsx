@@ -266,12 +266,14 @@ export default function ChatbotPage() {
     } catch { return null }
   }, [])
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (): Promise<Conversation[]> => {
     try {
       const res  = await fetch("/api/chat/conversations")
       const data = await res.json()
-      setConversations(Array.isArray(data) ? data : [])
-    } catch {}
+      const convs = Array.isArray(data) ? data : []
+      setConversations(convs)
+      return convs
+    } catch { return [] }
   }, [])
 
   const loadMessages = useCallback(async (convId: string) => {
@@ -296,29 +298,33 @@ export default function ChatbotPage() {
     if (!userName || initialized.current) return
     initialized.current = true
 
-    try {
-      setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0")
-    } catch {}
+    try { setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0") } catch {}
 
-    loadConversations()
+    void (async () => {
+      // 1. Restore sessionStorage (same tab/session — fastest path)
+      try {
+        const ssUser = sessionStorage.getItem(SS_CONV_USER)
+        const ssId   = sessionStorage.getItem(SS_CONV_ID)
+        const ssMsgs = sessionStorage.getItem(SS_MESSAGES)
+        if (ssUser === userName && ssId && ssMsgs) {
+          const msgs = JSON.parse(ssMsgs) as StoredMessage[]
+          setMessages(msgs)
+          setActiveConvId(ssId)
+          msgCountRef.current = msgs.length
+          loadConversations()  // load list for sidebar in background
+          return
+        }
+      } catch {}
 
-    // Restore session if same user
-    try {
-      const ssUser = sessionStorage.getItem(SS_CONV_USER)
-      const ssId   = sessionStorage.getItem(SS_CONV_ID)
-      const ssMsgs = sessionStorage.getItem(SS_MESSAGES)
-
-      if (ssUser === userName && ssId && ssMsgs) {
-        const msgs = JSON.parse(ssMsgs) as StoredMessage[]
-        setMessages(msgs)
-        setActiveConvId(ssId)
-        msgCountRef.current = msgs.length
-        return
+      // 2. No sessionStorage → load from Supabase + auto-select last conversation
+      const convs = await loadConversations()
+      if (convs.length > 0) {
+        setActiveConvId(convs[0].id)
+        await loadMessages(convs[0].id)
       }
-    } catch {}
-
-    // No valid session — start fresh (don't auto-create until first message)
-  }, [userName, loadConversations])
+      // else: start fresh (don't auto-create until first message)
+    })()
+  }, [userName, loadConversations, loadMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })

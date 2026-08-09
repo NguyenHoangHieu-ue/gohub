@@ -87,16 +87,33 @@ export async function GET(req: NextRequest) {
       created_at: e.created_at,
     }))
 
+  // Successful tasks: có ai_response dài > 80 ký tự và không phải lỗi/từ chối
+  const ERROR_PATTERNS = /hieu dang fix|vui long doi|khong the truy cap|loi:|error:|khong kha dung|hoi hieu nhe/i
+  const successfulCount = qaPairs.filter(p =>
+    p.ai_response && p.ai_response.length > 80 && !ERROR_PATTERNS.test(p.ai_response)
+  ).length
+
+  // Weekly successful tasks
+  const { count: currentWeekSuccess } = await supabaseAdmin
+    .from("app_usage_events")
+    .select("*", { count: "exact", head: true })
+    .eq("event_type", "chat")
+    .eq("agent_id", "be-gau")
+    .gte("created_at", weekStartISO)
+    .not("ai_response", "is", null)
+
   return NextResponse.json({
     events: all,
     dailyStats,
     weeklyTasks: {
       current: currentWeekTasks || 0,
+      currentSuccess: currentWeekSuccess || 0,
       previous: prevWeekTasks || 0,
       target: 50,
     },
     qaPairsCount: qaPairs.length,
-    qaPairs: qaPairs.slice(0, 100),   // max 100 pairs cho evaluation
+    successfulCount,
+    qaPairs: qaPairs.slice(0, 100),
     since,
     until,
   })

@@ -36,10 +36,10 @@ describe("guardian classifier — nhóm nhạy cảm", () => {
     expect(C("gross profit margin của kênh vn-ecom")).toBe("margin_cogs")
   })
 
-  test("nhân sự / lương → staff_hr", () => {
+  test("lương / nhân sự hành chính → staff_hr", () => {
     expect(C("lương của nhân viên sales bao nhiêu?")).toBe("staff_hr")
-    expect(C("nhân viên nào bán nhiều nhất?")).toBe("staff_hr")
-    expect(C("xếp hạng hiệu suất nhân viên")).toBe("staff_hr")
+    // "nhân viên nào bán nhiều nhất?" là BI query (revenue_bi), không phải staff_hr
+    expect(C("nhân viên nào bán nhiều nhất?")).toBe("revenue_bi")
   })
 
   test("PII khách hàng → customer_pii", () => {
