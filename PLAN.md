@@ -118,7 +118,7 @@
 - [x] **B2C-GROUP-COST** ✅ — `b2c/performance/route.ts`: fetch group costs song song + phân bổ theo revShare; projected dùng full budget × revShare. (8ae23c6)
 - [x] **STAFF-FE-FILTER** ✅ — `staff/page.tsx` toggleExpand: pass `includeShip`/`includeInternalOps` vào customers API. (b1a86cb)
 - [x] **ITEMS-ERROR** ✅ — `api/items/filters/route.ts`: bọc try-catch, trả 500 khi Supabase fail. (3dee049)
-- [ ] **QUARTER-T9-BADGE** 🟡 — `quarterly/page.tsx` line ~1436: đổi text "(PR)" thành badge cam "Ước tính" rõ hơn cho cột T9.
+- ❌ **QUARTER-T9-BADGE** — bỏ, tab Quarterly sắp đổi toàn bộ sang ENG.
 - [ ] **ISSUE-DASH-3** 🟡 (chờ Bảo/Hiếu) — nhóm "Other" ẩn khỏi bảng "Performance by Business Groups" (78 đơn, 0đ). UI Strict Lock → chờ chỉ thị.
 
 ### B3. OOP Priority 2 (AI làm, không khẩn)

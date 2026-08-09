@@ -23,11 +23,13 @@
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 
 **AI làm tiếp (backlog):**
-- Gấu Pro Phase 2: tách modules + test suite (≥15 test cases)
-- Gấu Pro Phase 3: prompt caching, Stability AI image gen, Kling video
-- Gấu Pro Phase 4: `compareVendorQuotes`, `trackSKUWinRate`, `sendLarkMessage`, semantic KB search
-- Gấu Pro Wave 2: video Kling AI (chờ API key), image prompt presets
-- Lark weekly auto-report, Product Win Rate dashboard, B2B bulk cost import
+- Gấu Pro Phase 3: Stability AI image gen (cần `STABILITY_API_KEY`), Kling video (cần `KLING_API_KEY`)
+- Semantic KB search (cần migration vector embedding vào creator_kb)
+- C2. Product Win Rate Dashboard (tab analytics/products)
+- C3. B2B Bulk Cost Import (Excel upload Quarter Report)
+
+**Hiếu cần set thêm ENV:**
+- `LARK_WEEKLY_REPORT_CHAT_ID` — chat_id Lark group nhận báo cáo tuần
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---
