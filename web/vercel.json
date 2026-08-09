@@ -27,6 +27,9 @@
     },
     "src/app/api/analytics/quarterly-b2b-customers/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/refresh-trends/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -49,6 +52,10 @@
     {
       "path": "/api/cron/refresh-monthly-kpis",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-trends",
+      "schedule": "0 1 * * *"
     }
   ]
 }

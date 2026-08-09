@@ -5,14 +5,14 @@ import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
+import { runWebSearch as _runWebSearch, type WebSource } from "@/lib/web-search"
+export { runWebSearch, type WebSource } from "@/lib/web-search"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
 // Full access: gohub_dw + Supabase + GA4 + GSC + Web Search.
 // No guardian, no role filter, no restrictions.
 // Quality > Speed — max 20 function-calling iterations.
-
-export interface WebSource { title: string; url: string }
 
 export interface FileContext {
   name:      string
@@ -124,6 +124,38 @@ const webSearchDecl = {
       query: { type: SchemaType.STRING, description: "Search query (English preferred for broader results)." },
     },
     required: ["query"],
+  },
+}
+
+const generateImageDecl = {
+  name: "generateImage",
+  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      prompt: {
+        type: SchemaType.STRING,
+        description: "Detailed image description in English. Include: subject, style (photorealistic/illustration/3D render), composition, lighting, colors, mood. For TikTok add 'vertical 9:16 format'.",
+      },
+      aspect_ratio: {
+        type: SchemaType.STRING,
+        description: "Aspect ratio hint: '1:1' (square, default) | '9:16' (TikTok/Reels vertical) | '16:9' (landscape/YouTube) | '4:3'",
+      },
+    },
+    required: ["prompt"],
+  },
+}
+
+const getTrendSnapshotsDecl = {
+  name: "getTrendSnapshots",
+  description: "Read GoHub's stored daily trend snapshots — travel SIM/eSIM trends, competitor TikTok content, viral topics. ALWAYS call this FIRST when Hiếu asks about trends, content ideas, script generation, or competitor analysis. Falls back to webSearch if snapshots are stale.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      days:     { type: SchemaType.NUMBER, description: "Look back N days (default 7, max 30)." },
+      category: { type: SchemaType.STRING, description: "Filter: 'travel_sim' | 'competitor' | 'travel' | 'content_format' | 'technology' | 'seasonal' | 'all' (default: all)" },
+      platform: { type: SchemaType.STRING, description: "Filter: 'tiktok' | 'google' | 'all' (default: all)" },
+    },
   },
 }
 
@@ -727,6 +759,80 @@ Key tables for analytics/config:
 - app_settings: system config (role_filters, access_policy, partner_tiers, etc.)
 - lark_cs_tickets: CS tickets from Lark
 - kb_wiki_pages: internal wiki pages
+- trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
+
+## Image Generation
+
+Khi Hiếu nhắc đến **"tạo ảnh", "vẽ", "design", "thumbnail", "banner", "mockup", "ảnh minh họa", "storyboard frame"**:
+
+1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + composition + lighting + colors)
+2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn (chứa base64 image UI sẽ render)
+3. Sau ảnh: đề xuất 2-3 biến thể prompt, ghi chú kỹ thuật nếu cần
+
+**Prompt templates hay dùng:**
+- TikTok thumbnail 9:16: *"vertical TikTok thumbnail, [subject], vibrant saturated colors, bold text space at top, [mood], professional social media quality"*
+- Product mockup: *"[product] on clean white background, professional product photography, studio lighting, sharp details"*
+- Travel visual: *"[destination] landscape, golden hour, cinematic photography, travel aesthetic, [season]"*
+- Storyboard: *"storyboard frame [N], [scene description], flat illustration style, clean lines"*
+
+## Content Creator Intelligence
+
+Khi Hiếu nhắc đến **"xu hướng", "trend", "kịch bản", "script", "content", "video", "TikTok", "topview", "lên ý tưởng content"**:
+
+### Bước 1 — Thu thập trend data
+1. Gọi \`getTrendSnapshots()\` để đọc data trend đã lưu (cron cập nhật 8h ICT mỗi ngày)
+2. Nếu snapshot rỗng hoặc cũ hơn 3 ngày → gọi thêm \`webSearch()\` với query cụ thể:
+   - "xu hướng TikTok du lịch [nước] tháng [tháng/năm]"
+   - "viral travel content TikTok Vietnam 2026"
+   - "[Airalo/Simify/Holafly] TikTok content strategy 2026"
+
+### Bước 2 — Tổng hợp & đánh giá
+Trình bày báo cáo xu hướng có cấu trúc:
+- **Top trends**: 3-5 chủ đề hot nhất liên quan GoHub (du lịch + SIM/eSIM)
+- **Competitor content**: Airalo, Simify, Holafly đang làm gì trên TikTok/YouTube
+- **Content gap**: Chủ đề viral mà GoHub chưa khai thác
+- **Cross-check nội bộ**: gọi executeSQL để xem nước nào đang có đơn nhiều nhất tháng này → ưu tiên content cho đúng thị trường
+
+### Bước 3 — Kịch bản TikTok (khi được yêu cầu hoặc khi viết script)
+
+Luôn dùng đúng cấu trúc này:
+
+---
+**📌 KỊCH BẢN:** [Tên ngắn mô tả nội dung]
+**🎯 Target:** [VD: Người Việt 25-35 chuẩn bị du lịch Nhật/Hàn/...]
+**⏱ Thời lượng:** [15s / 30s / 60s]
+**📱 Format:** Dọc 9:16 (TikTok/Reels/Shorts)
+
+**🎣 HOOK (0–3s)**
+> [Câu mở đầu gây sốc hoặc tạo tò mò — phải dừng ngón tay scroll. VD: "Đi Nhật mà dùng data roaming là TIÊU hết 500k/ngày đấy 😱"]
+
+**📍 CONTEXT (3–10s)**
+> [Vấn đề mà viewer đồng cảm — nói như bạn bè, không như quảng cáo. VD: "Mình cũng từng bị thế này, về VN nhận bill điện thoại muốn xỉu..."]
+
+**💡 SOLUTION (10–45s)**
+> Scene 1: [Giới thiệu SP cụ thể — tên đầy đủ, dung lượng, số ngày, giá chính xác]
+> Scene 2: [Demo/proof — tốc độ test thực tế, screenshot speed test, chỗ nào dùng được]
+> Scene 3: [So sánh số liệu thuyết phục — roaming vs eSIM GoHub, tiết kiệm bao nhiêu]
+
+**📲 CTA (45–60s)**
+> [Kêu gọi rõ + tạo urgency. VD: "Order trên GoHub trước 6 tiếng là nhận eSIM ngay — link trong bio!"]
+
+**#️⃣ HASHTAGS** (12-15 tags)
+> #eSIMdulich #SIMNhat #dulichNhat2026 #gohub #eSIM #simdulich [thêm tag nước + tag trend]
+
+**🎬 STORYBOARD CHI TIẾT**
+| Cảnh | Giây | Hình ảnh/Góc quay | Text overlay | Nhạc/Audio |
+|------|------|-------------------|--------------|------------|
+| 1 | 0–3 | ... | ... | ... |
+
+**💡 GHI CHÚ SẢN XUẤT**
+- B-roll gợi ý: [loại cảnh quay cụ thể]
+- Style nhạc: [upbeat / trending sound / lo-fi]
+- Màu/filter: [gợi ý tone brand GoHub — xanh navy #003B95]
+- Biến thể hook A/B: [2 hook thay thế để test]
+---
+
+Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
 `
 
 // ─── Supabase query helper (same logic as data-explorer, full access) ─────────
@@ -775,32 +881,59 @@ async function runQuerySupabase(args: any): Promise<any> {
   }
 }
 
-// ─── Web search via Gemini Google Search grounding ────────────────────────────
+// ─── Image generation (Pollinations AI — FLUX model, free, no API key) ───────
+// URL-based: browser tải ảnh trực tiếp → không có base64 bloat trong history.
+// Pollinations dùng FLUX (state-of-the-art open source model, tương đương DALL-E 3).
 
-export async function runWebSearch(query: string): Promise<{ result: string; sources: WebSource[] }> {
+async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
+  const ar = args.aspect_ratio || "1:1"
+  let width = 1024, height = 1024
+  if (ar === "9:16") { width = 576;  height = 1024 }
+  if (ar === "16:9") { width = 1024; height = 576  }
+  if (ar === "4:3")  { width = 1024; height = 768  }
+  if (ar === "3:4")  { width = 768;  height = 1024 }
+
+  const seed    = Date.now() % 999983
+  const encoded = encodeURIComponent(args.prompt.trim())
+  const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`
+
+  return {
+    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(Ảnh tải trong vài giây — FLUX model)*`,
+  }
+}
+
+// ─── Trend snapshots (Content Intelligence) ──────────────────────────────────
+
+async function runGetTrendSnapshots(args: any): Promise<any> {
+  const days = Math.min(Math.max(parseInt(args?.days) || 7, 1), 30)
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  const sinceStr = since.toISOString().slice(0, 10)
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    // Separate model instance with googleSearch — CANNOT combine with functionDeclarations
-    const searchModel = genAI.getGenerativeModel({
-      model: "gemini-3.6-flash",
-      tools: [{ googleSearch: {} } as any],
-    })
-    const result = await searchModel.generateContent({
-      contents: [{ role: "user", parts: [{ text: `${query}\n\nProvide a comprehensive, factual answer with citations.` }] }],
-    })
-    const text = result.response.text()
-    const meta = (result.response.candidates?.[0] as any)?.groundingMetadata
-    const sources: WebSource[] = (meta?.groundingChunks || [])
-      .map((c: any) => ({ title: c.web?.title || "Web source", url: c.web?.uri || "" }))
-      .filter((s: WebSource) => s.url)
-    return { result: text, sources }
+    let q = supabaseAdmin.from("trend_snapshots")
+      .select("date,platform,category,summary,raw_sources,created_at")
+      .gte("date", sinceStr)
+      .order("date", { ascending: false })
+      .limit(20)
+    if (args?.category && args.category !== "all") q = q.eq("category", args.category)
+    if (args?.platform && args.platform !== "all") q = q.eq("platform", args.platform)
+    const { data, error } = await q
+    if (error) return { error: error.message }
+    if (!data?.length) return {
+      message: `Chưa có trend snapshot trong ${days} ngày qua (cron chạy 8h ICT mỗi ngày).`,
+      snapshots: [],
+      hint: "Gọi webSearch() với query xu hướng cụ thể để lấy data live thay thế.",
+    }
+    return { snapshots: data, count: data.length, period: `${sinceStr} → hôm nay` }
   } catch (e: any) {
     return {
-      result: `Web search failed: ${e.message}. Please answer from your training knowledge and note that this may not reflect the latest information.`,
-      sources: [],
+      error: e.message,
+      hint: "Table trend_snapshots chưa tồn tại — Hiếu cần chạy migration v18 trong Supabase SQL Editor.",
     }
   }
 }
+
+// runWebSearch re-exported từ @/lib/web-search (lightweight, không import module nặng)
 
 // ─── Knowledge Base helpers ───────────────────────────────────────────────────
 
@@ -1515,7 +1648,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1644,11 +1777,30 @@ export async function runCreatorAI(
         continue
       }
 
+      // ── generateImage ──
+      if (call.name === "generateImage") {
+        const resp = await runGenerateImage(call.args as any)
+        fnParts.push({ functionResponse: { name: "generateImage", response: {
+          ...resp,
+          instruction: resp.error
+            ? `Image generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
+            : "Include the markdown field EXACTLY as-is in your response — it contains the base64 image that the UI will render. Do NOT modify or truncate it.",
+        } } })
+        continue
+      }
+
+      // ── getTrendSnapshots ──
+      if (call.name === "getTrendSnapshots") {
+        const resp = await runGetTrendSnapshots(call.args as any)
+        fnParts.push({ functionResponse: { name: "getTrendSnapshots", response: resp } })
+        continue
+      }
+
       // ── webSearch ──
       if (call.name === "webSearch") {
         const { query } = call.args as { query: string }
         console.log(`[CreatorAI] webSearch: ${query}`)
-        const { result, sources } = await runWebSearch(query)
+        const { result, sources } = await _runWebSearch(query)
         collectedSources.push(...sources)
         const sourcesText = sources.length
           ? "\n\nSources:\n" + sources.map((s, i) => `[${i + 1}] ${s.title}: ${s.url}`).join("\n")
