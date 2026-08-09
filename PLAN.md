@@ -6,33 +6,85 @@
 
 ## ĐÁNH GIÁ HỆ THỐNG (2026-08-09)
 
-### Ưu điểm
+> Đánh giá về kiến trúc, quy trình, công cụ — không phải danh sách bug.
 
-| # | Điểm mạnh | Chi tiết |
-|---|---|---|
-| 1 | **Analytics toàn diện** | 40+ tab, phủ hết revenue/GP/CM1/B2B/B2C/staff/vendors/3HK/quarterly/website |
-| 2 | **OOP analytics-engine** | Shared projection + cost-engine → bugs inline calc giảm mạnh, 1 chỗ fix tất cả |
-| 3 | **Dual AI phù hợp** | Bé Gấu (team, guardrails) + Gấu Pro (creator, full access 22 tools) |
-| 4 | **Gấu Pro phong phú** | 22 tools: SQL, Supabase, GA4, GSC, Lark, portal, image gen, trend, KB |
-| 5 | **Wiki + sync** | 51 trang, auto-sync Supabase, Bé Gấu đọc được KB khi trả lời |
-| 6 | **Staging discipline** | Không tự merge main, commit nhỏ từng task, ERRORS.md tránh lặp bug |
-| 7 | **Connection pool tốt** | statement_timeout=25s, idle_session_timeout=90s, không ghost pool |
+---
 
-### Nhược điểm / Technical Debt
+### 1. Kiến trúc tổng thể
 
-| # | Vấn đề | Mức độ | Ghi chú |
+**Ưu điểm:**
+- **Next.js 14 App Router** đúng hướng: server components, parallel data fetching, streaming response cho chatbot — phù hợp với use case BI + AI.
+- **Tách biệt 3 lớp DB** có logic rõ ràng: Supabase (operational + config), gohub_dw (analytics DW), Turso (config nhẹ + b2b costs). Mỗi DB làm đúng việc của nó.
+- **OOP analytics-engine** (s133+): tập trung logic projection + cost vào shared lib → thay đổi công thức 1 chỗ áp toàn hệ thống, hạn chế lỗi drift giữa các tab.
+- **Staging-first pipeline**: code không bao giờ lên thẳng production, review thủ công trước khi merge.
+
+**Nhược điểm / Cần cải thiện:**
+- **Không có connection pooler** (PgBouncer) cho gohub_dw → app-level max=3 là bottleneck; nếu nhiều Vercel instance cùng lúc (spike traffic) có thể cạn slot. Giải pháp đúng là Supabase Pooler hoặc PgBouncer phía Cloud SQL.
+- **3 data store tạo ra split logic**: channel costs ở Supabase, customer costs ở Turso, revenue ở gohub_dw → CM1 phải query 3 nguồn, kết hợp JS. Lý tưởng: gom cost về 1 nơi (Supabase hoặc Turso).
+- **Vercel serverless cold start** ảnh hưởng analytics: mỗi instance mới phải khởi tạo pool → query đầu tiên chậm. Prewarm cron (06:30 ICT) giảm thiểu nhưng không loại trừ.
+- **Không có read replica / caching layer** cho gohub_dw: mọi query đánh thẳng vào production DB. Cache 2 tầng (in-memory 5 phút + Supabase 12h) giúp nhiều nhưng chỉ work sau lần đầu.
+
+---
+
+### 2. Quy trình phát triển
+
+**Ưu điểm:**
+- **Commit nhỏ từng task**: dễ rollback, dễ review, git log đọc như changelog.
+- **Wiki sync vào Supabase**: Bé Gấu đọc được wiki khi trả lời → team được hỗ trợ thông tin cập nhật.
+- **ERRORS.md**: ghi lại bài học từ bug → session sau không lặp lại lỗi cũ (đặc biệt SQL gotchas).
+- **CLAUDE.md auto-load**: AI nắm context ngay đầu session mà không cần brief lại.
+
+**Nhược điểm / Cần cải thiện:**
+- **Không có CI/CD tự động**: tsc + vitest chạy thủ công trước push. Nếu Hiếu quên → lỗi lên staging. Cần GitHub Actions chạy check trên mỗi push.
+- **Không có cron failure alerting**: nếu `refresh-trends`, `prewarm-analytics`, hay `refresh-kpis` fail → không ai biết cho đến khi data bị thiếu/cũ. Cần Lark notify khi cron fail.
+- **Wiki sync thủ công**: phải nhớ chạy `python import_wiki.py` sau mỗi lần sửa wiki → dễ quên, Bé Gấu đọc data cũ. Cần trigger tự động (GitHub Actions hook khi docs/wiki/ thay đổi).
+- **Test coverage thấp**: be-gau.ts (chatbot chính) không có test sau rebuild s131. Nếu refactor sẽ không biết mình break gì.
+
+---
+
+### 3. AI / Chatbot
+
+**Ưu điểm:**
+- **Single function-calling agent** (Bé Gấu, s131): thay pipeline 6-agent cứng → Gemini tự chọn tool phù hợp, linh hoạt hơn nhiều, ít trường hợp "bí" hơn.
+- **Gấu Pro 22 tools**: đủ để automation phức tạp (query DB + browse portal + generate image + manage Lark tasks + ghi KB).
+- **Guardian regex** (không LLM): nhanh, deterministic, không bị flip → phân loại câu hỏi nhạy cảm chính xác hơn pipeline LLM-classify cũ.
+- **Creator KB**: Gấu Pro đọc KB riêng của Hiếu trước khi trả lời → câu trả lời dùng đúng quy ước nội bộ (COGS, mã SKU, tỷ giá).
+
+**Nhược điểm / Cần cải thiện:**
+- **Gấu Pro không lưu conversation**: in-memory → F5 mất hết. Gây ra context loss khi làm việc dài. Cần persist vào Supabase `conversations` table (đã có schema, chưa dùng cho Gấu Pro).
+- **Image generation phụ thuộc Pollinations** (third-party, free): không có SLA, chất lượng không ổn định, không có negative prompts. Không suitable cho production content. Nên xem xét Stable Diffusion API (Stability AI) hoặc Replicate cho chất lượng cao hơn.
+- **Trend snapshots 1x/ngày**: nếu cron fail hoặc dữ liệu cũ → Gấu Pro tư vấn content dựa trên trend cũ. Cần fallback rõ hơn (hiển thị ngày snapshot, gợi ý webSearch live nếu > 2 ngày).
+- **Không có multi-turn memory** cho Bé Gấu: mỗi cuộc hội thoại không nhớ context từ cuộc trước (ví dụ: "tuần trước tôi hỏi về Japan..." → Bé Gấu không biết).
+
+---
+
+### 4. Công cụ (Tools)
+
+| Tool | Đang dùng cho | Đánh giá | Cải thiện |
 |---|---|---|---|
-| 1 | **B2C CM1 thiếu group cost** | 🔴 Cao | b2c/performance không trừ ~150M/tháng group cost B2C → số sai, chỉ trừ channel-level |
-| 2 | **be-gau.ts 0 test coverage** | 🔴 Cao | Chatbot chính của team (rebuild s131) không có unit test; agents.test.ts test tool cũ |
-| 3 | **OOP Priority 2 còn 4 routes** | 🟠 Trung | channels/performance, b2b/strategic-performance, b2c/monthly, b2c/performance còn inline |
-| 4 | **Staff FE bug: filter không pass** | 🟠 Trung | page.tsx không truyền includeShip/includeInternalOps khi fetch customers |
-| 5 | **Không có Lark weekly report** | 🟠 Trung | Báo cáo tuần phải làm thủ công; cron + Gấu Pro đủ tool nhưng chưa implement |
-| 6 | **JoyTel CAPTCHA blocked** | 🟠 Trung | CAPTCHA nhiễu nặng, Gemini OCR ~0%; cần 2captcha service hoặc bỏ qua |
-| 7 | **3HK data pipeline stuck T6** | 🟠 Trung | fact_data_usage max 2026-06-30; T7+ không có (vận hành phía DB owner) |
-| 8 | **Video generation chưa có** | 🟡 Thấp | Kling AI API key chưa có; feature đã lên kế hoạch Wave 2 |
-| 9 | **items/filters thiếu error handling** | 🟡 Thấp | api/items/filters không có try-catch → crash silently nếu Supabase lỗi |
-| 10 | **Quarter T9 label "(PR)" nhỏ** | 🟡 Thấp | User dễ hiểu nhầm T9 là số thật; cần badge "Ước tính" rõ hơn |
-| 11 | **Không có Looker Studio / Power BI** | 🟡 Thấp | Hiếu muốn kết nối gohub_dw; cần DB owner tạo read-only user + bật public IP |
+| **Gemini Flash** | Bé Gấu + Gấu Pro + Guardian + Trend cron | ✅ Nhanh, rẻ, function-calling tốt | Model name không nhất quán trong codebase (gemini-3.5-flash vs gemini-3.6-flash) |
+| **Gemini Embedding** | KB/Wiki search (pgvector) | ✅ 3072 dims, chất lượng tốt | Không index được (> 2000 dims limit pgvector) → exact scan full table mỗi search |
+| **Pollinations AI** | Image gen Gấu Pro | ⚠️ Free nhưng không ổn định | Nên upgrade sang Stability AI hoặc Replicate API |
+| **Supabase** | Products, KB, config, costs | ✅ Phù hợp | Đang dùng như KV store (app_settings) — nên có typed table thay JSON blob |
+| **gohub_dw Postgres** | Analytics | ✅ Đủ mạnh | Cần PgBouncer; Hiếu không có quyền thêm index |
+| **Turso SQLite** | B2B costs, config | ⚠️ Tạo split data | Nên gom về Supabase để 1 nguồn duy nhất |
+| **Vercel** | Deploy + Cron | ✅ Tiện lợi | Cron chỉ 1 trigger/run, không retry nếu fail |
+| **Lark** | Team chatbot + CS tickets + OAuth | ✅ Team dùng Lark nên self-contained | OAuth flow phức tạp (app version phải publish sau mỗi lần đổi scope) |
+
+---
+
+### 5. Đề xuất cải thiện chiến lược (theo thứ tự ưu tiên)
+
+| # | Cải thiện | Lợi ích | Effort |
+|---|---|---|---|
+| 1 | **CI/CD GitHub Actions** (tsc + vitest tự động) | Không bao giờ push code lỗi | Nhỏ (~1 ngày) |
+| 2 | **Cron failure → Lark alert** | Biết ngay khi data pipeline fail | Nhỏ (~2h) |
+| 3 | **Wiki auto-sync** (GitHub Actions khi docs/wiki/ thay đổi) | Bé Gấu luôn đọc wiki mới nhất | Nhỏ (~1 ngày) |
+| 4 | **Gấu Pro conversation persistence** (Supabase) | Không mất context khi F5 | Trung (~3 ngày) |
+| 5 | **Gom Turso b2b costs → Supabase** | 1 nguồn duy nhất cho costs | Trung (~3 ngày) |
+| 6 | **PgBouncer / Supabase Pooler** cho gohub_dw | Scale nhiều connection hơn | Lớn (cần DB owner) |
+| 7 | **Image gen upgrade** (Stability AI / Replicate) | Chất lượng ổn định, negative prompts | Trung (~2 ngày) |
+| 8 | **Looker Studio connector** | BOD xem chart không cần vào web | Lớn (cần DB owner) |
 
 ---
 
