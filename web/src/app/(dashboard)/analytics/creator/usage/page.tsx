@@ -700,12 +700,12 @@ export default function UsagePage() {
                   Gấu Pro chấm điểm từng cặp Q&A của Bé Gấu · Thang điểm 1-5 · Kèm nhận xét
                 </p>
                 {qaPairsCount === 0 ? (
-                  <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="mt-3 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold">Chưa có dữ liệu câu trả lời</div>
-                      <div className="mt-0.5">Hiếu cần chạy migration v32 trong Supabase SQL Editor trước. Sau đó các câu trả lời mới của Bé Gấu sẽ được lưu tự động.</div>
-                      <code className="block mt-1 bg-amber-100 px-2 py-1 rounded text-[10px]">web/db/migrations/v32_be_gau_ai_response.sql</code>
+                      <div className="font-semibold">Chưa có câu trả lời nào được ghi nhận trong kỳ này</div>
+                      <div className="mt-1">Migration v32 ✅ đã chạy. Câu trả lời của Bé Gấu sẽ tự lưu kể từ lần chat tiếp theo.</div>
+                      <div className="mt-1 font-medium">→ Chat vài tin với Bé Gấu tại <span className="underline">/chatbot</span>, rồi quay lại đây và bấm "Chấm điểm".</div>
                     </div>
                   </div>
                 ) : (
