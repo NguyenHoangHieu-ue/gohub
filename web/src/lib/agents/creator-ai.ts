@@ -9,6 +9,10 @@ import { SUPABASE_TABLES, SENSITIVE_TABLES } from "./data-explorer"
 import { runWebSearch as _runWebSearch, type WebSource } from "@/lib/web-search"
 export { runWebSearch, type WebSource } from "@/lib/web-search"
 
+// ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
+import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
+import { dispatchTool }          from "./creator/tools/dispatch"
+
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
 // Full access: gohub_dw + Supabase + GA4 + GSC + Web Search.
@@ -1728,7 +1732,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: [readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl, listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl, queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl, queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl, managePortalCredsDecl] }],
+    tools: [{ functionDeclarations: ALL_TOOL_DECLARATIONS }],
     generationConfig: { temperature: 0 },
   })
 
@@ -1780,8 +1784,10 @@ export async function runCreatorAI(
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts = await Promise.all(calls.map(async (call: any): Promise<any> => {
-      // Emit status event
+    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources)))
+    // Legacy inline dispatch removed — delegated to creator/tools/dispatch.ts
+    if (false) await Promise.all(calls.map(async (call: any): Promise<any> => {
+      // Emit status event (kept as dead code reference)
       const statusMsg = call.name === "webSearch"
         ? `🌐 Đang tìm kiếm: "${((call.args as any)?.query || "").slice(0, 60)}"`
         : call.name === "browsePortal"
