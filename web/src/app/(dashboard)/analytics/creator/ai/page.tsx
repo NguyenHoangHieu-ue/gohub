@@ -573,6 +573,7 @@ export default function CreatorAIPage() {
   const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
   const [listening,     setListening]     = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const [statusText,    setStatusText]    = useState("")
   const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
   const [convId,        setConvId]        = useState<string | null>(null)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
@@ -785,9 +786,8 @@ export default function CreatorAIPage() {
     setLoading(true)
 
     try {
-      let res: Response
-
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
+      let res: Response
       if (filesToSend.length > 0) {
         const form = new FormData()
         form.append("messages", JSON.stringify(serializedMsgs))
@@ -796,35 +796,64 @@ export default function CreatorAIPage() {
         res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
       } else {
         res = await fetch("/api/creator-ai/chat", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
         })
       }
 
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
         throw new Error(err.error || `HTTP ${res.status}`)
       }
 
-      const data = await res.json()
-      if (data.conversationId && !convId) {
-        setConvId(data.conversationId)
-        // Refresh conversation list
+      // SSE stream reader
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+      let assistantContent = ""
+      let finalSources:   WebSource[]  = []
+      let finalSummarized = false
+      let newConvId:      string | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const parts = buf.split("\n\n")
+        buf = parts.pop() ?? ""
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue
+          try {
+            const ev = JSON.parse(part.slice(6))
+            if      (ev.type === "status") setStatusText(ev.text)
+            else if (ev.type === "text")   assistantContent = ev.content
+            else if (ev.type === "done") {
+              newConvId       = ev.conversationId
+              finalSources    = Array.isArray(ev.sources) ? ev.sources : []
+              finalSummarized = ev.summarized === true
+            } else if (ev.type === "error") throw new Error(ev.message)
+          } catch (parseErr: any) {
+            if (parseErr.message && !parseErr.message.includes("JSON")) throw parseErr
+          }
+        }
+      }
+
+      setStatusText("")
+      setMessages([...next, {
+        role: "assistant",
+        content: assistantContent || "Không có nội dung trả về.",
+        sources: finalSources,
+        summarized: finalSummarized,
+      }])
+      if (newConvId && !convId) {
+        setConvId(newConvId)
         fetch("/api/creator-ai/conversations")
           .then(r => r.ok ? r.json() : [])
-          .then((list: { id: string; title: string; updated_at: string }[]) => {
-            if (Array.isArray(list)) setPastConvs(list)
-          })
+          .then((list: { id: string; title: string; updated_at: string }[]) => { if (Array.isArray(list)) setPastConvs(list) })
           .catch(() => {})
       }
-      setMessages([...next, {
-        role:    "assistant",
-        content: data.text || "Không có nội dung trả về.",
-        sources: Array.isArray(data.sources) ? data.sources : [],
-        summarized: data.summarized === true,
-      }])
     } catch (e: any) {
+      setStatusText("")
       setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
     } finally {
       setLoading(false)
@@ -897,9 +926,9 @@ export default function CreatorAIPage() {
             )
           )}
           {loading && (
-            <span className="flex items-center gap-1.5 text-xs text-violet-500">
-              <Loader2 size={13} className="animate-spin" />
-              Đang xử lý{thinkingMsg}…
+            <span className="flex items-center gap-1.5 text-xs text-violet-500 max-w-[240px] truncate">
+              <Loader2 size={13} className="animate-spin flex-shrink-0" />
+              {statusText || `Đang xử lý${thinkingMsg}…`}
             </span>
           )}
           {messages.length > 0 && !loading && (
@@ -1050,9 +1079,14 @@ export default function CreatorAIPage() {
                     ))}
                   </div>
                   <span className="text-xs text-gray-400">
-                    Đang phân tích{thinkingMsg}
-                    {elapsed > 10 && " — đang query database / web…"}
-                    {elapsed > 30 && " — phức tạp, chờ xíu…"}
+                    {statusText
+                      ? statusText
+                      : <>
+                          {`Đang phân tích${thinkingMsg}`}
+                          {elapsed > 10 && " — đang query database / web…"}
+                          {elapsed > 30 && " — phức tạp, chờ xíu…"}
+                        </>
+                    }
                   </span>
                 </div>
               </div>
