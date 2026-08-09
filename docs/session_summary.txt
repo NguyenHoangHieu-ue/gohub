@@ -39,10 +39,12 @@ Cập nhật lần cuối: 2026-08-09 (Session 139 cont. — Usage Analytics upd
 
 **Còn lại (skip):** Lark slow (kiến trúc limitation), schema auto-refresh (thấp priority)
 
-### Trạng thái cuối
-- staging = main = ad03cd0 ✅
-- Migration v32 ✅ đã chạy
-- Migration v31 ⏳ chưa chạy (chatbot_learning_log)
+### Trạng thái cuối (2026-08-09 end of day)
+- staging = main = 89832bc ✅
+- Migration v31 ✅ chatbot_learning_log
+- Migration v32 ✅ ai_response column
+- ENV LARK_CREATOR_USER_ID ✅ set trên Vercel
+- Self-learning loop Bé Gấu hoàn chỉnh: phát hiện → lưu DB → DM Hiếu Lark → review Gấu Pro → ghi creator_kb
 
 ## ══════ SESSION 139 — TỔNG KẾT (2026-08-09, Sonnet 4.6) ══════
 

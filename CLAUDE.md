@@ -4,24 +4,23 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-09, s139 cont.)
+## Trạng thái hiện tại (2026-08-09 end, s139)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `ad03cd0` (Bé Gấu 6 fixes) |
+| staging = main | `89832bc` |
 | tsc | PASS · vitest 80/80 |
 
-**Hiếu cần làm (chưa xong):**
-- [x] ✅ Chạy `web/db/migrations/v31_chatbot_learning_log.sql` — XONG (2026-08-09)
-- [x] ✅ Chạy `web/db/migrations/v32_be_gau_ai_response.sql` — XONG (2026-08-09)
-- [x] ✅ Set ENV `LARK_CREATOR_USER_ID` trên Vercel — XONG (2026-08-09)
+**Migrations & ENV — tất cả đã xong:**
+- [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
+
+**Hiếu cần làm (còn lại):**
 - [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
 - [ ] Nhập target T7/T8 cho scheduled reports
 - [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 - [ ] GitHub Secrets: kiểm tra `API_KEY`, `MCP_SECRET`, `CRON_SECRET` đã set chưa
-- [ ] Test Gấu Pro persistence thủ công (xem Network tab → `conversationId` phải là UUID)
 
 **AI làm tiếp (backlog):**
 - Fix bug Staff: FE không pass `includeShip`/`includeInternalOps` vào `/api/analytics/staff-report/customers`
