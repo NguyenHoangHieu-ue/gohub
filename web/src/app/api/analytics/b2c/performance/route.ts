@@ -6,26 +6,17 @@ import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
   getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
+  getDaysInMonth, getDaysInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { calcGroupOpCost } from "@/lib/analytics-engine/cost-engine"
 
 // Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
 // staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
 // projected_* khi end ∈ tháng hiện tại. prev_revenue khi comparisonType != none.
 
-function getDaysInMonth(month: string) {
-  const d = new Date(`${month}-01`)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-}
-function getDaysInRange(startDate: string, endDate: string, month: string) {
-  const rangeStart = new Date(startDate); const rangeEnd = new Date(endDate)
-  const mStart = new Date(`${month}-01`); const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0)
-  const iStart = rangeStart > mStart ? rangeStart : mStart
-  const iEnd = rangeEnd < mEnd ? rangeEnd : mEnd
-  return iStart <= iEnd ? Math.ceil((iEnd.getTime() - iStart.getTime()) / 86400000) + 1 : 0
-}
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
 async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
@@ -94,23 +85,31 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   }
 
   let channelCosts: any[] = []
+  let groupCosts: Array<{ group_name: string; month: string; amount: string }> = []
   const isChannelGroup = groupBy === "channel" || !groupBy
   if (isChannelGroup) {
     const start = new Date(startDate); const end = new Date(endDate)
     const months: string[] = []; let curr = new Date(start.getFullYear(), start.getMonth(), 1)
     while (curr <= end) { months.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1) }
     if (months.length > 0) {
-      const { data } = await supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months)
-      channelCosts = (data || []).map((r: any) => ({
+      const [{ data: chData }, { data: gcData }] = await Promise.all([
+        supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
+        supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").eq("group_name", "B2C").in("month", months),
+      ])
+      channelCosts = (chData || []).map((r: any) => ({
         channel: r.channel, month: r.month,
         ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
       }))
+      groupCosts = (gcData || []) as typeof groupCosts
     }
   }
+
+  const totalRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
 
   return finalRows.map(r => {
     const revenue = r.revenue; const margin = r.margin
     let gpm2 = margin
+    const revShare = isChannelGroup && totalRevenue > 0 ? revenue / totalRevenue : 0
     if (isChannelGroup) {
       r.monthly_data.forEach((monthRow: any) => {
         const mRev = parseFloat(monthRow.revenue || "0")
@@ -121,6 +120,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
           })
         })
       })
+      gpm2 -= calcGroupOpCost(groupCosts, "B2C", revShare, startDate, endDate)
     }
 
     let projected_revenue = revenue; let projected_margin = margin; let projected_gpm2 = gpm2
@@ -139,6 +139,8 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
             })
           })
         })
+        // full group cost budget × revShare (không pro-rata cho projection)
+        projected_gpm2 -= groupCosts.reduce((s, gc) => s + parseFloat(gc.amount || "0"), 0) * revShare
       } else {
         // op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
         const opCostFixed = margin - gpm2

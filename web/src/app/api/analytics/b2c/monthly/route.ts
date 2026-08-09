@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq, noCache, flushAnalyticsCacheByPrefixes } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isCronReq, noCache, flushAnalyticsCacheByPrefixes, getDaysInMonth, getDaysInRange } from "@/lib/analytics-helpers"
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
@@ -25,7 +26,6 @@ interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; u
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 type CostValue = { type?: string; value?: number }
 
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 const localPreviewAllowed = (req: NextRequest) =>
   process.env.NODE_ENV === "development" && req.nextUrl.searchParams.get("localPreview") === "1"
 

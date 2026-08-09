@@ -7,8 +7,7 @@ import {
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
   getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 type Metrics = { revenue: number; margin: number; units: number; orders?: number }
 type Item = {
