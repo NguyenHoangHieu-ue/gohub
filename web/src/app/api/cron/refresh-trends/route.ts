@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { runWebSearch } from "@/lib/web-search"
+import { alertCronFailure } from "@/lib/cron-alert"
 
 // Cron 8h ICT (1h UTC) mỗi ngày — thu thập trend data nhiều lĩnh vực lưu vào trend_snapshots.
 // Import từ web-search.ts (lightweight) thay vì creator-ai.ts để tránh kéo theo module nặng.
@@ -101,5 +102,8 @@ export async function GET(req: NextRequest) {
   }
 
   const ok = results.filter(r => r.ok).length
+  if (ok === 0) {
+    await alertCronFailure("refresh-trends", new Error(`All ${results.length} trend queries failed`))
+  }
   return NextResponse.json({ date: today, ok, total: results.length, results })
 }

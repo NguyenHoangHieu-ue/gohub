@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
+import { alertCronFailure } from "@/lib/cron-alert"
 
 // Cron: refresh analytics_monthly_kpis (snapshot CM1/GP/3HK theo tháng cho chatbot query).
 // Vercel cron hoặc gọi thủ công từ Settings: POST /api/cron/refresh-monthly-kpis
@@ -87,8 +88,10 @@ export async function POST(req: NextRequest) {
   if (rows.length > 0) {
     await supabaseAdmin.from("analytics_monthly_kpis")
       .upsert(rows, { onConflict: "month,company_code" })
+  } else {
+    await alertCronFailure("refresh-monthly-kpis", new Error("0 rows refreshed — all queries failed"))
   }
 
   console.log(`[monthly-kpis cron] refreshed ${rows.length} rows`)
-  return NextResponse.json({ ok: true, refreshed: rows.length })
+  return NextResponse.json({ ok: rows.length > 0, refreshed: rows.length })
 }

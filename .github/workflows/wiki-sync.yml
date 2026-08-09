@@ -1,0 +1,30 @@
+name: Wiki Sync — docs/wiki → Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/wiki/**"
+  workflow_dispatch:  # cho phép trigger thủ công từ GitHub Actions UI để test
+
+jobs:
+  sync:
+    name: Sync wiki pages to Supabase
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install pyyaml requests supabase
+
+      - name: Sync wiki to Supabase
+        run: python backend/seeding/import/import_wiki.py
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}

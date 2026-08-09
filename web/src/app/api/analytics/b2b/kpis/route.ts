@@ -10,8 +10,7 @@ import {
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { supabaseAdmin } from "@/lib/supabase"
-
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)

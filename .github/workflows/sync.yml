@@ -2,12 +2,14 @@ name: Sync GoHub Data to Supabase
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # every day at 01:00 UTC
-  workflow_dispatch:           # manual trigger from GitHub UI
+    - cron: "0 1 * * *"   # 01:00 UTC = 08:00 ICT (sau khi GoHub API cập nhật data buổi sáng)
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +25,7 @@ jobs:
         run: python sync.py
         env:
           API_KEY:              ${{ secrets.API_KEY }}
-          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL:         ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Notify Lark

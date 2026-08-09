@@ -5,11 +5,44 @@ department: tech
 tags: [architecture, diagram, second-brain, flow, mermaid]
 aliases: ["Second Brain Architecture", "System Diagram", "Flow Diagram"]
 created: 2026-06-13
-updated: 2026-06-25
+updated: 2026-08-09
 status: active
 ---
 
 # GoHub Second Brain — Kiến Trúc & Flow
+
+> ⚠️ **Cập nhật s131+ (2026-08-09)**: Chatbot đã đổi kiến trúc — xem mục "Trạng thái hiện tại" bên dưới.
+
+---
+
+## Trạng thái hiện tại (2026-08-09)
+
+### Chatbot — Bé Gấu mới (s131)
+
+**Bé Gấu (chatbot team)** nay dùng `be-gau.ts` (1 agent function-calling, thay pipeline 6-agent):
+- 1 vòng lặp ≤12 iterations, Gemini tự chọn tool phù hợp
+- Tools: `executeSQL` (gohub_dw), `querySupabase`, `listSupabaseTables`, `queryProduct`, `queryGA4`, `queryGSC`, `webSearch`, `readKnowledgeBase`
+- Guardian pre-flight vẫn giữ → route chặn system_internal trước khi vào be-gau
+- Diagram 5 bên dưới mô tả pipeline cũ (legacy, vẫn tham khảo được về logic agent)
+
+**Gấu Pro (creator only)** = `creator-ai.ts`, 16+ tools, max 20 iterations, không guardian:
+- Wave 1 (s138): thêm `getTrendSnapshots` + `generateImage` (Pollinations AI FLUX)
+- Cron `refresh-trends` chạy 8h ICT → trend_snapshots Supabase
+
+### Analytics — OOP pattern (s133+)
+
+Tất cả tính toán projection + cost chuyển về BE (route.ts), FE chỉ display:
+- `analytics-engine/projection.ts` → `getProjectionFactor()`
+- `analytics-engine/cost-engine.ts` → `COST_KEYS`, `calcChCostForPeriod()`, `calcChannelOpCost()`
+- `analytics-engine/quarter-projection.ts` → `buildQuarterMonthMeta()`
+
+### Deploy
+
+- **Vercel** (không còn Netlify từ s76)
+- Cron: 5 jobs (prewarm, refresh-kpis, refresh-b2c, scheduled-messages, refresh-trends)
+- Staging domain: `stg-intel-v2.gohub.cloud`
+
+---
 
 ---
 

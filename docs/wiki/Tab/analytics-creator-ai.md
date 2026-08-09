@@ -2,6 +2,7 @@
 title: "Gấu Pro (Creator AI)"
 page_type: tab_guide
 is_hidden: true
+updated: 2026-08-09
 ---
 
 # Gấu Pro — Creator AI
@@ -197,5 +198,46 @@ App token KHÔNG list được task/tasklist riêng của user (Lark trả 0) �
 - Staging domain: `https://stg-intel-v2.gohub.cloud`. ✅ OAuth ĐÃ CHẠY (staging).
 - **Gotcha "thiếu quyền" khi authorize**: (1) bỏ tham số `scope` trong URL để Lark tự dùng scope app đã publish (tránh lệch tên scope); (2) sau khi thêm quyền trong Lark PHẢI **publish version mới** — OAuth dùng quyền của version đã release, không phải bản nháp.
 
-### Ghi chú tham khảo
+#### Ghi chú tham khảo
 - **Tỷ giá nội bộ** (nhập ở Admin → Tỷ Giá Nội Bộ) lưu ở Supabase `app_settings`, key prefix `fx.` (vd `fx.usd_vnd`, `fx.twd_usd`), `category="fx_rate"`. Ghi qua `PATCH /api/admin/settings`.
+
+---
+
+## § Gấu Pro Wave 1 — s138 (2026-08-08)
+
+### Trend Intelligence
+
+**Cron `refresh-trends`** (`/api/cron/refresh-trends`, chạy 8h ICT mỗi ngày):
+- 11 queries / 6 categories: `travel_sim`, `travel`, `competitor`, `content_format`, `technology`, `seasonal`
+- Lưu vào Supabase `trend_snapshots` (migration v18 — Hiếu đã chạy)
+- Tách `runWebSearch` → `web/src/lib/web-search.ts` (lightweight, tránh import creator-ai.ts nặng trong cron)
+
+**Tool `getTrendSnapshots`** (trong Gấu Pro):
+- Đọc trend_snapshots 7 ngày gần nhất (tùy chỉnh days/category/platform)
+- Fallback: nếu snapshot rỗng hoặc cũ → gợi ý gọi thêm `webSearch` live
+- Dùng kết hợp với `webSearch` để viết script TikTok
+
+**Script generation format** (kịch bản TikTok chuẩn):
+Hook → Context → Solution → CTA → Hashtags → Storyboard, kèm 2 biến thể hook A/B
+
+### Image Generation (Pollinations AI — FLUX)
+
+**Tool `generateImage`:**
+- URL-based: browser tải ảnh trực tiếp (không base64 bloat trong history)
+- Model: FLUX (state-of-the-art open source, tương đương DALL-E 3)
+- Tham số: `enhance=true` (Pollinations dùng LLM cải thiện prompt trước khi gửi FLUX)
+- Resolution: 1:1=1024×1024 | 9:16=864×1536 (TikTok native) | 16:9=1536×864
+- Chất lượng prompt: thêm "highly detailed, 8K, masterpiece, no text, no watermark"
+
+**Để cải thiện tiếp:**
+- Prompt template rõ hơn (style + subject + lighting + quality suffix)
+- Negative hints trong prompt: "no blur, sharp focus, no watermarks"
+- Video generation: chờ Kling AI API key (`KLING_API_KEY` — Hiếu đăng ký klingai.com)
+
+### Bé Gấu (chatbot team) — s131
+
+Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
+- 1 vòng lặp ≤12 iterations, Gemini tự chọn tool
+- Tools: executeSQL (gohub_dw), querySupabase, queryProduct, webSearch, readKnowledgeBase, queryGA4, queryGSC
+- Guardian pre-flight vẫn giữ ở route level
+- Legacy pipeline (router/graph/orchestrator/agents) giữ file nhưng không còn là luồng chính

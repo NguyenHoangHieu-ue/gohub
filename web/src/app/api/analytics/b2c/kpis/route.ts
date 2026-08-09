@@ -3,36 +3,15 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getDaysInRange, getDaysInMonth, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
 // CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
 // Cost lấy từ Supabase analytics_channel_costs / analytics_channel_group_costs (đã có từ Channels).
 
 const B2C_FILTER = "UPPER(s.group_name) = 'B2C'"
-
-function getDaysInMonth(month: string) {
-  const d = new Date(`${month}-01`)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-}
-function getDaysInRange(startDate: string, endDate: string, month: string) {
-  const rangeStart = new Date(startDate)
-  const rangeEnd = new Date(endDate)
-  const mStart = new Date(`${month}-01`)
-  const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0)
-  const iStart = rangeStart > mStart ? rangeStart : mStart
-  const iEnd = rangeEnd < mEnd ? rangeEnd : mEnd
-  if (iStart <= iEnd) return Math.ceil((iEnd.getTime() - iStart.getTime()) / 86400000) + 1
-  return 0
-}
-function monthsBetween(s: Date, e: Date) {
-  const m: string[] = []
-  let curr = new Date(s.getFullYear(), s.getMonth(), 1)
-  while (curr <= e) { m.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1) }
-  return m
-}
-const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -95,28 +74,24 @@ export async function GET(req: NextRequest) {
     const duration = end.getTime() - start.getTime()
     const prevStart = new Date(start.getTime() - duration - 86400000)
     const prevEnd = new Date(start.getTime() - 86400000)
-    const currentMonths = monthsBetween(start, end)
-    const prevMonths = monthsBetween(prevStart, prevEnd)
+    const pStartStr = prevStart.toISOString().split("T")[0]
+    const pEndStr = prevEnd.toISOString().split("T")[0]
+    const currentMonths = getMonthsInRange(startDate, endDate)
+    const prevMonths = getMonthsInRange(pStartStr, pEndStr)
     const allMonths = Array.from(new Set([...currentMonths, ...prevMonths]))
 
     let totalOpCost = 0, prevTotalOpCost = 0
     if (allMonths.length > 0) {
-      const [{ data: ccData }, { data: gcData }] = await Promise.all([
-        supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", allMonths),
+      const [channelCosts, { data: gcData }] = await Promise.all([
+        getChannelCostsForMonths(allMonths),
         supabaseAdmin.from("analytics_channel_group_costs").select("month, amount").eq("group_name", "B2C").in("month", allMonths),
       ])
-      const channelCosts = (ccData || []).map((r: any) => ({
-        channel: r.channel, month: r.month,
-        ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-      }))
-      const pStartStr = prevStart.toISOString().split("T")[0]
-      const pEndStr = prevEnd.toISOString().split("T")[0]
 
       channelRows.forEach(row => {
         const apply = (months: string[], rangeStart: string, rangeEnd: string, rev: number, add: (v: number) => void) => {
           channelCosts.filter((c: any) => c.channel === row.channel && months.includes(String(c.month))).forEach((c: any) => {
             const ratio = getDaysInMonth(String(c.month)) > 0 ? getDaysInRange(rangeStart, rangeEnd, String(c.month)) / getDaysInMonth(String(c.month)) : 0
-            ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
+            COST_KEYS.forEach(key => {
               const v = c[key]
               // amount: pro-rata theo số ngày trong kỳ (× ratio). percent: áp thẳng trên revenue của kỳ (rev đã
               // là doanh thu range) — KHÔNG × ratio (nhất quán bod-data.ts; B2C-1 s126: trước nhân dư → under-count kỳ lẻ tháng).

@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { supabaseAdmin } from "@/lib/supabase"
 
 function getMonthStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
-}
-function daysInMonth(m: string) {
-  const d = new Date(`${m}-01`)
-  return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()
 }
 
 export async function GET(req: NextRequest) {
@@ -101,6 +98,7 @@ export async function GET(req: NextRequest) {
       const groupCosts = (gcData || []) as { group_name: string; month: string; amount: string }[]
 
       // Build summary per month
+      const todayStr = today.toISOString().split("T")[0]
       const summary = months.map(m => {
         const row = rows.find(r => r.month === m)
         const revenue = parseFloat(row?.revenue || "0")
@@ -112,16 +110,15 @@ export async function GET(req: NextRequest) {
           .filter(c => c.month === m)
           .reduce((s, c) => s + parseFloat(c.amount || "0"), 0)
 
-        // Projection for current month
-        const mDate = new Date(`${m}-01`)
-        const isCurrent = mDate.getFullYear() === today.getFullYear() && mDate.getMonth() === today.getMonth()
-        const dim = daysInMonth(m)
-        const elapsed = isCurrent ? today.getDate() : dim
-        const factor = (isCurrent && elapsed < dim) ? dim / elapsed : 1
+        // Projection for current month (shared logic from analytics-engine/projection)
+        const monthStart = `${m}-01`
+        const factor = getProjectionFactor(monthStart, todayStr)
         const isProjected = factor > 1
 
         // Actual CM1 (op cost prorated for partial month)
-        const actualOpCost = isProjected ? totalOpCost * (elapsed / dim) : totalOpCost
+        const actualOpCost = isProjected
+          ? totalOpCost * (getDaysInRange(monthStart, todayStr, m) / getDaysInMonth(m))
+          : totalOpCost
         const cm1 = gp - actualOpCost
 
         // Projected (current month only)
