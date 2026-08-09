@@ -1,5 +1,48 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-09 (Session 139 — Cải thiện chiến lược: CI/CD + Cron alert + Wiki auto-sync + Gấu Pro persistence + OOP + Docs).
+Cập nhật lần cuối: 2026-08-09 (Session 139 cont. — Usage Analytics update + v32 + Bé Gấu 6 fixes).
+
+## ══════ SESSION 139 (tiếp) — Bé Gấu fixes + Usage Analytics ══════
+
+### H. Usage Analytics — Update toàn diện (commit b8f20c4)
+
+**Data collection:**
+- `chat/route.ts`: lưu `ai_response` sau khi `runBeGau()` trả về (fire-and-forget)
+- `v32_be_gau_ai_response.sql`: ADD COLUMN ai_response TEXT — Hiếu đã chạy ✅
+- `usage-stats/route.ts`: thêm dailyStats, weeklyTasks, qaPairs, successfulCount
+
+**API mới:**
+- `/api/analytics/usage-stats/classify`: Gemini phân loại câu hỏi thành nhóm chủ đề
+- `/api/analytics/usage-stats/evaluate`: Gemini chấm điểm Q&A Bé Gấu 1-5 + nhận xét
+
+**Tab Tổng quan:** Line chart trend theo ngày + Tasks/Week KPI card (target 50/tuần Q3 KPI)
+
+**Tab Chatbot:** "Phân loại với Gấu Pro" button, cột "Đã có trả lời" trong chat log
+
+**Tab Chất lượng AI (MỚI):**
+- Gấu Pro chấm điểm 30 cặp Q&A: score 1-5 + nhận xét + tổng hợp
+- Summary: điểm TB, bar chart phân bố, điểm mạnh/yếu, nhận xét tổng
+- Bảng chi tiết expand từng cặp Q&A có score badge
+
+### I. Bé Gấu — 6 fixes (commit ad03cd0)
+
+**Đánh giá ưu/nhược:**
+- Ưu: single function-calling, guardian regex, role filtering, multi-source, retry logic
+- Nhược: không memory, 0 tests, SQL có thể sai, Lark chậm, guardian false positive, creator_kb không filter
+
+**6 fixes đã làm:**
+1. Conversation memory: chatbot/page.tsx auto-load last conversation từ Supabase → team không mất context
+2. Tests: be-gau.test.ts 15 tests, 80/80 vitest PASS
+3. SQL self-correction: thêm hướng dẫn retry 0 rows, detect join nhân bản, ví dụ WHERE ngày chuẩn
+4. Successful task tracking: usage-stats trả successfulCount + currentWeekSuccess
+5. Guardian FP: "nhân viên bán nhiều nhất" → revenue_bi (không còn bị chặn nhầm staff_hr)
+6. creator_kb filter: non-priv roles không thấy category "cogs"
+
+**Còn lại (skip):** Lark slow (kiến trúc limitation), schema auto-refresh (thấp priority)
+
+### Trạng thái cuối
+- staging = main = ad03cd0 ✅
+- Migration v32 ✅ đã chạy
+- Migration v31 ⏳ chưa chạy (chatbot_learning_log)
 
 ## ══════ SESSION 139 — TỔNG KẾT (2026-08-09, Sonnet 4.6) ══════
 
