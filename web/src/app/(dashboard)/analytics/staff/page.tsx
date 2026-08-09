@@ -167,13 +167,16 @@ function StaffPageInner() {
     if (expandedStaff === code) { setExpandedStaff(null); setCustomers([]); return }
     setExpandedStaff(code); setCustomers([]); setCustLoading(true)
     try {
-      const r = await fetch(`/api/analytics/staff-report/customers?${new URLSearchParams({
+      const custParams = new URLSearchParams({
         staffCode: code,
         startDate: applied.startDate, endDate: applied.endDate,
         dataSource: applied.viewMode,
         channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
         channel: applied.channel, companyCode: applied.companyCode,
-      })}`)
+      })
+      if (includeShip)        custParams.set("includeShip", "1")
+      if (includeInternalOps) custParams.set("includeInternalOps", "1")
+      const r = await fetch(`/api/analytics/staff-report/customers?${custParams}`)
       if (r.ok) setCustomers(await r.json())
     } catch {} finally { setCustLoading(false) }
   }
