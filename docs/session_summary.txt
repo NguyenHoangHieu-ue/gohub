@@ -1,5 +1,57 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-08 (Session 138 — Tab Staff audit + Gấu Pro: Trend Intelligence + Image Generation).
+Cập nhật lần cuối: 2026-08-09 (Session 139 — Cải thiện chiến lược: CI/CD + Cron alert + Wiki auto-sync + Gấu Pro persistence + OOP + Docs).
+
+## ══════ SESSION 139 — TỔNG KẾT (2026-08-09, Sonnet 4.6) ══════
+
+### A. Gấu Pro — Cải thiện ảnh Pollinations (commit fc47102)
+- `enhance=true` vào Pollinations URL → LLM cải thiện prompt trước FLUX
+- Resolution 9:16: 576×1024 → 864×1536 (TikTok native)
+- Resolution 16:9: 1024×576 → 1536×864
+- Prompt templates với quality modifiers (8K, highly detailed, lighting)
+
+### B. OOP Priority 1 — 3 routes đồng bộ analytics-engine (commit 3ed8372)
+- `monthly-kpis`: xóa `daysInMonth()` local → `getProjectionFactor` + `getDaysInRange/getDaysInMonth`
+- `b2c/kpis`: xóa 4 hàm local → `COST_KEYS` từ cost-engine + `getChannelCostsForMonths`
+- `b2b/kpis`: xóa `const COST_KEYS` local → import từ cost-engine
+- Net: −48 dòng, +19 dòng
+
+### C. Tài liệu — Quy hoạch lại (commit 2d26ee2)
+- `CLAUDE.md` rewrite → START HERE: trạng thái + read order + pending + rules
+- `docs/ERRORS.md` (NEW local): 8 nhóm lỗi + lesson learned
+- `docs/SYSTEM.md` (NEW local): kiến trúc tổng thể tabs/routes/DB/chatbot
+- `docs/CHANGELOG.md` (NEW local): lịch sử s126–s138
+- Xóa file thừa: `docs/data-query-standard.md`, `docs/quarterly-report-formulas.md`, `Bug.txt`
+- Wiki update + sync: analytics-staff, analytics-creator-ai, Second-Brain-Architecture
+
+### D. PLAN.md — Đánh giá + Plan mới (commit e13c0f6, 9d8451a)
+- Đánh giá kiến trúc/quy trình/tool (không phải bug list):
+  - Kiến trúc: OOP tốt, tách DB rõ ✅ | Thiếu pooler, split Turso/Supabase, cold start ❌
+  - Quy trình: commit nhỏ, wiki sync, ERRORS.md ✅ | Không CI/CD, không cron alert ❌
+  - AI: single agent, 22 tools, guardian regex ✅ | Gấu Pro mất conv khi F5, Pollinations no SLA ❌
+  - 8 cải thiện chiến lược theo ưu tiên
+
+### E. 4 Cải thiện chiến lược (commit c89ddc2)
+1. **CI/CD** (`.github/workflows/ci.yml`): tsc + vitest tự động trên mỗi push staging/main
+2. **Cron alert** (`lib/cron-alert.ts`): alert Lark khi cron fail; update 5 cron routes
+3. **Wiki auto-sync** (`.github/workflows/wiki-sync.yml`): push main + docs/wiki/** → tự chạy import_wiki.py
+4. **Gấu Pro persistence**: save Supabase sau mỗi exchange, load history mount, dropdown lịch sử
+
+### F. Fix GitHub Actions workflows (commit 656be8e)
+- `sync.yml`: fix `SUPABASE_URL` → `NEXT_PUBLIC_SUPABASE_URL`, thêm timeout
+- `data_sync.yml`: fix secret name, bỏ schedule hàng ngày (tốn GitHub minutes)
+- `ci.yml`: thêm `NEXT_PUBLIC_SUPABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, timeout
+- `scheduled-messages.yml`: thêm timeout + ghi chú độ trễ GitHub Actions
+
+### G. Gấu Pro persistence — hotfix 2 bugs (commit 78884c5)
+- Bug 1 (critical): IIFE fire-and-forget tạo convId SAU response → FE nhận null → mỗi tin tạo conv mới
+  Fix: tạo conversation record đồng bộ, chỉ save messages fire-and-forget
+- Bug 2 (medium): localStorage không lưu convId → mất sau F5
+  Fix: lưu `LS_KEY + "_id"`, restore khi mount
+
+### Trạng thái cuối session
+- staging = main = 8b7451b ✅ (đã merge 3 lần trong session)
+- Hiếu cần set GitHub Secrets: `API_KEY`, `MCP_SECRET`, `CRON_SECRET` (nếu chưa có)
+- Hiếu cần test Gấu Pro persistence thủ công (verify convId trong Network tab)
 
 ## ══════ SESSION 138 — TỔNG KẾT (2026-08-08, Sonnet 4.6) ══════
 
