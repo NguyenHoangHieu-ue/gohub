@@ -30,15 +30,12 @@
     },
     "src/app/api/cron/refresh-trends/route.ts": {
       "maxDuration": 60
-    },
-    "src/app/api/cron/weekly-report/route.ts": {
-      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/cron/scheduled-messages",
-      "schedule": "0 0 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/admin/sync-lark-tickets",
@@ -59,10 +56,6 @@
     {
       "path": "/api/cron/refresh-trends",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-report",
-      "schedule": "0 2 * * 1"
     }
   ]
 }

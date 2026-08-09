@@ -79,20 +79,21 @@ function computeRanges(period: Period): Ranges {
     }
   }
 
-  // daily: 3 ngày gần nhất (loại hôm nay)
+  // daily: báo cáo NGÀY HÔM QUA (1 ngày). So với ngày liền trước (DoD).
+  // Ma trận 3 ngày gần nhất (days) giữ làm CONTEXT xu hướng ở 【6】-【8】, KHÔNG dùng cho headline.
   const d1 = addDays(today, -1), d2 = addDays(today, -2), d3 = addDays(today, -3)
   const monthStr = ymd(d1).slice(0, 7)
   const monthFirst = new Date(Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth(), 1))
   const daysElapsed = Math.round((d1.getTime() - monthFirst.getTime()) / 86400_000) + 1
   return {
-    label: `3 ngày ${fmtVN(ymd(d3))}–${fmtVN(ymd(d1))}`,
-    curStart: ymd(d3), curEnd: ymd(d1),
-    prevStart: ymd(addDays(today, -6)), prevEnd: ymd(addDays(today, -4)),
-    prevLabel: `3 ngày liền trước (${fmtVN(ymd(addDays(today, -6)))}–${fmtVN(ymd(addDays(today, -4)))})`,
+    label: `Ngày ${fmtVN(ymd(d1))}`,
+    curStart: ymd(d1), curEnd: ymd(d1),          // chỉ hôm qua
+    prevStart: ymd(d2), prevEnd: ymd(d2),         // ngày liền trước (day-over-day)
+    prevLabel: `ngày liền trước (${fmtVN(ymd(d2))})`,
     monthStr,
     mtdStart: ymd(monthFirst), mtdEnd: ymd(d1),
     daysElapsed, daysInMonth: getDaysInMonth(monthStr),
-    days: [ymd(d1), ymd(d2), ymd(d3)], // desc
+    days: [ymd(d1), ymd(d2), ymd(d3)], // desc — ma trận context 3 ngày
   }
 }
 
@@ -318,10 +319,13 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   // Daily: ma trận theo ngày + top khách B2B + kênh B2C
   let raw: any = { totalRev, b2bRev, b2cRev, tHk, proj }
   if (period === "daily") {
+    // Ma trận 3 ngày (context) — headline chỉ 1 ngày (r.cur), nên query riêng khoảng d3→d1.
+    const matrixStart = r.days[r.days.length - 1]  // d3 (cũ nhất)
+    const matrixEnd   = r.days[0]                   // d1 (hôm qua)
     const [dayRows, b2bCust, b2cCh] = await Promise.all([
-      revByDay(r.curStart, r.curEnd),
-      b2bCustomersByDay(r.curStart, r.curEnd),
-      b2cChannelsByDay(r.curStart, r.curEnd),
+      revByDay(matrixStart, matrixEnd),
+      b2bCustomersByDay(matrixStart, matrixEnd),
+      b2cChannelsByDay(matrixStart, matrixEnd),
     ])
     const days = r.days // desc
     const fmtRow = (label: string, get: (d: string) => number) =>
