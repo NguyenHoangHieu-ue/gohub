@@ -4,27 +4,28 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-09 end, s139)
+## Trạng thái hiện tại (2026-08-09 cont, s139)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `89832bc` |
+| staging = main | `8815907` |
 | tsc | PASS · vitest 80/80 |
 
-**Migrations & ENV — tất cả đã xong:**
+**Migrations & ENV — đã xong:**
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại):**
+- [ ] Set `PORTAL_CRED_KEY` trên Vercel (xem `.env.local` — đã gen sẵn)
 - [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
 - [ ] Nhập target T7/T8 cho scheduled reports
 - [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
-- [ ] GitHub Secrets: kiểm tra `API_KEY`, `MCP_SECRET`, `CRON_SECRET` đã set chưa
 
 **AI làm tiếp (backlog):**
-- Fix bug Staff: FE không pass `includeShip`/`includeInternalOps` vào `/api/analytics/staff-report/customers`
-- OOP Priority 2: `channels/performance`, `b2b/strategic-performance`, `b2c/monthly`, `b2c/performance`
+- Gấu Pro Phase 2: tách modules + test suite (≥15 test cases)
+- Gấu Pro Phase 3: prompt caching, Stability AI image gen, Kling video
+- Gấu Pro Phase 4: `compareVendorQuotes`, `trackSKUWinRate`, `sendLarkMessage`, semantic KB search
 - Gấu Pro Wave 2: video Kling AI (chờ API key), image prompt presets
 - Lark weekly auto-report, Product Win Rate dashboard, B2B bulk cost import
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
