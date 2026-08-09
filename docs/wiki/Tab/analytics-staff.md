@@ -5,60 +5,112 @@ is_hidden: true
 department: all
 tags: [tab, analytics, staff]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-08-09
 status: active
 ---
 
 # Staff Performance (Hiệu Suất Nhân Viên)
 
-Leaderboard nhân viên theo doanh thu / số đơn / units. Dùng data model chung — xem [[_analytics-data-model]].
+Báo cáo doanh thu / 3HK revenue / số KH / CM1 theo từng nhân viên. Có bảng drill-down per-customer và chart so sánh.
 
 ---
 
 ## 1. Đường dẫn & File
+
 | | |
 |---|---|
-| Web | `/analytics/staff` — `web/src/app/(dashboard)/analytics/staff/page.tsx` |
-| API | `/api/staff-performance`, `/api/staff`, `/api/staff-list` |
-| Nguồn | fact + `dim_staff` (code, name) |
-
-## 2. Chỉ số trả về
-`staff_code`, `staff_name`, `total_revenue`, `total_orders`, `total_units` — sắp xếp giảm dần (leaderboard).
-
-## 3. Gotchas
-- **3HK revenue (STAFF-1, 2026-08-02)**: định nghĩa 3HK dùng `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (chuẩn toàn hệ thống, 7.930 SKU). Trước đây dùng `LIKE '3HK%'` (7.991 SKU) → gồm dư 61 SKU vendor `3HK` (không phải datapool). Đã sửa cả 4 query (staff-report + staff-report/customers, summary + monthly). Chênh T7 = 0đ (61 SKU đó không có doanh thu T7) nhưng đảm bảo nhất quán về sau.
-- Loại nhân viên hệ thống: `staff_name != 'Auto ESIM'`; SKU nhiễu `SHIPPINGFEE0`.
-- Nhân viên không map → `TRIM(staff_code)` / "Unknown".
-- Từng có bug NaN khi staff null → đã COALESCE.
+| Trang | `/analytics/staff` — `web/src/app/(dashboard)/analytics/staff/page.tsx` |
+| API tổng | `GET /api/analytics/staff-report` |
+| API KH theo staff | `GET /api/analytics/staff-report/customers` |
+| Nguồn | `fact_fulfillment_revenue` + `dim_staff` + `dim_customer` + Supabase group costs |
 
 ---
 
-## Data Sources
+## 2. Tính năng (s124, rebuild hoàn toàn)
 
-| Column / Metric | Source Table | Formula / Note |
-|-----------------|-------------|----------------|
-| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(...)` GROUP BY `staff_code` |
-| GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` per staff |
-| CM1 | GP − phân bổ Operation Cost | GP − `analytics_channel_group_costs.amount` phân bổ theo revenue share của staff |
-| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` per staff |
-| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` per staff |
-| Staff Name | `dim_staff.name` | JOIN `TRIM(f.staff_code) = TRIM(dim_staff.code)` |
-| Operation Cost | Supabase `analytics_channel_group_costs` | Phân bổ theo tỷ lệ revenue của từng staff |
-
+- **KPI cards**: tổng Revenue / 3HK Revenue / Customer Count / CM1 của toàn bộ team
+- **Bar chart so sánh**: chọn chế độ "Staff" (doanh thu từng nhân viên) hoặc "Customer" (KH hàng đầu)
+- **Leaderboard**: bảng xếp hạng, click mở rộng từng staff → xem danh sách KH + revenue + CM1 của KH đó
+- **Sparkline**: đường trend doanh thu theo tháng của mỗi nhân viên
+- **Total row**: dòng tổng cuối bảng
+- **Filter**: date range, include/exclude phí ship + đơn nội bộ
 
 ---
 
-## § Filter Chuẩn (s132 — 2026-08-04)
+## 3. API `/api/analytics/staff-report`
 
-Từ s132, tất cả tab analytics có 3 filter:
+| Param | Mô tả |
+|---|---|
+| `startDate`, `endDate` | Khoảng thời gian |
+| `dateColumn` | `fulfiled_date` (default) hoặc `created_date` |
+| `includeShip` | `1` = gồm phí ship (SHIPPINGFEE0) |
+| `includeInternalOps` | `1` = gồm đơn Internal-Transaction |
+| `includeOpsCustomers` | `1` = gồm B2B Ops / B2C Customer |
+
+**Response mỗi staff:**
+```json
+{
+  "staff_code": "...",
+  "staff_name": "...",
+  "total_revenue": 0,
+  "total_3hk_revenue": 0,
+  "customer_count": 0,
+  "cm1": 0,
+  "monthly_trend": [{ "month": "2026-07", "revenue": 0 }]
+}
+```
+
+---
+
+## 4. API `/api/analytics/staff-report/customers`
+
+Trả danh sách KH của 1 staff, kèm revenue + 3HK revenue + CH.Cost + CM1 per customer.
+
+⚠️ **Bug đã phát hiện (s138, chưa fix)**: FE không pass `includeShip` / `includeInternalOps` vào endpoint này → KH breakdown không khớp staff summary khi bật filter. Ảnh hưởng: nhỏ (filter mặc định đều Off).
+
+---
+
+## 5. Mapping staff
+
+- `dim_staff.sales_pic_code` (từ s138) — nhân viên phụ trách KH, JOIN để gán KH cho đúng nhân viên
+- Trước (s138): chỉ dùng `f.staff_code` → nhiều KH bị gán sai (không phải KH của staff đó)
+- Fallback: `COALESCE(dim_customer.sales_pic_code, f.staff_code)`
+
+---
+
+## 6. CM1 tính như thế nào
+
+```
+CM1 staff = SUM(gross_profit_vnd) của staff đó
+           - phần phân bổ Group Cost B2B/B2C theo revenue-share
+```
+
+⚠️ **Thiết kế hiện tại**: Σ(customer.cm1) > staff.cm1 vì customer-level không trừ group cost share — by design, group cost chỉ trừ ở cấp summary.
+
+---
+
+## 7. Gotchas
+
+**3HK vendor (STAFF-1, s126):**
+- Định nghĩa chuẩn: `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (7.930 SKU)
+- Trước: `LIKE '3HK%'` → bao gồm 61 SKU vendor "3HK" không phải datapool
+- Tất cả 4 query (staff-report summary + monthly, customers summary + monthly) đã fix
+
+**Loại nhân viên hệ thống:**
+- `staff_name != 'Auto ESIM'`
+- SKU nhiễu: `sku != 'SHIPPINGFEE0'` (khi includeShip = Off)
+
+**Staff không map:**
+- TRIM(staff_code) → "Unknown" nếu không có dim_staff entry
+
+---
+
+## 8. Filter chuẩn (từ s132)
 
 | Filter | Default | Ý nghĩa |
-|--------|---------|---------|
-| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
-| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
-| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+|---|---|---|
+| `includeShip` | Off | Bao gồm phí ship |
+| `includeInternalOps` | Off | Bao gồm đơn Internal-Transaction (GP âm) |
+| `includeOpsCustomers` | Off | Bao gồm KH hệ thống (B2B Ops, B2C Customer US/VN) |
 
-**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
-
-UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
-
+Bật CẢ 3 → khớp số raw gohub_dw (dùng để validate).
