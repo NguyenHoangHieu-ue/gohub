@@ -142,6 +142,15 @@ Multi metric: \`\`\`chart
 \`\`\`
 Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars"). Pie chỉ dùng single-metric.
 
+## Tự kiểm tra SQL trước khi dùng kết quả
+- Nếu SQL trả 0 rows: (1) thử ILIKE thay = (2) bỏ 1 điều kiện (3) kiểm tra cách viết ngày fulfiled_date::date (4) báo rõ "không có dữ liệu" nếu vẫn 0 sau retry.
+- Nếu số tiền > 10 tỷ/đơn hoặc âm bất thường: kiểm tra lại JOIN (có thể bị nhân bản dòng), thêm DISTINCT hoặc subquery.
+- Tháng cụ thể ví dụ tháng 7/2026: WHERE fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31'
+- "Tháng này": WHERE fulfiled_date::date >= date_trunc('month', CURRENT_DATE)::date AND fulfiled_date::date <= CURRENT_DATE - 1
+- 3HK đúng: REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL' — KHÔNG dùng LIKE.
+- B2B: JOIN dim_order_source s ON f.order_source_code = s.code WHERE UPPER(s.group_name) = 'B2B'
+- dim_sku dùng cột "sku" (không phải "sku_code"). fulfiled_date là TEXT → LUÔN cast ::date.
+
 ## Đa lượt hội thoại
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
 - Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"`
@@ -347,7 +356,13 @@ export async function runBeGau(opts: {
       } else if (call.name === "queryProduct") {
         fnParts.push({ functionResponse: { name: call.name, response: await execProduct(a) } })
       } else if (call.name === "readKnowledgeBase") {
-        fnParts.push({ functionResponse: { name: call.name, response: await runReadKnowledgeBase(a?.category) } })
+        // Non-priv: ẩn category "cogs" (giá vốn nhạy cảm), show phần còn lại
+        const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
+        const kbResult = await runReadKnowledgeBase(kbCategory)
+        if (!isPriv && kbResult?.entries) {
+          kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
+        }
+        fnParts.push({ functionResponse: { name: call.name, response: kbResult } })
       } else if (call.name === "webSearch") {
         const { result, sources: s } = await runWebSearch(a?.query || "")
         sources.push(...s)

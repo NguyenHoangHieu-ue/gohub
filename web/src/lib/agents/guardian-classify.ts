@@ -28,17 +28,16 @@ const RE_BIZ_PROC = /\bkyc\b|tao (san pham|sku|product|listing|item|goi)|quy tri
 // Giá vốn / biên lợi nhuận → margin_cogs.
 const RE_COGS = /\bcogs\b|gia von|gia nhap|gia goc|gia dau vao|bien (loi nhuan|lai)|ty suat loi nhuan|\bmargin\b|gross profit|\bgpm2?\b|\bcm1\b|\bgp2\b|contribution margin|loi nhuan|lai gop|lai rong|lo (rong|gop)|chenh lech gia (von|nhap|goc)/
 
-// Lương / nhân sự / hiệu suất nhân viên → staff_hr.
+// Lương / nhân sự / hành chính → staff_hr.
 // ⚠️ KHÔNG dùng bare "\bluong\b": bỏ dấu tiếng Việt làm "lương" (salary) ≡ "lượng" (quantity)
-// → "số LƯỢNG sản phẩm bán ra", "dung/lưu/sản/chất/năng lượng"… bị chặn nhầm là nhân sự.
-// Chỉ khớp "lương" trong NGỮ CẢNH lương bổng rõ ràng (đứng cạnh từ chỉ định lương/tiền công).
-const RE_HR = /tien luong|bang luong|tra luong|tang luong|giam luong|no luong|muc luong|thang luong|luong (thang|co ban|cung|net|gross|cua|nhan vien|nv|khoi diem|toi thieu|bao nhieu|bong)|(tang|giam|muc|bao nhieu|ky|no|deadline) luong|thu nhap (cua )?(nhan vien|nv|nhan su)|thuong (tet|le|nong)|tien thuong|hieu suat (lam viec )?(cua )?(nhan vien|nv|sales|nhan su)|xep hang (nhan vien|nv|sales)|danh gia (nhan vien|nv|nhan su)|kpi (cua )?(nhan vien|nv|sales)|\bnhan su\b|ho so nhan vien|cham cong|nghi phep|nhan vien nao (ban|lam|dat) (nhieu|gioi|tot|cao) ?nhat|sales nao (ban|gioi|nhieu) ?nhat|ai (la nguoi )?(ban|lam) (gioi|nhieu) ?nhat/
+// ⚠️ "nhân viên nào bán nhiều nhất" là câu BI (revenue_bi), KHÔNG phải HR — KHÔNG bắt ở đây.
+const RE_HR = /tien luong|bang luong|tra luong|tang luong|giam luong|no luong|muc luong|thang luong|luong (thang|co ban|cung|net|gross|cua|nhan vien|nv|khoi diem|toi thieu|bao nhieu|bong)|(tang|giam|muc|bao nhieu|ky|no|deadline) luong|thu nhap (cua )?(nhan vien|nv|nhan su)|thuong (tet|le|nong)|tien thuong|\bnhan su\b|ho so nhan vien|cham cong|nghi phep|kpi luong|tang luong|giam luong/
 
 // PII khách hàng → customer_pii (Lark group chặn; web cho qua).
 const RE_PII = /danh sach khach hang|so (dien thoai|dt) (cua )?khach|sdt (cua )?khach|email (cua )?khach|thong tin (ca nhan )?(cua )?khach|khach hang nao (mua|dat|chi) (nhieu|cao) ?nhat|top khach hang|khach (hang )?vip|ho so khach|dia chi (cua )?khach|lien he (cua )?khach/
 
-// Doanh thu/BI & sản phẩm — đều allow, chỉ để gán nhãn đúng (tôn trọng custom policy).
-const RE_REVENUE = /doanh thu|doanh so|don hang|so luong[a-z ]{0,12}(ban|xuat|tieu thu)|so luong ban|ban ra|ban duoc bao nhieu|kenh ban|\btarget\b|du phong|fulfillment|revenue|hieu suat kenh|\bb2b\b|\bb2c\b/
+// Doanh thu/BI & hiệu suất bán hàng — allow. "nhân viên nào bán nhiều nhất" là BI, không phải HR.
+const RE_REVENUE = /doanh thu|doanh so|don hang|so luong[a-z ]{0,12}(ban|xuat|tieu thu)|so luong ban|ban ra|ban duoc bao nhieu|kenh ban|\btarget\b|du phong|fulfillment|revenue|hieu suat kenh|\bb2b\b|\bb2c\b|nhan vien nao [a-z ]*(nhieu|gioi|tot|cao|it) ?nhat|sales nao [a-z ]*(nhieu|gioi|tot|cao) ?nhat|ai (la nguoi )?[a-z ]*(ban|lam)[a-z ]*(gioi|nhieu) ?nhat|top (nhan vien|sales|staff)|leaderboard/
 const RE_PRODUCT = /\bgoi\b|\bsim\b|esim|san pham|\bsku\b|gia ban|catalog|vendor|\bncc\b|worldmove|3hk|nuoc|quoc gia|khu vuc|listing/
 
 export interface ClassifyOut {
