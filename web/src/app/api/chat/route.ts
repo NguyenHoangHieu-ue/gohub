@@ -13,12 +13,19 @@ export const maxDuration = 60
 // NHƯNG giữ guardian pre-flight (chặn code/hệ thống/nội bộ) + lọc dữ liệu theo role + KHÔNG lộ
 // cách hoạt động/SQL cho user. Thay pipeline route→context→per-agent cũ.
 
-// Ghi 1 event chat cho Usage Analytics. PHẢI await (serverless không có waitUntil).
-async function logChat(identity: string | null | undefined, name: string | null, role: string, msg: string) {
+// Ghi 1 event chat cho Usage Analytics (cả câu hỏi + câu trả lời Bé Gấu).
+async function logChat(
+  identity: string | null | undefined,
+  name: string | null,
+  role: string,
+  msg: string,
+  aiResponse?: string | null,
+) {
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: identity || null, user_name: name || null, user_role: role,
       agent_id: "be-gau", user_message: msg.slice(0, 500),
+      ai_response: aiResponse ? aiResponse.slice(0, 3000) : null,
     })
   } catch { /* tracking không được làm vỡ chat */ }
 }
@@ -54,7 +61,6 @@ export async function POST(req: NextRequest) {
     }
 
     const identity = session.user.email || (session.user as any).username || null
-    await logChat(identity, name, role, lastMsg)
 
     // Giá bán theo kênh của vai trò (b2c/saleb2c → B2C; b2b → B2B; còn lại xem tất cả).
     const channel = getChannelFromRole(role)
@@ -77,6 +83,8 @@ export async function POST(req: NextRequest) {
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
           })
+          // Log cả câu hỏi + câu trả lời sau khi có đủ (fire-and-forget)
+          logChat(identity, name, role, lastMsg, text).catch(() => {})
           controller.enqueue(encoder.encode(text))
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
@@ -86,6 +94,7 @@ export async function POST(req: NextRequest) {
           controller.close()
         } catch (err: any) {
           const msg = (role === "admin" || role === "creator") ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+          logChat(identity, name, role, lastMsg, null).catch(() => {})
           controller.enqueue(encoder.encode(msg))
           controller.close()
         }
