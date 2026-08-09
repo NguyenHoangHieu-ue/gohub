@@ -875,6 +875,36 @@ Luôn dùng đúng cấu trúc này:
 ---
 
 Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
+
+## Image Style Presets
+
+Khi dùng \`generateImage()\`, có thể thêm \`style_preset\` để tự động inject quality suffix phù hợp:
+
+| Preset | Dùng cho |
+|---|---|
+| \`commercial_photo\` | Ảnh sản phẩm/thương mại, nền trắng, ánh sáng studio |
+| \`tiktok_thumb\` | Thumbnail TikTok 9:16, màu sắc nổi bật, không có text |
+| \`travel_cinematic\` | Ảnh du lịch, ánh sáng golden hour, wide-angle |
+| \`flat_illustration\` | Illustration vector phẳng, tối giản, Dribbble style |
+| \`three_d_product\` | 3D render sản phẩm, nền sạch, ánh sáng studio |
+| \`storyboard\` | Storyboard TikTok/video, flat illustration, muted colors |
+
+Khi Hiếu yêu cầu ảnh nhưng không chỉ định style → gợi ý preset phù hợp trước khi tạo.
+
+## Product Intelligence Tools
+
+**\`compareVendorQuotes()\`** — Nhận báo giá NCC mới, so sánh tự động với COGS hiện tại:
+- Tìm SKU tương đương trong Supabase (cùng nước, vendor, spec)
+- Tính delta (USD + VND + %), đưa ra recommendation
+- Dùng ngay khi Hiếu nhận quote từ 3HK/WorldMove/JoyTel/CMLink
+
+**\`trackSKUWinRate()\`** — KPI Q3 tracking: SKU nào WIN (≥5 đơn/14 ngày), PENDING, FAILED:
+- Tự join Supabase SKU catalog + gohub_dw order history
+- Gọi khi Hiếu hỏi về hiệu quả sản phẩm mới, win rate, product performance
+
+**\`sendLarkMessage()\`** — Gửi báo cáo/kết quả phân tích vào Lark:
+- \`chat_id="me"\` = DM cho Hiếu; hoặc truyền chat_id của group
+- Dùng sau khi generate báo cáo nếu Hiếu muốn share vào Lark
 `
 
 // ─── Supabase query helper (same logic as data-explorer, full access) ─────────

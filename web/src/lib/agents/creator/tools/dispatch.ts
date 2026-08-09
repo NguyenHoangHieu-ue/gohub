@@ -8,8 +8,11 @@ import { runQuerySupabase, runQueryProduct } from "./supabase"
 import { runQueryGA4, runQueryGSC } from "./analytics"
 import { runGenerateImage, runGetTrendSnapshots } from "./image"
 import { runLarkTask, runLarkBase } from "./lark"
+import { runSendLarkMessage }      from "./lark-send"
 import { runBrowsePortal, runManagePortalCredentials } from "./portal"
 import { runWebSearchTool }        from "./search"
+import { runCompareVendorQuotes }  from "./compare-quotes"
+import { runTrackSKUWinRate }      from "./win-rate"
 
 export async function dispatchTool(
   call: { name: string; args: any },
@@ -54,6 +57,15 @@ export async function dispatchTool(
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))
+
+  if (call.name === "sendLarkMessage")
+    return wrap(await runSendLarkMessage(call.args))
+
+  if (call.name === "compareVendorQuotes")
+    return wrap(await runCompareVendorQuotes(call.args))
+
+  if (call.name === "trackSKUWinRate")
+    return wrap(await runTrackSKUWinRate(call.args))
 
   if (call.name === "generateImage") {
     const resp = await runGenerateImage(call.args)
