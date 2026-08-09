@@ -15,7 +15,7 @@
 **Hiếu cần làm (chưa xong):**
 - [x] ✅ Chạy `web/db/migrations/v31_chatbot_learning_log.sql` — XONG (2026-08-09)
 - [x] ✅ Chạy `web/db/migrations/v32_be_gau_ai_response.sql` — XONG (2026-08-09)
-- [ ] Set ENV `LARK_CREATOR_USER_ID` = `ou_e5af3c7f447984052c1c5a5c2f594127` trên Vercel
+- [x] ✅ Set ENV `LARK_CREATOR_USER_ID` trên Vercel — XONG (2026-08-09)
 - [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
 - [ ] Nhập target T7/T8 cho scheduled reports
 - [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
