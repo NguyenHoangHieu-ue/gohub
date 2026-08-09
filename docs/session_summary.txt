@@ -7540,3 +7540,26 @@ SYSTEM_PROMPT: khi hỏi báo cáo → bắt cấu trúc: bối cảnh+kỳ → 
 Report depth cũng nhắc dùng đúng định nghĩa để khớp tab.
 
 tsc PASS. Wiki analytics-creator-ai.md synced. Staging (chưa merge main).
+
+
+## Session 139 cont-2 (2026-08-09)
+
+### Gau Pro audit + Phase 1 + Bug fixes
+
+Bug fixes (3):
+- B2C-GROUP-COST: b2c/performance thieu tru group cost B2C. Fix: fetch analytics_channel_group_costs song song + calcGroupOpCost theo revShare.
+- STAFF-FE-FILTER: staff/page.tsx toggleExpand khong pass includeShip/includeInternalOps. Fix: them 2 params vao URLSearchParams.
+- ITEMS-ERROR: api/items/filters/route.ts thieu try-catch. Fix: boc try-catch tra 500.
+
+OOP Priority 2 (4 routes): xoa local COST_KEYS/getDaysInMonth/getDaysInRange, import tu shared lib.
+
+Gau Pro Phase 1 (commit 52ae30f):
+1. Streaming SSE: route.ts tra text/event-stream. FE doc chunk, hien status real-time.
+2. Parallel tools: Promise.all thay for-loop. TOOL_STATUS map 20 tools.
+3. Encrypt credentials: AES-256-GCM, PORTAL_CRED_KEY ENV. loadPortalCreds decrypt, savePortalCreds encrypt.
+4. Cache SQL: cachedQuery TTL 5 phut hash MD5. Giam hit gohub_dw.
+5. Fix KB truncation: sort by PRIORITY_CATS, warn khi > 8000 chars bi cat.
+6. Fix multi-binary: fileContexts?: FileContext[], nhieu inlineData parts.
+
+Merge staging to main: 8815907. ENV them: PORTAL_CRED_KEY (da gen trong .env.local).
+tsc PASS . vitest 80/80

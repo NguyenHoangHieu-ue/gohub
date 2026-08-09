@@ -115,22 +115,32 @@
 
 ### B2. Bug chưa fix (AI làm)
 
-- [ ] **B2C-GROUP-COST** 🔴 — `b2c/performance/route.ts`: thiếu trừ group cost B2C (~150M/tháng).
-  Fix: thêm `calcGroupOpCost()` từ cost-engine vào response. Verify: số CM1 B2C Performance khớp BOD B2C group.
-- [ ] **STAFF-FE-FILTER** 🟠 — `staff/page.tsx` line 170-176: thêm `includeShip` + `includeInternalOps` vào URLSearchParams khi fetch `/api/analytics/staff-report/customers`.
-- [ ] **ITEMS-ERROR** 🟡 — `api/items/filters/route.ts`: bọc trong try-catch, trả `{ error }` 500 khi Supabase fail.
+- [x] **B2C-GROUP-COST** ✅ — `b2c/performance/route.ts`: fetch group costs song song + phân bổ theo revShare; projected dùng full budget × revShare. (8ae23c6)
+- [x] **STAFF-FE-FILTER** ✅ — `staff/page.tsx` toggleExpand: pass `includeShip`/`includeInternalOps` vào customers API. (b1a86cb)
+- [x] **ITEMS-ERROR** ✅ — `api/items/filters/route.ts`: bọc try-catch, trả 500 khi Supabase fail. (3dee049)
 - [ ] **QUARTER-T9-BADGE** 🟡 — `quarterly/page.tsx` line ~1436: đổi text "(PR)" thành badge cam "Ước tính" rõ hơn cho cột T9.
 - [ ] **ISSUE-DASH-3** 🟡 (chờ Bảo/Hiếu) — nhóm "Other" ẩn khỏi bảng "Performance by Business Groups" (78 đơn, 0đ). UI Strict Lock → chờ chỉ thị.
 
 ### B3. OOP Priority 2 (AI làm, không khẩn)
 
 4 routes còn dùng inline helpers thay vì analytics-engine:
-- [ ] `channels/performance/route.ts` — import COST_KEYS, refactor cost loop
-- [ ] `b2b/strategic-performance/route.ts` — import COST_KEYS, refactor cost loop
-- [ ] `b2c/monthly/route.ts` — import COST_KEYS + getDaysInMonth/getDaysInRange từ analytics-helpers
-- [ ] `b2c/performance/route.ts` — xóa 2 hàm local (đã có getProjectionFactor, chỉ còn getDaysInMonth/Range)
+- [x] `channels/performance/route.ts` — import COST_KEYS từ cost-engine, bỏ local const (15b0dbe)
+- [x] `b2b/strategic-performance/route.ts` — import COST_KEYS từ cost-engine, bỏ local const (bb21e3a)
+- [x] `b2c/monthly/route.ts` — import COST_KEYS + getDaysInMonth/getDaysInRange từ analytics-helpers (5dd7168)
+- [x] `b2c/performance/route.ts` — xóa getDaysInMonth/getDaysInRange local, import từ analytics-helpers (c5e47f7)
 
-### B4. CI/CD — Đã làm xong (s139) ✅
+### B4. Gấu Pro Phase 1 — Đã làm xong (s139 cont) ✅
+
+- ✅ Streaming SSE: route → `text/event-stream`, FE đọc từng event real-time (52ae30f)
+- ✅ Parallel tools: `Promise.all` thay for-loop, TOOL_STATUS 20 tools
+- ✅ Encrypt portal credentials: AES-256-GCM, cần set `PORTAL_CRED_KEY` trên Vercel
+- ✅ Cache SQL: `cachedQuery` TTL 5 phút, hash MD5 của SQL
+- ✅ Fix KB injection: sort by priority, warn khi truncated
+- ✅ Fix multi-binary file: `fileContexts?: FileContext[]`, gửi nhiều `inlineData` parts
+
+Hiếu cần làm: set ENV `PORTAL_CRED_KEY` = random 32-char string trên Vercel (để encrypt credentials).
+
+### B5. CI/CD — Đã làm xong (s139) ✅
 
 Đã implement 4/8 cải thiện chiến lược:
 - ✅ CI/CD GitHub Actions (`ci.yml`) — tsc + vitest tự động
