@@ -4,28 +4,29 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-09)
+## Trạng thái hiện tại (2026-08-09, s139)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| main | `22e71b4` (s138 Gấu Pro Wave 1 đã merge) |
-| Staging mới nhất | `3ed8372` (OOP Priority 1 refactor) |
+| staging = main | `8b7451b` (hotfix Gấu Pro persistence) |
 | tsc | PASS |
 
 **Hiếu cần làm (chưa xong):**
 - [ ] Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor
 - [ ] Set ENV `LARK_CREATOR_USER_ID` = `ou_e5af3c7f447984052c1c5a5c2f594127` trên Vercel
-- [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs (hiện tất cả = 0)
+- [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
 - [ ] Nhập target T7/T8 cho scheduled reports
 - [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
-- [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI connector
+- [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
+- [ ] GitHub Secrets: kiểm tra `API_KEY`, `MCP_SECRET`, `CRON_SECRET` đã set chưa
+- [ ] Test Gấu Pro persistence thủ công (xem Network tab → `conversationId` phải là UUID)
 
 **AI làm tiếp (backlog):**
 - Fix bug Staff: FE không pass `includeShip`/`includeInternalOps` vào `/api/analytics/staff-report/customers`
-- Update `docs/wiki/Tab/analytics-staff.md` (nội dung lỗi thời từ trước s124)
 - OOP Priority 2: `channels/performance`, `b2b/strategic-performance`, `b2c/monthly`, `b2c/performance`
-- Gấu Pro Wave 2: cải thiện prompt ảnh Pollinations (đã thêm enhance=true), video Kling AI
+- Gấu Pro Wave 2: video Kling AI (chờ API key), image prompt presets
+- Lark weekly auto-report, Product Win Rate dashboard, B2B bulk cost import
 
 ---
 

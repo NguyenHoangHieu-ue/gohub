@@ -1,5 +1,5 @@
 # PLAN.md — GoHub Intel
-> Cập nhật 2026-08-09. Items đã xong đã bỏ, chỉ giữ pending + plan mới.
+> Cập nhật 2026-08-09 (s139). Items đã xong đã bỏ, chỉ giữ pending + plan mới.
 > Chi tiết lịch sử: `docs/CHANGELOG.md` · Lỗi đã gặp: `docs/ERRORS.md`
 
 ---
@@ -129,6 +129,20 @@
 - [ ] `b2b/strategic-performance/route.ts` — import COST_KEYS, refactor cost loop
 - [ ] `b2c/monthly/route.ts` — import COST_KEYS + getDaysInMonth/getDaysInRange từ analytics-helpers
 - [ ] `b2c/performance/route.ts` — xóa 2 hàm local (đã có getProjectionFactor, chỉ còn getDaysInMonth/Range)
+
+### B4. CI/CD — Đã làm xong (s139) ✅
+
+Đã implement 4/8 cải thiện chiến lược:
+- ✅ CI/CD GitHub Actions (`ci.yml`) — tsc + vitest tự động
+- ✅ Cron failure alert (`cron-alert.ts`) — Lark notify khi cron fail
+- ✅ Wiki auto-sync (`wiki-sync.yml`) — push main docs/wiki → tự sync Supabase
+- ✅ Gấu Pro persistence — save Supabase, load history, dropdown lịch sử
+
+Còn lại (chờ external):
+- [ ] Gom Turso b2b costs → Supabase (cần migration + test kỹ Quarter Report)
+- [ ] PgBouncer (cần DB owner)
+- [ ] Image gen upgrade Stability AI (cần API key)
+- [ ] Looker Studio (cần DB owner)
 
 ---
 
