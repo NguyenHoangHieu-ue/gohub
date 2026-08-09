@@ -28,8 +28,9 @@
 - C2. Product Win Rate Dashboard (tab analytics/products)
 - C3. B2B Bulk Cost Import (Excel upload Quarter Report)
 
-**Hiếu cần set thêm ENV:**
-- `LARK_WEEKLY_REPORT_CHAT_ID` — chat_id Lark group nhận báo cáo tuần
+**Ghi chú:**
+- Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
+- Nếu target vẫn hiện "Chưa nhập target tháng này" → Hiếu cần nhập target ở tab Targets cho tháng đó.
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---
