@@ -4,13 +4,13 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-09, s139)
+## Trạng thái hiện tại (2026-08-09, s139 cont.)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `8b7451b` (hotfix Gấu Pro persistence) |
-| tsc | PASS |
+| staging = main | `ad03cd0` (Bé Gấu 6 fixes) |
+| tsc | PASS · vitest 80/80 |
 
 **Hiếu cần làm (chưa xong):**
 - [ ] Chạy `web/db/migrations/v31_chatbot_learning_log.sql` trên Supabase SQL Editor (chưa chạy)
@@ -28,6 +28,7 @@
 - OOP Priority 2: `channels/performance`, `b2b/strategic-performance`, `b2c/monthly`, `b2c/performance`
 - Gấu Pro Wave 2: video Kling AI (chờ API key), image prompt presets
 - Lark weekly auto-report, Product Win Rate dashboard, B2B bulk cost import
+- Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---
 
