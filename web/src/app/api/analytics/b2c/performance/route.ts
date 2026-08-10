@@ -40,7 +40,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const isChannelGroup = groupBy === "channel" || !groupBy
 
-  let selectClause = `data.channel_name as name${isChannelGroup ? ", MIN(data.order_source_code) as source_code" : ""}`
+  let selectClause = "data.channel_name as name"
   let joinClause = ""
   if (groupBy === "vendor") {
     selectClause = "v.vendor as name"; joinClause = "LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON data.sku = v.sku"
@@ -60,7 +60,6 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   const withMarket = groupBy === "customer"
   const marketSelect = withMarket ? ", COALESCE(data.company_code, 'NA') as market" : ""
   const groupByCols  = withMarket ? "1, 2, 3" : "1, 2"
-
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH b2c_data AS (
        SELECT f.*, TRIM(s.channel_name) as channel_name
@@ -70,6 +69,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
      )
      SELECT ${selectClause}${marketSelect},
        TO_CHAR(data.${source.dateCol}::DATE, 'YYYY-MM') as month,
+       ${isChannelGroup ? "MIN(data.order_source_code) as source_code," : ""}
        SUM(data.${source.revenueCol}) as revenue,
        SUM(data.${source.marginCol}) as margin,
        SUM(data.${source.quantityCol}) as units
