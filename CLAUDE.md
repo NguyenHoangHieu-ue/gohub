@@ -16,12 +16,12 @@
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại):**
-- [ ] Set `PORTAL_CRED_KEY` trên Vercel (xem `.env.local` — đã gen sẵn)
-- [ ] Nhập Cost T8 B2C ≠ 0 trong Manage Costs
-- [ ] Nhập target T7/T8 cho scheduled reports
-- [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
+- [x] ✅ Set `PORTAL_CRED_KEY` trên Vercel (2026-08-10)
+- [x] ✅ Nhập Cost T8 B2C (2026-08-10)
+- [x] ✅ Nhập target T7/T8 cho scheduled reports (2026-08-10)
+- [x] ✅ Đăng ký Kling AI API key (`KLING_API_KEY`) — đã có key (2026-08-10)
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
-- [ ] Setup **cron-job.org** cho Scheduled Messages (thay GitHub Actions): URL = `https://gohub-intel.vercel.app/api/cron/scheduled-messages`, Header `Authorization: Bearer <CRON_SECRET>`, every 15 min. CRON_SECRET lấy từ `.env.local`
+- [x] ✅ Setup **cron-job.org** cho Scheduled Messages (2026-08-10): every 15 min, Header `Authorization: Bearer <CRON_SECRET>`
 
 **AI làm tiếp (backlog):**
 - Gấu Pro Phase 3: Stability AI image gen (cần `STABILITY_API_KEY`), Kling video (cần `KLING_API_KEY`)
