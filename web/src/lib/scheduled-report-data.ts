@@ -10,7 +10,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // Định nghĩa số liệu tái dùng helpers chung (getDateFilter, fetchBODGroupMarginData) để KHỚP Dashboard.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Period = "daily" | "weekly" | "monthly"
+export type Period = "daily" | "weekly" | "monthly" | "quarterly"
 
 const REV = "fulfilled_revenue_amount_vnd"
 const GP = "gross_profit_vnd"
@@ -75,6 +75,32 @@ function computeRanges(period: Period): Ranges {
       monthStr,
       mtdStart: ymd(monthFirst), mtdEnd: ymd(yesterday),
       daysElapsed, daysInMonth: getDaysInMonth(monthStr),
+      days: [],
+    }
+  }
+
+  if (period === "quarterly") {
+    // Quý hiện tại: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
+    const qIdx = Math.floor(today.getUTCMonth() / 3)          // 0,1,2,3
+    const qStartMonth = qIdx * 3                               // 0,3,6,9
+    const qStart = new Date(Date.UTC(today.getUTCFullYear(), qStartMonth, 1))
+    const qEnd = addDays(today, -1)                            // data cutoff = hôm qua
+    // Quý trước
+    const prevQEnd = addDays(qStart, -1)
+    const prevQStart = new Date(Date.UTC(prevQEnd.getUTCFullYear(), Math.floor(prevQEnd.getUTCMonth() / 3) * 3, 1))
+    const qLabel = `Q${qIdx + 1}/${today.getUTCFullYear()}`
+    const prevQLabel = `Q${Math.floor(prevQEnd.getUTCMonth() / 3) + 1}/${prevQEnd.getUTCFullYear()}`
+    const daysElapsed = Math.round((qEnd.getTime() - qStart.getTime()) / 86400_000) + 1
+    const daysInQ = 92  // Q3=92 days (Jul31+Aug31+Sep30); dùng 92 làm xấp xỉ chung
+    const monthStr = ymd(qStart).slice(0, 7)
+    return {
+      label: qLabel,
+      curStart: ymd(qStart), curEnd: ymd(qEnd),
+      prevStart: ymd(prevQStart), prevEnd: ymd(prevQEnd),
+      prevLabel: prevQLabel,
+      monthStr,
+      mtdStart: ymd(qStart), mtdEnd: ymd(qEnd),
+      daysElapsed, daysInMonth: daysInQ,
       days: [],
     }
   }
@@ -197,6 +223,9 @@ function ratio(a: number, b: number) { return b > 0 ? (a / b) * 100 : 0 }
 // ─────────────────────────────────────────────────────────────────────────────
 export async function buildReportData(period: Period): Promise<{ block: string; ranges: Ranges; raw: any }> {
   const r = computeRanges(period)
+
+  // Quarterly: build riêng, trả sớm
+  if (period === "quarterly") return buildQuarterlyReportData(r)
 
   // Monthly: kỳ hiện tại CHÍNH LÀ cả tháng → MTD trùng cur (tránh query thừa, dùng lại).
   const isMonthly = period === "monthly"
@@ -373,9 +402,145 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   return { block: L.join("\n"), ranges: r, raw }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Quarterly report: revenue QTD per month + QoQ + CM1 + 3HK + pro-rata
+// ─────────────────────────────────────────────────────────────────────────────
+async function buildQuarterlyReportData(r: Ranges): Promise<{ block: string; ranges: Ranges; raw: any }> {
+  // Các tháng trong quý (đến hôm qua — tháng chưa đóng lấy partial)
+  const qYear = parseInt(r.curStart.slice(0, 4))
+  const qMonthStart = parseInt(r.curStart.slice(5, 7)) - 1  // 0-based
+  const months: { label: string; start: string; end: string; monthStr: string }[] = []
+  for (let i = 0; i < 3; i++) {
+    const mIdx = qMonthStart + i
+    const mStart = new Date(Date.UTC(qYear, mIdx, 1))
+    const mEndFull = new Date(Date.UTC(qYear, mIdx + 1, 0))  // last day of month
+    const mEnd = mEndFull.getTime() < new Date(r.curEnd + "T00:00:00Z").getTime()
+      ? ymd(mEndFull) : r.curEnd   // cap ở hôm qua cho tháng chưa đóng
+    if (mStart.getTime() > new Date(r.curEnd + "T00:00:00Z").getTime()) break
+    months.push({
+      label: `T${mIdx + 1}/${qYear}`,
+      start: ymd(mStart), end: mEnd,
+      monthStr: ymd(mStart).slice(0, 7),
+    })
+  }
+
+  const [curRows, prevRows, cur3hk, prev3hk, bodCur, bodPrev, ...monthRows] = await Promise.all([
+    revByMarketGroup(r.curStart, r.curEnd),
+    revByMarketGroup(r.prevStart, r.prevEnd),
+    rev3hkByMarket(r.curStart, r.curEnd),
+    rev3hkByMarket(r.prevStart, r.prevEnd),
+    fetchBODGroupMarginData(r.curStart, r.curEnd),
+    fetchBODGroupMarginData(r.prevStart, r.prevEnd),
+    ...months.map(m => revByMarketGroup(m.start, m.end)),
+  ])
+
+  // QTD aggregates
+  const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero(), qtdGp = zero()
+  for (const row of curRows) {
+    const rev = parseFloat(row.revenue || "0"), gp = parseFloat(row.gp || "0")
+    add(qtdRev, row.cc, rev); add(qtdGp, row.cc, gp)
+    if (row.grp === "B2B") add(qtdB2b, row.cc, rev)
+    else if (row.grp === "B2C") add(qtdB2c, row.cc, rev)
+  }
+  const prevQ = zero(), prevQB2b = zero(), prevQB2c = zero()
+  for (const row of prevRows) {
+    add(prevQ, row.cc, parseFloat(row.revenue || "0"))
+    if (row.grp === "B2B") add(prevQB2b, row.cc, parseFloat(row.revenue || "0"))
+    else if (row.grp === "B2C") add(prevQB2c, row.cc, parseFloat(row.revenue || "0"))
+  }
+  const qtd3hk = zero(); for (const row of cur3hk) add(qtd3hk, row.cc, parseFloat(row.revenue || "0"))
+  const prev3hkT = zero(); for (const row of prev3hk) add(prev3hkT, row.cc, parseFloat(row.revenue || "0"))
+
+  // Pro-rata cả quý
+  const projQ: Triple = {
+    vn: r.daysElapsed > 0 ? (qtdRev.vn / r.daysElapsed) * r.daysInMonth : 0,
+    us: r.daysElapsed > 0 ? (qtdRev.us / r.daysElapsed) * r.daysInMonth : 0,
+    total: r.daysElapsed > 0 ? (qtdRev.total / r.daysElapsed) * r.daysInMonth : 0,
+  }
+
+  // QoQ %
+  const qoq = (cur: number, prv: number) => prv > 0 ? ((cur - prv) / prv) * 100 : 0
+
+  // CM1 (từ BOD group margin, giống Dashboard)
+  const g = (groups: any[], name: string) => groups.find((x: any) => x.group === name)
+  const b2bStrat = g(bodCur.groups, "B2B-Strategic"), b2bNon = g(bodCur.groups, "B2B-Non-Strategic"), b2cG = g(bodCur.groups, "B2C")
+  const b2bRevTot = (b2bStrat?.revenue || 0) + (b2bNon?.revenue || 0)
+  const b2bCm1 = (b2bStrat?.gpm2 || 0) + (b2bNon?.gpm2 || 0)
+  const prevB2bStrat = g(bodPrev.groups, "B2B-Strategic"), prevB2bNon = g(bodPrev.groups, "B2B-Non-Strategic"), prevB2cG = g(bodPrev.groups, "B2C")
+  const prevB2bCm1 = (prevB2bStrat?.gpm2 || 0) + (prevB2bNon?.gpm2 || 0)
+
+  // Target tháng trong quý → cộng thành target quý
+  const allTargets = await Promise.all(months.map(m => getTargetRows(m.monthStr)))
+  const qtdTargetRev = allTargets.flat().reduce((s, t) => s + Number(t.target_revenue || 0), 0)
+  const NO_TGT = "Chưa nhập target tháng này"
+
+  // Per-month breakdown
+  const monthRevs: { label: string; rev: Triple; b2b: Triple; b2c: Triple }[] = months.map((m, i) => {
+    const rows = monthRows[i] || []
+    const rev = zero(), b2b = zero(), b2c = zero()
+    for (const row of rows) {
+      add(rev, row.cc, parseFloat(row.revenue || "0"))
+      if (row.grp === "B2B") add(b2b, row.cc, parseFloat(row.revenue || "0"))
+      else if (row.grp === "B2C") add(b2c, row.cc, parseFloat(row.revenue || "0"))
+    }
+    return { label: m.label, rev, b2b, b2c }
+  })
+
+  const L: string[] = []
+  L.push(`━━━ DỮ LIỆU ĐÃ TÍNH SẴN (KỲ: ${r.label} — QTD từ ${r.curStart} đến ${r.curEnd}, ${r.daysElapsed}/${r.daysInMonth} ngày) — CHỈ TRÌNH BÀY, KHÔNG TỰ QUERY ━━━`)
+  L.push(`So sánh với: ${r.prevLabel} (${r.prevStart} → ${r.prevEnd}).`)
+  L.push(``)
+  L.push(`【1】DOANH THU QTD (từ đầu quý đến hôm qua) vs ${r.prevLabel}:`)
+  L.push(triLine(`${r.label} QTD`, qtdRev))
+  L.push(triLine(`${r.prevLabel} (cả quý)`, prevQ))
+  L.push(`  - QoQ Tổng: ${pct(qoq(qtdRev.total, prevQ.total))} | VN: ${pct(qoq(qtdRev.vn, prevQ.vn))} | US: ${pct(qoq(qtdRev.us, prevQ.us))}`)
+  L.push(triLine("Pro-rata dự phóng cả quý", projQ))
+  L.push(``)
+  L.push(`【2】BREAKDOWN THEO NHÓM QTD:`)
+  L.push(triLine("B2B QTD", qtdB2b))
+  L.push(triLine("B2B cùng kỳ quý trước", prevQB2b))
+  L.push(`  - B2B QoQ: ${pct(qoq(qtdB2b.total, prevQB2b.total))}`)
+  L.push(triLine("B2C QTD", qtdB2c))
+  L.push(triLine("B2C cùng kỳ quý trước", prevQB2c))
+  L.push(`  - B2C QoQ: ${pct(qoq(qtdB2c.total, prevQB2c.total))}`)
+  L.push(``)
+  L.push(`【3】DOANH THU THEO THÁNG trong quý (VN | US | Tổng):`)
+  for (const m of monthRevs) {
+    L.push(`  - ${m.label}: Tổng ${vnd(m.rev.total)} (VN ${vnd(m.rev.vn)} | US ${vnd(m.rev.us)}) — B2B ${vnd(m.b2b.total)} | B2C ${vnd(m.b2c.total)}`)
+  }
+  L.push(``)
+  L.push(`【4】TIẾN ĐỘ TARGET QUÝ (tổng target 3 tháng):`)
+  L.push(triLine("QTD thực tế", qtdRev))
+  L.push(`  - Target quý (tổng target tháng trong quý): ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
+  if (qtdTargetRev > 0) {
+    L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
+    L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
+  }
+  L.push(``)
+  L.push(`【5】CM1 & LỢI NHUẬN QTD:`)
+  L.push(`  - B2B: Revenue ${vnd(b2bRevTot)} | CM1 ${vnd(b2bCm1)} | CM1% ${pct(ratio(b2bCm1, b2bRevTot))}`)
+  if (b2cG) L.push(`  - B2C: Revenue ${vnd(b2cG.revenue)} | CM1 ${vnd(b2cG.gpm2)} | CM1% ${pct(ratio(b2cG.gpm2, b2cG.revenue))}`)
+  L.push(`  - CM1 quý trước (${r.prevLabel}): B2B ${vnd(prevB2bCm1)}${prevB2cG ? ` | B2C ${vnd(prevB2cG.gpm2)}` : ""}`)
+  L.push(`  - QoQ CM1: B2B ${pct(qoq(b2bCm1, prevB2bCm1))}`)
+  L.push(``)
+  L.push(`【6】3HK (DATAPOOL) QTD:`)
+  L.push(triLine("3HK Revenue QTD", qtd3hk))
+  L.push(`  - 3HK Contribution % (QTD): ${pct(ratio(qtd3hk.total, qtdRev.total))}`)
+  L.push(triLine("3HK quý trước", prev3hkT))
+  L.push(`  - 3HK QoQ: ${pct(qoq(qtd3hk.total, prev3hkT.total))}`)
+  L.push(``)
+  L.push(`(Ghi chú: QTD = từ đầu quý đến ${r.curEnd}. Tháng chưa đóng = số partial đến hôm qua. Pro-rata = QTD/ngày đã trôi × ${r.daysInMonth} ngày cả quý.)`)
+
+  return { block: L.join("\n"), ranges: r, raw: { qtdRev, qtdB2b, qtdB2c, qtd3hk, projQ } }
+}
+
 // Suy period từ cron_expression (ƯU TIÊN — đây mới là lịch THỰC chạy). Tên chỉ dùng khi cron không chuẩn 5 trường.
 // Trước đây xét TÊN trước → 1 lịch monthly đặt tên có chữ "ngày"/"tuần" bị tính nhầm sang daily/weekly (sai kỳ số liệu).
 export function inferPeriod(cron: string, name?: string): Period {
+  // Quarterly phát hiện qua tên — cron không có pattern riêng cho quý
+  const n = (name || "").toLowerCase()
+  if (n.includes("quý") || n.includes("quarter") || n.includes("quarterly")) return "quarterly"
+
   const parts = (cron || "").trim().split(/\s+/)
   if (parts.length === 5) {
     const [, , dom, , dow] = parts
@@ -385,7 +550,6 @@ export function inferPeriod(cron: string, name?: string): Period {
     return "daily"                                     // "* * *" hoặc range/list dow (vd "1-5" = ngày làm việc → daily)
   }
   // cron không chuẩn → fallback theo tên
-  const n = (name || "").toLowerCase()
   if (n.includes("month") || n.includes("tháng")) return "monthly"
   if (n.includes("week") || n.includes("tuần")) return "weekly"
   return "daily"
