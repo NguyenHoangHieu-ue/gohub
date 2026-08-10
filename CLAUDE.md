@@ -21,6 +21,7 @@
 - [ ] Nhập target T7/T8 cho scheduled reports
 - [ ] Đăng ký Kling AI API key (`KLING_API_KEY`) cho video generation Gấu Pro
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
+- [ ] Setup **cron-job.org** cho Scheduled Messages (thay GitHub Actions): URL = `https://gohub-intel.vercel.app/api/cron/scheduled-messages`, Header `Authorization: Bearer <CRON_SECRET>`, every 15 min. CRON_SECRET lấy từ `.env.local`
 
 **AI làm tiếp (backlog):**
 - Gấu Pro Phase 3: Stability AI image gen (cần `STABILITY_API_KEY`), Kling video (cần `KLING_API_KEY`)
