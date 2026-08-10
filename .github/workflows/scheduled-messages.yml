@@ -6,8 +6,8 @@ name: Fire Scheduled Lark Messages
 # Vercel cron (vercel.json) chạy 1 lần/ngày làm backstop thêm.
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"   # mỗi 15 phút UTC (thực tế ~15-60 phút, xem ghi chú trên)
+  # Đã chuyển sang cron-job.org (external HTTP scheduler, chính xác hơn GitHub Actions).
+  # Giữ workflow_dispatch để trigger thủ công khi cần.
   workflow_dispatch:
 
 jobs:
