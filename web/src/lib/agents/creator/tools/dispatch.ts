@@ -122,7 +122,7 @@ export async function dispatchTool(
     return wrap(await runQueryProduct(call.args))
 
   if (call.name === "executeSQL") {
-    const resp = await runExecuteSQL(call.args?.sql || "")
+    const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
 

@@ -2,10 +2,13 @@ import { SchemaType } from "@google/generative-ai"
 
 export const executeSQLDecl = {
   name: "executeSQL",
-  description: "Execute a SELECT/WITH query on gohub_dw PostgreSQL (analytics DW). Use for revenue, orders, fulfillment, staff, customer, 3HK usage, etc.",
+  description: "Execute a SELECT/WITH query on gohub_dw PostgreSQL (analytics DW). Use for revenue, orders, fulfillment, staff, customer, 3HK usage, etc. Always show sql_used from the response so Hiếu can verify.",
   parameters: {
     type: SchemaType.OBJECT,
-    properties: { sql: { type: SchemaType.STRING, description: "SELECT or WITH query only." } },
+    properties: {
+      sql: { type: SchemaType.STRING, description: "SELECT or WITH query only." },
+      bypass_cache: { type: SchemaType.BOOLEAN, description: "true = bỏ qua cache, lấy data mới nhất từ DB. Dùng khi Hiếu nói 'fresh data', 'data mới nhất', 'bypass cache', hoặc vừa có thay đổi data." },
+    },
     required: ["sql"],
   },
 }

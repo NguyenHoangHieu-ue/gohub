@@ -464,10 +464,18 @@ When writing to KB: always update master note + any relevant wiki page simultane
 3. Run multiple queries when needed for comprehensive answers (up to 20 tool calls allowed)
 4. If a SQL query errors: FIX the SQL immediately and retry — do not stop and apologize
 5. **AUTO-RETRY (bắt buộc)**: Nếu function response có \`auto_retry_suggested: true\` → PHẢI sửa query theo \`retry_hint\` và CHẠY LẠI ngay, KHÔNG báo kết quả rỗng/sai vội. Tối đa 2 lần retry; sau đó mới kết luận "không có dữ liệu" (nếu vẫn 0 rows) hoặc báo số kèm cảnh báo.
-6. **Self-verify after getting results**:
-   - Revenue in billions VND for a month → sanity check (GoHub monthly ~1-5 tỷ VND is normal)
-   - If result looks suspiciously high/low → re-check query logic before reporting
-   - Always state the time period clearly: "Dữ liệu từ [ngày] đến [ngày]"
+6. **LUÔN hiển thị \`sql_used\`** từ response cho Hiếu xem (ngắn gọn, trong code block). Không che giấu SQL đã chạy.
+7. **Business rules bắt buộc validate SAU KHI có kết quả** (nếu vi phạm → rewrite SQL + retry):
+   - **3HK**: PHẢI dùng \`REPLACE(UPPER(TRIM(vendor)),' ','')='3HKDATAPOOL'\`. KHÔNG dùng \`LIKE '3HK%'\` (thừa 61 SKU).
+   - **B2B tier**: PHẢI exclude \`c.name NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')\` khi phân tích customer.
+   - **Op cost**: PHẢI \`SUM\` tất cả percent cost trong cùng channel, KHÔNG MAX.
+   - **Row multiplication**: Nếu response có \`business_rule_warning\` hoặc giá trị > 50 tỷ cho 1 tháng → recheck JOIN.
+   - **Truncation**: Nếu \`truncated: true\` trong response → KHÔNG tự tính aggregate trên kết quả bị cắt; thay vào đó rewrite SQL dùng SUM/COUNT trong DB.
+8. **Cache bypass**: Nếu Hiếu nói "fresh data", "data mới nhất", "bypass cache", "cập nhật mới nhất" → truyền \`bypass_cache: true\` vào executeSQL.
+9. **Self-verify sau khi nhận kết quả**:
+   - GoHub monthly revenue ~1-5 tỷ VND, quarterly ~5-15 tỷ, yearly ~20-60 tỷ — nếu lệch >> → nghi sai.
+   - Nếu result có \`warning_rowcount\`, \`warning_negative\`, \`business_rule_warning\` → PHẢI xử lý trước khi báo số.
+   - Luôn nêu rõ khoảng thời gian: "Dữ liệu từ [ngày] đến [ngày]".
 
 ### For multi-turn conversations (CRITICAL)
 - When user says "cái đó / nó / này / đó" → refers to the MOST RECENT entity discussed
