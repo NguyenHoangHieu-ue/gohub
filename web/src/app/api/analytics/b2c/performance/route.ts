@@ -106,10 +106,16 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
 
   const totalRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
 
-  return finalRows.map(r => {
+  // Group cost KHÔNG phân bổ vào từng channel → tránh kênh near-zero margin bị âm.
+  // Thay vào đó trả về tổng group cost để FE trừ ở TOTAL ROW.
+  const groupCostProrated = isChannelGroup ? calcGroupOpCost(groupCosts, "B2C", 1, startDate, endDate) : 0
+  const groupCostFullMonth = isChannelGroup
+    ? groupCosts.filter((gc: any) => gc.group_name === "B2C").reduce((s: number, gc: any) => s + parseFloat(gc.amount || "0"), 0)
+    : 0
+
+  const channelRows = finalRows.map(r => {
     const revenue = r.revenue; const margin = r.margin
     let gpm2 = margin
-    const revShare = isChannelGroup && totalRevenue > 0 ? revenue / totalRevenue : 0
     if (isChannelGroup) {
       r.monthly_data.forEach((monthRow: any) => {
         const mRev = parseFloat(monthRow.revenue || "0")
@@ -120,12 +126,9 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
           })
         })
       })
-      gpm2 -= calcGroupOpCost(groupCosts, "B2C", revShare, startDate, endDate)
     }
 
     let projected_revenue = revenue; let projected_margin = margin; let projected_gpm2 = gpm2
-    // Dùng shared getProjectionFactor (cross-month → 1, tháng hiện tại MTD → factor đúng).
-    // Cách cũ chỉ check end.getMonth()===now.getMonth() → sai khi cross-month (vd 27/7–2/8: factor=4.43×).
     const projFactor = getProjectionFactor(startDate, endDate)
     if (projFactor > 1) {
       projected_revenue = revenue * projFactor
@@ -139,10 +142,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
             })
           })
         })
-        // full group cost budget × revShare (không pro-rata cho projection)
-        projected_gpm2 -= groupCosts.reduce((s, gc) => s + parseFloat(gc.amount || "0"), 0) * revShare
       } else {
-        // op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
         const opCostFixed = margin - gpm2
         projected_gpm2 = projected_margin - opCostFixed
       }
@@ -155,6 +155,8 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
       ...(withMarket ? { revenueVn: r.revenueVn || 0, revenueUs: r.revenueUs || 0 } : {}),
     }
   })
+
+  return { rows: channelRows, groupCostProrated, groupCostFullMonth }
 }
 
 export async function GET(req: NextRequest) {
@@ -193,12 +195,15 @@ export async function GET(req: NextRequest) {
         prevStart = new Date(start.getFullYear() - 1, start.getMonth(), start.getDate())
         prevEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
       }
-      // Kỳ hiện tại + kỳ trước độc lập → fetch song song
       const [current, previous] = await Promise.all([
         fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
         fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
       ])
-      return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
+      return {
+        rows: current.rows.map(curr => ({ ...curr, prev_revenue: previous.rows.find((p: any) => p.name === curr.name)?.revenue || 0 })),
+        groupCostProrated: current.groupCostProrated,
+        groupCostFullMonth: current.groupCostFullMonth,
+      }
     }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })

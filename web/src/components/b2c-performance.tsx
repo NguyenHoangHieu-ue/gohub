@@ -186,8 +186,11 @@ export function B2CPerformance() {
     key: "revenue",
     direction: "desc",
   })
+  // Group cost tổng (từ backend) — trừ ở TOTAL ROW, không phân bổ per-channel
+  const [groupCostProrated, setGroupCostProrated] = useState(0)
+  const [groupCostFullMonth, setGroupCostFullMonth] = useState(0)
 
-  // Cost data — CHỈ đọc để tính/hiển thị CM1 trong bảng (nhập cost ở tab Manage Costs).
+  // Cost data — CHỈ đọc để hiển thị breakdown trong expanded total row.
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<any[]>([])
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -327,7 +330,11 @@ export function B2CPerformance() {
       const pick = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" && r.value != null ? r.value : fallback
       setKpis(pick(kpiR, []))
       setTrendData(pick(trendR, []))
-      setPerformanceData(pick(perfR, []))
+      // Performance API trả { rows, groupCostProrated, groupCostFullMonth }
+      const perfResult = pick(perfR as PromiseSettledResult<{ rows: PerformanceData[]; groupCostProrated: number; groupCostFullMonth: number }>, { rows: [], groupCostProrated: 0, groupCostFullMonth: 0 })
+      setPerformanceData(perfResult.rows || [])
+      setGroupCostProrated(perfResult.groupCostProrated || 0)
+      setGroupCostFullMonth(perfResult.groupCostFullMonth || 0)
       setLossSkus(pick(lossR, []))
       setPrevMonthKpis(pick(prevKpiR, []))
 
@@ -407,10 +414,15 @@ export function B2CPerformance() {
       return acc
     }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
-    // Group costs already distributed per-channel by backend (calcGroupOpCost × revShare).
-    // DO NOT subtract again here — would double-count and make totals very negative.
+    // Group cost trừ ở TOTAL ROW (không phân bổ per-channel → tránh kênh near-zero margin bị âm).
+    // groupCostProrated = tổng group cost × dayRatio (thực tế kỳ này).
+    // groupCostFullMonth = tổng full month (dùng cho projected end-of-month).
+    if (groupBy === "channel") {
+      sum.gpm2 -= groupCostProrated
+      sum.projected_gpm2 -= groupCostFullMonth
+    }
     return sum
-  }, [performanceData, groupCosts, groupBy])
+  }, [performanceData, groupBy, groupCostProrated, groupCostFullMonth])
   const totalMarginPercent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
   const totalGpm2Percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
 
