@@ -106,9 +106,9 @@ export function B2CPerformance() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [showAllPerformance, setShowAllPerformance] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
-  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(true)
 
   const toggleVendor = (vendor: string) => {
     setSelectedVendors(prev =>
