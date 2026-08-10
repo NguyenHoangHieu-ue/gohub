@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
   getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
@@ -11,19 +10,37 @@ import {
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { calcGroupOpCost } from "@/lib/analytics-engine/cost-engine"
+import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
 
-// Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
-// staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
-// projected_* khi end ∈ tháng hiện tại. prev_revenue khi comparisonType != none.
+// Cùng logic CM1 với quarterly-report: fetchCosts + matchChannelCost (source_code + sub-channel + exact name).
+// Group cost KHÔNG phân bổ per-channel — FE trừ ở total row từ groupCosts state.
 
-const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
+const COST_KEYS_CH = ["ads", "platformFee", "sponsorProducts", "media"] as const
+
+function computeChCost(
+  channelCosts: any[], channel: string, month: string,
+  revenue: number, startDate: string, endDate: string,
+  sourceCode?: string, projected = false,
+): number {
+  let amtCost = 0, pctCost = 0
+  const dim = getDaysInMonth(month)
+  const ratio = projected ? 1 : (dim > 0 ? getDaysInRange(startDate, endDate, month) / dim : 0)
+  matchChannelCost(channelCosts, channel, month, sourceCode).forEach((c: any) => {
+    COST_KEYS_CH.forEach(key => {
+      const v = c[key]; if (!v) return
+      if (v.type === "amount") amtCost += (v.value || 0) * ratio
+      else pctCost += revenue * (v.value || 0) / 100
+    })
+  })
+  return amtCost + pctCost
+}
 
 async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
+  const isChannelGroup = groupBy === "channel" || !groupBy
 
-  let selectClause = "data.channel_name as name"
+  let selectClause = `data.channel_name as name${isChannelGroup ? ", MIN(data.order_source_code) as source_code" : ""}`
   let joinClause = ""
   if (groupBy === "vendor") {
     selectClause = "v.vendor as name"; joinClause = "LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON data.sku = v.sku"
@@ -40,7 +57,6 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     joinClause = "LEFT JOIN dim_customer c ON TRIM(data.customer_code) = TRIM(c.code)"
   }
 
-  // groupBy=customer: tách thêm thị trường (All/US/VN) theo company_code.
   const withMarket = groupBy === "customer"
   const marketSelect = withMarket ? ", COALESCE(data.company_code, 'NA') as market" : ""
   const groupByCols  = withMarket ? "1, 2, 3" : "1, 2"
@@ -84,42 +100,27 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     finalRows = finalRows.map(r => ({ ...r, name: mappings[r.name] || r.name }))
   }
 
+  // Dùng fetchCosts + matchChannelCost từ bod-data.ts (cùng logic với quarterly-report).
+  // source_code trong monthly_data giúp matchChannelCost tìm đúng cost kể cả khi channel đổi tên.
   let channelCosts: any[] = []
-  let groupCosts: Array<{ group_name: string; month: string; amount: string }> = []
-  const isChannelGroup = groupBy === "channel" || !groupBy
   if (isChannelGroup) {
     const start = new Date(startDate); const end = new Date(endDate)
     const months: string[] = []; let curr = new Date(start.getFullYear(), start.getMonth(), 1)
     while (curr <= end) { months.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1) }
     if (months.length > 0) {
-      const [{ data: chData }, { data: gcData }] = await Promise.all([
-        supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
-        supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").eq("group_name", "B2C").in("month", months),
-      ])
-      channelCosts = (chData || []).map((r: any) => ({
-        channel: r.channel, month: r.month,
-        ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-      }))
-      groupCosts = (gcData || []) as typeof groupCosts
+      const fetched = await fetchCosts(months)
+      channelCosts = fetched.channelCosts
     }
   }
 
-  const totalRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
-
-  // Group cost KHÔNG phân bổ vào từng channel → tránh kênh near-zero margin bị âm.
-  // FE sẽ tính groupCostProrated từ groupCosts state và trừ ở TOTAL ROW.
   const channelRows = finalRows.map(r => {
     const revenue = r.revenue; const margin = r.margin
     let gpm2 = margin
     if (isChannelGroup) {
       r.monthly_data.forEach((monthRow: any) => {
         const mRev = parseFloat(monthRow.revenue || "0")
-        const ratio = getDaysInMonth(monthRow.month) > 0 ? getDaysInRange(startDate, endDate, monthRow.month) / getDaysInMonth(monthRow.month) : 0
-        channelCosts.filter(c => c.channel === r.name && c.month === monthRow.month).forEach(c => {
-          ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-            const v = c[key]; if (v) gpm2 -= v.type === "amount" ? (v.value || 0) * ratio : (mRev * (v.value || 0)) / 100
-          })
-        })
+        const cc = computeChCost(channelCosts, r.name, monthRow.month, mRev, startDate, endDate, monthRow.source_code)
+        gpm2 -= cc
       })
     }
 
@@ -131,11 +132,9 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
       if (isChannelGroup) {
         projected_gpm2 = projected_margin
         r.monthly_data.forEach((monthRow: any) => {
-          channelCosts.filter(c => c.channel === r.name && c.month === monthRow.month).forEach(c => {
-            ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-              const v = c[key]; if (v) projected_gpm2 -= v.type === "amount" ? (v.value || 0) : (projected_revenue * (v.value || 0)) / 100
-            })
-          })
+          // projected: amount type không nhân ratio (full month budget)
+          const cc = computeChCost(channelCosts, r.name, monthRow.month, projected_revenue, startDate, endDate, monthRow.source_code, true)
+          projected_gpm2 -= cc
         })
       } else {
         const opCostFixed = margin - gpm2
@@ -174,7 +173,7 @@ export async function GET(req: NextRequest) {
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2c-perf:v2:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    const key = `b2c-perf:v3:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)
