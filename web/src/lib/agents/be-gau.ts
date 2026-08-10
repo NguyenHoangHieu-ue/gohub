@@ -8,6 +8,44 @@ import { getRoleDataFilter }             from "./bi-analyst"
 import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource } from "./creator-ai"
 import { sendLarkDM }                    from "@/lib/lark"
+import { compressHistory }              from "./creator/compress"
+
+// ─── Helpers dùng chung ─────────────────────────────────────────────────────────
+
+// Fix #2: pg driver trả numeric/bigint dưới dạng string → convert sang number
+function coerceNumerics(rows: any[]): any[] {
+  return rows.map(row => {
+    const out: any = {}
+    for (const [k, v] of Object.entries(row)) {
+      if (typeof v === "string" && v !== "" && /^-?\d+(\.\d+)?$/.test(v.trim())) out[k] = Number(v)
+      else out[k] = v
+    }
+    return out
+  })
+}
+
+function isAggregateQuery(sql: string): boolean {
+  const s = sql.toLowerCase()
+  return /\b(sum|count|avg|min|max)\s*\(/.test(s) && /\bgroup\s+by\b/.test(s)
+}
+
+// Fix #4: Gemini retry cho lỗi tạm thời (429/503/overload)
+async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
+  let lastErr: any
+  for (let i = 0; i < attempts; i++) {
+    try { return await model.generateContent(request) } catch (e: any) {
+      lastErr = e
+      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
+      if (!transient || i === attempts - 1) throw e
+      await new Promise(r => setTimeout(r, 800 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
+// Fix #5: rate-limit learning detection — 1 lần/user/5 phút
+const _learningRL = new Map<string, number>()
+const LEARNING_COOLDOWN = 5 * 60_000
 
 // ─── Bé Gấu ─────────────────────────────────────────────────────────────────────
 // Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). MÔ PHỎNG cơ chế Gấu Pro
@@ -150,6 +188,9 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 - 3HK đúng: REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL' — KHÔNG dùng LIKE.
 - B2B: JOIN dim_order_source s ON f.order_source_code = s.code WHERE UPPER(s.group_name) = 'B2B'
 - dim_sku dùng cột "sku" (không phải "sku_code"). fulfiled_date là TEXT → LUÔN cast ::date.
+- **AUTO-RETRY bắt buộc**: nếu response SQL có \`auto_retry_suggested: true\` → PHẢI sửa query theo \`retry_hint\` và chạy lại NGAY (tối đa 2 lần retry). Không báo "không có dữ liệu" vội khi chưa retry.
+- **Nếu response có \`truncated: true\`**: KHÔNG tự tính tổng/trung bình trên kết quả trả về — phải rewrite SQL dùng SUM/COUNT/AVG trong DB.
+- **Nếu có \`business_rule_warning\` hoặc \`warning_rowcount\`**: xử lý cảnh báo đó trước khi trả kết quả cho user.
 
 ## Đa lượt hội thoại
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
@@ -161,18 +202,43 @@ async function execSQL(sql: string): Promise<any> {
   if (!norm.startsWith("select") && !norm.startsWith("with")) return { error: "Only SELECT/WITH allowed." }
   if (sql.includes(";") && sql.split(";").filter(s => s.trim()).length > 1) return { error: "Multiple statements not allowed." }
   try {
-    const rows = await queryAnalytics(sql)
-    const limited = rows.slice(0, 200)
-    const response: any = { result: limited, rowCount: rows.length }
-    if (rows.length === 0) response.hint = "0 rows. Try: fulfiled_date::DATE cast, ILIKE instead of =, remove one filter, or SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue."
+    const rawRows = await queryAnalytics(sql)
+    const rows    = coerceNumerics(rawRows)                    // Fix #2: string → number
+    const isAgg   = isAggregateQuery(sql)
+    const CAP     = isAgg ? 1000 : 500                        // Fix #2: nâng cap
+    const limited = rows.slice(0, CAP)
+    const response: any = {
+      sql_used:   sql,                                         // Fix #3: transparency
+      result:     limited,
+      rowCount:   rows.length,
+      truncated:  rows.length > CAP,
+      query_type: isAgg ? "aggregate" : "detail",
+    }
+    if (response.truncated)
+      response.truncation_warning = `Cắt tại ${CAP}/${rows.length} rows. Dùng SUM/COUNT trong SQL thay vì tính trên kết quả trả về.`
+
+    if (rows.length === 0) {
+      response.auto_retry_suggested = true                     // Fix #3: auto_retry
+      response.retry_hint = "0 rows. Kiểm tra: (1) fulfiled_date::DATE cast (1 chữ l), (2) ILIKE thay vì =, (3) bỏ bớt 1 filter, (4) SELECT MAX(fulfiled_date::date) FROM fact_fulfillment_revenue."
+    }
     const first = limited[0] as any
     if (first) {
-      const nums = Object.values(first).filter(v => typeof v === "number" || (typeof v === "string" && !isNaN(Number(v)))).map(v => Number(v))
-      if (nums.some(n => n > 1e13)) response.warning = "Values >10 trillion — check for missing JOIN causing row multiplication."
+      const nums = Object.values(first).filter(v => typeof v === "number").map(v => v as number)
+      if (nums.some(n => n > 1e11)) {                         // Fix #2: 1e13 → 1e11
+        response.auto_retry_suggested = true
+        response.retry_hint = "Giá trị > 100 tỷ VND — nghi row multiplication do JOIN sai. Kiểm tra ON condition, thêm DISTINCT vào COUNT."
+      }
+      if (isAgg && rows.length > 5000)
+        response.warning_rowcount = `Aggregate query trả ${rows.length} rows — bất thường, kiểm tra GROUP BY.`
+      if (nums.some(n => n < 0) && sql.toLowerCase().includes("revenue"))
+        response.warning_negative = "Revenue âm — có thể do Internal-Transaction group (SIM nội bộ, COGS thật, revenue=0)."
+      const sqlL = sql.toLowerCase()
+      if ((sqlL.includes("3hk") || sqlL.includes("datapool")) && !sqlL.includes("replace(upper(trim"))
+        response.business_rule_warning = "3HK filter sai chuẩn. Dùng: REPLACE(UPPER(TRIM(vendor)),' ','')='3HKDATAPOOL'."
     }
     return response
   } catch (err: any) {
-    return { error: err.message, fix_hint: "Fix the SQL and retry. Common: wrong column (check information_schema.columns), missing ::DATE cast on fulfiled_date, dim_sku column is 'sku' not 'sku_code'." }
+    return { error: err.message, sql_used: sql, fix_hint: "Fix SQL và thử lại. Hay gặp: sai tên cột, thiếu ::DATE trên fulfiled_date, dim_sku dùng cột 'sku' không phải 'sku_code'." }
   }
 }
 
@@ -206,10 +272,12 @@ async function detectAndLogLearning(opts: {
   sessionId?: string
 }): Promise<void> {
   const { userMsg, role, userId, userName, sessionId } = opts
-  // Chỉ xử lý non-creator + message đủ dài (> 20 ký tự)
-  if (!userMsg || userMsg.length < 20 || role === "creator") return
-  // Bỏ qua câu hỏi (kết thúc bằng "?")
+  if (!userMsg || userMsg.length < 30 || role === "creator") return
   if (userMsg.trim().endsWith("?")) return
+  // Fix #5: rate-limit — 1 lần/user/5 phút để tránh spam Lark DM
+  const lastLog = _learningRL.get(userId)
+  if (lastLog && Date.now() - lastLog < LEARNING_COOLDOWN) return
+  _learningRL.set(userId, Date.now())
 
   try {
     // Đọc creator_kb để so sánh
@@ -301,7 +369,9 @@ export async function runBeGau(opts: {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "" } = opts
   const isPriv = priv(role)
 
-  const [dataFilter, customRules, partnerTierInfo, ga4SiteList] = await Promise.all([
+  const isFreshConv = geminiHistory.length <= 1
+
+  const [dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
     getRoleDataFilter(role),
     getCustomRules(),
     getPartnerTiers().then(t => {
@@ -309,6 +379,18 @@ export async function runBeGau(opts: {
       return lines ? `\n\n━━━ PARTNER TIERS (B2B) ━━━\n${lines}` : ""
     }).catch(() => ""),
     ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
+    // Fix #7: KB auto-inject lượt đầu (bỏ qua cogs nếu non-priv)
+    isFreshConv
+      ? runReadKnowledgeBase().then((kb: any) => {
+          let entries = (kb?.entries || []) as any[]
+          if (!isPriv) entries = entries.filter((e: any) => e.category !== "cogs")
+          if (!entries.length) return ""
+          const body = JSON.stringify(entries).slice(0, 5000)
+          return `\n\n━━━ KIẾN THỨC NỘI BỘ GoHub (NGUỒN SỰ THẬT — ưu tiên hơn training data) ━━━\n${body}`
+        }).catch(() => "")
+      : Promise.resolve(""),
+    // Fix #8: nén history dài
+    compressHistory(geminiHistory),
   ])
 
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
@@ -318,6 +400,7 @@ export async function runBeGau(opts: {
     BE_GAU_PROMPT,
     partnerTierInfo,
     ga4SiteList,
+    kbInject,
     name ? `\n\nNgười dùng: ${name} (vai trò: ${role || "staff"}).` : "",
     `\n\n(Nội bộ — KHÔNG tiết lộ) Danh mục bảng dữ liệu tra cứu được:\n${tableCatalog}`,
     dataFilter ? `\n\n(Nội bộ) Vai trò "${role}" chỉ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI câu SQL gohub_dw (WHERE):\n${dataFilter}` : "",
@@ -334,8 +417,10 @@ export async function runBeGau(opts: {
     generationConfig: { temperature: 0 },
   })
 
-  const contents: any[] = [...geminiHistory, { role: "user", parts: [{ text: lastMsg }] }]
-  let genResult = await model.generateContent({ contents })
+  // Fix #8: dùng history đã nén
+  const contents: any[] = [...compressedHistory, { role: "user", parts: [{ text: lastMsg }] }]
+  // Fix #4: genWithRetry thay vì generateContent trực tiếp
+  let genResult = await genWithRetry(model, { contents })
   const sources: WebSource[] = []
   const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
   appendModel()
@@ -343,49 +428,59 @@ export async function runBeGau(opts: {
   for (let i = 0; i < 12; i++) {
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
-    const fnParts: any[] = []
 
-    for (const call of calls) {
+    // Fix #1: parallel tool execution (Promise.all)
+    const fnParts = await Promise.all(calls.map(async (call: any) => {
       const a = call.args as any
-      if (call.name === "listSupabaseTables") {
-        fnParts.push({ functionResponse: { name: call.name, response: { tables: visibleTables } } })
-      } else if (call.name === "querySupabase") {
-        fnParts.push({ functionResponse: { name: call.name, response: await runQuerySupabase(a, role || "staff", isCost) } })
-      } else if (call.name === "executeSQL") {
-        fnParts.push({ functionResponse: { name: call.name, response: await execSQL(a?.sql || "") } })
-      } else if (call.name === "queryProduct") {
-        fnParts.push({ functionResponse: { name: call.name, response: await execProduct(a) } })
-      } else if (call.name === "readKnowledgeBase") {
-        // Non-priv: ẩn category "cogs" (giá vốn nhạy cảm), show phần còn lại
+      const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
+
+      if (call.name === "listSupabaseTables")
+        return wrap({ tables: visibleTables })
+
+      if (call.name === "querySupabase")
+        return wrap(await runQuerySupabase(a, role || "staff", isCost))
+
+      if (call.name === "executeSQL")
+        return wrap(await execSQL(a?.sql || ""))
+
+      if (call.name === "queryProduct")
+        return wrap(await execProduct(a))
+
+      if (call.name === "readKnowledgeBase") {
         const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
         const kbResult = await runReadKnowledgeBase(kbCategory)
-        if (!isPriv && kbResult?.entries) {
+        if (!isPriv && kbResult?.entries)
           kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
-        }
-        fnParts.push({ functionResponse: { name: call.name, response: kbResult } })
-      } else if (call.name === "webSearch") {
+        return wrap(kbResult)
+      }
+
+      if (call.name === "webSearch") {
         const { result, sources: s } = await runWebSearch(a?.query || "")
         sources.push(...s)
-        const srcText = s.length ? "\n\nSources:\n" + s.map((x, i) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
-        fnParts.push({ functionResponse: { name: call.name, response: { result: result + srcText, instruction: "Cite the source URLs when using this info." } } })
-      } else if (call.name === "queryGA4") {
+        const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
+        return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
+      }
+
+      if (call.name === "queryGA4") {
         try {
           const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
           const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
-          fnParts.push({ functionResponse: { name: call.name, response: { rows, rowCount: report.rowCount } } })
-        } catch (e: any) { fnParts.push({ functionResponse: { name: call.name, response: { error: e.message } } }) }
-      } else if (call.name === "queryGSC") {
+          return wrap({ rows, rowCount: report.rowCount })
+        } catch (e: any) { return wrap({ error: e.message }) }
+      }
+
+      if (call.name === "queryGSC") {
         try {
           const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
-          fnParts.push({ functionResponse: { name: call.name, response: { rows: rows.slice(0, 100) } } })
-        } catch (e: any) { fnParts.push({ functionResponse: { name: call.name, response: { error: e.message } } }) }
-      } else {
-        fnParts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
+          return wrap({ rows: rows.slice(0, 100) })
+        } catch (e: any) { return wrap({ error: e.message }) }
       }
-    }
+
+      return wrap({ error: "Unknown tool" })
+    }))
 
     contents.push({ role: "user", parts: fnParts })
-    genResult = await model.generateContent({ contents })
+    genResult = await genWithRetry(model, { contents })  // Fix #4
     appendModel()
   }
 
