@@ -407,12 +407,8 @@ export function B2CPerformance() {
       return acc
     }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
-    const totalGroupCosts = groupCosts.reduce((acc, gc) => acc + (gc.amount || 0), 0)
-    // Since group costs might not have projection equivalent implemented locally, we just subtract them from both.
-    if (groupBy === "channel") {
-      sum.gpm2 -= totalGroupCosts
-      sum.projected_gpm2 -= totalGroupCosts
-    }
+    // Group costs already distributed per-channel by backend (calcGroupOpCost × revShare).
+    // DO NOT subtract again here — would double-count and make totals very negative.
     return sum
   }, [performanceData, groupCosts, groupBy])
   const totalMarginPercent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
