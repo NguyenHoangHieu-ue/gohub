@@ -9,7 +9,7 @@
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `8815907` |
+| staging = main | `758aeff` |
 | tsc | PASS · vitest 80/80 |
 
 **Migrations & ENV — đã xong:**
