@@ -69,7 +69,7 @@ export async function dispatchTool(
     return wrap(await runTrackSKUWinRate(call.args))
 
   if (call.name === "generateVideo") {
-    const resp = await runGenerateVideo(call.args)
+    const resp = await runGenerateVideo(call.args, onEvent)
     return wrap({
       ...resp,
       instruction: resp.error

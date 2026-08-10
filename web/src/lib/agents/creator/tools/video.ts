@@ -26,13 +26,19 @@ function buildVideoMarkdown(videoUrl: string, cover: string): string {
   ].filter(Boolean).join("\n")
 }
 
+type OnEvent = ((e: { type: "status"; text: string }) => void) | undefined
+
 async function pollUntilDone(
   taskId: string,
   pollPath: string,
-  maxPolls = 12,
+  onEvent?: OnEvent,
+  maxPolls = 18,
 ): Promise<{ markdown?: string; task_id?: string; error?: string }> {
   for (let i = 0; i < maxPolls; i++) {
     await new Promise(r => setTimeout(r, 10_000))
+    const elapsed = (i + 1) * 10
+    onEvent?.({ type: "status", text: `🎬 Đang render video... ${elapsed}s / ~${maxPolls * 10}s` })
+
     let res: any
     try { res = await klingFetch(pollPath) } catch { continue }
     if (res.code !== 0) continue
@@ -48,20 +54,17 @@ async function pollUntilDone(
       return { error: `Kling thất bại: ${res.data?.task_status_msg ?? "unknown"}` }
     }
   }
-  // Timeout — trả task_id để Gấu hướng dẫn checkVideoStatus
+  // Timeout sau 180s — trả task_id để Gấu hướng dẫn checkVideoStatus
   return {
     task_id: taskId,
-    markdown: `⏳ Video đang render (task_id: \`${taskId}\`). Gọi \`checkVideoStatus\` sau 1-2 phút để lấy kết quả.`,
+    markdown: `⏳ Video render lâu hơn dự kiến (task_id: \`${taskId}\`). Gọi \`checkVideoStatus\` sau 1-2 phút để lấy kết quả.`,
   }
 }
 
-export async function runGenerateVideo(args: {
-  prompt: string
-  negative_prompt?: string
-  aspect_ratio?: string
-  duration?: number
-  mode?: string
-}): Promise<{ markdown?: string; task_id?: string; error?: string }> {
+export async function runGenerateVideo(
+  args: { prompt: string; negative_prompt?: string; aspect_ratio?: string; duration?: number; mode?: string },
+  onEvent?: OnEvent,
+): Promise<{ markdown?: string; task_id?: string; error?: string }> {
   if (!process.env.KLING_API_KEY) return { error: "KLING_API_KEY chưa set trên Vercel." }
 
   let createRes: any
@@ -89,7 +92,8 @@ export async function runGenerateVideo(args: {
   const taskId = createRes.data?.task_id
   if (!taskId) return { error: "Không nhận được task_id từ Kling." }
 
-  return pollUntilDone(taskId, `/v1/videos/text2video/${taskId}`, 12)
+  onEvent?.({ type: "status", text: "🎬 Đã gửi yêu cầu Kling, bắt đầu render..." })
+  return pollUntilDone(taskId, `/v1/videos/text2video/${taskId}`, onEvent)
 }
 
 export async function runCheckVideoStatus(args: { task_id: string }): Promise<{ markdown?: string; error?: string }> {

@@ -58,6 +58,9 @@ const TOOL_STATUS: Record<string, string> = {
 
 // ─── Tool declarations ───────────────────────────────────────────────────────
 
+// ⚠️ DEAD CODE — các declarations bên dưới KHÔNG được dùng (Gemini dùng ALL_TOOL_DECLARATIONS từ creator/declarations.ts).
+// TODO: xóa block này khi tiện — giữ tạm để tránh merge conflict với branch cũ.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const executeSQLDecl = {
   name: "executeSQL",
   description: "Execute a SELECT/WITH query on gohub_dw PostgreSQL (analytics DW). Use for revenue, orders, fulfillment, staff, customer, 3HK usage, etc.",

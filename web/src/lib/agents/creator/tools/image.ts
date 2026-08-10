@@ -48,7 +48,9 @@ export async function runGetTrendSnapshots(args: any): Promise<any> {
     if (error) return { error: error.message }
     if (!data?.length) return {
       message: `Chưa có trend snapshot trong ${days} ngày qua (cron chạy 8h ICT mỗi ngày).`,
-      snapshots: [], hint: "Gọi webSearch() với query xu hướng cụ thể để lấy data live thay thế.",
+      snapshots: [],
+      auto_retry_suggested: true,
+      retry_hint: `Snapshot chưa có — hãy gọi webSearch với query "travel SIM eSIM trends Southeast Asia ${new Date().toISOString().slice(0, 7)}" để lấy data live thay thế.`,
     }
     return { snapshots: data, count: data.length, period: `${sinceStr} → hôm nay` }
   } catch (e: any) {
