@@ -4,12 +4,12 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-09 cont, s139)
+## Trạng thái hiện tại (2026-08-10, s140)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `758aeff` |
+| staging = main | `e809571` |
 | tsc | PASS · vitest 80/80 |
 
 **Migrations & ENV — đã xong:**

@@ -1,5 +1,51 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-09 (Session 139 cont. — Usage Analytics update + v32 + Bé Gấu 6 fixes).
+Cập nhật lần cuối: 2026-08-10 (Session 140 — B2C Performance CM1 fix + Vercel cron fix).
+
+## ══════ SESSION 140 (2026-08-10) — B2C CM1 + Dashboard fixes ══════
+
+### A. Vercel cron Hobby plan block (commit 74719bd)
+- Bug: `*/5 * * * *` trong vercel.json block toàn bộ deployment (Hobby plan chỉ cho daily cron)
+- Fix: đổi về `0 1 * * *` (backstop). GitHub Actions `*/15` vẫn là trigger chính cho scheduled-messages.
+
+### B. B2C Performance CM1 — chuỗi fix nhiều bước (commits 6c8527b → e809571)
+
+**B1. Double group-cost deduction trong totals (6c8527b)**
+- FE `b2c-performance.tsx` useMemo totals trừ `totalGroupCosts` lần 2 (backend đã trừ per-channel rồi)
+- Fix: xóa 4 dòng double-deduction trong totals useMemo
+
+**B2. Group cost per-channel → kênh near-zero margin âm (32e5a0c → 31dd9c5)**
+- Root cause: 150M group cost/tháng phân bổ theo revShare → kênh near-zero GP bị âm
+- Data gohub_dw OK (total B2C GP Aug 1-9 = 260M dương, chỉ 2/1189 đơn âm)
+- Fix: group cost chỉ trừ ở TOTAL ROW. FE tính `groupCostProrated` từ `groupCosts` state (dayRatio × amount), trừ trong totals useMemo
+
+**B3. Port CM1 logic từ quarterly-report (7b50a72)**
+- Dùng `fetchCosts` + `matchChannelCost` từ `bod-data.ts` (source_code + sub-channel prefix + exact name)
+- Giống logic quarterly-report: channel cost match chính xác hơn exact-name-only
+
+**B4. GROUP BY bug — revenue 58M thay vì 450M (6e20e06)**
+- Root cause: `MIN(order_source_code)` ở vị trí 2 trong SELECT → `GROUP BY 1, 2` group theo (name, source_code) thay vì (name, month) → channel classification sai
+- Fix: di chuyển source_code xuống SAU month trong SQL (aggregate hợp lệ, không ảnh hưởng GROUP BY ordinal)
+
+**B5. Cache invalidation: bump cache key v2 → v3**
+- Supabase cache 12h vẫn trả data cũ dù code mới
+- Fix: bump cache key version
+
+**B6. Default checkboxes on (9aa67e7)**
+- Include Ship / Internal Ops / KH Ops: mặc định `useState(true)` thay vì `false`
+
+### C. Dashboard Target Progress >200% — phân tích
+- Không phải code bug. `proRataProgress = totalActual / proRataTarget × 100` đúng về toán học
+- Khả năng cao: target T8 chưa nhập B2B (chỉ có B2C) → totalActual (B2B+B2C) / B2C-only-target → inflate
+- Hành động: Hiếu cần nhập target B2B T8 trong tab Targets
+
+### Commits chính session 140
+- 6c8527b fix(b2c): CM1 totals double group-cost deduction
+- 74719bd fix(vercel): scheduled-messages cron */5 → 0 1 * * *
+- 31dd9c5 fix(b2c): revert API format, compute group cost in FE
+- 7b50a72 fix(b2c): port CM1 logic from quarterly-report
+- 6e20e06 fix(b2c): fix GROUP BY bug - source_code sau month
+- 9aa67e7 feat(b2c): default include ship/internal/ops checkboxes = true
+- e809571 merge main (HEAD)
 
 ## ══════ SESSION 139 (tiếp) — Bé Gấu fixes + Usage Analytics ══════
 
