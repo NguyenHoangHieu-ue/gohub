@@ -107,12 +107,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   const totalRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
 
   // Group cost KHÔNG phân bổ vào từng channel → tránh kênh near-zero margin bị âm.
-  // Thay vào đó trả về tổng group cost để FE trừ ở TOTAL ROW.
-  const groupCostProrated = isChannelGroup ? calcGroupOpCost(groupCosts, "B2C", 1, startDate, endDate) : 0
-  const groupCostFullMonth = isChannelGroup
-    ? groupCosts.filter((gc: any) => gc.group_name === "B2C").reduce((s: number, gc: any) => s + parseFloat(gc.amount || "0"), 0)
-    : 0
-
+  // FE sẽ tính groupCostProrated từ groupCosts state và trừ ở TOTAL ROW.
   const channelRows = finalRows.map(r => {
     const revenue = r.revenue; const margin = r.margin
     let gpm2 = margin
@@ -156,7 +151,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     }
   })
 
-  return { rows: channelRows, groupCostProrated, groupCostFullMonth }
+  return channelRows
 }
 
 export async function GET(req: NextRequest) {
@@ -199,11 +194,7 @@ export async function GET(req: NextRequest) {
         fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
         fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
       ])
-      return {
-        rows: current.rows.map(curr => ({ ...curr, prev_revenue: previous.rows.find((p: any) => p.name === curr.name)?.revenue || 0 })),
-        groupCostProrated: current.groupCostProrated,
-        groupCostFullMonth: current.groupCostFullMonth,
-      }
+      return current.map((curr: any) => ({ ...curr, prev_revenue: previous.find((p: any) => p.name === curr.name)?.revenue || 0 }))
     }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })

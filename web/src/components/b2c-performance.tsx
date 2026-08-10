@@ -186,11 +186,7 @@ export function B2CPerformance() {
     key: "revenue",
     direction: "desc",
   })
-  // Group cost tổng (từ backend) — trừ ở TOTAL ROW, không phân bổ per-channel
-  const [groupCostProrated, setGroupCostProrated] = useState(0)
-  const [groupCostFullMonth, setGroupCostFullMonth] = useState(0)
-
-  // Cost data — CHỈ đọc để hiển thị breakdown trong expanded total row.
+  // Cost data — CHỈ đọc để hiển thị breakdown + tính group cost tại total row.
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<any[]>([])
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -330,11 +326,7 @@ export function B2CPerformance() {
       const pick = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" && r.value != null ? r.value : fallback
       setKpis(pick(kpiR, []))
       setTrendData(pick(trendR, []))
-      // Performance API trả { rows, groupCostProrated, groupCostFullMonth }
-      const perfResult = pick(perfR as PromiseSettledResult<{ rows: PerformanceData[]; groupCostProrated: number; groupCostFullMonth: number }>, { rows: [], groupCostProrated: 0, groupCostFullMonth: 0 })
-      setPerformanceData(perfResult.rows || [])
-      setGroupCostProrated(perfResult.groupCostProrated || 0)
-      setGroupCostFullMonth(perfResult.groupCostFullMonth || 0)
+      setPerformanceData(pick(perfR, []))
       setLossSkus(pick(lossR, []))
       setPrevMonthKpis(pick(prevKpiR, []))
 
@@ -399,6 +391,31 @@ export function B2CPerformance() {
     return 0
   }), [performanceData, sortConfig])
 
+  // Tính group cost pro-rata từ groupCosts state (đã fetch từ Supabase), áp vào TOTAL ROW.
+  // Group cost KHÔNG phân bổ per-channel → kênh near-zero margin không bị âm.
+  const groupCostProrated = React.useMemo(() => {
+    if (groupBy !== "channel" || !startDate || !endDate) return 0
+    return groupCosts.reduce((sum, gc) => {
+      const month = String(gc.month || "")
+      if (!month) return sum
+      const [y, m] = month.split("-").map(Number)
+      if (!y || !m) return sum
+      const daysInMonth = new Date(y, m, 0).getDate()
+      const mStart = new Date(y, m - 1, 1); const mEnd = new Date(y, m, 0)
+      const rStart = new Date(startDate);   const rEnd = new Date(endDate)
+      const oStart = rStart > mStart ? rStart : mStart
+      const oEnd   = rEnd   < mEnd   ? rEnd   : mEnd
+      if (oEnd < oStart) return sum
+      const daysInRange = Math.round((oEnd.getTime() - oStart.getTime()) / 86400000) + 1
+      return sum + (Number(gc.amount) || 0) * daysInRange / daysInMonth
+    }, 0)
+  }, [groupCosts, startDate, endDate, groupBy])
+
+  const groupCostFullMonth = React.useMemo(() => {
+    if (groupBy !== "channel") return 0
+    return groupCosts.reduce((sum, gc) => sum + (Number(gc.amount) || 0), 0)
+  }, [groupCosts, groupBy])
+
   const totals = React.useMemo(() => {
     const sum = performanceData.reduce((acc, curr) => {
       acc.revenue += curr.revenue
@@ -414,9 +431,7 @@ export function B2CPerformance() {
       return acc
     }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
-    // Group cost trừ ở TOTAL ROW (không phân bổ per-channel → tránh kênh near-zero margin bị âm).
-    // groupCostProrated = tổng group cost × dayRatio (thực tế kỳ này).
-    // groupCostFullMonth = tổng full month (dùng cho projected end-of-month).
+    // Group cost trừ tại TOTAL ROW (không phân bổ per-channel).
     if (groupBy === "channel") {
       sum.gpm2 -= groupCostProrated
       sum.projected_gpm2 -= groupCostFullMonth
