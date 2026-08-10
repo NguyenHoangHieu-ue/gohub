@@ -13,6 +13,7 @@ import { runBrowsePortal, runManagePortalCredentials } from "./portal"
 import { runWebSearchTool }        from "./search"
 import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
+import { runGenerateVideo, runCheckVideoStatus } from "./video"
 
 export async function dispatchTool(
   call: { name: string; args: any },
@@ -67,6 +68,28 @@ export async function dispatchTool(
   if (call.name === "trackSKUWinRate")
     return wrap(await runTrackSKUWinRate(call.args))
 
+  if (call.name === "generateVideo") {
+    const resp = await runGenerateVideo(call.args, onEvent)
+    return wrap({
+      ...resp,
+      instruction: resp.error
+        ? `Video generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
+        : resp.task_id
+          ? `Include the markdown field as-is in your response. Tell Hiếu they can ask "checkVideoStatus ${resp.task_id}" sau ~2 phút.`
+          : "Include the markdown field EXACTLY as-is in your response so the UI renders the video link.",
+    })
+  }
+
+  if (call.name === "checkVideoStatus") {
+    const resp = await runCheckVideoStatus(call.args)
+    return wrap({
+      ...resp,
+      instruction: resp.error
+        ? `Check failed: ${resp.error}.`
+        : "Include the markdown field EXACTLY as-is in your response.",
+    })
+  }
+
   if (call.name === "generateImage") {
     const resp = await runGenerateImage(call.args)
     return wrap({
@@ -99,7 +122,7 @@ export async function dispatchTool(
     return wrap(await runQueryProduct(call.args))
 
   if (call.name === "executeSQL") {
-    const resp = await runExecuteSQL(call.args?.sql || "")
+    const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
 

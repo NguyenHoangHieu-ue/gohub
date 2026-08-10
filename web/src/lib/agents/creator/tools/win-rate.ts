@@ -30,42 +30,49 @@ export async function runTrackSKUWinRate(args: {
     const skuCodes = newSkus.map(s => s.sku_code)
     const skuList  = skuCodes.map(c => `'${c}'`).join(",")
 
+    // VALUES CTE với window_end riêng từng SKU → đếm ĐÚNG đơn trong 14 ngày đầu từ ngày tạo
+    const valuesList = newSkus.map(s => {
+      const windowEnd = new Date(s.created_at)
+      windowEnd.setDate(windowEnd.getDate() + winDays)
+      return `('${s.sku_code}','${windowEnd.toISOString().slice(0, 10)}'::date)`
+    }).join(",")
+
     const rows = await queryAnalytics<{
-      sku: string; orders_in_window: string; first_order_date: string
+      sku: string; orders_in_window: string; orders_total: string
     }>(
-      `SELECT
+      `WITH sku_windows(sku_code, window_end) AS (VALUES ${valuesList})
+       SELECT
          TRIM(f.sku) as sku,
-         COUNT(DISTINCT f.order_code) as orders_in_window,
-         MIN(f.fulfiled_date::date) as first_order_date
+         COUNT(DISTINCT CASE WHEN f.fulfiled_date::date <= sw.window_end THEN f.order_code END) as orders_in_window,
+         COUNT(DISTINCT f.order_code) as orders_total
        FROM fact_fulfillment_revenue f
+       JOIN sku_windows sw ON TRIM(f.sku) = sw.sku_code
        WHERE TRIM(f.sku) IN (${skuList})
          AND f.fulfiled_date::date <= CURRENT_DATE - 1
        GROUP BY TRIM(f.sku)`
     )
 
-    const ordersMap = new Map(rows.map(r => [r.sku, { orders: parseInt(r.orders_in_window || "0"), firstOrder: r.first_order_date }]))
+    const ordersMap = new Map(rows.map(r => [r.sku, {
+      ordersInWindow: parseInt(r.orders_in_window || "0"),
+      ordersTotal:    parseInt(r.orders_total    || "0"),
+    }]))
 
     const result = newSkus.map(s => {
-      const data         = ordersMap.get(s.sku_code)
-      const createdAt    = new Date(s.created_at)
-      const ordersTotal  = data?.orders ?? 0
-      const firstOrder   = data?.firstOrder
-      // Đếm đơn trong 14 ngày đầu từ khi tạo
-      const windowEnd    = new Date(createdAt)
-      windowEnd.setDate(windowEnd.getDate() + winDays)
-      const isInWindow   = !firstOrder || new Date(firstOrder) <= windowEnd
-      const ordersInWin  = isInWindow ? ordersTotal : 0
-      const agedays      = Math.floor((Date.now() - createdAt.getTime()) / 86400000)
-      const won          = ordersInWin >= winOrders
-      const pending      = !won && agedays < winDays
-      const failed       = !won && agedays >= winDays
+      const data        = ordersMap.get(s.sku_code)
+      const createdAt   = new Date(s.created_at)
+      const ordersInWin = data?.ordersInWindow ?? 0
+      const ordersTotal = data?.ordersTotal    ?? 0
+      const agedays     = Math.floor((Date.now() - createdAt.getTime()) / 86400000)
+      const won         = ordersInWin >= winOrders
+      const pending     = !won && agedays < winDays
+      const failed      = !won && agedays >= winDays
 
       return {
         sku_code:       s.sku_code,
         created_at:     s.created_at.slice(0, 10),
         age_days:       agedays,
-        orders_14d:     ordersInWin,
-        total_orders:   ordersTotal,
+        orders_14d:     ordersInWin,   // chỉ đơn trong 14 ngày đầu từ ngày tạo
+        total_orders:   ordersTotal,   // toàn bộ đơn tính đến hôm qua
         status:         won ? "WIN" : pending ? "PENDING" : "FAILED",
         win_pct:        Math.min(100, Math.round((ordersInWin / winOrders) * 100)),
       }

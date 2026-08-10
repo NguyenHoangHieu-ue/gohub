@@ -39,4 +39,6 @@ export const TOOL_STATUS: Record<string, string> = {
   sendLarkMessage:         "📨 Đang gửi Lark message...",
   compareVendorQuotes:     "💱 Đang so sánh báo giá NCC...",
   trackSKUWinRate:         "📊 Đang tính Win Rate SKU...",
+  generateVideo:           "🎬 Đang tạo video Kling AI (1-3 phút)...",
+  checkVideoStatus:        "🎬 Đang kiểm tra trạng thái video...",
 }

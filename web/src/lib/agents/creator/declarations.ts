@@ -2,10 +2,13 @@ import { SchemaType } from "@google/generative-ai"
 
 export const executeSQLDecl = {
   name: "executeSQL",
-  description: "Execute a SELECT/WITH query on gohub_dw PostgreSQL (analytics DW). Use for revenue, orders, fulfillment, staff, customer, 3HK usage, etc.",
+  description: "Execute a SELECT/WITH query on gohub_dw PostgreSQL (analytics DW). Use for revenue, orders, fulfillment, staff, customer, 3HK usage, etc. Always show sql_used from the response so Hiếu can verify.",
   parameters: {
     type: SchemaType.OBJECT,
-    properties: { sql: { type: SchemaType.STRING, description: "SELECT or WITH query only." } },
+    properties: {
+      sql: { type: SchemaType.STRING, description: "SELECT or WITH query only." },
+      bypass_cache: { type: SchemaType.BOOLEAN, description: "true = bỏ qua cache, lấy data mới nhất từ DB. Dùng khi Hiếu nói 'fresh data', 'data mới nhất', 'bypass cache', hoặc vừa có thay đổi data." },
+    },
     required: ["sql"],
   },
 }
@@ -363,6 +366,49 @@ export const compareVendorQuotesDecl = {
   },
 }
 
+export const generateVideoDecl = {
+  name: "generateVideo",
+  description: "Tạo video AI từ mô tả văn bản bằng Kling AI. Dùng khi Hiếu yêu cầu 'tạo video', 'quay video', 'làm clip', 'video TikTok/Reels'. Viết prompt tiếng Anh để chất lượng tốt nhất. Video render ~1-3 phút. Nếu timeout sẽ trả task_id để check sau.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      prompt: {
+        type: SchemaType.STRING,
+        description: "Mô tả video chi tiết bằng tiếng Anh. Cấu trúc: [chủ thể] + [hành động] + [phong cách: cinematic/realistic/animation] + [bối cảnh] + [ánh sáng/màu sắc].",
+      },
+      negative_prompt: {
+        type: SchemaType.STRING,
+        description: "Những gì KHÔNG muốn có trong video (vd: 'blurry, watermark, text overlay, distorted faces').",
+      },
+      aspect_ratio: {
+        type: SchemaType.STRING,
+        description: "Tỷ lệ khung hình: '16:9' (landscape YouTube, default) | '9:16' (TikTok/Reels dọc) | '1:1' (vuông).",
+      },
+      duration: {
+        type: SchemaType.NUMBER,
+        description: "Thời lượng video: 5 (default) hoặc 10 giây.",
+      },
+      mode: {
+        type: SchemaType.STRING,
+        description: "Chất lượng render: 'std' (nhanh hơn, default) | 'pro' (chậm hơn, chất lượng cao hơn).",
+      },
+    },
+    required: ["prompt"],
+  },
+}
+
+export const checkVideoStatusDecl = {
+  name: "checkVideoStatus",
+  description: "Kiểm tra trạng thái render video Kling khi generateVideo trả về task_id (timeout). Gọi sau ~2 phút để lấy URL video.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      task_id: { type: SchemaType.STRING, description: "task_id nhận được từ generateVideo." },
+    },
+    required: ["task_id"],
+  },
+}
+
 export const trackSKUWinRateDecl = {
   name: "trackSKUWinRate",
   description: "Báo cáo Win Rate SKU mới: SKU nào đạt ≥5 đơn trong 14 ngày đầu (WIN), đang tracking (PENDING), hay không đạt (FAILED). KPI Q3 của GoHub. Dùng để theo dõi hiệu quả onboarding sản phẩm mới.",
@@ -386,4 +432,6 @@ export const ALL_TOOL_DECLARATIONS = [
   managePortalCredsDecl,
   // Phase 4 tools
   sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,
+  // Phase 3 tools
+  generateVideoDecl, checkVideoStatusDecl,
 ]
