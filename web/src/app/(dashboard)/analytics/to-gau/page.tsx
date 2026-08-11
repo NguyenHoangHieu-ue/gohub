@@ -16,7 +16,6 @@ interface ChatGroup {
   is_archived: boolean
   created_at: string
   member_count: number
-  is_member?: boolean
   last_message: { content: string; sender_name: string; created_at: string } | null
 }
 
@@ -34,13 +33,11 @@ function fmtRelative(dateStr: string): string {
   return d.toLocaleDateString("vi-VN")
 }
 
-function GroupCard({ group, isCreator }: { group: ChatGroup; isCreator: boolean }) {
-  const hasAccess = isCreator || group.is_member !== false
+function GroupCard({ group }: { group: ChatGroup }) {
   return (
     <div className={cn(
       "bg-white border border-slate-200 rounded-xl p-5 hover:border-[#003B95]/40 hover:shadow-md transition-all group",
-      group.is_archived && "opacity-60",
-      !hasAccess && "border-dashed"
+      group.is_archived && "opacity-60"
     )}>
       <div className="flex items-start gap-3 mb-3">
         <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-2xl flex-shrink-0 border border-blue-100">
@@ -90,13 +87,11 @@ function GroupCard({ group, isCreator }: { group: ChatGroup; isCreator: boolean 
           "flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors",
           group.is_archived
             ? "bg-slate-100 text-slate-500 hover:bg-slate-200"
-            : hasAccess
-            ? "bg-[#003B95] text-white hover:bg-[#002d73]"
-            : "bg-slate-100 text-slate-500 hover:bg-slate-200 border border-dashed border-slate-300"
+            : "bg-[#003B95] text-white hover:bg-[#002d73]"
         )}
       >
         <MessageCircle size={14} />
-        {group.is_archived ? "Xem nhóm" : hasAccess ? "Vào nhóm" : "Xem nhóm"}
+        {group.is_archived ? "Xem nhóm" : "Vào nhóm"}
       </Link>
     </div>
   )
@@ -252,7 +247,7 @@ export default function ToGauPage() {
         )}
       </div>
 
-      {/* Filter toggle — chỉ creator/admin thấy tab Lưu trữ (#1) */}
+      {/* Filter toggle */}
       <div className="flex items-center gap-2 mb-5">
         <button
           onClick={() => setShowArchived(false)}
@@ -265,19 +260,17 @@ export default function ToGauPage() {
         >
           <LayoutList size={13} /> Hoạt động
         </button>
-        {isCreator && (
-          <button
-            onClick={() => setShowArchived(true)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors border",
-              showArchived
-                ? "bg-slate-600 text-white border-slate-600"
-                : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-            )}
-          >
-            <Archive size={13} /> Lưu trữ
-          </button>
-        )}
+        <button
+          onClick={() => setShowArchived(true)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors border",
+            showArchived
+              ? "bg-slate-600 text-white border-slate-600"
+              : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+          )}
+        >
+          <Archive size={13} /> Lưu trữ
+        </button>
       </div>
 
       {/* Content */}
@@ -324,7 +317,7 @@ export default function ToGauPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map(g => (
-            <GroupCard key={g.id} group={g} isCreator={isCreator} />
+            <GroupCard key={g.id} group={g} />
           ))}
         </div>
       )}
