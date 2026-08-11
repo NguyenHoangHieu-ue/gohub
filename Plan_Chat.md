@@ -399,6 +399,6 @@ web/db/migrations/v34_groupchat.sql
 | Phase | Status |
 |---|---|
 | Phase 1 — MVP chat | ✅ Xong (commit 602a553) |
-| Phase 2 — File + AI | ⏳ Chờ |
-| Phase 3 — Docs + Notes | ⏳ Chờ |
-| Phase 4 — Notify + Polish | ⏳ Chờ |
+| Phase 2 — File + AI | ✅ Xong (commit 663d874) |
+| Phase 3 — Docs + Notes | ✅ Xong (commit d9ef52c) |
+| Phase 4 — Notify + Polish | ✅ Xong (commit staging) |
