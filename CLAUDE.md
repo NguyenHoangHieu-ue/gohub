@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-11, s143)
+## Trạng thái hiện tại (2026-08-11, s144)
 
 | | |
 |---|---|
@@ -28,8 +28,8 @@
 - ✅ Semantic KB search: code xong, migration v33 đã chạy (2026-08-11)
 - ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
 - ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
-- ✅ **Tổ Gấu** group chat — 4 phase XONG, migration v34 đã chạy (2026-08-11)
-  - Phase 5 backlog: xem `Plan_Chat.md` § Phase 5
+- ✅ **Tổ Gấu** group chat — Phase 1-5 XONG, migration v34+v35 đã chạy (2026-08-11)
+  - Test plan: xem `Plan_Test_ToGau.md`
 
 **Ghi chú:**
 - Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
