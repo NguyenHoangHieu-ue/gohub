@@ -72,12 +72,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const body    = await req.json()
-  const content = body.content?.trim()
-  if (!content) return NextResponse.json({ error: "content required" }, { status: 400 })
+  const content = body.content?.trim() ?? ""
+  const attachments: { url: string; name: string; size: number; type: string }[] =
+    Array.isArray(body.attachments) ? body.attachments : []
+
+  if (!content && attachments.length === 0) {
+    return NextResponse.json({ error: "content or attachments required" }, { status: 400 })
+  }
+
+  // Determine msg_type
+  let msgType = "text"
+  if (attachments.length > 0 && !content) {
+    msgType = attachments[0].type.startsWith("image/") ? "image" : "file"
+  }
 
   const { data, error } = await supabaseAdmin
     .from("chat_messages")
-    .insert({ group_id: id, sender_email: email, sender_name: name, content, msg_type: "text" })
+    .insert({
+      group_id:    id,
+      sender_email: email,
+      sender_name: name,
+      content:     content || "",
+      msg_type:    msgType,
+      attachments: attachments.length > 0 ? attachments : [],
+    })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

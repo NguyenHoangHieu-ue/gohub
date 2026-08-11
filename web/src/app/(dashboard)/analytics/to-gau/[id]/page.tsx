@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Send, Settings, UserPlus, X, Trash2, Crown } from "lucide-react"
+import { ArrowLeft, Send, Settings, UserPlus, X, Trash2, Crown, Paperclip, Bot } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -15,32 +15,42 @@ const supabaseRealtime = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
 
+interface Attachment {
+  url:     string
+  name:    string
+  size:    number
+  type:    string
+}
+
 interface ChatMessage {
-  id: string
-  group_id: string
+  id:           string
+  group_id:     string
   sender_email: string
-  sender_name: string
-  content: string
-  msg_type: string
-  created_at: string
+  sender_name:  string
+  content:      string
+  msg_type:     string
+  created_at:   string
+  attachments?: Attachment[]
 }
 
 interface Member {
-  id: string
+  id:         string
   user_email: string
-  user_name: string | null
-  role: string
-  added_at: string
+  user_name:  string | null
+  role:       string
+  added_at:   string
 }
 
 interface GroupInfo {
-  id: string
-  name: string
-  description: string | null
-  avatar_emoji: string
-  created_by: string
-  is_archived: boolean
-  members: Member[]
+  id:                  string
+  name:                string
+  description:         string | null
+  avatar_emoji:        string
+  created_by:          string
+  is_archived:         boolean
+  members:             Member[]
+  ai_enabled?:         boolean
+  ai_scope?:           string | null
 }
 
 // Tạo màu avatar từ hash email
@@ -78,16 +88,38 @@ function fmtTime(dateStr: string): string {
   return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
 }
 
+function fmtFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 const EMOJI_OPTIONS = ["🐻", "🦊", "🐼", "🐨", "🦁", "🐯", "🦋", "🌟", "🎯", "🚀", "💡", "🎉"]
+
+const AI_SCOPE_PRESETS = [
+  {
+    label: "Sale",
+    value: "Chỉ trả lời về giá bán, tình trạng SP, SKU code, so sánh gói. KHÔNG tiết lộ COGS/margin.",
+  },
+  {
+    label: "BD",
+    value: "Trả lời về specs kỹ thuật, thông tin thị trường, báo giá so sánh. KHÔNG tiết lộ chiến lược.",
+  },
+  {
+    label: "Ops",
+    value: "Trả lời về quy trình nhập hàng, tracking, trạng thái kho. KHÔNG tiết lộ chi phí vận hành.",
+  },
+  { label: "Full", value: "" },
+]
 
 // ── Settings Modal ──
 function SettingsModal({
-  group, onClose, onSaved, onMemberRemoved,
+  group, onClose, onSaved, onMemberRemoved, isCreator,
 }: {
-  group: GroupInfo
-  onClose: () => void
-  onSaved: (updated: Partial<GroupInfo>) => void
+  group:           GroupInfo
+  onClose:         () => void
+  onSaved:         (updated: Partial<GroupInfo>) => void
   onMemberRemoved: (email: string) => void
+  isCreator:       boolean
 }) {
   const toast = useToast()
   const [name, setName]           = useState(group.name)
@@ -98,6 +130,11 @@ function SettingsModal({
   const [addName, setAddName]     = useState("")
   const [addingMember, setAddingMember] = useState(false)
   const [members, setMembers]     = useState<Member[]>(group.members)
+
+  // AI config state
+  const [aiEnabled, setAiEnabled] = useState<boolean>(group.ai_enabled ?? false)
+  const [aiScope, setAiScope]     = useState<string>(group.ai_scope ?? "")
+  const [savingAI, setSavingAI]   = useState(false)
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -116,6 +153,26 @@ function SettingsModal({
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSaveAI(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingAI(true)
+    try {
+      const res = await fetch(`/api/to-gau/groups/${group.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_enabled: aiEnabled, ai_scope: aiScope.trim() || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      toast.success("Đã lưu cài đặt AI")
+      onSaved({ ai_enabled: aiEnabled, ai_scope: aiScope.trim() || null })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setSavingAI(false)
     }
   }
 
@@ -228,9 +285,148 @@ function SettingsModal({
               </button>
             </form>
           </div>
+
+          {/* AI config — creator only */}
+          {isCreator && (
+            <div className="border-t border-slate-100 pt-5">
+              <h3 className="text-[13px] font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <Bot size={14} className="text-indigo-500" /> Trợ lý AI
+              </h3>
+              <form onSubmit={handleSaveAI} className="space-y-4">
+                {/* Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-medium text-slate-600">Bật Gấu Tổ AI</label>
+                  <button
+                    type="button"
+                    onClick={() => setAiEnabled(v => !v)}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                      aiEnabled ? "bg-indigo-600" : "bg-slate-200"
+                    )}
+                  >
+                    <span className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                      aiEnabled ? "translate-x-6" : "translate-x-1"
+                    )} />
+                  </button>
+                </div>
+
+                {/* Scope */}
+                <div>
+                  <label className="text-[13px] font-medium text-slate-600 block mb-1">Phạm vi AI được phép trả lời</label>
+                  <textarea
+                    value={aiScope}
+                    onChange={e => setAiScope(e.target.value)}
+                    rows={3}
+                    placeholder="Để trống = không giới hạn"
+                    disabled={!aiEnabled}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-indigo-400 resize-none disabled:opacity-50 disabled:bg-slate-50"
+                  />
+                  {/* Quick preset buttons */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {AI_SCOPE_PRESETS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        disabled={!aiEnabled}
+                        onClick={() => setAiScope(preset.value)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-40",
+                          aiScope === preset.value
+                            ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                            : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button type="submit" disabled={savingAI}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-[13px] font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                  {savingAI ? "Đang lưu..." : "Lưu cài đặt AI"}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+// ── File Preview (before send) ──
+function FilePreviewItem({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/")
+  const [objUrl, setObjUrl] = useState<string>("")
+
+  useEffect(() => {
+    if (!isImage) return
+    const url = URL.createObjectURL(file)
+    setObjUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file, isImage])
+
+  return (
+    <div className="relative flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-[12px] text-slate-700 max-w-[160px]">
+      {isImage && objUrl ? (
+        <img src={objUrl} alt={file.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
+      ) : (
+        <span className="text-lg flex-shrink-0">📄</span>
+      )}
+      <span className="truncate flex-1 min-w-0">{file.name}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex-shrink-0 text-slate-400 hover:text-rose-500"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  )
+}
+
+// ── Message Attachment Display ──
+function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
+  const [lightbox, setLightbox] = useState(false)
+  const isImage = attachment.type.startsWith("image/")
+
+  if (isImage) {
+    return (
+      <>
+        <img
+          src={attachment.url}
+          alt={attachment.name}
+          className="max-h-48 rounded-lg cursor-pointer object-contain mt-1"
+          onClick={() => setLightbox(true)}
+        />
+        {lightbox && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setLightbox(false)}
+          >
+            <img src={attachment.url} alt={attachment.name} className="max-w-full max-h-full rounded-xl" />
+          </div>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 mt-1 px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors text-[13px] text-slate-700 max-w-[240px]"
+    >
+      <span className="text-lg flex-shrink-0">📄</span>
+      <div className="flex-1 min-w-0">
+        <p className="truncate font-medium">{attachment.name}</p>
+        <p className="text-[11px] text-slate-400">{fmtFileSize(attachment.size)}</p>
+      </div>
+      <span className="text-[11px] text-[#003B95] font-medium flex-shrink-0">Tải về</span>
+    </a>
   )
 }
 
@@ -250,6 +446,14 @@ export default function ToGauRoomPage() {
   const [sending, setSending]     = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [forbidden, setForbidden] = useState(false)
+
+  // Phase 2: file upload states
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploading, setUploading]         = useState(false)
+  const fileInputRef                      = useRef<HTMLInputElement>(null)
+
+  // Phase 2: AI states
+  const [askingAI, setAskingAI] = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
@@ -319,19 +523,68 @@ export default function ToGauRoomPage() {
     return () => { supabaseRealtime.removeChannel(channel) }
   }, [groupId])
 
+  // Handle file selection
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    setSelectedFiles(prev => [...prev, ...files])
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  function removeSelectedFile(idx: number) {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== idx))
+  }
+
   async function sendMessage() {
     const text = content.trim()
-    if (!text || sending) return
+    if ((!text && selectedFiles.length === 0) || sending || uploading) return
 
     setSending(true)
     setContent("")
+    const filesToSend = [...selectedFiles]
+    setSelectedFiles([])
+
+    // Upload files first
+    let uploadedAttachments: Attachment[] = []
+    if (filesToSend.length > 0) {
+      setUploading(true)
+      try {
+        uploadedAttachments = await Promise.all(
+          filesToSend.map(async (file) => {
+            const fd = new FormData()
+            fd.append("file", file)
+            fd.append("group_id", groupId)
+            const res = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
+            if (!res.ok) {
+              const j = await res.json()
+              throw new Error(j.error ?? "Upload lỗi")
+            }
+            const { url, name, size, type } = await res.json()
+            return { url, name, size, type } as Attachment
+          })
+        )
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Upload thất bại")
+        setSending(false)
+        setUploading(false)
+        setContent(text)
+        setSelectedFiles(filesToSend)
+        return
+      } finally {
+        setUploading(false)
+      }
+    }
 
     // Optimistic update
     const tempId = `temp-${Date.now()}`
     const optimistic: ChatMessage = {
       id: tempId, group_id: groupId, sender_email: myEmail,
       sender_name: myName || myEmail, content: text,
-      msg_type: "text", created_at: new Date().toISOString(),
+      msg_type: uploadedAttachments.length > 0 && !text
+        ? (uploadedAttachments[0].type.startsWith("image/") ? "image" : "file")
+        : "text",
+      created_at: new Date().toISOString(),
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
     }
     setMessages(prev => [...prev, optimistic])
 
@@ -339,7 +592,10 @@ export default function ToGauRoomPage() {
       const res = await fetch(`/api/to-gau/groups/${groupId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({
+          content: text,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        }),
       })
       if (!res.ok) {
         const j = await res.json()
@@ -352,9 +608,35 @@ export default function ToGauRoomPage() {
       // Remove optimistic on error
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setContent(text)
+      setSelectedFiles(filesToSend)
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setSending(false)
+      textareaRef.current?.focus()
+    }
+  }
+
+  async function askAI() {
+    const question = content.trim()
+    if (!question || askingAI) return
+
+    setAskingAI(true)
+    setContent("")
+
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      // AI message will arrive via realtime subscription
+    } catch (err: unknown) {
+      setContent(question)
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setAskingAI(false)
       textareaRef.current?.focus()
     }
   }
@@ -404,6 +686,8 @@ export default function ToGauRoomPage() {
     )
   }
 
+  const showAIButton = group.ai_enabled !== false
+
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Main chat area */}
@@ -418,6 +702,11 @@ export default function ToGauRoomPage() {
             <h1 className="font-semibold text-slate-800 text-[15px] leading-tight truncate">{group.name}</h1>
             <p className="text-slate-400 text-[12px]">{group.members.length} thành viên</p>
           </div>
+          {group.ai_enabled && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-[11px] font-medium">
+              <Bot size={11} /> AI
+            </span>
+          )}
         </div>
 
         {/* Messages */}
@@ -435,9 +724,43 @@ export default function ToGauRoomPage() {
           ) : (
             <>
               {messages.map((msg, idx) => {
-                const isMe = msg.sender_email === myEmail
+                const isMe  = msg.sender_email === myEmail
+                const isAI  = msg.msg_type === "ai" || msg.sender_email === "ai@to-gau"
                 const prevMsg = idx > 0 ? messages[idx - 1] : null
                 const showAvatar = !prevMsg || prevMsg.sender_email !== msg.sender_email
+
+                if (isAI) {
+                  return (
+                    <div key={msg.id} className={cn("flex items-end gap-2 flex-row", showAvatar ? "mt-3" : "mt-0.5")}>
+                      {/* AI avatar */}
+                      <div className="w-8 flex-shrink-0">
+                        {showAvatar && (
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[13px] flex-shrink-0">
+                            🤖
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="max-w-[72%] min-w-0 flex flex-col items-start">
+                        {showAvatar && (
+                          <div className="flex items-center gap-1.5 mb-0.5 px-1">
+                            <p className="text-[11px] text-slate-400">{msg.sender_name}</p>
+                            <span className="px-1.5 py-0 rounded-full bg-indigo-100 text-indigo-600 text-[9px] font-semibold uppercase tracking-wide">AI</span>
+                          </div>
+                        )}
+                        <div className="px-3 py-2 rounded-2xl rounded-bl-sm text-[14px] leading-relaxed whitespace-pre-wrap break-words bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 text-slate-800 shadow-sm">
+                          {msg.content}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5 px-1 text-left">
+                          {fmtTime(msg.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="w-8 flex-shrink-0" />
+                    </div>
+                  )
+                }
+
                 return (
                   <div key={msg.id} className={cn("flex items-end gap-2", isMe ? "flex-row-reverse" : "flex-row", showAvatar ? "mt-3" : "mt-0.5")}>
                     {/* Avatar placeholder (để giữ spacing) */}
@@ -456,6 +779,14 @@ export default function ToGauRoomPage() {
                           : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm"
                       )}>
                         {msg.content}
+                        {/* Attachments */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="mt-1 space-y-1">
+                            {msg.attachments.map((att, i) => (
+                              <AttachmentDisplay key={i} attachment={att} />
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <p className={cn("text-[10px] text-slate-400 mt-0.5 px-1", isMe ? "text-right" : "text-left")}>
                         {fmtTime(msg.created_at)}
@@ -476,7 +807,35 @@ export default function ToGauRoomPage() {
 
         {/* Input bar */}
         <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-          <div className="flex items-end gap-3">
+          {/* File preview row */}
+          {selectedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {selectedFiles.map((file, idx) => (
+                <FilePreviewItem key={idx} file={file} onRemove={() => removeSelectedFile(idx)} />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-end gap-2">
+            {/* Paperclip button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || sending}
+              className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-[#003B95] disabled:opacity-40 transition-colors"
+              title="Đính kèm file"
+            >
+              <Paperclip size={15} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.xlsx,.docx,.txt"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
             <textarea
               ref={textareaRef}
               value={content}
@@ -487,12 +846,35 @@ export default function ToGauRoomPage() {
               className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none max-h-32 overflow-y-auto"
               style={{ minHeight: "42px" }}
             />
+
+            {/* AI button */}
+            {showAIButton && (
+              <button
+                type="button"
+                onClick={askAI}
+                disabled={!content.trim() || askingAI || sending}
+                title="Hỏi AI Gấu Tổ"
+                className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {askingAI ? (
+                  <span className="text-[13px] animate-pulse">🤖</span>
+                ) : (
+                  <Bot size={15} />
+                )}
+              </button>
+            )}
+
+            {/* Send button */}
             <button
               onClick={sendMessage}
-              disabled={!content.trim() || sending}
+              disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
               className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#003B95] text-white flex items-center justify-center hover:bg-[#002d73] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <Send size={16} />
+              {(sending || uploading) ? (
+                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Send size={16} />
+              )}
             </button>
           </div>
         </div>
@@ -539,6 +921,7 @@ export default function ToGauRoomPage() {
           onClose={() => setShowSettings(false)}
           onSaved={(updated) => setGroup(prev => prev ? { ...prev, ...updated } : prev)}
           onMemberRemoved={handleMemberRemoved}
+          isCreator={isCreator}
         />
       )}
     </div>
