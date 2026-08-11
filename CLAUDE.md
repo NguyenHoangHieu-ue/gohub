@@ -28,6 +28,7 @@
 - ✅ Semantic KB search: code xong, **Hiếu cần chạy `web/db/migrations/v33_creator_kb_embedding.sql` trong Supabase SQL Editor**
 - ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
 - ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
+- 🔄 **Tổ Gấu** group chat (Phase 1 MVP xong — commit 602a553; Phase 2-4 còn lại)
 
 **Ghi chú:**
 - Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
