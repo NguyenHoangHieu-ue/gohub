@@ -42,7 +42,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .eq("group_id", id)
     .order("added_at", { ascending: true })
 
-  return NextResponse.json({ data: { ...group, members: members ?? [] } })
+  // Return current user's member role for manager permission check (#2)
+  const myMember = (members ?? []).find(m => m.user_email === email)
+  const my_member_role = myMember?.role ?? null
+
+  return NextResponse.json({ data: { ...group, members: members ?? [], my_member_role } })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {

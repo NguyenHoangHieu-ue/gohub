@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-11, s142)
+## Trạng thái hiện tại (2026-08-11, s143)
 
 | | |
 |---|---|
@@ -25,7 +25,7 @@
 
 **AI làm tiếp (backlog):**
 - ✅ Gấu Pro: Stability AI image gen (code xong, cần Hiếu set `STABILITY_API_KEY` Vercel + tạo bucket `creator-images` public trong Supabase Storage)
-- ✅ Semantic KB search: code xong, **Hiếu cần chạy `web/db/migrations/v33_creator_kb_embedding.sql` trong Supabase SQL Editor**
+- ✅ Semantic KB search: code xong, migration v33 đã chạy (2026-08-11)
 - ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
 - ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
 - ✅ **Tổ Gấu** group chat — 4 phase XONG, migration v34 đã chạy (2026-08-11)

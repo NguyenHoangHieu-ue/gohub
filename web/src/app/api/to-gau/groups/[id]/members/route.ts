@@ -17,6 +17,16 @@ async function isMember(groupId: string, email: string): Promise<boolean> {
   return !!data
 }
 
+async function getMemberRole(groupId: string, email: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("chat_group_members")
+    .select("role")
+    .eq("group_id", groupId)
+    .eq("user_email", email)
+    .maybeSingle()
+  return data?.role ?? null
+}
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -42,17 +52,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const role       = session.user.role  || ""
-  const addedBy    = session.user.email || ""
-  if (!isPrivileged(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const role    = session.user.role  || ""
+  const addedBy = session.user.email || ""
+  const { id }  = params
 
-  const { id } = params
+  // Creator/admin hoặc manager của group này được thêm thành viên (#2)
+  const memberRole = isPrivileged(role) ? "admin" : await getMemberRole(id, addedBy)
+  if (!isPrivileged(role) && memberRole !== "manager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
   const body   = await req.json()
   const { user_email, user_name } = body
 
   if (!user_email?.trim()) return NextResponse.json({ error: "user_email required" }, { status: 400 })
 
-  // Lookup user_name from Supabase users table if not provided
   let resolvedName = user_name || null
   if (!resolvedName) {
     const { data: u } = await supabaseAdmin
@@ -72,22 +86,55 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json({ data }, { status: 201 })
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+// PATCH — đổi role thành viên (creator/admin only) (#2)
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const role = session.user.role || ""
   if (!isPrivileged(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const { id } = params
-  const email  = req.nextUrl.searchParams.get("email")
-  if (!email) return NextResponse.json({ error: "email query param required" }, { status: 400 })
+  const { id }  = params
+  const body    = await req.json()
+  const { user_email, role: newRole } = body
+
+  if (!user_email || !["admin", "manager", "member"].includes(newRole)) {
+    return NextResponse.json({ error: "user_email and valid role (admin/manager/member) required" }, { status: 400 })
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("chat_group_members")
+    .update({ role: newRole })
+    .eq("group_id", id)
+    .eq("user_email", user_email)
+    .select()
+    .single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data })
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const role    = session.user.role  || ""
+  const email   = session.user.email || ""
+  const { id }  = params
+
+  // Creator/admin hoặc manager được xóa thành viên (#2)
+  const memberRole = isPrivileged(role) ? "admin" : await getMemberRole(id, email)
+  if (!isPrivileged(role) && memberRole !== "manager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const targetEmail = req.nextUrl.searchParams.get("email")
+  if (!targetEmail) return NextResponse.json({ error: "email query param required" }, { status: 400 })
 
   const { error } = await supabaseAdmin
     .from("chat_group_members")
     .delete()
     .eq("group_id", id)
-    .eq("user_email", email)
+    .eq("user_email", targetEmail)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

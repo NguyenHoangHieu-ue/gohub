@@ -34,6 +34,8 @@ interface ChatMessage {
   msg_type:     string
   created_at:   string
   is_pinned?:   boolean
+  edited_at?:   string | null
+  is_recalled?: boolean
   attachments?: Attachment[]
 }
 
@@ -55,6 +57,7 @@ interface GroupInfo {
   members:             Member[]
   ai_enabled?:         boolean
   ai_scope?:           string | null
+  my_member_role?:     string | null
 }
 
 // Phase 3 interfaces
@@ -200,13 +203,14 @@ function renderContent(
 
 // ── Settings Modal ──
 function SettingsModal({
-  group, onClose, onSaved, onMemberRemoved, isCreator,
+  group, onClose, onSaved, onMemberRemoved, isCreator, isManager,
 }: {
   group:           GroupInfo
   onClose:         () => void
   onSaved:         (updated: Partial<GroupInfo>) => void
   onMemberRemoved: (email: string) => void
   isCreator:       boolean
+  isManager:       boolean
 }) {
   const toast = useToast()
   const [name, setName]           = useState(group.name)
@@ -214,14 +218,36 @@ function SettingsModal({
   const [emoji, setEmoji]         = useState(group.avatar_emoji || "🐻")
   const [saving, setSaving]       = useState(false)
   const [addEmail, setAddEmail]   = useState("")
-  const [addName, setAddName]     = useState("")
   const [addingMember, setAddingMember] = useState(false)
   const [members, setMembers]     = useState<Member[]>(group.members)
+
+  // User search autocomplete (#3)
+  const [userSuggestions, setUserSuggestions]   = useState<{email: string; name: string}[]>([])
+  const [showSuggestions, setShowSuggestions]   = useState(false)
+  const searchDebounce                          = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // AI config state
   const [aiEnabled, setAiEnabled] = useState<boolean>(group.ai_enabled ?? false)
   const [aiScope, setAiScope]     = useState<string>(group.ai_scope ?? "")
   const [savingAI, setSavingAI]   = useState(false)
+
+  // User search effect (#3)
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    if (!addEmail || addEmail.includes("@")) { setUserSuggestions([]); setShowSuggestions(false); return }
+    searchDebounce.current = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/to-gau/user-search?q=${encodeURIComponent(addEmail)}`)
+        const json = await res.json()
+        const filtered = (json.data ?? []).filter((u: {email: string}) =>
+          !members.some(m => m.user_email === u.email)
+        )
+        setUserSuggestions(filtered)
+        setShowSuggestions(filtered.length > 0)
+      } catch { setUserSuggestions([]) }
+    }, 300)
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
+  }, [addEmail, members])
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -267,18 +293,18 @@ function SettingsModal({
     e.preventDefault()
     if (!addEmail.trim()) return
     setAddingMember(true)
+    setShowSuggestions(false)
     try {
       const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_email: addEmail.trim(), user_name: addName.trim() || null }),
+        body: JSON.stringify({ user_email: addEmail.trim() }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
       toast.success(`Đã thêm ${addEmail.trim()}`)
       setMembers(prev => [...prev, json.data])
       setAddEmail("")
-      setAddName("")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
@@ -298,6 +324,25 @@ function SettingsModal({
     }
   }
 
+  // Đổi role thành viên (#2)
+  async function handleRoleChange(email: string, newRole: string) {
+    try {
+      const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_email: email, role: newRole }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setMembers(prev => prev.map(m => m.user_email === email ? { ...m, role: newRole } : m))
+      toast.success("Đã cập nhật quyền")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    }
+  }
+
+  const roleLabel: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Thành viên" }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -307,71 +352,117 @@ function SettingsModal({
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
-          {/* Basic info */}
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <label className="text-[13px] font-medium text-slate-600 block mb-2">Biểu tượng</label>
-              <div className="flex flex-wrap gap-2">
-                {EMOJI_OPTIONS.map(e => (
-                  <button key={e} type="button" onClick={() => setEmoji(e)}
-                    className={cn("w-9 h-9 rounded-lg text-xl flex items-center justify-center border-2 transition-all",
-                      emoji === e ? "border-[#003B95] bg-blue-50 scale-110" : "border-slate-200 hover:border-slate-400")}>
-                    {e}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-[13px] font-medium text-slate-600 block mb-1">Tên nhóm</label>
-              <input value={name} onChange={e => setName(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95]" required />
-            </div>
-            <div>
-              <label className="text-[13px] font-medium text-slate-600 block mb-1">Mô tả</label>
-              <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95] resize-none" />
-            </div>
-            <button type="submit" disabled={saving}
-              className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
-              {saving ? "Đang lưu..." : "Lưu thay đổi"}
-            </button>
-          </form>
-
-          {/* Members */}
-          <div>
-            <h3 className="text-[13px] font-semibold text-slate-700 mb-3 flex items-center gap-2"><UserPlus size={14} /> Thành viên ({members.length})</h3>
-            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-              {members.map(m => (
-                <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
-                  <Avatar name={m.user_name} email={m.user_email} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-slate-700 truncate">{m.user_name || m.user_email}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{m.user_email}</p>
-                  </div>
-                  {m.role === "admin" && <Crown size={12} className="text-amber-500 flex-shrink-0" />}
-                  {m.role !== "admin" && (
-                    <button onClick={() => handleRemoveMember(m.user_email)}
-                      className="text-slate-300 hover:text-rose-500 transition-colors flex-shrink-0">
-                      <Trash2 size={14} />
+          {/* Basic info — creator only */}
+          {isCreator && (
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <label className="text-[13px] font-medium text-slate-600 block mb-2">Biểu tượng</label>
+                <div className="flex flex-wrap gap-2">
+                  {EMOJI_OPTIONS.map(e => (
+                    <button key={e} type="button" onClick={() => setEmoji(e)}
+                      className={cn("w-9 h-9 rounded-lg text-xl flex items-center justify-center border-2 transition-all",
+                        emoji === e ? "border-[#003B95] bg-blue-50 scale-110" : "border-slate-200 hover:border-slate-400")}>
+                      {e}
                     </button>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-
-            {/* Add member form */}
-            <form onSubmit={handleAddMember} className="space-y-2">
-              <input value={addEmail} onChange={e => setAddEmail(e.target.value)} placeholder="Email người dùng *"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]" type="email" />
-              <input value={addName} onChange={e => setAddName(e.target.value)} placeholder="Tên hiển thị (tùy chọn)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]" />
-              <button type="submit" disabled={addingMember || !addEmail.trim()}
-                className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
-                <UserPlus size={14} />
-                {addingMember ? "Đang thêm..." : "Thêm thành viên"}
+              </div>
+              <div>
+                <label className="text-[13px] font-medium text-slate-600 block mb-1">Tên nhóm</label>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95]" required />
+              </div>
+              <div>
+                <label className="text-[13px] font-medium text-slate-600 block mb-1">Mô tả</label>
+                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95] resize-none" />
+              </div>
+              <button type="submit" disabled={saving}
+                className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
+                {saving ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
             </form>
-          </div>
+          )}
+
+          {/* Members — creator + manager (#2) */}
+          {(isCreator || isManager) && (
+            <div className={cn(!isCreator && "pt-0")}>
+              <h3 className="text-[13px] font-semibold text-slate-700 mb-3 flex items-center gap-2"><UserPlus size={14} /> Thành viên ({members.length})</h3>
+              <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                {members.map(m => (
+                  <div key={m.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50">
+                    <Avatar name={m.user_name} email={m.user_email} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-slate-700 truncate">{m.user_name || m.user_email}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{m.user_email}</p>
+                    </div>
+                    {/* Role badge / dropdown (#2) */}
+                    {isCreator && m.role !== "admin" ? (
+                      <select
+                        value={m.role || "member"}
+                        onChange={e => handleRoleChange(m.user_email, e.target.value)}
+                        className="text-[11px] border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-600 focus:outline-none focus:border-[#003B95] flex-shrink-0"
+                      >
+                        <option value="manager">Manager</option>
+                        <option value="member">Thành viên</option>
+                      </select>
+                    ) : (
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0",
+                        m.role === "admin" ? "bg-amber-50 text-amber-600" :
+                        m.role === "manager" ? "bg-blue-50 text-blue-600" :
+                        "bg-slate-100 text-slate-500"
+                      )}>
+                        {roleLabel[m.role] || "Thành viên"}
+                      </span>
+                    )}
+                    {m.role !== "admin" && (
+                      <button onClick={() => handleRemoveMember(m.user_email)}
+                        className="text-slate-300 hover:text-rose-500 transition-colors flex-shrink-0 ml-1">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Add member form with autocomplete (#3) */}
+              <form onSubmit={handleAddMember} className="space-y-2">
+                <div className="relative">
+                  <input
+                    value={addEmail}
+                    onChange={e => { setAddEmail(e.target.value); setShowSuggestions(false) }}
+                    onFocus={() => userSuggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="Tìm theo tên hoặc email *"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
+                  />
+                  {showSuggestions && (
+                    <div className="absolute top-full left-0 right-0 z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 overflow-hidden">
+                      {userSuggestions.map(u => (
+                        <button
+                          key={u.email}
+                          type="button"
+                          onMouseDown={e => { e.preventDefault(); setAddEmail(u.email); setShowSuggestions(false) }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
+                        >
+                          <Avatar name={u.name} email={u.email} size="sm" />
+                          <div>
+                            <p className="text-[13px] font-medium text-slate-700">{u.name || u.email}</p>
+                            <p className="text-[11px] text-slate-400">{u.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button type="submit" disabled={addingMember || !addEmail.trim()}
+                  className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                  <UserPlus size={14} />
+                  {addingMember ? "Đang thêm..." : "Thêm thành viên"}
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* AI config — creator only */}
           {isCreator && (
@@ -380,7 +471,6 @@ function SettingsModal({
                 <Bot size={14} className="text-indigo-500" /> Trợ lý AI
               </h3>
               <form onSubmit={handleSaveAI} className="space-y-4">
-                {/* Toggle */}
                 <div className="flex items-center justify-between">
                   <label className="text-[13px] font-medium text-slate-600">Bật Gấu Tổ AI</label>
                   <button
@@ -397,8 +487,6 @@ function SettingsModal({
                     )} />
                   </button>
                 </div>
-
-                {/* Scope */}
                 <div>
                   <label className="text-[13px] font-medium text-slate-600 block mb-1">Phạm vi AI được phép trả lời</label>
                   <textarea
@@ -409,7 +497,6 @@ function SettingsModal({
                     disabled={!aiEnabled}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-indigo-400 resize-none disabled:opacity-50 disabled:bg-slate-50"
                   />
-                  {/* Quick preset buttons */}
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {AI_SCOPE_PRESETS.map(preset => (
                       <button
@@ -429,7 +516,6 @@ function SettingsModal({
                     ))}
                   </div>
                 </div>
-
                 <button type="submit" disabled={savingAI}
                   className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-[13px] font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
                   {savingAI ? "Đang lưu..." : "Lưu cài đặt AI"}
@@ -1066,14 +1152,21 @@ export default function ToGauRoomPage() {
   // Pinned message hover
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
 
+  // Phase 5: edit/recall (#4)
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
+  const [editContent, setEditContent]   = useState("")
+  const [savingEdit, setSavingEdit]     = useState(false)
+
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const myEmail   = session?.user?.email || ""
-  const myName    = session?.user?.name  || ""
-  const myRole    = session?.user?.role  || ""
+  const myEmail      = session?.user?.email || ""
+  const myName       = session?.user?.name  || ""
+  const myRole       = session?.user?.role  || ""
   const isPrivileged = myRole === "creator" || myRole === "admin"
+  // isManager: creator/admin toàn hệ thống, hoặc manager của group này (#2)
+  const isManager    = isPrivileged || (group?.my_member_role === "manager")
 
   // Load group info
   useEffect(() => {
@@ -1161,7 +1254,8 @@ export default function ToGauRoomPage() {
         { event: "UPDATE", schema: "public", table: "chat_messages", filter: `group_id=eq.${groupId}` },
         (payload) => {
           const updated = payload.new as ChatMessage
-          setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, is_pinned: updated.is_pinned } : m))
+          // Sync nội dung (edit/recall) + pin
+          setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m))
           // Sync pinned list
           if (updated.is_pinned) {
             setPinnedMessages(prev => prev.some(m => m.id === updated.id) ? prev : [updated, ...prev])
@@ -1302,6 +1396,45 @@ export default function ToGauRoomPage() {
     }
   }
 
+  // Sửa nội dung tin nhắn (#4)
+  async function handleSaveEdit(msgId: string) {
+    if (!editContent.trim() || savingEdit) return
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/messages/${msgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: json.data.content, edited_at: json.data.edited_at } : m))
+      setEditingMsgId(null)
+      setEditContent("")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  // Thu hồi tin nhắn (#4)
+  async function handleRecall(msgId: string) {
+    if (!confirm("Thu hồi tin nhắn này?")) return
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/messages/${msgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_recalled: true }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: json.data.content, is_recalled: true, attachments: [] } : m))
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    }
+  }
+
   async function sendMessage() {
     const text = content.trim()
     if ((!text && selectedFiles.length === 0) || sending || uploading) return
@@ -1435,9 +1568,9 @@ export default function ToGauRoomPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
         <div className="text-5xl mb-4">🔒</div>
-        <h3 className="text-lg font-semibold text-slate-700 mb-2">Không có quyền truy cập</h3>
-        <p className="text-slate-400 text-[14px]">Bạn không phải thành viên của nhóm này.</p>
-        <Link href="/analytics/to-gau" className="mt-4 text-[#003B95] text-[14px] hover:underline">← Quay lại</Link>
+        <h3 className="text-lg font-semibold text-slate-700 mb-2">Bạn chưa được thêm vào nhóm này</h3>
+        <p className="text-slate-400 text-[14px]">Liên hệ Hiếu để được cấp quyền truy cập.</p>
+        <Link href="/analytics/to-gau" className="mt-4 text-[#003B95] text-[14px] hover:underline">← Quay lại danh sách nhóm</Link>
       </div>
     )
   }
@@ -1700,50 +1833,111 @@ export default function ToGauRoomPage() {
                           {showAvatar && !isMe && (
                             <p className="text-[11px] text-slate-400 mb-0.5 px-1">{msg.sender_name}</p>
                           )}
-                          <div className={cn(
-                            "px-3 py-2 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap break-words",
-                            isMe
-                              ? "bg-[#003B95] text-white rounded-br-sm"
-                              : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm",
-                            msg.is_pinned && "ring-1 ring-amber-400"
-                          )}>
-                            {renderContent(msg.content, myEmail, group.members)}
-                            {/* Attachments */}
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <div className="mt-1 space-y-1">
-                                {msg.attachments.map((att, i) => (
-                                  <AttachmentDisplay key={i} attachment={att} />
-                                ))}
+                          {/* Inline edit form (#4) */}
+                          {editingMsgId === msg.id ? (
+                            <div className="space-y-1.5">
+                              <textarea
+                                value={editContent}
+                                onChange={e => setEditContent(e.target.value)}
+                                rows={3}
+                                autoFocus
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveEdit(msg.id) }
+                                  if (e.key === "Escape") { setEditingMsgId(null); setEditContent("") }
+                                }}
+                                className={cn(
+                                  "w-full rounded-xl px-3 py-2 text-[14px] resize-none focus:outline-none",
+                                  isMe ? "bg-[#003B95]/80 text-white border border-white/30" : "bg-white border border-[#003B95] text-slate-800"
+                                )}
+                              />
+                              <div className={cn("flex gap-1.5", isMe ? "justify-end" : "justify-start")}>
+                                <button onClick={() => handleSaveEdit(msg.id)} disabled={savingEdit || !editContent.trim()}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-medium hover:bg-emerald-700 disabled:opacity-50">
+                                  {savingEdit ? "..." : "Lưu"}
+                                </button>
+                                <button onClick={() => { setEditingMsgId(null); setEditContent("") }}
+                                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-600 text-[11px] hover:bg-slate-50">
+                                  Hủy
+                                </button>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <div className={cn(
+                              "px-3 py-2 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap break-words",
+                              msg.is_recalled
+                                ? "bg-slate-100 text-slate-400 italic border border-dashed border-slate-200"
+                                : isMe
+                                ? "bg-[#003B95] text-white rounded-br-sm"
+                                : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm",
+                              msg.is_pinned && !msg.is_recalled && "ring-1 ring-amber-400"
+                            )}>
+                              {msg.is_recalled
+                                ? "Tin nhắn đã được thu hồi"
+                                : renderContent(msg.content, myEmail, group.members)
+                              }
+                              {/* Attachments */}
+                              {!msg.is_recalled && msg.attachments && msg.attachments.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  {msg.attachments.map((att, i) => (
+                                    <AttachmentDisplay key={i} attachment={att} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className={cn("flex items-center gap-1.5 mt-0.5 px-1", isMe ? "flex-row-reverse" : "flex-row")}>
                             <p className="text-[10px] text-slate-400">
                               {fmtTime(msg.created_at)}
                             </p>
-                            {msg.is_pinned && <Pin size={10} className="text-amber-500" />}
+                            {msg.is_pinned && !msg.is_recalled && <Pin size={10} className="text-amber-500" />}
+                            {msg.edited_at && !msg.is_recalled && (
+                              <span className="text-[10px] text-slate-400 italic">(đã sửa)</span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Pin action button — hover, privileged only */}
-                        {isPrivileged && isHovered && (
+                        {/* Action buttons — hover: pin (manager+), edit/recall (author or manager) (#2,#4) */}
+                        {isHovered && !msg.is_recalled && (
                           <div className={cn(
-                            "absolute top-0 z-10 flex items-center",
+                            "absolute top-0 z-10 flex items-center gap-1",
                             isMe ? "left-10" : "right-10"
                           )}>
-                            <button
-                              onClick={() => togglePin(msg.id)}
-                              title={msg.is_pinned ? "Bỏ ghim" : "Ghim tin nhắn"}
-                              className={cn(
-                                "p-1 rounded-lg border text-[11px] flex items-center gap-1 transition-colors shadow-sm",
-                                msg.is_pinned
-                                  ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
-                                  : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
-                              )}
-                            >
-                              <Pin size={11} />
-                              {msg.is_pinned ? "Bỏ ghim" : "Ghim"}
-                            </button>
+                            {/* Pin — manager+ */}
+                            {isManager && (
+                              <button
+                                onClick={() => togglePin(msg.id)}
+                                title={msg.is_pinned ? "Bỏ ghim" : "Ghim tin nhắn"}
+                                className={cn(
+                                  "p-1 rounded-lg border text-[11px] flex items-center gap-1 transition-colors shadow-sm",
+                                  msg.is_pinned
+                                    ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
+                                    : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
+                                )}
+                              >
+                                <Pin size={11} />
+                                {msg.is_pinned ? "Bỏ ghim" : "Ghim"}
+                              </button>
+                            )}
+                            {/* Sửa — tác giả hoặc manager */}
+                            {(isMe || isManager) && msg.msg_type !== "ai" && (
+                              <button
+                                onClick={() => { setEditingMsgId(msg.id); setEditContent(msg.content) }}
+                                title="Sửa tin nhắn"
+                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-[#003B95] hover:text-[#003B95] text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                              >
+                                <Edit2 size={11} /> Sửa
+                              </button>
+                            )}
+                            {/* Thu hồi — tác giả hoặc manager */}
+                            {(isMe || isManager) && (
+                              <button
+                                onClick={() => handleRecall(msg.id)}
+                                title="Thu hồi tin nhắn"
+                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-rose-400 hover:text-rose-500 text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                              >
+                                <Trash2 size={11} /> Thu hồi
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -1906,7 +2100,7 @@ export default function ToGauRoomPage() {
           ))}
         </div>
 
-        {isPrivileged && (
+        {isManager && (
           <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 space-y-2">
             <button
               onClick={() => setShowSettings(true)}
@@ -1926,6 +2120,7 @@ export default function ToGauRoomPage() {
           onSaved={(updated) => setGroup(prev => prev ? { ...prev, ...updated } : prev)}
           onMemberRemoved={handleMemberRemoved}
           isCreator={isPrivileged}
+          isManager={isManager}
         />
       )}
     </div>

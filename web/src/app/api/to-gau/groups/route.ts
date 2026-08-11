@@ -37,25 +37,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: await enrich(data ?? []) })
   }
 
-  // User thường: chỉ group mình là member
+  // User thường: thấy TẤT CẢ active groups + is_member flag (#1)
   const { data: memberRows, error: memberErr } = await supabaseAdmin
     .from("chat_group_members")
     .select("group_id")
     .eq("user_email", email)
   if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 500 })
 
-  const groupIds = (memberRows ?? []).map(r => r.group_id)
-  if (!groupIds.length) return NextResponse.json({ data: [] })
+  const memberGroupIds = new Set((memberRows ?? []).map(r => r.group_id as string))
 
+  // Regular users chỉ thấy active groups (không có archived tab)
   const { data: groups, error: groupErr } = await supabaseAdmin
     .from("chat_groups")
     .select("*")
-    .in("id", groupIds)
-    .eq("is_archived", archived)
+    .eq("is_archived", false)
     .order("created_at", { ascending: false })
   if (groupErr) return NextResponse.json({ error: groupErr.message }, { status: 500 })
 
-  return NextResponse.json({ data: await enrich(groups ?? []) })
+  const enriched = await enrich(groups ?? [])
+  return NextResponse.json({ data: enriched.map(g => ({ ...g, is_member: memberGroupIds.has((g as unknown as { id: string }).id) })) })
 }
 
 export async function POST(req: NextRequest) {
