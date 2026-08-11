@@ -1,11 +1,11 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Send, Settings, UserPlus, X, Trash2, Crown, Paperclip, Bot,
-  FileText, Pin, Upload, Tag, Edit2,
+  FileText, Pin, Upload, Tag, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
@@ -33,6 +33,7 @@ interface ChatMessage {
   content:      string
   msg_type:     string
   created_at:   string
+  is_pinned?:   boolean
   attachments?: Attachment[]
 }
 
@@ -155,6 +156,46 @@ function fileIcon(fileType: string | null): { icon: string; color: string } {
     return { icon: "📘", color: "text-blue-600" }
   if (fileType.startsWith("image/"))                                    return { icon: "🖼️", color: "text-violet-500" }
   return { icon: "📄", color: "text-slate-500" }
+}
+
+// ── Render content with @mention highlight ──
+function renderContent(
+  content: string,
+  myEmail: string,
+  members: Member[],
+): React.ReactNode {
+  if (!content) return null
+  // Match @word (letters, digits, dot, dash, underscore)
+  const parts = content.split(/(@[\w.\-]+)/g)
+  return parts.map((part, i) => {
+    if (!part.startsWith("@")) return part
+    const handle = part.slice(1).toLowerCase()
+    const myPrefix = myEmail.split("@")[0].toLowerCase()
+    const myName   = members.find(m => m.user_email === myEmail)?.user_name?.toLowerCase()
+
+    const isMe = handle === myPrefix || (myName && handle === myName.replace(/\s+/g, "").toLowerCase())
+    if (isMe) {
+      return (
+        <span key={i} className="bg-yellow-100 text-yellow-800 font-semibold px-0.5 rounded">
+          {part}
+        </span>
+      )
+    }
+    // Check if it matches any member
+    const matchedMember = members.find(m => {
+      const prefix = m.user_email.split("@")[0].toLowerCase()
+      const uname  = (m.user_name || "").toLowerCase().replace(/\s+/g, "")
+      return handle === prefix || handle === uname
+    })
+    if (matchedMember) {
+      return (
+        <span key={i} className="text-[#003B95] font-medium">
+          {part}
+        </span>
+      )
+    }
+    return part
+  })
 }
 
 // ── Settings Modal ──
@@ -979,7 +1020,7 @@ export default function ToGauRoomPage() {
   const { data: session } = useSession()
   const params  = useParams()
   const router  = useRouter()
-  const toast = useToast()
+  const toast   = useToast()
   const groupId = params.id as string
 
   const [group, setGroup]         = useState<GroupInfo | null>(null)
@@ -1002,13 +1043,37 @@ export default function ToGauRoomPage() {
   // Phase 3: tabs
   const [activeTab, setActiveTab] = useState<"chat" | "docs" | "notes">("chat")
 
+  // Phase 4: @mention
+  const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionCursorPos, setMentionCursorPos] = useState(0)
+
+  // Phase 4: search
+  const [searchOpen, setSearchOpen]       = useState(false)
+  const [searchQuery, setSearchQuery]     = useState("")
+  const [searchResults, setSearchResults] = useState<ChatMessage[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchDebounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Phase 4: pinned messages
+  const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([])
+  const [pinnedExpanded, setPinnedExpanded] = useState(false)
+
+  // Phase 4: scroll-to-bottom
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const messagesAreaRef = useRef<HTMLDivElement>(null)
+
+  // Pinned message hover
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
+
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const myEmail   = session?.user?.email || ""
   const myName    = session?.user?.name  || ""
   const myRole    = session?.user?.role  || ""
-  const isCreator = myRole === "creator" || myRole === "admin"
+  const isPrivileged = myRole === "creator" || myRole === "admin"
 
   // Load group info
   useEffect(() => {
@@ -1043,10 +1108,37 @@ export default function ToGauRoomPage() {
 
   useEffect(() => { loadMessages() }, [loadMessages])
 
+  // Load pinned messages
+  const loadPinned = useCallback(async () => {
+    if (!groupId) return
+    try {
+      const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?pinned=true&limit=20`)
+      if (!res.ok) return
+      const json = await res.json()
+      setPinnedMessages(json.data ?? [])
+    } catch {
+      // ignore
+    }
+  }, [groupId])
+
+  useEffect(() => { loadPinned() }, [loadPinned])
+
   // Scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Scroll button visibility
+  function handleMessagesScroll() {
+    const el = messagesAreaRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setShowScrollBtn(distFromBottom > 200)
+  }
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   // Supabase Realtime subscription
   useEffect(() => {
@@ -1059,10 +1151,23 @@ export default function ToGauRoomPage() {
         (payload) => {
           const newMsg = payload.new as ChatMessage
           setMessages(prev => {
-            // Avoid duplicate if we already inserted optimistically
             if (prev.some(m => m.id === newMsg.id)) return prev
             return [...prev, newMsg]
           })
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `group_id=eq.${groupId}` },
+        (payload) => {
+          const updated = payload.new as ChatMessage
+          setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, is_pinned: updated.is_pinned } : m))
+          // Sync pinned list
+          if (updated.is_pinned) {
+            setPinnedMessages(prev => prev.some(m => m.id === updated.id) ? prev : [updated, ...prev])
+          } else {
+            setPinnedMessages(prev => prev.filter(m => m.id !== updated.id))
+          }
         }
       )
       .subscribe()
@@ -1074,12 +1179,127 @@ export default function ToGauRoomPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     setSelectedFiles(prev => [...prev, ...files])
-    // Reset input so same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function removeSelectedFile(idx: number) {
     setSelectedFiles(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // @mention: parse textarea input
+  function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value
+    setContent(val)
+
+    // Detect @mention trigger
+    const cursor = e.target.selectionStart ?? val.length
+    // Find the last @ before cursor
+    const textBefore = val.slice(0, cursor)
+    const atIdx = textBefore.lastIndexOf("@")
+    if (atIdx !== -1) {
+      const afterAt = textBefore.slice(atIdx + 1)
+      // No space in afterAt = still typing a mention
+      if (!/\s/.test(afterAt)) {
+        setMentionQuery(afterAt)
+        setMentionCursorPos(atIdx)
+        setShowMentionDropdown(true)
+        return
+      }
+    }
+    setMentionQuery(null)
+    setShowMentionDropdown(false)
+  }
+
+  // @mention: filter members
+  const mentionSuggestions = useMemo(() => {
+    if (!group || mentionQuery === null) return []
+    const q = mentionQuery.toLowerCase()
+    return group.members
+      .filter(m => {
+        const name  = (m.user_name || "").toLowerCase()
+        const email = m.user_email.toLowerCase()
+        return !q || name.includes(q) || email.split("@")[0].includes(q)
+      })
+      .slice(0, 5)
+  }, [group, mentionQuery])
+
+  function selectMention(member: Member) {
+    const handle = member.user_name
+      ? member.user_name.replace(/\s+/g, "")
+      : member.user_email.split("@")[0]
+    const before = content.slice(0, mentionCursorPos)
+    const after  = content.slice(mentionCursorPos + 1 + (mentionQuery?.length ?? 0))
+    const newVal = `${before}@${handle} ${after}`
+    setContent(newVal)
+    setShowMentionDropdown(false)
+    setMentionQuery(null)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
+  // Search debounce
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchResults([])
+      return
+    }
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      return
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?search=${encodeURIComponent(searchQuery)}&limit=20`)
+        const json = await res.json()
+        setSearchResults(json.data ?? [])
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+  }, [searchQuery, searchOpen, groupId])
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50)
+  }, [searchOpen])
+
+  // Highlight matching text in search results
+  function highlightMatch(text: string, query: string): React.ReactNode {
+    if (!query) return text
+    const idx = text.toLowerCase().indexOf(query.toLowerCase())
+    if (idx === -1) return text
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
+      </>
+    )
+  }
+
+  // Pin/unpin message
+  async function togglePin(msgId: string) {
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/messages/${msgId}/pin`, { method: "POST" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      const { id, is_pinned } = json.data
+      // Update messages
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, is_pinned } : m))
+      // Update pinned list
+      if (is_pinned) {
+        const pinned = messages.find(m => m.id === id)
+        if (pinned) setPinnedMessages(prev => [{ ...pinned, is_pinned: true }, ...prev.filter(m => m.id !== id)])
+      } else {
+        setPinnedMessages(prev => prev.filter(m => m.id !== id))
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    }
   }
 
   async function sendMessage() {
@@ -1088,6 +1308,7 @@ export default function ToGauRoomPage() {
 
     setSending(true)
     setContent("")
+    setShowMentionDropdown(false)
     const filesToSend = [...selectedFiles]
     setSelectedFiles([])
 
@@ -1189,6 +1410,16 @@ export default function ToGauRoomPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // If mention dropdown open, Enter selects first suggestion
+    if (showMentionDropdown && mentionSuggestions.length > 0 && e.key === "Enter") {
+      e.preventDefault()
+      selectMention(mentionSuggestions[0])
+      return
+    }
+    if (showMentionDropdown && e.key === "Escape") {
+      setShowMentionDropdown(false)
+      return
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -1234,6 +1465,7 @@ export default function ToGauRoomPage() {
   }
 
   const showAIButton = group.ai_enabled !== false
+  const isArchived   = group.is_archived
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
@@ -1254,7 +1486,120 @@ export default function ToGauRoomPage() {
               <Bot size={11} /> AI
             </span>
           )}
+          {/* Search button */}
+          <button
+            onClick={() => { setSearchOpen(v => !v); if (searchOpen) { setSearchQuery(""); setSearchResults([]) } }}
+            className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+              searchOpen
+                ? "bg-[#003B95] text-white"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            )}
+            title="Tìm kiếm tin nhắn"
+          >
+            <Search size={15} />
+          </button>
         </div>
+
+        {/* Archived banner */}
+        {isArchived && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-[13px]">
+            <AlertTriangle size={14} className="flex-shrink-0" />
+            Nhóm này đã được lưu trữ. Chỉ có thể xem, không thể gửi tin.
+          </div>
+        )}
+
+        {/* Search panel */}
+        {searchOpen && (
+          <div className="flex-shrink-0 bg-white border-b border-slate-200 px-4 py-2.5 shadow-sm">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm tin nhắn trong nhóm..."
+                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => { setSearchQuery(""); setSearchResults([]) }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Search results */}
+            {(searchLoading || searchResults.length > 0 || (searchQuery && !searchLoading)) && (
+              <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                {searchLoading ? (
+                  <div className="flex items-center justify-center py-6 text-slate-400 text-[13px]">
+                    <span className="w-4 h-4 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin mr-2" /> Đang tìm...
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="py-6 text-center text-slate-400 text-[13px]">Không tìm thấy kết quả</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {searchResults.map(msg => (
+                      <button
+                        key={msg.id}
+                        className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
+                        onClick={() => {
+                          // Scroll to message in chat (find in messages list)
+                          const el = document.getElementById(`msg-${msg.id}`)
+                          if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" })
+                            el.classList.add("bg-yellow-50")
+                            setTimeout(() => el.classList.remove("bg-yellow-50"), 2000)
+                          }
+                          setSearchOpen(false)
+                          setSearchQuery("")
+                          setSearchResults([])
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[12px] font-medium text-slate-700">{msg.sender_name}</span>
+                          <span className="text-[11px] text-slate-400">{fmtTime(msg.created_at)}</span>
+                        </div>
+                        <p className="text-[13px] text-slate-600 line-clamp-2">
+                          {highlightMatch(msg.content, searchQuery)}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pinned messages strip */}
+        {pinnedMessages.length > 0 && activeTab === "chat" && (
+          <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200">
+            <button
+              onClick={() => setPinnedExpanded(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-2 text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              <Pin size={13} className="flex-shrink-0" />
+              <span className="text-[12px] font-medium flex-1 text-left">
+                📌 {pinnedMessages.length} tin nhắn đã ghim
+              </span>
+              {pinnedExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+            {pinnedExpanded && (
+              <div className="px-4 pb-3 space-y-1.5 max-h-40 overflow-y-auto">
+                {pinnedMessages.map(msg => (
+                  <div key={msg.id} className="bg-white rounded-lg px-3 py-2 border border-amber-200 text-[13px]">
+                    <span className="font-medium text-slate-700 mr-1.5">{msg.sender_name}:</span>
+                    <span className="text-slate-600 line-clamp-1">{msg.content}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tab bar */}
         <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4">
@@ -1283,7 +1628,11 @@ export default function ToGauRoomPage() {
         {activeTab === "chat" && (
           <>
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-slate-50">
+            <div
+              ref={messagesAreaRef}
+              onScroll={handleMessagesScroll}
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-1 bg-slate-50 relative"
+            >
               {msgLoading ? (
                 <div className="flex items-center justify-center h-32">
                   <span className="text-slate-400 text-[14px]">Đang tải tin nhắn...</span>
@@ -1301,11 +1650,11 @@ export default function ToGauRoomPage() {
                     const isAI  = msg.msg_type === "ai" || msg.sender_email === "ai@to-gau"
                     const prevMsg = idx > 0 ? messages[idx - 1] : null
                     const showAvatar = !prevMsg || prevMsg.sender_email !== msg.sender_email
+                    const isHovered = hoveredMsgId === msg.id
 
                     if (isAI) {
                       return (
-                        <div key={msg.id} className={cn("flex items-end gap-2 flex-row", showAvatar ? "mt-3" : "mt-0.5")}>
-                          {/* AI avatar */}
+                        <div key={msg.id} id={`msg-${msg.id}`} className={cn("flex items-end gap-2 flex-row transition-colors rounded-xl px-1", showAvatar ? "mt-3" : "mt-0.5")}>
                           <div className="w-8 flex-shrink-0">
                             {showAvatar && (
                               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[13px] flex-shrink-0">
@@ -1335,13 +1684,19 @@ export default function ToGauRoomPage() {
                     }
 
                     return (
-                      <div key={msg.id} className={cn("flex items-end gap-2", isMe ? "flex-row-reverse" : "flex-row", showAvatar ? "mt-3" : "mt-0.5")}>
-                        {/* Avatar placeholder (để giữ spacing) */}
+                      <div
+                        key={msg.id}
+                        id={`msg-${msg.id}`}
+                        className={cn("flex items-end gap-2 transition-colors rounded-xl px-1 relative group/msg", isMe ? "flex-row-reverse" : "flex-row", showAvatar ? "mt-3" : "mt-0.5")}
+                        onMouseEnter={() => setHoveredMsgId(msg.id)}
+                        onMouseLeave={() => setHoveredMsgId(null)}
+                      >
+                        {/* Avatar placeholder */}
                         <div className="w-8 flex-shrink-0">
                           {showAvatar && !isMe && <Avatar name={msg.sender_name} email={msg.sender_email} size="sm" />}
                         </div>
 
-                        <div className={cn("max-w-[72%] min-w-0", isMe ? "items-end" : "items-start", "flex flex-col")}>
+                        <div className={cn("max-w-[72%] min-w-0 relative", isMe ? "items-end" : "items-start", "flex flex-col")}>
                           {showAvatar && !isMe && (
                             <p className="text-[11px] text-slate-400 mb-0.5 px-1">{msg.sender_name}</p>
                           )}
@@ -1349,9 +1704,10 @@ export default function ToGauRoomPage() {
                             "px-3 py-2 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap break-words",
                             isMe
                               ? "bg-[#003B95] text-white rounded-br-sm"
-                              : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm"
+                              : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm",
+                            msg.is_pinned && "ring-1 ring-amber-400"
                           )}>
-                            {msg.content}
+                            {renderContent(msg.content, myEmail, group.members)}
                             {/* Attachments */}
                             {msg.attachments && msg.attachments.length > 0 && (
                               <div className="mt-1 space-y-1">
@@ -1361,10 +1717,35 @@ export default function ToGauRoomPage() {
                               </div>
                             )}
                           </div>
-                          <p className={cn("text-[10px] text-slate-400 mt-0.5 px-1", isMe ? "text-right" : "text-left")}>
-                            {fmtTime(msg.created_at)}
-                          </p>
+                          <div className={cn("flex items-center gap-1.5 mt-0.5 px-1", isMe ? "flex-row-reverse" : "flex-row")}>
+                            <p className="text-[10px] text-slate-400">
+                              {fmtTime(msg.created_at)}
+                            </p>
+                            {msg.is_pinned && <Pin size={10} className="text-amber-500" />}
+                          </div>
                         </div>
+
+                        {/* Pin action button — hover, privileged only */}
+                        {isPrivileged && isHovered && (
+                          <div className={cn(
+                            "absolute top-0 z-10 flex items-center",
+                            isMe ? "left-10" : "right-10"
+                          )}>
+                            <button
+                              onClick={() => togglePin(msg.id)}
+                              title={msg.is_pinned ? "Bỏ ghim" : "Ghim tin nhắn"}
+                              className={cn(
+                                "p-1 rounded-lg border text-[11px] flex items-center gap-1 transition-colors shadow-sm",
+                                msg.is_pinned
+                                  ? "bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100"
+                                  : "bg-white border-slate-200 text-slate-500 hover:border-amber-300 hover:text-amber-600"
+                              )}
+                            >
+                              <Pin size={11} />
+                              {msg.is_pinned ? "Bỏ ghim" : "Ghim"}
+                            </button>
+                          </div>
+                        )}
 
                         {/* Avatar for me */}
                         <div className="w-8 flex-shrink-0">
@@ -1376,95 +1757,135 @@ export default function ToGauRoomPage() {
                   <div ref={bottomRef} />
                 </>
               )}
+
+              {/* Scroll to bottom button */}
+              {showScrollBtn && (
+                <button
+                  onClick={scrollToBottom}
+                  className="fixed bottom-24 right-72 z-20 w-9 h-9 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95] transition-colors"
+                  title="Cuộn xuống"
+                >
+                  <ChevronDown size={18} />
+                </button>
+              )}
             </div>
 
             {/* Input bar */}
-            <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-              {/* File preview row */}
-              {selectedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedFiles.map((file, idx) => (
-                    <FilePreviewItem key={idx} file={file} onRemove={() => removeSelectedFile(idx)} />
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-end gap-2">
-                {/* Paperclip button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading || sending}
-                  className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-[#003B95] disabled:opacity-40 transition-colors"
-                  title="Đính kèm file"
-                >
-                  <Paperclip size={15} />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.xlsx,.docx,.txt"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng)"
-                  rows={1}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none max-h-32 overflow-y-auto"
-                  style={{ minHeight: "42px" }}
-                />
-
-                {/* AI button */}
-                {showAIButton && (
-                  <button
-                    type="button"
-                    onClick={askAI}
-                    disabled={!content.trim() || askingAI || sending}
-                    title="Hỏi AI Gấu Tổ"
-                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {askingAI ? (
-                      <span className="text-[13px] animate-pulse">🤖</span>
-                    ) : (
-                      <Bot size={15} />
-                    )}
-                  </button>
+            {!isArchived && (
+              <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+                {/* File preview row */}
+                {selectedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedFiles.map((file, idx) => (
+                      <FilePreviewItem key={idx} file={file} onRemove={() => removeSelectedFile(idx)} />
+                    ))}
+                  </div>
                 )}
 
-                {/* Send button */}
-                <button
-                  onClick={sendMessage}
-                  disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
-                  className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#003B95] text-white flex items-center justify-center hover:bg-[#002d73] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  {(sending || uploading) ? (
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Send size={16} />
+                {/* @mention dropdown */}
+                {showMentionDropdown && mentionSuggestions.length > 0 && (
+                  <div className="mb-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                    {mentionSuggestions.map(member => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); selectMention(member) }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 transition-colors text-left"
+                      >
+                        <Avatar name={member.user_name} email={member.user_email} size="sm" />
+                        <div>
+                          <p className="text-[13px] font-medium text-slate-700">{member.user_name || member.user_email}</p>
+                          <p className="text-[11px] text-slate-400">{member.user_email}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2">
+                  {/* Paperclip button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || sending}
+                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-[#003B95] disabled:opacity-40 transition-colors"
+                    title="Đính kèm file"
+                  >
+                    <Paperclip size={15} />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf,.xlsx,.docx,.txt"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+
+                  <textarea
+                    ref={textareaRef}
+                    value={content}
+                    onChange={handleContentChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng, @ để mention)"
+                    rows={1}
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none max-h-32 overflow-y-auto"
+                    style={{ minHeight: "42px" }}
+                  />
+
+                  {/* AI button */}
+                  {showAIButton && (
+                    <button
+                      type="button"
+                      onClick={askAI}
+                      disabled={!content.trim() || askingAI || sending}
+                      title="Hỏi AI Gấu Tổ"
+                      className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {askingAI ? (
+                        <span className="text-[13px] animate-pulse">🤖</span>
+                      ) : (
+                        <Bot size={15} />
+                      )}
+                    </button>
                   )}
-                </button>
+
+                  {/* Send button */}
+                  <button
+                    onClick={sendMessage}
+                    disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
+                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#003B95] text-white flex items-center justify-center hover:bg-[#002d73] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {(sending || uploading) ? (
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Send size={16} />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Archived: no-input notice */}
+            {isArchived && (
+              <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 text-center text-[13px] text-slate-400">
+                Nhóm đã lưu trữ — không thể gửi tin nhắn mới
+              </div>
+            )}
           </>
         )}
 
         {activeTab === "docs" && (
-          <DocsPanel groupId={groupId} myEmail={myEmail} isPrivileged={isCreator} />
+          <DocsPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
         )}
 
         {activeTab === "notes" && (
-          <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isCreator} />
+          <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
         )}
       </div>
 
       {/* Right sidebar: Members */}
-      <div className="w-60 flex-shrink-0 border-l border-slate-200 bg-white flex flex-col hidden md:flex">
+      <div className="w-60 flex-shrink-0 border-l border-slate-200 bg-white flex-col hidden md:flex">
         <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
           <h3 className="text-[13px] font-semibold text-slate-700">Thành viên ({group.members.length})</h3>
         </div>
@@ -1485,7 +1906,7 @@ export default function ToGauRoomPage() {
           ))}
         </div>
 
-        {isCreator && (
+        {isPrivileged && (
           <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 space-y-2">
             <button
               onClick={() => setShowSettings(true)}
@@ -1504,7 +1925,7 @@ export default function ToGauRoomPage() {
           onClose={() => setShowSettings(false)}
           onSaved={(updated) => setGroup(prev => prev ? { ...prev, ...updated } : prev)}
           onMemberRemoved={handleMemberRemoved}
-          isCreator={isCreator}
+          isCreator={isPrivileged}
         />
       )}
     </div>

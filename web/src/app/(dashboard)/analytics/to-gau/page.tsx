@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
-import { Users, Plus, X, MessageCircle } from "lucide-react"
+import { Users, Plus, X, MessageCircle, Archive, LayoutList } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/toast"
 
@@ -22,24 +22,36 @@ interface ChatGroup {
 const EMOJI_OPTIONS = ["🐻", "🦊", "🐼", "🐨", "🦁", "🐯", "🦋", "🌟", "🎯", "🚀", "💡", "🎉"]
 
 function fmtRelative(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
+  const d    = new Date(dateStr)
+  const now  = new Date()
   const diff = Math.floor((now.getTime() - d.getTime()) / 1000)
-  if (diff < 60) return "vừa xong"
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`
+  if (diff < 60)    return "vừa xong"
+  if (diff < 3600)  return `${Math.floor(diff / 60)} phút trước`
   if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`
+  if (diff < 86400 * 2) return "hôm qua"
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ngày trước`
   return d.toLocaleDateString("vi-VN")
 }
 
-function GroupCard({ group, isCreator }: { group: ChatGroup; isCreator: boolean }) {
+function GroupCard({ group }: { group: ChatGroup }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 hover:border-[#003B95]/40 hover:shadow-md transition-all group">
+    <div className={cn(
+      "bg-white border border-slate-200 rounded-xl p-5 hover:border-[#003B95]/40 hover:shadow-md transition-all group",
+      group.is_archived && "opacity-60"
+    )}>
       <div className="flex items-start gap-3 mb-3">
         <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-2xl flex-shrink-0 border border-blue-100">
           {group.avatar_emoji || "🐻"}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-slate-800 text-[15px] leading-tight truncate">{group.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-slate-800 text-[15px] leading-tight truncate">{group.name}</h3>
+            {group.is_archived && (
+              <span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium">
+                <Archive size={9} /> Lưu trữ
+              </span>
+            )}
+          </div>
           {group.description && (
             <p className="text-slate-500 text-[13px] mt-0.5 line-clamp-2 leading-relaxed">{group.description}</p>
           )}
@@ -71,10 +83,15 @@ function GroupCard({ group, isCreator }: { group: ChatGroup; isCreator: boolean 
 
       <Link
         href={`/analytics/to-gau/${group.id}`}
-        className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] transition-colors"
+        className={cn(
+          "flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors",
+          group.is_archived
+            ? "bg-slate-100 text-slate-500 hover:bg-slate-200"
+            : "bg-[#003B95] text-white hover:bg-[#002d73]"
+        )}
       >
         <MessageCircle size={14} />
-        Vào nhóm
+        {group.is_archived ? "Xem nhóm" : "Vào nhóm"}
       </Link>
     </div>
   )
@@ -188,14 +205,16 @@ export default function ToGauPage() {
   const [groups, setGroups]         = useState<ChatGroup[]>([])
   const [loading, setLoading]       = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   const role      = session?.user?.role || ""
   const isCreator = role === "creator" || role === "admin"
 
-  const loadGroups = useCallback(async () => {
+  const loadGroups = useCallback(async (archived = false) => {
     setLoading(true)
     try {
-      const res  = await fetch("/api/to-gau/groups")
+      const qs  = archived ? "?archived=true" : ""
+      const res  = await fetch(`/api/to-gau/groups${qs}`)
       const json = await res.json()
       setGroups(json.data ?? [])
     } catch {
@@ -205,7 +224,7 @@ export default function ToGauPage() {
     }
   }, [])
 
-  useEffect(() => { loadGroups() }, [loadGroups])
+  useEffect(() => { loadGroups(showArchived) }, [loadGroups, showArchived])
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -228,6 +247,32 @@ export default function ToGauPage() {
         )}
       </div>
 
+      {/* Filter toggle */}
+      <div className="flex items-center gap-2 mb-5">
+        <button
+          onClick={() => setShowArchived(false)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors border",
+            !showArchived
+              ? "bg-[#003B95] text-white border-[#003B95]"
+              : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+          )}
+        >
+          <LayoutList size={13} /> Hoạt động
+        </button>
+        <button
+          onClick={() => setShowArchived(true)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors border",
+            showArchived
+              ? "bg-slate-600 text-white border-slate-600"
+              : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+          )}
+        >
+          <Archive size={13} /> Lưu trữ
+        </button>
+      </div>
+
       {/* Content */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -248,14 +293,18 @@ export default function ToGauPage() {
         </div>
       ) : groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="text-6xl mb-4">🐻</div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">Chưa có nhóm nào</h3>
+          <div className="text-6xl mb-4">{showArchived ? "📦" : "🐻"}</div>
+          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+            {showArchived ? "Không có nhóm lưu trữ" : "Chưa có nhóm nào"}
+          </h3>
           <p className="text-slate-400 text-[14px] max-w-sm">
-            {isCreator
+            {showArchived
+              ? "Các nhóm đã lưu trữ sẽ xuất hiện ở đây."
+              : isCreator
               ? "Bắt đầu bằng cách tạo nhóm đầu tiên để nhóm nội bộ có thể chat với nhau."
               : "Bạn chưa được thêm vào nhóm nào. Liên hệ admin để được thêm vào nhóm."}
           </p>
-          {isCreator && (
+          {!showArchived && isCreator && (
             <button
               onClick={() => setShowCreate(true)}
               className="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#003B95] text-white text-[14px] font-medium hover:bg-[#002d73] transition-colors"
@@ -268,13 +317,13 @@ export default function ToGauPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map(g => (
-            <GroupCard key={g.id} group={g} isCreator={isCreator} />
+            <GroupCard key={g.id} group={g} />
           ))}
         </div>
       )}
 
       {showCreate && (
-        <CreateGroupModal onClose={() => setShowCreate(false)} onCreated={loadGroups} />
+        <CreateGroupModal onClose={() => setShowCreate(false)} onCreated={() => loadGroups(showArchived)} />
       )}
     </div>
   )

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
+import { sendLarkDM }               from "@/lib/lark"
 
 function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
@@ -15,6 +16,52 @@ async function isMember(groupId: string, email: string): Promise<boolean> {
     .eq("user_email", email)
     .maybeSingle()
   return !!data
+}
+
+// Fire-and-forget: gửi Lark DM cho các member khi có tin nhắn mới
+async function notifyLarkMembers(
+  groupId: string,
+  msg: { sender_name: string; content: string; msg_type: string },
+  senderEmail: string,
+) {
+  // 1. Lấy group info
+  const { data: group } = await supabaseAdmin
+    .from("chat_groups")
+    .select("name, avatar_emoji, notify_lark")
+    .eq("id", groupId)
+    .maybeSingle()
+  if (!group) return
+  // 2. Nếu notify_lark tắt → return sớm
+  if (group.notify_lark === false) return
+
+  // 3. Lấy members trừ sender
+  const { data: members } = await supabaseAdmin
+    .from("chat_group_members")
+    .select("user_email")
+    .eq("group_id", groupId)
+    .neq("user_email", senderEmail)
+  if (!members?.length) return
+
+  const emails = members.map(m => m.user_email)
+
+  // 4. JOIN với users table để lấy lark_open_id
+  const { data: users } = await supabaseAdmin
+    .from("users")
+    .select("email, lark_open_id")
+    .in("email", emails)
+  if (!users?.length) return
+
+  // 5. Tạo preview text
+  const isFileMsg = msg.msg_type === "file" || msg.msg_type === "image"
+  const preview   = isFileMsg ? "📎 Đã gửi file" : msg.content.slice(0, 80)
+  const text      = `[${group.avatar_emoji || "🐻"} ${group.name}] ${msg.sender_name}: ${preview}`
+
+  // 6. Gửi DM cho từng member có lark_open_id
+  await Promise.all(
+    users
+      .filter(u => u.lark_open_id)
+      .map(u => sendLarkDM(u.lark_open_id!, text))
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -32,16 +79,34 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const limitParam  = parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10)
   const limit       = Math.min(Math.max(1, limitParam), 200)
   const before      = req.nextUrl.searchParams.get("before")
+  const search      = req.nextUrl.searchParams.get("search")
+  const pinnedOnly  = req.nextUrl.searchParams.get("pinned") === "true"
 
   let query = supabaseAdmin
     .from("chat_messages")
     .select("id, group_id, sender_email, sender_name, content, msg_type, attachments, reply_to, is_pinned, created_at")
     .eq("group_id", id)
-    .order("created_at", { ascending: false })
-    .limit(limit)
+
+  if (pinnedOnly) {
+    // Chỉ lấy pinned messages, mới nhất trước
+    query = query.eq("is_pinned", true).order("created_at", { ascending: false }).limit(limit)
+    const { data, error } = await query
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data: data ?? [] })
+  }
+
+  if (search) {
+    // Search mode: ilike filter, trả DESC (mới nhất trước), không reverse
+    query = query.ilike("content", `%${search}%`).order("created_at", { ascending: false }).limit(limit)
+    const { data, error } = await query
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data: data ?? [] })
+  }
+
+  // Normal pagination
+  query = query.order("created_at", { ascending: false }).limit(limit)
 
   if (before) {
-    // Cursor: lấy tin trước cursor (for pagination)
     const { data: cur } = await supabaseAdmin
       .from("chat_messages")
       .select("created_at")
@@ -89,15 +154,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data, error } = await supabaseAdmin
     .from("chat_messages")
     .insert({
-      group_id:    id,
+      group_id:     id,
       sender_email: email,
-      sender_name: name,
-      content:     content || "",
-      msg_type:    msgType,
-      attachments: attachments.length > 0 ? attachments : [],
+      sender_name:  name,
+      content:      content || "",
+      msg_type:     msgType,
+      attachments:  attachments.length > 0 ? attachments : [],
     })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Fire-and-forget Lark notification (không block response)
+  notifyLarkMembers(id, { sender_name: name, content: content || "", msg_type: msgType }, email).catch(() => {})
+
   return NextResponse.json({ data }, { status: 201 })
 }

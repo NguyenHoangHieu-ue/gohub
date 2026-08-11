@@ -7,31 +7,34 @@ function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email = session.user.email || ""
-  const role  = session.user.role  || ""
+  const email      = session.user.email || ""
+  const role       = session.user.role  || ""
+  // ?archived=true → hiện nhóm đã lưu trữ; mặc định chỉ active
+  const archived   = req.nextUrl.searchParams.get("archived") === "true"
 
-  if (isPrivileged(role)) {
-    // creator/admin thấy tất cả groups
-    const { data, error } = await supabaseAdmin
-      .from("chat_groups")
-      .select("*")
-      .eq("is_archived", false)
-      .order("created_at", { ascending: false })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    // Bổ sung member_count + last_message
-    const enriched = await Promise.all((data ?? []).map(async (g) => {
+  async function enrich(data: Record<string, unknown>[]) {
+    return Promise.all(data.map(async (g) => {
       const [mc, lm] = await Promise.all([
         supabaseAdmin.from("chat_group_members").select("id", { count: "exact", head: true }).eq("group_id", g.id),
-        supabaseAdmin.from("chat_messages").select("content, sender_name, created_at").eq("group_id", g.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabaseAdmin.from("chat_messages").select("content, sender_name, created_at").eq("group_id", g.id as string).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ])
       return { ...g, member_count: mc.count ?? 0, last_message: lm.data ?? null }
     }))
-    return NextResponse.json({ data: enriched })
+  }
+
+  if (isPrivileged(role)) {
+    // creator/admin thấy tất cả groups (active hoặc archived tùy param)
+    const { data, error } = await supabaseAdmin
+      .from("chat_groups")
+      .select("*")
+      .eq("is_archived", archived)
+      .order("created_at", { ascending: false })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data: await enrich(data ?? []) })
   }
 
   // User thường: chỉ group mình là member
@@ -48,18 +51,11 @@ export async function GET() {
     .from("chat_groups")
     .select("*")
     .in("id", groupIds)
-    .eq("is_archived", false)
+    .eq("is_archived", archived)
     .order("created_at", { ascending: false })
   if (groupErr) return NextResponse.json({ error: groupErr.message }, { status: 500 })
 
-  const enriched = await Promise.all((groups ?? []).map(async (g) => {
-    const [mc, lm] = await Promise.all([
-      supabaseAdmin.from("chat_group_members").select("id", { count: "exact", head: true }).eq("group_id", g.id),
-      supabaseAdmin.from("chat_messages").select("content, sender_name, created_at").eq("group_id", g.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    ])
-    return { ...g, member_count: mc.count ?? 0, last_message: lm.data ?? null }
-  }))
-  return NextResponse.json({ data: enriched })
+  return NextResponse.json({ data: await enrich(groups ?? []) })
 }
 
 export async function POST(req: NextRequest) {
