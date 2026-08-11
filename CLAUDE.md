@@ -28,8 +28,8 @@
 - ✅ Semantic KB search: code xong, **Hiếu cần chạy `web/db/migrations/v33_creator_kb_embedding.sql` trong Supabase SQL Editor**
 - ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
 - ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
-- ✅ **Tổ Gấu** group chat — 4 phase XONG (Phase 1 602a553 · 2 663d874 · 3 d9ef52c · 4 staging)
-  - **Hiếu cần chạy `web/db/migrations/v34_to_gau.sql`** trong Supabase SQL Editor (5 bảng: chat_groups, chat_group_members, chat_messages, chat_docs, chat_notes)
+- ✅ **Tổ Gấu** group chat — 4 phase XONG, migration v34 đã chạy (2026-08-11)
+  - Phase 5 backlog: xem `Plan_Chat.md` § Phase 5
 
 **Ghi chú:**
 - Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.

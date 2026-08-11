@@ -373,11 +373,11 @@ web/db/migrations/v34_groupchat.sql
 
 ## 9. Những gì Hiếu cần làm
 
-| Việc | Khi nào |
+| Việc | Trạng thái |
 |---|---|
-| Chạy migration v34 trong Supabase SQL Editor | Trước khi deploy Phase 1 |
-| Tạo bucket `chat-attachments` (public, 20MB) trong Supabase Storage | Trước khi deploy Phase 2 |
-| Set `lark_id` cho từng user khi add vào group | Khi dùng Phase 4 (Lark notify) |
+| Chạy migration v34 trong Supabase SQL Editor | ✅ Xong (2026-08-11) |
+| Tạo bucket `to-gau-files` (public) trong Supabase Storage | ⏳ Tự động tạo khi upload lần đầu |
+| lark_open_id user: tự lấy từ `users.lark_open_id` khi login Lark | ✅ Đã xử lý trong code |
 
 ---
 
@@ -401,4 +401,46 @@ web/db/migrations/v34_groupchat.sql
 | Phase 1 — MVP chat | ✅ Xong (commit 602a553) |
 | Phase 2 — File + AI | ✅ Xong (commit 663d874) |
 | Phase 3 — Docs + Notes | ✅ Xong (commit d9ef52c) |
-| Phase 4 — Notify + Polish | ✅ Xong (commit staging) |
+| Phase 4 — Notify + Polish | ✅ Xong |
+| Migration v34 | ✅ Đã chạy trên Supabase (2026-08-11) |
+
+---
+
+## 12. Phase 5 — Backlog cải tiến (ghi nhận 2026-08-11)
+
+> Phát sinh sau khi dùng thực tế. Làm theo thứ tự ưu tiên.
+
+### #1 — Sidebar: Tổ Gấu lên đầu + visibility control
+**Vấn đề**: Tổ Gấu nên nằm đầu sidebar để mọi người đều thấy, nhưng access phải đúng.
+**Yêu cầu chi tiết**:
+- Di chuyển "Tổ Gấu" lên đầu sidebar (trên tất cả analytics tabs)
+- Người chưa được add vào group nào → vào `/analytics/to-gau` vẫn thấy **danh sách tên group** (read-only, không thấy nội dung), click vào group → hiện banner "Bạn chưa được thêm vào nhóm này. Liên hệ Hiếu để được cấp quyền."
+- Tab "Lưu trữ" → chỉ creator hoặc manager của group đó mới thấy
+- Trang list: mặc định ẩn group archived với người thường, hiện với creator/manager
+
+### #2 — Phân quyền Manager per-group
+**Vấn đề**: Hiện chỉ có creator mới tạo group, sửa tài liệu, etc. Cần role Manager ở cấp group.
+**Yêu cầu chi tiết**:
+- `chat_group_members.role` cần hỗ trợ: `'admin'` (creator toàn hệ thống) | `'manager'` (quản lý group đó) | `'member'` (chỉ đọc + chat)
+- Manager của group có thể: thêm/xóa member, upload/xóa docs, xóa notes, pin message, edit/thu hồi message
+- Creator vẫn là superadmin (được tất cả mọi group)
+- UI: trong Settings modal, cạnh mỗi member có dropdown role (admin/manager/member); chỉ creator mới đổi được role
+- Migration cần: `ALTER TABLE chat_group_members` — cột `role` đổi default từ `'member'` sang `'member'`, thêm CHECK constraint `IN ('admin','manager','member')`; **hoặc** giữ nguyên schema (text không check) chỉ cần update logic API
+
+### #3 — Gợi ý user khi thêm thành viên
+**Vấn đề**: Hiện phải nhập email thủ công khi add member, không biết ai đã đăng nhập Intel.
+**Yêu cầu chi tiết**:
+- Input "Thêm thành viên" trong Settings modal: khi gõ ≥ 1 ký tự → dropdown gợi ý user từ `users` table (query `ILIKE %{input}%` trên `name`, `email`, `username`)
+- Mỗi gợi ý hiện: Avatar chữ cái + tên + email
+- Click gợi ý → điền email vào input, auto-fill user_name
+- API mới: `GET /api/to-gau/user-search?q={query}` → query `users` table, trả `[{email, name, username}]`, limit 10
+- Lọc bỏ user đã là member của group đó
+
+### #4 — Chỉnh sửa và thu hồi tin nhắn
+**Vấn đề**: Creator hoặc manager cần sửa/xóa tin nhắn sai.
+**Yêu cầu chi tiết**:
+- **Sửa**: Click vào tin nhắn của mình → option "Sửa" → textarea inline replace nội dung → PATCH `/api/to-gau/groups/[id]/messages/[msgId]` với `{ content }` → hiện label nhỏ "(đã sửa)" cạnh timestamp
+- **Thu hồi**: Click option "Thu hồi" → xác nhận → nội dung đổi thành `"Tin nhắn đã được thu hồi"`, msg_type giữ nguyên, ẩn attachments
+- Quyền: tác giả tin nhắn được sửa/thu hồi tin của mình; creator/manager được sửa/thu hồi của bất kỳ ai trong group
+- Schema cần: thêm `edited_at timestamptz`, `is_recalled boolean DEFAULT false` vào `chat_messages`
+- Migration: `ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS edited_at timestamptz; ADD COLUMN IF NOT EXISTS is_recalled boolean DEFAULT false;`
