@@ -41,4 +41,6 @@ export const TOOL_STATUS: Record<string, string> = {
   trackSKUWinRate:         "📊 Đang tính Win Rate SKU...",
   generateVideo:           "🎬 Đang tạo video Kling AI (1-3 phút)...",
   checkVideoStatus:        "🎬 Đang kiểm tra trạng thái video...",
+  generateImageStability:  "🎨 Đang tạo ảnh Stability AI (SDXL)...",
+  searchKnowledgeBase:     "🔍 Đang tìm kiếm KB theo ngữ nghĩa...",
 }

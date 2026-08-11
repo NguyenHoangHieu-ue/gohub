@@ -250,6 +250,19 @@ export const rejectLearningDecl = {
   },
 }
 
+export const searchKBDecl = {
+  name: "searchKnowledgeBase",
+  description: "Tìm kiếm KB theo ngữ nghĩa (vector similarity) — dùng khi readKnowledgeBase không đủ chính xác hoặc muốn tìm entry gần nhất với 1 câu hỏi/concept. Yêu cầu migration v33 đã chạy.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      query: { type: SchemaType.STRING, description: "Câu hỏi hoặc concept cần tìm trong KB." },
+      limit: { type: SchemaType.NUMBER, description: "Số kết quả trả về (default 5, max 10)." },
+    },
+    required: ["query"],
+  },
+}
+
 export const readKBDecl = {
   name: "readKnowledgeBase",
   description: "Read entries from Hiếu's private Creator Knowledge Base (creator_kb table). Always call this at the start of a conversation or when questions relate to product codes, SKU rules, exchange rates, COGS, vendors, or processes. Returns the configured definitions and rules.",
@@ -366,6 +379,29 @@ export const compareVendorQuotesDecl = {
   },
 }
 
+export const generateImageStabilityDecl = {
+  name: "generateImageStability",
+  description: "Tạo ảnh AI chất lượng cao bằng Stability AI (SDXL Core) — thay thế cho generateImage khi cần ảnh photorealistic, commercial quality hoặc kết quả chính xác hơn. Viết prompt tiếng Anh. Cần STABILITY_API_KEY.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      prompt: {
+        type: SchemaType.STRING,
+        description: "Mô tả ảnh chi tiết bằng tiếng Anh. Cấu trúc: [chủ thể] + [phong cách: photorealistic/3D render/illustration] + [bối cảnh] + [ánh sáng] + [màu sắc/mood].",
+      },
+      aspect_ratio: {
+        type: SchemaType.STRING,
+        description: "Tỷ lệ khung hình: '1:1' (vuông, default) | '9:16' (TikTok/Reels) | '16:9' (landscape) | '4:3' | '3:4'",
+      },
+      style_preset: {
+        type: SchemaType.STRING,
+        description: "Style preset: 'commercial_photo' | 'tiktok_thumb' | 'travel_cinematic' | 'flat_illustration' | 'three_d_product' | 'storyboard'",
+      },
+    },
+    required: ["prompt"],
+  },
+}
+
 export const generateVideoDecl = {
   name: "generateVideo",
   description: "Tạo video AI từ mô tả văn bản bằng Kling AI. Dùng khi Hiếu yêu cầu 'tạo video', 'quay video', 'làm clip', 'video TikTok/Reels'. Viết prompt tiếng Anh để chất lượng tốt nhất. Video render ~1-3 phút. Nếu timeout sẽ trả task_id để check sau.",
@@ -425,7 +461,7 @@ export const trackSKUWinRateDecl = {
 
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
-  readKBDecl, writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
+  readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
   listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
   queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl,
   queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl,
@@ -433,5 +469,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 4 tools
   sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,
   // Phase 3 tools
-  generateVideoDecl, checkVideoStatusDecl,
+  generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
 ]
