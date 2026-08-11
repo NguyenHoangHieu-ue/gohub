@@ -4,13 +4,13 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-10, s141)
+## Trạng thái hiện tại (2026-08-11, s142)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
 | staging = main | `7b9ac65` |
-| tsc | PASS · vitest 80/80 |
+| tsc | PASS · vitest 125/125 |
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
@@ -24,10 +24,10 @@
 - [x] ✅ Setup **cron-job.org** cho Scheduled Messages (2026-08-10): every 15 min, Header `Authorization: Bearer <CRON_SECRET>`
 
 **AI làm tiếp (backlog):**
-- Gấu Pro Phase 3: Stability AI image gen (cần `STABILITY_API_KEY`), Kling video (cần `KLING_API_KEY`)
-- Semantic KB search (cần migration vector embedding vào creator_kb)
-- C2. Product Win Rate Dashboard (tab analytics/products)
-- C3. B2B Bulk Cost Import (Excel upload Quarter Report)
+- ✅ Gấu Pro: Stability AI image gen (code xong, cần Hiếu set `STABILITY_API_KEY` Vercel + tạo bucket `creator-images` public trong Supabase Storage)
+- ✅ Semantic KB search: code xong, **Hiếu cần chạy `web/db/migrations/v33_creator_kb_embedding.sql` trong Supabase SQL Editor**
+- ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
+- ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
 
 **Ghi chú:**
 - Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
