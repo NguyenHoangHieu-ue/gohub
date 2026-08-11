@@ -11,7 +11,9 @@ import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
 // Note tab — nổi bật, hiển thị cho tất cả role (Knowledge Base đã gộp vào trong trang Note)
-const NAV_INFO = { href: "/info", label: "Note", icon: StickyNote, key: "info" }
+const NAV_INFO   = { href: "/info",              label: "Note",    icon: StickyNote,    key: "info"    }
+// Tổ Gấu — luôn đầu sidebar, hiển thị cho tất cả user đã đăng nhập
+const NAV_TO_GAU = { href: "/analytics/to-gau", label: "Tổ Gấu", icon: MessageCircle, key: "to-gau"  }
 
 // Tabs luôn hiển thị ở trên (KB đã chuyển vào trong Note → bỏ khỏi sidebar)
 const NAV_MAIN = [
@@ -76,7 +78,6 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/targets",    label: "Manage Costs",       icon: Target    },
       { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
       { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
-      { href: "/analytics/to-gau",     label: "Tổ Gấu",            icon: MessageCircle },
     ],
   },
 ]
@@ -396,6 +397,7 @@ export function Sidebar() {
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
             {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
+            <NavRow href={NAV_TO_GAU.href} label={NAV_TO_GAU.label} Icon={NAV_TO_GAU.icon} active={isActive(NAV_TO_GAU.href)} collapsed accent="brand" />
             {topItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
@@ -435,6 +437,19 @@ export function Sidebar() {
                 <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">+ KB</span>
               </Link>
             )}
+
+            {/* Tổ Gấu — nổi bật đầu sidebar, tất cả user thấy */}
+            <Link
+              href={NAV_TO_GAU.href}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-2 text-[13px] font-semibold transition-all
+                ${isActive(NAV_TO_GAU.href)
+                  ? "bg-amber-600 text-white shadow-md ring-1 ring-amber-400/50"
+                  : "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/30 hover:bg-amber-500/25 hover:text-white"}`}
+            >
+              <MessageCircle size={16} className="flex-shrink-0" />
+              <span className="flex-1">{NAV_TO_GAU.label}</span>
+              <span className="text-base leading-none">🐻</span>
+            </Link>
 
             {/* Bé Gấu + Promotion — đứng riêng đầu sidebar */}
             {topItems.map(it => (
