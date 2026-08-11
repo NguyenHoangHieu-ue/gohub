@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, MessageCircle } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -76,6 +76,7 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/targets",    label: "Manage Costs",       icon: Target    },
       { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
       { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
+      { href: "/analytics/to-gau",     label: "Tổ Gấu",            icon: MessageCircle },
     ],
   },
 ]
