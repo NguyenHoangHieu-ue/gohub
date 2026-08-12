@@ -67,8 +67,10 @@ try{
   // Send all
   var sy=await fetch(HOST+'/api/portal/shopee-sync',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+TOKEN},body:JSON.stringify({monthly:monthly,products:prods})});
   var rs=await sy.json();
-  if(sy.ok){alert('Sync OK! '+monthly.length+' tháng, '+(prods&&prods.total||0)+' SP. Quay lai GoHub bam Lam moi.');}
-  else{alert('Sync that bai: '+JSON.stringify(rs));}
+  if(sy.ok){
+    var nonNull=monthly.filter(function(m){return m.metrics!==null;}).length;
+    alert('Sync OK!\\n'+monthly.length+' thang ('+nonNull+' co data), '+(prods&&prods.total||0)+' SP\\nSaved: '+JSON.stringify(rs.saved)+'\\nQuay lai GoHub bam Lam moi.');
+  }else{alert('Sync that bai (HTTP '+sy.status+'): '+JSON.stringify(rs));}
 }catch(e){console.error(e);alert('Loi: '+e.message);}
 })();`
 }
@@ -198,11 +200,12 @@ function ProductsTable({ products }: { products: { total: number; list: Product[
 }
 
 // ── Summary KPI cards ─────────────────────────────────────────────────────────
-function SummaryCards({ monthly, synced_at, onRefresh, loading }: {
+function SummaryCards({ monthly, synced_at, onRefresh, loading, legacyMetrics }: {
   monthly: MonthEntry[] | null; synced_at: string; onRefresh: () => void; loading: boolean
+  legacyMetrics?: Metrics | null
 }) {
   const curMonth = new Date().toISOString().slice(0, 7)
-  const cur = monthly?.find(m => m.month === curMonth)?.metrics ?? null
+  const cur = monthly?.find(m => m.month === curMonth)?.metrics ?? legacyMetrics ?? null
   const kpis = cur ? [
     { label: "Affiliates",      value: num(cur.affiliates),    color: "text-violet-600", bg: "bg-violet-50"  },
     { label: "Items Sold",      value: num(cur.itemsSold),     color: "text-blue-600",   bg: "bg-blue-50"    },
@@ -421,7 +424,13 @@ export default function PortalPage() {
       </div>
 
       {/* Summary cards — current month */}
-      <SummaryCards monthly={cached?.monthly??null} synced_at={cached?.synced_at??""} onRefresh={loadCached} loading={loading}/>
+      <SummaryCards
+        monthly={cached?.monthly??null}
+        legacyMetrics={(cached as any)?.metrics ?? null}
+        synced_at={cached?.synced_at??""}
+        onRefresh={loadCached}
+        loading={loading}
+      />
 
       {/* Monthly breakdown */}
       {!loading && cached?.monthly && cached.monthly.length > 0 && (

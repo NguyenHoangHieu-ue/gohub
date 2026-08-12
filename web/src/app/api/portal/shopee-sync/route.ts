@@ -42,13 +42,25 @@ export async function POST(req: NextRequest) {
     synced_at: new Date().toISOString(),
   })
 
+  const valueSize = Buffer.byteLength(value, "utf-8")
+  console.log("[shopee-sync] payload size:", valueSize, "bytes, months:", body.monthly?.length, "products:", body.products?.total)
+
   const { data: existing } = await supabaseAdmin
     .from("app_settings").select("id").eq("key", DATA_KEY).maybeSingle()
+
   if (existing) {
-    await supabaseAdmin.from("app_settings").update({ value }).eq("key", DATA_KEY)
+    const { error } = await supabaseAdmin.from("app_settings").update({ value }).eq("key", DATA_KEY)
+    if (error) {
+      console.error("[shopee-sync] update error:", error)
+      return NextResponse.json({ error: error.message, detail: "Supabase UPDATE failed" }, { status: 500, headers: CORS_HEADERS })
+    }
   } else {
-    await supabaseAdmin.from("app_settings").insert({ key: DATA_KEY, value, category: "portal" })
+    const { error } = await supabaseAdmin.from("app_settings").insert({ key: DATA_KEY, value, category: "portal" })
+    if (error) {
+      console.error("[shopee-sync] insert error:", error)
+      return NextResponse.json({ error: error.message, detail: "Supabase INSERT failed" }, { status: 500, headers: CORS_HEADERS })
+    }
   }
 
-  return NextResponse.json({ ok: true }, { headers: CORS_HEADERS })
+  return NextResponse.json({ ok: true, saved: { bytes: valueSize, months: body.monthly?.length, products: body.products?.total } }, { headers: CORS_HEADERS })
 }
