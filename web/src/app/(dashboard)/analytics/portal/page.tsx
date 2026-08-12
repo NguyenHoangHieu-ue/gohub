@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import {
   ExternalLink, Link2, Plus, Trash2, UserPlus, Shield,
   RefreshCw, BookmarkPlus, Copy, Check, AlertTriangle, Clock,
-  TrendingUp, Database, ChevronDown, ChevronRight,
+  TrendingUp, Database, ChevronDown, ChevronRight, KeyRound, Play,
 } from "lucide-react"
 import { useToast } from "@/components/toast"
 
@@ -296,6 +296,121 @@ function SummaryCards({ monthly, legacyMetrics, synced_at, onRefresh, loading }:
   )
 }
 
+// ── Affiliate Open API panel (official GraphQL, ký SHA256 server-side) ────────
+const INTROSPECT_QUERY = `{ __schema { queryType { fields { name description args { name type { kind name ofType { name kind } } } } } } }`
+
+function AffiliateApiPanel({ isCreator }: { isCreator: boolean }) {
+  const toast = useToast()
+  const [status, setStatus]   = useState<{ configured: boolean; appId: string | null } | null>(null)
+  const [appId, setAppId]     = useState("")
+  const [secret, setSecret]   = useState("")
+  const [saving, setSaving]   = useState(false)
+  const [query, setQuery]     = useState(INTROSPECT_QUERY)
+  const [vars, setVars]       = useState("{}")
+  const [running, setRunning] = useState(false)
+  const [result, setResult]   = useState<{ ok: boolean; data?: unknown; message?: string; errors?: unknown } | null>(null)
+
+  useEffect(() => {
+    if (!isCreator) return
+    fetch("/api/admin/portal-affiliate-creds").then(r => r.json()).then(setStatus).catch(() => {})
+  }, [isCreator])
+
+  async function saveCreds(e: React.FormEvent) {
+    e.preventDefault()
+    if (!appId.trim() || !secret.trim()) return
+    setSaving(true)
+    try {
+      const r = await fetch("/api/admin/portal-affiliate-creds", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ appId: appId.trim(), secret: secret.trim() }) })
+      const j = await r.json(); if (!r.ok) throw new Error(j.error)
+      toast.success("Đã lưu App ID / Secret")
+      setStatus({ configured: true, appId: appId.trim() }); setSecret("")
+    } catch (err: any) { toast.error(err.message || "Lỗi lưu") } finally { setSaving(false) }
+  }
+
+  async function run() {
+    setRunning(true); setResult(null)
+    let parsedVars: Record<string, unknown> = {}
+    try { parsedVars = vars.trim() ? JSON.parse(vars) : {} } catch { toast.error("Variables không phải JSON hợp lệ"); setRunning(false); return }
+    try {
+      const r = await fetch("/api/portal/shopee-affiliate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, variables: parsedVars }) })
+      const j = await r.json()
+      setResult(j)
+      if (j.error && j.error !== "graphql_error" && j.error !== "http_error") toast.error(j.message || j.error)
+    } catch { toast.error("Không gọi được API") } finally { setRunning(false) }
+  }
+
+  const resultRows = result?.data ? extractRows(result.data) : null
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <KeyRound size={16} className="text-[#003B95]" />
+        <h2 className="font-semibold text-slate-700 text-[15px]">Affiliate Open API (chính thức)</h2>
+      </div>
+
+      {/* Creds — creator only */}
+      {isCreator && (
+        <form onSubmit={saveCreds} className="space-y-2 rounded-lg bg-slate-50 border border-slate-100 p-3">
+          <p className="text-[12px] text-slate-500">
+            Lấy App ID + Secret từ trang Shopee Affiliate → mục <strong>Open API</strong>.
+            {status?.configured && <span className="text-emerald-600 font-medium"> Đã lưu (App ID: {status.appId}).</span>}
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <input value={appId} onChange={e => setAppId(e.target.value)} placeholder="App ID"
+              className="flex-1 min-w-[120px] border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]" />
+            <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Secret" type="password"
+              className="flex-1 min-w-[120px] border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]" />
+            <button type="submit" disabled={saving || !appId.trim() || !secret.trim()}
+              className="px-3 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50">
+              {saving ? "..." : "Lưu"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Query runner */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-[12px] font-medium text-slate-600">GraphQL Query</label>
+          <button onClick={() => { setQuery(INTROSPECT_QUERY); setVars("{}") }} className="text-[11px] text-[#003B95] hover:underline">
+            Dùng query khám phá schema
+          </button>
+        </div>
+        <textarea value={query} onChange={e => setQuery(e.target.value)} rows={5}
+          className="w-full text-[11px] font-mono border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#003B95] resize-y" />
+        <div className="flex gap-2 items-start">
+          <div className="flex-1">
+            <label className="text-[11px] text-slate-500">Variables (JSON)</label>
+            <input value={vars} onChange={e => setVars(e.target.value)} placeholder="{}"
+              className="w-full text-[11px] font-mono border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#003B95]" />
+          </div>
+          <button onClick={run} disabled={running || !query.trim()}
+            className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50">
+            <Play size={13} className={running ? "animate-pulse" : ""} /> {running ? "Đang chạy..." : "Chạy"}
+          </button>
+        </div>
+      </div>
+
+      {/* Result */}
+      {result && (
+        <div className="space-y-2">
+          {result.message && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[12px]">
+              <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{result.message}</span>
+            </div>
+          )}
+          {resultRows ? <DynamicTable rows={resultRows} /> : result.data ? (
+            <pre className="text-[10px] bg-slate-50 rounded-lg p-3 overflow-x-auto text-slate-600 max-h-80">{JSON.stringify(result.data, null, 2)}</pre>
+          ) : result.errors ? (
+            <pre className="text-[10px] bg-slate-50 rounded-lg p-3 overflow-x-auto text-slate-600 max-h-80">{JSON.stringify(result.errors, null, 2)}</pre>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Sync panel (creator) ──────────────────────────────────────────────────────
 function SyncPanel() {
   const toast = useToast()
@@ -442,6 +557,9 @@ export default function PortalPage() {
 
       {/* Mọi bảng bắt được từ portal (đầy đủ cột) */}
       {!loading && cached?.datasets && Object.keys(cached.datasets).length > 0 && <DatasetsSection datasets={cached.datasets} />}
+
+      {/* Affiliate Open API chính thức (ký SHA256 server-side) */}
+      <AffiliateApiPanel isCreator={isCreator} />
 
       {isCreator && <SyncPanel />}
 
