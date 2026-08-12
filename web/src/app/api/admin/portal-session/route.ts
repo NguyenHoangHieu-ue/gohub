@@ -37,12 +37,15 @@ export async function POST(req: NextRequest) {
   const { cookie, af_ac_enc_dat, af_ac_enc_sz_token, x_sap_ri, x_sap_sec } = body
   if (!cookie?.trim()) return NextResponse.json({ error: "cookie required" }, { status: 400 })
 
+  // Strip control chars (newline, carriage return...) ngay khi lưu
+  const clean = (s: string) => (s || "").replace(/[\x00-\x08\x0A-\x1F\x7F]/g, "").trim()
+
   const value = JSON.stringify({
-    cookie:              cookie.trim(),
-    af_ac_enc_dat:       af_ac_enc_dat?.trim()       || "",
-    af_ac_enc_sz_token:  af_ac_enc_sz_token?.trim()  || "",
-    x_sap_ri:            x_sap_ri?.trim()            || "",
-    x_sap_sec:           x_sap_sec?.trim()           || "",
+    cookie:              clean(cookie),
+    af_ac_enc_dat:       clean(af_ac_enc_dat  || ""),
+    af_ac_enc_sz_token:  clean(af_ac_enc_sz_token || ""),
+    x_sap_ri:            clean(x_sap_ri  || ""),
+    x_sap_sec:           clean(x_sap_sec || ""),
     x_sz_sdk_version:    "1.12.33-sc.3",
     updated_at:          new Date().toISOString(),
   })

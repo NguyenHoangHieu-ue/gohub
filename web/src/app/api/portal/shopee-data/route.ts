@@ -48,22 +48,26 @@ async function getStoredSession() {
   try { return JSON.parse(data.value) as Record<string, string> } catch { return null }
 }
 
+// Strip control chars (newline, carriage return, null...) — lẫn vào khi copy-paste từ DevTools
+function san(s: string): string {
+  return (s || "").replace(/[\x00-\x08\x0A-\x1F\x7F]/g, "").trim()
+}
+
 async function shopeeGQL(stored: Record<string, string>, query: string, variables: Record<string, unknown>) {
   const body = JSON.stringify({ operationName: query, query: GQL_QUERIES[query], variables })
   const headers: Record<string, string> = {
-    "content-type":       "application/json; charset=UTF-8",
-    "accept":             "application/json, text/plain, */*",
-    "accept-encoding":    "gzip, deflate, br",
-    "origin":             "https://banhang.shopee.vn",
-    "referer":            "https://banhang.shopee.vn/portal/web-seller-affiliate/commission_analytics",
-    "user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-    "cookie":             stored.cookie,
+    "content-type":    "application/json; charset=UTF-8",
+    "accept":          "application/json, text/plain, */*",
+    "origin":          "https://banhang.shopee.vn",
+    "referer":         "https://banhang.shopee.vn/portal/web-seller-affiliate/commission_analytics",
+    "user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "cookie":          san(stored.cookie),
   }
-  if (stored.af_ac_enc_dat)      headers["af-ac-enc-dat"]      = stored.af_ac_enc_dat
-  if (stored.af_ac_enc_sz_token) headers["af-ac-enc-sz-token"] = stored.af_ac_enc_sz_token
-  if (stored.x_sap_ri)           headers["x-sap-ri"]           = stored.x_sap_ri
-  if (stored.x_sap_sec)          headers["x-sap-sec"]          = stored.x_sap_sec
-  headers["x-sz-sdk-version"] = stored.x_sz_sdk_version || "1.12.33-sc.3"
+  if (stored.af_ac_enc_dat)      headers["af-ac-enc-dat"]      = san(stored.af_ac_enc_dat)
+  if (stored.af_ac_enc_sz_token) headers["af-ac-enc-sz-token"] = san(stored.af_ac_enc_sz_token)
+  if (stored.x_sap_ri)           headers["x-sap-ri"]           = san(stored.x_sap_ri)
+  if (stored.x_sap_sec)          headers["x-sap-sec"]          = san(stored.x_sap_sec)
+  headers["x-sz-sdk-version"] = san(stored.x_sz_sdk_version || "1.12.33-sc.3")
 
   const { status, json } = await httpsPost(`${SHOPEE_GQL}?q=${query}`, headers, body)
   const j = json as any
