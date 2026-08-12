@@ -71,9 +71,13 @@ async function shopeeGQL(stored: Record<string, string>, query: string, variable
 
   const { status, json } = await httpsPost(`${SHOPEE_GQL}?q=${query}`, headers, body)
   const j = json as any
-  if (status >= 400) throw new Error(`Shopee API ${status}`)
+  // Log full response để debug (xem trong Vercel Function Logs)
+  console.log("[shopee-gql]", query, "status:", status, "body:", JSON.stringify(j).slice(0, 500))
+  if (status >= 400) throw new Error(`Shopee ${status}: ${JSON.stringify(j).slice(0, 200)}`)
   if (j?.errors?.length) throw new Error(j.errors[0]?.message || "GraphQL error")
-  return j?.data
+  // Shopee có thể trả 200 nhưng data=null khi session hết hạn
+  if (j?.data == null) throw new Error(`Session hết hạn hoặc Shopee từ chối: ${JSON.stringify(j).slice(0, 200)}`)
+  return j.data
 }
 
 const GQL_QUERIES: Record<string, string> = {
@@ -169,10 +173,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, data: data?.QueryCommissionKeyMetrics })
     }
   } catch (err: any) {
-    const isAuth = err.message?.includes("401") || err.message?.includes("403")
+    const msg = err.message || ""
+    const isAuth = msg.includes("401") || msg.includes("403") || msg.includes("hết hạn") || msg.includes("từ chối")
+    console.error("[shopee-data] error:", msg)
     return NextResponse.json({
-      error: isAuth ? "session_expired" : "fetch_error",
-      message: isAuth ? "Session Shopee đã hết hạn. Creator cần cập nhật lại." : err.message,
-    }, { status: isAuth ? 401 : 500 })
+      error:   isAuth ? "session_expired" : "fetch_error",
+      message: isAuth ? `Session hết hạn — cần cập nhật lại. Chi tiết: ${msg}` : msg,
+    }, { status: 500 })
   }
 }
