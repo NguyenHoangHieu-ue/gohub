@@ -4,14 +4,16 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, MessageCircle, Link2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
 // Note tab — nổi bật, hiển thị cho tất cả role (Knowledge Base đã gộp vào trong trang Note)
-const NAV_INFO = { href: "/info", label: "Note", icon: StickyNote, key: "info" }
+const NAV_INFO   = { href: "/info",              label: "Note",    icon: StickyNote,    key: "info"    }
+// Tổ Gấu — luôn đầu sidebar, hiển thị cho tất cả user đã đăng nhập
+const NAV_TO_GAU = { href: "/analytics/to-gau", label: "Tổ Gấu", icon: MessageCircle, key: "to-gau"  }
 
 // Tabs luôn hiển thị ở trên (KB đã chuyển vào trong Note → bỏ khỏi sidebar)
 const NAV_MAIN = [
@@ -91,6 +93,14 @@ const MANAGEMENT_GROUP = {
   ],
 }
 
+// Portal — creator + whitelisted users (portal_access_users)
+const PORTAL_GROUP = {
+  label: "Portal",
+  items: [
+    { href: "/analytics/portal", label: "Portal Access", icon: Link2 },
+  ],
+}
+
 // Creator-only management
 const CREATOR_GROUP = {
   label: "Creator",
@@ -126,7 +136,8 @@ function useSidebarData(username: string, sessionRole: string) {
     rolePerms:       Record<string, string[]> | null
     hiddenTabs:      Set<string>
     gpEnabled:       boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false })
+    portalEnabled:   boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, portalEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -145,6 +156,7 @@ function useSidebarData(username: string, sessionRole: string) {
         rolePerms:        perms ?? null,
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
         gpEnabled:        me?.gp_enabled === true,
+        portalEnabled:    me?.portal_enabled === true,
       })
     })
   }, [username, sessionRole])
@@ -286,7 +298,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, portalEnabled } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -395,6 +407,7 @@ export function Sidebar() {
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
             {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
+            <NavRow href={NAV_TO_GAU.href} label={NAV_TO_GAU.label} Icon={NAV_TO_GAU.icon} active={isActive(NAV_TO_GAU.href)} collapsed accent="brand" />
             {topItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
@@ -416,6 +429,9 @@ export function Sidebar() {
             {gpEnabled && (
               <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
             )}
+            {portalEnabled && PORTAL_GROUP.items.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+            ))}
           </>
         ) : (
           /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
@@ -434,6 +450,19 @@ export function Sidebar() {
                 <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">+ KB</span>
               </Link>
             )}
+
+            {/* Tổ Gấu — nổi bật đầu sidebar, tất cả user thấy */}
+            <Link
+              href={NAV_TO_GAU.href}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-2 text-[13px] font-semibold transition-all
+                ${isActive(NAV_TO_GAU.href)
+                  ? "bg-amber-600 text-white shadow-md ring-1 ring-amber-400/50"
+                  : "bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/30 hover:bg-amber-500/25 hover:text-white"}`}
+            >
+              <MessageCircle size={16} className="flex-shrink-0" />
+              <span className="flex-1">{NAV_TO_GAU.label}</span>
+              <span className="text-base leading-none">🐻</span>
+            </Link>
 
             {/* Bé Gấu + Promotion — đứng riêng đầu sidebar */}
             {topItems.map(it => (
@@ -476,6 +505,14 @@ export function Sidebar() {
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
+                  </div>
+                )}
+                {analystOpen && portalEnabled && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-brand-400/80 uppercase tracking-wider">{PORTAL_GROUP.label}</p>
+                    {PORTAL_GROUP.items.map(it => (
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                    ))}
                   </div>
                 )}
               </div>

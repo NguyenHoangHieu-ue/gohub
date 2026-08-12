@@ -2,11 +2,11 @@ import type { GPEvent, WebSource } from "../types"
 import { TOOL_STATUS }             from "../types"
 import { ALL_TABLES }              from "./supabase"
 
-import { runReadKnowledgeBase, runWriteKnowledgeBase, runReviewPendingLearning, runApproveLearning, runRejectLearning } from "./knowledge"
+import { runReadKnowledgeBase, runWriteKnowledgeBase, runSearchKnowledgeBase, runReviewPendingLearning, runApproveLearning, runRejectLearning } from "./knowledge"
 import { runExecuteSQL }           from "./sql"
 import { runQuerySupabase, runQueryProduct } from "./supabase"
 import { runQueryGA4, runQueryGSC } from "./analytics"
-import { runGenerateImage, runGetTrendSnapshots } from "./image"
+import { runGenerateImage, runGenerateImageStability, runGetTrendSnapshots } from "./image"
 import { runLarkTask, runLarkBase } from "./lark"
 import { runSendLarkMessage }      from "./lark-send"
 import { runBrowsePortal, runManagePortalCredentials } from "./portal"
@@ -35,6 +35,9 @@ export async function dispatchTool(
 
   if (call.name === "writeKnowledgeBase")
     return wrap(await runWriteKnowledgeBase(call.args))
+
+  if (call.name === "searchKnowledgeBase")
+    return wrap(await runSearchKnowledgeBase(call.args))
 
   if (call.name === "reviewPendingLearning")
     return wrap(await runReviewPendingLearning(call.args?.limit || 20))
@@ -97,6 +100,16 @@ export async function dispatchTool(
       instruction: resp.error
         ? `Image generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
         : "Include the markdown field EXACTLY as-is in your response — it contains the base64 image that the UI will render. Do NOT modify or truncate it.",
+    })
+  }
+
+  if (call.name === "generateImageStability") {
+    const resp = await runGenerateImageStability(call.args)
+    return wrap({
+      ...resp,
+      instruction: resp.error
+        ? `Image generation failed: ${resp.error}. Báo Hiếu lỗi này.`
+        : "Include the markdown field EXACTLY as-is in your response — it contains the image URL. Do NOT modify or truncate it.",
     })
   }
 

@@ -4,34 +4,39 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-10, s140)
+## Trạng thái hiện tại (2026-08-12, s146)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `e809571` |
-| tsc | PASS · vitest 80/80 |
+| staging ahead main | 37 commit (s146 — Quarter Report + Fulfillment improvements) |
+| tsc | PASS |
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại):**
-- [x] ✅ Set `PORTAL_CRED_KEY` trên Vercel (2026-08-10)
-- [x] ✅ Nhập Cost T8 B2C (2026-08-10)
-- [x] ✅ Nhập target T7/T8 cho scheduled reports (2026-08-10)
-- [x] ✅ Đăng ký Kling AI API key (`KLING_API_KEY`) — đã có key (2026-08-10)
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
-- [x] ✅ Setup **cron-job.org** cho Scheduled Messages (2026-08-10): every 15 min, Header `Authorization: Bearer <CRON_SECRET>`
+- [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API (trang Portal → mục "Affiliate Open API") → chạy introspection để xác định query khả dụng
 
-**AI làm tiếp (backlog):**
-- Gấu Pro Phase 3: Stability AI image gen (cần `STABILITY_API_KEY`), Kling video (cần `KLING_API_KEY`)
-- Semantic KB search (cần migration vector embedding vào creator_kb)
-- C2. Product Win Rate Dashboard (tab analytics/products)
-- C3. B2B Bulk Cost Import (Excel upload Quarter Report)
+**s146 — đã làm (2026-08-12):**
+- ✅ **Quarter Report — cột % Target CM1**: bảng KH nhóm (Strategic/VIP/Gold/Silver) thêm cột badge màu = PR CM1 / (target_tháng × 3). Phần "Target & Progress" expand cũng fix tương tự, label hiện "T.Tháng / T.Quý".
+- ✅ **Fulfillment tab — cải tiến toàn diện**:
+  - 4 summary cards (thêm Avg Order Value), mỗi card MoM badge vs tháng trước
+  - Section B2B/B2C split: orders + revenue + % với progress bar
+  - Monthly Trend chart: dual Y-axis (Orders bar trái + Revenue line phải)
+  - Bảng breakdown: thêm cột B2B/B2C orders/revenue + Avg Order Value
+  - Top Locations: thêm cột Revenue
+  - Backend: query mới B2B/B2C split per month + revenue trong overall_locations
+
+**s145 — đã xong (ghi lại):**
+- ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.
+- ✅ **Tổ Gấu**: AI reply ngay, @mention Lark DM, fix nút Test scheduled 403.
+- ✅ **Portal Access** tab `/analytics/portal`: Hướng C (console interceptor) CHẠY; Hướng A (SHA256 Open API) đang test.
 
 **Ghi chú:**
-- Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
-- Nếu target vẫn hiện "Chưa nhập target tháng này" → Hiếu cần nhập target ở tab Targets cho tháng đó.
+- Quarter Report: target KH nhập theo THÁNG → cột % Target CM1 nhân × 3 để ra target quý.
+- Daily 【3】 theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---

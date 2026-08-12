@@ -92,6 +92,15 @@ export default function ProductPerformancePage() {
   const [selectedDestination, setSelectedDestination] = useState<string>("all")
   const [availableDestinations, setAvailableDestinations] = useState<{ code: string; name: string }[]>([])
 
+  // Win Rate Tab
+  const [activeTab, setActiveTab] = useState<"performance" | "winrate">("performance")
+  const [wrData,    setWrData]    = useState<any>(null)
+  const [wrLoading, setWrLoading] = useState(false)
+  const [wrDays,    setWrDays]    = useState(90)
+  const [wrThresh,  setWrThresh]  = useState(5)
+  const [wrWinDays, setWrWinDays] = useState(14)
+  const [wrVendor,  setWrVendor]  = useState("")
+
   // Đóng custom dropdown khi click ra ngoài — ngăn Vendor/SKU dropdown che Destination select
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -176,6 +185,11 @@ export default function ProductPerformancePage() {
     fetchFilteredChannels()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChannelGroup])
+
+  useEffect(() => {
+    if (activeTab === "winrate" && !wrData) fetchWinRate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   const fetchFilteredChannels = async () => {
     try {
@@ -407,6 +421,20 @@ export default function ProductPerformancePage() {
     }
   }
 
+  const fetchWinRate = async () => {
+    setWrLoading(true)
+    try {
+      const params = new URLSearchParams({ days: String(wrDays), win_threshold: String(wrThresh), win_days: String(wrWinDays) })
+      if (wrVendor) params.set("vendor", wrVendor)
+      const res = await fetch(`/api/analytics/win-rate?${params}`)
+      setWrData(await res.json())
+    } catch (err) {
+      console.error("Win rate fetch error:", err)
+    } finally {
+      setWrLoading(false)
+    }
+  }
+
   const groupedChannelData = useMemo(() => {
     const groups = { b2c: [] as ChannelData[], b2bStrategic: [] as ChannelData[], b2bNonStrategic: [] as ChannelData[] }
     channelData.forEach(channel => {
@@ -516,7 +544,18 @@ export default function ProductPerformancePage() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        {/* ── Tab bar ── */}
+        <div className="flex bg-white rounded-xl border border-slate-200 shadow-sm p-1 self-start">
+          {(["performance", "winrate"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={cn("px-4 py-1.5 text-sm font-semibold rounded-lg transition-all",
+                activeTab === tab ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+              {tab === "performance" ? "Performance" : "Win Rate"}
+            </button>
+          ))}
+        </div>
+
+        <div className={cn("bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4", activeTab !== "performance" && "hidden")}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* SKU Multi-select */}
             <div className="space-y-1.5 relative" ref={skuDropdownRef}>
@@ -653,7 +692,7 @@ export default function ProductPerformancePage() {
         </div>
       </div>
 
-      <div ref={reportRef} className="space-y-6">
+      <div ref={reportRef} className={cn("space-y-6", activeTab !== "performance" && "hidden")}>
         {/* Summary Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {[
@@ -882,6 +921,120 @@ export default function ProductPerformancePage() {
             </table>
           </div>
         </div>
+
+        {/* ── Win Rate tab ── */}
+        {activeTab === "winrate" && (
+          <div className="space-y-4">
+            {/* Config */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">SKU created trong (ngày)</label>
+                  <input type="number" min={7} max={365} value={wrDays}
+                    onChange={e => setWrDays(parseInt(e.target.value) || 90)}
+                    className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Ngưỡng WIN (đơn)</label>
+                  <input type="number" min={1} max={100} value={wrThresh}
+                    onChange={e => setWrThresh(parseInt(e.target.value) || 5)}
+                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Cửa sổ tính (ngày)</label>
+                  <input type="number" min={1} max={90} value={wrWinDays}
+                    onChange={e => setWrWinDays(parseInt(e.target.value) || 14)}
+                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Vendor (tùy chọn)</label>
+                  <input type="text" placeholder="Vd: 3D, GB..." value={wrVendor}
+                    onChange={e => setWrVendor(e.target.value)}
+                    className="w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <button onClick={fetchWinRate} disabled={wrLoading}
+                  className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
+                  {wrLoading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+                  Tính Win Rate
+                </button>
+              </div>
+            </div>
+
+            {/* Summary */}
+            {wrData?.summary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "SKU mới",    value: wrData.summary.total, color: "text-slate-800", bg: "bg-slate-50 border-slate-200" },
+                  { label: "WIN",        value: wrData.summary.win, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",
+                    sub: `${wrData.summary.win_rate_pct}% win rate` },
+                  { label: "PENDING",    value: wrData.summary.pending, color: "text-amber-700", bg: "bg-amber-50 border-amber-200",
+                    sub: "đang tracking" },
+                  { label: "FAILED",     value: wrData.summary.failed, color: "text-red-700", bg: "bg-red-50 border-red-200",
+                    sub: `ngưỡng: ${wrData.config?.win_threshold ?? 5} đơn / ${wrData.config?.win_days ?? 14} ngày` },
+                ].map(c => (
+                  <div key={c.label} className={cn("rounded-xl border p-5 shadow-sm", c.bg)}>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{c.label}</p>
+                    <p className={cn("text-3xl font-extrabold tabular-nums", c.color)}>{c.value}</p>
+                    {c.sub && <p className="text-xs text-slate-500 mt-1">{c.sub}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SKU table */}
+            {wrData?.skus?.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-slate-900">Danh sách SKU mới — {wrData.config?.lookback_days ?? wrDays} ngày gần nhất</h2>
+                  <span className="text-xs text-slate-400">{wrData.skus.length} SKU</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-indigo-600">
+                        {["SKU", "Ngày tạo", "Tuổi (ngày)", "Trạng thái", `Đơn ${wrData.config?.win_days ?? 14}d đầu`, "Win%", "Tổng đơn"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-200 uppercase tracking-wider whitespace-nowrap first:pl-5">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {wrData.skus.map((s: any, i: number) => {
+                        const statusCls = s.status === "WIN" ? "bg-emerald-100 text-emerald-700" : s.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
+                        return (
+                          <tr key={s.sku_code} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                            <td className="px-5 py-3 font-mono font-semibold text-slate-800">{s.sku_code}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.created_at}</td>
+                            <td className="px-4 py-3 text-slate-600 tabular-nums">{s.age_days}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-bold", statusCls)}>{s.status}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">{s.orders_14d}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={cn("h-full rounded-full", s.win_pct >= 100 ? "bg-emerald-500" : "bg-indigo-400")}
+                                    style={{ width: `${Math.min(s.win_pct, 100)}%` }} />
+                                </div>
+                                <span className="text-[11px] text-slate-600 tabular-nums">{s.win_pct}%</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-600">{s.total_orders}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {wrData && !wrData.skus?.length && !wrLoading && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400">
+                Không có SKU mới trong {wrDays} ngày qua.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

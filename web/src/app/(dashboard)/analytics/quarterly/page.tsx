@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2 } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -1108,6 +1108,77 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   const [costEdits, setCostEdits] = useState<CustomerCostEdits>({})
   const [costSnapshot, setCostSnapshot] = useState<string>("")
   const [savingCost, setSavingCost] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importMsg,     setImportMsg]     = useState("")
+  const importFileRef = useRef<HTMLInputElement>(null)
+
+  const downloadTemplate = async () => {
+    const XLSX = await import("xlsx")
+    const rows: any[] = []
+    for (const tier of allTiers) {
+      const custs: any[] = Object.values(tier.byRegion ?? {}).flatMap((rd: any) => rd.customers ?? [])
+      for (const c of custs) {
+        for (const m of quarterMonths) {
+          const existing = parseCostLines(c.monthsCost?.[m]?.cost_lines)
+          if (existing.length > 0) {
+            for (const l of existing) {
+              rows.push({ customer_code: c.code, customer_name: c.name, month: m, cost_label: l.label, cost_type: l.type, cost_value: l.value })
+            }
+          } else {
+            rows.push({ customer_code: c.code, customer_name: c.name, month: m, cost_label: "", cost_type: "amount", cost_value: "" })
+          }
+        }
+      }
+    }
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows, {
+      header: ["customer_code","customer_name","month","cost_label","cost_type","cost_value"],
+    }), "Chi phi B2B")
+    XLSX.writeFile(wb, `b2b_cost_template_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}.xlsx`)
+  }
+
+  const handleImportFile = async (file: File) => {
+    setImportLoading(true); setImportMsg("")
+    try {
+      const XLSX = await import("xlsx")
+      const buf  = await file.arrayBuffer()
+      const wb   = XLSX.read(buf)
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<any>(ws)
+
+      const grouped = new Map<string, { code: string; month: string; lines: CostLine[] }>()
+      for (const row of rows) {
+        const code  = String(row.customer_code || "").trim()
+        const month = String(row.month || "").trim()
+        const label = String(row.cost_label || "").trim()
+        const type  = row.cost_type === "percent" ? "percent" : "amount" as "amount" | "percent"
+        const value = parseFloat(row.cost_value) || 0
+        if (!code || !month) continue
+        const key = `${code}__${month}`
+        if (!grouped.has(key)) grouped.set(key, { code, month, lines: [] })
+        if (label || value) grouped.get(key)!.lines.push({ label, type, value })
+      }
+
+      const costs = [...grouped.values()].map(g => ({
+        month: g.month, customer_code: g.code, cost_lines: JSON.stringify(g.lines),
+      }))
+      if (costs.length === 0) { setImportMsg("File không có dữ liệu hợp lệ"); return }
+
+      const res = await fetch("/api/analytics/b2b-customer-costs", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ costs }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setImportMsg(`✅ Đã import ${d.saved ?? 0} dòng (${grouped.size} customer×tháng)`)
+        onSaved?.()
+      } else { setImportMsg(`❌ ${d.error || "Lỗi import"}`) }
+    } catch (e: any) {
+      setImportMsg(`❌ ${e.message}`)
+    } finally {
+      setImportLoading(false)
+      if (importFileRef.current) importFileRef.current.value = ""
+    }
+  }
 
   // ── Per-customer expand + target + creator orders ──
   const [expandedCusts, setExpandedCusts] = useState<Set<string>>(new Set())
@@ -1394,6 +1465,21 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
               </button>
             ))}
           </div>
+          <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }} />
+          {canEditCost && !editMode && (
+            <div className="flex items-center gap-1.5">
+              <button onClick={downloadTemplate}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
+                <FileDown className="w-3 h-3" />Template
+              </button>
+              <button onClick={() => importFileRef.current?.click()} disabled={importLoading}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all disabled:opacity-50">
+                {importLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}Import
+              </button>
+              {importMsg && <span className="text-[10px] font-semibold text-slate-500 max-w-[200px] truncate">{importMsg}</span>}
+            </div>
+          )}
           {canEditCost && (
             editMode ? (
               <>
@@ -1598,6 +1684,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%Tgt CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (CM1)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
@@ -1621,7 +1708,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
                             const isEditingTgt = editingTargetCode === c.code
                             const isSavingTgt  = savingTargetCode  === c.code
-                            const colSpanAll = 9 + (isCreator ? 2 : 0)
+                            const colSpanAll = 10 + (isCreator ? 2 : 0)
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
@@ -1650,6 +1737,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
                                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  <td className="px-3 py-2 text-right text-[10px]">
+                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / (tgt.cm1 * 3) * 100; return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                  </td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
@@ -1811,17 +1901,17 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
-                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target: {fc(tgt.cm1)}</div>
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">T.Tháng: {fc(tgt.cm1)} · T.Quý: {fc(tgt.cm1 * 3)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
+                                                        <span className={cn("font-bold", cPrCm1 / (tgt.cm1 * 3) >= 1 ? "text-green-600" : cPrCm1 / (tgt.cm1 * 3) >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / (tgt.cm1 * 3) * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)}
+                                                        <span className={cn("font-bold", actCm1 / (tgt.cm1 * 3) >= 1 ? "text-green-600" : actCm1 / (tgt.cm1 * 3) >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? actCm1 / (tgt.cm1 * 3) * 100 : 0)}
                                                         </span>
                                                       </div>
                                                     </div>
@@ -1912,7 +2002,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             )
                           })}
                           {custs.length === 0 && (
-                            <tr><td colSpan={9 + (isCreator ? 2 : 0)} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                            <tr><td colSpan={10 + (isCreator ? 2 : 0)} className="px-3 py-6 text-center text-slate-400 italic text-xs">
                               {custSearch ? `Không tìm thấy KH khớp "${custSearch}"` : "Không có khách hàng"}
                             </td></tr>
                           )}
