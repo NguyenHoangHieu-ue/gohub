@@ -2,11 +2,38 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }          from "next-auth"
 import { authOptions }               from "@/lib/auth"
 import { supabaseAdmin }             from "@/lib/supabase"
+import https                         from "node:https"
 
 export const dynamic = "force-dynamic"
 
 const SHOPEE_GQL = "https://banhang.shopee.vn/api/v3/affiliateplatform/gql"
 const SESSION_KEY = "portal_shopee_session"
+
+// Dùng node:https thay fetch() vì undici (Node 18+) block cookie header
+function httpsPost(url: string, headers: Record<string, string>, body: string): Promise<{ status: number; json: unknown }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const buf = Buffer.from(body, "utf-8")
+    const req = https.request({
+      hostname: u.hostname,
+      path:     u.pathname + u.search,
+      method:   "POST",
+      headers:  { ...headers, "content-length": String(buf.length) },
+    }, (res) => {
+      const chunks: Buffer[] = []
+      res.on("data", (c: Buffer) => chunks.push(c))
+      res.on("end", () => {
+        try {
+          resolve({ status: res.statusCode ?? 200, json: JSON.parse(Buffer.concat(chunks).toString("utf-8")) })
+        } catch { reject(new Error("Shopee trả về response không hợp lệ")) }
+      })
+      res.on("error", reject)
+    })
+    req.on("error", reject)
+    req.write(buf)
+    req.end()
+  })
+}
 
 // Convert YYYY-MM-DD to ICT (UTC+7) Unix timestamp seconds
 function toICTTs(dateStr: string, endOfDay: boolean): string {
@@ -23,27 +50,26 @@ async function getStoredSession() {
 
 async function shopeeGQL(stored: Record<string, string>, query: string, variables: Record<string, unknown>) {
   const body = JSON.stringify({ operationName: query, query: GQL_QUERIES[query], variables })
-  const res = await fetch(`${SHOPEE_GQL}?q=${query}`, {
-    method: "POST",
-    headers: {
-      "content-type":       "application/json; charset=UTF-8",
-      "accept":             "application/json, text/plain, */*",
-      "origin":             "https://banhang.shopee.vn",
-      "referer":            "https://banhang.shopee.vn/portal/web-seller-affiliate/commission_analytics",
-      "user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-      "cookie":             stored.cookie,
-      "af-ac-enc-dat":      stored.af_ac_enc_dat      || "",
-      "af-ac-enc-sz-token": stored.af_ac_enc_sz_token || "",
-      "x-sap-ri":           stored.x_sap_ri           || "",
-      "x-sap-sec":          stored.x_sap_sec          || "",
-      "x-sz-sdk-version":   stored.x_sz_sdk_version   || "1.12.33-sc.3",
-    },
-    body,
-  })
-  if (!res.ok) throw new Error(`Shopee API ${res.status}`)
-  const json = await res.json()
-  if (json.errors?.length) throw new Error(json.errors[0]?.message || "GraphQL error")
-  return json.data
+  const headers: Record<string, string> = {
+    "content-type":       "application/json; charset=UTF-8",
+    "accept":             "application/json, text/plain, */*",
+    "accept-encoding":    "gzip, deflate, br",
+    "origin":             "https://banhang.shopee.vn",
+    "referer":            "https://banhang.shopee.vn/portal/web-seller-affiliate/commission_analytics",
+    "user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "cookie":             stored.cookie,
+  }
+  if (stored.af_ac_enc_dat)      headers["af-ac-enc-dat"]      = stored.af_ac_enc_dat
+  if (stored.af_ac_enc_sz_token) headers["af-ac-enc-sz-token"] = stored.af_ac_enc_sz_token
+  if (stored.x_sap_ri)           headers["x-sap-ri"]           = stored.x_sap_ri
+  if (stored.x_sap_sec)          headers["x-sap-sec"]          = stored.x_sap_sec
+  headers["x-sz-sdk-version"] = stored.x_sz_sdk_version || "1.12.33-sc.3"
+
+  const { status, json } = await httpsPost(`${SHOPEE_GQL}?q=${query}`, headers, body)
+  const j = json as any
+  if (status >= 400) throw new Error(`Shopee API ${status}`)
+  if (j?.errors?.length) throw new Error(j.errors[0]?.message || "GraphQL error")
+  return j?.data
 }
 
 const GQL_QUERIES: Record<string, string> = {
