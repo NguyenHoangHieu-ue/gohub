@@ -18,49 +18,70 @@ async function isMember(groupId: string, email: string): Promise<boolean> {
   return !!data
 }
 
-// Fire-and-forget: gửi Lark DM cho các member khi có tin nhắn mới
+// Parse @mention handles từ content: "@TênHandle" hoặc "@email.prefix"
+function parseMentionHandles(content: string): string[] {
+  const matches = content.match(/@([\w.]+)/g) ?? []
+  return matches.map(m => m.slice(1).toLowerCase())
+}
+
+// Fire-and-forget: gửi Lark DM cho các member khi có tin nhắn mới hoặc được @mention
 async function notifyLarkMembers(
   groupId: string,
   msg: { sender_name: string; content: string; msg_type: string },
   senderEmail: string,
 ) {
-  // 1. Lấy group info
-  const { data: group } = await supabaseAdmin
-    .from("chat_groups")
-    .select("name, avatar_emoji, notify_lark")
-    .eq("id", groupId)
-    .maybeSingle()
-  if (!group) return
-  // 2. Nếu notify_lark tắt → return sớm
-  if (group.notify_lark === false) return
+  // 1. Lấy group info + tất cả members (cần cho mention matching)
+  const [{ data: group }, { data: members }] = await Promise.all([
+    supabaseAdmin.from("chat_groups").select("name, avatar_emoji, notify_lark").eq("id", groupId).maybeSingle(),
+    supabaseAdmin.from("chat_group_members").select("user_email, user_name").eq("group_id", groupId).neq("user_email", senderEmail),
+  ])
+  if (!group || !members?.length) return
 
-  // 3. Lấy members trừ sender
-  const { data: members } = await supabaseAdmin
-    .from("chat_group_members")
-    .select("user_email")
-    .eq("group_id", groupId)
-    .neq("user_email", senderEmail)
-  if (!members?.length) return
+  // 2. Phát hiện @mention → tìm member được nhắc đến
+  const handles = parseMentionHandles(msg.content)
+  const mentionedEmails = new Set<string>()
+  if (handles.length > 0) {
+    for (const handle of handles) {
+      const matched = members.find(m => {
+        const prefix = m.user_email.split("@")[0].toLowerCase()
+        const name   = (m.user_name || "").replace(/\s+/g, "").toLowerCase()
+        return handle === prefix || (name && handle === name)
+      })
+      if (matched) mentionedEmails.add(matched.user_email)
+    }
+  }
 
-  const emails = members.map(m => m.user_email)
+  // 3. Xác định danh sách cần notify:
+  //    - @mention: luôn gửi cho mentioned users (bất kể notify_lark flag)
+  //    - General: gửi cho all members nếu notify_lark không bị tắt
+  const generalEmails: string[] = group.notify_lark !== false
+    ? members.map(m => m.user_email)
+    : []
+  const allTargetEmails = [...new Set([...mentionedEmails, ...generalEmails])]
+  if (!allTargetEmails.length) return
 
-  // 4. JOIN với users table để lấy lark_open_id
+  // 4. Lấy lark_open_id
   const { data: users } = await supabaseAdmin
     .from("users")
     .select("email, lark_open_id")
-    .in("email", emails)
+    .in("email", allTargetEmails)
   if (!users?.length) return
 
-  // 5. Tạo preview text
+  // 5. Build text — @mention dùng text khác
   const isFileMsg = msg.msg_type === "file" || msg.msg_type === "image"
-  const preview   = isFileMsg ? "📎 Đã gửi file" : msg.content.slice(0, 80)
-  const text      = `[${group.avatar_emoji || "🐻"} ${group.name}] ${msg.sender_name}: ${preview}`
+  const preview   = isFileMsg ? "📎 Đã gửi file" : msg.content.slice(0, 100)
+  const groupTag  = `[${group.avatar_emoji || "🐻"} ${group.name}]`
 
-  // 6. Gửi DM cho từng member có lark_open_id
   await Promise.all(
     users
       .filter(u => u.lark_open_id)
-      .map(u => sendLarkDM(u.lark_open_id!, text))
+      .map(u => {
+        const isMentioned = mentionedEmails.has(u.email)
+        const text = isMentioned
+          ? `🔔 ${msg.sender_name} đã nhắc đến bạn trong ${groupTag}:\n${preview}`
+          : `${groupTag} ${msg.sender_name}: ${preview}`
+        return sendLarkDM(u.lark_open_id!, text)
+      })
   )
 }
 

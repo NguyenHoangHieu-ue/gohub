@@ -1532,7 +1532,10 @@ export default function ToGauRoomPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      // AI message will arrive via realtime subscription
+      // Add AI message immediately; dedup check handles if realtime also fires
+      if (json.data) {
+        setMessages(prev => prev.some(m => m.id === json.data.id) ? prev : [...prev, json.data])
+      }
     } catch (err: unknown) {
       setContent(question)
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")

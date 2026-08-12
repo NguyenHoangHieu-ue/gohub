@@ -229,16 +229,50 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
 
   // Monthly: kỳ hiện tại CHÍNH LÀ cả tháng → MTD trùng cur (tránh query thừa, dùng lại).
   const isMonthly = period === "monthly"
-  const [curRows, prevRows, cur3hk, prev3hk, mtdRows, mtd3hkRows, bodCur, targetRows] = await Promise.all([
-    revByMarketGroup(r.curStart, r.curEnd),
-    revByMarketGroup(r.prevStart, r.prevEnd),
-    rev3hkByMarket(r.curStart, r.curEnd),
-    rev3hkByMarket(r.prevStart, r.prevEnd),
-    isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),
-    isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),
-    fetchBODGroupMarginData(r.curStart, r.curEnd),       // CM1 theo nhóm (company-agnostic, khớp Dashboard/Target)
-    getTargetRows(r.monthStr),
+  const isDaily   = period === "daily"
+
+  // Daily: tính thêm QTD + target quý để hiện trong【3】
+  let qStartStr = "", qEndStr = "", daysElapsedInQ = 0, daysInQ = 92, qLabel = ""
+  const qMonthStrings: string[] = []
+  if (isDaily) {
+    const ictD = ictNow()
+    const todayD = new Date(Date.UTC(ictD.getUTCFullYear(), ictD.getUTCMonth(), ictD.getUTCDate()))
+    const yestD  = addDays(todayD, -1)
+    const qMo    = Math.floor(todayD.getUTCMonth() / 3) * 3
+    const qStart = new Date(Date.UTC(todayD.getUTCFullYear(), qMo, 1))
+    qStartStr = ymd(qStart)
+    qEndStr   = ymd(yestD)
+    daysElapsedInQ = Math.round((yestD.getTime() - qStart.getTime()) / 86400_000) + 1
+    qLabel = `Q${Math.floor(todayD.getUTCMonth() / 3) + 1}/${todayD.getUTCFullYear()}`
+    for (let i = 0; i < 3; i++) {
+      const mStr = `${todayD.getUTCFullYear()}-${String(qMo + i + 1).padStart(2, "0")}`
+      if (mStr <= r.monthStr) qMonthStrings.push(mStr)
+    }
+  }
+
+  const allResults = await Promise.all([
+    revByMarketGroup(r.curStart, r.curEnd),                                              // 0
+    revByMarketGroup(r.prevStart, r.prevEnd),                                            // 1
+    rev3hkByMarket(r.curStart, r.curEnd),                                                // 2
+    rev3hkByMarket(r.prevStart, r.prevEnd),                                              // 3
+    isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),           // 4
+    isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),             // 5
+    fetchBODGroupMarginData(r.curStart, r.curEnd),                                       // 6
+    getTargetRows(r.monthStr),                                                           // 7
+    isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD
+    ...qMonthStrings.map(m => getTargetRows(m)),                                         // 9+: quarter month targets
   ])
+
+  const curRows    = allResults[0] as Awaited<ReturnType<typeof revByMarketGroup>>
+  const prevRows   = allResults[1] as Awaited<ReturnType<typeof revByMarketGroup>>
+  const cur3hk     = allResults[2] as Awaited<ReturnType<typeof rev3hkByMarket>>
+  const prev3hk    = allResults[3] as Awaited<ReturnType<typeof rev3hkByMarket>>
+  const mtdRows    = allResults[4] as Awaited<ReturnType<typeof revByMarketGroup>>
+  const mtd3hkRows = allResults[5] as Awaited<ReturnType<typeof rev3hkByMarket>>
+  const bodCur     = allResults[6] as Awaited<ReturnType<typeof fetchBODGroupMarginData>>
+  const targetRows = allResults[7] as Awaited<ReturnType<typeof getTargetRows>>
+  const qtdRevRows = allResults[8] as Awaited<ReturnType<typeof revByMarketGroup>>
+  const qMonthTargetArrays = allResults.slice(9) as Array<Awaited<ReturnType<typeof getTargetRows>>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -291,6 +325,18 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   }
   const tgtCm1B2b = targetCm1Pct("B2B"), tgtCm1B2c = targetCm1Pct("B2C")
 
+  // QTD aggregates (daily only)
+  const qtdRev = zero()
+  if (isDaily) {
+    for (const row of qtdRevRows) add(qtdRev, row.cc, parseFloat(row.revenue || "0"))
+  }
+  const qtdTargetRev = isDaily ? qMonthTargetArrays.flat().reduce((s, t) => s + Number(t.target_revenue || 0), 0) : 0
+  const projQ: Triple = {
+    vn:    daysElapsedInQ > 0 ? (qtdRev.vn    / daysElapsedInQ) * daysInQ : 0,
+    us:    daysElapsedInQ > 0 ? (qtdRev.us    / daysElapsedInQ) * daysInQ : 0,
+    total: daysElapsedInQ > 0 ? (qtdRev.total / daysElapsedInQ) * daysInQ : 0,
+  }
+
   // MoM/WoW %
   const momPct = (cur: number, prv: number) => prv > 0 ? ((cur - prv) / prv) * 100 : 0
 
@@ -328,6 +374,17 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % tiến độ hiện tại (MTD/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
     L.push(`  - % đạt target theo pro-rata (dự phóng/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(proj.total, totalTargetMonth)) : NO_TGT}`)
+    // Quarterly sub-section for daily reports
+    if (isDaily && qStartStr) {
+      L.push(`  ── TIẾN ĐỘ ${qLabel} (${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}) ──`)
+      L.push(triLine(`QTD (${qStartStr}→${qEndStr})`, qtdRev))
+      L.push(triLine("Pro-rata dự phóng cả quý", projQ))
+      L.push(`  - Target quý (${qMonthStrings.length} tháng): ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
+      if (qtdTargetRev > 0) {
+        L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
+        L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
+      }
+    }
   }
   L.push(``)
   L.push(`【4】LỢI NHUẬN & CM1 (toàn công ty — cost/target không tách theo thị trường):`)
