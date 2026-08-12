@@ -31,19 +31,22 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  // Accept both old format {metrics,startDate,endDate} and new {monthly,products}
+  // Format mới: { monthly, datasets } — datasets = mọi bảng GraphQL portal tự tải (bắt qua interceptor)
+  // Vẫn nhận format cũ { metrics, products } để tương thích ngược.
   const value = JSON.stringify({
     monthly:  body.monthly  ?? null,
-    products: body.products ?? null,
+    datasets: body.datasets ?? null,   // { [queryName]: { variables, data, at } }
     // legacy fallback
-    metrics:  body.metrics  ?? null,
+    products:  body.products  ?? null,
+    metrics:   body.metrics   ?? null,
     startDate: body.startDate ?? null,
     endDate:   body.endDate   ?? null,
     synced_at: new Date().toISOString(),
   })
 
   const valueSize = Buffer.byteLength(value, "utf-8")
-  console.log("[shopee-sync] payload size:", valueSize, "bytes, months:", body.monthly?.length, "products:", body.products?.total)
+  const dsKeys = body.datasets ? Object.keys(body.datasets) : []
+  console.log("[shopee-sync] size:", valueSize, "months:", body.monthly?.length, "datasets:", dsKeys.join(","))
 
   // UPSERT thay SELECT+INSERT/UPDATE — tránh race condition khi script chạy song song
   const { error } = await supabaseAdmin
@@ -61,5 +64,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, saved: { bytes: valueSize, months: body.monthly?.length, products: body.products?.total ?? 0 } }, { headers: CORS_HEADERS })
+  return NextResponse.json({ ok: true, saved: { bytes: valueSize, months: body.monthly?.length ?? 0, datasets: dsKeys } }, { headers: CORS_HEADERS })
 }
