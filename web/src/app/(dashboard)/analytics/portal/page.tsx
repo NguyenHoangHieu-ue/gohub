@@ -139,13 +139,32 @@ function MetricsPanel({ cached, loading, onRefresh }: {
   )
 }
 
+// Raw JS script (for paste vào DevTools Console — KHÔNG có prefix javascript:)
+function makeConsoleScript(token: string, appOrigin: string): string {
+  return `(async function(){
+  var TOKEN='${token}',HOST='${appOrigin}';
+  var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),1);
+  var ts=function(d){return String(Math.floor(d.getTime()/1000));};
+  try{
+    var r=await fetch('/api/v3/affiliateplatform/gql?q=QueryCommissionKeyMetrics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({operationName:'QueryCommissionKeyMetrics',query:'query QueryCommissionKeyMetrics($startTime:Long,$endTime:Long,$commissionType:InsightCommissionType){QueryCommissionKeyMetrics(startTime:$startTime,endTime:$endTime,commissionType:$commissionType){affiliates itemsSold orderAmount estCommission}}',variables:{commissionType:'TARGET_COMMISSION',startTime:ts(start),endTime:ts(now)}})});
+    var d=await r.json();
+    var m=d&&d.data&&d.data.QueryCommissionKeyMetrics;
+    if(!m){console.error('Shopee data null:',JSON.stringify(d));return;}
+    var sy=await fetch(HOST+'/api/portal/shopee-sync',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+TOKEN},body:JSON.stringify({metrics:m,startDate:start.toISOString().slice(0,10),endDate:now.toISOString().slice(0,10)})});
+    console.log(sy.ok?'OK: sync thanh cong':'FAIL: '+sy.status);
+    alert(sy.ok?'Sync thanh cong! Quay lai GoHub bam Lam moi.':'Sync that bai '+sy.status);
+  }catch(e){console.error(e);alert('Loi: '+e.message);}
+})();`
+}
+
 // ── Bookmarklet setup panel (creator only) ────────────────────────────────────
 function BookmarkletPanel() {
   const toast = useToast()
-  const [token,    setToken]    = useState<string | null>(null)
-  const [loading,  setLoading]  = useState(true)
-  const [regen,    setRegen]    = useState(false)
-  const [copied,   setCopied]   = useState(false)
+  const [token,       setToken]       = useState<string | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [regen,       setRegen]       = useState(false)
+  const [copiedConsole, setCopiedConsole] = useState(false)
+  const [showConsole, setShowConsole] = useState(false)
   const appOrigin = typeof window !== "undefined" ? window.location.origin : ""
 
   useEffect(() => {
@@ -166,74 +185,96 @@ function BookmarkletPanel() {
     finally { setRegen(false) }
   }
 
-  async function copyToken() {
+  async function copyConsole() {
     if (!token) return
-    await navigator.clipboard.writeText(token)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    await navigator.clipboard.writeText(makeConsoleScript(token, appOrigin))
+    setCopiedConsole(true)
+    setTimeout(() => setCopiedConsole(false), 2500)
+    toast.success("Đã copy! Paste vào Console trên trang Shopee rồi Enter")
   }
 
   const bookmarkletHref = token ? makeBookmarklet(token, appOrigin) : "#"
 
+  if (loading) return <div className="h-32 bg-slate-100 rounded-xl animate-pulse" />
+  if (!token) return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <button onClick={handleRegen} disabled={regen}
+        className="w-full py-2.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
+        {regen ? "Đang tạo..." : "Tạo Sync Token (bước đầu tiên)"}
+      </button>
+    </div>
+  )
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <BookmarkPlus size={16} className="text-[#003B95]" />
-        <h2 className="font-semibold text-slate-700 text-[15px]">Thiết lập Bookmarklet</h2>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2 text-[13px] text-blue-800">
-        <p className="font-semibold">Cách dùng:</p>
-        <ol className="list-decimal ml-4 space-y-1">
-          <li>Bước 1: {!token ? "Tạo token trước" : <><strong>Kéo nút xanh bên dưới</strong> vào thanh Bookmarks bar</>}</li>
-          <li>Bước 2: Mở <a href={PORTALS[0].url} target="_blank" rel="noopener noreferrer" className="underline font-medium">Shopee Affiliate Portal</a> (phải đăng nhập Shopee)</li>
-          <li>Bước 3: Click bookmark <strong>"Sync → GoHub"</strong> trên thanh bookmarks</li>
-          <li>Bước 4: Xác nhận alert → quay lại đây nhấn "Làm mới"</li>
-        </ol>
-      </div>
-
-      {loading ? (
-        <div className="h-10 bg-slate-100 rounded-lg animate-pulse" />
-      ) : !token ? (
-        <button onClick={handleRegen} disabled={regen}
-          className="w-full py-2.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
-          {regen ? "Đang tạo..." : "Tạo Sync Token"}
-        </button>
-      ) : (
-        <div className="space-y-3">
-          {/* Bookmarklet drag link */}
-          <div className="flex items-center gap-3">
-            <a
-              href={bookmarkletHref}
-              onClick={e => e.preventDefault()}
-              draggable
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium cursor-grab active:cursor-grabbing select-none hover:bg-[#002d73] transition-colors"
-              title="Kéo vào Bookmarks bar"
-            >
-              <BookmarkPlus size={14} />
-              Sync → GoHub
-            </a>
-            <span className="text-[12px] text-slate-400">← Kéo vào Bookmarks bar</span>
-          </div>
-
-          {/* Token display */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-              <code className="text-[12px] text-slate-600 font-mono flex-1 truncate">{token}</code>
-              <button onClick={copyToken} className="text-slate-400 hover:text-[#003B95] flex-shrink-0">
-                {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-              </button>
-            </div>
-            <button onClick={handleRegen} disabled={regen} title="Tạo token mới (huỷ bookmarklet cũ)"
-              className="p-2 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-50">
-              <RefreshCw size={14} className={regen ? "animate-spin" : ""} />
-            </button>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Token này được nhúng trong bookmarklet. Tạo token mới sẽ vô hiệu hoá bookmarklet cũ.
-          </p>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <BookmarkPlus size={16} className="text-[#003B95]" />
+          <h2 className="font-semibold text-slate-700 text-[15px]">Đồng bộ dữ liệu Shopee</h2>
         </div>
-      )}
+        <button onClick={handleRegen} disabled={regen} title="Tạo token mới"
+          className="text-[12px] text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors disabled:opacity-50">
+          <RefreshCw size={11} className={regen ? "animate-spin" : ""} /> Đổi token
+        </button>
+      </div>
+
+      {/* Cách 1: Console (đơn giản nhất) */}
+      <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+          <p className="font-semibold text-emerald-800 text-[14px]">Cách nhanh nhất — Dùng DevTools Console</p>
+        </div>
+        <ol className="text-[13px] text-emerald-700 space-y-1 ml-8">
+          <li>① Mở <a href={PORTALS[0].url} target="_blank" rel="noopener noreferrer" className="underline font-medium">Shopee Affiliate Portal</a> (đảm bảo đã đăng nhập)</li>
+          <li>② Nhấn <kbd className="bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded text-[11px] font-mono">F12</kbd> → tab <strong>Console</strong></li>
+          <li>③ Click nút bên dưới để copy script → Paste vào Console → Enter</li>
+          <li>④ Thấy alert "Sync thành công" → quay lại đây nhấn "Làm mới"</li>
+        </ol>
+        <button
+          onClick={copyConsole}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 transition-colors"
+        >
+          {copiedConsole ? <><Check size={14} /> Đã copy!</> : <><Copy size={14} /> Copy script để paste vào Console</>}
+        </button>
+        {showConsole && token && (
+          <textarea
+            readOnly
+            value={makeConsoleScript(token, appOrigin)}
+            rows={3}
+            className="w-full text-[10px] font-mono bg-white border border-emerald-200 rounded-lg px-2 py-1.5 resize-none text-slate-600"
+          />
+        )}
+        <button onClick={() => setShowConsole(v => !v)} className="text-[11px] text-emerald-600 underline">
+          {showConsole ? "Ẩn script" : "Xem script thủ công"}
+        </button>
+      </div>
+
+      {/* Cách 2: Bookmarklet (cần kéo) */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-slate-500 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+          <p className="font-semibold text-slate-600 text-[14px]">Cách tiện hơn sau này — Bookmarklet</p>
+        </div>
+        <p className="text-[13px] text-slate-500 ml-8">
+          Kéo nút xanh dưới đây vào <strong>Bookmarks bar</strong> (thanh bookmark trên Chrome). Sau đó mỗi lần muốn sync, chỉ cần click bookmark khi đang ở trang Shopee.
+        </p>
+        <div className="flex items-center gap-3 ml-8">
+          <a
+            href={bookmarkletHref}
+            onClick={e => { e.preventDefault(); toast.warning("Kéo nút này vào Bookmarks bar — đừng click trực tiếp tại đây") }}
+            draggable
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium cursor-grab active:cursor-grabbing select-none border-2 border-dashed border-blue-300 hover:border-blue-400 transition-colors"
+            title="KÉO vào Bookmarks bar (đừng click)"
+          >
+            <BookmarkPlus size={14} />
+            Sync → GoHub
+          </a>
+          <span className="text-[12px] text-slate-400">⬅ KÉO vào Bookmarks bar</span>
+        </div>
+        <p className="text-[11px] text-slate-400 ml-8">
+          Chưa thấy Bookmarks bar? Nhấn <kbd className="bg-slate-200 px-1 rounded font-mono text-[10px]">Ctrl+Shift+B</kbd> để bật.
+        </p>
+      </div>
     </div>
   )
 }
