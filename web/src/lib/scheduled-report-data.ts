@@ -1,6 +1,7 @@
 import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 import { supabaseAdmin } from "@/lib/supabase"
+import { tursoQuery } from "@/lib/turso"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Precompute số liệu cho Scheduled Reports (Daily/Weekly/Monthly).
@@ -201,6 +202,20 @@ async function b2cChannelsByDay(start: string, end: string) {
   return cachedAnalyticsQuery<{ ch: string; d: string; revenue: string }>(sql)
 }
 
+// Target quý từ Turso target_planning_quarter (cùng nguồn với tab Quarter Report).
+// qKey format: "Q3-2026". Trả tổng B2B+B2C revenue target (không tách VN/US).
+async function getQuarterTargetRev(qKey: string): Promise<number> {
+  try {
+    const rows = await tursoQuery<{ target_revenue: string | number }>(
+      `SELECT target_revenue FROM target_planning_quarter WHERE quarter = ?`,
+      [qKey]
+    )
+    return rows.reduce((s, r) => s + (parseFloat(String(r.target_revenue ?? 0)) || 0), 0)
+  } catch {
+    return 0
+  }
+}
+
 // Target theo channel cho 1 tháng (target_planning ở Supabase, KHÔNG có trong gohub_dw).
 async function getTargetRows(monthStr: string) {
   const { data } = await supabaseAdmin
@@ -231,9 +246,8 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const isMonthly = period === "monthly"
   const isDaily   = period === "daily"
 
-  // Daily: tính thêm QTD + target quý để hiện trong【3】
-  let qStartStr = "", qEndStr = "", daysElapsedInQ = 0, daysInQ = 92, qLabel = ""
-  const qMonthStrings: string[] = []
+  // Daily: tính thêm QTD + target quý (từ Turso, cùng nguồn Quarter Report) để hiện trong【3】
+  let qStartStr = "", qEndStr = "", daysElapsedInQ = 0, daysInQ = 92, qLabel = "", qKey = ""
   if (isDaily) {
     const ictD = ictNow()
     const todayD = new Date(Date.UTC(ictD.getUTCFullYear(), ictD.getUTCMonth(), ictD.getUTCDate()))
@@ -243,24 +257,24 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     qStartStr = ymd(qStart)
     qEndStr   = ymd(yestD)
     daysElapsedInQ = Math.round((yestD.getTime() - qStart.getTime()) / 86400_000) + 1
-    qLabel = `Q${Math.floor(todayD.getUTCMonth() / 3) + 1}/${todayD.getUTCFullYear()}`
-    for (let i = 0; i < 3; i++) {
-      const mStr = `${todayD.getUTCFullYear()}-${String(qMo + i + 1).padStart(2, "0")}`
-      if (mStr <= r.monthStr) qMonthStrings.push(mStr)
-    }
+    const qIdx = Math.floor(todayD.getUTCMonth() / 3) + 1
+    qLabel = `Q${qIdx}/${todayD.getUTCFullYear()}`
+    qKey   = `Q${qIdx}-${todayD.getUTCFullYear()}`   // format Turso: "Q3-2026"
   }
 
-  const allResults = await Promise.all([
-    revByMarketGroup(r.curStart, r.curEnd),                                              // 0
-    revByMarketGroup(r.prevStart, r.prevEnd),                                            // 1
-    rev3hkByMarket(r.curStart, r.curEnd),                                                // 2
-    rev3hkByMarket(r.prevStart, r.prevEnd),                                              // 3
-    isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),           // 4
-    isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),             // 5
-    fetchBODGroupMarginData(r.curStart, r.curEnd),                                       // 6
-    getTargetRows(r.monthStr),                                                           // 7
-    isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD
-    ...qMonthStrings.map(m => getTargetRows(m)),                                         // 9+: quarter month targets
+  const [allResults, qtdTargetRev] = await Promise.all([
+    Promise.all([
+      revByMarketGroup(r.curStart, r.curEnd),                                              // 0
+      revByMarketGroup(r.prevStart, r.prevEnd),                                            // 1
+      rev3hkByMarket(r.curStart, r.curEnd),                                                // 2
+      rev3hkByMarket(r.prevStart, r.prevEnd),                                              // 3
+      isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),           // 4
+      isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),             // 5
+      fetchBODGroupMarginData(r.curStart, r.curEnd),                                       // 6
+      getTargetRows(r.monthStr),                                                           // 7
+      isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD revenue
+    ]),
+    isDaily ? getQuarterTargetRev(qKey) : Promise.resolve(0),                             // target quý từ Turso
   ])
 
   const curRows    = allResults[0] as Awaited<ReturnType<typeof revByMarketGroup>>
@@ -272,7 +286,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const bodCur     = allResults[6] as Awaited<ReturnType<typeof fetchBODGroupMarginData>>
   const targetRows = allResults[7] as Awaited<ReturnType<typeof getTargetRows>>
   const qtdRevRows = allResults[8] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const qMonthTargetArrays = allResults.slice(9) as Array<Awaited<ReturnType<typeof getTargetRows>>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -330,7 +343,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   if (isDaily) {
     for (const row of qtdRevRows) add(qtdRev, row.cc, parseFloat(row.revenue || "0"))
   }
-  const qtdTargetRev = isDaily ? qMonthTargetArrays.flat().reduce((s, t) => s + Number(t.target_revenue || 0), 0) : 0
+  // qtdTargetRev đã được fetch song song từ Turso ở trên
   const projQ: Triple = {
     vn:    daysElapsedInQ > 0 ? (qtdRev.vn    / daysElapsedInQ) * daysInQ : 0,
     us:    daysElapsedInQ > 0 ? (qtdRev.us    / daysElapsedInQ) * daysInQ : 0,
@@ -370,7 +383,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
     L.push(triLine(`Doanh thu QTD (${qStartStr}→${qEndStr})`, qtdRev))
     L.push(triLine("Pro-rata dự phóng cả quý", projQ))
-    L.push(`  - Target quý (${qMonthStrings.length} tháng): ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
+    L.push(`  - Target quý: ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
     if (qtdTargetRev > 0) {
       L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
       L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
