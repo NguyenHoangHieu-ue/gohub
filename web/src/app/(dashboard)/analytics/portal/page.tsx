@@ -60,10 +60,13 @@ try{
     var met=d&&d.data&&d.data.QueryCommissionKeyMetrics||null;
     monthly.push({month:prevYear+'-'+(m+1<10?'0':'')+(m+1),startDate:s.toISOString().slice(0,10),endDate:e.toISOString().slice(0,10),metrics:met});
   }
-  // Fetch top products for current month (up to 100)
-  var ms=new Date(year,curMo,1);
-  var ld=await gql('QueryCommissionList',{commissionType:'TARGET_COMMISSION',startTime:ts(ms),endTime:ts(now),page:1,pageSize:100},QLIST);
-  var prods=ld&&ld.data&&ld.data.QueryCommissionList||null;
+  // Fetch top products for current month (optional — bỏ qua nếu Shopee đổi schema)
+  var prods=null;
+  try{
+    var ms=new Date(year,curMo,1);
+    var ld=await gql('QueryCommissionList',{commissionType:'TARGET_COMMISSION',startTime:ts(ms),endTime:ts(now),page:1,pageSize:100},QLIST);
+    prods=ld&&ld.data&&ld.data.QueryCommissionList||null;
+  }catch(pe){console.warn('Product list skip:',pe);}
   // Send all
   var sy=await fetch(HOST+'/api/portal/shopee-sync',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+TOKEN},body:JSON.stringify({monthly:monthly,products:prods})});
   var rs=await sy.json();

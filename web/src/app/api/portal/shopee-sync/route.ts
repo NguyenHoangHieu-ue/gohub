@@ -45,22 +45,21 @@ export async function POST(req: NextRequest) {
   const valueSize = Buffer.byteLength(value, "utf-8")
   console.log("[shopee-sync] payload size:", valueSize, "bytes, months:", body.monthly?.length, "products:", body.products?.total)
 
-  const { data: existing } = await supabaseAdmin
-    .from("app_settings").select("id").eq("key", DATA_KEY).maybeSingle()
+  // UPSERT thay SELECT+INSERT/UPDATE — tránh race condition khi script chạy song song
+  const { error } = await supabaseAdmin
+    .from("app_settings")
+    .upsert({ key: DATA_KEY, value, category: "portal" }, { onConflict: "key" })
 
-  if (existing) {
-    const { error } = await supabaseAdmin.from("app_settings").update({ value }).eq("key", DATA_KEY)
-    if (error) {
-      console.error("[shopee-sync] update error:", error)
-      return NextResponse.json({ error: error.message, detail: "Supabase UPDATE failed" }, { status: 500, headers: CORS_HEADERS })
-    }
-  } else {
-    const { error } = await supabaseAdmin.from("app_settings").insert({ key: DATA_KEY, value, category: "portal" })
-    if (error) {
-      console.error("[shopee-sync] insert error:", error)
-      return NextResponse.json({ error: error.message, detail: "Supabase INSERT failed" }, { status: 500, headers: CORS_HEADERS })
+  if (error) {
+    console.error("[shopee-sync] upsert error:", error)
+    // Fallback: try plain UPDATE nếu upsert không hỗ trợ onConflict trên key này
+    const { error: updateErr } = await supabaseAdmin
+      .from("app_settings").update({ value }).eq("key", DATA_KEY)
+    if (updateErr) {
+      console.error("[shopee-sync] fallback update error:", updateErr)
+      return NextResponse.json({ error: updateErr.message, detail: "Supabase write failed" }, { status: 500, headers: CORS_HEADERS })
     }
   }
 
-  return NextResponse.json({ ok: true, saved: { bytes: valueSize, months: body.monthly?.length, products: body.products?.total } }, { headers: CORS_HEADERS })
+  return NextResponse.json({ ok: true, saved: { bytes: valueSize, months: body.monthly?.length, products: body.products?.total ?? 0 } }, { headers: CORS_HEADERS })
 }
