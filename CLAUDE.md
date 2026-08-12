@@ -4,12 +4,12 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-12, s145)
+## Trạng thái hiện tại (2026-08-12, s146)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging ahead main | 12 commit (s145 — Portal + fixes) |
+| staging ahead main | 37 commit (s146 — Quarter Report + Fulfillment improvements) |
 | tsc | PASS |
 
 **Migrations & ENV — đã xong:**
@@ -19,19 +19,24 @@
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 - [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API (trang Portal → mục "Affiliate Open API") → chạy introspection để xác định query khả dụng
 
-**s145 — làm session này (2026-08-12):**
-- ✅ **Scheduled Daily report**: mục 【3】 Pro-rata & Target đổi từ THÁNG (MTD) → QUÝ (QTD), lấy target quý từ **Turso `target_planning_quarter`** (cùng nguồn tab Quarter Report), tách B2B/B2C (không tách VN/US). File `lib/scheduled-report-data.ts`.
-- ✅ **Tổ Gấu**: (1) AI reply hiện ngay (append `json.data` thay vì chỉ chờ Supabase Realtime); (2) @mention gửi Lark DM cho người được nhắc (regex `/@\S+/` bắt Unicode, bypass `notify_lark`); (3) fix nút Test scheduled 403 (fast-path `session.user.role`).
-- ✅ **Portal Access** (tab mới `/analytics/portal`) — creator + user whitelist:
-  - Sidebar: nhóm "Portal" (hiện khi `portal_enabled`)
-  - Lấy data Shopee affiliate — 3 cách đã thử, xem `docs/SYSTEM.md` §Portal:
-    - Hướng B (session cookie server-side) → **THẤT BẠI** (x-sap-sec fingerprint block)
-    - Hướng C (bookmarklet/console interceptor) → **CHẠY**: paste script vào Console trang Shopee, bắt mọi GraphQL response portal tự tải, gửi 1 lần về `/api/portal/shopee-sync`
-    - Hướng A (Affiliate Open API chính thức, ký SHA256) → **ĐANG TEST**: creator nhập App ID+Secret, chạy introspection dò schema
+**s146 — đã làm (2026-08-12):**
+- ✅ **Quarter Report — cột % Target CM1**: bảng KH nhóm (Strategic/VIP/Gold/Silver) thêm cột badge màu = PR CM1 / (target_tháng × 3). Phần "Target & Progress" expand cũng fix tương tự, label hiện "T.Tháng / T.Quý".
+- ✅ **Fulfillment tab — cải tiến toàn diện**:
+  - 4 summary cards (thêm Avg Order Value), mỗi card MoM badge vs tháng trước
+  - Section B2B/B2C split: orders + revenue + % với progress bar
+  - Monthly Trend chart: dual Y-axis (Orders bar trái + Revenue line phải)
+  - Bảng breakdown: thêm cột B2B/B2C orders/revenue + Avg Order Value
+  - Top Locations: thêm cột Revenue
+  - Backend: query mới B2B/B2C split per month + revenue trong overall_locations
+
+**s145 — đã xong (ghi lại):**
+- ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.
+- ✅ **Tổ Gấu**: AI reply ngay, @mention Lark DM, fix nút Test scheduled 403.
+- ✅ **Portal Access** tab `/analytics/portal`: Hướng C (console interceptor) CHẠY; Hướng A (SHA256 Open API) đang test.
 
 **Ghi chú:**
-- Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
-- Daily 【3】 giờ theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
+- Quarter Report: target KH nhập theo THÁNG → cột % Target CM1 nhân × 3 để ra target quý.
+- Daily 【3】 theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---

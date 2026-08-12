@@ -1,5 +1,48 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-10 (Session 140 — B2C Performance CM1 fix + Vercel cron fix).
+Cập nhật lần cuối: 2026-08-12 (Session 146 — Quarter Report % Target CM1 + Fulfillment improvements).
+
+## ══════ SESSION 146 (2026-08-12) — Quarter Report + Fulfillment ══════
+
+### A. Quarter Report — cột % Target CM1 (commits 22e380f, 76b576a)
+
+**Yêu cầu:** Thêm cột bên cạnh CM1 pro-rata trong bảng khách hàng nhóm (Strategic/VIP/Gold/Silver) hiện % đạt target CM1.
+
+**Lưu ý quan trọng:** Target nhập là target THÁNG, không phải quý → phải nhân × 3.
+
+**Thay đổi:**
+- `quarterly/page.tsx`: Thêm `<th>%Tgt CM1</th>` + `<td>` badge màu trong bảng KH nhóm
+  - Xanh lá ≥ 100%, xanh `#003B95` ≥ 75%, cam < 75%
+  - Công thức: `pr.prCm1 / (tgt.cm1 * 3) * 100`
+- Fix phần "Target & Progress" expanded: so sánh vs `tgt.cm1 * 3` (quarterly)
+- Label hiện "T.Tháng: X · T.Quý: X×3" để rõ nguồn gốc
+
+### B. Fulfillment tab — cải tiến toàn diện (commit 22e380f)
+
+**Yêu cầu:** Tự lên ý tưởng cải tiến tab Fulfillment.
+
+**Backend (`fulfillment-report/route.ts`):**
+- Thêm query thứ 5: B2B/B2C split per month (join `dim_order_source.group_name`)
+  → trả `b2b_orders`, `b2b_revenue`, `b2c_orders`, `b2c_revenue` trong từng `monthly` item
+- Thêm `revenue` vào `overallLocRows` query (từ `SUM(fulfilled_revenue_amount_vnd)`)
+- Bump cache key `v2` để invalidate cache cũ
+
+**Frontend (`fulfillment/page.tsx`):**
+1. **4 Summary cards** (từ 3 → 4): thêm "Avg Order Value" = Revenue / Gross Orders
+   - Mỗi card có MoM badge so tháng gần nhất vs tháng trước trong kỳ
+2. **B2B/B2C split section**: 2 card hiện orders + revenue + % tổng + progress bar cho mỗi kênh
+3. **Monthly Trend chart**: nâng cấp dual Y-axis — bar Orders (trục trái) + Line Revenue (trục phải, `f(v) = v/1e9 + "B"`)
+   - Import thêm `Line` từ recharts
+4. **Bảng breakdown**: từ 4 cột → 9 cột (thêm B2B orders/rev, B2C orders/rev, Avg Order Value)
+5. **Top Locations**: thêm cột Revenue (màu amber)
+
+### Commits session 146
+- 22e380f feat: Quarter Report % Target CM1 column + Fulfillment tab improvements
+- 76b576a fix(quarterly): % Target CM1 dùng target tháng × 3 = target quý
+
+### tsc / build
+- tsc PASS cả 2 lần push
+
+---
 
 ## ══════ SESSION 140 (2026-08-10) — B2C CM1 + Dashboard fixes ══════
 
