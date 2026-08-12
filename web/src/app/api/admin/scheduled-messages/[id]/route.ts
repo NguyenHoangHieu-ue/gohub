@@ -26,7 +26,10 @@ async function canWriteScheduled(username: string): Promise<boolean> {
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const _sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const _allowed = ["admin", "creator"].includes(_sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!_allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()
   const { name, prompt, cron_expression, lark_webhook_url, lark_keyword, is_active } = body
@@ -53,7 +56,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const _sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const _allowed = ["admin", "creator"].includes(_sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!_allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -68,7 +74,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user.username))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  // Fast-path: dùng session.user.role trước (tránh username undefined → DB miss → 403 nhầm)
+  const sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const allowed = ["admin", "creator"].includes(sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data: msg, error } = await supabaseAdmin
     .from("lark_scheduled_messages")

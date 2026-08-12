@@ -18,10 +18,11 @@ async function isMember(groupId: string, email: string): Promise<boolean> {
   return !!data
 }
 
-// Parse @mention handles từ content: "@TênHandle" hoặc "@email.prefix"
+// Parse @mention handles từ content. Dùng \S thay \w để bắt được tên Unicode (Hiếu, Ngọc...)
+// Strip dấu câu cuối để "@Hiếu," → "hiếu"
 function parseMentionHandles(content: string): string[] {
-  const matches = content.match(/@([\w.]+)/g) ?? []
-  return matches.map(m => m.slice(1).toLowerCase())
+  const matches = content.match(/@\S+/g) ?? []
+  return matches.map(m => m.slice(1).replace(/[.,!?;:)]+$/, "").toLowerCase())
 }
 
 // Fire-and-forget: gửi Lark DM cho các member khi có tin nhắn mới hoặc được @mention
