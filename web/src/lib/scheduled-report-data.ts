@@ -365,8 +365,18 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : NO_TGT}`)
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % đạt target (Thực tế/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
+  } else if (isDaily && qStartStr) {
+    // Daily → tiến độ QUÝ (QTD + pro-rata + target quý)
+    L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
+    L.push(triLine(`Doanh thu QTD (${qStartStr}→${qEndStr})`, qtdRev))
+    L.push(triLine("Pro-rata dự phóng cả quý", projQ))
+    L.push(`  - Target quý (${qMonthStrings.length} tháng): ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
+    if (qtdTargetRev > 0) {
+      L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
+      L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
+    }
   } else {
-    // Daily/Weekly → đang trong tháng chạy → pro-rata dự phóng cả tháng + tiến độ hiện tại.
+    // Weekly → pro-rata tháng hiện tại
     L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày):`)
     L.push(triLine(`Doanh thu MTD (${r.mtdStart}→${r.mtdEnd})`, mtdTotal))
     L.push(triLine("Pro-rata dự phóng cả tháng", proj))
@@ -374,17 +384,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % tiến độ hiện tại (MTD/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
     L.push(`  - % đạt target theo pro-rata (dự phóng/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(proj.total, totalTargetMonth)) : NO_TGT}`)
-    // Quarterly sub-section for daily reports
-    if (isDaily && qStartStr) {
-      L.push(`  ── TIẾN ĐỘ ${qLabel} (${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}) ──`)
-      L.push(triLine(`QTD (${qStartStr}→${qEndStr})`, qtdRev))
-      L.push(triLine("Pro-rata dự phóng cả quý", projQ))
-      L.push(`  - Target quý (${qMonthStrings.length} tháng): ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
-      if (qtdTargetRev > 0) {
-        L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
-        L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
-      }
-    }
   }
   L.push(``)
   L.push(`【4】LỢI NHUẬN & CM1 (toàn công ty — cost/target không tách theo thị trường):`)
