@@ -4,36 +4,34 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-11, s144)
+## Trạng thái hiện tại (2026-08-12, s145)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging = main | `7b9ac65` |
-| tsc | PASS · vitest 125/125 |
+| staging ahead main | 12 commit (s145 — Portal + fixes) |
+| tsc | PASS |
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại):**
-- [x] ✅ Set `PORTAL_CRED_KEY` trên Vercel (2026-08-10)
-- [x] ✅ Nhập Cost T8 B2C (2026-08-10)
-- [x] ✅ Nhập target T7/T8 cho scheduled reports (2026-08-10)
-- [x] ✅ Đăng ký Kling AI API key (`KLING_API_KEY`) — đã có key (2026-08-10)
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
-- [x] ✅ Setup **cron-job.org** cho Scheduled Messages (2026-08-10): every 15 min, Header `Authorization: Bearer <CRON_SECRET>`
+- [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API (trang Portal → mục "Affiliate Open API") → chạy introspection để xác định query khả dụng
 
-**AI làm tiếp (backlog):**
-- ✅ Gấu Pro: Stability AI image gen (code xong, cần Hiếu set `STABILITY_API_KEY` Vercel + tạo bucket `creator-images` public trong Supabase Storage)
-- ✅ Semantic KB search: code xong, migration v33 đã chạy (2026-08-11)
-- ✅ C2. Product Win Rate Dashboard (tab "Win Rate" trong analytics/products — xong)
-- ✅ C3. B2B Bulk Cost Import (Template + Import Excel trong Quarter Report — xong)
-- ✅ **Tổ Gấu** group chat — Phase 1-5 XONG, migration v34+v35 đã chạy (2026-08-11)
-  - Test plan: xem `Plan_Test_ToGau.md`
+**s145 — làm session này (2026-08-12):**
+- ✅ **Scheduled Daily report**: mục 【3】 Pro-rata & Target đổi từ THÁNG (MTD) → QUÝ (QTD), lấy target quý từ **Turso `target_planning_quarter`** (cùng nguồn tab Quarter Report), tách B2B/B2C (không tách VN/US). File `lib/scheduled-report-data.ts`.
+- ✅ **Tổ Gấu**: (1) AI reply hiện ngay (append `json.data` thay vì chỉ chờ Supabase Realtime); (2) @mention gửi Lark DM cho người được nhắc (regex `/@\S+/` bắt Unicode, bypass `notify_lark`); (3) fix nút Test scheduled 403 (fast-path `session.user.role`).
+- ✅ **Portal Access** (tab mới `/analytics/portal`) — creator + user whitelist:
+  - Sidebar: nhóm "Portal" (hiện khi `portal_enabled`)
+  - Lấy data Shopee affiliate — 3 cách đã thử, xem `docs/SYSTEM.md` §Portal:
+    - Hướng B (session cookie server-side) → **THẤT BẠI** (x-sap-sec fingerprint block)
+    - Hướng C (bookmarklet/console interceptor) → **CHẠY**: paste script vào Console trang Shopee, bắt mọi GraphQL response portal tự tải, gửi 1 lần về `/api/portal/shopee-sync`
+    - Hướng A (Affiliate Open API chính thức, ký SHA256) → **ĐANG TEST**: creator nhập App ID+Secret, chạy introspection dò schema
 
 **Ghi chú:**
 - Báo cáo Daily/Weekly/Monthly dùng Scheduled Messages có sẵn (KHÔNG tạo cron riêng). s139: fix timing (Vercel */5), daily=1 ngày, target luôn hiển thị.
-- Nếu target vẫn hiện "Chưa nhập target tháng này" → Hiếu cần nhập target ở tab Targets cho tháng đó.
+- Daily 【3】 giờ theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
 ---

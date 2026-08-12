@@ -7609,3 +7609,35 @@ Gau Pro Phase 1 (commit 52ae30f):
 
 Merge staging to main: 8815907. ENV them: PORTAL_CRED_KEY (da gen trong .env.local).
 tsc PASS . vitest 80/80
+
+==================================================================================
+### Session 145 (2026-08-12) — Scheduled quarterly fix + Tổ Gấu fixes + Portal Access
+
+**1. Scheduled Daily report — mục 【3】 Pro-rata & Target theo QUÝ (thay vì tháng)**
+- lib/scheduled-report-data.ts: daily 【3】 giờ hiện QTD + pro-rata cả quý + target quý
+- Target quý lấy từ Turso `target_planning_quarter` (getQuarterTargets) — CÙNG NGUỒN tab
+  Quarter Report (trước đó query nhầm Supabase analytics_target_planning → luôn "chưa nhập")
+- Tách B2B/B2C (không tách VN/US) đúng format Quarter Report nhập
+- Weekly vẫn giữ pro-rata THÁNG; Monthly giữ số thực tế
+
+**2. Tổ Gấu (3 fix)**
+- AI reply hiện ngay: askAI() append json.data vào messages (không chỉ chờ Supabase Realtime
+  vốn bị RLS chặn với anon key)
+- @mention → Lark DM: parseMentionHandles regex /@\S+/ (bắt Unicode "@Hiếu"), gửi DM riêng
+  cho người được nhắc, bypass notify_lark flag. messages/route.ts
+- Nút Test scheduled 403: fast-path check session.user.role trước khi fallback DB username
+  (username undefined trong session credentials → getDbRole trả "" → 403 nhầm)
+
+**3. Portal Access — tab mới /analytics/portal (creator + user whitelist)**
+- Sidebar: nhóm "Portal"; /api/user/me trả portal_enabled
+- API: portal-users (whitelist), portal-sync-token, shopee-sync, shopee-cached,
+  shopee-affiliate, portal-affiliate-creds, portal-session (legacy)
+- 3 hướng lấy data Shopee affiliate:
+  A) Affiliate Open API chính thức (open-api.affiliate.shopee.vn/graphql, ký SHA256) — ĐANG TEST
+     (creator nhập App ID+Secret, có query runner + introspection dò schema)
+  B) session cookie server-side — THẤT BẠI (x-sap-sec fingerprint)
+  C) bookmarklet/console interceptor — CHẠY (paste Console trang Shopee, bắt GraphQL response,
+     gửi 1 lần; đã lấy được commission theo tháng T3-T8 + affiliates/itemsSold/orderAmount/estCommission)
+
+Commits staging: 690372a → 17db3fb (12 commit). tsc PASS.
+Lỗi kỹ thuật ghi docs/ERRORS.md §9 (undici cookie, x-sap-sec fingerprint, upsert race, SHA256 sign).
