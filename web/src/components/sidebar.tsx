@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, MessageCircle } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, MessageCircle, Link2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -93,6 +93,14 @@ const MANAGEMENT_GROUP = {
   ],
 }
 
+// Portal — creator + whitelisted users (portal_access_users)
+const PORTAL_GROUP = {
+  label: "Portal",
+  items: [
+    { href: "/analytics/portal", label: "Portal Access", icon: Link2 },
+  ],
+}
+
 // Creator-only management
 const CREATOR_GROUP = {
   label: "Creator",
@@ -128,7 +136,8 @@ function useSidebarData(username: string, sessionRole: string) {
     rolePerms:       Record<string, string[]> | null
     hiddenTabs:      Set<string>
     gpEnabled:       boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false })
+    portalEnabled:   boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, portalEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -147,6 +156,7 @@ function useSidebarData(username: string, sessionRole: string) {
         rolePerms:        perms ?? null,
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
         gpEnabled:        me?.gp_enabled === true,
+        portalEnabled:    me?.portal_enabled === true,
       })
     })
   }, [username, sessionRole])
@@ -288,7 +298,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, portalEnabled } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -419,6 +429,9 @@ export function Sidebar() {
             {gpEnabled && (
               <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
             )}
+            {portalEnabled && PORTAL_GROUP.items.map(it => (
+              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
+            ))}
           </>
         ) : (
           /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
@@ -492,6 +505,14 @@ export function Sidebar() {
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
+                  </div>
+                )}
+                {analystOpen && portalEnabled && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-brand-400/80 uppercase tracking-wider">{PORTAL_GROUP.label}</p>
+                    {PORTAL_GROUP.items.map(it => (
+                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
+                    ))}
                   </div>
                 )}
               </div>

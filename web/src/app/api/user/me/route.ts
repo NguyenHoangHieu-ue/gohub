@@ -11,10 +11,11 @@ export async function GET() {
 
   const username = session.user.username
 
-  const [userRes, configRes, gpRes] = await Promise.all([
+  const [userRes, configRes, gpRes, portalRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
     supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "portal_access_users").maybeSingle(),
   ])
 
   let writableTabs: string[] = []
@@ -36,6 +37,16 @@ export async function GET() {
     } catch {}
   }
 
+  let portalEnabled = false
+  if (data?.role === "creator") {
+    portalEnabled = true
+  } else if (portalRes.data?.value) {
+    try {
+      const allowed = JSON.parse(portalRes.data.value) as string[]
+      portalEnabled = allowed.includes(username)
+    } catch {}
+  }
+
   return NextResponse.json({
     role:              data?.role              ?? session.user.role,
     department:        data?.department        ?? "none",
@@ -43,5 +54,6 @@ export async function GET() {
     allowed_tabs:      data?.allowed_tabs      ?? null,
     writable_tabs:     writableTabs,
     gp_enabled:        gpEnabled,
+    portal_enabled:    portalEnabled,
   })
 }

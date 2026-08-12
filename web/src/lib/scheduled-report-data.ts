@@ -203,16 +203,22 @@ async function b2cChannelsByDay(start: string, end: string) {
 }
 
 // Target quý từ Turso target_planning_quarter (cùng nguồn với tab Quarter Report).
-// qKey format: "Q3-2026". Trả tổng B2B+B2C revenue target (không tách VN/US).
-async function getQuarterTargetRev(qKey: string): Promise<number> {
+// qKey format: "Q3-2026". Trả B2B + B2C tách riêng (Quarter Report không tách VN/US).
+interface QuarterTargets { b2bRev: number; b2cRev: number; total: number }
+async function getQuarterTargets(qKey: string): Promise<QuarterTargets> {
+  const empty: QuarterTargets = { b2bRev: 0, b2cRev: 0, total: 0 }
   try {
-    const rows = await tursoQuery<{ target_revenue: string | number }>(
-      `SELECT target_revenue FROM target_planning_quarter WHERE quarter = ?`,
+    const rows = await tursoQuery<{ channel: string; target_revenue: string | number }>(
+      `SELECT channel, target_revenue FROM target_planning_quarter WHERE quarter = ?`,
       [qKey]
     )
-    return rows.reduce((s, r) => s + (parseFloat(String(r.target_revenue ?? 0)) || 0), 0)
+    const n = (v: string | number | undefined) => parseFloat(String(v ?? 0)) || 0
+    const b2b = rows.find(r => r.channel === "B2B")
+    const b2c = rows.find(r => r.channel === "B2C")
+    const b2bRev = n(b2b?.target_revenue), b2cRev = n(b2c?.target_revenue)
+    return { b2bRev, b2cRev, total: b2bRev + b2cRev }
   } catch {
-    return 0
+    return empty
   }
 }
 
@@ -274,7 +280,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
       getTargetRows(r.monthStr),                                                           // 7
       isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD revenue
     ]),
-    isDaily ? getQuarterTargetRev(qKey) : Promise.resolve(0),                             // target quý từ Turso
+    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),  // target quý từ Turso
   ])
 
   const curRows    = allResults[0] as Awaited<ReturnType<typeof revByMarketGroup>>
@@ -286,6 +292,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const bodCur     = allResults[6] as Awaited<ReturnType<typeof fetchBODGroupMarginData>>
   const targetRows = allResults[7] as Awaited<ReturnType<typeof getTargetRows>>
   const qtdRevRows = allResults[8] as Awaited<ReturnType<typeof revByMarketGroup>>
+  const qtTargets  = qtdTargetRev as QuarterTargets
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -338,12 +345,19 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   }
   const tgtCm1B2b = targetCm1Pct("B2B"), tgtCm1B2c = targetCm1Pct("B2C")
 
-  // QTD aggregates (daily only)
-  const qtdRev = zero()
+  // QTD aggregates (daily only) — tách B2B/B2C để hiện trong【3】
+  const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero()
   if (isDaily) {
-    for (const row of qtdRevRows) add(qtdRev, row.cc, parseFloat(row.revenue || "0"))
+    for (const row of qtdRevRows) {
+      const v = parseFloat(row.revenue || "0")
+      add(qtdRev, row.cc, v)
+      if (row.grp === "B2B") add(qtdB2b, row.cc, v)
+      else if (row.grp === "B2C") add(qtdB2c, row.cc, v)
+    }
   }
-  // qtdTargetRev đã được fetch song song từ Turso ở trên
+  // Projections B2B/B2C theo quý (total only, không cần tách VN/US)
+  const projQb2b = daysElapsedInQ > 0 ? (qtdB2b.total / daysElapsedInQ) * daysInQ : 0
+  const projQb2c = daysElapsedInQ > 0 ? (qtdB2c.total / daysElapsedInQ) * daysInQ : 0
   const projQ: Triple = {
     vn:    daysElapsedInQ > 0 ? (qtdRev.vn    / daysElapsedInQ) * daysInQ : 0,
     us:    daysElapsedInQ > 0 ? (qtdRev.us    / daysElapsedInQ) * daysInQ : 0,
@@ -379,14 +393,16 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % đạt target (Thực tế/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
   } else if (isDaily && qStartStr) {
-    // Daily → tiến độ QUÝ (QTD + pro-rata + target quý)
+    // Daily → tiến độ QUÝ theo B2B/B2C (không tách VN/US — khớp cách nhập trong Quarter Report)
+    const hasQTgt = qtTargets.total > 0
+    const NO_QTGT = "Chưa nhập target quý"
     L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
-    L.push(triLine(`Doanh thu QTD (${qStartStr}→${qEndStr})`, qtdRev))
-    L.push(triLine("Pro-rata dự phóng cả quý", projQ))
-    L.push(`  - Target quý: ${qtdTargetRev > 0 ? vnd(qtdTargetRev) : NO_TGT}`)
-    if (qtdTargetRev > 0) {
-      L.push(`  - % QTD/Target quý: ${pct(ratio(qtdRev.total, qtdTargetRev))}`)
-      L.push(`  - % Pro-rata/Target quý: ${pct(ratio(projQ.total, qtdTargetRev))}`)
+    L.push(`  - Doanh thu QTD (${qStartStr}→${qEndStr}): B2B ${vnd(qtdB2b.total)} | B2C ${vnd(qtdB2c.total)} | Tổng ${vnd(qtdRev.total)}`)
+    L.push(`  - Pro-rata dự phóng cả quý: B2B ${vnd(projQb2b)} | B2C ${vnd(projQb2c)} | Tổng ${vnd(projQb2b + projQb2c)}`)
+    L.push(`  - Target quý: ${hasQTgt ? `B2B ${vnd(qtTargets.b2bRev)} | B2C ${vnd(qtTargets.b2cRev)} | Tổng ${vnd(qtTargets.total)}` : NO_QTGT}`)
+    if (hasQTgt) {
+      L.push(`  - % QTD/Target: B2B ${pct(ratio(qtdB2b.total, qtTargets.b2bRev))} | B2C ${pct(ratio(qtdB2c.total, qtTargets.b2cRev))} | Tổng ${pct(ratio(qtdRev.total, qtTargets.total))}`)
+      L.push(`  - % Pro-rata/Target: B2B ${pct(ratio(projQb2b, qtTargets.b2bRev))} | B2C ${pct(ratio(projQb2c, qtTargets.b2cRev))} | Tổng ${pct(ratio(projQb2b + projQb2c, qtTargets.total))}`)
     }
   } else {
     // Weekly → pro-rata tháng hiện tại
