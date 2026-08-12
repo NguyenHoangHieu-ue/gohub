@@ -942,6 +942,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             { label: "% chi phí MKT / revenue", metric: "mktRate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%` },
             { label: "Gross profit", metric: "grossProfit" as const, fmt: formatCurrency },
             { label: "Gross profit %", metric: "gpRate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%` },
+            { label: "CM1 = Gross profit - Spend", metric: "cm1" as const, fmt: formatCurrency, highlight: true },
             { label: "(Gross profit - MKT) / revenue", metric: "cm1Rate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%`, highlight: true },
           ].map(row => (
             <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
