@@ -31,13 +31,14 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { metrics, list, startDate, endDate } = body
-
+  // Accept both old format {metrics,startDate,endDate} and new {monthly,products}
   const value = JSON.stringify({
-    metrics,
-    list: list ?? null,
-    startDate,
-    endDate,
+    monthly:  body.monthly  ?? null,
+    products: body.products ?? null,
+    // legacy fallback
+    metrics:  body.metrics  ?? null,
+    startDate: body.startDate ?? null,
+    endDate:   body.endDate   ?? null,
     synced_at: new Date().toISOString(),
   })
 
