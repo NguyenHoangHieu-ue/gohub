@@ -1684,6 +1684,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%Tgt CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (CM1)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
@@ -1707,7 +1708,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
                             const isEditingTgt = editingTargetCode === c.code
                             const isSavingTgt  = savingTargetCode  === c.code
-                            const colSpanAll = 9 + (isCreator ? 2 : 0)
+                            const colSpanAll = 10 + (isCreator ? 2 : 0)
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
@@ -1736,6 +1737,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
                                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  <td className="px-3 py-2 text-right text-[10px]">
+                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                  </td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
@@ -1998,7 +2002,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             )
                           })}
                           {custs.length === 0 && (
-                            <tr><td colSpan={9 + (isCreator ? 2 : 0)} className="px-3 py-6 text-center text-slate-400 italic text-xs">
+                            <tr><td colSpan={10 + (isCreator ? 2 : 0)} className="px-3 py-6 text-center text-slate-400 italic text-xs">
                               {custSearch ? `Không tìm thấy KH khớp "${custSearch}"` : "Không có khách hàng"}
                             </td></tr>
                           )}

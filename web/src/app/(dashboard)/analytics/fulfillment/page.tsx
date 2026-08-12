@@ -1,17 +1,15 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect } from "react"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ComposedChart,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  ComposedChart, Line,
 } from "recharts"
-import { Truck, Package, Filter, Calendar, Download, AlertCircle, RotateCcw, MapPin, Tablet } from "lucide-react"
+import { Truck, Package, Filter, Calendar, Download, AlertCircle, RotateCcw, MapPin, Tablet, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportRawRows } from "@/lib/export-excel"
-
-// Port "y hệt" gohub-intel FulfillmentReport. Backend /api/analytics/fulfillment-report (chung shape).
-// Adapt: "use client"; cn @/lib/utils; inline getDefaultDateRange; Export CSV wired (intel để trống).
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -29,10 +27,11 @@ function getDefaultDateRange() {
 interface FulfillmentData {
   monthly: {
     month: string; gross_orders: number; revenue: number; items_delivery: number
+    b2b_orders: number; b2b_revenue: number; b2c_orders: number; b2c_revenue: number
     categories: Record<string, { units: number; orders: number; revenue: number; locations: Record<string, { units: number; orders: number; revenue: number }> }>
     locations: { name: string; orders: number; units: number; revenue: number }[]
   }[]
-  overall_locations: { name: string; orders: number; units: number }[]
+  overall_locations: { name: string; orders: number; units: number; revenue: number }[]
 }
 
 export default function FulfillmentReport() {
@@ -44,7 +43,7 @@ export default function FulfillmentReport() {
   const [includeShip,        setIncludeShip]        = useState(false)
   const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
-  useEffect(() => { fetchFulfillmentData() }, []) // eslint-disable-line react-hooks/exhaustive-deps — lọc theo ngày chỉ chạy khi bấm "Lọc"
+  useEffect(() => { fetchFulfillmentData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchFulfillmentData = async () => {
     setLoading(true); setError(null)
@@ -64,9 +63,16 @@ export default function FulfillmentReport() {
   }
 
   const totals = (data?.monthly || []).reduce((acc, curr) => ({
-    gross_orders: acc.gross_orders + curr.gross_orders, revenue: acc.revenue + curr.revenue,
+    gross_orders: acc.gross_orders + curr.gross_orders,
+    revenue: acc.revenue + curr.revenue,
     items_delivery: acc.items_delivery + curr.items_delivery,
-  }), { gross_orders: 0, revenue: 0, items_delivery: 0 })
+    b2b_orders: acc.b2b_orders + curr.b2b_orders,
+    b2b_revenue: acc.b2b_revenue + curr.b2b_revenue,
+    b2c_orders: acc.b2c_orders + curr.b2c_orders,
+    b2c_revenue: acc.b2c_revenue + curr.b2c_revenue,
+  }), { gross_orders: 0, revenue: 0, items_delivery: 0, b2b_orders: 0, b2b_revenue: 0, b2c_orders: 0, b2c_revenue: 0 })
+
+  const avgOrderValue = totals.gross_orders > 0 ? totals.revenue / totals.gross_orders : 0
 
   const categoryKeys = Array.from(new Set((data?.monthly || []).flatMap(m => Object.keys(m.categories || {})))).sort()
   const allLocationNames = Array.from(new Set([
@@ -88,11 +94,31 @@ export default function FulfillmentReport() {
   const revMonths = [...(data?.monthly || [])].reverse()
   const momPct = (last: number, prev: number) => (prev ? ((last / prev) - 1) * 100 : 0)
 
+  // MoM for summary cards: last month vs previous month in the filtered period
+  const lastM  = revMonths[revMonths.length - 1]
+  const prevM  = revMonths[revMonths.length - 2]
+  const momOrders  = lastM && prevM ? momPct(lastM.gross_orders, prevM.gross_orders) : null
+  const momRevenue = lastM && prevM ? momPct(lastM.revenue, prevM.revenue) : null
+  const momItems   = lastM && prevM ? momPct(lastM.items_delivery, prevM.items_delivery) : null
+  const momAvgOV   = lastM && prevM && prevM.gross_orders > 0 && lastM.gross_orders > 0
+    ? momPct(lastM.revenue / lastM.gross_orders, prevM.revenue / prevM.gross_orders) : null
+
+  const MomBadge = ({ v }: { v: number | null }) => {
+    if (v === null || revMonths.length < 2) return null
+    return (
+      <span className={cn("text-[11px] font-bold", v >= 0 ? "text-emerald-600" : "text-rose-500")}>
+        {v >= 0 ? "▲" : "▼"} {Math.abs(v).toFixed(1)}% vs tháng trước
+      </span>
+    )
+  }
+
   const handleExportCSV = () => {
     if (!data || data.monthly.length === 0) return
     const rows = data.monthly.map(m => ({
       "Month": m.month, "Gross Orders": m.gross_orders,
       "Revenue": m.revenue, "Items Delivery": m.items_delivery,
+      "B2B Orders": m.b2b_orders, "B2B Revenue": m.b2b_revenue,
+      "B2C Orders": m.b2c_orders, "B2C Revenue": m.b2c_revenue,
     }))
     exportRawRows(rows, `fulfillment_${startDate}_to_${endDate}`, "Fulfillment")
   }
@@ -107,7 +133,7 @@ export default function FulfillmentReport() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Fulfillment Report</h1>
           <p className="text-slate-500 text-sm">Monitor order fulfillment, delivery performance, and product categories</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 bg-white px-3 py-2 border border-slate-200 rounded-xl shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
@@ -137,23 +163,69 @@ export default function FulfillmentReport() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Gross Orders", value: totals.gross_orders, icon: Package, color: "blue" },
-          { label: "Items Delivery", value: totals.items_delivery, icon: Truck, color: "indigo" },
-          { label: "Total Revenue", value: totals.revenue, icon: RotateCcw, color: "amber", isCurrency: true },
+          { label: "Gross Orders", value: totals.gross_orders, icon: Package, color: "blue", mom: momOrders, isCurrency: false },
+          { label: "Items Delivery", value: totals.items_delivery, icon: Truck, color: "indigo", mom: momItems, isCurrency: false },
+          { label: "Total Revenue", value: totals.revenue, icon: RotateCcw, color: "amber", mom: momRevenue, isCurrency: true },
+          { label: "Avg Order Value", value: avgOrderValue, icon: TrendingUp, color: "emerald", mom: momAvgOV, isCurrency: true },
         ].map((item, idx) => (
           <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
             <div className="flex justify-between items-start mb-3">
-              <div className={cn("p-2.5 rounded-xl", item.color === "blue" ? "bg-blue-50 text-blue-600" : item.color === "emerald" ? "bg-emerald-50 text-emerald-600" : item.color === "indigo" ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600")}>
+              <div className={cn("p-2.5 rounded-xl",
+                item.color === "blue"    ? "bg-blue-50 text-blue-600"    :
+                item.color === "indigo"  ? "bg-indigo-50 text-indigo-600" :
+                item.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
+                                           "bg-amber-50 text-amber-600")}>
                 <item.icon className="w-5 h-5" />
               </div>
             </div>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{item.label}</p>
-            {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (<h3 className="text-2xl font-bold text-slate-900 mt-1">{item.isCurrency ? formatCompactNumber(item.value) : formatNumber(item.value)}</h3>)}
+            {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">
+                {item.isCurrency ? formatCompactNumber(item.value) : formatNumber(item.value)}
+              </h3>
+            )}
+            {!loading && <div className="mt-1.5 min-h-[18px]"><MomBadge v={item.mom} /></div>}
           </div>
         ))}
       </div>
+
+      {/* B2B / B2C split */}
+      {!loading && data && (totals.b2b_orders > 0 || totals.b2c_orders > 0) && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <h2 className="text-sm font-bold text-slate-700 mb-4">B2B / B2C Split (toàn kỳ)</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { label: "B2B", orders: totals.b2b_orders, revenue: totals.b2b_revenue, accent: "#003B95", bg: "bg-blue-50" },
+              { label: "B2C", orders: totals.b2c_orders, revenue: totals.b2c_revenue, accent: "#0ea5e9", bg: "bg-sky-50" },
+            ].map(seg => {
+              const ordPct = totals.gross_orders > 0 ? seg.orders / totals.gross_orders * 100 : 0
+              const revPct = totals.revenue > 0 ? seg.revenue / totals.revenue * 100 : 0
+              return (
+                <div key={seg.label} className={cn("rounded-xl p-4 border", seg.bg, seg.label === "B2B" ? "border-blue-200" : "border-sky-200")}>
+                  <p className="text-xs font-extrabold uppercase tracking-widest mb-2" style={{ color: seg.accent }}>{seg.label}</p>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Đơn hàng</p>
+                      <p className="text-xl font-bold text-slate-900">{formatNumber(seg.orders)}</p>
+                      <p className="text-[11px] text-slate-500">{ordPct.toFixed(1)}% tổng đơn</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Revenue</p>
+                      <p className="text-xl font-bold text-slate-900">{formatCompactNumber(seg.revenue)}</p>
+                      <p className="text-[11px] text-slate-500">{revPct.toFixed(1)}% tổng rev</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(revPct, 100)}%`, background: seg.accent }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Detailed Fulfillment Matrix Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
@@ -260,11 +332,13 @@ export default function FulfillmentReport() {
 
       {/* Summary Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Monthly Trend: Orders (bar, left) + Revenue (line, right) */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Monthly Order Trend</h2>
+            <h2 className="text-lg font-bold text-slate-900">Monthly Trend</h2>
             <div className="flex items-center gap-4 text-xs font-medium">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> Gross Orders</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> Gross Orders (trái)</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-amber-400 rounded-full"></div> Revenue (phải)</div>
             </div>
           </div>
           <div className="h-[300px]">
@@ -273,9 +347,16 @@ export default function FulfillmentReport() {
                 <ComposedChart data={revMonths}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                  <Bar dataKey="gross_orders" name="Gross Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
+                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false}
+                    tick={{ fill: "#b45309", fontSize: 10 }}
+                    tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+                    formatter={(v: any, name: string) => name === "Revenue" ? [formatCompactNumber(v), "Revenue"] : [formatNumber(v as number), name]}
+                  />
+                  <Bar yAxisId="left" dataKey="gross_orders" name="Gross Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -307,21 +388,30 @@ export default function FulfillmentReport() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                {["Month", "Gross Orders", "Revenue", "Items Deliv."].map((h, i) => (
-                  <th key={h} className={cn("px-4 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100", i === 0 ? "px-6" : i === 2 ? "text-right" : "text-center")}>{h}</th>
+                {["Month", "Gross Orders", "Revenue", "Items Deliv.", "B2B Đơn", "B2B Rev", "B2C Đơn", "B2C Rev", "Avg Order Val"].map((h, i) => (
+                  <th key={h} className={cn("px-4 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100",
+                    i === 0 ? "px-6" : i === 2 || i >= 5 ? "text-right" : "text-center")}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? Array(3).fill(0).map((_, i) => (<tr key={i}>{Array(4).fill(0).map((_, j) => <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>)}</tr>)) : (
-                (data?.monthly || []).map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-slate-800">{row.month}</td>
-                    <td className="px-4 py-4 text-center font-medium text-slate-600">{formatNumber(row.gross_orders)}</td>
-                    <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(row.revenue)}</td>
-                    <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.items_delivery)}</td>
-                  </tr>
-                ))
+              {loading ? Array(3).fill(0).map((_, i) => (<tr key={i}>{Array(9).fill(0).map((_, j) => <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>)}</tr>)) : (
+                (data?.monthly || []).map((row, idx) => {
+                  const aov = row.gross_orders > 0 ? row.revenue / row.gross_orders : 0
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-800">{row.month}</td>
+                      <td className="px-4 py-4 text-center font-medium text-slate-600">{formatNumber(row.gross_orders)}</td>
+                      <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(row.revenue)}</td>
+                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.items_delivery)}</td>
+                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.b2b_orders)}</td>
+                      <td className="px-4 py-4 text-right text-slate-600">{formatCompactNumber(row.b2b_revenue)}</td>
+                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.b2c_orders)}</td>
+                      <td className="px-4 py-4 text-right text-slate-600">{formatCompactNumber(row.b2c_revenue)}</td>
+                      <td className="px-4 py-4 text-right text-slate-500 text-[12px]">{formatCompactNumber(aov)}</td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
             {!loading && data && (data.monthly || []).length > 0 && (
@@ -331,6 +421,11 @@ export default function FulfillmentReport() {
                   <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.gross_orders)}</td>
                   <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.revenue)}</td>
                   <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.items_delivery)}</td>
+                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.b2b_orders)}</td>
+                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.b2b_revenue)}</td>
+                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.b2c_orders)}</td>
+                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.b2c_revenue)}</td>
+                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(avgOrderValue)}</td>
                 </tr>
               </tfoot>
             )}
@@ -359,10 +454,22 @@ export default function FulfillmentReport() {
           <div className="space-y-3">
             {(data?.overall_locations || []).slice(0, 5).map((loc, i) => (
               <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <span className="text-sm font-medium text-slate-700">{loc.name || "Unknown"}</span>
-                <div className="flex items-center gap-4">
-                  <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders</p><p className="text-sm font-bold text-slate-900">{formatNumber(loc.orders)}</p></div>
-                  <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Units</p><p className="text-sm font-bold text-slate-900">{formatNumber(loc.units)}</p></div>
+                <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{loc.name || "Unknown"}</span>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(loc.orders)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Units</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(loc.units)}</p>
+                  </div>
+                  {loc.revenue > 0 && (
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Revenue</p>
+                      <p className="text-sm font-bold text-amber-700">{formatCompactNumber(loc.revenue)}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
