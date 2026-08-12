@@ -1738,7 +1738,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   </td>
                                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
                                   <td className="px-3 py-2 text-right text-[10px]">
-                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / (tgt.cm1 * 3) * 100; return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
                                   </td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
@@ -1901,17 +1901,17 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
-                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target: {fc(tgt.cm1)}</div>
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">T.Tháng: {fc(tgt.cm1)} · T.Quý: {fc(tgt.cm1 * 3)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
+                                                        <span className={cn("font-bold", cPrCm1 / (tgt.cm1 * 3) >= 1 ? "text-green-600" : cPrCm1 / (tgt.cm1 * 3) >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? cPrCm1 / (tgt.cm1 * 3) * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
-                                                          {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)}
+                                                        <span className={cn("font-bold", actCm1 / (tgt.cm1 * 3) >= 1 ? "text-green-600" : actCm1 / (tgt.cm1 * 3) >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.cm1 > 0 ? actCm1 / (tgt.cm1 * 3) * 100 : 0)}
                                                         </span>
                                                       </div>
                                                     </div>
