@@ -170,6 +170,29 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PATCH — sửa metadata item (retail_price, safety_stock, reorder_point, status, vendor, sim_type, note_permanent)
+export async function PATCH(req: NextRequest) {
+  try {
+    await requireAuth()
+    const body = await req.json() as {
+      sku_code: string; retail_price?: number; safety_stock?: number; reorder_point?: number
+      status?: string; vendor?: string; sim_type?: string; note_permanent?: string | null
+    }
+    if (!body.sku_code) return NextResponse.json({ error: "sku_code required" }, { status: 400 })
+
+    const { sku_code, ...fields } = body
+    const { error } = await supabaseAdmin
+      .from("inventory_items")
+      .update(fields)
+      .eq("sku_code", sku_code)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+}
+
 // DELETE — xóa SKU khỏi danh sách track
 export async function DELETE(req: NextRequest) {
   try {
