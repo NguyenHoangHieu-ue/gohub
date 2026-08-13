@@ -1,5 +1,35 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-12 (Session 146 — Quarter Report % Target CM1 + Fulfillment improvements).
+Cập nhật lần cuối: 2026-08-13 (Session 147 — Ẩn Tổ Gấu, Staff Target theo tháng, Inventory Management tab).
+
+## ══════ SESSION 147 (2026-08-13) ══════
+
+### A. Ẩn tab Tổ Gấu (commit ea68e6a → merge main 6a0176b)
+- `sidebar.tsx`: chỉ hiện Tổ Gấu với `isCreatorUser`, ẩn với mọi role khác (cả collapsed + expanded mode)
+
+### B. Staff tab — 2 cột Target editable (commits b5e0fcf, 49ae2a1, c9076fc)
+- Thêm cột **CM1 Target (Strategic)** + **CM1 Target (Non-strategic)** + **3HK Rev Target**
+- Lưu per `(staff_code, month)` trong bảng Supabase `staff_targets` (PK composite)
+- API: `GET/PATCH /api/analytics/staff-targets?months=2026-08,...`
+- UI: button **Sửa Target tháng YYYY-MM** → edit mode batch → Lưu/Hủy (Lưu active khi có thay đổi)
+- Multi-month: hiện tổng target, disable edit (tooltip "Chọn 1 tháng để chỉnh sửa")
+- Lưu `updated_by_email` + `updated_by_name` trong DB
+- Export: thêm 3 cột target vào cả single-month và multi-month
+
+### C. Inventory Management tab — rebuild hoàn toàn (commits b9c09ae, 3a299f9)
+- Thay thế tab Fulfillment cũ (báo cáo doanh thu) bằng OPS inventory management
+- **2 Supabase tables**: `inventory_items` (SKU list) + `inventory_snapshots` (daily/weekly stock)
+- **1 Supabase table**: `vendor_balances` (số dư tài khoản vendor)
+- **APIs**: inventory-items (CRUD + PATCH metadata), inventory-snapshots (GET history, POST batch), vendor-balances (GET/PATCH)
+- **Page features**:
+  - Alert banner (DOI < 7 đỏ, DOI < 30 vàng, HSD < 30 ngày cam)
+  - Vendor Balance section (collapsible, edit balance/currency/credit_limit)
+  - Bảng tồn kho: full English column names, uniform slate colors, row-level alert colors only
+  - "Update Stock" → edit mode → nhập tồn kho 5 kho, HSD, kênh phân bổ → Save Snapshot (upsert theo ngày)
+  - ⚙️ Settings icon per row → EditItemModal → sửa retail_price, safety_stock, reorder_point, status, vendor
+  - History expand: xem snapshot ngày trước, click ngày để load
+  - Sold 15D/30D auto từ `fact_fulfillment_revenue` gohub_dw
+  - Export Excel đầy đủ
+- **Migrations**: v22_staff_targets (PK staff_code+month), v23_inventory (2 tables), v24_vendor_balances
 
 ## ══════ SESSION 146 (2026-08-12) — Quarter Report + Fulfillment ══════
 
