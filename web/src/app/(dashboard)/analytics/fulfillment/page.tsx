@@ -1,482 +1,697 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  ComposedChart, Line,
-} from "recharts"
-import { Truck, Package, Filter, Calendar, Download, AlertCircle, RotateCcw, MapPin, Tablet, TrendingUp } from "lucide-react"
+  Package, Plus, Save, XCircle, Pencil, Trash2, Download,
+  ChevronDown, ChevronRight, AlertTriangle, Clock, CheckCircle, History,
+  RefreshCw, Filter, Eye, EyeOff,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
-import { DatePresets } from "@/components/date-presets"
 import { exportRawRows } from "@/lib/export-excel"
+import { formatCompactNumber } from "@/lib/analytics-formatters"
 
-function getDefaultDateRange() {
-  const today = new Date()
-  const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
-  if (today.getDate() <= 7) {
-    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
-    return { startDate: fmt(start), endDate: fmt(end) }
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface InventoryItem {
+  sku_code:        string
+  sim_type:        string
+  vendor:          string
+  status:          string
+  retail_price:    number
+  safety_stock:    number
+  reorder_point:   number
+  note_permanent:  string | null
+  // snapshot
+  snapshot_date:   string | null
+  stock_total:     number
+  stock_warehouse: number
+  stock_pq_hcm:    number
+  stock_dd_hn:     number
+  stock_tsn_hcm:   number
+  stock_kg:        number
+  expiry_date:     string | null
+  expiry_qty:      number
+  ops_qty:         number
+  telco_qty:       number
+  od_qty:          number
+  ws_qty:          number
+  b2c_qty:         number
+  marketing_qty:   number
+  note:            string
+  updated_by:      string | null
+  updated_at:      string | null
+  // computed
+  sold_15d:        number
+  sold_30d:        number
+  avg_per_day:     number
+  doi:             number | null
+  est_out_of_stock: string | null
+}
+
+type DraftItem = Pick<InventoryItem,
+  "stock_total"|"stock_warehouse"|"stock_pq_hcm"|"stock_dd_hn"|"stock_tsn_hcm"|"stock_kg"|
+  "expiry_date"|"expiry_qty"|"ops_qty"|"telco_qty"|"od_qty"|"ws_qty"|"b2c_qty"|"marketing_qty"|"note">
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fck = (n: number) => formatCompactNumber(n)
+const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
+const todayStr = fmt(new Date())
+
+function doiColor(doi: number | null, stock: number): "red" | "yellow" | "green" | "gray" {
+  if (stock === 0) return "gray"
+  if (doi === null) return "gray"
+  if (doi < 7)  return "red"
+  if (doi < 30) return "yellow"
+  return "green"
+}
+
+function DoiBadge({ doi, stock }: { doi: number | null; stock: number }) {
+  const color = doiColor(doi, stock)
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full",
+      color === "red"    && "bg-red-100 text-red-700",
+      color === "yellow" && "bg-amber-100 text-amber-700",
+      color === "green"  && "bg-emerald-100 text-emerald-700",
+      color === "gray"   && "bg-slate-100 text-slate-400",
+    )}>
+      {color === "red"    && <AlertTriangle className="w-3 h-3" />}
+      {color === "yellow" && <Clock className="w-3 h-3" />}
+      {color === "green"  && <CheckCircle className="w-3 h-3" />}
+      {doi !== null ? `${doi}N` : stock === 0 ? "Hết" : "—"}
+    </span>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg: Record<string, string> = {
+    Active:    "bg-emerald-100 text-emerald-700",
+    Inactive:  "bg-slate-100 text-slate-500",
+    Temporary: "bg-blue-100 text-blue-700",
+    Deleted:   "bg-red-100 text-red-500",
   }
-  const start = new Date(today.getFullYear(), today.getMonth(), 1)
-  const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  return { startDate: fmt(start), endDate: fmt(end) }
+  return <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase", cfg[status] ?? "bg-slate-100 text-slate-500")}>{status}</span>
 }
 
-interface FulfillmentData {
-  monthly: {
-    month: string; gross_orders: number; revenue: number; items_delivery: number
-    b2b_orders: number; b2b_revenue: number; b2c_orders: number; b2c_revenue: number
-    categories: Record<string, { units: number; orders: number; revenue: number; locations: Record<string, { units: number; orders: number; revenue: number }> }>
-    locations: { name: string; orders: number; units: number; revenue: number }[]
-  }[]
-  overall_locations: { name: string; orders: number; units: number; revenue: number }[]
+function NumInput({ value, onChange, className }: { value: number; onChange: (v: number) => void; className?: string }) {
+  return (
+    <input type="number" min={0} value={value || ""}
+      onChange={e => onChange(parseInt(e.target.value) || 0)}
+      placeholder="0"
+      className={cn("w-20 text-right text-xs font-bold bg-white border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500", className)}
+    />
+  )
 }
 
-export default function FulfillmentReport() {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<FulfillmentData | null>(null)
-  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+// ─── Add SKU Modal ────────────────────────────────────────────────────────────
+function AddSkuModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [skuCode,      setSkuCode]      = useState("")
+  const [simType,      setSimType]      = useState("SIM")
+  const [vendor,       setVendor]       = useState("")
+  const [status,       setStatus]       = useState("Active")
+  const [safetyStock,  setSafetyStock]  = useState(0)
+  const [reorderPoint, setReorderPoint] = useState(0)
+  const [retailPrice,  setRetailPrice]  = useState(0)
+  const [notePerm,     setNotePerm]     = useState("")
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState("")
 
-  useEffect(() => { fetchFulfillmentData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchFulfillmentData = async () => {
-    setLoading(true); setError(null)
+  const submit = async () => {
+    if (!skuCode.trim()) { setError("SKU code không được trống"); return }
+    setSaving(true); setError("")
     try {
-      const params = new URLSearchParams({ startDate, endDate })
-      if (includeShip)        params.set("includeShip", "1")
-      if (includeInternalOps) params.set("includeInternalOps", "1")
-      const res = await fetch(`/api/analytics/fulfillment-report?${params}`)
-      if (res.ok) setData(await res.json())
-      else { const errorData = await res.json(); setError(errorData.message || errorData.error || "Failed to fetch fulfillment data") }
-    } catch (err: any) {
-      console.error("Error fetching fulfillment data:", err)
-      setError(err.message || "Failed to fetch. Please check your connection.")
-    } finally {
-      setLoading(false)
-    }
+      const r = await fetch("/api/analytics/inventory-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku_code: skuCode.trim(), sim_type: simType, vendor, status,
+          retail_price: retailPrice, safety_stock: safetyStock, reorder_point: reorderPoint,
+          note_permanent: notePerm || null,
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok) { setError(j.error ?? "Lỗi"); return }
+      onAdded(); onClose()
+    } catch { setError("Lỗi kết nối") } finally { setSaving(false) }
   }
-
-  const totals = (data?.monthly || []).reduce((acc, curr) => ({
-    gross_orders: acc.gross_orders + curr.gross_orders,
-    revenue: acc.revenue + curr.revenue,
-    items_delivery: acc.items_delivery + curr.items_delivery,
-    b2b_orders: acc.b2b_orders + curr.b2b_orders,
-    b2b_revenue: acc.b2b_revenue + curr.b2b_revenue,
-    b2c_orders: acc.b2c_orders + curr.b2c_orders,
-    b2c_revenue: acc.b2c_revenue + curr.b2c_revenue,
-  }), { gross_orders: 0, revenue: 0, items_delivery: 0, b2b_orders: 0, b2b_revenue: 0, b2c_orders: 0, b2c_revenue: 0 })
-
-  const avgOrderValue = totals.gross_orders > 0 ? totals.revenue / totals.gross_orders : 0
-
-  const categoryKeys = Array.from(new Set((data?.monthly || []).flatMap(m => Object.keys(m.categories || {})))).sort()
-  const allLocationNames = Array.from(new Set([
-    ...(data?.monthly || []).flatMap(m => (m.locations || []).map(l => l.name)),
-    ...(data?.monthly || []).flatMap(m => Object.values(m.categories || {}).flatMap(c => Object.keys(c.locations || {}))),
-  ])).filter(Boolean).sort()
-
-  const getCategoryColor = (index: number) => ["#0ea5e9", "#8b5cf6", "#10b981", "#f43f5e", "#f59e0b", "#64748b"][index % 6]
-  const getCategoryBgColor = (index: number) => ["bg-sky-500", "bg-violet-500", "bg-emerald-500", "bg-rose-500", "bg-amber-500", "bg-slate-500"][index % 6]
-
-  const formatCategoryName = (key: string) => {
-    if (!key) return "Unknown"
-    const lowerKey = key.toLowerCase()
-    if (lowerKey === "esim") return "eSIM"
-    if (lowerKey === "sim" || lowerKey === "sim_card") return "SIM Card"
-    return key.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")
-  }
-
-  const revMonths = [...(data?.monthly || [])].reverse()
-  const momPct = (last: number, prev: number) => (prev ? ((last / prev) - 1) * 100 : 0)
-
-  // MoM for summary cards: last month vs previous month in the filtered period
-  const lastM  = revMonths[revMonths.length - 1]
-  const prevM  = revMonths[revMonths.length - 2]
-  const momOrders  = lastM && prevM ? momPct(lastM.gross_orders, prevM.gross_orders) : null
-  const momRevenue = lastM && prevM ? momPct(lastM.revenue, prevM.revenue) : null
-  const momItems   = lastM && prevM ? momPct(lastM.items_delivery, prevM.items_delivery) : null
-  const momAvgOV   = lastM && prevM && prevM.gross_orders > 0 && lastM.gross_orders > 0
-    ? momPct(lastM.revenue / lastM.gross_orders, prevM.revenue / prevM.gross_orders) : null
-
-  const MomBadge = ({ v }: { v: number | null }) => {
-    if (v === null || revMonths.length < 2) return null
-    return (
-      <span className={cn("text-[11px] font-bold", v >= 0 ? "text-emerald-600" : "text-rose-500")}>
-        {v >= 0 ? "▲" : "▼"} {Math.abs(v).toFixed(1)}% vs tháng trước
-      </span>
-    )
-  }
-
-  const handleExportCSV = () => {
-    if (!data || data.monthly.length === 0) return
-    const rows = data.monthly.map(m => ({
-      "Month": m.month, "Gross Orders": m.gross_orders,
-      "Revenue": m.revenue, "Items Delivery": m.items_delivery,
-      "B2B Orders": m.b2b_orders, "B2B Revenue": m.b2b_revenue,
-      "B2C Orders": m.b2c_orders, "B2C Revenue": m.b2c_revenue,
-    }))
-    exportRawRows(rows, `fulfillment_${startDate}_to_${endDate}`, "Fulfillment")
-  }
-
-  const Skeleton = ({ className }: { className?: string }) => (<div className={cn("animate-pulse bg-slate-200 rounded", className)} />)
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50 min-h-screen font-sans">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Fulfillment Report</h1>
-          <p className="text-slate-500 text-sm">Monitor order fulfillment, delivery performance, and product categories</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 bg-white px-3 py-2 border border-slate-200 rounded-xl shadow-sm">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
-            <span className="text-slate-400">-</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-sm border-none focus:ring-0 p-0" />
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-black text-slate-900 mb-4">Thêm SKU theo dõi</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
+            <input value={skuCode} onChange={e => setSkuCode(e.target.value)}
+              placeholder="VD: 1D0003DK00000"
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
-          {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
-            <label key={label} className="flex items-center gap-1 cursor-pointer">
-              <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
-              <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
-            </label>
-          ))}
-          <button onClick={() => fetchFulfillmentData()} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
-          <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all shadow-sm">
-            <Download className="w-4 h-4" />Export
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Loại</label>
+              <select value={simType} onChange={e => setSimType(e.target.value)}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50 focus:outline-none">
+                <option value="SIM">SIM</option>
+                <option value="ESIM">ESIM</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value)}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50 focus:outline-none">
+                {["Active","Inactive","Temporary","Deleted"].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
+            <input value={vendor} onChange={e => setVendor(e.target.value)}
+              placeholder="VD: 3HKDATAPOOL (tự động lấy nếu để trống)"
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Retail Price</label>
+              <input type="number" value={retailPrice || ""} onChange={e => setRetailPrice(Number(e.target.value))}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Safety (15D)</label>
+              <input type="number" value={safetyStock || ""} onChange={e => setSafetyStock(Number(e.target.value))}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Reorder (30D)</label>
+              <input type="number" value={reorderPoint || ""} onChange={e => setReorderPoint(Number(e.target.value))}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ghi chú cố định</label>
+            <textarea value={notePerm} onChange={e => setNotePerm(e.target.value)} rows={2}
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          {error && <p className="text-xs text-red-600 font-bold">{error}</p>}
+        </div>
+        <div className="flex gap-2 mt-5">
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Hủy</button>
+          <button onClick={submit} disabled={saving}
+            className="flex-1 py-2 rounded-lg text-sm font-black bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50">
+            {saving ? "Đang lưu…" : "Thêm SKU"}
           </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-rose-50 border border-rose-100 text-rose-600 p-4 rounded-2xl flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <p className="text-sm font-medium">{error}</p>
-          <button onClick={() => fetchFulfillmentData()} className="ml-auto px-3 py-1 bg-rose-100 hover:bg-rose-200 rounded-lg text-xs font-bold transition-colors">Try Again</button>
-        </div>
-      )}
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Gross Orders", value: totals.gross_orders, icon: Package, color: "blue", mom: momOrders, isCurrency: false },
-          { label: "Items Delivery", value: totals.items_delivery, icon: Truck, color: "indigo", mom: momItems, isCurrency: false },
-          { label: "Total Revenue", value: totals.revenue, icon: RotateCcw, color: "amber", mom: momRevenue, isCurrency: true },
-          { label: "Avg Order Value", value: avgOrderValue, icon: TrendingUp, color: "emerald", mom: momAvgOV, isCurrency: true },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
-            <div className="flex justify-between items-start mb-3">
-              <div className={cn("p-2.5 rounded-xl",
-                item.color === "blue"    ? "bg-blue-50 text-blue-600"    :
-                item.color === "indigo"  ? "bg-indigo-50 text-indigo-600" :
-                item.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
-                                           "bg-amber-50 text-amber-600")}>
-                <item.icon className="w-5 h-5" />
-              </div>
-            </div>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{item.label}</p>
-            {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                {item.isCurrency ? formatCompactNumber(item.value) : formatNumber(item.value)}
-              </h3>
-            )}
-            {!loading && <div className="mt-1.5 min-h-[18px]"><MomBadge v={item.mom} /></div>}
-          </div>
-        ))}
-      </div>
-
-      {/* B2B / B2C split */}
-      {!loading && data && (totals.b2b_orders > 0 || totals.b2c_orders > 0) && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h2 className="text-sm font-bold text-slate-700 mb-4">B2B / B2C Split (toàn kỳ)</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: "B2B", orders: totals.b2b_orders, revenue: totals.b2b_revenue, accent: "#003B95", bg: "bg-blue-50" },
-              { label: "B2C", orders: totals.b2c_orders, revenue: totals.b2c_revenue, accent: "#0ea5e9", bg: "bg-sky-50" },
-            ].map(seg => {
-              const ordPct = totals.gross_orders > 0 ? seg.orders / totals.gross_orders * 100 : 0
-              const revPct = totals.revenue > 0 ? seg.revenue / totals.revenue * 100 : 0
-              return (
-                <div key={seg.label} className={cn("rounded-xl p-4 border", seg.bg, seg.label === "B2B" ? "border-blue-200" : "border-sky-200")}>
-                  <p className="text-xs font-extrabold uppercase tracking-widest mb-2" style={{ color: seg.accent }}>{seg.label}</p>
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Đơn hàng</p>
-                      <p className="text-xl font-bold text-slate-900">{formatNumber(seg.orders)}</p>
-                      <p className="text-[11px] text-slate-500">{ordPct.toFixed(1)}% tổng đơn</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Revenue</p>
-                      <p className="text-xl font-bold text-slate-900">{formatCompactNumber(seg.revenue)}</p>
-                      <p className="text-[11px] text-slate-500">{revPct.toFixed(1)}% tổng rev</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 h-1.5 bg-white/60 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(revPct, 100)}%`, background: seg.accent }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Detailed Fulfillment Matrix Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-          <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-slate-400" /><h2 className="text-lg font-bold text-slate-800 tracking-tight">Detail Fulfillment Analysis</h2></div>
-        </div>
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200">
-          <table className="w-full text-sm border-collapse min-w-[1000px]">
-            <thead>
-              <tr className="bg-[#003B95] text-white">
-                <th className="px-6 py-3 text-left font-bold min-w-[200px] border-r border-white/10 uppercase tracking-wider text-[10px]">A. FULFILLMENT</th>
-                {revMonths.map(m => <th key={m.month} className="px-4 py-3 text-center border-r border-white/10 font-bold text-[10px]">{m.month.split("-").reverse().join("_")}</th>)}
-                <th className="px-4 py-3 text-center font-bold bg-[#002B70] text-[10px]">MoM (%)</th>
-              </tr>
-              <tr className="bg-[#A7C7E7] text-slate-900 border-b border-slate-200">
-                <th className="px-6 py-2 text-left font-bold text-[11px] border-r border-white/20">1. SIM &amp; ESIM</th>
-                {revMonths.map(m => <th key={m.month} className="px-4 py-2 text-center border-r border-white/20 font-bold text-[11px]">{m.month.split("-").reverse().join("_")}</th>)}
-                <th className="px-4 py-2 text-center font-bold text-[11px]">MoM %</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="bg-slate-100/30"><td className="px-6 py-2 font-bold text-slate-800 border-r border-slate-200" colSpan={100}>Summary (All Warehouses)</td></tr>
-              {([
-                { label: "Gross Orders", key: "gross_orders" as const, indent: true, bold: true, borderBottom: true },
-              ]).map((row, rIdx) => {
-                const lastValue = revMonths.length > 0 ? (revMonths[revMonths.length - 1][row.key] as number) : 0
-                const prevValue = revMonths.length > 1 ? (revMonths[revMonths.length - 2][row.key] as number) : 0
-                const mom = momPct(lastValue, prevValue)
-                return (
-                  <tr key={rIdx} className={cn("hover:bg-slate-50 transition-colors", row.borderBottom && "border-b-2 border-slate-200")}>
-                    <td className={cn("px-6 py-2 border-r border-slate-100 font-medium text-slate-600", row.indent && "pl-10")}>{row.label}</td>
-                    {revMonths.map(m => <td key={m.month} className={cn("px-4 py-2 text-center border-r border-slate-100", row.bold ? "font-bold text-slate-900" : "text-slate-600")}>{formatNumber(m[row.key] as number)}</td>)}
-                    <td className={cn("px-4 py-2 text-center font-bold bg-slate-50/50", mom >= 0 ? "text-emerald-600" : "text-rose-600")}>{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
-                  </tr>
-                )
-              })}
-              {allLocationNames.map(locName => (
-                <React.Fragment key={`overall-${locName}`}>
-                  <tr className="bg-slate-50/50"><td className="px-6 py-1.5 font-bold text-slate-700 border-r border-slate-200 pl-8 text-xs bg-slate-100/20">{locName}</td><td colSpan={100}></td></tr>
-                  {([{ label: "Revenue", key: "revenue" as const, type: "currency" }, { label: "Items delivery", key: "units" as const }, { label: "Orders delivery", key: "orders" as const }]).map((row, rIdx) => {
-                    const getVal = (m: FulfillmentData["monthly"][0]) => { const l = m.locations.find(loc => loc.name === locName); return l ? (l[row.key as keyof typeof l] as number) : 0 }
-                    const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
-                    const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
-                    const mom = momPct(lastVal, prevVal)
-                    return (
-                      <tr key={rIdx} className="hover:bg-slate-50 group border-b border-slate-100/50">
-                        <td className="px-6 py-1 border-r border-slate-100 pl-12 text-[11px] text-slate-400 group-hover:text-slate-600">{row.label}</td>
-                        {revMonths.map(m => <td key={m.month} className="px-4 py-1 text-center border-r border-slate-100 text-[11px] text-slate-500">{row.type === "currency" ? formatCompactNumber(getVal(m)) : formatNumber(getVal(m))}</td>)}
-                        <td className="px-4 py-1 text-center text-[11px] font-medium bg-slate-50/50">{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
-                      </tr>
-                    )
-                  })}
-                </React.Fragment>
-              ))}
-              {categoryKeys.map(catKey => (
-                <React.Fragment key={catKey}>
-                  <tr className="bg-slate-100/50"><td className="px-6 py-2 font-bold text-slate-800 bg-[#C8D9ED] border-r border-slate-200" colSpan={100}>{formatCategoryName(catKey)}</td></tr>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <td className="px-6 py-2 font-bold text-slate-900 border-r border-slate-200 bg-slate-100/30">All warehouses</td>
-                    {revMonths.map(m => <td key={m.month} className="px-4 py-2 text-center border-r border-slate-100 text-[10px] font-bold text-slate-400">{m.month.split("-").reverse().join("_")}</td>)}
-                    <td className="bg-slate-100/30"></td>
-                  </tr>
-                  {([{ label: "Revenue", key: "revenue" as const, type: "currency" }, { label: "Items delivery", key: "units" as const }, { label: "Orders delivery", key: "orders" as const, bold: true, borderBottom: true }]).map((row, rIdx) => {
-                    const getVal = (m: FulfillmentData["monthly"][0]) => (m.categories[catKey]?.[row.key] || 0)
-                    const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
-                    const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
-                    const mom = momPct(lastVal, prevVal)
-                    return (
-                      <tr key={rIdx} className={cn("hover:bg-slate-50", row.borderBottom && "border-b border-slate-200")}>
-                        <td className="px-6 py-1.5 border-r border-slate-100 pl-12 text-xs text-slate-500">{row.label}</td>
-                        {revMonths.map(m => { const val = getVal(m); return <td key={m.month} className={cn("px-4 py-1.5 text-center border-r border-slate-100 text-xs", row.bold ? "font-bold text-slate-800" : "text-slate-500")}>{row.type === "currency" ? formatCompactNumber(val) : formatNumber(Math.round(val))}</td> })}
-                        <td className="px-4 py-1.5 text-center text-xs font-medium bg-slate-50/50">{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
-                      </tr>
-                    )
-                  })}
-                  {allLocationNames.map(locName => {
-                    const hasData = (data?.monthly || []).some(m => { const locData = m.categories[catKey]?.locations?.[locName]; return !!locData && (locData.units > 0 || locData.orders > 0) })
-                    if (!hasData) return null
-                    return (
-                      <React.Fragment key={`${catKey}-${locName}`}>
-                        <tr className="bg-white border-b border-slate-50 group"><td className="px-6 py-2 font-bold text-slate-700 bg-slate-50/30 border-r border-slate-200 pl-10 text-xs text-ellipsis overflow-hidden whitespace-nowrap max-w-[250px]">{locName}</td><td colSpan={100} className="bg-slate-50/20"></td></tr>
-                        {([{ label: "Revenue", key: "revenue" as const, type: "currency" }, { label: "Items delivery", key: "units" as const }, { label: "Orders delivery", key: "orders" as const }]).map((row, rIdx) => {
-                          const getVal = (m: FulfillmentData["monthly"][0]) => { const l = m.categories[catKey]?.locations?.[locName]; return l ? (l[row.key as keyof typeof l] as number) : 0 }
-                          const lastVal = revMonths.length > 0 ? getVal(revMonths[revMonths.length - 1]) : 0
-                          const prevVal = revMonths.length > 1 ? getVal(revMonths[revMonths.length - 2]) : 0
-                          const mom = momPct(lastVal, prevVal)
-                          return (
-                            <tr key={rIdx} className="hover:bg-slate-50 group border-b border-slate-50/50">
-                              <td className="px-6 py-1.5 border-r border-slate-100 pl-16 text-[10px] text-slate-400 group-hover:text-slate-600 transition-colors uppercase tracking-tight">{row.label}</td>
-                              {revMonths.map(m => { const val = getVal(m); return <td key={m.month} className="px-4 py-1.5 text-center border-r border-slate-100 text-[10px] text-slate-600">{row.type === "currency" ? formatCompactNumber(val) : formatNumber(Math.round(val))}</td> })}
-                              <td className="px-4 py-1.5 text-center text-[10px] font-bold bg-slate-50/50">{mom === 0 ? "-" : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`}</td>
-                            </tr>
-                          )
-                        })}
-                      </React.Fragment>
-                    )
-                  })}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Summary Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Trend: Orders (bar, left) + Revenue (line, right) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Monthly Trend</h2>
-            <div className="flex items-center gap-4 text-xs font-medium">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> Gross Orders (trái)</div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-amber-400 rounded-full"></div> Revenue (phải)</div>
-            </div>
-          </div>
-          <div className="h-[300px]">
-            {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={revMonths}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
-                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false}
-                    tick={{ fill: "#b45309", fontSize: 10 }}
-                    tickFormatter={(v) => `${(v / 1e9).toFixed(1)}B`} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-                    formatter={(v: any, name: string) => name === "Revenue" ? [formatCompactNumber(v), "Revenue"] : [formatNumber(v as number), name]}
-                  />
-                  <Bar yAxisId="left" dataKey="gross_orders" name="Gross Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Line yAxisId="right" type="monotone" dataKey="revenue" name="Revenue" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-900 mb-6">Units by Category</h2>
-          <div className="h-[300px]">
-            {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revMonths} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="month" type="category" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} width={50} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                  {categoryKeys.map((key, i) => <Bar key={key} dataKey={`categories.${key}.units`} name={formatCategoryName(key)} stackId="a" fill={getCategoryColor(i)} barSize={12} />)}
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Detailed Report Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h2 className="text-lg font-bold text-slate-900">Fulfillment Breakdown (Monthly)</h2></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50">
-                {["Month", "Gross Orders", "Revenue", "Items Deliv.", "B2B Đơn", "B2B Rev", "B2C Đơn", "B2C Rev", "Avg Order Val"].map((h, i) => (
-                  <th key={h} className={cn("px-4 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100",
-                    i === 0 ? "px-6" : i === 2 || i >= 5 ? "text-right" : "text-center")}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? Array(3).fill(0).map((_, i) => (<tr key={i}>{Array(9).fill(0).map((_, j) => <td key={j} className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>)}</tr>)) : (
-                (data?.monthly || []).map((row, idx) => {
-                  const aov = row.gross_orders > 0 ? row.revenue / row.gross_orders : 0
-                  return (
-                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-800">{row.month}</td>
-                      <td className="px-4 py-4 text-center font-medium text-slate-600">{formatNumber(row.gross_orders)}</td>
-                      <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(row.revenue)}</td>
-                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.items_delivery)}</td>
-                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.b2b_orders)}</td>
-                      <td className="px-4 py-4 text-right text-slate-600">{formatCompactNumber(row.b2b_revenue)}</td>
-                      <td className="px-4 py-4 text-center text-slate-600">{formatNumber(row.b2c_orders)}</td>
-                      <td className="px-4 py-4 text-right text-slate-600">{formatCompactNumber(row.b2c_revenue)}</td>
-                      <td className="px-4 py-4 text-right text-slate-500 text-[12px]">{formatCompactNumber(aov)}</td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-            {!loading && data && (data.monthly || []).length > 0 && (
-              <tfoot className="bg-slate-50 mt-4">
-                <tr>
-                  <td className="px-6 py-4 font-bold text-slate-900">Total</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.gross_orders)}</td>
-                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.revenue)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.items_delivery)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.b2b_orders)}</td>
-                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.b2b_revenue)}</td>
-                  <td className="px-4 py-4 text-center font-bold text-slate-900">{formatNumber(totals.b2c_orders)}</td>
-                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(totals.b2c_revenue)}</td>
-                  <td className="px-4 py-4 text-right font-bold text-slate-900">{formatCompactNumber(avgOrderValue)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-
-      {/* Locations Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-4"><Tablet className="w-5 h-5 text-sky-500" /><h3 className="font-bold text-slate-900">Units Breakdown by Type (Selected Period)</h3></div>
-          <div className="space-y-4">
-            {categoryKeys.map((key, i) => {
-              const value = (data?.monthly || []).reduce((acc, curr) => acc + (curr.categories[key]?.units || 0), 0)
-              return (
-                <div key={i}>
-                  <div className="flex justify-between text-sm mb-1.5"><span className="font-medium text-slate-600">{formatCategoryName(key)}</span><span className="font-bold text-slate-900">{formatNumber(value)} units</span></div>
-                  <div className="w-full bg-slate-100 rounded-full h-2"><div className={cn("h-2 rounded-full", getCategoryBgColor(i))} style={{ width: `${Math.min(100, (value / (totals.items_delivery || 1)) * 100)}%` }} /></div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-4"><MapPin className="w-5 h-5 text-indigo-500" /><h3 className="font-bold text-slate-900">Top Fulfillment Locations (Overall)</h3></div>
-          <div className="space-y-3">
-            {(data?.overall_locations || []).slice(0, 5).map((loc, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{loc.name || "Unknown"}</span>
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders</p>
-                    <p className="text-sm font-bold text-slate-900">{formatNumber(loc.orders)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Units</p>
-                    <p className="text-sm font-bold text-slate-900">{formatNumber(loc.units)}</p>
-                  </div>
-                  {loc.revenue > 0 && (
-                    <div className="text-right">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Revenue</p>
-                      <p className="text-sm font-bold text-amber-700">{formatCompactNumber(loc.revenue)}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            {!loading && (data?.overall_locations || []).length === 0 && <div className="text-center py-6 text-slate-400 text-sm">No location data found</div>}
-          </div>
         </div>
       </div>
     </div>
   )
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+function FulfillmentInner() {
+  const [items,        setItems]        = useState<InventoryItem[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [dates,        setDates]        = useState<string[]>([])
+  const [selectedDate, setSelectedDate] = useState<string>("")   // "" = latest
+  const [filterType,   setFilterType]   = useState<"ALL"|"SIM"|"ESIM">("ALL")
+  const [filterAlert,  setFilterAlert]  = useState<"ALL"|"red"|"yellow"|"green"|"gray">("ALL")
+  const [filterVendor, setFilterVendor] = useState("")
+  const [showChannels, setShowChannels] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [expandedSku,  setExpandedSku]  = useState<string | null>(null)
+  const [historyData,  setHistoryData]  = useState<{ snapshot_date: string; stock_total: number }[]>([])
+
+  // Edit mode
+  const [editMode,     setEditMode]     = useState(false)
+  const [snapshotDate, setSnapshotDate] = useState(todayStr)
+  const [drafts,       setDrafts]       = useState<Record<string, DraftItem>>({})
+  const [saving,       setSaving]       = useState(false)
+
+  // Fetch
+  const fetchItems = useCallback(async (date?: string) => {
+    setLoading(true)
+    try {
+      const url = date ? `/api/analytics/inventory-items?date=${date}` : "/api/analytics/inventory-items"
+      const r = await fetch(url)
+      if (r.ok) setItems(await r.json())
+    } catch {} finally { setLoading(false) }
+  }, [])
+
+  const fetchDates = useCallback(async () => {
+    try {
+      const r = await fetch("/api/analytics/inventory-snapshots/dates")
+      if (r.ok) setDates(await r.json())
+    } catch {}
+  }, [])
+
+  useEffect(() => { fetchItems(); fetchDates() }, [fetchItems, fetchDates])
+
+  // Filtered items
+  const filtered = useMemo(() => items.filter(it => {
+    if (filterType !== "ALL" && it.sim_type !== filterType) return false
+    if (filterVendor && it.vendor !== filterVendor) return false
+    if (filterAlert !== "ALL" && doiColor(it.doi, it.stock_total) !== filterAlert) return false
+    return true
+  }), [items, filterType, filterVendor, filterAlert])
+
+  const vendors = useMemo(() => [...new Set(items.map(i => i.vendor).filter(Boolean))].sort(), [items])
+
+  // Alerts summary
+  const alerts = useMemo(() => ({
+    red:    items.filter(i => doiColor(i.doi, i.stock_total) === "red").length,
+    yellow: items.filter(i => doiColor(i.doi, i.stock_total) === "yellow").length,
+    expiry: items.filter(i => i.expiry_date && new Date(i.expiry_date) <= new Date(Date.now() + 30*86400000)).length,
+  }), [items])
+
+  // Edit mode helpers
+  const enterEdit = () => {
+    const d: Record<string, DraftItem> = {}
+    for (const it of filtered) {
+      d[it.sku_code] = {
+        stock_total: it.stock_total, stock_warehouse: it.stock_warehouse,
+        stock_pq_hcm: it.stock_pq_hcm, stock_dd_hn: it.stock_dd_hn,
+        stock_tsn_hcm: it.stock_tsn_hcm, stock_kg: it.stock_kg,
+        expiry_date: it.expiry_date, expiry_qty: it.expiry_qty,
+        ops_qty: it.ops_qty, telco_qty: it.telco_qty, od_qty: it.od_qty,
+        ws_qty: it.ws_qty, b2c_qty: it.b2c_qty, marketing_qty: it.marketing_qty,
+        note: it.note,
+      }
+    }
+    setDrafts(d); setEditMode(true)
+  }
+
+  const setField = (code: string, field: keyof DraftItem, val: any) =>
+    setDrafts(p => ({ ...p, [code]: { ...p[code], [field]: val } }))
+
+  const hasChanges = useMemo(() => {
+    if (!editMode) return false
+    return Object.entries(drafts).some(([code, d]) => {
+      const it = items.find(i => i.sku_code === code)
+      if (!it) return false
+      return d.stock_total !== it.stock_total || d.note !== it.note ||
+        d.stock_pq_hcm !== it.stock_pq_hcm || d.stock_dd_hn !== it.stock_dd_hn
+    })
+  }, [editMode, drafts, items])
+
+  const saveSnapshot = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const updates = Object.entries(drafts).map(([sku_code, d]) => ({ sku_code, ...d }))
+      const r = await fetch("/api/analytics/inventory-snapshots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot_date: snapshotDate, updates }),
+      })
+      if (r.ok) {
+        setEditMode(false); setDrafts({})
+        await fetchItems(selectedDate || undefined); await fetchDates()
+      }
+    } catch {} finally { setSaving(false) }
+  }
+
+  const deleteItem = async (code: string) => {
+    if (!confirm(`Xóa ${code} khỏi danh sách theo dõi?`)) return
+    await fetch("/api/analytics/inventory-items", {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku_code: code }),
+    })
+    await fetchItems(selectedDate || undefined)
+  }
+
+  const expandHistory = async (code: string) => {
+    if (expandedSku === code) { setExpandedSku(null); return }
+    setExpandedSku(code)
+    try {
+      const r = await fetch(`/api/analytics/inventory-snapshots?sku_code=${code}`)
+      if (r.ok) setHistoryData(await r.json())
+    } catch {}
+  }
+
+  // Export
+  const exportData = () => {
+    const rows = filtered.map((it, i) => ({
+      "No.": i + 1, "SKU": it.sku_code, "Type": it.sim_type, "Vendor": it.vendor,
+      "Status": it.status, "Snapshot Date": it.snapshot_date ?? "",
+      "Tổng tồn": it.stock_total, "Kho tổng": it.stock_warehouse,
+      "Phổ Quang HCM": it.stock_pq_hcm, "Đống Đa HN": it.stock_dd_hn,
+      "TSN HCM": it.stock_tsn_hcm, "Ký gửi": it.stock_kg,
+      "Bán 15D": it.sold_15d, "Bán 30D": it.sold_30d,
+      "Avg/ngày": it.avg_per_day, "DOI": it.doi ?? "",
+      "Hết hàng dự kiến": it.est_out_of_stock ?? "",
+      "Safety Stock": it.safety_stock, "Reorder Point": it.reorder_point,
+      "Hạn SD": it.expiry_date ?? "", "SL sắp hết hạn": it.expiry_qty,
+      "Retail Price": it.retail_price,
+      "Total Value": it.stock_total * it.retail_price,
+      "OPS": it.ops_qty, "Telco": it.telco_qty, "OD": it.od_qty,
+      "WS": it.ws_qty, "B2C": it.b2c_qty, "Marketing": it.marketing_qty,
+      "Ghi chú": it.note, "Cập nhật bởi": it.updated_by ?? "",
+    }))
+    exportRawRows(rows, `Inventory_${todayStr}`, "Inventory")
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div className="p-4 lg:p-8 space-y-5 max-w-[1800px] mx-auto pb-24 lg:pb-8">
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 rotate-3">
+            <Package className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Inventory Management</h1>
+            <p className="text-sm text-slate-500 font-medium italic">Quản lý tồn kho · Bán 15D/30D auto từ hệ thống</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Thêm SKU
+          </button>
+          <button onClick={exportData}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+            <Download className="w-3.5 h-3.5" /> Export
+          </button>
+        </div>
+      </div>
+
+      {/* Alert banner */}
+      {(alerts.red > 0 || alerts.yellow > 0 || alerts.expiry > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {alerts.red > 0 && (
+            <button onClick={() => setFilterAlert(filterAlert === "red" ? "ALL" : "red")}
+              className={cn("flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
+                filterAlert === "red" ? "border-red-400 bg-red-50" : "border-red-200 bg-red-50/60 hover:border-red-300")}>
+              <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
+              <div><p className="text-lg font-black text-red-700">{alerts.red} SKU</p><p className="text-xs text-red-600 font-semibold">Cần nhập gấp (DOI &lt; 7 ngày)</p></div>
+            </button>
+          )}
+          {alerts.yellow > 0 && (
+            <button onClick={() => setFilterAlert(filterAlert === "yellow" ? "ALL" : "yellow")}
+              className={cn("flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
+                filterAlert === "yellow" ? "border-amber-400 bg-amber-50" : "border-amber-200 bg-amber-50/60 hover:border-amber-300")}>
+              <Clock className="w-6 h-6 text-amber-600 shrink-0" />
+              <div><p className="text-lg font-black text-amber-700">{alerts.yellow} SKU</p><p className="text-xs text-amber-600 font-semibold">Sắp hết hàng (7–30 ngày)</p></div>
+            </button>
+          )}
+          {alerts.expiry > 0 && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl border-2 border-orange-200 bg-orange-50/60">
+              <AlertTriangle className="w-6 h-6 text-orange-600 shrink-0" />
+              <div><p className="text-lg font-black text-orange-700">{alerts.expiry} SKU</p><p className="text-xs text-orange-600 font-semibold">Hạn sử dụng &lt; 30 ngày</p></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+        {(["ALL","SIM","ESIM"] as const).map(t => (
+          <button key={t} onClick={() => setFilterType(t)}
+            className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
+              filterType === t ? "bg-blue-600 border-blue-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+            {t === "ALL" ? "Tất cả" : t}
+          </button>
+        ))}
+        <select value={filterVendor} onChange={e => setFilterVendor(e.target.value)}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1">
+          <option value="">All Vendors</option>
+          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+
+        {/* Snapshot date */}
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Xem ngày:</label>
+          <select value={selectedDate}
+            onChange={e => { setSelectedDate(e.target.value); fetchItems(e.target.value || undefined) }}
+            className="bg-slate-50 border-slate-200 rounded-lg text-xs font-bold text-slate-700 px-2 py-1">
+            <option value="">Mới nhất</option>
+            {dates.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <button onClick={() => fetchItems(selectedDate || undefined)}
+            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors">
+            <RefreshCw className={cn("w-3.5 h-3.5 text-slate-500", loading && "animate-spin")} />
+          </button>
+        </div>
+
+        <button onClick={() => setShowChannels(v => !v)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-100 transition-colors">
+          {showChannels ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+          Kênh phân bổ
+        </button>
+      </div>
+
+      {/* Main table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Table header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">Danh sách tồn kho</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {filtered.length} SKU{selectedDate ? ` · Snapshot ${selectedDate}` : " · Snapshot mới nhất"} · Bán 15D/30D từ gohub_dw
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {editMode ? (
+              <>
+                <div className="flex items-center gap-1.5 mr-1">
+                  <label className="text-[11px] font-bold text-slate-500">Ngày nhập:</label>
+                  <input type="date" value={snapshotDate} onChange={e => setSnapshotDate(e.target.value)}
+                    className="border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <button onClick={() => { setEditMode(false); setDrafts({}) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                  <XCircle className="w-3.5 h-3.5" /> Hủy
+                </button>
+                <button onClick={saveSnapshot} disabled={saving}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+                    hasChanges && !saving ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                  <Save className="w-3.5 h-3.5" />
+                  {saving ? "Đang lưu…" : "Lưu snapshot"}
+                </button>
+              </>
+            ) : (
+              <button onClick={enterEdit}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">
+                <Pencil className="w-3.5 h-3.5" /> Cập nhật tồn kho
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              {/* Group row */}
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <th colSpan={4} className="px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase">SKU Info</th>
+                <th colSpan={6} className="px-4 py-1.5 text-[10px] font-bold text-emerald-600 uppercase text-center border-l border-emerald-100 bg-emerald-50/40">Tồn kho</th>
+                <th colSpan={4} className="px-4 py-1.5 text-[10px] font-bold text-blue-600 uppercase text-center border-l border-blue-100 bg-blue-50/40">Tốc độ bán (gohub_dw)</th>
+                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-bold text-purple-600 uppercase text-center border-l border-purple-100 bg-purple-50/40">Ngưỡng</th>
+                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-bold text-orange-600 uppercase text-center border-l border-orange-100 bg-orange-50/40">Hạn SD</th>
+                {showChannels && <th colSpan={6} className="px-4 py-1.5 text-[10px] font-bold text-rose-600 uppercase text-center border-l border-rose-100 bg-rose-50/40">Kênh phân bổ</th>}
+                <th className="px-4 py-1.5" />
+              </tr>
+              {/* Column row */}
+              <tr className="bg-slate-50 border-b border-slate-200">
+                {/* SKU info */}
+                <th className="px-4 py-2 font-bold text-slate-500 uppercase tracking-wider w-8">#</th>
+                <th className="px-4 py-2 font-bold text-slate-500 uppercase tracking-wider">SKU</th>
+                <th className="px-4 py-2 font-bold text-slate-500 uppercase tracking-wider">Vendor</th>
+                <th className="px-4 py-2 font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                {/* Stock */}
+                <th className="px-3 py-2 font-bold text-emerald-600 uppercase text-right border-l border-emerald-100 bg-emerald-50/30">Tổng</th>
+                <th className="px-3 py-2 font-bold text-emerald-500 uppercase text-right bg-emerald-50/20 whitespace-nowrap">Kho TC</th>
+                <th className="px-3 py-2 font-bold text-emerald-500 uppercase text-right bg-emerald-50/20 whitespace-nowrap">PQ-HCM</th>
+                <th className="px-3 py-2 font-bold text-emerald-500 uppercase text-right bg-emerald-50/20 whitespace-nowrap">ĐĐ-HN</th>
+                <th className="px-3 py-2 font-bold text-emerald-500 uppercase text-right bg-emerald-50/20 whitespace-nowrap">TSN-HCM</th>
+                <th className="px-3 py-2 font-bold text-emerald-500 uppercase text-right bg-emerald-50/20 whitespace-nowrap">KG</th>
+                {/* Bán */}
+                <th className="px-3 py-2 font-bold text-blue-500 uppercase text-right border-l border-blue-100 bg-blue-50/30 whitespace-nowrap">Bán 15D</th>
+                <th className="px-3 py-2 font-bold text-blue-500 uppercase text-right bg-blue-50/20 whitespace-nowrap">Bán 30D</th>
+                <th className="px-3 py-2 font-bold text-blue-600 uppercase text-right bg-blue-50/20 whitespace-nowrap">Avg/N</th>
+                <th className="px-3 py-2 font-bold text-blue-700 uppercase text-center bg-blue-50/20">DOI</th>
+                {/* Ngưỡng */}
+                <th className="px-3 py-2 font-bold text-purple-500 uppercase text-right border-l border-purple-100 bg-purple-50/30 whitespace-nowrap">Safety</th>
+                <th className="px-3 py-2 font-bold text-purple-500 uppercase text-right bg-purple-50/20 whitespace-nowrap">Reorder</th>
+                {/* Hạn SD */}
+                <th className="px-3 py-2 font-bold text-orange-500 uppercase text-right border-l border-orange-100 bg-orange-50/30 whitespace-nowrap">Hạn SD</th>
+                <th className="px-3 py-2 font-bold text-orange-500 uppercase text-right bg-orange-50/20 whitespace-nowrap">SL HSD</th>
+                {/* Kênh */}
+                {showChannels && <>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right border-l border-rose-100 bg-rose-50/30">OPS</th>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right bg-rose-50/20">Telco</th>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right bg-rose-50/20">OD</th>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right bg-rose-50/20">WS</th>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right bg-rose-50/20">B2C</th>
+                  <th className="px-2 py-2 font-bold text-rose-500 uppercase text-right bg-rose-50/20">Mkt</th>
+                </>}
+                <th className="px-3 py-2 font-bold text-slate-400 uppercase">Ghi chú / Hành động</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading && (
+                <tr><td colSpan={20} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" /> Đang tải…
+                </td></tr>
+              )}
+              {!loading && filtered.length === 0 && (
+                <tr><td colSpan={20} className="px-6 py-10 text-center text-sm text-slate-400">
+                  Chưa có SKU nào. Click "Thêm SKU" để bắt đầu.
+                </td></tr>
+              )}
+              {!loading && filtered.map((it, idx) => {
+                const d    = drafts[it.sku_code]
+                const isEx = expandedSku === it.sku_code
+                const color = doiColor(it.doi, it.stock_total)
+                const expiryAlert = it.expiry_date && new Date(it.expiry_date) <= new Date(Date.now() + 30*86400000)
+
+                // Stock display value (draft or actual)
+                const sv = (field: keyof DraftItem) => editMode && d ? (d[field] as number) : (it[field as keyof InventoryItem] as number)
+
+                return (
+                  <React.Fragment key={it.sku_code}>
+                    <tr className={cn("transition-colors hover:bg-slate-50/60",
+                      color === "red" && "bg-red-50/30",
+                      isEx && "bg-blue-50/40",
+                    )}>
+                      {/* # */}
+                      <td className="px-4 py-2.5 text-slate-400 font-bold">{idx + 1}</td>
+                      {/* SKU */}
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => expandHistory(it.sku_code)} className="text-slate-400 hover:text-blue-600 transition-colors">
+                            {isEx ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
+                          <div>
+                            <p className="font-black text-slate-900 text-[11px] leading-tight">{it.sku_code}</p>
+                            <p className="text-[9px] text-slate-400">{it.sim_type}</p>
+                          </div>
+                        </div>
+                      </td>
+                      {/* Vendor */}
+                      <td className="px-4 py-2.5 font-bold text-slate-600 text-[11px]">{it.vendor || "—"}</td>
+                      {/* Status */}
+                      <td className="px-4 py-2.5"><StatusBadge status={it.status} /></td>
+
+                      {/* Stock */}
+                      {editMode && d ? <>
+                        <td className="px-2 py-2 border-l border-emerald-100 bg-emerald-50/30">
+                          <NumInput value={d.stock_total} onChange={v => setField(it.sku_code, "stock_total", v)} className="w-20" />
+                        </td>
+                        <td className="px-2 py-2 bg-emerald-50/20"><NumInput value={d.stock_warehouse} onChange={v => setField(it.sku_code, "stock_warehouse", v)} /></td>
+                        <td className="px-2 py-2 bg-emerald-50/20"><NumInput value={d.stock_pq_hcm}   onChange={v => setField(it.sku_code, "stock_pq_hcm",   v)} /></td>
+                        <td className="px-2 py-2 bg-emerald-50/20"><NumInput value={d.stock_dd_hn}    onChange={v => setField(it.sku_code, "stock_dd_hn",    v)} /></td>
+                        <td className="px-2 py-2 bg-emerald-50/20"><NumInput value={d.stock_tsn_hcm}  onChange={v => setField(it.sku_code, "stock_tsn_hcm",  v)} /></td>
+                        <td className="px-2 py-2 bg-emerald-50/20"><NumInput value={d.stock_kg}        onChange={v => setField(it.sku_code, "stock_kg",        v)} /></td>
+                      </> : <>
+                        <td className="px-3 py-2.5 text-right font-black text-emerald-700 border-l border-emerald-100 bg-emerald-50/30">{it.stock_total.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-600 bg-emerald-50/20">{it.stock_warehouse || "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-600 bg-emerald-50/20">{it.stock_pq_hcm    || "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-600 bg-emerald-50/20">{it.stock_dd_hn     || "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-600 bg-emerald-50/20">{it.stock_tsn_hcm   || "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-bold text-slate-600 bg-emerald-50/20">{it.stock_kg         || "—"}</td>
+                      </>}
+
+                      {/* Bán — read only */}
+                      <td className="px-3 py-2.5 text-right font-bold text-blue-600 border-l border-blue-100 bg-blue-50/30">{it.sold_15d.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-blue-700 bg-blue-50/20">{it.sold_30d.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-blue-500 bg-blue-50/20">{it.avg_per_day.toFixed(1)}</td>
+                      <td className="px-3 py-2.5 text-center bg-blue-50/20"><DoiBadge doi={it.doi} stock={it.stock_total} /></td>
+
+                      {/* Ngưỡng — read only */}
+                      <td className="px-3 py-2.5 text-right font-bold text-purple-600 border-l border-purple-100 bg-purple-50/30">{it.safety_stock || "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-purple-500 bg-purple-50/20">{it.reorder_point || "—"}</td>
+
+                      {/* Hạn SD */}
+                      {editMode && d ? <>
+                        <td className="px-2 py-2 border-l border-orange-100 bg-orange-50/30">
+                          <input type="date" value={d.expiry_date ?? ""}
+                            onChange={e => setField(it.sku_code, "expiry_date", e.target.value || null)}
+                            className="text-[11px] font-bold border border-orange-200 rounded px-1 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                        </td>
+                        <td className="px-2 py-2 bg-orange-50/20">
+                          <NumInput value={d.expiry_qty} onChange={v => setField(it.sku_code, "expiry_qty", v)} />
+                        </td>
+                      </> : <>
+                        <td className={cn("px-3 py-2.5 text-right font-bold border-l border-orange-100 bg-orange-50/30",
+                          expiryAlert ? "text-orange-700" : "text-slate-500")}>
+                          {it.expiry_date ?? "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold text-orange-600 bg-orange-50/20">{it.expiry_qty || "—"}</td>
+                      </>}
+
+                      {/* Kênh */}
+                      {showChannels && (editMode && d ? <>
+                        {(["ops_qty","telco_qty","od_qty","ws_qty","b2c_qty","marketing_qty"] as (keyof DraftItem)[]).map((f,fi) => (
+                          <td key={f} className={cn("px-1 py-2", fi===0 && "border-l border-rose-100 bg-rose-50/30", fi>0 && "bg-rose-50/20")}>
+                            <NumInput value={d[f] as number} onChange={v => setField(it.sku_code, f, v)} className="w-16" />
+                          </td>
+                        ))}
+                      </> : <>
+                        {([it.ops_qty,it.telco_qty,it.od_qty,it.ws_qty,it.b2c_qty,it.marketing_qty]).map((v,fi) => (
+                          <td key={fi} className={cn("px-2 py-2.5 text-right font-bold text-rose-600",
+                            fi===0 && "border-l border-rose-100 bg-rose-50/30", fi>0 && "bg-rose-50/20")}>
+                            {v || "—"}
+                          </td>
+                        ))}
+                      </>)}
+
+                      {/* Ghi chú + actions */}
+                      <td className="px-3 py-2.5">
+                        {editMode && d ? (
+                          <input value={d.note} onChange={e => setField(it.sku_code, "note", e.target.value)}
+                            placeholder="Ghi chú…"
+                            className="w-44 text-xs border border-slate-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {it.note && <span className="text-[11px] text-slate-500 max-w-[160px] truncate" title={it.note}>{it.note}</span>}
+                            {it.note_permanent && <span className="text-[11px] text-purple-500 italic max-w-[120px] truncate" title={it.note_permanent}>[{it.note_permanent}]</span>}
+                            <button onClick={() => deleteItem(it.sku_code)}
+                              className="ml-1 p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* History expand */}
+                    {isEx && (
+                      <tr>
+                        <td colSpan={showChannels ? 25 : 19} className="px-0 py-0">
+                          <div className="bg-blue-50/60 border-b border-blue-100 px-6 py-3">
+                            <p className="text-[11px] font-black text-blue-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <History className="w-3.5 h-3.5" /> Lịch sử tồn kho — {it.sku_code}
+                            </p>
+                            {historyData.length === 0 ? (
+                              <p className="text-xs text-slate-400">Chưa có lịch sử</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {historyData.map(h => (
+                                  <div key={h.snapshot_date} className="bg-white rounded-lg px-3 py-2 border border-blue-100 text-center">
+                                    <p className="text-[10px] text-blue-600 font-bold">{h.snapshot_date}</p>
+                                    <p className="text-sm font-black text-slate-900">{h.stock_total.toLocaleString()}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showAddModal && (
+        <AddSkuModal onClose={() => setShowAddModal(false)} onAdded={() => { fetchItems(selectedDate || undefined); fetchDates() }} />
+      )}
+    </div>
+  )
+}
+
+export default function FulfillmentPage() {
+  return <Suspense><FulfillmentInner /></Suspense>
 }
