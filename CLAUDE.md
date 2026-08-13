@@ -26,6 +26,8 @@
 - ✅ **Ẩn tab Tổ Gấu** với mọi role trừ creator (sidebar collapsed + expanded)
 - ✅ **Staff tab — CM1 Target + 3HK Target**: lưu theo (staff_code × tháng), edit mode Sửa/Lưu/Hủy, lưu người sửa
 - ✅ **Fulfillment tab rebuild → Inventory Management**: OPS nhập tồn kho, vendor balance, DOI alert, history snapshot, Sold auto từ gohub_dw
+- ✅ **Quarter Report — target CM1 KH**: bỏ × 3, target nhập là target QUÝ trực tiếp
+- ✅ **Quyền chỉnh sửa**: thêm `quarterly`/`staff`/`fulfillment` vào Users tab + helper `writable-tabs.ts` + enforce 6 API routes
 
 **s145 — đã xong (ghi lại):**
 - ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.
