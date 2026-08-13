@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { supabaseAdmin } from "@/lib/supabase"
+import { canWriteTab } from "@/lib/writable-tabs"
+
+const READ_ROLES  = ["admin", "creator", "bod"]
+const WRITE_ROLES = ["admin", "creator"]
+
+// GET ?quarter=Q3-2026&metric=sla
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const ok = await canWriteTab(session.user.username, "my-metrics", READ_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const quarter = req.nextUrl.searchParams.get("quarter") ?? "Q3-2026"
+  const metric  = req.nextUrl.searchParams.get("metric")  ?? "sla"
+
+  const { data, error } = await supabaseAdmin
+    .from("okr_evidence_records")
+    .select("*")
+    .eq("quarter", quarter)
+    .eq("metric", metric)
+    .order("request_time", { ascending: false })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const records = data ?? []
+  const completed = records.filter(r => r.duration_value != null)
+  const avg = completed.length > 0
+    ? completed.reduce((a, r) => a + Number(r.duration_value), 0) / completed.length
+    : null
+
+  return NextResponse.json({ records, avg, count: records.length, completed: completed.length })
+}
+
+// POST — tạo hoặc cập nhật 1 record
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const ok = await canWriteTab(session.user.username, "my-metrics", WRITE_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const body = await req.json() as {
+    id?: string
+    quarter: string; metric: string; title?: string
+    request_time: string; request_note?: string; request_image_url?: string
+    completion_time?: string; completion_note?: string; completion_image_url?: string
+  }
+
+  const name = session.user.name ?? session.user.email ?? session.user.username
+
+  // Tính duration nếu có cả 2 thời điểm
+  let duration_value: number | null = null
+  if (body.completion_time && body.request_time) {
+    const diff = new Date(body.completion_time).getTime() - new Date(body.request_time).getTime()
+    duration_value = body.metric === "sla"
+      ? +(diff / 3600000).toFixed(2)   // giờ
+      : +(diff / 60000).toFixed(2)     // phút
+  }
+
+  const row = {
+    quarter:              body.quarter,
+    metric:               body.metric,
+    title:                body.title || null,
+    request_time:         body.request_time,
+    request_note:         body.request_note || null,
+    request_image_url:    body.request_image_url || null,
+    completion_time:      body.completion_time || null,
+    completion_note:      body.completion_note || null,
+    completion_image_url: body.completion_image_url || null,
+    duration_value,
+    created_by:           name,
+  }
+
+  if (body.id) {
+    const { error } = await supabaseAdmin
+      .from("okr_evidence_records").update(row).eq("id", body.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, id: body.id })
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("okr_evidence_records").insert(row).select("id").single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, id: data.id })
+}
+
+// DELETE ?id=uuid
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const ok = await canWriteTab(session.user.username, "my-metrics", WRITE_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const id = req.nextUrl.searchParams.get("id")
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
+
+  const { error } = await supabaseAdmin
+    .from("okr_evidence_records").delete().eq("id", id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

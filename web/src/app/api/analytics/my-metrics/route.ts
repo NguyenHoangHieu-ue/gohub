@@ -56,7 +56,34 @@ export async function GET(req: NextRequest) {
   const hk3Rev      = hk3Data.reduce((a, r) => a + r.hk3_rev,   0)
   const hk3Pct      = hk3TotalRev > 0 ? (hk3Rev / hk3TotalRev) * 100 : 0
 
-  // ── 2. Bé Gấu task count (Supabase) ──────────────────────────────────────
+  // ── 2. SKU Gross Margin (gohub_dw) ────────────────────────────────────────
+  let gmData: { month: string; gp: number; rev: number; gm_pct: number }[] = []
+  try {
+    const gmRows = await queryAnalytics<{ month: string; gp: string; rev: string }>(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', fulfiled_date::date), 'YYYY-MM') AS month,
+        SUM(gross_profit_vnd)::bigint              AS gp,
+        SUM(fulfilled_revenue_amount_vnd)::bigint  AS rev
+      FROM fact_fulfillment_revenue
+      WHERE fulfiled_date IS NOT NULL
+        AND fulfiled_date::date BETWEEN '${start}' AND '${end}'
+        AND fulfiled_date::date <= CURRENT_DATE - 1
+        AND fulfilled_revenue_amount_vnd > 0
+      GROUP BY 1
+      ORDER BY 1
+    `)
+    gmData = gmRows.map(r => {
+      const gp  = Number(r.gp)  || 0
+      const rev = Number(r.rev) || 0
+      return { month: r.month, gp, rev, gm_pct: rev > 0 ? +(gp/rev*100).toFixed(2) : 0 }
+    })
+  } catch {}
+
+  const gmTotalGP  = gmData.reduce((a, r) => a + r.gp,  0)
+  const gmTotalRev = gmData.reduce((a, r) => a + r.rev, 0)
+  const gmQtdPct   = gmTotalRev > 0 ? +(gmTotalGP / gmTotalRev * 100).toFixed(2) : 0
+
+  // ── 3. Bé Gấu task count (Supabase) ──────────────────────────────────────
   const startISO = `${start}T00:00:00.000Z`
   const endISO   = `${end}T23:59:59.999Z`
 
@@ -86,16 +113,23 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     quarter, year, start, end,
     hk3: {
-      pct:      +hk3Pct.toFixed(2),
-      hk3_rev:  hk3Rev,
+      pct:       +hk3Pct.toFixed(2),
+      hk3_rev:   hk3Rev,
       total_rev: hk3TotalRev,
-      monthly:  hk3Data,
+      monthly:   hk3Data,
+    },
+    gm: {
+      qtd_pct:   gmQtdPct,
+      total_gp:  gmTotalGP,
+      total_rev: gmTotalRev,
+      monthly:   gmData,
+      baseline:  36.7,  // T08/2026 baseline từ image
     },
     begau: {
-      total:    taskTotal,
-      web:      taskWeb,
-      lark:     taskLark,
-      monthly:  taskByMonth,
+      total:   taskTotal,
+      web:     taskWeb,
+      lark:    taskLark,
+      monthly: taskByMonth,
     },
   })
 }
