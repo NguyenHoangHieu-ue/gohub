@@ -19,6 +19,12 @@ import {
 } from "recharts"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+interface StaffTarget {
+  cm1_strategic:     number
+  cm1_non_strategic: number
+  hk3_rev:           number
+}
+
 interface MonthlyItem { month: string; revenue: number; hk3_revenue: number; gross_profit: number }
 
 interface StaffRow {
@@ -137,6 +143,11 @@ function StaffPageInner() {
   const [customers,     setCustomers]     = useState<CustomerRow[]>([])
   const [custLoading,   setCustLoading]   = useState(false)
 
+  // Targets — editable per-staff
+  const [targets,     setTargets]     = useState<Record<string, StaffTarget>>({})
+  const [editingCell, setEditingCell] = useState<{ code: string; field: keyof StaffTarget } | null>(null)
+  const [editValue,   setEditValue]   = useState("")
+
   const fetchChannels = useCallback(async () => {
     try {
       const r = await fetch(`/api/channels?${new URLSearchParams({ channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup })}`)
@@ -160,8 +171,30 @@ function StaffPageInner() {
     } catch {} finally { setLoading(false) }
   }, [applied, includeShip, includeInternalOps])
 
+  const fetchTargets = useCallback(async () => {
+    try {
+      const r = await fetch("/api/analytics/staff-targets")
+      if (r.ok) setTargets(await r.json())
+    } catch {}
+  }, [])
+
+  const saveTarget = useCallback(async (code: string, field: keyof StaffTarget, raw: string) => {
+    const num = parseFloat(raw.replace(/,/g, "")) || 0
+    const prev = targets[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+    const next = { ...prev, [field]: num }
+    setTargets(t => ({ ...t, [code]: next }))
+    try {
+      await fetch("/api/analytics/staff-targets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffCode: code, target: next }),
+      })
+    } catch {}
+  }, [targets])
+
   useEffect(() => { fetchChannels() }, [fetchChannels])
   useEffect(() => { fetchStaff() },   [fetchStaff])
+  useEffect(() => { fetchTargets() }, [fetchTargets])
 
   const toggleExpand = async (code: string) => {
     if (expandedStaff === code) { setExpandedStaff(null); setCustomers([]); return }
@@ -251,63 +284,76 @@ function StaffPageInner() {
 
   // ─── Export ─────────────────────────────────────────────────────────────
   const exportStaff = () => {
+    const tgt = (code: string) => targets[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
     if (isMultiMonth) {
-      // Multi-month: mỗi sales → từng tháng → TỔNG sales → cuối cùng GRAND TOTAL
       const rows: Record<string, any>[] = []
       displayed.forEach((s, i) => {
+        const t = tgt(s.staff_code)
         monthsInRange.forEach(month => {
           const m = s.monthly.find(x => x.month === month)
           rows.push({
-            "Rank":        i + 1,
-            "Staff Code":  s.staff_code,
-            "Staff Name":  s.staff_name,
-            "Tháng":       month,
-            "Revenue":     m?.revenue || 0,
-            "3HK Revenue": m?.hk3_revenue || 0,
-            "3HK %":       (m?.revenue || 0) > 0 ? +((m!.hk3_revenue / m!.revenue)*100).toFixed(1) : 0,
-            "GP":          m?.gross_profit || 0,
-            "CM1":         "",
-            "CM1 %":       "",
-            "KH":          "",
-            "Đơn":         "",
+            "Rank":               i + 1,
+            "Staff Code":         s.staff_code,
+            "Staff Name":         s.staff_name,
+            "Tháng":              month,
+            "Revenue":            m?.revenue || 0,
+            "3HK Revenue":        m?.hk3_revenue || 0,
+            "3HK %":              (m?.revenue || 0) > 0 ? +((m!.hk3_revenue / m!.revenue)*100).toFixed(1) : 0,
+            "GP":                 m?.gross_profit || 0,
+            "CM1":                "",
+            "CM1 %":              "",
+            "CM1 Target (Strategic)":     "",
+            "CM1 Target (Non-Strategic)": "",
+            "3HK Rev Target":             "",
+            "KH":                 "",
+            "Đơn":                "",
           })
         })
-        // Subtotal per sales
         rows.push({
-          "Rank":        i + 1,
-          "Staff Code":  s.staff_code,
-          "Staff Name":  s.staff_name,
-          "Tháng":       "TỔNG",
-          "Revenue":     s.total_revenue,
-          "3HK Revenue": s.hk3_revenue,
-          "3HK %":       s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
-          "GP":          s.gross_profit,
-          "CM1":         +s.cm1.toFixed(0),
-          "CM1 %":       +s.cm1_pct.toFixed(1),
-          "KH":          s.customer_count,
-          "Đơn":         s.total_orders,
+          "Rank":               i + 1,
+          "Staff Code":         s.staff_code,
+          "Staff Name":         s.staff_name,
+          "Tháng":              "TỔNG",
+          "Revenue":            s.total_revenue,
+          "3HK Revenue":        s.hk3_revenue,
+          "3HK %":              s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+          "GP":                 s.gross_profit,
+          "CM1":                +s.cm1.toFixed(0),
+          "CM1 %":              +s.cm1_pct.toFixed(1),
+          "CM1 Target (Strategic)":     t.cm1_strategic,
+          "CM1 Target (Non-Strategic)": t.cm1_non_strategic,
+          "3HK Rev Target":             t.hk3_rev,
+          "KH":                 s.customer_count,
+          "Đơn":                s.total_orders,
         })
-        rows.push({}) // dòng trống ngăn cách
+        rows.push({})
       })
-      // Grand total
       rows.push({
         "Rank": "", "Staff Code": "", "Staff Name": "GRAND TOTAL", "Tháng": "",
         "Revenue": totRev, "3HK Revenue": totHk3,
         "3HK %": totRev > 0 ? +((totHk3/totRev)*100).toFixed(1) : 0,
         "GP": totGP, "CM1": +totCM1.toFixed(0),
         "CM1 %": totRev > 0 ? +((totCM1/totRev)*100).toFixed(1) : 0,
+        "CM1 Target (Strategic)":     displayed.reduce((a, s) => a + (tgt(s.staff_code).cm1_strategic || 0), 0),
+        "CM1 Target (Non-Strategic)": displayed.reduce((a, s) => a + (tgt(s.staff_code).cm1_non_strategic || 0), 0),
+        "3HK Rev Target":             displayed.reduce((a, s) => a + (tgt(s.staff_code).hk3_rev || 0), 0),
         "KH": totCust, "Đơn": totOrds,
       })
       exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
     } else {
-      // Single period: flat
-      const rows = displayed.map((s, i) => ({
-        "Rank": i + 1, "Staff Code": s.staff_code, "Staff Name": s.staff_name,
-        "Revenue": s.total_revenue, "3HK Revenue": s.hk3_revenue,
-        "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
-        "GP": s.gross_profit, "CM1": +s.cm1.toFixed(0), "CM1 %": +s.cm1_pct.toFixed(1),
-        "KH": s.customer_count, "Đơn": s.total_orders,
-      }))
+      const rows = displayed.map((s, i) => {
+        const t = tgt(s.staff_code)
+        return {
+          "Rank": i + 1, "Staff Code": s.staff_code, "Staff Name": s.staff_name,
+          "Revenue": s.total_revenue, "3HK Revenue": s.hk3_revenue,
+          "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+          "GP": s.gross_profit, "CM1": +s.cm1.toFixed(0), "CM1 %": +s.cm1_pct.toFixed(1),
+          "CM1 Target (Strategic)":     t.cm1_strategic,
+          "CM1 Target (Non-Strategic)": t.cm1_non_strategic,
+          "3HK Rev Target":             t.hk3_rev,
+          "KH": s.customer_count, "Đơn": s.total_orders,
+        }
+      })
       exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
     }
   }
@@ -633,20 +679,76 @@ function StaffPageInner() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
+              {/* Row 1: group headers */}
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <th colSpan={8} />
+                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-black text-rose-600 uppercase tracking-wider text-center border-l border-rose-200 bg-rose-50/60">
+                  CM1 Target
+                </th>
+                <th className="px-4 py-1.5 text-[10px] font-black text-orange-600 uppercase tracking-wider text-center border-l border-orange-200 bg-orange-50/60">
+                  3HK Target
+                </th>
+                <th colSpan={4} />
+              </tr>
+              {/* Row 2: column headers */}
               <tr className="bg-slate-50 border-b border-slate-200">
-                {["#","Sales","Tổng Rev","3HK Rev","3HK%","GP","CM1","CM1%","KH","Đơn","Trend","Contr%"].map((h,i) => (
-                  <th key={h} className={cn("px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider", i>1 && "text-right", i<=1 && i>0 && "")}>{h}</th>
+                {["#","Sales","Tổng Rev","3HK Rev","3HK%","GP","CM1","CM1%"].map((h,i) => (
+                  <th key={h} className={cn("px-4 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider", i>1 && "text-right")}>{h}</th>
+                ))}
+                <th className="px-4 py-2.5 text-xs font-bold text-rose-500 uppercase tracking-wider text-right border-l border-rose-100 bg-rose-50/40 whitespace-nowrap">Strategic</th>
+                <th className="px-4 py-2.5 text-xs font-bold text-rose-400 uppercase tracking-wider text-right bg-rose-50/40 whitespace-nowrap">Non-strat.</th>
+                <th className="px-4 py-2.5 text-xs font-bold text-orange-500 uppercase tracking-wider text-right border-l border-orange-100 bg-orange-50/40 whitespace-nowrap">3HK Rev</th>
+                {["KH","Đơn","Trend","Contr%"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {displayed.length === 0 && !loading && (
-                <tr><td colSpan={12} className="px-6 py-8 text-center text-sm text-slate-400">Không có dữ liệu</td></tr>
+                <tr><td colSpan={15} className="px-6 py-8 text-center text-sm text-slate-400">Không có dữ liệu</td></tr>
               )}
               {displayed.map((s, i) => {
                 const hk3p    = s.total_revenue > 0 ? (s.hk3_revenue / s.total_revenue) * 100 : 0
                 const contp   = totRev > 0 ? (s.total_revenue / totRev) * 100 : 0
                 const isExp   = expandedStaff === s.staff_code
+                const t       = targets[s.staff_code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+
+                const TargetCell = ({ field, bg }: { field: keyof StaffTarget; bg: string }) => {
+                  const isEdit = editingCell?.code === s.staff_code && editingCell?.field === field
+                  return (
+                    <td
+                      className={cn("px-2 py-3 text-right", bg)}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {isEdit ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={() => { saveTarget(s.staff_code, field, editValue); setEditingCell(null) }}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") { saveTarget(s.staff_code, field, editValue); setEditingCell(null) }
+                            if (e.key === "Escape") setEditingCell(null)
+                          }}
+                          className="w-24 text-right text-xs font-bold bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => { setEditingCell({ code: s.staff_code, field }); setEditValue(String(t[field] || "")) }}
+                          className={cn(
+                            "text-xs font-bold tabular-nums rounded px-1.5 py-0.5 transition-colors",
+                            t[field] ? "text-slate-700 hover:bg-white hover:shadow-sm" : "text-slate-300 hover:bg-white hover:text-slate-500",
+                          )}
+                          title="Click để chỉnh sửa"
+                        >
+                          {t[field] ? fck(t[field]) : "—"}
+                        </button>
+                      )}
+                    </td>
+                  )
+                }
+
                 return (
                   <React.Fragment key={s.staff_code}>
                     <tr onClick={() => toggleExpand(s.staff_code)}
@@ -681,6 +783,9 @@ function StaffPageInner() {
                           {pct(s.cm1_pct)}
                         </span>
                       </td>
+                      <TargetCell field="cm1_strategic"     bg="border-l border-rose-100 bg-rose-50/30" />
+                      <TargetCell field="cm1_non_strategic" bg="bg-rose-50/20" />
+                      <TargetCell field="hk3_rev"           bg="border-l border-orange-100 bg-orange-50/30" />
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
                       <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>
@@ -696,7 +801,7 @@ function StaffPageInner() {
 
                     {/* Customer expand */}
                     {isExp && (
-                      <tr><td colSpan={12} className="px-0 py-0">
+                      <tr><td colSpan={15} className="px-0 py-0">
                         <div className="bg-blue-50/60 border-b border-blue-100 px-6 py-4">
                           {custLoading ? (
                             <div className="text-xs text-slate-400 py-4 text-center">Đang tải KH…</div>
@@ -785,6 +890,15 @@ function StaffPageInner() {
                   <td className="px-4 py-3 text-right text-sm text-emerald-700">{fck(totGP)}</td>
                   <td className="px-4 py-3 text-right text-sm text-indigo-700">{fck(totCM1)}</td>
                   <td className="px-4 py-3 text-right text-xs text-indigo-700">{totRev>0?pct((totCM1/totRev)*100):"0%"}</td>
+                  <td className="px-4 py-3 text-right text-xs text-rose-600 border-l border-rose-100 bg-rose-50/30">
+                    {fck(displayed.reduce((a,s) => a + (targets[s.staff_code]?.cm1_strategic||0), 0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-rose-600 bg-rose-50/20">
+                    {fck(displayed.reduce((a,s) => a + (targets[s.staff_code]?.cm1_non_strategic||0), 0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-orange-600 border-l border-orange-100 bg-orange-50/30">
+                    {fck(displayed.reduce((a,s) => a + (targets[s.staff_code]?.hk3_rev||0), 0))}
+                  </td>
                   <td className="px-4 py-3 text-right text-sm text-slate-600">{totCust}</td>
                   <td className="px-4 py-3 text-right text-sm text-slate-500">{totOrds.toLocaleString()}</td>
                   <td colSpan={2} />
