@@ -20,19 +20,27 @@ export interface StaffTarget {
   updated_by_name?:  string
 }
 
-// GET — { [staffCode]: StaffTarget }
-export async function GET() {
+// GET ?months=2026-07,2026-08
+// Returns: { [staffCode]: { [month]: StaffTarget } }
+export async function GET(req: NextRequest) {
   try {
     await requireAuth()
-    const { data, error } = await supabaseAdmin
-      .from("staff_targets")
-      .select("staff_code, cm1_strategic, cm1_non_strategic, hk3_rev, updated_at, updated_by_email, updated_by_name")
+    const monthsParam = req.nextUrl.searchParams.get("months") ?? ""
+    const months = monthsParam.split(",").map(m => m.trim()).filter(Boolean)
 
+    let query = supabaseAdmin
+      .from("staff_targets")
+      .select("staff_code, month, cm1_strategic, cm1_non_strategic, hk3_rev, updated_at, updated_by_email, updated_by_name")
+
+    if (months.length > 0) query = query.in("month", months)
+
+    const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    const result: Record<string, StaffTarget> = {}
+    const result: Record<string, Record<string, StaffTarget>> = {}
     for (const row of data ?? []) {
-      result[row.staff_code] = {
+      if (!result[row.staff_code]) result[row.staff_code] = {}
+      result[row.staff_code][row.month] = {
         cm1_strategic:     Number(row.cm1_strategic)     || 0,
         cm1_non_strategic: Number(row.cm1_non_strategic) || 0,
         hk3_rev:           Number(row.hk3_rev)           || 0,
@@ -47,16 +55,17 @@ export async function GET() {
   }
 }
 
-// PATCH — batch upsert, kèm editor info
+// PATCH — batch upsert với month
 export async function PATCH(req: NextRequest) {
   try {
     const session = await requireAuth()
     const { updates } = await req.json() as {
       updates: Array<{
-        staffCode:        string
-        cm1_strategic:    number
+        staffCode:         string
+        month:             string
+        cm1_strategic:     number
         cm1_non_strategic: number
-        hk3_rev:          number
+        hk3_rev:           number
       }>
     }
     if (!Array.isArray(updates) || updates.length === 0)
@@ -68,6 +77,7 @@ export async function PATCH(req: NextRequest) {
 
     const rows = updates.map(u => ({
       staff_code:        u.staffCode,
+      month:             u.month,
       cm1_strategic:     u.cm1_strategic     || 0,
       cm1_non_strategic: u.cm1_non_strategic || 0,
       hk3_rev:           u.hk3_rev           || 0,
@@ -78,7 +88,7 @@ export async function PATCH(req: NextRequest) {
 
     const { error } = await supabaseAdmin
       .from("staff_targets")
-      .upsert(rows, { onConflict: "staff_code" })
+      .upsert(rows, { onConflict: "staff_code,month" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, updated: rows.length })
