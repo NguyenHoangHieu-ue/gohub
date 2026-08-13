@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { canWriteTab } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 export async function GET() {
   const settings = await fetchQuarterlySettings()
@@ -11,8 +14,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const ok = await canWriteTab(session.user.username, "quarterly", WRITE_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))
   let saved = 0

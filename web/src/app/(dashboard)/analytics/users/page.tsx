@@ -44,8 +44,11 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode; creatorOnly
 
 // Tab có thể được creator gán quyền write per-user
 const WRITABLE_TAB_DEFS = [
-  { key: "scheduled", label: "Scheduled Messages" },
-  { key: "targets",   label: "KPI / Target" },
+  { key: "scheduled",   label: "Scheduled Messages" },
+  { key: "targets",     label: "KPI / Target" },
+  { key: "quarterly",   label: "Quarter Report (nhập target KH)" },
+  { key: "staff",       label: "Staff (nhập target sales)" },
+  { key: "fulfillment", label: "Inventory Management (nhập tồn kho)" },
 ]
 
 export default function UserManagementPage() {

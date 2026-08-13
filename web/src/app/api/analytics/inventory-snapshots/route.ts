@@ -2,19 +2,29 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWriteTab } from "@/lib/writable-tabs"
 
-const ALLOWED = ["admin", "creator", "manager", "staff"]
+const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod", "ops-&-cs"]
+const WRITE_ROLES = ["admin", "creator", "manager", "staff"]
 
-async function requireAuth() {
+async function requireRead() {
   const session = await getServerSession(authOptions)
-  if (!session || !ALLOWED.includes(session.user.role)) throw new Error("Unauthorized")
+  if (!session || !READ_ROLES.includes(session.user.role)) throw new Error("Unauthorized")
+  return session
+}
+
+async function requireWrite() {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error("Unauthorized")
+  const ok = await canWriteTab(session.user.username, "fulfillment", WRITE_ROLES)
+  if (!ok) throw new Error("Forbidden")
   return session
 }
 
 // GET ?sku_code=xxx — lịch sử snapshots của 1 SKU
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireRead()
     const sku = req.nextUrl.searchParams.get("sku_code")
     if (!sku) return NextResponse.json({ error: "sku_code required" }, { status: 400 })
 
@@ -35,7 +45,7 @@ export async function GET(req: NextRequest) {
 // POST — lưu batch snapshot (nhiều SKU cùng 1 ngày)
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAuth()
+    const session = await requireWrite()
     const { snapshot_date, updates } = await req.json() as {
       snapshot_date: string
       updates: Array<{
@@ -100,7 +110,7 @@ export async function POST(req: NextRequest) {
 // GET /available-dates — danh sách ngày đã có snapshot
 export async function HEAD(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireRead()
     const { data, error } = await supabaseAdmin
       .from("inventory_snapshots")
       .select("snapshot_date")
