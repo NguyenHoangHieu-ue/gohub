@@ -6,6 +6,7 @@ export const ALL_ANALYTICS_IDS = [
   "dashboard", "quarterly", "bod", "all-time", "channels", "b2b", "b2c", "website",
   "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
   "cs-troubleshoot", "feedback", "products", "targets", "sql", "scheduled", "info",
+  "my-metrics",
 ]
 
 // Quyền NỀN mặc định theo role (admin = toàn quyền, không liệt kê). Deny-by-default;

@@ -21,8 +21,9 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "vendors", label: "Vendors" }, { id: "orders", label: "Orders" }, { id: "fulfillment", label: "Fulfillment" },
   { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
-  { id: "scheduled", label: "Scheduled Messages" },
-  { id: "info",      label: "Note" },
+  { id: "scheduled",  label: "Scheduled Messages" },
+  { id: "info",       label: "Note" },
+  { id: "my-metrics", label: "My Metrics" },
 ]
 const PM_TABS = [
   { key: "kb",   label: "Kiến Thức"   },
@@ -49,6 +50,7 @@ const WRITABLE_TAB_DEFS = [
   { key: "quarterly",   label: "Quarter Report (nhập target KH)" },
   { key: "staff",       label: "Staff (nhập target sales)" },
   { key: "fulfillment", label: "Inventory Management (nhập tồn kho)" },
+  { key: "my-metrics",  label: "My Metrics (xem OKR dashboard)" },
 ]
 
 export default function UserManagementPage() {
