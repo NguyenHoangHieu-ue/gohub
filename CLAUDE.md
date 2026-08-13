@@ -33,7 +33,7 @@
 - ✅ **Portal Access** tab `/analytics/portal`: Hướng C (console interceptor) CHẠY; Hướng A (SHA256 Open API) đang test.
 
 **Ghi chú:**
-- Quarter Report: target KH nhập theo THÁNG → cột % Target CM1 nhân × 3 để ra target quý.
+- Quarter Report: target CM1 KH nhập là target QUÝ (không nhân × 3). % Target CM1 = PR CM1 / target_quý.
 - Daily 【3】 theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
 - Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
 
