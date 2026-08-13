@@ -253,10 +253,13 @@ function EditItemModal({ item, onClose, onSaved }: { item: InventoryItem; onClos
 }
 
 // ─── Vendor Balance Section ────────────────────────────────────────────────────
+const EMPTY_NEW_ROW = () => ({ vendor: "", balance: 0, currency: "USD", credit_limit: 0, note: "" })
+
 function VendorBalanceSection({ vendors }: { vendors: string[] }) {
   const [balances,  setBalances]  = useState<VendorBalance[]>([])
   const [editMode,  setEditMode]  = useState(false)
   const [drafts,    setDrafts]    = useState<Record<string, VendorBalance>>({})
+  const [newRows,   setNewRows]   = useState<ReturnType<typeof EMPTY_NEW_ROW>[]>([])
   const [saving,    setSaving]    = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
@@ -267,7 +270,6 @@ function VendorBalanceSection({ vendors }: { vendors: string[] }) {
 
   useEffect(() => { fetchBalances() }, [fetchBalances])
 
-  // Merge DB balances with tracked vendors (vendors not in DB yet → show empty row)
   const rows = useMemo(() => {
     const map = Object.fromEntries(balances.map(b => [b.vendor, b]))
     const allV = [...new Set([...vendors, ...balances.map(b => b.vendor)])].sort()
@@ -280,14 +282,29 @@ function VendorBalanceSection({ vendors }: { vendors: string[] }) {
     setDrafts(d); setEditMode(true)
   }
 
+  const addNewRow = () => {
+    if (!editMode) enterEdit()
+    setNewRows(p => [...p, EMPTY_NEW_ROW()])
+  }
+
+  const setNewField = (idx: number, field: string, val: any) =>
+    setNewRows(p => p.map((r, i) => i === idx ? { ...r, [field]: val } : r))
+
+  const removeNewRow = (idx: number) =>
+    setNewRows(p => p.filter((_, i) => i !== idx))
+
+  const cancel = () => { setEditMode(false); setDrafts({}); setNewRows([]) }
+
   const save = async () => {
     setSaving(true)
-    const updates = Object.values(drafts)
+    const existing = Object.values(drafts)
+    const added    = newRows.filter(r => r.vendor.trim())
+    const updates  = [...existing, ...added.map(r => ({ ...r, vendor: r.vendor.trim() }))]
     const r = await fetch("/api/analytics/vendor-balances", {
       method:"PATCH", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ updates }),
     })
-    if (r.ok) { await fetchBalances(); setEditMode(false); setDrafts({}) }
+    if (r.ok) { await fetchBalances(); setEditMode(false); setDrafts({}); setNewRows([]) }
     setSaving(false)
   }
 
@@ -304,21 +321,25 @@ function VendorBalanceSection({ vendors }: { vendors: string[] }) {
         </button>
         {!collapsed && (
           <div className="flex items-center gap-2">
+            <button onClick={addNewRow}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Add Vendor
+            </button>
             {editMode ? (
               <>
-                <button onClick={() => { setEditMode(false); setDrafts({}) }}
+                <button onClick={cancel}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">
                   <XCircle className="w-3.5 h-3.5" /> Cancel
                 </button>
                 <button onClick={save} disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50">
                   <Save className="w-3.5 h-3.5" /> {saving ? "Saving…" : "Save"}
                 </button>
               </>
             ) : (
               <button onClick={enterEdit}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">
-                <Pencil className="w-3.5 h-3.5" /> Edit Balances
+                <Pencil className="w-3.5 h-3.5" /> Edit
               </button>
             )}
           </div>
@@ -389,6 +410,47 @@ function VendorBalanceSection({ vendors }: { vendors: string[] }) {
                   </tr>
                 )
               })}
+              {/* New rows being added */}
+              {newRows.map((nr, idx) => (
+                <tr key={`new-${idx}`} className="bg-blue-50/40">
+                  <Td>
+                    <input
+                      autoFocus={idx === newRows.length - 1}
+                      value={nr.vendor}
+                      onChange={e => setNewField(idx, "vendor", e.target.value)}
+                      placeholder="Vendor name…"
+                      className="w-36 text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    />
+                  </Td>
+                  <Td right>
+                    <input type="number" value={nr.balance || ""} onChange={e => setNewField(idx,"balance",Number(e.target.value))}
+                      placeholder="0"
+                      className="w-28 text-right text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
+                  </Td>
+                  <Td>
+                    <select value={nr.currency} onChange={e => setNewField(idx,"currency",e.target.value)}
+                      className="border border-blue-300 rounded px-1.5 py-0.5 text-xs font-bold bg-white focus:outline-none">
+                      {["USD","VND","EUR","HKD","SGD"].map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </Td>
+                  <Td right>
+                    <input type="number" value={nr.credit_limit || ""} onChange={e => setNewField(idx,"credit_limit",Number(e.target.value))}
+                      placeholder="0"
+                      className="w-28 text-right text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
+                  </Td>
+                  <Td>
+                    <input value={nr.note ?? ""} onChange={e => setNewField(idx,"note",e.target.value)}
+                      placeholder="Note…"
+                      className="w-48 text-xs border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
+                  </Td>
+                  <Td>
+                    <button onClick={() => removeNewRow(idx)}
+                      className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </Td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
