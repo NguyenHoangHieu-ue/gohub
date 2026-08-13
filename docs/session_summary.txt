@@ -40,6 +40,8 @@ Cập nhật lần cuối: 2026-08-13 (Session 147 — Ẩn Tổ Gấu, Staff Ta
 - **Bé Gấu Tasks**: AUTO count (ai_response IS NOT NULL) + toggle "Xem danh sách hội thoại" — hiện user message + AI reply, phân trang 15/trang
 - Baseline T8/2026 nhúng vào note banner và tất cả comparisons
 - APIs: GET/POST/DELETE evidence, POST upload image to Supabase Storage, GET conversations (paginated), GET auto metrics (3HK + GM + Bé Gấu)
+- fix: 3HK query dùng subquery dim_sku thay vì vendor column không tồn tại trong fact_fulfillment_revenue
+- feat: target per-quarter editable — button "Sửa Target" → nhập 6 target values → lưu vào app_settings, fallback về default nếu chưa nhập
 
 ### D. Quarter Report — fix target CM1 KH (commit 2454e00)
 - Bỏ nhân × 3: target CM1 của từng KH nhóm là target QUÝ (không phải tháng)

@@ -31,9 +31,16 @@ interface Conversation {
   id: number; user_message: string; ai_response: string
   channel: string; user: string; created_at: string
 }
+interface ManualMetrics {
+  target_sla_hours: number; target_sla_pct: number; target_vendor_speed: number
+  target_gm_delta: number; target_hk3_pct: number; target_begau: number
+  sla_time: number; sla_pct: number; vendor_speed: number
+  gm_baseline: number; gm_actual: number
+  updated_by?: string; updated_at?: string
+}
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const TARGETS = {
+// Fallback khi chưa lưu target vào DB
+const DEFAULT_TARGETS = {
   Q3: { sla_hours: 5, sla_pct: 80, vendor_speed: 15, gm_delta: 2.5, hk3_pct: 74, begau: 450 },
   Q4: { sla_hours: 1, sla_pct: 90, vendor_speed: 5,  gm_delta: 5.0, hk3_pct: 80, begau: 650 },
 }
@@ -361,8 +368,23 @@ function MyMetricsInner() {
   const [expandConv, setExpandConv] = useState<number | null>(null)
   const CONV_LIMIT = 15
 
-  const targets  = TARGETS[selQ]
-  const qLabel   = `${selQ}-${selYear}`
+  const [manual,    setManual]    = useState<ManualMetrics | null>(null)
+  const [editTarget, setEditTarget] = useState(false)
+  const [draftT,     setDraftT]    = useState<Partial<ManualMetrics>>({})
+  const [savingT,    setSavingT]   = useState(false)
+
+  const qLabel  = `${selQ}-${selYear}`
+  const defT    = DEFAULT_TARGETS[selQ]
+
+  // Target: DB values nếu đã lưu, fallback về DEFAULT_TARGETS
+  const targets = {
+    sla_hours:    manual?.target_sla_hours    || defT.sla_hours,
+    sla_pct:      manual?.target_sla_pct      || defT.sla_pct,
+    vendor_speed: manual?.target_vendor_speed || defT.vendor_speed,
+    gm_delta:     manual?.target_gm_delta     || defT.gm_delta,
+    hk3_pct:      manual?.target_hk3_pct      || defT.hk3_pct,
+    begau:        manual?.target_begau         || defT.begau,
+  }
 
   const fetchAuto = useCallback(async () => {
     setLoading(true)
@@ -371,7 +393,35 @@ function MyMetricsInner() {
     setLoading(false)
   }, [selQ, selYear])
 
-  useEffect(() => { fetchAuto() }, [fetchAuto])
+  const fetchManual = useCallback(async () => {
+    const r = await fetch(`/api/analytics/my-metrics/manual?quarter=${selQ}&year=${selYear}`)
+    if (r.ok) { const d = await r.json(); setManual(d) }
+    else setManual(null)
+  }, [selQ, selYear])
+
+  useEffect(() => { fetchAuto(); fetchManual() }, [fetchAuto, fetchManual])
+
+  const openEditTarget = () => {
+    setDraftT({
+      target_sla_hours:    targets.sla_hours,
+      target_sla_pct:      targets.sla_pct,
+      target_vendor_speed: targets.vendor_speed,
+      target_gm_delta:     targets.gm_delta,
+      target_hk3_pct:      targets.hk3_pct,
+      target_begau:        targets.begau,
+    })
+    setEditTarget(true)
+  }
+
+  const saveTargets = async () => {
+    setSavingT(true)
+    const r = await fetch("/api/analytics/my-metrics/manual", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quarter: selQ, year: String(selYear), ...draftT }),
+    })
+    if (r.ok) { await fetchManual(); setEditTarget(false) }
+    setSavingT(false)
+  }
 
   const fetchConvs = useCallback(async (page = 0) => {
     setConvLoad(true)
@@ -420,6 +470,10 @@ function MyMetricsInner() {
           <button onClick={fetchAuto} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors">
             <RefreshCw className={cn("w-4 h-4 text-slate-500", loading && "animate-spin")} />
           </button>
+          <button onClick={openEditTarget}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+            <Pencil className="w-3.5 h-3.5" /> Sửa Target
+          </button>
         </div>
       </div>
 
@@ -427,6 +481,52 @@ function MyMetricsInner() {
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[11px] text-amber-700 font-medium">
         📌 <strong>Baseline T8/2026:</strong> SLA = {BASELINES.sla} · Vendor Speed = {BASELINES.vendor_speed} · SKU GM = {BASELINES.gm_pct}% · Datapool = {BASELINES.hk3_pct}% · Tasks = {BASELINES.begau_weekly}
       </div>
+
+      {/* Target edit modal */}
+      {editTarget && (
+        <div className="bg-white border border-blue-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-black text-slate-900">Sửa Target — {qLabel}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Lưu target theo từng quý, sẽ ghi đè default</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditTarget(false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">
+                <XCircle className="w-3.5 h-3.5" /> Hủy
+              </button>
+              <button onClick={saveTargets} disabled={savingT}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">
+                <Save className="w-3.5 h-3.5" /> {savingT ? "Đang lưu…" : "Lưu"}
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+            {([
+              ["SLA — giờ (max)", "target_sla_hours",    "giờ"],
+              ["SLA — compliance", "target_sla_pct",     "%"],
+              ["Vendor Speed", "target_vendor_speed",    "phút"],
+              ["SKU GM delta",    "target_gm_delta",     "%"],
+              ["%3HK Datapool",   "target_hk3_pct",      "%"],
+              ["Bé Gấu tasks/quý","target_begau",        "tasks"],
+            ] as [string, keyof ManualMetrics, string][]).map(([label, field, unit]) => (
+              <div key={field}>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <input
+                    type="number" step="0.1" min={0}
+                    value={(draftT[field] as number) ?? ""}
+                    onChange={e => setDraftT(p => ({ ...p, [field]: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-400 shrink-0">{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── 1. Operational Excellence ── */}
       <div>
