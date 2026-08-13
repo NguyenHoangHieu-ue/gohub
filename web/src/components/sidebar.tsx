@@ -43,10 +43,11 @@ const ANALYTICS_GROUPS = [
   {
     label: "Overview",
     items: [
-      { href: "/analytics",           label: "Dashboard",       icon: LayoutDashboard },
-      { href: "/analytics/quarterly", label: "Quarter Report",  icon: BarChart3       },
-      { href: "/analytics/bod",       label: "BOD Report",      icon: PieChart        },
-      { href: "/analytics/all-time",  label: "All-Time Report", icon: BarChart3       },
+      { href: "/analytics",             label: "Dashboard",       icon: LayoutDashboard },
+      { href: "/analytics/quarterly",   label: "Quarter Report",  icon: BarChart3       },
+      { href: "/analytics/bod",         label: "BOD Report",      icon: PieChart        },
+      { href: "/analytics/all-time",    label: "All-Time Report", icon: BarChart3       },
+      { href: "/analytics/my-metrics",  label: "My Metrics",      icon: Target          },
     ],
   },
   {

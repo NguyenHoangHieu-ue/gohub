@@ -3,19 +3,29 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { canWriteTab } from "@/lib/writable-tabs"
 
-const ALLOWED = ["admin", "creator", "manager", "staff"]
+const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod", "ops-&-cs"]
+const WRITE_ROLES = ["admin", "creator", "manager", "staff"]
 
-async function requireAuth() {
+async function requireRead() {
   const session = await getServerSession(authOptions)
-  if (!session || !ALLOWED.includes(session.user.role)) throw new Error("Unauthorized")
+  if (!session || !READ_ROLES.includes(session.user.role)) throw new Error("Unauthorized")
+  return session
+}
+
+async function requireWrite() {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error("Unauthorized")
+  const ok = await canWriteTab(session.user.username, "fulfillment", WRITE_ROLES)
+  if (!ok) throw new Error("Forbidden")
   return session
 }
 
 // GET — danh sách items + latest snapshot + sold từ gohub_dw
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireRead()
 
     // 1. Lấy inventory_items
     const { data: items, error: itemErr } = await supabaseAdmin
@@ -132,7 +142,7 @@ export async function GET(req: NextRequest) {
 // POST — thêm SKU mới vào danh sách track
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAuth()
+    const session = await requireWrite()
     const body = await req.json() as {
       sku_code: string; sim_type: string; vendor?: string; status?: string
       retail_price?: number; safety_stock?: number; reorder_point?: number; note_permanent?: string
@@ -173,7 +183,7 @@ export async function POST(req: NextRequest) {
 // PATCH — sửa metadata item (retail_price, safety_stock, reorder_point, status, vendor, sim_type, note_permanent)
 export async function PATCH(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireWrite()
     const body = await req.json() as {
       sku_code: string; retail_price?: number; safety_stock?: number; reorder_point?: number
       status?: string; vendor?: string; sim_type?: string; note_permanent?: string | null
@@ -196,7 +206,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE — xóa SKU khỏi danh sách track
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireWrite()
     const { sku_code } = await req.json()
     if (!sku_code) return NextResponse.json({ error: "sku_code required" }, { status: 400 })
 

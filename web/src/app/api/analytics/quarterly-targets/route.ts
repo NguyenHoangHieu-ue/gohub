@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
+import { canWriteTab } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
 // Lưu/lấy target quý từ Turso table: target_planning_quarter
 // Schema: id TEXT PK, quarter TEXT, channel TEXT, target_revenue REAL,
@@ -65,8 +68,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(session.user.role))
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const ok = await canWriteTab(session.user.username, "quarterly", WRITE_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { quarter, year, targets } = await req.json()
   if (!quarter || !year) return NextResponse.json({ error: "quarter and year required" }, { status: 400 })

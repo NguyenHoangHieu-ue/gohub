@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWriteTab } from "@/lib/writable-tabs"
 
-const ALLOWED = ["admin", "creator", "manager"]
+const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod"]
+const WRITE_ROLES = ["admin", "creator", "manager"]
 
-async function requireAuth() {
+async function requireRead() {
   const session = await getServerSession(authOptions)
-  if (!session || !ALLOWED.includes(session.user.role)) throw new Error("Unauthorized")
+  if (!session || !READ_ROLES.includes(session.user.role)) throw new Error("Unauthorized")
+  return session
+}
+
+async function requireWrite() {
+  const session = await getServerSession(authOptions)
+  if (!session) throw new Error("Unauthorized")
+  const ok = await canWriteTab(session.user.username, "staff", WRITE_ROLES)
+  if (!ok) throw new Error("Forbidden")
   return session
 }
 
@@ -24,7 +34,7 @@ export interface StaffTarget {
 // Returns: { [staffCode]: { [month]: StaffTarget } }
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth()
+    await requireRead()
     const monthsParam = req.nextUrl.searchParams.get("months") ?? ""
     const months = monthsParam.split(",").map(m => m.trim()).filter(Boolean)
 
@@ -58,7 +68,7 @@ export async function GET(req: NextRequest) {
 // PATCH — batch upsert với month
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await requireAuth()
+    const session = await requireWrite()
     const { updates } = await req.json() as {
       updates: Array<{
         staffCode:         string
