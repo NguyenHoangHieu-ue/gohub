@@ -8,11 +8,19 @@ const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
 
 export interface ManualMetrics {
-  sla_time:     number   // giờ thực tế
-  sla_pct:      number   // % compliance thực tế
-  vendor_speed: number   // phút thực tế
-  gm_baseline:  number   // GM% baseline (%)
-  gm_actual:    number   // GM% actual (%)
+  // targets (per quarter — editable)
+  target_sla_hours:    number
+  target_sla_pct:      number
+  target_vendor_speed: number
+  target_gm_delta:     number
+  target_hk3_pct:      number
+  target_begau:        number
+  // actuals (manual)
+  sla_time:     number
+  sla_pct:      number
+  vendor_speed: number
+  gm_baseline:  number
+  gm_actual:    number
   updated_by:   string
   updated_at:   string
 }
@@ -63,6 +71,14 @@ export async function PATCH(req: NextRequest) {
   const prev: Partial<ManualMetrics> = existing?.value ? JSON.parse(existing.value) : {}
 
   const next: ManualMetrics = {
+    // targets
+    target_sla_hours:    values.target_sla_hours    ?? prev.target_sla_hours    ?? 0,
+    target_sla_pct:      values.target_sla_pct      ?? prev.target_sla_pct      ?? 0,
+    target_vendor_speed: values.target_vendor_speed ?? prev.target_vendor_speed ?? 0,
+    target_gm_delta:     values.target_gm_delta     ?? prev.target_gm_delta     ?? 0,
+    target_hk3_pct:      values.target_hk3_pct      ?? prev.target_hk3_pct      ?? 0,
+    target_begau:        values.target_begau         ?? prev.target_begau         ?? 0,
+    // actuals
     sla_time:     values.sla_time     ?? prev.sla_time     ?? 0,
     sla_pct:      values.sla_pct      ?? prev.sla_pct      ?? 0,
     vendor_speed: values.vendor_speed ?? prev.vendor_speed ?? 0,
