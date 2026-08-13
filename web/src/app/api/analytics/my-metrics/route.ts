@@ -34,14 +34,16 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await queryAnalytics<{ month: string; hk3_rev: string; total_rev: string }>(`
       SELECT
-        TO_CHAR(DATE_TRUNC('month', fulfiled_date::date), 'YYYY-MM') AS month,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
-            THEN fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
-        SUM(fulfilled_revenue_amount_vnd)::bigint                   AS total_rev
-      FROM fact_fulfillment_revenue
-      WHERE fulfiled_date IS NOT NULL
-        AND fulfiled_date::date BETWEEN '${start}' AND '${end}'
-        AND fulfiled_date::date <= CURRENT_DATE - 1
+        TO_CHAR(DATE_TRUNC('month', f.fulfiled_date::date), 'YYYY-MM') AS month,
+        SUM(CASE WHEN TRIM(f.sku) IN (
+          SELECT DISTINCT TRIM(sku) FROM dim_sku
+          WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+        ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
+        SUM(f.fulfilled_revenue_amount_vnd)::bigint                AS total_rev
+      FROM fact_fulfillment_revenue f
+      WHERE f.fulfiled_date IS NOT NULL
+        AND f.fulfiled_date::date BETWEEN '${start}' AND '${end}'
+        AND f.fulfiled_date::date <= CURRENT_DATE - 1
       GROUP BY 1
       ORDER BY 1
     `)
