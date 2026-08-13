@@ -28,7 +28,7 @@
 - ✅ **Fulfillment tab rebuild → Inventory Management**: OPS nhập tồn kho, vendor balance, DOI alert, history snapshot, Sold auto từ gohub_dw
 - ✅ **Quarter Report — target CM1 KH**: bỏ × 3, target nhập là target QUÝ trực tiếp
 - ✅ **Quyền chỉnh sửa**: thêm `quarterly`/`staff`/`fulfillment`/`my-metrics` vào Users tab + helper `writable-tabs.ts` + enforce 6 API routes
-- ✅ **Tab My Metrics (OKR Dashboard)**: SLA+Vendor evidence (ảnh+time+tự tính duration), SKU GM auto từ gohub_dw, 3HK% auto, Bé Gấu task count + conversation list. Migrations v25 + bucket okr-evidence đã chạy.
+- ✅ **Tab My Metrics (OKR Dashboard)**: SLA+Vendor evidence (ảnh+time+tự tính duration), SKU GM auto từ gohub_dw, 3HK% auto (fix subquery dim_sku), Bé Gấu task count + conversation list, target per-quarter editable. Migrations v25 + bucket okr-evidence đã chạy.
 
 **s145 — đã xong (ghi lại):**
 - ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.
