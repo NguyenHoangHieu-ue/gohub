@@ -7,6 +7,7 @@ import { DatePresets } from "@/components/date-presets"
 import {
   Users, Calendar, Filter, Download, Search,
   ChevronDown, ChevronRight, RefreshCw, X, Play,
+  Pencil, Save, XCircle,
 } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
@@ -23,7 +24,12 @@ interface StaffTarget {
   cm1_strategic:     number
   cm1_non_strategic: number
   hk3_rev:           number
+  updated_at?:       string
+  updated_by_email?: string
+  updated_by_name?:  string
 }
+
+type TargetValues = Pick<StaffTarget, "cm1_strategic" | "cm1_non_strategic" | "hk3_rev">
 
 interface MonthlyItem { month: string; revenue: number; hk3_revenue: number; gross_profit: number }
 
@@ -143,10 +149,11 @@ function StaffPageInner() {
   const [customers,     setCustomers]     = useState<CustomerRow[]>([])
   const [custLoading,   setCustLoading]   = useState(false)
 
-  // Targets — editable per-staff
-  const [targets,     setTargets]     = useState<Record<string, StaffTarget>>({})
-  const [editingCell, setEditingCell] = useState<{ code: string; field: keyof StaffTarget } | null>(null)
-  const [editValue,   setEditValue]   = useState("")
+  // Targets
+  const [targets,      setTargets]      = useState<Record<string, StaffTarget>>({})
+  const [editMode,     setEditMode]     = useState(false)
+  const [draftTargets, setDraftTargets] = useState<Record<string, TargetValues>>({})
+  const [saving,       setSaving]       = useState(false)
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -178,19 +185,58 @@ function StaffPageInner() {
     } catch {}
   }, [])
 
-  const saveTarget = useCallback(async (code: string, field: keyof StaffTarget, raw: string) => {
-    const num = parseFloat(raw.replace(/,/g, "")) || 0
-    const prev = targets[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
-    const next = { ...prev, [field]: num }
-    setTargets(t => ({ ...t, [code]: next }))
+  const enterEdit = useCallback(() => {
+    const disp = selectedCodes.length > 0
+      ? staffData.filter(s => selectedCodes.includes(s.staff_code))
+      : staffData
+    const draft: Record<string, TargetValues> = {}
+    for (const s of disp) {
+      const t = targets[s.staff_code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+      draft[s.staff_code] = { cm1_strategic: t.cm1_strategic, cm1_non_strategic: t.cm1_non_strategic, hk3_rev: t.hk3_rev }
+    }
+    setDraftTargets(draft)
+    setEditMode(true)
+  }, [staffData, selectedCodes, targets])
+
+  const cancelEdit = useCallback(() => {
+    setEditMode(false)
+    setDraftTargets({})
+  }, [])
+
+  const hasChanges = useMemo(() => {
+    if (!editMode) return false
+    return Object.entries(draftTargets).some(([code, d]) => {
+      const t = targets[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+      return d.cm1_strategic !== t.cm1_strategic || d.cm1_non_strategic !== t.cm1_non_strategic || d.hk3_rev !== t.hk3_rev
+    })
+  }, [editMode, draftTargets, targets])
+
+  const saveTargets = useCallback(async () => {
+    if (!hasChanges || saving) return
+    setSaving(true)
+    const updates = Object.entries(draftTargets)
+      .filter(([code, d]) => {
+        const t = targets[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+        return d.cm1_strategic !== t.cm1_strategic || d.cm1_non_strategic !== t.cm1_non_strategic || d.hk3_rev !== t.hk3_rev
+      })
+      .map(([staffCode, d]) => ({ staffCode, ...d }))
     try {
-      await fetch("/api/analytics/staff-targets", {
+      const r = await fetch("/api/analytics/staff-targets", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffCode: code, target: next }),
+        body: JSON.stringify({ updates }),
       })
-    } catch {}
-  }, [targets])
+      if (r.ok) {
+        await fetchTargets()
+        setEditMode(false)
+        setDraftTargets({})
+      }
+    } catch {} finally { setSaving(false) }
+  }, [hasChanges, saving, draftTargets, targets, fetchTargets])
+
+  const setDraftField = useCallback((code: string, field: keyof TargetValues, val: number) => {
+    setDraftTargets(prev => ({ ...prev, [code]: { ...(prev[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }), [field]: val } }))
+  }, [])
 
   useEffect(() => { fetchChannels() }, [fetchChannels])
   useEffect(() => { fetchStaff() },   [fetchStaff])
@@ -672,9 +718,38 @@ function StaffPageInner() {
 
       {/* Leaderboard table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-black text-slate-900">Chi tiết từng Sales</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Click hàng để xem breakdown KH · CM1 = GP − CH.Cost từng KH (Turso) − chi phí nhóm B2B/B2C</p>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">Chi tiết từng Sales</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Click hàng để xem breakdown KH · CM1 = GP − CH.Cost từng KH (Turso) − chi phí nhóm B2B/B2C</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {editMode ? (
+              <>
+                <button onClick={cancelEdit}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                  <XCircle className="w-3.5 h-3.5" /> Hủy
+                </button>
+                <button
+                  onClick={saveTargets}
+                  disabled={!hasChanges || saving}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+                    hasChanges && !saving
+                      ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                      : "bg-slate-100 text-slate-400 cursor-not-allowed",
+                  )}>
+                  <Save className="w-3.5 h-3.5" />
+                  {saving ? "Đang lưu…" : "Lưu"}
+                </button>
+              </>
+            ) : (
+              <button onClick={enterEdit}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+                <Pencil className="w-3.5 h-3.5" /> Sửa Target
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -708,42 +783,36 @@ function StaffPageInner() {
                 <tr><td colSpan={15} className="px-6 py-8 text-center text-sm text-slate-400">Không có dữ liệu</td></tr>
               )}
               {displayed.map((s, i) => {
-                const hk3p    = s.total_revenue > 0 ? (s.hk3_revenue / s.total_revenue) * 100 : 0
-                const contp   = totRev > 0 ? (s.total_revenue / totRev) * 100 : 0
-                const isExp   = expandedStaff === s.staff_code
-                const t       = targets[s.staff_code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+                const hk3p  = s.total_revenue > 0 ? (s.hk3_revenue / s.total_revenue) * 100 : 0
+                const contp = totRev > 0 ? (s.total_revenue / totRev) * 100 : 0
+                const isExp = expandedStaff === s.staff_code
+                const t     = targets[s.staff_code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+                const d     = draftTargets[s.staff_code] ?? { cm1_strategic: t.cm1_strategic, cm1_non_strategic: t.cm1_non_strategic, hk3_rev: t.hk3_rev }
 
-                const TargetCell = ({ field, bg }: { field: keyof StaffTarget; bg: string }) => {
-                  const isEdit = editingCell?.code === s.staff_code && editingCell?.field === field
+                const TargetTd = ({ field, border }: { field: keyof TargetValues; border?: string }) => {
+                  const bgClass = field === "hk3_rev"
+                    ? cn("border-l border-orange-100 bg-orange-50/30", border)
+                    : field === "cm1_strategic"
+                      ? cn("border-l border-rose-100 bg-rose-50/30", border)
+                      : cn("bg-rose-50/20", border)
+                  const displayVal = editMode ? d[field] : t[field]
+                  const lastEdit   = !editMode && t.updated_by_name && field === "cm1_strategic"
+                    ? `Sửa bởi ${t.updated_by_name}` : undefined
                   return (
-                    <td
-                      className={cn("px-2 py-3 text-right", bg)}
-                      onClick={e => e.stopPropagation()}
-                    >
-                      {isEdit ? (
+                    <td className={cn("px-2 py-3 text-right", bgClass)} onClick={e => e.stopPropagation()}>
+                      {editMode ? (
                         <input
-                          autoFocus
                           type="number"
-                          value={editValue}
-                          onChange={e => setEditValue(e.target.value)}
-                          onBlur={() => { saveTarget(s.staff_code, field, editValue); setEditingCell(null) }}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") { saveTarget(s.staff_code, field, editValue); setEditingCell(null) }
-                            if (e.key === "Escape") setEditingCell(null)
-                          }}
-                          className="w-24 text-right text-xs font-bold bg-white border border-blue-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={d[field] || ""}
+                          onChange={e => setDraftField(s.staff_code, field, parseFloat(e.target.value) || 0)}
+                          className="w-24 text-right text-xs font-bold bg-white border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="0"
                         />
                       ) : (
-                        <button
-                          onClick={() => { setEditingCell({ code: s.staff_code, field }); setEditValue(String(t[field] || "")) }}
-                          className={cn(
-                            "text-xs font-bold tabular-nums rounded px-1.5 py-0.5 transition-colors",
-                            t[field] ? "text-slate-700 hover:bg-white hover:shadow-sm" : "text-slate-300 hover:bg-white hover:text-slate-500",
-                          )}
-                          title="Click để chỉnh sửa"
-                        >
-                          {t[field] ? fck(t[field]) : "—"}
-                        </button>
+                        <span className={cn("text-xs font-bold tabular-nums", displayVal ? "text-slate-700" : "text-slate-300")}
+                          title={lastEdit}>
+                          {displayVal ? fck(displayVal) : "—"}
+                        </span>
                       )}
                     </td>
                   )
@@ -751,8 +820,8 @@ function StaffPageInner() {
 
                 return (
                   <React.Fragment key={s.staff_code}>
-                    <tr onClick={() => toggleExpand(s.staff_code)}
-                      className={cn("cursor-pointer transition-colors group", isExp ? "bg-blue-50 border-l-2 border-l-blue-600" : "hover:bg-slate-50")}>
+                    <tr onClick={() => !editMode && toggleExpand(s.staff_code)}
+                      className={cn("transition-colors group", !editMode && "cursor-pointer", isExp ? "bg-blue-50 border-l-2 border-l-blue-600" : "hover:bg-slate-50")}>
                       <td className="px-4 py-3">
                         <span className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
                           i < 3 ? RANK_STYLE[i] : "text-slate-400 text-[11px]")}>{i + 1}</span>
@@ -783,9 +852,9 @@ function StaffPageInner() {
                           {pct(s.cm1_pct)}
                         </span>
                       </td>
-                      <TargetCell field="cm1_strategic"     bg="border-l border-rose-100 bg-rose-50/30" />
-                      <TargetCell field="cm1_non_strategic" bg="bg-rose-50/20" />
-                      <TargetCell field="hk3_rev"           bg="border-l border-orange-100 bg-orange-50/30" />
+                      <TargetTd field="cm1_strategic" />
+                      <TargetTd field="cm1_non_strategic" />
+                      <TargetTd field="hk3_rev" />
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
                       <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>

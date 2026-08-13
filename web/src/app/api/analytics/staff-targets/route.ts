@@ -11,27 +11,35 @@ async function requireAuth() {
   return session
 }
 
-export interface StaffTargetRow {
+export interface StaffTarget {
   cm1_strategic:     number
   cm1_non_strategic: number
   hk3_rev:           number
+  updated_at?:       string
+  updated_by_email?: string
+  updated_by_name?:  string
 }
 
-// GET — trả về toàn bộ targets dạng { [staffCode]: StaffTargetRow }
+// GET — { [staffCode]: StaffTarget }
 export async function GET() {
   try {
     await requireAuth()
     const { data, error } = await supabaseAdmin
-      .from("app_settings")
-      .select("key, value")
-      .like("key", "staff_target.%")
+      .from("staff_targets")
+      .select("staff_code, cm1_strategic, cm1_non_strategic, hk3_rev, updated_at, updated_by_email, updated_by_name")
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    const result: Record<string, StaffTargetRow> = {}
+    const result: Record<string, StaffTarget> = {}
     for (const row of data ?? []) {
-      const code = row.key.replace("staff_target.", "")
-      try { result[code] = JSON.parse(row.value) } catch {}
+      result[row.staff_code] = {
+        cm1_strategic:     Number(row.cm1_strategic)     || 0,
+        cm1_non_strategic: Number(row.cm1_non_strategic) || 0,
+        hk3_rev:           Number(row.hk3_rev)           || 0,
+        updated_at:        row.updated_at,
+        updated_by_email:  row.updated_by_email,
+        updated_by_name:   row.updated_by_name,
+      }
     }
     return NextResponse.json(result)
   } catch {
@@ -39,27 +47,41 @@ export async function GET() {
   }
 }
 
-// PATCH — lưu target cho 1 staff
+// PATCH — batch upsert, kèm editor info
 export async function PATCH(req: NextRequest) {
   try {
-    await requireAuth()
-    const { staffCode, target } = await req.json() as {
-      staffCode: string
-      target: StaffTargetRow
+    const session = await requireAuth()
+    const { updates } = await req.json() as {
+      updates: Array<{
+        staffCode:        string
+        cm1_strategic:    number
+        cm1_non_strategic: number
+        hk3_rev:          number
+      }>
     }
-    if (!staffCode) return NextResponse.json({ error: "staffCode required" }, { status: 400 })
+    if (!Array.isArray(updates) || updates.length === 0)
+      return NextResponse.json({ error: "updates required" }, { status: 400 })
+
+    const now   = new Date().toISOString()
+    const email = session.user.email ?? ""
+    const name  = session.user.name  ?? session.user.email ?? ""
+
+    const rows = updates.map(u => ({
+      staff_code:        u.staffCode,
+      cm1_strategic:     u.cm1_strategic     || 0,
+      cm1_non_strategic: u.cm1_non_strategic || 0,
+      hk3_rev:           u.hk3_rev           || 0,
+      updated_at:        now,
+      updated_by_email:  email,
+      updated_by_name:   name,
+    }))
 
     const { error } = await supabaseAdmin
-      .from("app_settings")
-      .upsert({
-        key:        `staff_target.${staffCode}`,
-        value:      JSON.stringify(target),
-        category:   "staff_targets",
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "key" })
+      .from("staff_targets")
+      .upsert(rows, { onConflict: "staff_code" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, updated: rows.length })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
