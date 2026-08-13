@@ -29,7 +29,17 @@ Cập nhật lần cuối: 2026-08-13 (Session 147 — Ẩn Tổ Gấu, Staff Ta
   - History expand: xem snapshot ngày trước, click ngày để load
   - Sold 15D/30D auto từ `fact_fulfillment_revenue` gohub_dw
   - Export Excel đầy đủ
-- **Migrations**: v22_staff_targets (PK staff_code+month), v23_inventory (2 tables), v24_vendor_balances
+- **Migrations**: v22_staff_targets (PK staff_code+month), v23_inventory (2 tables), v24_vendor_balances, v25_okr_evidence
+- **Supabase bucket**: okr-evidence (public, upload ảnh bằng chứng SLA/vendor)
+
+### F. Tab My Metrics — OKR Dashboard (commits 600f18f, 36a3d13)
+- Route `/analytics/my-metrics`, sidebar Overview group, phân quyền creator config per-user
+- **SLA Handling Time** + **Vendor Selection Speed**: evidence-based — thêm case (request time+ảnh, completion time+ảnh), tự tính duration, hiện average + list bằng chứng
+- **SKU Gross Margin**: AUTO từ gohub_dw (gross_profit_vnd / fulfilled_revenue_amount_vnd), monthly breakdown, delta vs baseline 36.7%
+- **%3HK Datapool**: AUTO (đã có) + baseline 67.5% + delta comparison
+- **Bé Gấu Tasks**: AUTO count (ai_response IS NOT NULL) + toggle "Xem danh sách hội thoại" — hiện user message + AI reply, phân trang 15/trang
+- Baseline T8/2026 nhúng vào note banner và tất cả comparisons
+- APIs: GET/POST/DELETE evidence, POST upload image to Supabase Storage, GET conversations (paginated), GET auto metrics (3HK + GM + Bé Gấu)
 
 ### D. Quarter Report — fix target CM1 KH (commit 2454e00)
 - Bỏ nhân × 3: target CM1 của từng KH nhóm là target QUÝ (không phải tháng)
