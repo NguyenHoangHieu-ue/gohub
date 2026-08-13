@@ -4,30 +4,28 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-12, s146)
+## Trạng thái hiện tại (2026-08-13, s147)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` |
-| staging ahead main | 37 commit (s146 — Quarter Report + Fulfillment improvements) |
+| staging ahead main | ~44 commit (s147 — Inventory Management + Staff Target) |
 | tsc | PASS |
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
+- [x] ✅ v22 `staff_targets` (staff_code + month PK)
+- [x] ✅ v23 `inventory_items` + `inventory_snapshots`
+- [x] ✅ v24 `vendor_balances`
 
 **Hiếu cần làm (còn lại):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 - [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API (trang Portal → mục "Affiliate Open API") → chạy introspection để xác định query khả dụng
 
-**s146 — đã làm (2026-08-12):**
-- ✅ **Quarter Report — cột % Target CM1**: bảng KH nhóm (Strategic/VIP/Gold/Silver) thêm cột badge màu = PR CM1 / (target_tháng × 3). Phần "Target & Progress" expand cũng fix tương tự, label hiện "T.Tháng / T.Quý".
-- ✅ **Fulfillment tab — cải tiến toàn diện**:
-  - 4 summary cards (thêm Avg Order Value), mỗi card MoM badge vs tháng trước
-  - Section B2B/B2C split: orders + revenue + % với progress bar
-  - Monthly Trend chart: dual Y-axis (Orders bar trái + Revenue line phải)
-  - Bảng breakdown: thêm cột B2B/B2C orders/revenue + Avg Order Value
-  - Top Locations: thêm cột Revenue
-  - Backend: query mới B2B/B2C split per month + revenue trong overall_locations
+**s147 — đã làm (2026-08-13):**
+- ✅ **Ẩn tab Tổ Gấu** với mọi role trừ creator (sidebar collapsed + expanded)
+- ✅ **Staff tab — CM1 Target + 3HK Target**: lưu theo (staff_code × tháng), edit mode Sửa/Lưu/Hủy, lưu người sửa
+- ✅ **Fulfillment tab rebuild → Inventory Management**: OPS nhập tồn kho, vendor balance, DOI alert, history snapshot, Sold auto từ gohub_dw
 
 **s145 — đã xong (ghi lại):**
 - ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.

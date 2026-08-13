@@ -1,65 +1,128 @@
 ---
-title: "Fulfillment Report (Báo Cáo Hoàn Thành Đơn)"
+title: "Inventory Management (Fulfillment)"
 page_type: tab_guide
 is_hidden: true
 department: all
-tags: [tab, analytics, fulfillment]
+tags: [tab, analytics, fulfillment, inventory, ops]
 created: 2026-06-28
-updated: 2026-08-02
+updated: 2026-08-13
 status: active
 ---
 
-# Fulfillment Report (Báo Cáo Hoàn Thành Đơn)
+# Inventory Management
 
-Tốc độ & chất lượng giao SIM theo tháng / chi nhánh / loại SP. Dùng data model chung — xem [[_analytics-data-model]].
+Tab dành riêng cho OPS quản lý tồn kho SIM/eSIM. Rebuild hoàn toàn từ s147 (2026-08-13) — thay thế tab Fulfillment cũ (báo cáo doanh thu).
 
 ---
 
 ## 1. Đường dẫn & File
+
 | | |
 |---|---|
-| Web | `/analytics/fulfillment` — `web/src/app/(dashboard)/analytics/fulfillment/page.tsx` |
-| API | `/api/analytics/fulfillment-report` |
-| Nguồn | **`fact_fulfillment_revenue`** (bảng fulfillment, cột `fulfiled_date`) + `dim_location` + `dim_sku` |
-
-## 2. Chỉ số trả về
-- `month`, `location` (chi nhánh — `dim_location.location_name`), `product_type`.
-- `revenue = SUM(fulfilled_revenue_amount_vnd)`, `units = SUM(fulfilled_quantity)`.
-- `orders / gross_orders = COUNT(DISTINCT order_code)`, `items_delivery`.
-
-## 3. Gotchas
-- Báo cáo này **luôn dùng Fulfillment** (`fact_fulfillment_revenue`) — không có chế độ Created.
-- `dim_location` = **chi nhánh**, KHÔNG phải nước đích.
-- **(2026-08-02, BUG-FULFILL-1) ĐÃ BỎ các cột Huỷ / Hoàn / Net Orders / Orders Delivery / Orders Return** vì trước đây chúng được suy ra từ **tỷ lệ cứng bịa** (cancel 3%, return 1.5%, delivery 98%, order_return 1.2% trên gross_orders) — KHÔNG phải dữ liệu thật. `fact_fulfillment_revenue` không có cột trạng thái huỷ/hoàn. Tab nay chỉ hiển thị số THẬT: `gross_orders`, `revenue`, `items_delivery` (+ breakdown theo location/product_type). Nếu sau này có nguồn trạng thái đơn thật → mới thêm lại cột.
-- Bảng category "All warehouses" trước hiện Gross/Cancel/Return/Net theo multiplier bịa → nay hiện Revenue / Items delivery / Orders delivery THẬT từ `categories[cat]`.
+| Web | `/analytics/fulfillment` |
+| Page | `web/src/app/(dashboard)/analytics/fulfillment/page.tsx` |
+| API items | `GET/POST/PATCH/DELETE /api/analytics/inventory-items` |
+| API snapshots | `GET/POST /api/analytics/inventory-snapshots` |
+| API snapshot dates | `GET /api/analytics/inventory-snapshots/dates` |
+| API vendor balances | `GET/PATCH /api/analytics/vendor-balances` |
 
 ---
 
-## Data Sources
+## 2. Kiến trúc data
 
-| Column / Metric | Source Table | Formula / Note |
-|-----------------|-------------|----------------|
-| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY month |
-| Units | `fact_fulfillment_revenue.fulfilled_quantity` | `SUM(fulfilled_quantity)` |
-| Orders | `fact_fulfillment_revenue.order_code` | `COUNT(DISTINCT order_code)` |
-| Month | `fact_fulfillment_revenue.fulfiled_date` | GROUP BY `DATE_TRUNC('month', fulfiled_date)` |
-| Location (Chi nhánh) | `dim_location.location_name` | JOIN `f.location_id = dim_location.location_id`; chi nhánh GoHub, KHÔNG phải nước đích |
-| Product Type | `dim_sku.type_of_sim` | JOIN `f.sku = dim_sku.sku`; eSIM / SIM phân loại |
+### Supabase tables (OPS nhập tay)
 
+**`inventory_items`** — danh sách SKU OPS muốn theo dõi (OPS tự thêm/xóa):
+- `sku_code` TEXT PRIMARY KEY
+- `sim_type` TEXT — "SIM" | "ESIM"
+- `vendor` TEXT
+- `status` TEXT — Active / Inactive / Temporary / Deleted
+- `retail_price` NUMERIC
+- `safety_stock` INT — ngưỡng cảnh báo 15D
+- `reorder_point` INT — ngưỡng nhập hàng 30D
+- `note_permanent` TEXT — ghi chú cố định (hiện ở mọi snapshot)
+
+**`inventory_snapshots`** — mỗi lần OPS nhập = 1 bản ghi theo ngày:
+- PK = `(sku_code, snapshot_date)`
+- Kho: `stock_total`, `stock_warehouse` (Main WH), `stock_pq_hcm`, `stock_dd_hn`, `stock_tsn_hcm`, `stock_kg` (Consignment)
+- HSD: `expiry_date`, `expiry_qty`
+- Kênh: `ops_qty`, `telco_qty`, `od_qty`, `ws_qty`, `b2c_qty`, `marketing_qty`
+- `note`, `updated_by`, `updated_at`
+
+**`vendor_balances`** — số dư tài khoản với từng vendor:
+- PK = `vendor`
+- `balance`, `currency`, `credit_limit`, `note`, `updated_by`
+
+### gohub_dw (tự động)
+
+- `fact_fulfillment_revenue` → tính **Sold 15D / Sold 30D** per SKU (fulfilled_quantity, fulfiled_date)
+- Tính toán: `Avg/Day = sold_30d / 30`, `DOI = stock_total / avg_day`, `Est. Out of Stock = today + DOI ngày`
 
 ---
 
-## § Filter Chuẩn (s132 — 2026-08-04)
+## 3. Tên kho (mapping)
 
-Từ s132, tất cả tab analytics có 3 filter:
+| Code | Tên đầy đủ |
+|---|---|
+| `stock_warehouse` | Main Warehouse (Kho tổng) |
+| `stock_pq_hcm` | Pho Quang (HCM) |
+| `stock_dd_hn` | Dong Da (HN) |
+| `stock_tsn_hcm` | Tan Son Nhat (HCM) |
+| `stock_kg` | Consignment (Chi nhánh ký gửi) |
 
-| Filter | Default | Ý nghĩa |
-|--------|---------|---------|
-| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
-| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
-| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+---
 
-**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+## 4. Alert logic
 
-UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+| Level | Điều kiện | Màu hiển thị |
+|---|---|---|
+| Critical | DOI < 7 ngày (hoặc stock = 0) | Row bg đỏ nhạt, badge đỏ |
+| Warning | DOI 7–30 ngày | Row bg vàng nhạt, badge vàng |
+| OK | DOI > 30 ngày | Badge xanh, không đổi màu row |
+| None | Chưa bán (Avg/Day = 0) | Badge xám |
+| Expiry alert | expiry_date ≤ 30 ngày từ hôm nay | Cột expiry_date màu cam |
 
+Alert banner đầu trang: click để filter theo mức cảnh báo. Vendor balance: đỏ nhạt nếu balance < 20% credit_limit.
+
+---
+
+## 5. Luồng UX
+
+### Thêm SKU
+1. Click "Add SKU" → modal nhập SKU code, type, vendor, status, retail_price, safety_stock, reorder_point
+2. Vendor/type tự lookup từ `dim_sku` gohub_dw nếu để trống
+3. POST → `inventory_items`
+
+### Cập nhật tồn kho (snapshot)
+1. Click "Update Stock" → bảng vào edit mode, chọn ngày snapshot (mặc định hôm nay)
+2. Nhập số từng kho, hạn SD, ghi chú
+3. "Save Snapshot" → POST → `inventory_snapshots` upsert theo `(sku_code, snapshot_date)`
+4. Lưu `updated_by` = tên người dùng
+
+### Sửa cấu hình SKU
+- Icon ⚙️ cuối row → modal EditItemModal → PATCH `inventory_items`
+- Có thể sửa: retail_price, safety_stock, reorder_point, status, vendor, sim_type, note_permanent
+
+### Xem lịch sử
+- Click ▶ đầu row → hiện tất cả snapshot dates + stock_total
+- Click vào 1 ngày → load toàn bảng theo ngày đó
+
+### Vendor Balance
+- Section riêng (có thể collapse) phía trên bảng chính
+- Tự hiện vendor nào có trong `inventory_items`
+- "Edit Balances" → nhập balance, currency, credit_limit per vendor → PATCH `vendor_balances`
+
+---
+
+## 6. Phân quyền
+
+GET/POST/PATCH/DELETE: `admin`, `creator`, `manager`, `staff`
+
+---
+
+## 7. Gotchas
+
+- SKU code trong `inventory_items` phải khớp chính xác với `fact_fulfillment_revenue.sku` (sau TRIM) để sold 15D/30D tính đúng
+- `dim_sku.sku` trong gohub_dw = mã hiện tại (đã map sẵn) — không cần map thêm
+- Snapshot upsert theo `(sku_code, snapshot_date)` — nhập lại cùng ngày = ghi đè
+- `sold_15d / sold_30d` tính từ hôm nay ngược về 15/30 ngày (không theo snapshot_date)
