@@ -1,8 +1,7 @@
 // BC Datapool (Billion Connect) API client — server-side only
 // Protocol: POST REST, MD5 signature, UTC+8 timestamps
+// WARNING: production API — không spam, BC sẽ chặn nếu gọi quá nhiều
 import { createHash } from "crypto"
-
-const PROD_URL = "https://apiint-flow.billionconnect.com/Flow/saler/2.0/invoke"
 
 export const BC_SALES_METHOD = "1" // retail
 
@@ -27,19 +26,20 @@ export async function callBC<T = unknown>(
   tradeData: object,
   override?: { key?: string; secret?: string },
 ): Promise<BCResponse<T>> {
-  const appKey    = override?.key    ?? process.env.BC_APP_KEY
-  const appSecret = override?.secret ?? process.env.BC_APP_SECRET
-  if (!appKey || !appSecret) throw new Error("BC_APP_KEY / BC_APP_SECRET not set")
+  const url       = process.env.BC_DATAPOOL_BASE_API_URL ?? "https://apiint-flow.billionconnect.com/Flow/saler/2.0/invoke"
+  const appKey    = override?.key    ?? process.env.BC_DATAPOOL_CHANNEL_ID
+  const appSecret = override?.secret ?? process.env.BC_DATAPOOL_APP_SECRET
+  if (!appKey || !appSecret) throw new Error("BC_DATAPOOL_CHANNEL_ID / BC_DATAPOOL_APP_SECRET not set")
 
   const body = JSON.stringify({ tradeType, tradeTime: tradeTime(), tradeData })
   const sign = md5(appSecret + body)
 
-  const res = await fetch(PROD_URL, {
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type":  "application/json;charset=UTF-8",
       "x-channel-id":  appKey,
-      "x-sign-method": "md5",
+      "x-sign-method": process.env.BC_DATAPOOL_SIGN_METHOD ?? "md5",
       "x-sign-value":  sign,
     },
     body,
