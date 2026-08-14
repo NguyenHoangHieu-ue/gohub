@@ -23,9 +23,10 @@ const NAV_MAIN = [
 
 // Tabs nhóm Products (collapsible)
 const NAV_PRODUCTS = [
-  { href: "/skus",      label: "System SKUs",  icon: Package, key: "skus"      },
-  { href: "/ncc",       label: "NCC Catalog",  icon: Truck,   key: "ncc"       },
-  { href: "/countries", label: "Reference",    icon: Globe,   key: "countries" },
+  { href: "/skus",                        label: "System SKUs",  icon: Package,  key: "skus"         },
+  { href: "/ncc",                         label: "NCC Catalog",  icon: Truck,    key: "ncc"          },
+  { href: "/analytics/bc-datapool",       label: "BC Datapool",  icon: Database, key: "bc-datapool"  },
+  { href: "/countries",                   label: "Reference",    icon: Globe,    key: "countries"    },
 ]
 
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
