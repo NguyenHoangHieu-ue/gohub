@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { alertCronFailure } from "@/lib/cron-alert"
 import { sendLarkMessage } from "@/lib/lark"
@@ -169,30 +171,44 @@ async function notifyLark(changes: SyncChanges) {
   await sendLarkMessage(cfg.value, "chat_id", lines.join("\n"))
 }
 
+async function runSync() {
+  const [countries, products, prices, balance] = await Promise.all([
+    syncCountries(),
+    syncProducts(),
+    syncPrices(),
+    syncBalance(),
+  ])
+  const changes: SyncChanges = { products, prices, countries, balance }
+  await Promise.all([
+    notifyLark(changes),
+    supabaseAdmin.from("bc_sync_log").insert({ changes: changes as object, synced_at: new Date().toISOString() }),
+  ])
+  return changes
+}
+
+// Vercel cron (GET + Bearer CRON_SECRET)
 export async function GET(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
   try {
-    const [countries, products, prices, balance] = await Promise.all([
-      syncCountries(),
-      syncProducts(),
-      syncPrices(),
-      syncBalance(),
-    ])
-
-    const changes: SyncChanges = { products, prices, countries, balance }
-
-    await Promise.all([
-      notifyLark(changes),
-      supabaseAdmin.from("bc_sync_log").insert({
-        changes: changes as object,
-        synced_at: new Date().toISOString(),
-      }),
-    ])
-
+    const changes = await runSync()
     return NextResponse.json({ ok: true, changes })
   } catch (err) {
     await alertCronFailure("bc-sync", err)
+    return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
+  }
+}
+
+// Manual trigger từ UI (POST + session admin/creator)
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const role = (session?.user as { role?: string })?.role ?? ""
+  if (!session || !["admin", "creator"].includes(role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  try {
+    const changes = await runSync()
+    return NextResponse.json({ ok: true, changes })
+  } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
   }
 }

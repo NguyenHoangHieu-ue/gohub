@@ -427,6 +427,7 @@ export default function BCDatapoolPage() {
   const [syncLog, setSyncLog]   = useState<SyncLog[]>([])
   const [loading, setLoading]   = useState(true)
   const [syncing, setSyncing]   = useState(false)
+  const [syncError, setSyncError] = useState("")
   const [lastLoad, setLastLoad] = useState("")
 
   const loadData = useCallback(async () => {
@@ -452,10 +453,18 @@ export default function BCDatapoolPage() {
 
   async function triggerSync() {
     setSyncing(true)
+    setSyncError("")
     try {
-      await fetch("/api/cron/bc-sync", { headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? ""}` } })
-      await loadData()
-    } catch { /* ignore */ }
+      const res = await fetch("/api/cron/bc-sync", { method: "POST" })
+      const json = await res.json() as { ok?: boolean; error?: string; changes?: unknown }
+      if (!res.ok || !json.ok) {
+        setSyncError(json.error ?? `HTTP ${res.status}`)
+      } else {
+        await loadData()
+      }
+    } catch (e) {
+      setSyncError((e as Error).message)
+    }
     setSyncing(false)
   }
 
@@ -496,6 +505,13 @@ export default function BCDatapoolPage() {
           </button>
         </div>
       </div>
+
+      {syncError && (
+        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
+          <XCircle size={15} className="mt-0.5 flex-shrink-0 text-red-500" />
+          <span><span className="font-medium">Sync lỗi:</span> {syncError}</span>
+        </div>
+      )}
 
       {/* Balance banner */}
       {balance[0] && (
