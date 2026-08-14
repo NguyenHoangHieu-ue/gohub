@@ -175,29 +175,35 @@ const ChartTooltip = ({ active, payload, label }: any) => {
   )
 }
 
-const WRITE_ROLES = ["admin", "creator", "manager"]
+// Role được phép sửa target mặc định (không cần grant thêm)
+const WRITE_ROLES = ["admin", "creator", "manager", "bod"]
 
 // ─── Main component ───────────────────────────────────────────────────────────
 function StaffPageInner() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const role = (session?.user as { role?: string })?.role ?? ""
   const username = (session?.user as { username?: string })?.username ?? ""
-  const [canWrite, setCanWrite] = useState(false)
+
+  // Tính ngay từ role (synchronous) — không cần async state, không bị delay
+  const roleCanWrite = WRITE_ROLES.includes(role)
+  // Explicit grant cho các role khác (e.g. staff được creator cấp thêm)
+  const [grantedWrite, setGrantedWrite] = useState(false)
+  const canWrite = status === "authenticated" && (roleCanWrite || grantedWrite)
 
   useEffect(() => {
-    if (!role) return
-    if (WRITE_ROLES.includes(role)) { setCanWrite(true); return }
+    // Chỉ check explicit grant khi role không đủ quyền mặc định
+    if (!role || roleCanWrite) return
     fetch("/api/permissions", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d?.perms) return
         try {
           const cfg = JSON.parse(d.perms["permissions.writable_tabs"] ?? "{}") as Record<string, string[]>
-          setCanWrite((cfg[username] ?? []).includes("staff"))
+          setGrantedWrite((cfg[username] ?? []).includes("staff"))
         } catch {}
       })
       .catch(() => {})
-  }, [role, username])
+  }, [role, username, roleCanWrite])
 
   const def = getDefaultDateRange()
   const [urlState, setUrlState] = useUrlStates({

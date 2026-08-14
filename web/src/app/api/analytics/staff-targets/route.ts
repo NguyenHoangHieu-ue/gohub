@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
 
 const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod"]
-const WRITE_ROLES = ["admin", "creator", "manager"]
+const WRITE_ROLES = ["admin", "creator", "manager", "bod"]
 
 async function requireRead() {
   const session = await getServerSession(authOptions)
