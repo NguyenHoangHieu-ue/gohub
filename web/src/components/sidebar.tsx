@@ -23,9 +23,10 @@ const NAV_MAIN = [
 
 // Tabs nhóm Products (collapsible)
 const NAV_PRODUCTS = [
-  { href: "/skus",      label: "System SKUs",  icon: Package, key: "skus"      },
-  { href: "/ncc",       label: "NCC Catalog",  icon: Truck,   key: "ncc"       },
-  { href: "/countries", label: "Reference",    icon: Globe,   key: "countries" },
+  { href: "/skus",                        label: "System SKUs",  icon: Package,  key: "skus"         },
+  { href: "/ncc",                         label: "NCC Catalog",  icon: Truck,    key: "ncc"          },
+  { href: "/analytics/bc-datapool",       label: "BC Datapool",  icon: Database, key: "bc-datapool"  },
+  { href: "/countries",                   label: "Reference",    icon: Globe,    key: "countries"    },
 ]
 
 // NAV_ALL giữ lại cho logic permission (admin/manager thấy tất cả)
@@ -68,7 +69,6 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/orders",          label: "Orders",          icon: ClipboardList },
       { href: "/analytics/fulfillment",     label: "Fulfillment",     icon: Zap           },
       { href: "/analytics/3hk-usage",       label: "3HK Data Usage",  icon: Activity      },
-      { href: "/analytics/bc-datapool",     label: "BC Datapool",     icon: Database      },
       { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse    },
       { href: "/analytics/feedback",        label: "Feedback",        icon: MessageSquare },
     ],

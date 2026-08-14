@@ -4,7 +4,7 @@
 // 20 trang analytics phân quyền được (khớp REPORTS ở users/admin + ANALYTICS_GROUPS ở sidebar)
 export const ALL_ANALYTICS_IDS = [
   "dashboard", "quarterly", "bod", "all-time", "channels", "b2b", "b2c", "website",
-  "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage", "bc-datapool",
+  "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
   "cs-troubleshoot", "feedback", "products", "targets", "sql", "scheduled", "info",
   "my-metrics",
 ]
@@ -17,7 +17,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   b2b:        ["dashboard", "quarterly", "b2b", "vendors", "channels", "customers", "targets", "orders"],
   b2c:        ["dashboard", "quarterly", "b2c", "channels", "website", "products", "customers"],
   saleb2c:    ["dashboard", "b2c", "channels", "website"],
-  "ops-&-cs": ["dashboard", "orders", "fulfillment", "cs-troubleshoot", "feedback", "3hk-usage", "bc-datapool"],
+  "ops-&-cs": ["dashboard", "orders", "fulfillment", "cs-troubleshoot", "feedback", "3hk-usage"],
   hr:         ["dashboard", "staff", "orders"],
   product:    ["dashboard", "products", "3hk-usage", "vendors", "all-time"],
 }
