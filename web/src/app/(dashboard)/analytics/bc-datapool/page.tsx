@@ -288,6 +288,57 @@ interface QueryForm {
   beginDate?: string; endDate?: string; eid?: string
 }
 
+function CredentialTest() {
+  const [secret, setSecret] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<object | null>(null)
+
+  async function test() {
+    if (!secret.trim()) return
+    setLoading(true); setResult(null)
+    const res = await fetch("/api/bc/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ testSecret: secret.trim() }),
+    })
+    setResult(await res.json() as object)
+    setLoading(false)
+  }
+
+  const r = result as { tradeCode?: string; tradeMsg?: string } | null
+  const ok = r?.tradeCode === "1000"
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+      <p className="text-sm font-semibold text-amber-800">Test App Secret</p>
+      <p className="text-xs text-amber-700">Nhập appSecret từ portal BC để kiểm tra — gọi F014 (balance) và trả kết quả ngay.</p>
+      <div className="flex gap-2">
+        <input
+          value={secret} onChange={e => setSecret(e.target.value)}
+          placeholder="Nhập appSecret..."
+          type="text"
+          className="flex-1 px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-mono"
+        />
+        <button
+          onClick={test} disabled={loading || !secret.trim()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+        >
+          {loading ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
+          Test
+        </button>
+      </div>
+      {result && (
+        <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
+          ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200")}>
+          {ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
+          {ok ? `Secret đúng! Số dư: ${(result as { tradeData?: { saleBalance?: string } }).tradeData?.saleBalance ?? "—"}`
+              : `[${r?.tradeCode}] ${r?.tradeMsg}`}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QueryTab() {
   const [qType, setQType]   = useState<QueryType>("F011")
   const [form, setForm]     = useState<QueryForm>({})
@@ -358,6 +409,7 @@ function QueryTab() {
 
   return (
     <div className="space-y-4">
+      <CredentialTest />
       <div className="flex gap-1 flex-wrap border-b border-gray-100 pb-3">
         {QUERIES.map(q => (
           <button

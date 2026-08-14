@@ -25,9 +25,10 @@ export interface BCResponse<T = unknown> {
 export async function callBC<T = unknown>(
   tradeType: string,
   tradeData: object,
+  override?: { key?: string; secret?: string },
 ): Promise<BCResponse<T>> {
-  const appKey    = process.env.BC_APP_KEY
-  const appSecret = process.env.BC_APP_SECRET
+  const appKey    = override?.key    ?? process.env.BC_APP_KEY
+  const appSecret = override?.secret ?? process.env.BC_APP_SECRET
   if (!appKey || !appSecret) throw new Error("BC_APP_KEY / BC_APP_SECRET not set")
 
   const body = JSON.stringify({ tradeType, tradeTime: tradeTime(), tradeData })
