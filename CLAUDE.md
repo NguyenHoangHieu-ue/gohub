@@ -4,41 +4,43 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-13, s147)
+## Trạng thái hiện tại (2026-08-14, s148)
 
 | | |
 |---|---|
-| Branch làm việc | `staging` |
-| staging ahead main | ~44 commit (s147 — Inventory Management + Staff Target) |
+| Branch làm việc | `staging` (= main, đã merge) |
 | tsc | PASS |
 
 **Migrations & ENV — đã xong:**
-- [x] ✅ v31 `chatbot_learning_log` · v32 `ai_response` · ENV `LARK_CREATOR_USER_ID`
-- [x] ✅ v22 `staff_targets` (staff_code + month PK)
-- [x] ✅ v23 `inventory_items` + `inventory_snapshots`
-- [x] ✅ v24 `vendor_balances`
+- [x] ✅ v31–v35 (cũ)
+- [x] ✅ v36 `bc_countries/bc_products/bc_prices/bc_balance_log/bc_sync_log` (BC Datapool)
+- [x] ✅ v37 `hk3_strategic` + `hk3_non_strategic` trên `staff_targets`
+- [x] ✅ ENV Vercel: `BC_DATAPOOL_BASE_API_URL`, `BC_DATAPOOL_CHANNEL_ID`, `BC_DATAPOOL_APP_SECRET`, `BC_DATAPOOL_SIGN_METHOD`
 
 **Hiếu cần làm (còn lại):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
-- [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API (trang Portal → mục "Affiliate Open API") → chạy introspection để xác định query khả dụng
+- [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API
+- [ ] **BC Datapool — lấy appSecret đúng từ BC support** (xem ghi chú bên dưới)
 
-**s147 — đã làm (2026-08-13):**
-- ✅ **Ẩn tab Tổ Gấu** với mọi role trừ creator (sidebar collapsed + expanded)
-- ✅ **Staff tab — CM1 Target + 3HK Target**: lưu theo (staff_code × tháng), edit mode Sửa/Lưu/Hủy, lưu người sửa
-- ✅ **Fulfillment tab rebuild → Inventory Management**: OPS nhập tồn kho, vendor balance, DOI alert, history snapshot, Sold auto từ gohub_dw
-- ✅ **Quarter Report — target CM1 KH**: bỏ × 3, target nhập là target QUÝ trực tiếp
-- ✅ **Quyền chỉnh sửa**: thêm `quarterly`/`staff`/`fulfillment`/`my-metrics` vào Users tab + helper `writable-tabs.ts` + enforce 6 API routes
-- ✅ **Tab My Metrics (OKR Dashboard)**: SLA+Vendor evidence (ảnh+time+tự tính duration), SKU GM auto từ gohub_dw, 3HK% auto (fix subquery dim_sku), Bé Gấu task count + conversation list, target per-quarter editable. Migrations v25 + bucket okr-evidence đã chạy.
+**s148 — đã làm (2026-08-14):**
+- ✅ **BC Datapool integration**: tab `/analytics/bc-datapool` (Product group), sync cron 7h ICT, tra cứu F011/F012/F023/F046, debug endpoint `/api/bc/debug`
+- ✅ **Staff tab — 3HK Target tách Strategic/Non-Strategic**: migration v37, update API + page
+- ✅ **Staff tab — fix button Sửa**: chỉ hiện với role có quyền (admin/creator/manager/bod + explicit grant); fix bug input chỉ nhập 1 số; cảnh báo số âm/không hợp lệ
 
-**s145 — đã xong (ghi lại):**
-- ✅ **Scheduled Daily report**: mục 【3】 đổi MTD → QTD, lấy target quý Turso `target_planning_quarter`, tách B2B/B2C.
-- ✅ **Tổ Gấu**: AI reply ngay, @mention Lark DM, fix nút Test scheduled 403.
-- ✅ **Portal Access** tab `/analytics/portal`: Hướng C (console interceptor) CHẠY; Hướng A (SHA256 Open API) đang test.
+**⚠️ BC Datapool — ĐANG BỊ CHẶN (cần Hiếu xử lý):**
+- Channel ID: `GohubDataPool` ✅ (BC tìm thấy)
+- AppSecret hiện tại `082746f265c6412da554855fe415785a` ❌ → BC luôn trả `[1008] Signature verification failed`
+- Đã debug kỹ: formula `md5(appSecret + jsonBody)` đúng theo spec, nhưng secret sai
+- **Việc cần làm**: Liên hệ BC support, hỏi: *"AppSecret `082746f265c6412da554855fe415785a` cho channel GohubDataPool có đúng không? Vui lòng xác nhận hoặc cung cấp secret đúng + 1 working example request."*
+- Sau khi có secret đúng: cập nhật `BC_DATAPOOL_APP_SECRET` trên Vercel → bấm "Sync ngay" trên tab BC Datapool → test bằng "Test App Secret" trên tab Tra cứu
+
+**s147 — đã xong (ghi lại):**
+- ✅ Ẩn tab Tổ Gấu · Staff target · Inventory Management · Quarter Report · Quyền chỉnh sửa · My Metrics
 
 **Ghi chú:**
-- Quarter Report: target CM1 KH nhập là target QUÝ (không nhân × 3). % Target CM1 = PR CM1 / target_quý.
+- Quarter Report: target CM1 KH nhập là target QUÝ (không nhân × 3).
 - Daily 【3】 theo QUÝ; nếu hiện "Chưa nhập target quý" → Hiếu nhập ở tab Quarter Report.
-- Bé Gấu: Lark slow (skip — giới hạn kiến trúc), schema auto-refresh (thấp priority)
+- Bé Gấu: Lark slow (skip — giới hạn kiến trúc)
 
 ---
 
