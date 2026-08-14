@@ -34,10 +34,12 @@ export async function callBC<T = unknown>(
   const body = JSON.stringify({ tradeType, tradeTime: tradeTime(), tradeData })
   const sign = md5(appSecret + body)
 
+  // BC signature check bị fail khi Content-Type=application/json (BC re-serialize canonical JSON trước khi verify).
+  // Phải dùng application/x-www-form-urlencoded để BC verify trên raw body bytes → sign khớp.
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      "Content-Type":  "application/json;charset=UTF-8",
+      "Content-Type":  "application/x-www-form-urlencoded",
       "x-channel-id":  appKey,
       "x-sign-method": process.env.BC_DATAPOOL_SIGN_METHOD ?? "md5",
       "x-sign-value":  sign,
