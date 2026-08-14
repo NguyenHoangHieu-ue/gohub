@@ -13,9 +13,6 @@ import {
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-// Cron chạy 7h sáng ICT (00:00 UTC): sync F001/F002/F003/F014 về Supabase.
-// Gửi Lark nếu có thay đổi (sản phẩm thêm/xóa/đổi, giá thay đổi, số dư thay đổi).
-
 interface SyncChanges {
   products:  { added: string[]; removed: string[]; modified: string[] }
   prices:    { changed: string[] }
@@ -23,9 +20,15 @@ interface SyncChanges {
   balance:   { prev: number | null; current: number }
 }
 
+function assertBC(res: { tradeCode: string; tradeMsg: string }, label: string) {
+  if (res.tradeCode !== "1000") {
+    throw new Error(`BC ${label}: [${res.tradeCode}] ${res.tradeMsg}`)
+  }
+}
+
 async function syncCountries(): Promise<{ added: string[]; removed: string[] }> {
   const res = await bcGetCountries()
-  if (res.tradeCode !== "1000" || !res.tradeData) return { added: [], removed: [] }
+  assertBC(res, "F001")
 
   const incoming = res.tradeData as BCCountry[]
   const { data: existing } = await supabaseAdmin.from("bc_countries").select("mcc")
@@ -46,7 +49,7 @@ async function syncCountries(): Promise<{ added: string[]; removed: string[] }> 
 
 async function syncProducts(): Promise<{ added: string[]; removed: string[]; modified: string[] }> {
   const res = await bcGetProducts()
-  if (res.tradeCode !== "1000" || !res.tradeData) return { added: [], removed: [], modified: [] }
+  assertBC(res, "F002")
 
   const incoming = res.tradeData as BCProduct[]
   const { data: existing } = await supabaseAdmin.from("bc_products").select("sku_id,name,type,high_flow_size_kb")
@@ -89,7 +92,7 @@ async function syncProducts(): Promise<{ added: string[]; removed: string[]; mod
 
 async function syncPrices(): Promise<{ changed: string[] }> {
   const res = await bcGetPrices()
-  if (res.tradeCode !== "1000" || !res.tradeData) return { changed: [] }
+  assertBC(res, "F003")
 
   const incoming = res.tradeData as BCPrice[]
   const rows: { sku_id: string; copies: string; retail_price: number; settlement_price: number; synced_at: string }[] = []
@@ -126,8 +129,9 @@ async function syncPrices(): Promise<{ changed: string[] }> {
 
 async function syncBalance(): Promise<{ prev: number | null; current: number }> {
   const res = await bcGetBalance()
-  const current = parseFloat((res.tradeData as { saleBalance?: string })?.saleBalance ?? "0") || 0
+  assertBC(res, "F014")
 
+  const current = parseFloat((res.tradeData as { saleBalance?: string })?.saleBalance ?? "0") || 0
   const { data: last } = await supabaseAdmin
     .from("bc_balance_log")
     .select("balance")
@@ -157,9 +161,7 @@ async function notifyLark(changes: SyncChanges) {
     ? ` (${changes.balance.current > changes.balance.prev ? "+" : ""}${(changes.balance.current - changes.balance.prev).toFixed(2)})`
     : ""
 
-  const lines: string[] = [
-    `🔄 *BC Datapool Sync* — ${time}`,
-  ]
+  const lines = [`🔄 *BC Datapool Sync* — ${time}`]
   if (changes.products.added.length)    lines.push(`📦 Sản phẩm MỚI (+${changes.products.added.length}): ${changes.products.added.slice(0, 3).join(", ")}${changes.products.added.length > 3 ? "..." : ""}`)
   if (changes.products.removed.length)  lines.push(`❌ Sản phẩm XÓA (-${changes.products.removed.length})`)
   if (changes.products.modified.length) lines.push(`✏️ Sản phẩm ĐỔI (~${changes.products.modified.length}): ${changes.products.modified.slice(0, 3).join(", ")}${changes.products.modified.length > 3 ? "..." : ""}`)
@@ -172,11 +174,12 @@ async function notifyLark(changes: SyncChanges) {
 }
 
 async function runSync() {
-  const [countries, products, prices, balance] = await Promise.all([
+  // F014 trước (nhẹ nhất) để xác minh auth ngay lập tức
+  const balance = await syncBalance()
+  const [countries, products, prices] = await Promise.all([
     syncCountries(),
     syncProducts(),
     syncPrices(),
-    syncBalance(),
   ])
   const changes: SyncChanges = { products, prices, countries, balance }
   await Promise.all([
@@ -199,7 +202,7 @@ export async function GET(req: NextRequest) {
 }
 
 // Manual trigger từ UI (POST + session admin/creator)
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   const role = (session?.user as { role?: string })?.role ?? ""
   if (!session || !["admin", "creator"].includes(role)) {
@@ -209,6 +212,9 @@ export async function POST(req: NextRequest) {
     const changes = await runSync()
     return NextResponse.json({ ok: true, changes })
   } catch (err) {
-    return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })
+    const msg = (err as Error).message
+    // Lưu lỗi vào sync_log để tracking
+    try { await supabaseAdmin.from("bc_sync_log").insert({ error: msg, synced_at: new Date().toISOString() }) } catch { /* ignore */ }
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
