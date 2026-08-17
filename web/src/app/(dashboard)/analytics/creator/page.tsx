@@ -327,14 +327,37 @@ function CaThreadSection() {
   const [myOpenId, setMyOpenId]     = useState("")
   const [dryRun, setDryRun]         = useState(true)
   const [running, setRunning]       = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [saveMsg, setSaveMsg]       = useState<string | null>(null)
   const [result, setResult]         = useState<any>(null)
   const [error, setError]           = useState<string | null>(null)
 
   useEffect(() => {
-    fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
-      setLarkConnected(d?.connected ?? false)
+    // Load Lark connection status + saved config in parallel
+    Promise.all([
+      fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null),
+      fetch("/api/creator/ca-thread").then(r => r.ok ? r.json() : null),
+    ]).then(([status, cfg]) => {
+      setLarkConnected(status?.connected ?? false)
+      if (cfg?.chat_id)   setChatId(cfg.chat_id)
+      if (cfg?.emoji_type) setEmojiType(cfg.emoji_type)
+      if (cfg?.days_back)  setDaysBack(cfg.days_back)
+      if (cfg?.my_open_id) setMyOpenId(cfg.my_open_id)
     }).catch(() => setLarkConnected(false))
   }, [])
+
+  const saveConfig = async () => {
+    setSaving(true); setSaveMsg(null)
+    try {
+      await fetch("/api/creator/ca-thread", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, emoji_type: emojiType, days_back: daysBack, my_open_id: myOpenId }),
+      })
+      setSaveMsg("Đã lưu")
+      setTimeout(() => setSaveMsg(null), 2000)
+    } finally { setSaving(false) }
+  }
 
   const run = async () => {
     if (!chatId.trim()) return
@@ -366,14 +389,21 @@ function CaThreadSection() {
 
   return (
     <div className="bg-white rounded-2xl border border-sky-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-sky-50 bg-sky-50/50 flex items-center gap-3">
-        <div className="w-8 h-8 bg-sky-600 rounded-xl flex items-center justify-center">
-          <MessageSquare className="w-4 h-4 text-white" />
+      <div className="px-6 py-4 border-b border-sky-50 bg-sky-50/50 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-sky-600 rounded-xl flex items-center justify-center">
+            <MessageSquare className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h2 className="font-bold text-slate-800">Cà Thread Lark</h2>
+            <p className="text-xs text-slate-400">Quét group, tag người trong thread chưa có reaction YES để hỏi update</p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-bold text-slate-800">Cà Thread Lark</h2>
-          <p className="text-xs text-slate-400">Quét group, tag người trong thread chưa có reaction YES để hỏi update</p>
-        </div>
+        <button onClick={saveConfig} disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 rounded-lg disabled:opacity-50 transition-colors">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          {saveMsg ?? "Lưu config"}
+        </button>
       </div>
 
       <div className="p-6 space-y-4">
