@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Gấu Pro → bấm 'Kết nối Lark' rồi thử lại." }, { status: 401 })
     const since = Math.floor(Date.now() / 1000) - days_back * 86400
 
-    // 1. List root messages in the group chat (paginated, filter by start_time)
+    // 1. List root messages — chỉ dùng params bắt buộc, filter ngày trong code
     const rootMessages: any[] = []
     let pageToken: string | undefined
 
@@ -86,8 +86,6 @@ export async function POST(req: NextRequest) {
         container_id: chat_id,
         container_type: "chat",
         page_size: "50",
-        start_time: String(since),    // unix seconds — Lark sẽ chỉ trả messages sau thời điểm này
-        user_id_type: "open_id",
       })
       if (pageToken) qs.set("page_token", pageToken)
 
@@ -95,12 +93,13 @@ export async function POST(req: NextRequest) {
       if (data.code !== 0) throw new Error(`Lark list-messages [${data.code}]: ${data.msg}`)
 
       const items: any[] = data.data?.items ?? []
-      // Root messages have no root_id; skip thread replies that appear in the list
+      let reachedEnd = false
       for (const msg of items) {
+        if (parseInt(msg.create_time) < since) { reachedEnd = true; break }
         if (!msg.root_id) rootMessages.push(msg)
       }
 
-      pageToken = data.data?.has_more ? data.data.page_token : undefined
+      pageToken = (!reachedEnd && data.data?.has_more) ? data.data.page_token : undefined
     } while (pageToken)
 
     // 2. Process each root message that has a thread
