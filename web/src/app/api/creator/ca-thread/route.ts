@@ -94,65 +94,40 @@ export async function POST(req: NextRequest) {
     if (!userToken) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Creator → mục Cà Thread → bấm 'Kết nối Lark'." }, { status: 401 })
     const since = Math.floor(Date.now() / 1000) - days_back * 86400
 
-    // 1. List root messages — chỉ dùng params bắt buộc, filter ngày trong code
-    const rootMessages: any[] = []
-    let pageToken: string | undefined
+    // 1. Lấy 1 trang tin nhắn gần nhất (không paginate để tránh timeout)
+    const data = await larkGet(
+      `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50`,
+      appToken
+    )
+    if (data.code !== 0) throw new Error(`Lark list-messages [${data.code}]: ${data.msg}`)
 
-    do {
-      const qs = new URLSearchParams({
-        container_id: chat_id,
-        container_id_type: "chat",
-        page_size: "50",
-      })
-      if (pageToken) qs.set("page_token", pageToken)
+    const rootMessages = (data.data?.items ?? [] as any[])
+      .filter((msg: any) => !msg.root_id && parseInt(msg.create_time) >= since && msg.thread_id)
+      .slice(0, max_threads)
 
-      const data = await larkGet(`/im/v1/messages?${qs}`, appToken)
-      if (data.code !== 0) throw new Error(`Lark list-messages [${data.code}]: ${data.msg}`)
-
-      const items: any[] = data.data?.items ?? []
-      let reachedEnd = false
-      for (const msg of items) {
-        if (parseInt(msg.create_time) < since) { reachedEnd = true; break }
-        if (!msg.root_id) rootMessages.push(msg)
-      }
-
-      pageToken = (!reachedEnd && data.data?.has_more) ? data.data.page_token : undefined
-    } while (pageToken)
-
-    // 2. Process each root message that has a thread
+    // 2. Xử lý song song từng thread (thread replies + reactions cùng lúc)
     const results: ThreadResult[] = []
     let remindedCount = 0
 
-    for (const msg of rootMessages) {
-      if (results.filter(r => r.sent || r.reminded_users.length > 0).length >= max_threads) break
-
+    await Promise.all(rootMessages.map(async (msg: any) => {
       const msgId: string = msg.message_id
-      // thread_id exists when at least one reply was made in the thread
-      const threadId: string = msg.thread_id || msgId
-      if (!msg.thread_id) continue // no thread started yet → skip
+      const threadId: string = msg.thread_id
 
-      // Get thread messages — dùng app token
-      const threadData = await larkGet(
-        `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_id_type=thread&page_size=50`,
-        appToken
-      )
-      if (threadData.code !== 0 && threadData.code !== undefined) continue
+      const [threadData, reactionData] = await Promise.all([
+        larkGet(`/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_id_type=thread&page_size=50`, appToken),
+        larkGet(`/im/v1/messages/${msgId}/reactions?page_size=50`, appToken),
+      ])
+
       const threadMsgs: any[] = threadData.data?.items ?? []
-      const replies = threadMsgs.filter(m => m.message_id !== msgId && !!m.root_id)
+      const replies = threadMsgs.filter((m: any) => m.message_id !== msgId && !!m.root_id)
+      if (replies.length === 0) return
 
-      if (replies.length === 0) continue
-
-      // Check YES reaction — dùng app token
-      const reactionData = await larkGet(
-        `/im/v1/messages/${msgId}/reactions?page_size=50`,
-        appToken
-      )
       const reactions: any[] = reactionData.data?.items ?? []
-      const hasYes = reactions.some(r => r.emoji?.emoji_type === emoji_type)
+      const hasYes = reactions.some((r: any) => r.emoji?.emoji_type === emoji_type)
 
       if (hasYes) {
         results.push({ message_id: msgId, create_time: msg.create_time, has_yes: true, reply_count: replies.length, reminded_users: [], sent: false })
-        continue
+        return
       }
 
       // Collect unique participants (sender + @mentioned in all thread messages)
@@ -167,7 +142,7 @@ export async function POST(req: NextRequest) {
       userIds.delete("")
 
       const participantIds = Array.from(userIds)
-      if (participantIds.length === 0) continue
+      if (participantIds.length === 0) return
 
       const entry: ThreadResult = {
         message_id: msgId,
@@ -187,7 +162,6 @@ export async function POST(req: NextRequest) {
               content: [[...atTags, { tag: "text", text: " Dạ thread này còn update thêm thông tin gì nữa không ạ a/c" }]],
             },
           }
-          // gửi bằng user token — tin hiện tên Hiếu
           const sendRes = await fetch(`${LARK}/im/v1/messages/${msgId}/reply`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${userToken}` },
@@ -202,7 +176,7 @@ export async function POST(req: NextRequest) {
       }
 
       results.push(entry)
-    }
+    }))
 
     return NextResponse.json({
       ok: true,
