@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       // Bước 1: kiểm tra chat info
       const chatInfo = await larkGet(`/im/v1/chats/${encodeURIComponent(chat_id)}`, appToken)
       // Bước 2: thử list 1 message
-      const msgList = await larkGet(`/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_type=chat&page_size=1`, appToken)
+      const msgList = await larkGet(`/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=1`, appToken)
       return NextResponse.json({ chat_id, chatInfo, msgList })
     } catch (e: any) {
       return NextResponse.json({ error: e.message }, { status: 500 })
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     do {
       const qs = new URLSearchParams({
         container_id: chat_id,
-        container_type: "chat",
+        container_id_type: "chat",
         page_size: "50",
       })
       if (pageToken) qs.set("page_token", pageToken)
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
       // Get thread messages — dùng app token
       const threadData = await larkGet(
-        `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_type=thread&page_size=50`,
+        `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_id_type=thread&page_size=50`,
         appToken
       )
       if (threadData.code !== 0 && threadData.code !== undefined) continue
