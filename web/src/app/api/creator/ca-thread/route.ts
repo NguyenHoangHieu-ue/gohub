@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getLarkUserToken } from "@/lib/lark"
+import { getLarkToken, getLarkUserToken } from "@/lib/lark"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const LARK = "https://open.larksuite.com/open-apis"
@@ -73,8 +73,11 @@ export async function POST(req: NextRequest) {
   if (!chat_id) return NextResponse.json({ error: "Thiếu chat_id" }, { status: 400 })
 
   try {
-    const token = await getLarkUserToken()
-    if (!token) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Gấu Pro → bấm 'Kết nối Lark' rồi thử lại." }, { status: 401 })
+    // đọc messages/reactions dùng app token (bot phải ở trong group)
+    const appToken  = await getLarkToken()
+    // gửi tin nhắn dùng user token (tin hiện tên Hiếu, không phải bot)
+    const userToken = await getLarkUserToken()
+    if (!userToken) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Creator → mục Cà Thread → bấm 'Kết nối Lark'." }, { status: 401 })
     const since = Math.floor(Date.now() / 1000) - days_back * 86400
 
     // 1. List root messages — chỉ dùng params bắt buộc, filter ngày trong code
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
       })
       if (pageToken) qs.set("page_token", pageToken)
 
-      const data = await larkGet(`/im/v1/messages?${qs}`, token)
+      const data = await larkGet(`/im/v1/messages?${qs}`, appToken)
       if (data.code !== 0) throw new Error(`Lark list-messages [${data.code}]: ${data.msg}`)
 
       const items: any[] = data.data?.items ?? []
@@ -114,21 +117,21 @@ export async function POST(req: NextRequest) {
       const threadId: string = msg.thread_id || msgId
       if (!msg.thread_id) continue // no thread started yet → skip
 
-      // Get thread messages (includes root + all replies)
+      // Get thread messages — dùng app token
       const threadData = await larkGet(
         `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_type=thread&page_size=50`,
-        token
+        appToken
       )
-      if (threadData.code !== 0 && threadData.code !== undefined) continue // thread không đọc được → bỏ qua
+      if (threadData.code !== 0 && threadData.code !== undefined) continue
       const threadMsgs: any[] = threadData.data?.items ?? []
       const replies = threadMsgs.filter(m => m.message_id !== msgId && !!m.root_id)
 
-      if (replies.length === 0) continue // no actual replies
+      if (replies.length === 0) continue
 
-      // Check if YES reaction exists on root message
+      // Check YES reaction — dùng app token
       const reactionData = await larkGet(
         `/im/v1/messages/${msgId}/reactions?page_size=50`,
-        token
+        appToken
       )
       const reactions: any[] = reactionData.data?.items ?? []
       const hasYes = reactions.some(r => r.emoji?.emoji_type === emoji_type)
@@ -170,9 +173,10 @@ export async function POST(req: NextRequest) {
               content: [[...atTags, { tag: "text", text: " Dạ thread này còn update thêm thông tin gì nữa không ạ a/c" }]],
             },
           }
+          // gửi bằng user token — tin hiện tên Hiếu
           const sendRes = await fetch(`${LARK}/im/v1/messages/${msgId}/reply`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${userToken}` },
             body: JSON.stringify({ msg_type: "post", content: JSON.stringify(postContent) }),
           })
           const sendData = await sendRes.json()
