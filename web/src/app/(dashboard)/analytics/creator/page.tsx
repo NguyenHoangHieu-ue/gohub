@@ -195,6 +195,9 @@ function CreatorSettings() {
       {/* Gấu Pro Access */}
       <GpAccessSection />
 
+      {/* My Metrics Access */}
+      <MyMetricsAccessSection />
+
       {/* Cà Thread */}
       <CaThreadSection />
     </div>
@@ -314,6 +317,82 @@ function GpAccessSection() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function MyMetricsAccessSection() {
+  const [users, setUsers]       = useState<{ username: string; name: string; role: string }[]>([])
+  const [newUsername, setNew]   = useState("")
+  const [loading, setLoading]   = useState(true)
+  const [adding, setAdding]     = useState(false)
+  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null)
+
+  const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  const reload = () => fetch("/api/creator/my-metrics-access").then(r => r.ok ? r.json() : null).then(d => setUsers(d?.users ?? [])).finally(() => setLoading(false))
+  useEffect(() => { reload() }, [])
+
+  const add = async () => {
+    if (!newUsername.trim()) return
+    setAdding(true)
+    try {
+      const r = await fetch("/api/creator/my-metrics-access", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", username: newUsername.trim() }),
+      })
+      const d = await r.json()
+      if (!r.ok) { notify(false, d.error || "Lỗi"); return }
+      setNew(""); await reload(); notify(true, `Đã cấp quyền "${newUsername.trim()}"`)
+    } finally { setAdding(false) }
+  }
+
+  const remove = async (username: string) => {
+    await fetch("/api/creator/my-metrics-access", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remove", username }),
+    })
+    setUsers(prev => prev.filter(u => u.username !== username))
+    notify(true, `Đã thu hồi quyền "${username}"`)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-emerald-50 bg-emerald-50/50 flex items-center gap-3">
+        <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center">
+          <Shield className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <h2 className="font-bold text-slate-800">My Metrics — Phân quyền xem</h2>
+          <p className="text-xs text-slate-400">Những user được thêm vào đây mới thấy tab My Metrics</p>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        {msg && <div className={cn("px-4 py-2.5 rounded-xl text-sm", msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>{msg.text}</div>}
+        <div className="flex gap-2">
+          <input value={newUsername} onChange={e => setNew(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+            placeholder="Username cần cấp quyền..."
+            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          <button onClick={add} disabled={adding || !newUsername.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-40 transition-colors">
+            <Plus className="w-3.5 h-3.5" />{adding ? "Đang thêm…" : "Thêm"}
+          </button>
+        </div>
+        {loading ? <div className="text-xs text-slate-400 py-2">Đang tải...</div>
+          : users.length === 0 ? <div className="text-xs text-slate-400 py-4 text-center">Chưa có user nào (ngoài creator).</div>
+          : <div className="space-y-2">{users.map(u => (
+              <div key={u.username} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                <div>
+                  <span className="text-sm font-medium text-slate-800">{u.name}</span>
+                  <span className="ml-2 text-xs text-slate-400">@{u.username}</span>
+                  <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
+                </div>
+                <button onClick={() => remove(u.username)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}</div>}
       </div>
     </div>
   )

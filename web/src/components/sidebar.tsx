@@ -48,7 +48,6 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/quarterly",   label: "Quarter Report",  icon: BarChart3       },
       { href: "/analytics/bod",         label: "BOD Report",      icon: PieChart        },
       { href: "/analytics/all-time",    label: "All-Time Report", icon: BarChart3       },
-      { href: "/analytics/my-metrics",  label: "My Metrics",      icon: Target          },
     ],
   },
   {
@@ -112,6 +111,7 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator/knowledge", label: "Own Info",         icon: BookOpen },
     { href: "/analytics/creator/devtools",  label: "API & Database",   icon: Terminal },
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
+    { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
   ],
 }
 
@@ -136,10 +136,11 @@ function useSidebarData(username: string, sessionRole: string) {
     allowedAnalytics: string[] | null
     allowedTabs:     string[] | null
     rolePerms:       Record<string, string[]> | null
-    hiddenTabs:      Set<string>
-    gpEnabled:       boolean
-    portalEnabled:   boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, portalEnabled: false })
+    hiddenTabs:        Set<string>
+    gpEnabled:         boolean
+    portalEnabled:     boolean
+    myMetricsEnabled:  boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, portalEnabled: false, myMetricsEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -157,8 +158,9 @@ function useSidebarData(username: string, sessionRole: string) {
         allowedTabs:      me?.allowed_tabs       != null ? (me.allowed_tabs       as string).split(",").filter(Boolean) : null,
         rolePerms:        perms ?? null,
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
-        gpEnabled:        me?.gp_enabled === true,
-        portalEnabled:    me?.portal_enabled === true,
+        gpEnabled:        me?.gp_enabled         === true,
+        portalEnabled:    me?.portal_enabled      === true,
+        myMetricsEnabled: me?.my_metrics_enabled  === true,
       })
     })
   }, [username, sessionRole])
@@ -300,7 +302,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, portalEnabled } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, portalEnabled, myMetricsEnabled: myMetricsEnabledFlag } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -312,7 +314,8 @@ export function Sidebar() {
   //  - còn lại: quyền NỀN theo role (ma trận role_permissions) ∪ trang cấp THÊM per-user (allowed_analytics)
   const isCreatorUser = effectiveRole === "creator"
   // gpEnabled: non-creator user được creator cấp quyền dùng Gấu Pro
-  const gpEnabled = !isCreatorUser && gpEnabledFlag
+  const gpEnabled         = !isCreatorUser && gpEnabledFlag
+  const myMetricsEnabled  = !isCreatorUser && myMetricsEnabledFlag
 
   const analyticsGroups = (() => {
     let groups = ANALYTICS_GROUPS
@@ -434,6 +437,9 @@ export function Sidebar() {
             {portalEnabled && PORTAL_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
+            {myMetricsEnabled && (
+              <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed accent="violet" />
+            )}
           </>
         ) : (
           /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
@@ -517,6 +523,12 @@ export function Sidebar() {
                     {PORTAL_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
                     ))}
+                  </div>
+                )}
+                {analystOpen && myMetricsEnabled && (
+                  <div className="mt-0.5">
+                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Personal</p>
+                    <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />
                   </div>
                 )}
               </div>

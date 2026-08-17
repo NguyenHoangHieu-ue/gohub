@@ -773,5 +773,17 @@ function SectionHeader({ n, label, note }: { n: number; label: string; note?: st
 }
 
 export default function MyMetricsPage() {
+  const [allowed, setAllowed] = useState<boolean | null>(null)
+  useEffect(() => {
+    fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
+      setAllowed(d?.my_metrics_enabled === true)
+    }).catch(() => setAllowed(false))
+  }, [])
+  if (allowed === null) return null
+  if (!allowed) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <p className="text-slate-400 text-sm">Bạn không có quyền truy cập trang này.</p>
+    </div>
+  )
   return <Suspense><MyMetricsInner /></Suspense>
 }
