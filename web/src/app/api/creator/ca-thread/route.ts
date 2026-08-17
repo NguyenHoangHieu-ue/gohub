@@ -72,6 +72,20 @@ export async function POST(req: NextRequest) {
 
   if (!chat_id) return NextResponse.json({ error: "Thiếu chat_id" }, { status: 400 })
 
+  // Debug mode: thử từng bước và trả về raw response
+  if (req.nextUrl.searchParams.get("debug") === "1") {
+    try {
+      const appToken = await getLarkToken()
+      // Bước 1: kiểm tra chat info
+      const chatInfo = await larkGet(`/im/v1/chats/${encodeURIComponent(chat_id)}`, appToken)
+      // Bước 2: thử list 1 message
+      const msgList = await larkGet(`/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_type=chat&page_size=1`, appToken)
+      return NextResponse.json({ chat_id, chatInfo, msgList })
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 500 })
+    }
+  }
+
   try {
     // đọc messages/reactions dùng app token (bot phải ở trong group)
     const appToken  = await getLarkToken()
