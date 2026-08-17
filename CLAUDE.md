@@ -4,11 +4,11 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-17, s149)
+## Trạng thái hiện tại (2026-08-17, s150)
 
 | | |
 |---|---|
-| Branch làm việc | `staging` (= main, đã merge) |
+| Branch làm việc | `staging` (= main, đã sync) |
 | tsc | PASS |
 
 **Migrations & ENV — đã xong:**
@@ -21,6 +21,23 @@
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 - [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API
 - [ ] **BC Datapool — lấy appSecret đúng từ BC support** (xem ghi chú bên dưới)
+- [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` trong Lark Developer Console + publish version mới
+- [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark) để tin gửi bằng tên Hiếu
+
+**s150 — đã làm (2026-08-17):**
+- ✅ **Cà Thread Lark** (`/analytics/creator`): bot quét group Lark, tag người trong thread chưa có reaction YES kèm "Dạ thread này còn update thêm thông tin gì nữa không ạ a/c"
+  - Đọc messages = app token (bot Bé Gấu), gửi tin = user token (tên Hiếu)
+  - Config lưu 1 lần vào Supabase `app_settings` (key `ca_thread_config`), hàng ngày chỉ bấm "Cà Thread"
+  - Nút Sửa để đổi group sau này
+  - Root bug: Lark dùng `container_id_type` không phải `container_type` → fixed
+  - Xử lý song song (Promise.all) thay vì tuần tự để tránh timeout Vercel
+- ✅ **OAuth Lark fix**: dùng `NEXTAUTH_URL` làm base (redirect URI nhất quán), `sameSite: "none"` khi production
+- ✅ **My Metrics — phân quyền**: chỉ creator + whitelist mới thấy tab
+  - My Metrics rời khỏi Overview → xuống Creator group trong sidebar
+  - API `/api/creator/my-metrics-access`: add/remove user whitelist
+  - Creator page: thêm section "My Metrics — Phân quyền xem"
+  - Granted users thấy My Metrics trong section "Personal" riêng
+- ✅ **Workflow fix**: từ nay commit lên `staging` trước, chỉ merge `main` khi Hiếu đồng ý
 
 **s149 — đã làm (2026-08-17):**
 - ✅ **B2B Tier Performance export**: đổi CSV → Excel, gộp strategic + all tiers, thêm cột Tier (commit 1bc594d → merge main)
