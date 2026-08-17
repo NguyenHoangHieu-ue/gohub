@@ -1,5 +1,22 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-13 (Session 147 — Ẩn Tổ Gấu, Staff Target theo tháng, Inventory Management tab, Quyền chỉnh sửa per-tab).
+Cập nhật lần cuối: 2026-08-17 (Session 149 — B2B Tier export Excel, BC Datapool debug).
+
+## ══════ SESSION 149 (2026-08-17) ══════
+
+### A. B2B Tier Performance — export Excel đầy đủ (commit 1bc594d → merge main 46d2bbd)
+- Đổi nút "CSV" → "Excel" (thực ra exportToCSV đã gọi exportToExcel bên trong — chỉ sai label)
+- Fix thiếu data: export cũ chỉ lấy `getFilteredOtherTiers()` (bỏ qua named strategic partners)
+- Fix: gộp `strategicPerformance` + `nonStrategic`, thêm cột **Tier** ở đầu
+- File: `web/src/app/(dashboard)/analytics/b2b/page.tsx`
+
+### B. BC Datapool — debug kỹ, xác nhận code đúng, secret sai
+- Thử gọi thẳng BC API qua curl: F014 (balance query)
+- Thử 5 variant MD5 signature: `appSecret+body`, `body+appSecret`, `appKey+appSecret`, `appKey+body+appSecret`, `appSecret+appKey+body`
+- TẤT CẢ trả `[1008] Signature verification failed`
+- **Kết luận**: code + formula đúng, AppSecret `082746f265c6412da554855fe415785a` SAI với channel `GohubDataPool`
+- **CHỜ**: Hiếu liên hệ BC support lấy AppSecret đúng → update `.env.local` + Vercel
+
+
 
 ## ══════ SESSION 147 (2026-08-13) ══════
 
@@ -7741,3 +7758,7 @@ tsc PASS . vitest 80/80
 
 Commits staging: 690372a → 17db3fb (12 commit). tsc PASS.
 Lỗi kỹ thuật ghi docs/ERRORS.md §9 (undici cookie, x-sap-sec fingerprint, upsert race, SHA256 sign).
+
+
+--- s148 2026-08-14 ---
+feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001/F002/F003/F014 vao Supabase (bc_countries, bc_products, bc_prices, bc_balance_log). Cron 7h sang ICT, phat hien thay doi + Lark alert. Tab tra cuu on-demand F011/F012/F023/F046. Page /analytics/bc-datapool (Catalog/So du/Quoc gia/Tra cuu). BC_APP_KEY=GohubDataPool. Chua chay migration v36 + set env Vercel.

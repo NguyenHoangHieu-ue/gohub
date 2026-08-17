@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-14, s148)
+## Trạng thái hiện tại (2026-08-17, s149)
 
 | | |
 |---|---|
@@ -21,6 +21,10 @@
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
 - [ ] **Portal Affiliate**: nhập App ID + Secret Shopee Affiliate Open API
 - [ ] **BC Datapool — lấy appSecret đúng từ BC support** (xem ghi chú bên dưới)
+
+**s149 — đã làm (2026-08-17):**
+- ✅ **B2B Tier Performance export**: đổi CSV → Excel, gộp strategic + all tiers, thêm cột Tier (commit 1bc594d → merge main)
+- ⚠️ **BC Datapool**: xác nhận code hoàn chỉnh, thử 5 variant MD5 signature đều trả `[1008]` → AppSecret `082746f265c6412da554855fe415785a` SAI, chờ Hiếu lấy secret đúng từ BC support
 
 **s148 — đã làm (2026-08-14):**
 - ✅ **BC Datapool integration**: tab `/analytics/bc-datapool` (Product group), sync cron 7h ICT, tra cứu F011/F012/F023/F046, debug endpoint `/api/bc/debug`
