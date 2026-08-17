@@ -320,6 +320,7 @@ function GpAccessSection() {
 }
 
 function CaThreadSection() {
+  const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
   const [chatId, setChatId]         = useState("")
   const [emojiType, setEmojiType]   = useState("THUMBSUP")
   const [daysBack, setDaysBack]     = useState(7)
@@ -328,6 +329,12 @@ function CaThreadSection() {
   const [running, setRunning]       = useState(false)
   const [result, setResult]         = useState<any>(null)
   const [error, setError]           = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
+      setLarkConnected(d?.connected ?? false)
+    }).catch(() => setLarkConnected(false))
+  }, [])
 
   const run = async () => {
     if (!chatId.trim()) return
@@ -370,6 +377,25 @@ function CaThreadSection() {
       </div>
 
       <div className="p-6 space-y-4">
+        {/* Lark connection status */}
+        {larkConnected === false && (
+          <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <p className="text-xs text-amber-700">Chưa kết nối Lark cá nhân — tin nhắn sẽ gửi bằng tên bạn, không phải bot.</p>
+            </div>
+            <a href="/api/lark/oauth/start" className="ml-3 shrink-0 px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg hover:bg-amber-600">
+              Kết nối Lark
+            </a>
+          </div>
+        )}
+        {larkConnected === true && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+            <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+            <p className="text-xs text-emerald-700 font-medium">Đã kết nối Lark — tin nhắn sẽ gửi bằng tài khoản Lark của bạn</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="md:col-span-2">
             <label className="text-xs font-medium text-slate-600 block mb-1">Chat ID của group Lark *</label>

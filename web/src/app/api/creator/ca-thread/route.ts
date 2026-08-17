@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getLarkToken } from "@/lib/lark"
+import { getLarkUserToken } from "@/lib/lark"
 
 const LARK = "https://open.larksuite.com/open-apis"
 
@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
   if (!chat_id) return NextResponse.json({ error: "Thiếu chat_id" }, { status: 400 })
 
   try {
-    const token = await getLarkToken()
+    const token = await getLarkUserToken()
+    if (!token) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Gấu Pro → bấm 'Kết nối Lark' rồi thử lại." }, { status: 401 })
     const since = Math.floor(Date.now() / 1000) - days_back * 86400
 
     // 1. List root messages in the group chat (paginated, newest first, stop when too old)
