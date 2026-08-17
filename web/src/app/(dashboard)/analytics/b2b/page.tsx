@@ -662,13 +662,64 @@ export default function B2BPerformance() {
                     </div>
                     <button onClick={() => {
                       const nonStrategic = getFilteredOtherTiers()
-                      const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
-                      if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
-                      columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                      const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
-                      exportToCSV(exportData, "B2B_Tier_Performance", columns)
+                      const classifyTierForExport = (pln?: string | null): string => {
+                        if (!pln) return "Strategic"
+                        const p = pln.toUpperCase()
+                        for (const [tier, keywords] of Object.entries(tierKeywords)) {
+                          if ((keywords as string[]).some(kw => p.includes(kw.toUpperCase()))) return tier
+                        }
+                        return "Strategic"
+                      }
+                      const allRows = [
+                        ...strategicPerformance.map(d => ({
+                          tier: d.tier,
+                          name: d.name,
+                          revenue: d.revenue,
+                          projected_revenue: Math.round(d.revenue * projectionFactor),
+                          projected_margin: Math.round(d.margin * projectionFactor),
+                          projected_gpm2: Math.round(d.gpm2 * projectionFactor),
+                          units: d.units,
+                          margin: d.margin,
+                          margin_percent: Math.round(d.margin_percent * 10) / 10,
+                          gpm2: d.gpm2,
+                          gpm2_percent: Math.round(d.gpm2_percent * 10) / 10,
+                        })),
+                        ...nonStrategic.map(d => ({
+                          tier: classifyTierForExport(d.price_list_name),
+                          name: d.name,
+                          revenue: d.revenue,
+                          projected_revenue: Math.round(d.revenue * projectionFactor),
+                          projected_margin: Math.round(d.margin * projectionFactor),
+                          projected_gpm2: Math.round((d.gpm2 ?? 0) * projectionFactor),
+                          units: d.units,
+                          margin: d.margin,
+                          margin_percent: Math.round(d.margin_percent * 10) / 10,
+                          gpm2: d.gpm2,
+                          gpm2_percent: Math.round(d.gpm2_percent * 10) / 10,
+                        })),
+                      ]
+                      const columns: { label: string; key: string }[] = [
+                        { label: "Tier", key: "tier" },
+                        { label: "Customer Name", key: "name" },
+                        { label: "Revenue", key: "revenue" },
+                      ]
+                      if (isProjectable) {
+                        columns.push(
+                          { label: "Projected Revenue", key: "projected_revenue" },
+                          { label: "Projected GP", key: "projected_margin" },
+                          { label: "Projected CM1", key: "projected_gpm2" },
+                        )
+                      }
+                      columns.push(
+                        { label: "Units Sold", key: "units" },
+                        { label: "Gross Profit", key: "margin" },
+                        { label: "Margin %", key: "margin_percent" },
+                        { label: "CM1", key: "gpm2" },
+                        { label: "CM1 %", key: "gpm2_percent" },
+                      )
+                      exportToExcel(allRows, columns, `B2B_Tier_Performance_${startDate}_to_${endDate}`)
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                      <Download className="w-3 h-3" />CSV
+                      <Download className="w-3 h-3" />Excel
                     </button>
                   </div>
                 </div>
