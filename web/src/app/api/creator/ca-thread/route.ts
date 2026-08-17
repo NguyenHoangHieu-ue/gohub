@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: "Chưa kết nối Lark cá nhân. Vào Gấu Pro → bấm 'Kết nối Lark' rồi thử lại." }, { status: 401 })
     const since = Math.floor(Date.now() / 1000) - days_back * 86400
 
-    // 1. List root messages in the group chat (paginated, newest first, stop when too old)
+    // 1. List root messages — chỉ dùng params bắt buộc, filter ngày trong code
     const rootMessages: any[] = []
     let pageToken: string | undefined
 
@@ -86,20 +86,16 @@ export async function POST(req: NextRequest) {
         container_id: chat_id,
         container_type: "chat",
         page_size: "50",
-        sort_type: "ByCreateTimeDesc",
-        user_id_type: "open_id",
       })
       if (pageToken) qs.set("page_token", pageToken)
 
       const data = await larkGet(`/im/v1/messages?${qs}`, token)
-      if (data.code !== 0) throw new Error(`Lark [${data.code}]: ${data.msg}`)
+      if (data.code !== 0) throw new Error(`Lark list-messages [${data.code}]: ${data.msg}`)
 
       const items: any[] = data.data?.items ?? []
       let reachedEnd = false
-
       for (const msg of items) {
         if (parseInt(msg.create_time) < since) { reachedEnd = true; break }
-        // Root messages have no root_id; skip thread replies
         if (!msg.root_id) rootMessages.push(msg)
       }
 
@@ -120,9 +116,10 @@ export async function POST(req: NextRequest) {
 
       // Get thread messages (includes root + all replies)
       const threadData = await larkGet(
-        `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_type=thread&page_size=50&user_id_type=open_id`,
+        `/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_type=thread&page_size=50`,
         token
       )
+      if (threadData.code !== 0 && threadData.code !== undefined) continue // thread không đọc được → bỏ qua
       const threadMsgs: any[] = threadData.data?.items ?? []
       const replies = threadMsgs.filter(m => m.message_id !== msgId && !!m.root_id)
 
