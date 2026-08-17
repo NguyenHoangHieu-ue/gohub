@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle } from "lucide-react"
+import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
@@ -194,6 +194,9 @@ function CreatorSettings() {
 
       {/* Gấu Pro Access */}
       <GpAccessSection />
+
+      {/* Cà Thread */}
+      <CaThreadSection />
     </div>
   )
 }
@@ -311,6 +314,197 @@ function GpAccessSection() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function CaThreadSection() {
+  const [chatId, setChatId]         = useState("")
+  const [emojiType, setEmojiType]   = useState("THUMBSUP")
+  const [daysBack, setDaysBack]     = useState(7)
+  const [myOpenId, setMyOpenId]     = useState("")
+  const [dryRun, setDryRun]         = useState(true)
+  const [running, setRunning]       = useState(false)
+  const [result, setResult]         = useState<any>(null)
+  const [error, setError]           = useState<string | null>(null)
+
+  const run = async () => {
+    if (!chatId.trim()) return
+    setRunning(true); setResult(null); setError(null)
+    try {
+      const r = await fetch("/api/creator/ca-thread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id:    chatId.trim(),
+          emoji_type: emojiType.trim() || "THUMBSUP",
+          days_back:  daysBack,
+          my_open_id: myOpenId.trim() || undefined,
+          dry_run:    dryRun,
+          max_threads: 20,
+        }),
+      })
+      const d = await r.json()
+      if (!r.ok) setError(d.error || "Lỗi không xác định")
+      else setResult(d)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const toDate = (ts: string) => new Date(parseInt(ts) * 1000).toLocaleDateString("vi-VN")
+
+  return (
+    <div className="bg-white rounded-2xl border border-sky-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-sky-50 bg-sky-50/50 flex items-center gap-3">
+        <div className="w-8 h-8 bg-sky-600 rounded-xl flex items-center justify-center">
+          <MessageSquare className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <h2 className="font-bold text-slate-800">Cà Thread Lark</h2>
+          <p className="text-xs text-slate-400">Quét group, tag người trong thread chưa có reaction YES để hỏi update</p>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="md:col-span-2">
+            <label className="text-xs font-medium text-slate-600 block mb-1">Chat ID của group Lark *</label>
+            <input
+              value={chatId} onChange={e => setChatId(e.target.value)}
+              placeholder="oc_xxxxxxxx (copy từ Lark group info)"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Emoji type của YES reaction</label>
+            <input
+              value={emojiType} onChange={e => setEmojiType(e.target.value)}
+              placeholder="THUMBSUP"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">Hover vào emoji trong Lark để thấy tên (VD: THUMBSUP, OK, YES...)</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Quét bao nhiêu ngày gần đây</label>
+            <input
+              type="number" min={1} max={30} value={daysBack} onChange={e => setDaysBack(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs font-medium text-slate-600 block mb-1">Open ID của bạn (loại trừ khỏi danh sách tag)</label>
+            <input
+              value={myOpenId} onChange={e => setMyOpenId(e.target.value)}
+              placeholder="ou_xxxxxxxx (lấy từ Lark Developer Console)"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2.5 cursor-pointer select-none" onClick={() => setDryRun(p => !p)}>
+          <div className={cn("w-9 h-5 rounded-full transition-colors relative flex-shrink-0", dryRun ? "bg-amber-400" : "bg-sky-500")}>
+            <div className={cn("w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-all shadow-sm", dryRun ? "left-[3px]" : "left-[18px]")} />
+          </div>
+          <span className="text-sm text-slate-700">
+            {dryRun
+              ? <><strong className="text-amber-600">Dry run</strong> — xem trước, chưa gửi tin</>
+              : <><strong className="text-sky-600">Live</strong> — sẽ gửi tin nhắn thật vào Lark</>}
+          </span>
+        </label>
+
+        {!dryRun && (
+          <div className="flex items-start gap-2 px-3 py-2.5 bg-orange-50 border border-orange-200 rounded-xl">
+            <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-orange-700">Chế độ Live sẽ gửi tin nhắn thật vào group. Nên chạy Dry run trước để kiểm tra.</p>
+          </div>
+        )}
+
+        <button
+          onClick={run}
+          disabled={running || !chatId.trim()}
+          className="flex items-center gap-2 px-5 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-bold hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        >
+          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+          {running ? "Đang quét..." : "Cà Thread"}
+        </button>
+
+        {error && (
+          <div className="px-4 py-3 bg-rose-50 border border-rose-100 text-rose-700 rounded-xl text-sm">{error}</div>
+        )}
+
+        {result && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Root messages quét", value: result.scanned_root },
+                { label: "Thread có reply", value: result.threads_found },
+                { label: result.dry_run ? "Sẽ nhắc" : "Đã nhắc", value: result.dry_run ? result.results?.filter((r: any) => r.reminded_users.length > 0).length : result.reminded },
+              ].map(s => (
+                <div key={s.label} className="bg-slate-50 rounded-xl px-4 py-3 text-center border border-slate-100">
+                  <div className="text-2xl font-bold text-slate-800">{s.value ?? 0}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {result.results?.length > 0 && (
+              <div className="border border-slate-100 rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-600">Chi tiết threads</div>
+                <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+                  {result.results.map((r: any) => (
+                    <div key={r.message_id} className="px-4 py-2.5 flex items-start gap-3">
+                      <div className="mt-0.5 shrink-0">
+                        {r.has_yes
+                          ? <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          : r.sent
+                          ? <CheckCircle className="w-4 h-4 text-sky-500" />
+                          : <XCircle className="w-4 h-4 text-amber-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
+                          <code className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-mono">{r.message_id.slice(-8)}</code>
+                          <span>{toDate(r.create_time)}</span>
+                          <span>{r.reply_count} reply</span>
+                          {r.has_yes && <span className="text-emerald-600 font-medium">✓ YES</span>}
+                          {r.sent && <span className="text-sky-600 font-medium">Đã gửi</span>}
+                          {r.error && <span className="text-rose-500">{r.error}</span>}
+                        </div>
+                        {!r.has_yes && r.reminded_users.length > 0 && (
+                          <div className="text-[11px] text-slate-400 mt-0.5 break-all">
+                            Tag: {r.reminded_users.join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.dry_run && (
+              <p className="text-xs text-amber-600 text-center">Dry run — tắt toggle rồi bấm Cà Thread lần nữa để gửi thật</p>
+            )}
+          </div>
+        )}
+
+        <details className="group">
+          <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600 select-none">Hướng dẫn setup Lark App</summary>
+          <div className="mt-2 px-4 py-3 bg-slate-50 rounded-xl text-xs text-slate-600 space-y-1.5 leading-relaxed">
+            <p><strong>1. Bot phải là thành viên của group</strong> — vào group Lark → Settings → Add members/bots → chọn bot Bé Gấu</p>
+            <p><strong>2. Permissions cần bật</strong> trong Lark Developer Console (app cli_aaa90ee73ef8ded4):</p>
+            <ul className="list-disc ml-4 space-y-0.5">
+              <li><code className="bg-slate-100 px-1 rounded">im:message</code> — đọc và gửi tin nhắn</li>
+              <li><code className="bg-slate-100 px-1 rounded">im:message.reaction:readonly</code> — đọc reaction</li>
+            </ul>
+            <p><strong>3. Chat ID</strong> — mở group Lark → nhấn tên group → Copy link → ID dạng <code className="bg-slate-100 px-1 rounded">oc_xxxxxxxx</code></p>
+            <p><strong>4. Open ID của bạn</strong> — Lark Developer Console → tìm người dùng → copy open_id dạng <code className="bg-slate-100 px-1 rounded">ou_xxxxxxxx</code></p>
+            <p><strong>5. Emoji type</strong> — hover vào emoji reaction trong Lark → hiện tooltip tên (VD: "THUMBSUP", "OK", "YES")</p>
+          </div>
+        </details>
       </div>
     </div>
   )
