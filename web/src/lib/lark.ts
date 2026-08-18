@@ -76,6 +76,13 @@ export async function getLarkUserToken(): Promise<string | null> {
   } catch { return null }
 }
 
+// open_id của creator đã kết nối Lark cá nhân (để gán task assignee mà không cần env).
+export async function getLarkUserOpenId(): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", OAUTH_KEY).maybeSingle()
+  if (!data?.value) return null
+  try { return (JSON.parse(data.value) as LarkOAuthStore).open_id ?? null } catch { return null }
+}
+
 // Cache app_access_token (expires in ~2h, refresh 10 min before)
 let _token: string | null   = null
 let _tokenExp: number       = 0

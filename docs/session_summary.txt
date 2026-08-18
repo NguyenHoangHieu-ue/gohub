@@ -7868,3 +7868,16 @@ feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001
 - Cells: px-3 py-2→px-1.5 py-1; Name column max-w-[200px]→max-w-[130px]
 - Header labels rút gọn: "Gross Margin"→"G.Margin", "%QoQ (CM1)"→"%QoQ", "Tên Khách hàng"→"Tên KH"
 
+
+## ══════ SESSION 154 (2026-08-18) ══════
+
+### A. Port 2 feature B2C từ prod → staging→main (e1f9893)
+- Đánh giá: staging đi TRƯỚC prod (không phải sau); 4/6 commit B2C của prod đã có trên staging (tốt hơn, kèm CAC/CPL).
+- Port surgical 2 thứ MỚI: GA4 hostname filter (ga4.ts, cherry-pick sạch) + B2C MKT Profit Report (manualMktSpend + CM1, port thủ công vào dashboard).
+- KHÔNG lấy nguyên khối vì analytics-helpers prod thiếu 11+ hàm dùng toàn hệ thống.
+- ⚠️ manualMktSpend hardcode tới 2026-08 → tháng sau phải sửa code.
+
+### B. Wave 1 tab Creator (từ PLAN.md)
+- **1.1 Cà Thread lịch sử "đã cà"** (staging a1a6e1f): migration v40 ca_thread_log; handleSend INSERT log; handleScan đánh dấu already_sent persistent; action history; FE badge + section Lịch sử. ⚠️ Hiếu chạy migration v40.
+- **1.3 Gấu Pro Lark task** (staging 807d658): code đã ưu tiên userToken sẵn; bổ sung getLarkUserOpenId() làm assignee fallback khi env trống.
+- ⏳ 1.2 multi-group: chưa làm (đổi config shape, chờ test 1.1 trước).

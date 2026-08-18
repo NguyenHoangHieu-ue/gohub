@@ -4,20 +4,22 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-18, s153)
+## Trạng thái hiện tại (2026-08-18, s154)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main khi Hiếu yêu cầu) |
 | tsc | PASS |
+| ⏳ Trên staging CHƯA merge main | Wave 1.1 (v40 ca_thread_log) + 1.3 (Lark task) + session log |
+| ✅ Đã lên main | Port B2C (GA4 hostname + MKT Profit Report) + PLAN.md |
+
+**➡️ MAI LÀM TIẾP:** Wave 1.2 Cà Thread multi-group (xem `PLAN.md` §1.2). Sau đó Wave 2.
 
 **Migrations & ENV — đã xong:**
-- [x] ✅ v31–v35 (cũ)
-- [x] ✅ v36 `bc_countries/bc_products/bc_prices/bc_balance_log/bc_sync_log` (BC Datapool)
-- [x] ✅ v37 `hk3_strategic` + `hk3_non_strategic` trên `staff_targets`
-- [x] ✅ v38 `target_rev` trên `b2b_customer_targets` (Target Revenue per-KH)
-- [x] ✅ v39 `target_3hk_rev` trên `b2b_customer_targets` (3HK Revenue Target per-KH)
-- [x] ✅ ENV Vercel: `BC_DATAPOOL_BASE_API_URL`, `BC_DATAPOOL_CHANNEL_ID`, `BC_DATAPOOL_APP_SECRET`, `BC_DATAPOOL_SIGN_METHOD`
+- [x] ✅ v31–v35 (cũ) · v36 BC Datapool · v37 staff hk3 split
+- [x] ✅ v38 `target_rev` + v39 `target_3hk_rev` trên `b2b_customer_targets`
+- [x] ✅ **v40 `ca_thread_log`** (lịch sử cà thread) — Hiếu ĐÃ chạy
+- [x] ✅ ENV Vercel: `BC_DATAPOOL_*`
 
 **Hiếu cần làm (còn lại):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
@@ -25,6 +27,13 @@
 - [ ] **BC Datapool — lấy appSecret đúng từ BC support** (xem ghi chú bên dưới)
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` trong Lark Developer Console + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark) để tin gửi bằng tên Hiếu
+- [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử; nếu OK → merge main
+
+**s154 — đã làm (2026-08-18):**
+- ✅ **Port 2 feature B2C từ prod** (→ main e1f9893): GA4 hostname filter + B2C MKT Profit Report (manualMktSpend + CM1). Staging đi TRƯỚC prod → chỉ lấy 2 thứ mới, KHÔNG lấy nguyên khối (analytics-helpers prod thiếu 11+ hàm). ⚠️ manualMktSpend hardcode tới 2026-08.
+- ✅ **Wave 1.1 Cà Thread lịch sử "đã cà"** (staging a1a6e1f): migration v40; handleSend INSERT log; handleScan mark already_sent persistent; action history; FE badge + section Lịch sử.
+- ✅ **Wave 1.3 Gấu Pro Lark task** (staging 807d658): code đã ưu tiên userToken; thêm getLarkUserOpenId() assignee fallback.
+- ⏳ **Wave 1.2 multi-group**: CHƯA làm — đổi config `ca_thread_config` → `{groups:[...]}` (backward-compat) + FE dropdown chọn group.
 
 **s153 — đã làm (2026-08-18):**
 - ✅ **Quarter Report — fix save target không được** (→ main b15b354)
