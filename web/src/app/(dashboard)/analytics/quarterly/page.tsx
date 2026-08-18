@@ -1684,24 +1684,24 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                       <span className="text-[10px] text-slate-400">Revenue {fc(rd.totalRevenue)} · CM1 <span className={cm1Color(rd.totalCm1)}>{fc(rd.totalCm1)}</span> ({pct(rd.totalCm1Pct)})</span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-slate-100">
-                      <table className="w-full text-[11px] border-collapse">
+                      <table className="w-full text-[10px] border-collapse">
                         <thead>
                           <tr className="bg-slate-100">
-                            {isCreator && <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Mã KH</th>}
-                            <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên Khách hàng</th>
-                            {isCreator && <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Bảng giá</th>}
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Revenue</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Gross Margin</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">GM%</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Ch.Cost</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%Tgt CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (CM1)</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">3HK Rev TGT</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%TGT 3HK</th>
- </tr>
+                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Mã KH</th>}
+                            <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide">Tên KH</th>
+                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Bảng giá</th>}
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Revenue</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">G.Margin</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">GM%</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Ch.Cost</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">CM1</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%Tgt CM1</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">%CM1</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%QoQ</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">3HK%</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">3HK Rev TGT</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%TGT 3HK</th>
+                          </tr>
                         </thead>
                         <tbody>
                           {custs.map((c: any, i: number) => {
@@ -1726,49 +1726,49 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
                                 <tr className={cn("border-t border-slate-50 cursor-pointer", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/10")}>
-                                  {isCreator && <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap text-[10px]">{c.code}</td>}
-                                  <td className="px-3 py-2 text-slate-700 font-medium max-w-[200px]" onClick={toggleExpand}>
-                                    <div className="flex items-center gap-1.5">
+                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-500 whitespace-nowrap text-[9px]">{c.code}</td>}
+                                  <td className="px-1.5 py-1 text-slate-700 font-medium max-w-[130px]" onClick={toggleExpand}>
+                                    <div className="flex items-center gap-1">
                                       <ChevronRight className={cn("w-3 h-3 text-slate-400 flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
-                                      <span className="truncate text-[11px]" title={c.name}>{c.name}</span>
+                                      <span className="truncate text-[10px]" title={c.name}>{c.name}</span>
                                       {editMode && dirtyCodes.has(c.code) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
                                     </div>
                                   </td>
                                   {isCreator && (
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      {c.priceListName ? <span className="text-[9px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
+                                    <td className="px-1.5 py-1 whitespace-nowrap">
+                                      {c.priceListName ? <span className="text-[9px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
-                                  <td className="px-3 py-2 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
-                                  <td className="px-3 py-2 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(pr.prGm)}</td>
-                                  <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
-                                  <td className="px-3 py-2 text-right tabular-nums text-[10px]">
+                                  <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
+                                  <td className="px-1.5 py-1 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(pr.prGm)}</td>
+                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
+                                  <td className="px-1.5 py-1 text-right tabular-nums text-[10px]">
                                     {editMode && canEditCost
-                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
+                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
                                           <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
                                         </button>
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
-                                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
-                                  <td className="px-3 py-2 text-right text-[10px]">
-                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                  <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  <td className="px-1.5 py-1 text-right text-[10px]">
+                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
                                   </td>
-                                  <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
-                                  <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
-                                  <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
+                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
+                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
+                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
                                   {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed */}
                                   {(() => {
                                     const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev
                                       : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
                                     return (
                                       <>
-                                        <td className="px-3 py-2 text-right text-slate-500 text-[10px] tabular-nums whitespace-nowrap">
+                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] tabular-nums whitespace-nowrap">
                                           {tgt3hk > 0 ? fc(tgt3hk) : <span className="text-slate-300">—</span>}
                                         </td>
-                                        <td className="px-3 py-2 text-right text-[10px]">
+                                        <td className="px-1.5 py-1 text-right text-[10px]">
                                           {tgt3hk > 0 ? (() => {
                                             const p = pr.prHk3 / tgt3hk * 100
-                                            return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
+                                            return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
                                           })() : <span className="text-slate-300">—</span>}
                                         </td>
                                       </>
