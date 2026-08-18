@@ -518,7 +518,7 @@ function CaThreadSection() {
     finally { setSending(null) }
   }
 
-  const toDate = (ts: string) => new Date(parseInt(ts) * 1000).toLocaleDateString("vi-VN")
+  const toDate = (ts: string) => new Date(parseInt(ts)).toLocaleDateString("vi-VN") // Lark create_time = ms
   const truncate = (s: string, n = 150) => s.length > n ? s.slice(0, n) + "…" : s
 
   return (
