@@ -1,4 +1,97 @@
 # PLAN.md — GoHub Intel
+
+> ⚠️ Phần MỚI (s153) ở đầu. Backlog cũ (s139) giữ nguyên bên dưới mục "═══ BACKLOG s139 ═══".
+
+---
+
+# PLAN — Cải Thiện Nhóm Tab Creator (s153, 2026-08-18)
+
+> Dựa trên đánh giá toàn diện 5 tab creator + tab whitelist.
+> Nguyên tắc: staging-first · UI Strict Lock (không đổi màu/layout analytics) · minimum code.
+> Migration tiếp theo: **v40+** (v39 là mới nhất).
+
+## 0. Tóm tắt đánh giá (baseline)
+
+| Tab | Route | Quyền | Trạng thái |
+|---|---|---|---|
+| Gấu Pro | `/analytics/creator/ai` | creator + whitelist | ✅ Streaming SSE OK, tool mạnh (16+) |
+| Creator Settings | `/analytics/creator` | creator + admin | ⚠️ Cà Thread thiếu history/schedule |
+| Own Info / Knowledge | `/analytics/creator/knowledge` | creator | ⚠️ Không search/version/import |
+| Dev Tools | `/analytics/creator/devtools` | creator (+admin unlock) | ⚠️ Không saved queries |
+| Usage Analytics | `/analytics/creator/usage` | creator | ⚠️ Không so sánh kỳ trước |
+
+**Đã xác minh (sửa đánh giá ban đầu):**
+- ✅ Gấu Pro CÓ streaming (SSE: BE `chat/route.ts:231-282`, FE reader `ai/page.tsx:809-821`) → KHÔNG cần fix streaming.
+
+## Wave 1 — High Priority
+
+### 1.1 Cà Thread — Lịch sử "đã cà" (chống nhắc trùng / quên)
+- **Vấn đề:** cà xong không lưu; reload mất trạng thái; không biết thread nào đã nhắc.
+- **Giải pháp:** Migration **v40** `ca_thread_log` (id=message_id, chat_id, content_snip, participants JSON, message_sent, sent_by, sent_at). `handleSend`→INSERT log; `handleScan`→JOIN đánh dấu `already_sent`; action `history`. FE: badge "Đã cà DD/MM bởi @user" persistent + section Lịch sử.
+- **Files:** `v40_ca_thread_log.sql` · `api/creator/ca-thread/route.ts` · `creator/page.tsx`
+- **Effort:** M (~2-3h) · **Accept:** cà→reload→vẫn thấy "đã cà".
+
+### 1.2 Cà Thread — Multi-group
+- **Vấn đề:** config chỉ 1 chat_id; muốn nhiều group phải sửa từng lần.
+- **Giải pháp:** đổi `ca_thread_config` → `{ groups: [...] }` (backward-compat wrap shape cũ). FE dropdown chọn group + "+ Thêm group".
+- **Files:** `api/creator/ca-thread/route.ts` · `creator/page.tsx` · **Effort:** M (~2h)
+
+### 1.3 Gấu Pro — Lark task dùng user token (tên Hiếu)
+- **Vấn đề:** `createLarkTask` dùng app token → task không gắn tên Hiếu.
+- **Giải pháp:** ưu tiên `getLarkUserToken()` (OAuth có sẵn từ Cà Thread), fallback app token.
+- **Files:** `web/src/lib/agents/creator-ai.ts` · **Effort:** S (~1h)
+
+## Wave 2 — Medium Priority
+
+### 2.1 Tab Visibility — Bulk toggle + Preview
+- Nút ẩn/hiện cả cột (role) / cả hàng (tab) + modal "Xem trước role này thấy gì". Chỉ FE.
+- **Files:** `creator/page.tsx` · **Effort:** M (~2h)
+
+### 2.2 Access grants — Audit log + search user
+- Migration **v41** `access_audit_log`. Ghi log ở gp-access / my-metrics-access / tab-visibility POST. Autocomplete username từ `/api/users`.
+- **Files:** `v41_access_audit_log.sql` · 3 API · `creator/page.tsx` · **Effort:** M-L (~3-4h)
+
+### 2.3 Own Info / Knowledge — Search + Import batch
+- Ô search client-side; import Excel/CSV (category,key,title,content)→preview→bulk upsert (dùng xlsx sẵn có). Optional: v42 version history.
+- **Files:** `creator/knowledge/page.tsx` · `api/creator-ai/knowledge/route.ts` · **Effort:** M (~2-3h)
+
+## Wave 3 — Low Priority
+- **3.1 Usage Analytics** — toggle so sánh kỳ trước (delta %) + trend line score. `creator/usage/page.tsx` · M (~2h)
+- **3.2 Dev Tools** — saved queries + history (localStorage). `creator/devtools/page.tsx` · S-M (~1.5h)
+- **3.3 Cà Thread schedule** — cron nhắc Hiếu "có N thread cần cà" (KHÔNG auto-send). `api/cron/ca-thread-remind` · M (~2h)
+
+## Thứ tự đề xuất
+```
+Wave 1: 1.1 Cà Thread history [M] → 1.3 Lark user token [S] → 1.2 multi-group [M]
+Wave 2: 2.1 bulk toggle [M] → 2.3 knowledge search+import [M] → 2.2 audit log [M-L]
+Wave 3: 3.1 · 3.2 · 3.3 (khi rảnh)
+```
+
+## Migration đã cấp số
+| # | Nội dung | Wave |
+|---|---|---|
+| v40 | `ca_thread_log` | 1.1 |
+| v41 | `access_audit_log` | 2.2 |
+| v42 | `creator_knowledge_history` (optional) | 2.3 |
+
+## Ràng buộc
+- Staging-first, merge main khi Hiếu duyệt. UI creator được chỉnh UX (không phải analytics BI).
+- Mỗi item xong → cập nhật `docs/wiki/Tab/analytics-creator.md` + append `session_summary.txt`. Mỗi item = 1 commit.
+
+## ⚠️ Ghi chú branch (check trước khi làm wave — 2026-08-18)
+`origin/prod` diverge từ main tại `21cd89f` (01/07, s86). **6 commit B2C report chưa có trong main** (git cherry `+`):
+- `1dd06a6` nested B2C revenue market breakdown (17/07)
+- `c92d5d3` customer channel breakdown (31/07)
+- `57d1923` fix B2C new/returning channel split (31/07)
+- `8a75d24` **GA4 filter theo production hostname** (12/08) — chỉ đụng `ga4.ts`, ÍT diverge, cherry-pick tương đối sạch
+- `7149fa3` **B2C MKT profit section** + `1d7d1d8` **CM1 row** (12/08) — `manualMktSpend`/CM1 KHÔNG có trong main
+`5e5c1c9` (Build B2C preview) đã tích hợp (`-`). `codex/b2c-dashboard-preview` = subset cũ của prod (bỏ qua).
+→ **Files B2C đã diverge ~1550 dòng** kể từ 01/07 → KHÔNG cherry-pick nguyên khối; port thủ công từng logic lên base main nếu Hiếu muốn (chờ Hiếu quyết).
+
+---
+
+# ═══════════════════ BACKLOG s139 (cũ, giữ nguyên) ═══════════════════
+
 > Cập nhật 2026-08-09 (s139). Items đã xong đã bỏ, chỉ giữ pending + plan mới.
 > Chi tiết lịch sử: `docs/CHANGELOG.md` · Lỗi đã gặp: `docs/ERRORS.md`
 
