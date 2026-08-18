@@ -796,6 +796,103 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   const hasUsers = data ? data.months.some(m => (data.users?.[m]?.total ?? 0) > 0) : false
   const hasProfitTrend = profitRows.length > 0
 
+  // ── B2C MKT Profit Report (spend Meta/Google nhập tay, port từ prod s153) ──
+  const manualMktSpend: Record<string, { meta: number; google: number }> = {
+    "2026-01": { meta: 27_072_086, google: 63_028_659 },
+    "2026-02": { meta: 52_489_693, google: 69_445_647 },
+    "2026-03": { meta: 53_167_619, google: 74_709_661 },
+    "2026-04": { meta: 59_193_440, google: 74_627_703 },
+    "2026-05": { meta: 32_463_652, google: 66_394_132 },
+    "2026-06": { meta: 36_056_174, google: 64_273_619 },
+    "2026-07": { meta: 42_070_736, google: 70_479_701 },
+    "2026-08": { meta: 10_623_472, google: 19_567_666 },
+  }
+  const mktReportMonths = data ? data.months.filter(m => manualMktSpend[m]) : []
+  const profitTotalForMonth = (month: string) => {
+    const rows = Object.values(data?.profitByChannel?.[month] ?? {})
+    return rows.reduce((acc, cell) => ({
+      revenue: acc.revenue + (cell.revenue ?? 0),
+      cogs: acc.cogs + (cell.cogs ?? 0),
+      grossProfit: acc.grossProfit + (cell.grossProfit ?? 0),
+    }), { revenue: 0, cogs: 0, grossProfit: 0 })
+  }
+  const mktMetric = (month: string, metric: "meta" | "google" | "totalMkt" | "revenue" | "mktRate" | "grossProfit" | "gpRate" | "cm1" | "cm1Rate") => {
+    const spend = manualMktSpend[month]
+    if (!spend) return 0
+    const profit = profitTotalForMonth(month)
+    const totalMkt = spend.meta + spend.google
+    const cm1 = profit.grossProfit - totalMkt
+    if (metric === "meta") return spend.meta
+    if (metric === "google") return spend.google
+    if (metric === "totalMkt") return totalMkt
+    if (metric === "revenue") return profit.revenue
+    if (metric === "mktRate") return profit.revenue > 0 ? totalMkt / profit.revenue : 0
+    if (metric === "grossProfit") return profit.grossProfit
+    if (metric === "gpRate") return profit.revenue > 0 ? profit.grossProfit / profit.revenue : 0
+    if (metric === "cm1") return cm1
+    return profit.revenue > 0 ? cm1 / profit.revenue : 0
+  }
+  const MktDelta = ({ month, metric }: { month: string; metric: Parameters<typeof mktMetric>[1] }) => {
+    const idx = mktReportMonths.indexOf(month)
+    if (idx <= 0) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
+    const currentValue = mktMetric(month, metric)
+    const prevValue = mktMetric(mktReportMonths[idx - 1], metric)
+    if (!prevValue) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
+    const diff = currentValue - prevValue
+    const change = (diff / Math.abs(prevValue)) * 100
+    const positive = diff >= 0
+    return (
+      <div className={`mt-0.5 text-[11px] font-semibold ${positive ? "text-emerald-600" : "text-rose-500"}`}>
+        {positive ? "↑" : "↓"} {Math.abs(change).toFixed(1)}%
+      </div>
+    )
+  }
+  const MktProfitReportTable = () => (
+    <div className="overflow-x-auto px-0 pb-2">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+            <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[210px]">Chỉ số</th>
+            {mktReportMonths.map(month => {
+              const label = monthLabel(month)
+              return (
+                <th key={month} className="text-right font-semibold px-4 py-3 text-xs min-w-[175px]">
+                  {label.top} <span className="text-slate-300">{label.sub}</span>
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {[
+            { label: "Meta Spend", metric: "meta" as const, fmt: formatCurrency },
+            { label: "Google Spend", metric: "google" as const, fmt: formatCurrency },
+            { label: "Total chi phí MKT", metric: "totalMkt" as const, fmt: formatCurrency, highlight: true },
+            { label: "Revenue B2C total", metric: "revenue" as const, fmt: formatCurrency, highlight: true },
+            { label: "% chi phí MKT / revenue", metric: "mktRate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%` },
+            { label: "Gross profit", metric: "grossProfit" as const, fmt: formatCurrency },
+            { label: "Gross profit %", metric: "gpRate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%` },
+            { label: "CM1 = Gross profit - Spend", metric: "cm1" as const, fmt: formatCurrency, highlight: true },
+            { label: "(Gross profit - MKT) / revenue", metric: "cm1Rate" as const, fmt: (n: number) => `${(n * 100).toFixed(1)}%`, highlight: true },
+          ].map(row => (
+            <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
+              <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[210px] ${row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>
+                {row.label}
+              </td>
+              {mktReportMonths.map(month => (
+                <td key={month} className={`px-4 py-4 text-right tabular-nums min-w-[175px] ${month === data?.currentMonth ? "bg-blue-50/40" : ""}`}>
+                  <div className={row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{row.fmt(mktMetric(month, row.metric))}</div>
+                  <MktDelta month={month} metric={row.metric} />
+                  {month === data?.currentMonth && <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
   type AcquisitionRow = {
     label: string
     highlight?: boolean
@@ -1060,6 +1157,19 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"}
                 sub="Spend ÷ Leads" source="Chat" />
             </div>
+
+            <Section
+              icon={<DollarSign className="w-5 h-5" />}
+              title="B2C MKT Profit Report"
+              desc="Total chi phí MKT = Meta + Google · Revenue/COGS/GP lấy từ fulfillment B2C"
+              source="admin"
+            >
+              {mktReportMonths.length > 0 ? (
+                <MktProfitReportTable />
+              ) : (
+                <AwaitingData note="Chưa có đủ dữ liệu tháng để render bảng report MKT." />
+              )}
+            </Section>
 
             <Section
               icon={<TrendingUp className="w-5 h-5" />}
