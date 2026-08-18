@@ -65,6 +65,14 @@ Danh sách user được thấy tab My Metrics trong sidebar.
 
 Bot quét group Lark, tìm các thread có reply nhưng chưa có reaction YES (reaction đồng ý/done). Hiếu click Cà từng thread để gửi tin nhắn nhắc @mention các người liên quan.
 
+### Lịch sử "đã cà" (s153, v40)
+
+- **Bảng:** Supabase `ca_thread_log` (id=message_id, chat_id, content_snip, participants JSON, message_sent, sent_by, sent_at)
+- `handleSend` → sau khi gửi thành công INSERT log (upsert theo message_id)
+- `handleScan` → JOIN log, đánh dấu thread `already_sent` + `sent_at` + `sent_by` (persistent, không mất khi reload)
+- Action `history` → 30 lần cà gần nhất của group
+- FE: badge "Đã cà ✓ DD/MM · @user" trên thread card + section "Lịch sử cà" collapse ở dưới
+
 ### Config (lưu 1 lần)
 
 - **Source:** Supabase `app_settings`, key `ca_thread_config`, category `lark_tool`

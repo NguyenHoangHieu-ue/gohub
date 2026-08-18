@@ -408,6 +408,18 @@ interface ThreadScan {
   content: string
   participants: { open_id: string; name: string }[]
   replies: { open_id: string; name: string; content: string; create_time: string }[]
+  already_sent?: boolean
+  sent_at?: string
+  sent_by?: string
+}
+
+interface CaHistoryItem {
+  id: string
+  content_snip: string
+  participants: string[]
+  message_sent: string
+  sent_by: string
+  sent_at: string
 }
 
 function CaThreadSection() {
@@ -433,6 +445,11 @@ function CaThreadSection() {
   const [sending, setSending]             = useState<string | null>(null)
   const [sentIds, setSentIds]             = useState<Set<string>>(new Set())
   const [sendError, setSendError]         = useState<string | null>(null)
+
+  // history
+  const [history, setHistory]     = useState<CaHistoryItem[] | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [loadingHist, setLoadingHist] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -499,6 +516,7 @@ function CaThreadSection() {
 
   const sendCa = async (thread: ThreadScan) => {
     setSending(thread.message_id); setSendError(null)
+    const chosen = thread.participants.filter(p => checkedPIds.has(p.open_id))
     try {
       const r = await fetch("/api/creator/ca-thread", {
         method: "POST",
@@ -506,7 +524,11 @@ function CaThreadSection() {
         body: JSON.stringify({
           action: "send",
           message_id: thread.message_id,
-          participants: thread.participants.filter(p => checkedPIds.has(p.open_id)).map(p => p.open_id),
+          thread_id: thread.thread_id,
+          chat_id: chatId,
+          content: thread.content,
+          participants: chosen.map(p => p.open_id),
+          participant_names: chosen.map(p => p.name),
           message_text: editText,
         }),
       })
@@ -514,8 +536,29 @@ function CaThreadSection() {
       if (!r.ok) { setSendError(d.error || "Lỗi khi gửi"); return }
       setSentIds(prev => new Set([...prev, thread.message_id]))
       setPreviewId(null)
+      if (showHistory) loadHistory()  // refresh lịch sử nếu đang mở
     } catch (e: any) { setSendError(e.message) }
     finally { setSending(null) }
+  }
+
+  const loadHistory = async () => {
+    setLoadingHist(true)
+    try {
+      const r = await fetch("/api/creator/ca-thread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "history", chat_id: chatId, limit: 30 }),
+      })
+      const d = await r.json()
+      setHistory(d.history ?? [])
+    } catch { setHistory([]) }
+    finally { setLoadingHist(false) }
+  }
+
+  const toggleHistory = () => {
+    const next = !showHistory
+    setShowHistory(next)
+    if (next && history === null) loadHistory()
   }
 
   const toDate = (ts: string) => new Date(parseInt(ts)).toLocaleDateString("vi-VN") // Lark create_time = ms
@@ -657,7 +700,7 @@ function CaThreadSection() {
                   <ThreadCard
                     key={t.message_id}
                     thread={t}
-                    isSent={sentIds.has(t.message_id)}
+                    isSent={sentIds.has(t.message_id) || !!t.already_sent}
                     isPreviewing={previewId === t.message_id}
                     editText={editText}
                     checkedPIds={checkedPIds}
@@ -673,6 +716,42 @@ function CaThreadSection() {
                   />
                 ))}
               </div>
+        )}
+
+        {/* Lịch sử cà */}
+        {configSaved && !editing && (
+          <div className="border-t border-slate-100 pt-3">
+            <button onClick={toggleHistory}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700">
+              {showHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              Lịch sử cà {history !== null && `(${history.length})`}
+            </button>
+            {showHistory && (
+              <div className="mt-3">
+                {loadingHist ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400"><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang tải…</div>
+                ) : !history || history.length === 0 ? (
+                  <div className="text-xs text-slate-400 py-2">Chưa có lịch sử cà nào.</div>
+                ) : (
+                  <div className="border border-slate-100 rounded-xl divide-y divide-slate-50 max-h-72 overflow-y-auto">
+                    {history.map(h => (
+                      <div key={h.id + h.sent_at} className="px-4 py-2.5 text-xs">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-emerald-600 font-medium">{new Date(h.sent_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                          <span className="text-slate-400">bởi @{h.sent_by}</span>
+                          {h.participants.length > 0 && <span className="text-slate-400">· tag {h.participants.length} người</span>}
+                        </div>
+                        <p className="text-slate-500 break-words leading-relaxed">{h.content_snip || <span className="italic text-slate-300">(không có nội dung)</span>}</p>
+                        {h.participants.length > 0 && (
+                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">→ {h.participants.map((p: string) => `@${p}`).join(", ")}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -724,7 +803,13 @@ function ThreadCard({
                 {thread.days_ago === 0 ? "hôm nay" : `${thread.days_ago} ngày trước`}
               </span>
               <span className="text-[11px] text-slate-400">{thread.replies.length} reply</span>
-              {isSent && <span className="text-[11px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-medium">Đã cà ✓</span>}
+              {isSent && (
+                <span className="text-[11px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-medium">
+                  Đã cà ✓{thread.already_sent && thread.sent_at
+                    ? ` ${new Date(thread.sent_at).toLocaleDateString("vi-VN")}${thread.sent_by ? ` · @${thread.sent_by}` : ""}`
+                    : ""}
+                </span>
+              )}
             </div>
 
             {/* Content */}

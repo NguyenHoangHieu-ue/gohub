@@ -84,9 +84,11 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const { action } = body
+  const username = (session!.user as any).username || session!.user?.email || "web"
   if (action === "scan") return handleScan(body)
-  if (action === "send") return handleSend(body)
-  return NextResponse.json({ error: "action phải là scan hoặc send" }, { status: 400 })
+  if (action === "send") return handleSend(body, username)
+  if (action === "history") return handleHistory(body)
+  return NextResponse.json({ error: "action phải là scan | send | history" }, { status: 400 })
 }
 
 interface ThreadScanResult {
@@ -97,6 +99,9 @@ interface ThreadScanResult {
   content: string
   participants: { open_id: string; name: string }[]
   replies: { open_id: string; name: string; content: string; create_time: string }[]
+  already_sent?: boolean
+  sent_at?: string
+  sent_by?: string
 }
 
 async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_open_id, max_threads = 20 }: any) {
@@ -210,11 +215,30 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
     })
   }))
 
+  // Đánh dấu thread đã cà (persistent) từ ca_thread_log
+  if (threads.length > 0) {
+    try {
+      const ids = threads.map(t => t.message_id)
+      const { data: logs } = await supabaseAdmin
+        .from("ca_thread_log")
+        .select("id, sent_at, sent_by")
+        .in("id", ids)
+      const logMap = new Map((logs ?? []).map((l: any) => [l.id, l]))
+      for (const t of threads) {
+        const log = logMap.get(t.message_id)
+        if (log) { t.already_sent = true; t.sent_at = log.sent_at; t.sent_by = log.sent_by }
+      }
+    } catch {} // bảng chưa tạo → bỏ qua đánh dấu
+  }
+
   threads.sort((a, b) => parseInt(b.create_time) - parseInt(a.create_time))
   return NextResponse.json({ ok: true, threads })
 }
 
-async function handleSend({ message_id, participants, message_text }: any) {
+async function handleSend(
+  { message_id, participants, message_text, chat_id, thread_id, content, participant_names }: any,
+  username: string,
+) {
   if (!message_id) return NextResponse.json({ error: "Thiếu message_id" }, { status: 400 })
 
   const userToken = await getLarkUserToken()
@@ -242,5 +266,40 @@ async function handleSend({ message_id, participants, message_text }: any) {
   if (sendData.code !== 0) {
     return NextResponse.json({ error: `[${sendData.code}] ${sendData.msg}` }, { status: 500 })
   }
-  return NextResponse.json({ ok: true })
+
+  // Ghi log "đã cà" (không chặn response nếu lỗi)
+  const sentAt = new Date().toISOString()
+  try {
+    await supabaseAdmin.from("ca_thread_log").upsert({
+      id: message_id,
+      chat_id: chat_id ?? "",
+      thread_id: thread_id ?? null,
+      content_snip: (content ?? "").slice(0, 150),
+      participants: JSON.stringify(participant_names ?? []),
+      message_sent: text,
+      sent_by: username,
+      sent_at: sentAt,
+    }, { onConflict: "id" })
+  } catch {} // bảng chưa tạo → bỏ qua
+
+  return NextResponse.json({ ok: true, sent_at: sentAt, sent_by: username })
+}
+
+async function handleHistory({ chat_id, limit = 30 }: any) {
+  try {
+    let q = supabaseAdmin
+      .from("ca_thread_log")
+      .select("id, chat_id, content_snip, participants, message_sent, sent_by, sent_at")
+      .order("sent_at", { ascending: false })
+      .limit(Math.min(Number(limit) || 30, 100))
+    if (chat_id) q = q.eq("chat_id", chat_id)
+    const { data } = await q
+    const history = (data ?? []).map((r: any) => ({
+      ...r,
+      participants: (() => { try { return JSON.parse(r.participants ?? "[]") } catch { return [] } })(),
+    }))
+    return NextResponse.json({ ok: true, history })
+  } catch {
+    return NextResponse.json({ ok: true, history: [] })
+  }
 }
