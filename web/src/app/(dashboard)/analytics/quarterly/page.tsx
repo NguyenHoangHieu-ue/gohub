@@ -1352,13 +1352,13 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     if (!quarterLabel) return
     const parts = quarterLabel.split("-")
     if (parts.length !== 2) return
-    const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
-    const cm1Val    = parseFmt(inp.cm1)
-    const thkVal    = parseFloat(inp.thk) || 0
-    const revVal    = parseFmt(inp.rev)
-    const hk3revVal = parseFmt(inp.hk3rev)
     setSavingTargetCode(c.code)
     try {
+      const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
+      const cm1Val    = parseFmt(inp.cm1 ?? "")
+      const thkVal    = parseFloat(inp.thk || "0") || 0
+      const revVal    = parseFmt(inp.rev ?? "")
+      const hk3revVal = parseFmt(inp.hk3rev ?? "")
       const res = await fetch("/api/analytics/b2b-customer-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal, target_3hk_rev: hk3revVal }),
@@ -1369,7 +1369,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
         setEditingTargetCode(null)
         notify?.(true, `Đã lưu target KH ${c.name}`)
       } else notify?.(false, d?.error || "Lưu thất bại")
-    } catch { notify?.(false, "Lỗi kết nối") }
+    } catch (e: any) { notify?.(false, e?.message || "Lỗi kết nối") }
     finally { setSavingTargetCode(null) }
   }
 
