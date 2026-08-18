@@ -103,8 +103,9 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
   if (!chat_id) return NextResponse.json({ error: "Thiếu chat_id" }, { status: 400 })
 
   const appToken = await getLarkToken()
-  const since = Math.floor(Date.now() / 1000) - days_back * 86400
-  const now = Math.floor(Date.now() / 1000)
+  // Lark create_time = milliseconds → so sánh ms với ms
+  const since = Date.now() - days_back * 86400 * 1000
+  const now = Date.now()
 
   // Lấy danh sách thành viên group để map open_id → tên
   const nameMap: Record<string, string> = {}
@@ -178,7 +179,7 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
       message_id: msgId,
       thread_id: threadId,
       create_time: msg.create_time,
-      days_ago: Math.floor((now - parseInt(msg.create_time)) / 86400),
+      days_ago: Math.floor((now - parseInt(msg.create_time)) / (86400 * 1000)),
       content: parseLarkContent(msg),
       participants,
       replies: replies.map((r: any) => ({
