@@ -1182,9 +1182,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
 
   // ── Per-customer expand + target + creator orders ──
   const [expandedCusts, setExpandedCusts] = useState<Set<string>>(new Set())
-  const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number; rev: number }>>({})
+  const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number; rev: number; hk3rev: number }>>({})
   const [editingTargetCode, setEditingTargetCode] = useState<string | null>(null)
-  const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string; rev: string }>>({})
+  const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string; rev: string; hk3rev: string }>>({})
   const [savingTargetCode, setSavingTargetCode] = useState<string | null>(null)
   // Creator: orders explorer per-customer
   const [ordersData, setOrdersData] = useState<Record<string, { rows: any[]; groupBy: string; loading: boolean }>>({})
@@ -1213,21 +1213,25 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   // PR values của 1 KH: existing projected (Σ actual_monthly × kpiPrFactor) rồi × futureScale (gồm ước tính T9).
   // ex* = existing projected (chưa ×futureScale) → dùng để tính từng tháng tương lai trong bảng chi tiết.
   const custPr = (c: any) => {
-    let exRev = 0, exGm = 0, exCm1 = 0
+    let exRev = 0, exGm = 0, exCm1 = 0, exHk3 = 0
     quarterMonths.forEach(m => {
       const f = monthKpiFactor[m] ?? 1
       const ms = c.monthSummary?.[m]
       if (!ms) return
-      exRev  += (ms.actualRevenue ?? ms.revenue) * f
+      const revBase = ms.actualRevenue ?? ms.revenue
+      exRev  += revBase * f
       exGm   += (ms.actualGm  ?? ms.gm)  * f
       exCm1  += (ms.actualCm1 ?? ms.cm1) * f
+      // 3HK PR: dùng hk3Pct thực tế × revenue projected tháng đó
+      exHk3  += (ms.hk3Pct / 100) * revBase * f
     })
     const exCc = exGm - exCm1
     const prRev = Math.round(exRev * futureScale), prGm = Math.round(exGm * futureScale), prCm1 = Math.round(exCm1 * futureScale)
+    const prHk3 = Math.round(exHk3 * futureScale)
     // QoQ: PR CM1 (gồm T9) vs CM1 quý trước (BE trả prevCm1)
     const prevCm1 = c.prevCm1 ?? 0
     const qoqPct = prevCm1 !== 0 ? Math.round((prCm1 - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
-    return { prRev, prGm, prCm1, exRev, exGm, exCm1, exCc, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0, qoqPct }
+    return { prRev, prGm, prCm1, prHk3, exRev, exGm, exCm1, exHk3, exCc, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0, qoqPct }
   }
   // Ngày trong tháng "YYYY-MM" + tháng tương lai (chưa có trong summary) → để ước tính T9.
   const daysInMonthFE = (ym: string) => { const [yy, mm] = ym.split("-").map(Number); return new Date(yy, mm, 0).getDate() }
@@ -1334,11 +1338,12 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   }
   // ── Per-customer target save ──
   const startEditTarget = (c: any) => {
-    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0 }
+    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
     setTargetInputs(prev => ({ ...prev, [c.code]: {
-      cm1: fmtInput(tgt.cm1),
-      thk: tgt.thk > 0 ? tgt.thk.toString() : "",
-      rev: fmtInput(tgt.rev),
+      cm1:    fmtInput(tgt.cm1),
+      thk:    tgt.thk > 0 ? tgt.thk.toString() : "",
+      rev:    fmtInput(tgt.rev),
+      hk3rev: fmtInput(tgt.hk3rev),
     }}))
     setEditingTargetCode(c.code)
   }
@@ -1347,19 +1352,20 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     if (!quarterLabel) return
     const parts = quarterLabel.split("-")
     if (parts.length !== 2) return
-    const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "" }
-    const cm1Val = parseFmt(inp.cm1)
-    const thkVal = parseFloat(inp.thk) || 0
-    const revVal = parseFmt(inp.rev)
+    const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
+    const cm1Val    = parseFmt(inp.cm1)
+    const thkVal    = parseFloat(inp.thk) || 0
+    const revVal    = parseFmt(inp.rev)
+    const hk3revVal = parseFmt(inp.hk3rev)
     setSavingTargetCode(c.code)
     try {
       const res = await fetch("/api/analytics/b2b-customer-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal }),
+        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal, target_3hk_rev: hk3revVal }),
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok && d?.ok) {
-        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal, rev: revVal } }))
+        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal, rev: revVal, hk3rev: hk3revVal } }))
         setEditingTargetCode(null)
         notify?.(true, `Đã lưu target KH ${c.name}`)
       } else notify?.(false, d?.error || "Lưu thất bại")
@@ -1693,7 +1699,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">%CM1</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%QoQ (CM1)</th>
                             <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">3HK%</th>
-                          </tr>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">3HK Rev TGT</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">%TGT 3HK</th>
+ </tr>
                         </thead>
                         <tbody>
                           {custs.map((c: any, i: number) => {
@@ -1710,10 +1718,10 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                             const prGmPct = pr.prGmPct
                             const qoqCls = pr.qoqPct == null ? "text-slate-300" : pr.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             // Target
-                            const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
+                            const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
                             const isEditingTgt = editingTargetCode === c.code
                             const isSavingTgt  = savingTargetCode  === c.code
-                            const colSpanAll = 10 + (isCreator ? 2 : 0)
+                            const colSpanAll = 12 + (isCreator ? 2 : 0)
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
@@ -1748,6 +1756,24 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   <td className={cn("px-3 py-2 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-3 py-2 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
                                   <td className="px-3 py-2 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
+                                  {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed */}
+                                  {(() => {
+                                    const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev
+                                      : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
+                                    return (
+                                      <>
+                                        <td className="px-3 py-2 text-right text-slate-500 text-[10px] tabular-nums whitespace-nowrap">
+                                          {tgt3hk > 0 ? fc(tgt3hk) : <span className="text-slate-300">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-[10px]">
+                                          {tgt3hk > 0 ? (() => {
+                                            const p = pr.prHk3 / tgt3hk * 100
+                                            return <span className={cn("inline-flex px-1.5 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
+                                          })() : <span className="text-slate-300">—</span>}
+                                        </td>
+                                      </>
+                                    )
+                                  })()}
                                 </tr>
 
                                 {/* ── Sub-row expanded ── */}
@@ -1968,16 +1994,31 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                     </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
                                                 </div>
-                                                {/* Target 3HK Revenue = Target Revenue × Target 3HK% (computed, display only) */}
-                                                {tgt.rev > 0 && tgt.thk > 0 && (
-                                                  <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-                                                    <span className="text-slate-400 flex-shrink-0 text-[10px]">Target 3HK Rev</span>
-                                                    <div className="text-right text-[10px]">
-                                                      <span className="font-semibold text-slate-600 tabular-nums">{fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
-                                                      <span className="text-slate-300 ml-1">= {fc(tgt.rev)} × {pct(tgt.thk)}</span>
+                                                {/* Target 3HK Revenue — nhập tay hoặc fallback computed */}
+                                                <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
+                                                  <span className="text-slate-500 flex-shrink-0 text-[11px]">3HK Rev Target</span>
+                                                  {isEditingTgt ? (
+                                                    <div className="flex flex-col items-end gap-0.5">
+                                                      <input type="text" value={targetInputs[c.code]?.hk3rev ?? ""} placeholder="VD: 1.500.000.000"
+                                                        onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), hk3rev: e.target.value } }))}
+                                                        className="w-40 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                      {tgt.rev > 0 && tgt.thk > 0 && (
+                                                        <span className="text-[9px] text-slate-300">auto: {fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
+                                                      )}
                                                     </div>
-                                                  </div>
-                                                )}
+                                                  ) : (() => {
+                                                    const val = tgt.hk3rev > 0 ? tgt.hk3rev : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
+                                                    if (val <= 0) return <span className="text-slate-300 text-[10px]">Chưa đặt</span>
+                                                    return (
+                                                      <div className="text-right text-[10px]">
+                                                        <span className="font-semibold text-slate-600 tabular-nums">{fc(val)}</span>
+                                                        {tgt.hk3rev <= 0 && tgt.rev > 0 && tgt.thk > 0 && (
+                                                          <span className="text-slate-300 ml-1 text-[9px]">(auto)</span>
+                                                        )}
+                                                      </div>
+                                                    )
+                                                  })()}
+                                                </div>
                                               </div>
                                             </div>
 

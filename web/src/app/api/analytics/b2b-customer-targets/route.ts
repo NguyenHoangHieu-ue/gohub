@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
-// Target CM1, 3HK% và Revenue per-KH per-quý — lưu Supabase b2b_customer_targets.
+// Target CM1, 3HK%, Revenue, 3HK Revenue per-KH per-quý — lưu Supabase b2b_customer_targets.
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -15,16 +15,17 @@ export async function GET(req: NextRequest) {
 
   const { data } = await supabaseAdmin
     .from("b2b_customer_targets")
-    .select("customer_code, target_cm1, target_3hk_pct, target_rev")
+    .select("customer_code, target_cm1, target_3hk_pct, target_rev, target_3hk_rev")
     .eq("quarter", quarter)
     .eq("year", year)
 
-  const targets: Record<string, { cm1: number; thk: number; rev: number }> = {}
+  const targets: Record<string, { cm1: number; thk: number; rev: number; hk3rev: number }> = {}
   ;(data ?? []).forEach(r => {
     targets[r.customer_code] = {
-      cm1: Number(r.target_cm1)     || 0,
-      thk: Number(r.target_3hk_pct) || 0,
-      rev: Number(r.target_rev)     || 0,
+      cm1:    Number(r.target_cm1)     || 0,
+      thk:    Number(r.target_3hk_pct) || 0,
+      rev:    Number(r.target_rev)     || 0,
+      hk3rev: Number(r.target_3hk_rev) || 0,
     }
   })
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))
-  const { quarter, year, customer_code, target_cm1, target_3hk_pct, target_rev } = body
+  const { quarter, year, customer_code, target_cm1, target_3hk_pct, target_rev, target_3hk_rev } = body
 
   if (!quarter || !year || !customer_code)
     return NextResponse.json({ error: "quarter, year, customer_code required" }, { status: 400 })
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
     target_cm1:     Number(target_cm1)     || 0,
     target_3hk_pct: Number(target_3hk_pct) || 0,
     target_rev:     Number(target_rev)     || 0,
+    target_3hk_rev: Number(target_3hk_rev) || 0,
     updated_by: updatedBy,
     updated_at: new Date().toISOString(),
   }, { onConflict: "id" })
