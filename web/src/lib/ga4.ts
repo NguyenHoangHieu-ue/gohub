@@ -35,6 +35,35 @@ interface RunOpts {
   limit?: number
 }
 
+function hostNamesForSite(cfg: GA4Config): string[] {
+  const source = cfg.siteUrl || cfg.name || ""
+  let host = source
+  try {
+    host = new URL(source.startsWith("http") ? source : `https://${source}`).hostname
+  } catch {
+    host = source.match(/(?:^|\s)([a-z0-9.-]+\.[a-z]{2,})(?:\s|$)/i)?.[1] || ""
+  }
+  host = host.toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")
+  if (!host) return []
+  return Array.from(new Set([host, `www.${host}`]))
+}
+
+function exactStringFilter(fieldName: string, value: string) {
+  return { filter: { fieldName, stringFilter: { matchType: "EXACT", value } } }
+}
+
+function buildDimensionFilter(cfg: GA4Config, eventNameFilter?: string) {
+  const expressions = [
+    ...hostNamesForSite(cfg).map(host => exactStringFilter("hostName", host)),
+  ]
+  const hostFilter = expressions.length === 1 ? expressions[0] : expressions.length > 1 ? { orGroup: { expressions } } : null
+  const eventFilter = eventNameFilter ? exactStringFilter("eventName", eventNameFilter) : null
+  const filters = [hostFilter, eventFilter].filter(Boolean)
+  if (filters.length === 0) return undefined
+  if (filters.length === 1) return filters[0]
+  return { andGroup: { expressions: filters } }
+}
+
 // Chạy 1 report cho site (mặc định site đầu nếu không truyền siteId).
 export async function runGA4Report(opts: RunOpts): Promise<GA4Report> {
   const configs = await loadConfigs()
@@ -55,11 +84,8 @@ export async function runGA4Report(opts: RunOpts): Promise<GA4Report> {
     metrics: opts.metrics.map(name => ({ name })),
   }
   if (opts.limit) requestBody.limit = opts.limit
-  if (opts.eventNameFilter) {
-    requestBody.dimensionFilter = {
-      filter: { fieldName: "eventName", stringFilter: { matchType: "EXACT", value: opts.eventNameFilter } },
-    }
-  }
+  const dimensionFilter = buildDimensionFilter(cfg, opts.eventNameFilter)
+  if (dimensionFilter) requestBody.dimensionFilter = dimensionFilter
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const resp = await analyticsData.properties.runReport({ property: `properties/${cfg.propertyId}`, auth: authClient as any, requestBody })
