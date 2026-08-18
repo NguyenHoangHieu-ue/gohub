@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-18, s151)
+## Trạng thái hiện tại (2026-08-18, s152)
 
 | | |
 |---|---|
@@ -16,6 +16,7 @@
 - [x] ✅ v36 `bc_countries/bc_products/bc_prices/bc_balance_log/bc_sync_log` (BC Datapool)
 - [x] ✅ v37 `hk3_strategic` + `hk3_non_strategic` trên `staff_targets`
 - [x] ✅ v38 `target_rev` trên `b2b_customer_targets` (Target Revenue per-KH)
+- [x] ✅ v39 `target_3hk_rev` trên `b2b_customer_targets` (3HK Revenue Target per-KH)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_BASE_API_URL`, `BC_DATAPOOL_CHANNEL_ID`, `BC_DATAPOOL_APP_SECRET`, `BC_DATAPOOL_SIGN_METHOD`
 
 **Hiếu cần làm (còn lại):**
@@ -25,19 +26,22 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` trong Lark Developer Console + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark) để tin gửi bằng tên Hiếu
 
+**s152 — đã làm (2026-08-18):**
+- ✅ **Cà Thread — fix bugs**
+  - `create_time` Lark = milliseconds → fix filter `since`, `days_ago`, `toDate`
+  - Thêm pagination 5 trang (250 msgs) → fix "chỉ quét hôm nay"
+  - `sort_type=ByCreateTimeDesc` → lấy messages mới nhất trước
+  - `r.reaction_type?.emoji_type` thay `r.emoji?.emoji_type` → fix YES filter không hoạt động
+- ✅ **Quarter Report — cột Target 3HK Revenue + %TGT 3HK**
+  - Bảng Khách hàng nhóm: thêm cột "3HK Rev TGT" và "%TGT 3HK"
+  - `prHk3` = Σ(hk3Pct × revenue_projected × factor) × futureScale
+  - Migration v39: `ADD COLUMN target_3hk_rev` → nhập tay trực tiếp
+  - Fallback: nếu chưa nhập → auto = `target_rev × target_3hk_pct`
+
 **s151 — đã làm (2026-08-18):**
 - ✅ **Cà Thread — gộp Dry-run/Live → Quét & Cà từng thread**
-  - Nút "Quét N ngày" → danh sách thread card (nội dung + replies + người liên quan)
-  - Mỗi thread có nút Cà riêng → preview inline → edit câu cà → Gửi ngay
-  - API: `scan` (resolve tên qua Lark Members API) + `send` (gửi 1 thread)
-- ✅ **Quarter Report — CH.Cost B2B tier fix**
-  - CH.Cost dùng projected (full amount) thay vì actual (partial) → PR 3 tháng đúng
-  - Cộng ước tính CH.Cost tháng 9: dùng T9 record nếu có, fallback T8
-  - Cache key v6→v7→v8
-- ✅ **Quarter Report — Target Revenue per-customer**
-  - Migration v38: `ADD COLUMN target_rev` vào `b2b_customer_targets` (Supabase)
-  - UI: input Revenue Target + progress Dự kiến/Tiến độ TT
-  - UI: hiển thị Target 3HK Revenue = Target Revenue × Target %3HK (computed)
+- ✅ **Quarter Report — CH.Cost B2B tier fix** (projected thay actual, cộng T9 ước tính)
+- ✅ **Quarter Report — Target Revenue per-customer** (migration v38)
 - ✅ **Áp dụng .ai skill**: staging-first pipeline, wiki sync, session log
 
 **s150 — đã làm (2026-08-17):**

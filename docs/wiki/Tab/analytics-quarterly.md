@@ -15,6 +15,7 @@ Tab riêng dưới Dashboard (tách khỏi modal "Báo cáo Quý" cũ). Báo cá
 
 > ⚠️ **CẬP NHẬT s135 (2026-08-05) — projection thống nhất + fix nhất quán 2 route.** Đọc §"Projection & Nhất quán" cuối trang.
 > ⚠️ **CẬP NHẬT s151 (2026-08-18) — CH.Cost B2B fix + Target Revenue per-KH.** Xem §"CH.Cost B2B" và §"Target per-KH".
+> ⚠️ **CẬP NHẬT s152 (2026-08-18) — Cột Target 3HK Revenue + %TGT 3HK + nhập tay (v39).** Xem §"Target per-KH".
 
 ## Projection & Nhất quán (s135 — QUAN TRỌNG)
 
@@ -131,12 +132,17 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | `target_3hk_pct` | REAL | Target %3HK |
 | `target_rev` | BIGINT | Target Revenue quý (thêm v38) |
 
+**Cột bảng Khách hàng nhóm (s152):**
+- `3HK Rev TGT`: hiện target 3HK Revenue (nhập tay hoặc auto = target_rev × thk%)
+- `%TGT 3HK`: PR 3HK Rev / Target 3HK Rev × 100 — badge xanh lá ≥100%, xanh ≥75%, vàng <75%
+- `prHk3` = Σ per-month (hk3Pct/100 × revBase × kpiPrFactor) × futureScale
+
 **UI Target & Progress** (expand từng customer → phần dưới trái):
 - **Revenue Target**: nhập target quý → hiện Dự kiến (PR) và Tiến độ TT (actual) vs target.
 - **CM1 Target**: tương tự Revenue.
 - **3HK% Target**: nhập % → so sánh actual 3HK%.
-- **Target 3HK Revenue** (computed, không nhập): `Target Revenue × Target %3HK` — hiện khi cả 2 đã đặt.
-- API: `GET/POST /api/analytics/b2b-customer-targets` (Supabase). Migration v38 cần chạy trước.
+- **3HK Rev Target** (s152): nhập tay trực tiếp. Nếu để trống → fallback auto `target_rev × thk%` (hiện badge "(auto)").
+- API: `GET/POST /api/analytics/b2b-customer-targets` (Supabase). Migration v38 + v39 cần chạy trước.
 
 ## 8. Phân quyền
 - **Xem tab**: admin, creator, bod, b2b, b2c, staff. Default permissions union code defaults + DB.
