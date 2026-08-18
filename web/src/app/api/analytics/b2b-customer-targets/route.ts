@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const id = `${quarter}-${year}_${customer_code}`
   const updatedBy = (session.user as any).username || session.user.email || "web"
 
-  const { error } = await supabaseAdmin.from("b2b_customer_targets").upsert({
+  const payload = {
     id, quarter, year, customer_code,
     target_cm1:     Number(target_cm1)     || 0,
     target_3hk_pct: Number(target_3hk_pct) || 0,
@@ -54,7 +54,18 @@ export async function POST(req: NextRequest) {
     target_3hk_rev: Number(target_3hk_rev) || 0,
     updated_by: updatedBy,
     updated_at: new Date().toISOString(),
-  }, { onConflict: "id" })
+  }
+
+  let { error } = await supabaseAdmin.from("b2b_customer_targets").upsert(payload, { onConflict: "id" })
+
+  // Fallback: nếu lỗi do cột v38/v39 chưa tồn tại → upsert không có cột mới (migration chưa chạy)
+  if (error && (error.code === '42703' || error.message?.includes('column'))) {
+    const { id: _id, target_rev: _r, target_3hk_rev: _h, ...basePayload } = payload
+    const fallback = await supabaseAdmin.from("b2b_customer_targets").upsert(
+      { id, ...basePayload }, { onConflict: "id" }
+    )
+    error = fallback.error
+  }
 
   if (error) {
     console.error("[b2b-customer-targets POST]", error.message)

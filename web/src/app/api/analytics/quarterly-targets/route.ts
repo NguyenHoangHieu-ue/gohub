@@ -68,7 +68,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const ok = await canWriteTab(session.user.username, "quarterly", WRITE_ROLES)
+  // Ưu tiên kiểm tra session role trực tiếp (nhanh, không cần DB round-trip).
+  // Fallback canWriteTab cho user được grant explicit writable_tabs.
+  const sessionRole = (session.user as any).role as string ?? ""
+  const ok = WRITE_ROLES.includes(sessionRole) || await canWriteTab(session.user.username, "quarterly", WRITE_ROLES)
   if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { quarter, year, targets } = await req.json()
