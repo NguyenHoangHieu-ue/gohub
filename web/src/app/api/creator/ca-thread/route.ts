@@ -106,6 +106,7 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
   // Lark create_time = milliseconds → so sánh ms với ms
   const since = Date.now() - days_back * 86400 * 1000
   const now = Date.now()
+  const sinceSeconds = Math.floor(since / 1000) // Lark start_time nhận Unix seconds
 
   // Lấy danh sách thành viên group để map open_id → tên
   const nameMap: Record<string, string> = {}
@@ -119,25 +120,29 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
     }
   } catch {} // fallback vào mentions nếu API members lỗi
 
-  // Lấy messages gần nhất
+  // Lấy messages mới nhất trước (DESC), lọc phía server theo start_time
   const data = await larkGet(
-    `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50`,
+    `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50&sort_type=ByCreateTimeDesc&start_time=${sinceSeconds}`,
     appToken
   )
   if (data.code !== 0) return NextResponse.json({ error: `Lark [${data.code}]: ${data.msg}` }, { status: 500 })
 
+  // Chỉ lấy root messages (không có root_id) trong window days_back
+  // Không ép thread_id vì reply kiểu cũ có thể không có field này
   const rootMessages = (data.data?.items ?? [])
-    .filter((msg: any) => !msg.root_id && parseInt(msg.create_time) >= since && msg.thread_id)
+    .filter((msg: any) => !msg.root_id && parseInt(msg.create_time) >= since)
     .slice(0, max_threads)
 
   const threads: ThreadScanResult[] = []
 
   await Promise.all(rootMessages.map(async (msg: any) => {
     const msgId: string = msg.message_id
-    const threadId: string = msg.thread_id
+    // thread_id ưu tiên; nếu không có thì dùng message_id làm container (Lark cho phép)
+    const containerId: string = msg.thread_id || msgId
+    const containerType = msg.thread_id ? "thread" : "thread"
 
     const [threadData, reactionData] = await Promise.all([
-      larkGet(`/im/v1/messages?container_id=${encodeURIComponent(threadId)}&container_id_type=thread&page_size=50`, appToken),
+      larkGet(`/im/v1/messages?container_id=${encodeURIComponent(containerId)}&container_id_type=${containerType}&page_size=50`, appToken),
       larkGet(`/im/v1/messages/${msgId}/reactions?page_size=50`, appToken),
     ])
 
@@ -146,7 +151,8 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
     if (hasYes) return // bỏ qua thread đã có reaction YES
 
     const threadMsgs: any[] = threadData.data?.items ?? []
-    const replies = threadMsgs.filter((m: any) => m.message_id !== msgId && !!m.root_id)
+    // replies = các tin khác trong thread (có root_id hoặc đơn giản là không phải root message này)
+    const replies = threadMsgs.filter((m: any) => m.message_id !== msgId)
     if (replies.length === 0) return // bỏ qua thread chưa có reply
 
     // Bổ sung nameMap từ mentions trong các tin nhắn
@@ -177,7 +183,7 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
 
     threads.push({
       message_id: msgId,
-      thread_id: threadId,
+      thread_id: containerId,
       create_time: msg.create_time,
       days_ago: Math.floor((now - parseInt(msg.create_time)) / (86400 * 1000)),
       content: parseLarkContent(msg),
