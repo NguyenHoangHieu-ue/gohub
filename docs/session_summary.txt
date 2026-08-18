@@ -7762,3 +7762,28 @@ Lỗi kỹ thuật ghi docs/ERRORS.md §9 (undici cookie, x-sap-sec fingerprint,
 
 --- s148 2026-08-14 ---
 feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001/F002/F003/F014 vao Supabase (bc_countries, bc_products, bc_prices, bc_balance_log). Cron 7h sang ICT, phat hien thay doi + Lark alert. Tab tra cuu on-demand F011/F012/F023/F046. Page /analytics/bc-datapool (Catalog/So du/Quoc gia/Tra cuu). BC_APP_KEY=GohubDataPool. Chua chay migration v36 + set env Vercel.
+
+## ══════ SESSION 151 (2026-08-18) ══════
+
+### A. Cà Thread — gộp Dry-run/Live → Quét & Cà từng thread (staging e470f64)
+
+**Yêu cầu:** Bỏ toggle dry-run/live. Thay bằng: nút Quét → danh sách thread → mỗi thread có nút Cà riêng → preview + edit trước khi gửi.
+
+**API changes (`/api/creator/ca-thread/route.ts`):**
+- `POST { action: "scan" }`: quét group, resolve tên qua Lark Members API + mentions inline, trả ThreadScan[] đầy đủ (content, replies với sender name, participants)
+- `POST { action: "send" }`: gửi 1 thread cụ thể với participant list + editable text
+- Giữ debug endpoint (`?debug=1`)
+
+**UI changes (`analytics/creator/page.tsx` — CaThreadSection):**
+- Bỏ toggle dry_run, nút "Cà Thread" cũ
+- Thêm nút "Quét N ngày gần đây" → hiện danh sách thread card
+- Mỗi card: nội dung gốc (truncate 150 chars + toggle xem thêm), badge ngày/X ngày trước, toggle replies (sender + content), chips @người liên quan, nút Cà
+- Click Cà → panel preview inline: toggle từng @mention, textarea sửa text, preview câu cà, nút Gửi ngay
+- Sau gửi: card mờ + badge "Đã cà ✓"
+
+**Wiki:** Tạo mới `docs/wiki/Tab/analytics-creator.md` (tab creator settings chưa có wiki)
+
+**Áp dụng .ai skill:** Staging-first pipeline — commit lên staging branch, KHÔNG tự merge main.
+- Đã cherry-pick sang staging (commit e470f64) sau khi lỡ push thẳng main session trước
+- Từ nay: mọi thay đổi → commit + push staging, chờ Hiếu yêu cầu mới merge main
+
