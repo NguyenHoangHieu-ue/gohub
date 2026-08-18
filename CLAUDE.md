@@ -4,17 +4,18 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-17, s150)
+## Trạng thái hiện tại (2026-08-18, s151)
 
 | | |
 |---|---|
-| Branch làm việc | `staging` (= main, đã sync) |
+| Branch làm việc | `staging` (làm việc ở đây, merge main khi Hiếu yêu cầu) |
 | tsc | PASS |
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31–v35 (cũ)
 - [x] ✅ v36 `bc_countries/bc_products/bc_prices/bc_balance_log/bc_sync_log` (BC Datapool)
 - [x] ✅ v37 `hk3_strategic` + `hk3_non_strategic` trên `staff_targets`
+- [x] ✅ v38 `target_rev` trên `b2b_customer_targets` (Target Revenue per-KH)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_BASE_API_URL`, `BC_DATAPOOL_CHANNEL_ID`, `BC_DATAPOOL_APP_SECRET`, `BC_DATAPOOL_SIGN_METHOD`
 
 **Hiếu cần làm (còn lại):**
@@ -24,20 +25,25 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` trong Lark Developer Console + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark) để tin gửi bằng tên Hiếu
 
+**s151 — đã làm (2026-08-18):**
+- ✅ **Cà Thread — gộp Dry-run/Live → Quét & Cà từng thread**
+  - Nút "Quét N ngày" → danh sách thread card (nội dung + replies + người liên quan)
+  - Mỗi thread có nút Cà riêng → preview inline → edit câu cà → Gửi ngay
+  - API: `scan` (resolve tên qua Lark Members API) + `send` (gửi 1 thread)
+- ✅ **Quarter Report — CH.Cost B2B tier fix**
+  - CH.Cost dùng projected (full amount) thay vì actual (partial) → PR 3 tháng đúng
+  - Cộng ước tính CH.Cost tháng 9: dùng T9 record nếu có, fallback T8
+  - Cache key v6→v7→v8
+- ✅ **Quarter Report — Target Revenue per-customer**
+  - Migration v38: `ADD COLUMN target_rev` vào `b2b_customer_targets` (Supabase)
+  - UI: input Revenue Target + progress Dự kiến/Tiến độ TT
+  - UI: hiển thị Target 3HK Revenue = Target Revenue × Target %3HK (computed)
+- ✅ **Áp dụng .ai skill**: staging-first pipeline, wiki sync, session log
+
 **s150 — đã làm (2026-08-17):**
 - ✅ **Cà Thread Lark** (`/analytics/creator`): bot quét group Lark, tag người trong thread chưa có reaction YES kèm "Dạ thread này còn update thêm thông tin gì nữa không ạ a/c"
-  - Đọc messages = app token (bot Bé Gấu), gửi tin = user token (tên Hiếu)
-  - Config lưu 1 lần vào Supabase `app_settings` (key `ca_thread_config`), hàng ngày chỉ bấm "Cà Thread"
-  - Nút Sửa để đổi group sau này
-  - Root bug: Lark dùng `container_id_type` không phải `container_type` → fixed
-  - Xử lý song song (Promise.all) thay vì tuần tự để tránh timeout Vercel
-- ✅ **OAuth Lark fix**: dùng `NEXTAUTH_URL` làm base (redirect URI nhất quán), `sameSite: "none"` khi production
+- ✅ **OAuth Lark fix**: dùng `NEXTAUTH_URL` làm base, `sameSite: "none"` khi production
 - ✅ **My Metrics — phân quyền**: chỉ creator + whitelist mới thấy tab
-  - My Metrics rời khỏi Overview → xuống Creator group trong sidebar
-  - API `/api/creator/my-metrics-access`: add/remove user whitelist
-  - Creator page: thêm section "My Metrics — Phân quyền xem"
-  - Granted users thấy My Metrics trong section "Personal" riêng
-- ✅ **Workflow fix**: từ nay commit lên `staging` trước, chỉ merge `main` khi Hiếu đồng ý
 
 **s149 — đã làm (2026-08-17):**
 - ✅ **B2B Tier Performance export**: đổi CSV → Excel, gộp strategic + all tiers, thêm cột Tier (commit 1bc594d → merge main)

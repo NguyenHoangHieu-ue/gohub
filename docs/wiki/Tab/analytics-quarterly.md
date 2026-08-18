@@ -14,6 +14,7 @@ status: active
 Tab riêng dưới Dashboard (tách khỏi modal "Báo cáo Quý" cũ). Báo cáo hiệu suất Revenue / Gross Margin / **CM1** theo quý, tách B2B + B2C, có **nhập & so sánh Target quý**, pro-rata cho tháng hiện tại. Thiết kế port từ `gohub-report/` (gohub.py + code.html).
 
 > ⚠️ **CẬP NHẬT s135 (2026-08-05) — projection thống nhất + fix nhất quán 2 route.** Đọc §"Projection & Nhất quán" cuối trang.
+> ⚠️ **CẬP NHẬT s151 (2026-08-18) — CH.Cost B2B fix + Target Revenue per-KH.** Xem §"CH.Cost B2B" và §"Target per-KH".
 
 ## Projection & Nhất quán (s135 — QUAN TRỌNG)
 
@@ -103,12 +104,39 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Hủy** (CH.Cost) | Reset toàn bộ edits, thoát edit mode |
 
 ## 7. Gotchas
-- **Cache key đổi khi thêm field**: `qreport_raw_v2`, `qb2b_raw_v3`. Đổi key khi cấu trúc cached data thay đổi để tránh crash.
+- **Cache key đổi khi thêm field**: `qreport_raw_v2`, `qb2b_raw_v8` (v8 = s151). Đổi key khi cấu trúc cached data thay đổi để tránh crash.
 - **Costs ngoài cache**: `fetchCustomerCosts` (Turso) chạy song song với `cachedQuery` (gohub_dw) → costs luôn fresh, không bao giờ stale.
 - **Supabase fallback**: Q2 costs lưu ở Supabase (code cũ trước Turso migration) → `fetchCustomerCosts` tự fallback nếu Turso empty.
 - **Target lưu Turso** (KHÔNG Supabase) để đồng bộ Python `gohub-report`.
 - **CH.Cost rebuild**: sau khi lưu, FE rebuild `costEdits` từ data mới (không reset edit mode) → user tiếp tục edit được ngay.
 - **Tháng hiện tại**: cột `Actual` + `PR` stacked (badge `Act`/`PR` xanh). Tháng đã qua: chỉ PR.
+
+## § CH.Cost B2B — Logic projection (s151)
+
+**Vấn đề cũ**: CH.Cost tổng quý dùng `rawCc` (actual, amount × elapsedRatio) → T8 chỉ hiện 17/31 ngày, không nhất quán với Revenue/GM dùng projected.
+
+**Fix (v8)**:
+- `ccForSummary = totCc` (Σ `monthCost`, `elapsedRatio=1`) — amount giữ full monthly value, percent × projected revenue.
+- T9 (tháng tương lai, chưa có data): ước tính từ `costMap["2026-09_code"]` nếu đã nhập, fallback `costMap["2026-08_code"]`. Cộng thẳng vào `totCc`.
+- Kết quả: `c.cc = T7_full + T8_full + T9_est`. FE `qPrCc = tier.totalCc × futureScale` đúng.
+
+## § Target per-KH (s151)
+
+**Supabase** `b2b_customer_targets` (KHÔNG Turso — khác với target tổng B2B/B2C):
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | TEXT PK | `{Q}-{year}_{customer_code}` |
+| `target_cm1` | BIGINT | Target CM1 quý |
+| `target_3hk_pct` | REAL | Target %3HK |
+| `target_rev` | BIGINT | Target Revenue quý (thêm v38) |
+
+**UI Target & Progress** (expand từng customer → phần dưới trái):
+- **Revenue Target**: nhập target quý → hiện Dự kiến (PR) và Tiến độ TT (actual) vs target.
+- **CM1 Target**: tương tự Revenue.
+- **3HK% Target**: nhập % → so sánh actual 3HK%.
+- **Target 3HK Revenue** (computed, không nhập): `Target Revenue × Target %3HK` — hiện khi cả 2 đã đặt.
+- API: `GET/POST /api/analytics/b2b-customer-targets` (Supabase). Migration v38 cần chạy trước.
 
 ## 8. Phân quyền
 - **Xem tab**: admin, creator, bod, b2b, b2c, staff. Default permissions union code defaults + DB.

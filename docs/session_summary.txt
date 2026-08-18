@@ -7787,3 +7787,28 @@ feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001
 - Đã cherry-pick sang staging (commit e470f64) sau khi lỡ push thẳng main session trước
 - Từ nay: mọi thay đổi → commit + push staging, chờ Hiếu yêu cầu mới merge main
 
+
+## ══════ SESSION 151 — bổ sung (2026-08-18) ══════
+
+### B. Quarter Report — CH.Cost B2B fix (staging→main d61b704)
+
+**Fix 1 (v7): ccForSummary = totCc thay vì totActCc**
+- Gốc: CH.Cost dùng `rawCc` (actual, amount × elapsedRatio) → T8 chỉ tính 17/31 ngày.
+- Fix: dùng `monthCost` (projected, elapsedRatio=1) → amount giữ full, percent × projected rev.
+- Nhất quán với Revenue/GM → FE × futureScale ra PR 3 tháng đúng.
+
+**Fix 2 (v8): cộng ước tính T9 CH.Cost**
+- Future months: tra costMap["2026-09_code"] nếu có, fallback T8 record.
+- `totCc = T7 + T8 + T9_est` → `tier.totalCc` đúng.
+- Cache key v6→v7→v8.
+
+### C. Quarter Report — Target Revenue per-customer (staging→main d61b704)
+- Migration v38: `ADD COLUMN target_rev BIGINT DEFAULT 0` trên `b2b_customer_targets` (Supabase). Hiếu đã chạy.
+- API GET/POST: thêm `target_rev`.
+- UI: input Revenue Target + progress Dự kiến/Tiến độ TT.
+- UI: Target 3HK Revenue = Target Revenue × Target %3HK (computed, display only).
+
+### D. Docs sync
+- CLAUDE.md: cập nhật s151, thêm v38 migration.
+- docs/wiki/Tab/analytics-quarterly.md: thêm §CH.Cost B2B và §Target per-KH.
+- docs/wiki/Tab/analytics-creator.md: tạo mới (s151 đầu).
