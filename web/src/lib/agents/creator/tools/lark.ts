@@ -1,4 +1,4 @@
-import { getLarkToken, getLarkUserToken } from "@/lib/lark"
+import { getLarkToken, getLarkUserToken, getLarkUserOpenId } from "@/lib/lark"
 
 const LARK = "https://open.larksuite.com/open-apis"
 
@@ -6,7 +6,8 @@ export async function runLarkTask(action: string, args: any): Promise<any> {
   try {
     const userToken = await getLarkUserToken()
     const appToken  = await getLarkToken()
-    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    // Assignee: env LARK_CREATOR_USER_ID, fallback open_id đã kết nối Lark cá nhân
+    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || (await getLarkUserOpenId()) || ""
     const h: Record<string, string> = {
       "Authorization": `Bearer ${userToken || appToken}`,
       "Content-Type": "application/json",
