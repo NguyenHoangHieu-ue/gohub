@@ -106,8 +106,6 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
   // Lark create_time = milliseconds → so sánh ms với ms
   const since = Date.now() - days_back * 86400 * 1000
   const now = Date.now()
-  const sinceSeconds = Math.floor(since / 1000) // Lark start_time nhận Unix seconds
-
   // Lấy danh sách thành viên group để map open_id → tên
   const nameMap: Record<string, string> = {}
   try {
@@ -120,17 +118,31 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
     }
   } catch {} // fallback vào mentions nếu API members lỗi
 
-  // Lấy messages mới nhất trước (DESC), lọc phía server theo start_time
-  const data = await larkGet(
-    `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50&sort_type=ByCreateTimeDesc&start_time=${sinceSeconds}`,
-    appToken
-  )
-  if (data.code !== 0) return NextResponse.json({ error: `Lark [${data.code}]: ${data.msg}` }, { status: 500 })
+  // Paginate qua messages (mới nhất trước, tối đa 5 trang = 250 msgs)
+  // Dừng sớm khi gặp message cũ hơn since để tránh timeout
+  const allItems: any[] = []
+  let pageToken: string | undefined
+  for (let page = 0; page < 5; page++) {
+    const url = `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50&sort_type=ByCreateTimeDesc${pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : ""}`
+    const pageData = await larkGet(url, appToken)
+    if (pageData.code !== 0) {
+      if (page === 0) return NextResponse.json({ error: `Lark [${pageData.code}]: ${pageData.msg}` }, { status: 500 })
+      break
+    }
+    const items: any[] = pageData.data?.items ?? []
+    if (items.length === 0) break
 
-  // Chỉ lấy root messages (không có root_id) trong window days_back
-  // Không ép thread_id vì reply kiểu cũ có thể không có field này
-  const rootMessages = (data.data?.items ?? [])
-    .filter((msg: any) => !msg.root_id && parseInt(msg.create_time) >= since)
+    const inWindow = items.filter((m: any) => parseInt(m.create_time) >= since)
+    allItems.push(...inWindow)
+
+    // Dừng nếu trang này có message ngoài window (tức đã quét đủ)
+    if (inWindow.length < items.length || !pageData.data?.has_more || !pageData.data?.page_token) break
+    pageToken = pageData.data.page_token
+  }
+
+  // Chỉ lấy root messages trong window
+  const rootMessages = allItems
+    .filter((msg: any) => !msg.root_id)
     .slice(0, max_threads)
 
   const threads: ThreadScanResult[] = []
@@ -147,7 +159,8 @@ async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_
     ])
 
     const reactions: any[] = reactionData.data?.items ?? []
-    const hasYes = reactions.some((r: any) => r.emoji?.emoji_type === emoji_type)
+    // Lark reaction field path: r.reaction_type.emoji_type (không phải r.emoji)
+    const hasYes = reactions.some((r: any) => r.reaction_type?.emoji_type === emoji_type)
     if (hasYes) return // bỏ qua thread đã có reaction YES
 
     const threadMsgs: any[] = threadData.data?.items ?? []
