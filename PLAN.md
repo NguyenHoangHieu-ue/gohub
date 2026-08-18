@@ -25,21 +25,18 @@
 
 ## Wave 1 — High Priority
 
-### 1.1 Cà Thread — Lịch sử "đã cà" (chống nhắc trùng / quên)
-- **Vấn đề:** cà xong không lưu; reload mất trạng thái; không biết thread nào đã nhắc.
-- **Giải pháp:** Migration **v40** `ca_thread_log` (id=message_id, chat_id, content_snip, participants JSON, message_sent, sent_by, sent_at). `handleSend`→INSERT log; `handleScan`→JOIN đánh dấu `already_sent`; action `history`. FE: badge "Đã cà DD/MM bởi @user" persistent + section Lịch sử.
-- **Files:** `v40_ca_thread_log.sql` · `api/creator/ca-thread/route.ts` · `creator/page.tsx`
-- **Effort:** M (~2-3h) · **Accept:** cà→reload→vẫn thấy "đã cà".
+### 1.1 ✅ XONG (s154, staging a1a6e1f) — Cà Thread Lịch sử "đã cà"
+- Migration **v40** `ca_thread_log` — Hiếu ĐÃ chạy. `handleSend`→INSERT; `handleScan`→mark `already_sent` persistent; action `history`. FE badge + section Lịch sử.
+- ⏳ CÒN: test trên staging (cà→reload→còn badge) → merge main.
 
-### 1.2 Cà Thread — Multi-group
+### 1.2 ⬅️ MAI BẮT ĐẦU TỪ ĐÂY — Cà Thread Multi-group
 - **Vấn đề:** config chỉ 1 chat_id; muốn nhiều group phải sửa từng lần.
-- **Giải pháp:** đổi `ca_thread_config` → `{ groups: [...] }` (backward-compat wrap shape cũ). FE dropdown chọn group + "+ Thêm group".
-- **Files:** `api/creator/ca-thread/route.ts` · `creator/page.tsx` · **Effort:** M (~2h)
+- **Giải pháp:** đổi `ca_thread_config` → `{ groups: [...] }` (backward-compat: đọc thấy shape cũ có `chat_id` ở root → wrap `groups[0]`). FE dropdown chọn group + "+ Thêm group" trong edit mode. API `scan`/`send` đã nhận `chat_id` → chỉ cần FE truyền group đang chọn.
+- **Files:** `api/creator/ca-thread/route.ts` (đọc/ghi config array) · `creator/page.tsx` (CaThreadSection) · **Effort:** M (~2h)
+- **Lưu ý:** `ca_thread_config` hiện là single object `{chat_id, emoji_type, days_back, my_open_id}`. Giữ backward-compat để config cũ không vỡ.
 
-### 1.3 Gấu Pro — Lark task dùng user token (tên Hiếu)
-- **Vấn đề:** `createLarkTask` dùng app token → task không gắn tên Hiếu.
-- **Giải pháp:** ưu tiên `getLarkUserToken()` (OAuth có sẵn từ Cà Thread), fallback app token.
-- **Files:** `web/src/lib/agents/creator-ai.ts` · **Effort:** S (~1h)
+### 1.3 ✅ XONG (s154, staging 807d658) — Gấu Pro Lark task user token
+- Code đã ưu tiên `userToken || appToken` sẵn (task hiện tên Hiếu khi kết nối). Bổ sung `getLarkUserOpenId()` làm assignee fallback khi env `LARK_CREATOR_USER_ID` trống.
 
 ## Wave 2 — Medium Priority
 
