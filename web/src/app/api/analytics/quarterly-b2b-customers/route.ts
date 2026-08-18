@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
   const prevQMonths = [0, 1, 2].map(i => `${prevYear}-${String(prevQFirstMonth + i).padStart(2, "0")}`)
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  // v6: fix elapsedRatio swap (monthCost/rawCc args bị đảo nhau từ commit d466ba7)
-  const rawCacheKey = `qb2b_raw_v6:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  // v7: fix ccForSummary dùng totCc (projected) thay totActCc (actual) → PR 3 tháng đúng
+  const rawCacheKey = `qb2b_raw_v7:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
@@ -319,11 +319,10 @@ export async function GET(req: NextRequest) {
         }
       })
 
-      // c.cc / c.cm1: dùng actual (pro-rated cho tháng đang chạy) thay vì full budget.
-      // → Bảng 3 Ch.Cost Tổng Quý khớp với Bảng 1 (Tổng hợp theo Tháng) cho T8 pro-rated.
-      // (totCc = Σ monthCost = full budget cho T8 amount; totActCc = Σ rawCc = actual pro-rated)
-      const ccForSummary = totActCc  // actual pro-rated — dùng cho c.cc
-      const cm1ForSummary = totActGm - totActCc
+      // c.cc dùng projected (Σ monthCost): amount giữ nguyên full, percent × projected revenue.
+      // Nhất quán với Revenue/GM (đều dùng projected) → FE × futureScale ra đúng PR 3 tháng.
+      const ccForSummary = totCc
+      const cm1ForSummary = totGm - totCc
       const hasProjected = monthMeta.some(mr => mr.isProjected)
       // QoQ: so sánh CM1 (actual pro-rated) vs CM1 thực tế quý trước
       const prevCm1 = prevCm1Map.get(cust.code) ?? null
