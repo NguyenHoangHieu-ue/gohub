@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-18, s152)
+## Trạng thái hiện tại (2026-08-18, s153)
 
 | | |
 |---|---|
@@ -26,17 +26,17 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` trong Lark Developer Console + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark) để tin gửi bằng tên Hiếu
 
+**s153 — đã làm (2026-08-18):**
+- ✅ **Quarter Report — fix save target không được** (→ main b15b354)
+  - `quarterly-targets` API: check `session.user.role` trực tiếp trước `canWriteTab` → tránh 403 khi getDbRole fail
+  - `b2b-customer-targets` API: `Math.round()` target_rev/target_3hk_rev trước khi upsert BIGINT (lỗi `invalid input syntax for type bigint`)
+  - `b2b-customer-targets` API: fallback upsert không có cột mới nếu migration chưa chạy (error 42703)
+  - FE `saveTarget`: parseFmt vào trong try-catch + null-safe `?? ""`
+- ✅ **Quarter Report — thu hẹp bảng KH để screenshot** (px-3→px-1.5, header 9px)
+
 **s152 — đã làm (2026-08-18):**
-- ✅ **Cà Thread — fix bugs**
-  - `create_time` Lark = milliseconds → fix filter `since`, `days_ago`, `toDate`
-  - Thêm pagination 5 trang (250 msgs) → fix "chỉ quét hôm nay"
-  - `sort_type=ByCreateTimeDesc` → lấy messages mới nhất trước
-  - `r.reaction_type?.emoji_type` thay `r.emoji?.emoji_type` → fix YES filter không hoạt động
-- ✅ **Quarter Report — cột Target 3HK Revenue + %TGT 3HK**
-  - Bảng Khách hàng nhóm: thêm cột "3HK Rev TGT" và "%TGT 3HK"
-  - `prHk3` = Σ(hk3Pct × revenue_projected × factor) × futureScale
-  - Migration v39: `ADD COLUMN target_3hk_rev` → nhập tay trực tiếp
-  - Fallback: nếu chưa nhập → auto = `target_rev × target_3hk_pct`
+- ✅ **Cà Thread — fix bugs** (ms timestamp, pagination, emoji field path, sort DESC)
+- ✅ **Quarter Report — cột Target 3HK Revenue + %TGT 3HK + nhập tay** (migration v39)
 
 **s151 — đã làm (2026-08-18):**
 - ✅ **Cà Thread — gộp Dry-run/Live → Quét & Cà từng thread**

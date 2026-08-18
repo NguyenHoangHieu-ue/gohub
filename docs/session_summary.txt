@@ -7843,3 +7843,28 @@ feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001
 - `ADD COLUMN target_3hk_rev BIGINT DEFAULT 0` trên b2b_customer_targets (Supabase, đã chạy)
 - UI: input trong Target & Progress; nếu để trống → fallback auto từ computed; badge "(auto)"
 
+
+## ══════ SESSION 153 (2026-08-18) ══════
+
+### A. Quarter Report — fix save target không được (→ main b15b354)
+
+**Lỗi 1: invalid input syntax for type bigint: "738.68"**
+- Nguyên nhân: `parseFmt` dùng `parseFloat` → trả số thập phân; cột BIGINT không chứa được
+- Fix: `Math.round(Number(target_rev) || 0)` trong `b2b-customer-targets` POST
+
+**Lỗi 2: quarterly-targets POST trả 403**
+- Nguyên nhân: `canWriteTab` dùng `getDbRole` → nếu username không match DB → role="" → không trong WRITE_ROLES → 403
+- Fix: check `WRITE_ROLES.includes(sessionRole)` trước, fallback `canWriteTab` sau
+
+**Lỗi 3: saveTarget FE throw unhandled error**
+- Nguyên nhân: `parseFmt(inp.hk3rev)` nằm ngoài try-catch; nếu `inp.hk3rev` undefined → crash silent
+- Fix: đưa toàn bộ parseFmt calls vào trong try-catch + `?? ""` null-safe
+
+**Lỗi 4: b2b-customer-targets upsert fail nếu cột chưa tồn tại**
+- Fix: fallback upsert không có `target_rev`/`target_3hk_rev` nếu error code 42703
+
+### B. Quarter Report — thu hẹp bảng KH để screenshot (→ main 217eb39)
+- Table font: text-[11px]→text-[10px]; header px-3→px-1.5, text-[9px]
+- Cells: px-3 py-2→px-1.5 py-1; Name column max-w-[200px]→max-w-[130px]
+- Header labels rút gọn: "Gross Margin"→"G.Margin", "%QoQ (CM1)"→"%QoQ", "Tên Khách hàng"→"Tên KH"
+
