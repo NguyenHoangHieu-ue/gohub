@@ -7812,3 +7812,34 @@ feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001
 - CLAUDE.md: cập nhật s151, thêm v38 migration.
 - docs/wiki/Tab/analytics-quarterly.md: thêm §CH.Cost B2B và §Target per-KH.
 - docs/wiki/Tab/analytics-creator.md: tạo mới (s151 đầu).
+
+## ══════ SESSION 152 (2026-08-18) ══════
+
+### A. Cà Thread — fix bugs (→ main b06cc6b, d7c8c4b)
+
+**Bug 1: Lark create_time = milliseconds (không phải seconds)**
+- `since` và `now` đổi sang ms (`Date.now()` không chia 1000)
+- `days_ago` chia `86400 * 1000`
+- `toDate` bỏ `× 1000` (đã là ms)
+- Hệ quả cũ: filter `>= since` luôn pass (ms >> s) → quét hết group; ngày hiện năm ~56613
+
+**Bug 2: Chỉ quét hôm nay (page_size=50 hết slot)**
+- Thêm pagination 5 trang (250 msgs tối đa)
+- `sort_type=ByCreateTimeDesc` → lấy mới nhất trước
+- Dừng sớm khi gặp message ngoài window `days_back`
+
+**Bug 3: Thread YES vẫn hiện**
+- `r.emoji?.emoji_type` → `r.reaction_type?.emoji_type` (Lark field path đúng)
+- Bug này tồn tại từ s150, filter YES chưa bao giờ hoạt động
+
+### B. Quarter Report — cột Target 3HK + nhập tay (→ main 89e6ce9)
+
+**Thêm 2 cột bảng Khách hàng nhóm:**
+- `3HK Rev TGT`: target 3HK Revenue (nhập tay hoặc auto = target_rev × thk%)
+- `%TGT 3HK`: PR 3HK Revenue / Target 3HK Revenue × 100 (badge màu)
+- `prHk3` trong custPr() = Σ(hk3Pct/100 × revBase × f) × futureScale
+
+**Migration v39 + nhập tay:**
+- `ADD COLUMN target_3hk_rev BIGINT DEFAULT 0` trên b2b_customer_targets (Supabase, đã chạy)
+- UI: input trong Target & Progress; nếu để trống → fallback auto từ computed; badge "(auto)"
+
