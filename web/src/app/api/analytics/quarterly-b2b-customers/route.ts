@@ -76,8 +76,8 @@ export async function GET(req: NextRequest) {
   const prevQMonths = [0, 1, 2].map(i => `${prevYear}-${String(prevQFirstMonth + i).padStart(2, "0")}`)
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  // v6: fix elapsedRatio swap (monthCost/rawCc args bị đảo nhau từ commit d466ba7)
-  const rawCacheKey = `qb2b_raw_v6:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  // v8: cộng ước tính T9 CH.Cost (dùng T8 record làm fallback)
+  const rawCacheKey = `qb2b_raw_v8:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
@@ -271,6 +271,23 @@ export async function GET(req: NextRequest) {
         const rec = costMap.get(`${m}_${cust.code}`)
         const meta = monthMeta.find(x => x.month === m)
         const isProj = meta?.isProjected ?? false
+        const isFuture = meta?.isFuture ?? false
+
+        // Tháng tương lai (T9): ước tính CH.Cost từ record của T9 (nếu đã nhập) hoặc fallback T8.
+        if (isFuture) {
+          const prevIdx = months.indexOf(m) - 1
+          const prevM = prevIdx >= 0 ? months[prevIdx] : undefined
+          const fallbackRec = prevM ? costMap.get(`${prevM}_${cust.code}`) : undefined
+          const futureRec = rec ?? fallbackRec
+          if (futureRec) {
+            // amount: full monthly amount. percent: × prev month projected revenue làm ước tính.
+            const prevMd = prevM ? cust.months.get(prevM) : undefined
+            const estRev = prevMd ? prevMd.rawRevenue * prevMd.factor : 0
+            const estCost = calcRecordCostProjected(futureRec, estRev, 1, 1)
+            totCc += estCost
+          }
+          return
+        }
 
         // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31)
         const elapsedRatio = meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
@@ -292,7 +309,6 @@ export async function GET(req: NextRequest) {
         if (md) {
           const mCm1 = md.gm - monthCost
           // isRunning = tháng đang chạy (không phải tương lai, chưa kết thúc) — bao gồm cả elapsed < MIN_PROJECT_DAYS.
-          // Cần set actualCc cho MỌI tháng đang chạy (không chỉ isProjected) vì cc = full budget khi elapsedRatio=1.
           const isRunning = !!(meta && !meta.isFuture && meta.elapsed > 0 && meta.elapsed < meta.dim)
           monthSummary[m] = {
             revenue: r2(md.revenue), gm: r2(md.gm), cc: r2(monthCost),
@@ -301,7 +317,7 @@ export async function GET(req: NextRequest) {
             ...(isRunning && {
               ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm) }),
               actualCc: r2(rawCc),
-              actualCm1: r2(md.rawGm - rawCc),  // luôn set: CM1 = GM_actual - CC_actual (khớp CH.COST hiển thị)
+              actualCm1: r2(md.rawGm - rawCc),
             }),
           }
           totRev += md.revenue; totGm += md.gm; totCc += monthCost; totHk3 += md.hk3
@@ -319,11 +335,10 @@ export async function GET(req: NextRequest) {
         }
       })
 
-      // c.cc / c.cm1: dùng actual (pro-rated cho tháng đang chạy) thay vì full budget.
-      // → Bảng 3 Ch.Cost Tổng Quý khớp với Bảng 1 (Tổng hợp theo Tháng) cho T8 pro-rated.
-      // (totCc = Σ monthCost = full budget cho T8 amount; totActCc = Σ rawCc = actual pro-rated)
-      const ccForSummary = totActCc  // actual pro-rated — dùng cho c.cc
-      const cm1ForSummary = totActGm - totActCc
+      // c.cc dùng projected (Σ monthCost): amount giữ nguyên full, percent × projected revenue.
+      // Nhất quán với Revenue/GM (đều dùng projected) → FE × futureScale ra đúng PR 3 tháng.
+      const ccForSummary = totCc
+      const cm1ForSummary = totGm - totCc
       const hasProjected = monthMeta.some(mr => mr.isProjected)
       // QoQ: so sánh CM1 (actual pro-rated) vs CM1 thực tế quý trước
       const prevCm1 = prevCm1Map.get(cust.code) ?? null

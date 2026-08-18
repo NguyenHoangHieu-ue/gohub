@@ -1182,9 +1182,9 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
 
   // ── Per-customer expand + target + creator orders ──
   const [expandedCusts, setExpandedCusts] = useState<Set<string>>(new Set())
-  const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number }>>({})
+  const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number; rev: number }>>({})
   const [editingTargetCode, setEditingTargetCode] = useState<string | null>(null)
-  const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string }>>({})
+  const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string; rev: string }>>({})
   const [savingTargetCode, setSavingTargetCode] = useState<string | null>(null)
   // Creator: orders explorer per-customer
   const [ordersData, setOrdersData] = useState<Record<string, { rows: any[]; groupBy: string; loading: boolean }>>({})
@@ -1334,8 +1334,12 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
   }
   // ── Per-customer target save ──
   const startEditTarget = (c: any) => {
-    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0 }
-    setTargetInputs(prev => ({ ...prev, [c.code]: { cm1: fmtInput(tgt.cm1), thk: tgt.thk > 0 ? tgt.thk.toString() : "" } }))
+    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0 }
+    setTargetInputs(prev => ({ ...prev, [c.code]: {
+      cm1: fmtInput(tgt.cm1),
+      thk: tgt.thk > 0 ? tgt.thk.toString() : "",
+      rev: fmtInput(tgt.rev),
+    }}))
     setEditingTargetCode(c.code)
   }
   const cancelEditTarget = () => { setEditingTargetCode(null) }
@@ -1343,18 +1347,19 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
     if (!quarterLabel) return
     const parts = quarterLabel.split("-")
     if (parts.length !== 2) return
-    const inp = targetInputs[c.code] ?? { cm1: "", thk: "" }
+    const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "" }
     const cm1Val = parseFmt(inp.cm1)
     const thkVal = parseFloat(inp.thk) || 0
+    const revVal = parseFmt(inp.rev)
     setSavingTargetCode(c.code)
     try {
       const res = await fetch("/api/analytics/b2b-customer-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal }),
+        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal }),
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok && d?.ok) {
-        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal } }))
+        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal, rev: revVal } }))
         setEditingTargetCode(null)
         notify?.(true, `Đã lưu target KH ${c.name}`)
       } else notify?.(false, d?.error || "Lưu thất bại")
@@ -1893,11 +1898,37 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                 )}
                                               </div>
                                               <div className="space-y-2 text-[11px]">
+                                                {/* Target Revenue */}
+                                                <div className="flex items-center justify-between gap-3">
+                                                  <span className="text-slate-500 flex-shrink-0">Revenue Target</span>
+                                                  {isEditingTgt ? (
+                                                    <input type="text" value={targetInputs[c.code]?.rev ?? ""} placeholder="VD: 2.000.000.000"
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), rev: e.target.value } }))}
+                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                  ) : tgt.rev > 0 ? (
+                                                    <div className="text-right space-y-0.5">
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target quý: {fc(tgt.rev)}</div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Dự kiến:</span>
+                                                        <span className={cn("font-bold", cPrRev / tgt.rev >= 1 ? "text-green-600" : cPrRev / tgt.rev >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.rev > 0 ? cPrRev / tgt.rev * 100 : 0)}
+                                                        </span>
+                                                      </div>
+                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                        <span className="text-slate-400">Tiến độ TT:</span>
+                                                        <span className={cn("font-bold", actRev / tgt.rev >= 1 ? "text-green-600" : actRev / tgt.rev >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                          {pct(tgt.rev > 0 ? actRev / tgt.rev * 100 : 0)}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  ) : <span className="text-slate-300">Chưa đặt</span>}
+                                                </div>
+                                                {/* Target CM1 */}
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">CM1 Target</span>
                                                   {isEditingTgt ? (
                                                     <input type="text" value={targetInputs[c.code]?.cm1 ?? ""} placeholder="VD: 500.000.000"
-                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), cm1: e.target.value } }))}
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), cm1: e.target.value } }))}
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
@@ -1917,11 +1948,12 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                     </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
                                                 </div>
+                                                {/* Target 3HK% */}
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">3HK% Target</span>
                                                   {isEditingTgt ? (
                                                     <input type="number" min="0" max="100" step="0.1" value={targetInputs[c.code]?.thk ?? ""} placeholder="VD: 70.0"
-                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? {}), thk: e.target.value } }))}
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), thk: e.target.value } }))}
                                                       className="w-24 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
                                                   ) : tgt.thk > 0 ? (
                                                     <div className="text-right space-y-0.5 text-[10px]">
@@ -1936,6 +1968,16 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                                     </div>
                                                   ) : <span className="text-slate-300">Chưa đặt</span>}
                                                 </div>
+                                                {/* Target 3HK Revenue = Target Revenue × Target 3HK% (computed, display only) */}
+                                                {tgt.rev > 0 && tgt.thk > 0 && (
+                                                  <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
+                                                    <span className="text-slate-400 flex-shrink-0 text-[10px]">Target 3HK Rev</span>
+                                                    <div className="text-right text-[10px]">
+                                                      <span className="font-semibold text-slate-600 tabular-nums">{fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
+                                                      <span className="text-slate-300 ml-1">= {fc(tgt.rev)} × {pct(tgt.thk)}</span>
+                                                    </div>
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
 
