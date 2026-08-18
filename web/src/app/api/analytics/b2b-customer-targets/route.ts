@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
     id, quarter, year, customer_code,
     target_cm1:     Number(target_cm1)     || 0,
     target_3hk_pct: Number(target_3hk_pct) || 0,
-    target_rev:     Number(target_rev)     || 0,
-    target_3hk_rev: Number(target_3hk_rev) || 0,
+    target_rev:     Math.round(Number(target_rev)     || 0),
+    target_3hk_rev: Math.round(Number(target_3hk_rev) || 0),
     updated_by: updatedBy,
     updated_at: new Date().toISOString(),
   }
