@@ -29,11 +29,9 @@
 - Migration **v40** `ca_thread_log` — Hiếu ĐÃ chạy. `handleSend`→INSERT; `handleScan`→mark `already_sent` persistent; action `history`. FE badge + section Lịch sử.
 - ⏳ CÒN: test trên staging (cà→reload→còn badge) → merge main.
 
-### 1.2 ⬅️ MAI BẮT ĐẦU TỪ ĐÂY — Cà Thread Multi-group
-- **Vấn đề:** config chỉ 1 chat_id; muốn nhiều group phải sửa từng lần.
-- **Giải pháp:** đổi `ca_thread_config` → `{ groups: [...] }` (backward-compat: đọc thấy shape cũ có `chat_id` ở root → wrap `groups[0]`). FE dropdown chọn group + "+ Thêm group" trong edit mode. API `scan`/`send` đã nhận `chat_id` → chỉ cần FE truyền group đang chọn.
-- **Files:** `api/creator/ca-thread/route.ts` (đọc/ghi config array) · `creator/page.tsx` (CaThreadSection) · **Effort:** M (~2h)
-- **Lưu ý:** `ca_thread_config` hiện là single object `{chat_id, emoji_type, days_back, my_open_id}`. Giữ backward-compat để config cũ không vỡ.
+### 1.2 ✅ XONG (s155, staging b743bd7) — Cà Thread Multi-group
+- API GET: `normalizeConfig()` backward-compat (shape cũ `chat_id` ở root → wrap `groups[0]`). PUT lưu `{groups:[...]}`.
+- FE: state `groups[]` + `selectedIdx` + `editIdx` (null/−1/≥0). Group selector tabs khi ≥2 group. Thêm/Sửa/Xóa group. Tên group tuỳ chọn. `scan`/`send`/`history` tự dùng `activeGroup`.
 
 ### 1.3 ✅ XONG (s154, staging 807d658) — Gấu Pro Lark task user token
 - Code đã ưu tiên `userToken || appToken` sẵn (task hiện tên Hiếu khi kết nối). Bổ sung `getLarkUserOpenId()` làm assignee fallback khi env `LARK_CREATOR_USER_ID` trống.

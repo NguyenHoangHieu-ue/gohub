@@ -1,5 +1,11 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-17 (Session 149 — B2B Tier export Excel, BC Datapool debug).
+Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 Cà Thread multi-group).
+
+## ══════ SESSION 155 (2026-08-19) ══════
+**Wave 1.2 Cà Thread Multi-group** (staging b743bd7):
+- API route.ts: thêm `normalizeConfig()` backward-compat (shape cũ `{chat_id,...}` → wrap thành `{groups:[{...}]}`). GET trả `{groups:[...]}`. PUT nhận và lưu format mới.
+- FE creator/page.tsx: thêm `GroupConfig` interface + `DEFAULT_GROUP`. Rewrite `CaThreadSection` — state `groups[]` + `selectedIdx` + `editIdx` (null/−1/≥0) thay state riêng lẻ cũ. UI: group selector tabs khi ≥2 group + nút "Thêm group" ở góc; form thêm/sửa có field "Tên group" tuỳ chọn; nút "Xóa group này" khi ≥2 group; scan/send/history dùng `activeGroup` (group đang chọn).
+- tsc PASS · staged: b743bd7
 
 ## ══════ SESSION 149 (2026-08-17) ══════
 
