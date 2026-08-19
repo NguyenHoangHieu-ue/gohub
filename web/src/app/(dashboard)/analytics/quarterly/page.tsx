@@ -298,6 +298,18 @@ function QuarterlyContent() {
   const [savingSquad,   setSavingSquad]    = useState(false)
   const [squadMsg,      setSquadMsg]       = useState<{ ok: boolean; text: string } | null>(null)
   const [expandedSquads, setExpandedSquads] = useState<Set<number>>(new Set())
+  // Filters
+  const [sqSearch,       setSqSearch]       = useState("")
+  const [sqFilterRegion, setSqFilterRegion] = useState<"ALL"|"VN"|"US">("ALL")
+  const [sqFilterTier,   setSqFilterTier]   = useState<string>("ALL")
+  const [sqFilterPic,    setSqFilterPic]    = useState<string>("ALL")
+  const [sqFilterRisk,   setSqFilterRisk]   = useState<string>("ALL")
+  const [sqFilterLeader, setSqFilterLeader] = useState<string>("ALL")
+  const [sqSortCol,      setSqSortCol]      = useState<string>("risk_level")
+  const [sqSortDir,      setSqSortDir]      = useState<"asc"|"desc">("asc")
+
+  const RISK_ORDER = ["danger_high","danger_low","safe_low","safe","very_safe","no_target"]
+
   const notifySquad = (ok: boolean, text: string) => { setSquadMsg({ ok, text }); setTimeout(() => setSquadMsg(null), 3000) }
 
   // Load squad config + users khi mở tab
@@ -1151,13 +1163,6 @@ function QuarterlyContent() {
               </button>
             </div>
 
-            {/* Risk legend */}
-            <div className="px-5 py-2 border-b border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
-              {Object.entries(RISK_META).filter(([k]) => k !== "no_target").map(([k, v]) => (
-                <span key={k} className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", v.bg, v.color)}>{v.label}</span>
-              ))}
-            </div>
-
             {squadLoading ? (
               <div className="flex items-center justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-[#003B95]" /></div>
             ) : !squadData ? (
@@ -1166,129 +1171,302 @@ function QuarterlyContent() {
               <div className="py-12 text-center text-slate-400 text-sm">
                 Chưa có squad nào. {canEditSettings && "Bấm \"Cấu hình Squad\" để thêm."}
               </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {squadData.squads.map((sq: any, si: number) => {
-                  const expanded = expandedSquads.has(si)
-                  const pctColor = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
-                  const leaderUser = squadUsers.find(u => u.username === sq.leader)
-                  return (
-                    <div key={si}>
-                      {/* Squad header row */}
-                      <div className={cn("px-5 py-3 hover:bg-slate-50 transition-colors", si % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
-                        {/* Row 1: tên, leader, risk summary, toggle */}
-                        <div className="flex items-center gap-3 mb-2">
-                          <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
-                            className="flex items-center gap-2 flex-1 text-left">
-                            <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
-                            <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
-                            {leaderUser && <span className="text-xs text-slate-400">· Leader: {leaderUser.name}</span>}
-                            <span className="text-xs text-slate-400">· {sq.customer_count} KH</span>
-                          </button>
-                          {/* Risk badges */}
-                          <div className="flex flex-wrap gap-1 shrink-0">
-                            {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => {
-                              const cnt = sq.risk_counts?.[k] ?? 0
-                              if (!cnt) return null
-                              const m = RISK_META[k]
-                              return <span key={k} className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums", m.bg, m.color)}>{cnt} {m.label}</span>
-                            })}
-                          </div>
-                        </div>
-                        {/* Row 2: số liệu tổng squad */}
-                        <div className="ml-6 grid grid-cols-3 gap-x-6 gap-y-1 text-xs">
-                          {/* Revenue */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400 w-16 shrink-0">Revenue</span>
-                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.revenue)}</span>
-                            <span className="tabular-nums text-blue-600 font-medium">→ {formatCompactNumber(sq.revenue_pr)} PR</span>
-                            {sq.target_rev > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.rev_pct))}>{sq.rev_pct != null ? `${sq.rev_pct}%` : "—"} tgt</span>}
-                          </div>
-                          {/* GP (proxy CM1) */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400 w-16 shrink-0">GP~CM1</span>
-                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.gp)}</span>
-                            {sq.target_cm1 > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.gp_cm1_pct))}>{sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "—"} tgt</span>}
-                          </div>
-                          {/* 3HK */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400 w-10 shrink-0">3HK</span>
-                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.hk3)}</span>
-                            <span className="text-slate-500">{sq.hk3_pct}%</span>
-                          </div>
-                        </div>
-                      </div>
+            ) : (() => {
+              // Collect unique values for filters
+              const allCusts: any[] = squadData.squads.flatMap((sq: any) =>
+                (sq.customers ?? []).map((c: any) => ({ ...c, squad_name: sq.name, leader: sq.leader })))
+              const uniquePics = [...new Set(allCusts.map((c: any) => c.sales_pic).filter(Boolean))] as string[]
+              const leaders = squadData.squads.filter((sq: any) => sq.leader).map((sq: any) => ({ username: sq.leader, name: squadUsers.find(u => u.username === sq.leader)?.name ?? sq.leader }))
 
-                      {/* Expandable customer table */}
-                      {expanded && sq.customers?.length > 0 && (
-                        <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
-                          <table className="w-full text-[11px] border-collapse">
-                            <thead>
-                              <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
-                                <th className="px-4 py-2 text-left font-semibold">KH</th>
-                                <th className="px-3 py-2 text-right font-semibold">Rev Actual</th>
-                                <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
-                                <th className="px-3 py-2 text-right font-semibold">Rev Tgt</th>
-                                <th className="px-3 py-2 text-right font-semibold">%TGT Rev</th>
-                                <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
-                                <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
-                                <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
-                                <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK%</th>
-                                <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
-                                <th className="px-3 py-2 text-right font-semibold">%TGT 3HK</th>
-                                <th className="px-3 py-2 text-center font-semibold border-l border-slate-200">Đánh giá</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {sq.customers.map((c: any, ci: number) => {
-                                const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
-                                const pct = (v: number | null) => v != null ? `${v}%` : "—"
-                                const pctCol = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
-                                return (
-                                  <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                    <td className="px-4 py-2 font-medium text-slate-700">{c.customer_name}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatCompactNumber(c.revenue)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_rev > 0 ? formatCompactNumber(c.target_rev) : "—"}</td>
-                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.rev_pct))}>{pct(c.rev_pct)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
-                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
-                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
-                                    <td className="px-3 py-2 text-center border-l border-slate-100">
-                                      <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
+              const hasFilter = sqSearch || sqFilterRegion !== "ALL" || sqFilterTier !== "ALL" || sqFilterPic !== "ALL" || sqFilterRisk !== "ALL" || sqFilterLeader !== "ALL"
+
+              // Apply filters
+              let filtered = allCusts.filter(c => {
+                if (sqSearch && !c.customer_name?.toLowerCase().includes(sqSearch.toLowerCase())) return false
+                if (sqFilterRegion !== "ALL" && c.region !== sqFilterRegion) return false
+                if (sqFilterTier   !== "ALL" && c.tier   !== sqFilterTier)   return false
+                if (sqFilterPic    !== "ALL" && c.sales_pic !== sqFilterPic) return false
+                if (sqFilterRisk   !== "ALL" && c.risk_level !== sqFilterRisk) return false
+                if (sqFilterLeader !== "ALL" && c.leader !== sqFilterLeader)  return false
+                return true
+              })
+
+              // Sort
+              filtered = [...filtered].sort((a, b) => {
+                let av: any, bv: any
+                if (sqSortCol === "risk_level") { av = RISK_ORDER.indexOf(a.risk_level); bv = RISK_ORDER.indexOf(b.risk_level) }
+                else if (sqSortCol === "customer_name") { av = a.customer_name; bv = b.customer_name }
+                else if (sqSortCol === "revenue_pr") { av = a.revenue_pr; bv = b.revenue_pr }
+                else if (sqSortCol === "cm1_pct")  { av = a.cm1_pct  ?? -999; bv = b.cm1_pct  ?? -999 }
+                else if (sqSortCol === "hk3_tgt_pct") { av = a.hk3_tgt_pct ?? -999; bv = b.hk3_tgt_pct ?? -999 }
+                else { av = a[sqSortCol]; bv = b[sqSortCol] }
+                if (av === bv) return 0
+                const d = av < bv ? -1 : 1
+                return sqSortDir === "asc" ? d : -d
+              })
+
+              const sortBtn = (col: string, label: string) => {
+                const active = sqSortCol === col
+                return (
+                  <button onClick={() => { if (active) setSqSortDir(d => d === "asc" ? "desc" : "asc"); else { setSqSortCol(col); setSqSortDir("asc") } }}
+                    className={cn("flex items-center gap-0.5 text-left whitespace-nowrap", active ? "text-[#003B95] font-bold" : "text-slate-500 hover:text-slate-800")}>
+                    {label}{active ? (sqSortDir === "asc" ? " ▲" : " ▼") : ""}
+                  </button>
+                )
+              }
+
+              const pct = (v: number | null) => v != null ? `${v}%` : "—"
+              const pctCol = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
+
+              return (
+                <>
+                  {/* Filters */}
+                  <div className="px-4 py-3 border-b border-slate-100 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input value={sqSearch} onChange={e => setSqSearch(e.target.value)}
+                          placeholder="Tìm khách hàng..."
+                          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] w-44" />
+                      </div>
+                      {/* Region */}
+                      <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                        {(["ALL","VN","US"] as const).map(v => (
+                          <button key={v} onClick={() => setSqFilterRegion(v)}
+                            className={cn("px-2 py-1 text-[11px] font-bold rounded-md transition-all", sqFilterRegion === v ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-200")}>
+                            {v === "VN" ? "🇻🇳 VN" : v === "US" ? "🇺🇸 US" : "ALL"}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Tier */}
+                      <select value={sqFilterTier} onChange={e => setSqFilterTier(e.target.value)}
+                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                        <option value="ALL">Tất cả tier</option>
+                        {["Strategic","VIP","Gold","Silver"].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      {/* Leader */}
+                      {leaders.length > 0 && (
+                        <select value={sqFilterLeader} onChange={e => setSqFilterLeader(e.target.value)}
+                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                          <option value="ALL">Tất cả leader</option>
+                          {leaders.map((l: any) => <option key={l.username} value={l.username}>{l.name}</option>)}
+                        </select>
+                      )}
+                      {hasFilter && (
+                        <button onClick={() => { setSqSearch(""); setSqFilterRegion("ALL"); setSqFilterTier("ALL"); setSqFilterPic("ALL"); setSqFilterRisk("ALL"); setSqFilterLeader("ALL") }}
+                          className="flex items-center gap-1 px-2 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
+                          <X className="w-3 h-3" /> Xóa filter
+                        </button>
                       )}
                     </div>
-                  )
-                })}
-
-                {/* Totals */}
-                {squadData.totals && (
-                  <div className="px-5 py-3 bg-[#003B95]/5 border-t-2 border-[#003B95]/20">
-                    <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
-                      <span className="w-28">Tổng</span>
-                      <span className="text-slate-500">{squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH</span>
-                      <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
-                      <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
-                      <span className="text-slate-500">GP: {formatCompactNumber(squadData.totals.gp)}</span>
-                      <span className="text-slate-500">3HK: {formatCompactNumber(squadData.totals.hk3)} ({squadData.totals.hk3_pct}%)</span>
+                    {/* PIC chips */}
+                    {uniquePics.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[10px] text-slate-400 font-medium">PIC:</span>
+                        <button onClick={() => setSqFilterPic("ALL")}
+                          className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterPic === "ALL" ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
+                          Tất cả
+                        </button>
+                        {uniquePics.map(code => {
+                          const info = squadData.available_pics?.find((p: any) => p.code === code)
+                          return (
+                            <button key={code} onClick={() => setSqFilterPic(sqFilterPic === code ? "ALL" : code)}
+                              className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterPic === code ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
+                              {info?.name ?? code}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* Risk chips */}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-slate-400 font-medium">Mức độ:</span>
+                      <button onClick={() => setSqFilterRisk("ALL")}
+                        className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterRisk === "ALL" ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
+                        Tất cả
+                      </button>
+                      {Object.entries(RISK_META).map(([k, v]) => (
+                        <button key={k} onClick={() => setSqFilterRisk(sqFilterRisk === k ? "ALL" : k)}
+                          className={cn("px-2 py-0.5 text-[11px] rounded-full border font-medium transition-all",
+                            sqFilterRisk === k ? `${v.bg} ${v.color} border-transparent` : "bg-white text-slate-500 border-slate-200 hover:border-slate-400")}>
+                          {v.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
+
+              <div className="divide-y divide-slate-100">
+                {hasFilter ? (
+                  /* ── Flat filtered view ── */
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11px] border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                            <th className="px-4 py-2 text-left">{sortBtn("customer_name","KH")}</th>
+                            <th className="px-3 py-2 text-left font-semibold">Squad</th>
+                            <th className="px-3 py-2 text-left font-semibold">Tier</th>
+                            <th className="px-3 py-2 text-left font-semibold">PIC</th>
+                            <th className="px-3 py-2 text-right">{sortBtn("revenue_pr","Rev PR")}</th>
+                            <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">GP PR</th>
+                            <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
+                            <th className="px-3 py-2 text-right">{sortBtn("cm1_pct","%TGT CM1")}</th>
+                            <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">3HK%</th>
+                            <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
+                            <th className="px-3 py-2 text-right">{sortBtn("hk3_tgt_pct","%TGT 3HK")}</th>
+                            <th className="px-3 py-2 text-center border-l border-slate-200">{sortBtn("risk_level","Đánh giá")}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filtered.length === 0 ? (
+                            <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">Không có kết quả phù hợp.</td></tr>
+                          ) : filtered.map((c: any, ci: number) => {
+                            const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
+                            const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
+                            return (
+                              <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                <td className="px-4 py-2 font-medium text-slate-700">
+                                  {c.customer_name}
+                                  <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                </td>
+                                <td className="px-3 py-2 text-slate-500">{c.squad_name}</td>
+                                <td className="px-3 py-2 text-slate-500">{c.tier}</td>
+                                <td className="px-3 py-2 text-slate-500">{picInfo?.name ?? c.sales_pic}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
+                                <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
+                                <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
+                                <td className="px-3 py-2 text-center border-l border-slate-100">
+                                  <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="px-4 py-1.5 text-[10px] text-slate-400">{filtered.length} kết quả</p>
+                  </>
+                ) : (
+                  /* ── Per-squad view (no filter) ── */
+                  <>
+                    {squadData.squads.map((sq: any, si: number) => {
+                      const expanded = expandedSquads.has(si)
+                      const pctColor = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
+                      const leaderUser = squadUsers.find(u => u.username === sq.leader)
+                      return (
+                        <div key={si}>
+                          <div className={cn("px-5 py-3 hover:bg-slate-50 transition-colors", si % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
+                            <div className="flex items-center gap-3 mb-2">
+                              <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
+                                className="flex items-center gap-2 flex-1 text-left">
+                                <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
+                                <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
+                                {leaderUser && <span className="text-xs text-slate-400">· Leader: {leaderUser.name}</span>}
+                                <span className="text-xs text-slate-400">· {sq.customer_count} KH</span>
+                              </button>
+                              <div className="flex flex-wrap gap-1 shrink-0">
+                                {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => {
+                                  const cnt = sq.risk_counts?.[k] ?? 0
+                                  if (!cnt) return null
+                                  const m = RISK_META[k]
+                                  return <span key={k} className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums", m.bg, m.color)}>{cnt} {m.label}</span>
+                                })}
+                              </div>
+                            </div>
+                            <div className="ml-6 grid grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 w-16 shrink-0">Revenue</span>
+                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.revenue)}</span>
+                                <span className="tabular-nums text-blue-600 font-medium">→ {formatCompactNumber(sq.revenue_pr)} PR</span>
+                                {sq.target_rev > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.rev_pct))}>{sq.rev_pct != null ? `${sq.rev_pct}%` : "—"} tgt</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 w-16 shrink-0">GP~CM1</span>
+                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.gp)}</span>
+                                {sq.target_cm1 > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.gp_cm1_pct))}>{sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "—"} tgt</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-slate-400 w-10 shrink-0">3HK</span>
+                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.hk3)}</span>
+                                <span className="text-slate-500">{sq.hk3_pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Expand: customer table (bỏ Rev Tgt + %TGT Rev) */}
+                          {expanded && sq.customers?.length > 0 && (
+                            <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
+                              <table className="w-full text-[11px] border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                                    <th className="px-4 py-2 text-left font-semibold">KH</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Tier</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Rev Actual</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
+                                    <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
+                                    <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
+                                    <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
+                                    <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK%</th>
+                                    <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
+                                    <th className="px-3 py-2 text-right font-semibold">%TGT 3HK</th>
+                                    <th className="px-3 py-2 text-center font-semibold border-l border-slate-200">Đánh giá</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {sq.customers.map((c: any, ci: number) => {
+                                    const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
+                                    return (
+                                      <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                        <td className="px-4 py-2 font-medium text-slate-700">
+                                          {c.customer_name}
+                                          <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                        </td>
+                                        <td className="px-3 py-2 text-slate-500">{c.tier}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatCompactNumber(c.revenue)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
+                                        <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
+                                        <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
+                                        <td className="px-3 py-2 text-center border-l border-slate-100">
+                                          <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {squadData.totals && (
+                      <div className="px-5 py-3 bg-[#003B95]/5 border-t-2 border-[#003B95]/20">
+                        <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
+                          <span>Tổng · {squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH</span>
+                          <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
+                          <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
+                          <span className="text-slate-500">GP: {formatCompactNumber(squadData.totals.gp)}</span>
+                          <span className="text-slate-500">3HK: {squadData.totals.hk3_pct}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
-                <p className="px-5 py-2 text-[10px] text-slate-400">
-                  GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). Pro-rata = Actual × (Tổng ngày Q / Ngày đã trôi qua). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK%actual / 3HK%target.
+                <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+                  GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK%actual / 3HK%target.
                 </p>
               </div>
-            )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}

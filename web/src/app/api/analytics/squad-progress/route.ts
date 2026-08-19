@@ -9,6 +9,20 @@ export const dynamic = "force-dynamic"
 
 type RiskLevel = "very_safe" | "safe" | "safe_low" | "danger_low" | "danger_high" | "no_target"
 
+function classifyTier(priceListName: string | null): string {
+  const p = (priceListName || "").toUpperCase()
+  if (p.includes("VIP"))    return "VIP"
+  if (p.includes("GOLD"))   return "Gold"
+  if (p.includes("SILVER")) return "Silver"
+  return "Strategic"
+}
+function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
+  const p = (priceListName || "").toUpperCase()
+  const c = (currencyCode  || "").toUpperCase()
+  if (c === "USD" || p.includes(" US") || p.startsWith("US ")) return "US"
+  return "VN"
+}
+
 function getRiskLevel(cm1Pct: number | null, hk3Pct: number | null): RiskLevel {
   const hasCm1 = cm1Pct != null
   const hasHk3 = hk3Pct != null
@@ -63,12 +77,15 @@ export async function GET(req: NextRequest) {
     const [custRows, picRows] = await Promise.all([
       queryAnalytics<{
         customer_code: string; customer_name: string; sales_pic_code: string | null
+        price_list_name: string | null; currency_code: string | null
         revenue: string; gm: string; hk3: string
       }>(`
         SELECT
           TRIM(f.customer_code)                               AS customer_code,
           COALESCE(c.name, TRIM(f.customer_code))             AS customer_name,
           TRIM(c.sales_pic_code)                              AS sales_pic_code,
+          c.price_list_name,
+          c.currency_code,
           SUM(f.fulfilled_revenue_amount_vnd)                 AS revenue,
           SUM(f.gross_profit_vnd)                             AS gm,
           SUM(CASE WHEN sk.sku IS NOT NULL
@@ -123,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     // 4. Build customer map with risk
     const custMap: Record<string, {
-      customer_name: string; sales_pic: string
+      customer_name: string; sales_pic: string; tier: string; region: string
       revenue: number; gm: number; hk3: number
       tgt_rev: number; tgt_cm1: number; tgt_hk3: number; tgt_hk3pct: number
     }> = {}
@@ -131,6 +148,8 @@ export async function GET(req: NextRequest) {
       custMap[r.customer_code] = {
         customer_name: r.customer_name,
         sales_pic:  r.sales_pic_code || "",
+        tier:       classifyTier(r.price_list_name),
+        region:     classifyRegion(r.price_list_name, r.currency_code),
         revenue:    Number(r.revenue) || 0,
         gm:         Number(r.gm)     || 0,
         hk3:        Number(r.hk3)    || 0,
@@ -170,6 +189,9 @@ export async function GET(req: NextRequest) {
         return {
           customer_code: code,
           customer_name: c.customer_name,
+          sales_pic: c.sales_pic,
+          tier:   c.tier,
+          region: c.region,
           revenue: c.revenue, revenue_pr: revPr, target_rev: c.tgt_rev,
           rev_pct: c.tgt_rev > 0 ? Math.round(revPr / c.tgt_rev * 100) : null,
           gp: c.gm, gp_pr: gpPr, target_cm1: c.tgt_cm1,
