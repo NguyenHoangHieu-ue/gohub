@@ -166,17 +166,21 @@ const webSearchDecl = {
 
 const generateImageDecl = {
   name: "generateImage",
-  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality. Pollinations will AI-enhance the prompt automatically (enhance=true).",
+  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality. Pollinations will AI-enhance the prompt automatically (enhance=true). Use style_preset to auto-inject the right quality suffix.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       prompt: {
         type: SchemaType.STRING,
-        description: "Detailed image description in English. Structure: [subject] + [style: photorealistic/cinematic/flat illustration/3D render] + [composition] + [lighting: golden hour/studio/dramatic] + [colors/mood] + [quality suffix: highly detailed, 8K, masterpiece, professional quality, no text, no watermark]. The more specific, the better.",
+        description: "Detailed image description in English. Structure: [subject] + [style] + [composition] + [lighting] + [colors/mood]. The more specific, the better. Do NOT add quality suffix if using style_preset.",
       },
       aspect_ratio: {
         type: SchemaType.STRING,
         description: "Aspect ratio: '1:1' (square 1024×1024, default) | '9:16' (TikTok/Reels 864×1536) | '16:9' (landscape 1536×864) | '4:3' (standard 1024×768)",
+      },
+      style_preset: {
+        type: SchemaType.STRING,
+        description: "Auto-inject quality suffix: 'commercial_photo' (product, white bg, studio) | 'tiktok_thumb' (vibrant, eye-catching 9:16) | 'travel_cinematic' (golden hour, wide-angle) | 'flat_illustration' (vector, minimalist) | 'three_d_product' (3D render, clean bg) | 'storyboard' (flat, muted, sketchy)",
       },
     },
     required: ["prompt"],
@@ -968,7 +972,16 @@ async function runQuerySupabase(args: any): Promise<any> {
 // URL-based: browser tải ảnh trực tiếp → không có base64 bloat trong history.
 // Pollinations dùng FLUX (state-of-the-art open source model, tương đương DALL-E 3).
 
-async function runGenerateImage(args: { prompt: string; aspect_ratio?: string }): Promise<{ markdown: string; error?: string }> {
+const IMAGE_STYLE_PRESETS: Record<string, string> = {
+  commercial_photo:  "product photography, pure white background, studio lighting, sharp focus, highly detailed, 8K resolution, professional quality, no text, no watermark",
+  tiktok_thumb:      "TikTok thumbnail style, vibrant saturated colors, eye-catching composition, high contrast, bold visual, no text, no watermark",
+  travel_cinematic:  "travel photography, golden hour lighting, wide-angle lens, cinematic composition, vivid landscape, highly detailed, no text, no watermark",
+  flat_illustration: "flat vector illustration, minimalist clean design, Dribbble style, soft pastel colors, professional graphic design, no text, no watermark",
+  three_d_product:   "3D product render, clean white background, studio lighting, photorealistic surface, high-quality 3D CGI, no text, no watermark",
+  storyboard:        "storyboard frame, flat illustration, muted earth tones, light sketchy line art, minimal shading, cinematic panel composition",
+}
+
+async function runGenerateImage(args: { prompt: string; aspect_ratio?: string; style_preset?: string }): Promise<{ markdown: string; error?: string }> {
   const ar = args.aspect_ratio || "1:1"
   let width = 1024, height = 1024
   if (ar === "9:16") { width = 864;  height = 1536 }  // TikTok native resolution
@@ -977,12 +990,17 @@ async function runGenerateImage(args: { prompt: string; aspect_ratio?: string })
   if (ar === "3:4")  { width = 768;  height = 1024 }
 
   const seed    = Date.now() % 999983
-  const encoded = encodeURIComponent(args.prompt.trim())
+  // Ghép style preset suffix vào prompt nếu có
+  const basePrompt  = args.prompt.trim()
+  const presetSuffix = args.style_preset ? (IMAGE_STYLE_PRESETS[args.style_preset] ?? "") : ""
+  const fullPrompt   = presetSuffix ? `${basePrompt}, ${presetSuffix}` : basePrompt
+  const encoded = encodeURIComponent(fullPrompt)
   // enhance=true: Pollinations dùng LLM cải thiện prompt trước khi gửi FLUX → chất lượng tốt hơn rõ rệt
   const url     = `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=flux`
+  const presetLabel = args.style_preset ? ` · preset: ${args.style_preset}` : ""
 
   return {
-    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${args.prompt.slice(0, 120)}*\n> *(${width}×${height}px — FLUX + AI enhance)*`,
+    markdown: `![Ảnh Gấu Pro tạo](${url})\n\n> 💾 **Lưu ảnh**: chuột phải → "Lưu ảnh dưới dạng..." | *Prompt: ${basePrompt.slice(0, 120)}*\n> *(${width}×${height}px — FLUX + AI enhance${presetLabel})*`,
   }
 }
 
