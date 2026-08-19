@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
           AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
           AND COALESCE(c.name, TRIM(f.customer_code))
               NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')
-        GROUP BY 1, 2, 3
+        GROUP BY 1, 2, 3, c.price_list_name, c.currency_code
       `),
       queryAnalytics<{ code: string; name: string }>(`
         SELECT DISTINCT
