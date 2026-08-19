@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -286,6 +286,72 @@ function QuarterlyContent() {
   const [newExcluded, setNewExcluded] = useState("")
   const [custSuggestions, setCustSuggestions] = useState<{code: string; name: string}[]>([])
   const [loadingSugg, setLoadingSugg] = useState(false)
+
+  // ── Squad Progress ──
+  const [activeSection, setActiveSection]  = useState<"overview" | "squad">("overview")
+  const [squadData,     setSquadData]      = useState<any>(null)
+  const [squadLoading,  setSquadLoading]   = useState(false)
+  const [squadConfig,   setSquadConfig]    = useState<{ squads: { name: string; leader?: string; sales_pics: string[] }[] } | null>(null)
+  const [squadUsers,    setSquadUsers]     = useState<{ username: string; name: string; role: string }[]>([])
+  const [editingSquad,  setEditingSquad]   = useState(false)
+  const [draftSquads,   setDraftSquads]    = useState<{ name: string; leader: string; sales_pics: string[] }[]>([])
+  const [savingSquad,   setSavingSquad]    = useState(false)
+  const [squadMsg,      setSquadMsg]       = useState<{ ok: boolean; text: string } | null>(null)
+  const [expandedSquads, setExpandedSquads] = useState<Set<number>>(new Set())
+  const notifySquad = (ok: boolean, text: string) => { setSquadMsg({ ok, text }); setTimeout(() => setSquadMsg(null), 3000) }
+
+  // Load squad config + users khi mở tab
+  useEffect(() => {
+    if (activeSection !== "squad") return
+    fetch("/api/config/squad-config").then(r => r.ok ? r.json() : null).then(d => {
+      if (d) {
+        setSquadConfig({ squads: d.squads ?? [] })
+        setSquadUsers(d.users ?? [])
+      }
+    })
+  }, [activeSection])
+
+  const fetchSquadProgress = useCallback(async () => {
+    setSquadLoading(true)
+    try {
+      const params = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
+      const res = await fetch(`/api/analytics/squad-progress?${params}`)
+      if (res.ok) setSquadData(await res.json())
+      else notifySquad(false, "Lỗi tải dữ liệu squad")
+    } catch { notifySquad(false, "Lỗi kết nối") }
+    finally { setSquadLoading(false) }
+  }, [selQ, selYear, companyCode])
+
+  useEffect(() => {
+    if (activeSection === "squad") fetchSquadProgress()
+  }, [activeSection, selQ, selYear, companyCode, fetchSquadProgress])
+
+  const saveSquadConfig = async () => {
+    setSavingSquad(true)
+    try {
+      const r = await fetch("/api/config/squad-config", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ squads: draftSquads }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setSquadConfig({ squads: draftSquads })
+        setEditingSquad(false)
+        notifySquad(true, "Đã lưu cấu hình squad")
+        fetchSquadProgress()
+      } else notifySquad(false, d.error || "Lưu thất bại")
+    } catch { notifySquad(false, "Lỗi kết nối") }
+    finally { setSavingSquad(false) }
+  }
+
+  const RISK_META: Record<string, { label: string; color: string; bg: string }> = {
+    very_safe:  { label: "Rất an toàn",    color: "text-emerald-700", bg: "bg-emerald-100" },
+    safe:       { label: "An toàn",         color: "text-green-700",   bg: "bg-green-100"   },
+    safe_low:   { label: "An toàn ít",      color: "text-yellow-700",  bg: "bg-yellow-100"  },
+    danger_low: { label: "Nguy hiểm ít",    color: "text-orange-700",  bg: "bg-orange-100"  },
+    danger_high:{ label: "Nguy hiểm nhiều", color: "text-red-700",     bg: "bg-red-100"     },
+    no_target:  { label: "Chưa có target",  color: "text-slate-500",   bg: "bg-slate-100"   },
+  }
 
   useEffect(() => {
     if (!canEditSettings) return
@@ -577,6 +643,22 @@ function QuarterlyContent() {
           {msg.text}
         </div>
       )}
+
+      {/* ── Tab bar ── */}
+      <div className="flex gap-1 border-b border-slate-200 -mb-4">
+        {([["overview", Building2, "Tổng quan"], ["squad", Users, "Squad Progress"]] as const).map(([id, Icon, label]) => (
+          <button key={id} onClick={() => setActiveSection(id as any)}
+            className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              activeSection === id
+                ? "border-[#003B95] text-[#003B95]"
+                : "border-transparent text-slate-500 hover:text-slate-700")}>
+            <Icon className="w-4 h-4" />{label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview content (ẩn khi tab = squad) ── */}
+      <div className={activeSection === "squad" ? "hidden" : ""}>
 
       {/* ── Settings panel (admin/creator only) ── */}
       {canEditSettings && showSettings && qSettings && (
@@ -927,6 +1009,287 @@ function QuarterlyContent() {
 
       {!loading && summary.length === 0 && report && (
         <div className="text-center py-16 text-slate-400 text-sm">Chưa có dữ liệu cho {selQ}-{selYear}.</div>
+      )}
+      </div>{/* end overview wrapper */}
+
+      {/* ── Squad Progress tab ── */}
+      {activeSection === "squad" && (
+        <div className="space-y-6">
+
+          {squadMsg && (
+            <div className={cn("px-4 py-2.5 rounded-lg text-sm", squadMsg.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700")}>
+              {squadMsg.text}
+            </div>
+          )}
+
+          {/* ── Manage squads (admin/creator) ── */}
+          {canEditSettings && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <button onClick={() => {
+                if (!editingSquad) {
+                  setDraftSquads((squadConfig?.squads ?? []).map(s => ({ name: s.name, leader: s.leader ?? "", sales_pics: [...s.sales_pics] })))
+                  setEditingSquad(true)
+                } else { setEditingSquad(false) }
+              }} className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-bold text-slate-800">Cấu hình Squad</span>
+                  {squadConfig && <span className="text-xs text-slate-400">({squadConfig.squads.length} squad)</span>}
+                </div>
+                {editingSquad ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+
+              {editingSquad && (
+                <div className="p-5 space-y-4">
+                  {draftSquads.map((sq, si) => {
+                    // Danh sách available pics = tất cả - đã chọn trong squad này - đã chọn ở squad khác
+                    const usedInOthers = new Set(draftSquads.flatMap((s, i) => i !== si ? s.sales_pics : []))
+                    const availPics = (squadData?.available_pics ?? []).filter((p: any) => !sq.sales_pics.includes(p.code) && !usedInOthers.has(p.code))
+                    return (
+                      <div key={si} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                        {/* Header: tên squad + xóa */}
+                        <div className="flex items-center gap-2">
+                          <input value={sq.name} onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, name: e.target.value } : s))}
+                            placeholder="Tên squad (VD: Squad 1 Ngọc)"
+                            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
+                          <button onClick={() => setDraftSquads(prev => prev.filter((_, i) => i !== si))}
+                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Leader dropdown từ users list */}
+                        <div>
+                          <p className="text-xs font-medium text-slate-500 mb-1">Leader</p>
+                          <select value={sq.leader ?? ""}
+                            onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, leader: e.target.value } : s))}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95] bg-white">
+                            <option value="">— Chọn leader —</option>
+                            {squadUsers.map(u => (
+                              <option key={u.username} value={u.username}>{u.name} (@{u.username})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Sales PIC: chip đã chọn */}
+                        <div>
+                          <p className="text-xs font-medium text-slate-500 mb-1.5">Sales PIC trong squad</p>
+                          {sq.sales_pics.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">Chưa có — click thêm từ danh sách bên dưới</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {sq.sales_pics.map(code => {
+                                const info = (squadData?.available_pics ?? []).find((p: any) => p.code === code)
+                                return (
+                                  <span key={code} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#003B95] text-white text-xs rounded-full font-medium">
+                                    {info?.name ?? code}
+                                    <button onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si
+                                      ? { ...s, sales_pics: s.sales_pics.filter(c => c !== code) } : s))}
+                                      className="hover:text-red-300 transition-colors ml-0.5">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Available pics (đã lọc bỏ đã chọn) */}
+                          {availPics.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 mb-1">Click để thêm:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {availPics.map((p: any) => (
+                                  <button key={p.code}
+                                    onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si
+                                      ? { ...s, sales_pics: [...s.sales_pics, p.code] } : s))}
+                                    className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#003B95] hover:text-white transition-colors">
+                                    <Plus className="w-2.5 h-2.5 inline-block mr-0.5" />{p.name} ({p.code})
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {availPics.length === 0 && sq.sales_pics.length > 0 && (
+                            <p className="text-[10px] text-slate-400">Tất cả sales PIC đã được phân vào squad.</p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  <div className="flex gap-2">
+                    <button onClick={() => setDraftSquads(prev => [...prev, { name: "", leader: "", sales_pics: [] }])}
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm border border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-[#003B95] hover:text-[#003B95] transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Thêm squad
+                    </button>
+                    <button onClick={saveSquadConfig} disabled={savingSquad}
+                      className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                      {savingSquad ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      {savingSquad ? "Đang lưu…" : "Lưu cấu hình"}
+                    </button>
+                    <button onClick={() => setEditingSquad(false)}
+                      className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Squad progress table ── */}
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Squad Progress — {selQ} {selYear}</h2>
+                {squadData && <p className="text-xs text-slate-400 mt-0.5">{squadData.elapsed_days}/{squadData.quarter_days} ngày · Pro-rata × {squadData.pr_factor?.toFixed(2)}</p>}
+              </div>
+              <button onClick={fetchSquadProgress} disabled={squadLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white text-xs font-semibold rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                <RefreshCw className={cn("w-3.5 h-3.5", squadLoading && "animate-spin")} />
+                {squadLoading ? "Đang tải…" : "Làm mới"}
+              </button>
+            </div>
+
+            {/* Risk legend */}
+            <div className="px-5 py-2 border-b border-slate-100 flex flex-wrap gap-x-4 gap-y-1">
+              {Object.entries(RISK_META).filter(([k]) => k !== "no_target").map(([k, v]) => (
+                <span key={k} className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", v.bg, v.color)}>{v.label}</span>
+              ))}
+            </div>
+
+            {squadLoading ? (
+              <div className="flex items-center justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-[#003B95]" /></div>
+            ) : !squadData ? (
+              <div className="py-12 text-center text-slate-400 text-sm">Bấm "Làm mới" để tải dữ liệu.</div>
+            ) : !squadData.squads?.length ? (
+              <div className="py-12 text-center text-slate-400 text-sm">
+                Chưa có squad nào. {canEditSettings && "Bấm \"Cấu hình Squad\" để thêm."}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {squadData.squads.map((sq: any, si: number) => {
+                  const expanded = expandedSquads.has(si)
+                  const pctColor = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
+                  const leaderUser = squadUsers.find(u => u.username === sq.leader)
+                  return (
+                    <div key={si}>
+                      {/* Squad header row */}
+                      <div className={cn("px-5 py-3 hover:bg-slate-50 transition-colors", si % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
+                        {/* Row 1: tên, leader, risk summary, toggle */}
+                        <div className="flex items-center gap-3 mb-2">
+                          <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
+                            className="flex items-center gap-2 flex-1 text-left">
+                            <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
+                            <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
+                            {leaderUser && <span className="text-xs text-slate-400">· Leader: {leaderUser.name}</span>}
+                            <span className="text-xs text-slate-400">· {sq.customer_count} KH</span>
+                          </button>
+                          {/* Risk badges */}
+                          <div className="flex flex-wrap gap-1 shrink-0">
+                            {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => {
+                              const cnt = sq.risk_counts?.[k] ?? 0
+                              if (!cnt) return null
+                              const m = RISK_META[k]
+                              return <span key={k} className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums", m.bg, m.color)}>{cnt} {m.label}</span>
+                            })}
+                          </div>
+                        </div>
+                        {/* Row 2: số liệu tổng squad */}
+                        <div className="ml-6 grid grid-cols-3 gap-x-6 gap-y-1 text-xs">
+                          {/* Revenue */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 w-16 shrink-0">Revenue</span>
+                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.revenue)}</span>
+                            <span className="tabular-nums text-blue-600 font-medium">→ {formatCompactNumber(sq.revenue_pr)} PR</span>
+                            {sq.target_rev > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.rev_pct))}>{sq.rev_pct != null ? `${sq.rev_pct}%` : "—"} tgt</span>}
+                          </div>
+                          {/* GP (proxy CM1) */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 w-16 shrink-0">GP~CM1</span>
+                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.gp)}</span>
+                            {sq.target_cm1 > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.gp_cm1_pct))}>{sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "—"} tgt</span>}
+                          </div>
+                          {/* 3HK */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 w-10 shrink-0">3HK</span>
+                            <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.hk3)}</span>
+                            <span className="text-slate-500">{sq.hk3_pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expandable customer table */}
+                      {expanded && sq.customers?.length > 0 && (
+                        <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
+                          <table className="w-full text-[11px] border-collapse">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                                <th className="px-4 py-2 text-left font-semibold">KH</th>
+                                <th className="px-3 py-2 text-right font-semibold">Rev Actual</th>
+                                <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
+                                <th className="px-3 py-2 text-right font-semibold">Rev Tgt</th>
+                                <th className="px-3 py-2 text-right font-semibold">%TGT Rev</th>
+                                <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
+                                <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
+                                <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
+                                <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK%</th>
+                                <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
+                                <th className="px-3 py-2 text-right font-semibold">%TGT 3HK</th>
+                                <th className="px-3 py-2 text-center font-semibold border-l border-slate-200">Đánh giá</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {sq.customers.map((c: any, ci: number) => {
+                                const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
+                                const pct = (v: number | null) => v != null ? `${v}%` : "—"
+                                const pctCol = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
+                                return (
+                                  <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                    <td className="px-4 py-2 font-medium text-slate-700">{c.customer_name}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatCompactNumber(c.revenue)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_rev > 0 ? formatCompactNumber(c.target_rev) : "—"}</td>
+                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.rev_pct))}>{pct(c.rev_pct)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
+                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
+                                    <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
+                                    <td className="px-3 py-2 text-center border-l border-slate-100">
+                                      <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Totals */}
+                {squadData.totals && (
+                  <div className="px-5 py-3 bg-[#003B95]/5 border-t-2 border-[#003B95]/20">
+                    <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
+                      <span className="w-28">Tổng</span>
+                      <span className="text-slate-500">{squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH</span>
+                      <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
+                      <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
+                      <span className="text-slate-500">GP: {formatCompactNumber(squadData.totals.gp)}</span>
+                      <span className="text-slate-500">3HK: {formatCompactNumber(squadData.totals.hk3)} ({squadData.totals.hk3_pct}%)</span>
+                    </div>
+                  </div>
+                )}
+                <p className="px-5 py-2 text-[10px] text-slate-400">
+                  GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). Pro-rata = Actual × (Tổng ngày Q / Ngày đã trôi qua). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK%actual / 3HK%target.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
