@@ -26,6 +26,14 @@ async function saveAllowed(list: string[]) {
   )
 }
 
+async function logAccess(action: string, targetUsername: string, performedBy: string) {
+  try {
+    await supabaseAdmin.from("access_audit_log").insert({
+      action, target_type: "my_metrics_access", target_username: targetUsername, performed_by: performedBy,
+    })
+  } catch {} // bảng chưa tạo (v41 chưa chạy) → bỏ qua
+}
+
 export async function GET() {
   try {
     await requireCreator()
@@ -41,7 +49,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireCreator()
+    const session = await requireCreator()
+    const by = (session.user as any)?.username ?? "unknown"
     const { action, username } = await req.json()
     if (!username?.trim()) return NextResponse.json({ error: "username required" }, { status: 400 })
 
@@ -51,10 +60,12 @@ export async function POST(req: NextRequest) {
       const { data: user } = await supabaseAdmin.from("users").select("role").eq("username", username.trim()).maybeSingle()
       if (!user) return NextResponse.json({ error: `User "${username}" không tồn tại` }, { status: 404 })
       if (!allowed.includes(username.trim())) await saveAllowed([...allowed, username.trim()])
+      await logAccess("add", username.trim(), by)
       return NextResponse.json({ ok: true })
     }
     if (action === "remove") {
       await saveAllowed(allowed.filter(u => u !== username.trim()))
+      await logAccess("remove", username.trim(), by)
       return NextResponse.json({ ok: true })
     }
     return NextResponse.json({ error: "action must be add or remove" }, { status: 400 })

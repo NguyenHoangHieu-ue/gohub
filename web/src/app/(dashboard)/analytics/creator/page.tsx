@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
@@ -239,6 +239,9 @@ function CreatorSettings() {
       {/* My Metrics Access */}
       <MyMetricsAccessSection />
 
+      {/* Audit Log */}
+      <AuditLogSection />
+
       {/* Cà Thread */}
       <CaThreadSection />
 
@@ -269,6 +272,58 @@ function CreatorSettings() {
               })()}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UserSearchInput({ value, onChange, onSelect, placeholder, wrapperClass, inputClass }: {
+  value: string
+  onChange: (v: string) => void
+  onSelect: (username: string) => void
+  placeholder?: string
+  wrapperClass?: string
+  inputClass?: string
+}) {
+  const [suggestions, setSuggestions] = useState<{ username: string; name: string; role: string }[]>([])
+  const [open, setOpen] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current)
+    if (value.length < 2) { setSuggestions([]); setOpen(false); return }
+    timer.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/users/search?q=${encodeURIComponent(value)}`)
+        const d = await r.json()
+        setSuggestions(d.users ?? [])
+        setOpen((d.users ?? []).length > 0)
+      } catch { setSuggestions([]); setOpen(false) }
+    }, 300)
+    return () => { if (timer.current) clearTimeout(timer.current) }
+  }, [value])
+
+  return (
+    <div className={cn("relative", wrapperClass)}>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={e => e.key === "Escape" && setOpen(false)}
+        placeholder={placeholder}
+        className={inputClass}
+      />
+      {open && (
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {suggestions.map(u => (
+            <button key={u.username} onMouseDown={() => { onChange(u.username); onSelect(u.username); setOpen(false) }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
+              <span className="font-medium text-slate-800">{u.name}</span>
+              <span className="text-slate-400 text-xs">@{u.username}</span>
+              <span className="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -351,11 +406,13 @@ function GpAccessSection() {
 
         {/* Add user */}
         <div className="flex gap-2">
-          <input
-            value={newUsername} onChange={e => setNewUsername(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && add()}
-            placeholder="Username cần cấp quyền..."
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400"
+          <UserSearchInput
+            value={newUsername}
+            onChange={setNewUsername}
+            onSelect={setNewUsername}
+            placeholder="Tìm username hoặc tên…"
+            wrapperClass="flex-1"
+            inputClass="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
           <button onClick={add} disabled={adding || !newUsername.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors">
@@ -442,9 +499,14 @@ function MyMetricsAccessSection() {
       <div className="p-6 space-y-4">
         {msg && <div className={cn("px-4 py-2.5 rounded-xl text-sm", msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>{msg.text}</div>}
         <div className="flex gap-2">
-          <input value={newUsername} onChange={e => setNew(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
-            placeholder="Username cần cấp quyền..."
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          <UserSearchInput
+            value={newUsername}
+            onChange={setNew}
+            onSelect={setNew}
+            placeholder="Tìm username hoặc tên…"
+            wrapperClass="flex-1"
+            inputClass="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          />
           <button onClick={add} disabled={adding || !newUsername.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-40 transition-colors">
             <Plus className="w-3.5 h-3.5" />{adding ? "Đang thêm…" : "Thêm"}
@@ -465,6 +527,70 @@ function MyMetricsAccessSection() {
               </div>
             ))}</div>}
       </div>
+    </div>
+  )
+}
+
+const TARGET_LABEL: Record<string, string> = { gp_access: "Gấu Pro", my_metrics_access: "My Metrics" }
+
+function AuditLogSection() {
+  const [logs, setLogs]       = useState<any[] | null>(null)
+  const [show, setShow]       = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch("/api/creator/access-audit-log?limit=30")
+      const d = await r.json()
+      setLogs(d.logs ?? [])
+    } catch { setLogs([]) }
+    finally { setLoading(false) }
+  }
+
+  const toggle = () => { const next = !show; setShow(next); if (next && logs === null) load() }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <button onClick={toggle} className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-slate-500 rounded-xl flex items-center justify-center">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div className="text-left">
+            <h2 className="font-bold text-slate-800 text-sm">Audit Log — Cấp / Thu hồi quyền</h2>
+            <p className="text-xs text-slate-400">30 thao tác gần nhất (Gấu Pro + My Metrics)</p>
+          </div>
+        </div>
+        {show ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+      {show && (
+        <div className="border-t border-slate-100 p-4">
+          {loading ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />Đang tải…
+            </div>
+          ) : !logs || logs.length === 0 ? (
+            <div className="text-xs text-slate-400 py-4 text-center">Chưa có thao tác nào được ghi lại (cần chạy migration v41).</div>
+          ) : (
+            <div className="space-y-1 max-h-72 overflow-y-auto">
+              {logs.map(log => (
+                <div key={log.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 text-xs flex-wrap">
+                  <span className={cn("px-1.5 py-0.5 rounded font-medium shrink-0", log.action === "add" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600")}>
+                    {log.action === "add" ? "Cấp" : "Thu hồi"}
+                  </span>
+                  <span className="text-slate-400 shrink-0">{TARGET_LABEL[log.target_type] ?? log.target_type}</span>
+                  <span className="font-medium text-slate-800">@{log.target_username}</span>
+                  <span className="text-slate-400">bởi @{log.performed_by}</span>
+                  <span className="ml-auto text-slate-300 shrink-0">
+                    {new Date(log.performed_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
