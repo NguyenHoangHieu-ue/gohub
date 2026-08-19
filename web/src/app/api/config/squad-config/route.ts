@@ -2,17 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getDbRole } from "@/lib/db-role"
 
 const KEY = "squad_config"
-
-async function requireEditor() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.username) throw new Error("Unauthorized")
-  const role = await getDbRole(session.user.username)
-  if (!["admin", "creator"].includes(role)) throw new Error("Forbidden")
-  return session
-}
 
 export async function GET() {
   try {
@@ -29,7 +20,11 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    await requireEditor()
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!["admin", "creator"].includes(session.user.role ?? ""))
+      return NextResponse.json({ error: "Chỉ admin/creator mới có thể lưu cấu hình squad" }, { status: 403 })
+
     const body = await req.json()
     const { error } = await supabaseAdmin.from("app_settings").upsert(
       { key: KEY, value: JSON.stringify(body), category: "squad" },
@@ -38,7 +33,6 @@ export async function PUT(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   } catch (e: any) {
-    const status = e.message === "Forbidden" ? 403 : e.message === "Unauthorized" ? 401 : 500
-    return NextResponse.json({ error: e.message }, { status })
+    return NextResponse.json({ error: e.message ?? "Lỗi không xác định" }, { status: 500 })
   }
 }

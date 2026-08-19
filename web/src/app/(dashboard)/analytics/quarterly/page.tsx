@@ -333,14 +333,15 @@ function QuarterlyContent() {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ squads: draftSquads }),
       })
-      const d = await r.json()
+      let d: any = {}
+      try { d = await r.json() } catch { /* non-JSON response */ }
       if (r.ok) {
         setSquadConfig({ squads: draftSquads })
         setEditingSquad(false)
         notifySquad(true, "Đã lưu cấu hình squad")
         fetchSquadProgress()
-      } else notifySquad(false, d.error || "Lưu thất bại")
-    } catch { notifySquad(false, "Lỗi kết nối") }
+      } else notifySquad(false, d.error || `Lỗi ${r.status}: ${r.statusText}`)
+    } catch (e: any) { notifySquad(false, `Lỗi kết nối: ${e.message}`) }
     finally { setSavingSquad(false) }
   }
 
