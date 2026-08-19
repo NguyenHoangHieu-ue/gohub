@@ -36,12 +36,21 @@ function parseLarkContent(msg: any): string {
   } catch { return "" }
 }
 
+function normalizeConfig(raw: any): { groups: { chat_id: string; emoji_type?: string; days_back?: number; my_open_id?: string; name?: string }[] } {
+  if (!raw || typeof raw !== "object") return { groups: [] }
+  if (Array.isArray(raw.groups)) return { groups: raw.groups }
+  // Backward-compat: shape cũ có chat_id ở root → wrap thành groups[0]
+  if (raw.chat_id) return { groups: [{ chat_id: raw.chat_id, emoji_type: raw.emoji_type, days_back: raw.days_back, my_open_id: raw.my_open_id }] }
+  return { groups: [] }
+}
+
 export async function GET() {
   try {
     await requireCreatorOrAdmin()
     const { data } = await supabaseAdmin
       .from("app_settings").select("value").eq("key", CONFIG_KEY).maybeSingle()
-    return NextResponse.json(data?.value ? JSON.parse(data.value) : {})
+    const raw = data?.value ? JSON.parse(data.value) : null
+    return NextResponse.json(normalizeConfig(raw))
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
