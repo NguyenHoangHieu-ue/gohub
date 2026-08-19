@@ -49,10 +49,10 @@
 ### 2.3 ✅ XONG (s155, staging cd669fc) — Knowledge Search + Import batch
 - API `?action=batch`: upsert array entries từ Excel/CSV, regenerate master note 1 lần. Search box client-side (title+content). Import modal: parse xlsx/csv dynamic import → preview table → nhập batch.
 
-## Wave 3 — Low Priority
-- **3.1 Usage Analytics** — toggle so sánh kỳ trước (delta %) + trend line score. `creator/usage/page.tsx` · M (~2h)
-- **3.2 Dev Tools** — saved queries + history (localStorage). `creator/devtools/page.tsx` · S-M (~1.5h)
-- **3.3 Cà Thread schedule** — cron nhắc Hiếu "có N thread cần cà" (KHÔNG auto-send). `api/cron/ca-thread-remind` · M (~2h)
+## Wave 3 — Low Priority ✅ XONG (s155, staging 6040aec)
+- **3.1** ✅ toggle "So sánh kỳ trước" → fetch prev period → delta % (▲/▼) trong 3 KPI cards (Views/Chats/Users)
+- **3.2** ✅ saved queries + history trong localStorage; tab Endpoints/Saved/History; nút 🔖 Lưu
+- **3.3** ✅ cron ca-thread-remind: scan ~count threads → Lark DM cho `LARK_CREATOR_USER_ID` hàng thứ 2 10h ICT. Cần set `LARK_CREATOR_USER_ID` trên Vercel.
 
 ## Thứ tự đề xuất
 ```

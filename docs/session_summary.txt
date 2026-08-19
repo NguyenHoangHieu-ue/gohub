@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 + Wave 2 hoàn tất).
+Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 + Wave 2 + Wave 3 hoàn tất).
 
 ## ══════ SESSION 155 (2026-08-19) ══════
 **Wave 1.2 Cà Thread Multi-group** (staging b743bd7):
@@ -21,6 +21,12 @@ Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 + Wave 2 hoàn t
 - API POST `?action=batch`: upsert mảng entries, regenerate master note 1 lần.
 - FE: search box client-side (title+content); nút Upload → file input ẩn; import modal parse xlsx/csv → preview → batch upsert.
 - tsc PASS · tất cả Wave 2: b661452, 597f7d5, cd669fc
+
+**Wave 3 (staging 6040aec):**
+- 3.1 Usage: toggle "So sánh kỳ trước" → fetch prev period → delta % (▲/▼) trong KPI cards Views/Chats/Users.
+- 3.2 DevTools: ApiTester thêm tab Endpoints/Saved/History; nút 🔖 Lưu; localStorage persist.
+- 3.3 Cron ca-thread-remind: scan threads → Lark DM hàng thứ 2 10h ICT. Cần set LARK_CREATOR_USER_ID trên Vercel.
+- tsc PASS · 6040aec
 
 ## ══════ SESSION 149 (2026-08-17) ══════
 
