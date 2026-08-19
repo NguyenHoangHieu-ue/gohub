@@ -29,33 +29,30 @@
 - Migration **v40** `ca_thread_log` — Hiếu ĐÃ chạy. `handleSend`→INSERT; `handleScan`→mark `already_sent` persistent; action `history`. FE badge + section Lịch sử.
 - ⏳ CÒN: test trên staging (cà→reload→còn badge) → merge main.
 
-### 1.2 ⬅️ MAI BẮT ĐẦU TỪ ĐÂY — Cà Thread Multi-group
-- **Vấn đề:** config chỉ 1 chat_id; muốn nhiều group phải sửa từng lần.
-- **Giải pháp:** đổi `ca_thread_config` → `{ groups: [...] }` (backward-compat: đọc thấy shape cũ có `chat_id` ở root → wrap `groups[0]`). FE dropdown chọn group + "+ Thêm group" trong edit mode. API `scan`/`send` đã nhận `chat_id` → chỉ cần FE truyền group đang chọn.
-- **Files:** `api/creator/ca-thread/route.ts` (đọc/ghi config array) · `creator/page.tsx` (CaThreadSection) · **Effort:** M (~2h)
-- **Lưu ý:** `ca_thread_config` hiện là single object `{chat_id, emoji_type, days_back, my_open_id}`. Giữ backward-compat để config cũ không vỡ.
+### 1.2 ✅ XONG (s155, staging b743bd7) — Cà Thread Multi-group
+- API GET: `normalizeConfig()` backward-compat (shape cũ `chat_id` ở root → wrap `groups[0]`). PUT lưu `{groups:[...]}`.
+- FE: state `groups[]` + `selectedIdx` + `editIdx` (null/−1/≥0). Group selector tabs khi ≥2 group. Thêm/Sửa/Xóa group. Tên group tuỳ chọn. `scan`/`send`/`history` tự dùng `activeGroup`.
 
 ### 1.3 ✅ XONG (s154, staging 807d658) — Gấu Pro Lark task user token
 - Code đã ưu tiên `userToken || appToken` sẵn (task hiện tên Hiếu khi kết nối). Bổ sung `getLarkUserOpenId()` làm assignee fallback khi env `LARK_CREATOR_USER_ID` trống.
 
 ## Wave 2 — Medium Priority
 
-### 2.1 Tab Visibility — Bulk toggle + Preview
-- Nút ẩn/hiện cả cột (role) / cả hàng (tab) + modal "Xem trước role này thấy gì". Chỉ FE.
-- **Files:** `creator/page.tsx` · **Effort:** M (~2h)
+### 2.1 ✅ XONG (s155, staging b661452) — Tab Visibility Bulk toggle + Preview
+- Header role: click tên → preview modal (danh sách tab visible). Nút eye nhỏ → toggle ẩn tất cả tab cho role đó.
+- Label tab: nút eye nhỏ đầu hàng → toggle tab đó cho tất cả role.
 
-### 2.2 Access grants — Audit log + search user
-- Migration **v41** `access_audit_log`. Ghi log ở gp-access / my-metrics-access / tab-visibility POST. Autocomplete username từ `/api/users`.
-- **Files:** `v41_access_audit_log.sql` · 3 API · `creator/page.tsx` · **Effort:** M-L (~3-4h)
+### 2.2 ✅ XONG (s155, staging 597f7d5) — Access Audit Log + autocomplete username
+- v41 migration `access_audit_log`. gp-access + my-metrics-access ghi log sau add/remove. GET endpoint `/api/creator/access-audit-log`. `UserSearchInput` component autocomplete debounce 300ms. `AuditLogSection` collapse/expand.
+- ⚠️ Hiếu cần chạy `v41_access_audit_log.sql` trên Supabase SQL Editor.
 
-### 2.3 Own Info / Knowledge — Search + Import batch
-- Ô search client-side; import Excel/CSV (category,key,title,content)→preview→bulk upsert (dùng xlsx sẵn có). Optional: v42 version history.
-- **Files:** `creator/knowledge/page.tsx` · `api/creator-ai/knowledge/route.ts` · **Effort:** M (~2-3h)
+### 2.3 ✅ XONG (s155, staging cd669fc) — Knowledge Search + Import batch
+- API `?action=batch`: upsert array entries từ Excel/CSV, regenerate master note 1 lần. Search box client-side (title+content). Import modal: parse xlsx/csv dynamic import → preview table → nhập batch.
 
-## Wave 3 — Low Priority
-- **3.1 Usage Analytics** — toggle so sánh kỳ trước (delta %) + trend line score. `creator/usage/page.tsx` · M (~2h)
-- **3.2 Dev Tools** — saved queries + history (localStorage). `creator/devtools/page.tsx` · S-M (~1.5h)
-- **3.3 Cà Thread schedule** — cron nhắc Hiếu "có N thread cần cà" (KHÔNG auto-send). `api/cron/ca-thread-remind` · M (~2h)
+## Wave 3 — Low Priority ✅ XONG (s155, staging 6040aec)
+- **3.1** ✅ toggle "So sánh kỳ trước" → fetch prev period → delta % (▲/▼) trong 3 KPI cards (Views/Chats/Users)
+- **3.2** ✅ saved queries + history trong localStorage; tab Endpoints/Saved/History; nút 🔖 Lưu
+- **3.3** ✅ cron ca-thread-remind: scan ~count threads → Lark DM cho `LARK_CREATOR_USER_ID` hàng thứ 2 10h ICT. Cần set `LARK_CREATOR_USER_ID` trên Vercel.
 
 ## Thứ tự đề xuất
 ```
