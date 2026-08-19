@@ -330,7 +330,7 @@ function QuarterlyContent() {
     setSavingSquad(true)
     try {
       const r = await fetch("/api/config/squad-config", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ squads: draftSquads }),
       })
       let d: any = {}
