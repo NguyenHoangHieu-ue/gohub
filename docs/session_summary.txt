@@ -1,11 +1,26 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 Cà Thread multi-group).
+Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 + Wave 2 hoàn tất).
 
 ## ══════ SESSION 155 (2026-08-19) ══════
 **Wave 1.2 Cà Thread Multi-group** (staging b743bd7):
 - API route.ts: thêm `normalizeConfig()` backward-compat (shape cũ `{chat_id,...}` → wrap thành `{groups:[{...}]}`). GET trả `{groups:[...]}`. PUT nhận và lưu format mới.
 - FE creator/page.tsx: thêm `GroupConfig` interface + `DEFAULT_GROUP`. Rewrite `CaThreadSection` — state `groups[]` + `selectedIdx` + `editIdx` (null/−1/≥0) thay state riêng lẻ cũ. UI: group selector tabs khi ≥2 group + nút "Thêm group" ở góc; form thêm/sửa có field "Tên group" tuỳ chọn; nút "Xóa group này" khi ≥2 group; scan/send/history dùng `activeGroup` (group đang chọn).
 - tsc PASS · staged: b743bd7
+
+**Wave 2.1 Tab Visibility Bulk toggle + Preview** (staging b661452):
+- Header role: click tên → modal xem trước tab visible. Nút eye nhỏ → toggle ẩn toàn bộ tab cho role.
+- Đầu mỗi hàng tab: nút eye nhỏ → toggle tab cho tất cả role cùng lúc.
+
+**Wave 2.2 Access Audit Log + autocomplete** (staging 597f7d5):
+- v41 migration SQL (Hiếu cần chạy trên Supabase).
+- API `/api/users/search` (creator+admin search users). `/api/creator/access-audit-log` GET.
+- gp-access + my-metrics-access: ghi audit log sau add/remove (graceful fallback nếu v41 chưa chạy).
+- FE: `UserSearchInput` debounce 300ms; `AuditLogSection` collapse/expand.
+
+**Wave 2.3 Knowledge Search + Import batch** (staging cd669fc):
+- API POST `?action=batch`: upsert mảng entries, regenerate master note 1 lần.
+- FE: search box client-side (title+content); nút Upload → file input ẩn; import modal parse xlsx/csv → preview → batch upsert.
+- tsc PASS · tất cả Wave 2: b661452, 597f7d5, cd669fc
 
 ## ══════ SESSION 149 (2026-08-17) ══════
 
