@@ -49,6 +49,18 @@ function today()       { return new Date().toISOString().slice(0, 10) }
 function daysAgo(n: number) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10)
 }
+function prevRange(from: string, to: string) {
+  const f = new Date(from), t = new Date(to)
+  const diff = t.getTime() - f.getTime()
+  const pTo   = new Date(f.getTime() - 86400000)
+  const pFrom = new Date(pTo.getTime() - diff)
+  return { from: pFrom.toISOString().slice(0, 10), to: pTo.toISOString().slice(0, 10) }
+}
+function deltaStr(cur: number, prev: number) {
+  if (!prev) return cur > 0 ? "▲ mới" : ""
+  const pct = Math.round(((cur - prev) / prev) * 100)
+  return pct >= 0 ? `▲ +${pct}% vs kỳ trước` : `▼ ${pct}% vs kỳ trước`
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -140,6 +152,29 @@ export default function UsagePage() {
   const [classifying,      setClassifying]      = useState(false)
   const [categories,       setCategories]       = useState<Category[]>([])
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+
+  // Compare kỳ trước
+  const [compareMode, setCompareMode] = useState(false)
+  const [prevData, setPrevData]       = useState<{ views: number; chats: number; users: number } | null>(null)
+  const [prevLoading, setPrevLoading] = useState(false)
+
+  useEffect(() => {
+    if (!compareMode || !session || session.user.role !== "creator") { setPrevData(null); return }
+    const { from, to } = prevRange(fromDate, toDate)
+    setPrevLoading(true)
+    fetch(`/api/analytics/usage-stats?from=${from}&to=${to}`)
+      .then(r => r.json())
+      .then(d => {
+        const ev = d.events || []
+        setPrevData({
+          views: ev.filter((e: any) => e.event_type === "page_view").length,
+          chats: ev.filter((e: any) => e.event_type === "chat").length,
+          users: new Set(ev.map((e: any) => e.user_email)).size,
+        })
+      })
+      .catch(() => setPrevData(null))
+      .finally(() => setPrevLoading(false))
+  }, [compareMode, fromDate, toDate, session])
 
   // Evaluate state
   const [evaluating,  setEvaluating]  = useState(false)
@@ -313,6 +348,11 @@ export default function UsagePage() {
               {d}d
             </button>
           ))}
+          <button onClick={() => setCompareMode(c => !c)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${compareMode ? "bg-violet-600 border-violet-600 text-white" : "border-slate-200 text-slate-500 hover:border-violet-400 hover:text-violet-600"}`}>
+            <TrendingUp className="w-3.5 h-3.5" />
+            {prevLoading ? "Đang tải…" : compareMode ? "So sánh: Bật" : "So sánh kỳ trước"}
+          </button>
           <button onClick={handleExport} disabled={loading || events.length === 0}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#003B95] text-white rounded-lg hover:bg-[#002B70] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             <Download className="w-3.5 h-3.5" /> Export
@@ -322,9 +362,15 @@ export default function UsagePage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard icon={Activity}      label="Tab Views"      value={loading?"…":pageViews.length} sub="đã dedup"      color="text-blue-600" />
-        <KpiCard icon={MessageSquare} label="Chat Messages"  value={loading?"…":chats.length}     sub="câu hỏi Bé Gấu" color="text-purple-600" />
-        <KpiCard icon={Users}         label="Unique Users"   value={loading?"…":userStats.length} sub="người dùng"    color="text-emerald-600" />
+        <KpiCard icon={Activity}      label="Tab Views"      value={loading?"…":pageViews.length}
+          sub={compareMode && prevData ? deltaStr(pageViews.length, prevData.views) : "đã dedup"}
+          color="text-blue-600" />
+        <KpiCard icon={MessageSquare} label="Chat Messages"  value={loading?"…":chats.length}
+          sub={compareMode && prevData ? deltaStr(chats.length, prevData.chats) : "câu hỏi Bé Gấu"}
+          color="text-purple-600" />
+        <KpiCard icon={Users}         label="Unique Users"   value={loading?"…":userStats.length}
+          sub={compareMode && prevData ? deltaStr(userStats.length, prevData.users) : "người dùng"}
+          color="text-emerald-600" />
         <KpiCard icon={Bot}           label="Agents Used"    value={loading?"…":agentData.length} sub="loại agent"    color="text-orange-600" />
         <KpiCard
           icon={Target}

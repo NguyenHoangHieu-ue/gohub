@@ -33,6 +33,9 @@
     },
     "src/app/api/cron/bc-sync/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/ca-thread-remind/route.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -63,6 +66,10 @@
     {
       "path": "/api/cron/bc-sync",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/ca-thread-remind",
+      "schedule": "0 3 * * 1"
     }
   ]
 }

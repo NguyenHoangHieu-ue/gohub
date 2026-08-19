@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight, GitBranch } from "lucide-react"
+import { Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight, GitBranch, Bookmark, BookmarkCheck, Clock, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DataLineageMap } from "@/components/data-lineage-map"
 
@@ -87,6 +87,9 @@ const QUICK_ENDPOINTS = [
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
 
+type SavedQuery = { label: string; method: string; path: string; body: string }
+type HistoryItem = { method: string; path: string; status: number; ms: number; ts: string }
+
 function ApiTester() {
   const [method, setMethod] = useState<(typeof METHODS)[number]>("GET")
   const [path, setPath] = useState("/api/user/me")
@@ -96,6 +99,33 @@ function ApiTester() {
   const [err, setErr] = useState<string | null>(null)
   const [routes, setRoutes] = useState<string[]>([])
   const [routesLoading, setRoutesLoading] = useState(false)
+  const [epTab, setEpTab] = useState<"endpoints" | "saved" | "history">("endpoints")
+  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([])
+  const [history, setHistory] = useState<HistoryItem[]>([])
+
+  useEffect(() => {
+    try {
+      const sq = localStorage.getItem("devtools_saved_queries")
+      if (sq) setSavedQueries(JSON.parse(sq))
+      const h = localStorage.getItem("devtools_history")
+      if (h) setHistory(JSON.parse(h))
+    } catch {}
+  }, [])
+
+  const saveQuery = () => {
+    const label = `${method} ${path}`
+    const newQ = [{ label, method, path, body }, ...savedQueries.filter(q => !(q.method === method && q.path === path))].slice(0, 30)
+    setSavedQueries(newQ)
+    try { localStorage.setItem("devtools_saved_queries", JSON.stringify(newQ)) } catch {}
+  }
+
+  const removeQuery = (i: number) => {
+    const newQ = savedQueries.filter((_, idx) => idx !== i)
+    setSavedQueries(newQ)
+    try { localStorage.setItem("devtools_saved_queries", JSON.stringify(newQ)) } catch {}
+  }
+
+  const loadQuery = (q: SavedQuery) => { setMethod(q.method as any); setPath(q.path); setBody(q.body) }
 
   // Tự động lấy danh sách mọi API route (cập nhật khi thêm route mới) — bấm "Làm mới" để quét lại.
   const loadRoutes = useCallback(() => {
@@ -122,6 +152,10 @@ function ApiTester() {
       let pretty = raw
       try { pretty = JSON.stringify(JSON.parse(raw), null, 2) } catch { /* giữ raw nếu không phải JSON */ }
       setResp({ status: res.status, ok: res.ok, ms, text: pretty })
+      // Ghi history
+      const newH: HistoryItem[] = [{ method, path, status: res.status, ms, ts: new Date().toISOString() }, ...history].slice(0, 30)
+      setHistory(newH)
+      try { localStorage.setItem("devtools_history", JSON.stringify(newH)) } catch {}
     } catch (e: any) {
       setErr(e.message || "Lỗi mạng")
     } finally { setLoading(false) }
@@ -144,6 +178,9 @@ function ApiTester() {
           <button onClick={send} disabled={loading} className="flex items-center justify-center gap-2 px-5 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 disabled:opacity-50 shrink-0">
             {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}Gửi
           </button>
+          <button onClick={saveQuery} title="Lưu query này" className="flex items-center justify-center gap-1.5 px-3 py-2 border border-slate-200 text-slate-500 rounded-lg text-sm hover:bg-amber-50 hover:border-amber-400 hover:text-amber-600 shrink-0 transition-colors">
+            <Bookmark className="w-4 h-4" />
+          </button>
         </div>
 
         {method !== "GET" && method !== "DELETE" && (
@@ -157,19 +194,65 @@ function ApiTester() {
         )}
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Endpoints ({routes.length || QUICK_ENDPOINTS.length})</p>
-            <button onClick={loadRoutes} disabled={routesLoading} className="flex items-center gap-1 text-[11px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50">
-              <RefreshCw className={cn("w-3 h-3", routesLoading && "animate-spin")} />Làm mới
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-            {(routes.length ? routes : QUICK_ENDPOINTS).map(ep => (
-              <button key={ep} onClick={() => { setMethod("GET"); setPath(ep) }} className="text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors truncate max-w-full">
-                {ep}
+          <div className="flex items-center gap-2">
+            {(["endpoints", "saved", "history"] as const).map(t => (
+              <button key={t} onClick={() => setEpTab(t)}
+                className={cn("text-[11px] font-bold px-2 py-1 rounded-md transition-colors",
+                  epTab === t ? "bg-amber-500 text-white" : "text-slate-400 hover:bg-slate-100")}>
+                {t === "endpoints" ? `Endpoints (${routes.length || QUICK_ENDPOINTS.length})`
+                  : t === "saved" ? `Saved (${savedQueries.length})`
+                  : `History (${history.length})`}
               </button>
             ))}
+            {epTab === "endpoints" && (
+              <button onClick={loadRoutes} disabled={routesLoading} className="ml-auto flex items-center gap-1 text-[11px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-50">
+                <RefreshCw className={cn("w-3 h-3", routesLoading && "animate-spin")} />Làm mới
+              </button>
+            )}
           </div>
+          {epTab === "endpoints" && (
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+              {(routes.length ? routes : QUICK_ENDPOINTS).map(ep => (
+                <button key={ep} onClick={() => { setMethod("GET"); setPath(ep) }} className="text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors truncate max-w-full">
+                  {ep}
+                </button>
+              ))}
+            </div>
+          )}
+          {epTab === "saved" && (
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {savedQueries.length === 0 ? (
+                <p className="text-[11px] text-slate-400 py-2">Chưa có query nào. Bấm 🔖 để lưu.</p>
+              ) : savedQueries.map((q, i) => (
+                <div key={i} className="flex items-center gap-1 group">
+                  <button onClick={() => loadQuery(q)} className="flex-1 text-left text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors truncate">
+                    <span className={cn("font-bold mr-1.5", q.method === "GET" ? "text-emerald-600" : q.method === "POST" ? "text-blue-600" : "text-orange-600")}>{q.method}</span>
+                    {q.path}
+                    {q.body && <span className="ml-1 text-violet-400 text-[9px]">[body]</span>}
+                  </button>
+                  <button onClick={() => removeQuery(i)} className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-300 hover:text-rose-500 transition-all shrink-0">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {epTab === "history" && (
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {history.length === 0 ? (
+                <p className="text-[11px] text-slate-400 py-2">Chưa có request nào.</p>
+              ) : history.map((h, i) => (
+                <button key={i} onClick={() => { setMethod(h.method as any); setPath(h.path) }}
+                  className="flex items-center gap-2 text-[11px] font-mono px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition-colors">
+                  <span className={cn("font-bold shrink-0", h.status < 300 ? "text-emerald-600" : h.status < 400 ? "text-amber-600" : "text-rose-600")}>{h.status}</span>
+                  <span className="text-slate-400 shrink-0">{h.ms}ms</span>
+                  <span className={cn("font-bold shrink-0", h.method === "GET" ? "text-emerald-600" : "text-blue-600")}>{h.method}</span>
+                  <span className="truncate flex-1">{h.path}</span>
+                  <span className="text-slate-300 shrink-0">{new Date(h.ts).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
