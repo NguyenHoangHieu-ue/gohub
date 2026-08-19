@@ -39,6 +39,28 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!await guard(req)) return NextResponse.json({ error: "Creator only" }, { status: 403 })
 
+  // Batch import từ Excel/CSV
+  if (req.nextUrl.searchParams.get("action") === "batch") {
+    const { entries } = await req.json()
+    if (!Array.isArray(entries) || entries.length === 0)
+      return NextResponse.json({ error: "entries array required" }, { status: 400 })
+    const rows = entries
+      .filter((e: any) => e.title?.trim() && e.content?.trim())
+      .map((e: any) => ({
+        key: e.key?.trim() || slugify(String(e.title)),
+        category: e.category?.trim() || "notes",
+        title: String(e.title).trim(),
+        content: String(e.content).trim(),
+        updated_at: new Date().toISOString(),
+      }))
+    for (let i = 0; i < rows.length; i += 20) {
+      const { error } = await supabaseAdmin.from("creator_kb").upsert(rows.slice(i, i + 20), { onConflict: "key" })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    await regenerateMasterNote()
+    return NextResponse.json({ ok: true, count: rows.length })
+  }
+
   const body = await req.json()
   const { key, category, title, content, metadata } = body
 
