@@ -277,7 +277,7 @@ Còn lại (chờ external):
 
 ## D. AI / GẤU PRO — Cải thiện
 
-### D1. Thêm test cho be-gau.ts 🔴
+### D1. ✅ XONG (s155, staging fc95584) — Tests be-gau.ts
 
 **Vấn đề**: Chatbot team đang không có bất kỳ test nào sau rebuild s131.
 
@@ -297,7 +297,7 @@ Còn lại (chờ external):
 - Poll status → trả URL video khi done
 - Cron timeout: Kling mất 2-5 phút → dùng callback hoặc poll từ FE
 
-### D3. Gấu Pro Image — Prompt Engineering
+### D3. ✅ XONG (s155, staging dd50be0) — Gấu Pro Image style presets
 
 **Mục tiêu**: Nâng chất lượng ảnh Pollinations thêm (enhance=true đã thêm).
 
