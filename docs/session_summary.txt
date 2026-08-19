@@ -1,5 +1,17 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1.2 + Wave 2 + Wave 3 hoàn tất).
+Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1-3 + C2/D1/D3 + Squad Progress).
+
+## ══════ SESSION 155b (2026-08-19) — SQUAD PROGRESS ══════
+**Subtab Squad Progress trong Quarter Report** (staging, CHƯA merge main từ d7c88ec):
+- Files: `api/config/squad-config/route.ts`, `api/analytics/squad-progress/route.ts`, `api/analytics/squad-targets/route.ts` (mới) + `quarterly/page.tsx` (tab bar Tổng quan|Squad Progress).
+- **Cấu hình squad** (admin/creator): tên + leader (dropdown từ `users`) + sales_pics (click-only từ available list, pic đã chọn biến khỏi list, chip có nút ×). Lưu `app_settings.squad_config`.
+- **Progress table**: map customer theo `dim_customer.sales_pic_code` → squad. Rev/GP(~CM1)/3HK: Actual + Pro-rata + Target + %. Pro-rata = actual × quarter_days/elapsed_days.
+- **Risk per-customer** (từ %TGT CM1 + %TGT 3HK): very_safe (cả 2 ≥100%) / safe (1 trong 2 ≥100%) / safe_low (cả 2 ≥85%) / danger_low (1 trong 2 ≥85%) / danger_high (cả 2 <85%). Badge màu + summary count per squad.
+- **Filter**: search KH · region VN/US · tier (Strategic/VIP/Gold/Silver) · squad · PIC chips (bấm→list KH) · risk chips. Có filter → flat view (bảng phẳng mọi squad) + sort cột. Không filter → per-squad expand.
+- **Target squad theo quý**: section nhập Rev/CM1/3HK Rev từng squad → `app_settings.squad_targets` keyed `{Q}_{year}`; ưu tiên hơn tổng target per-customer khi >0.
+- **Bugs fix**: PUT→POST (405) · auth JWT role thay getDbRole (403 sai) · GROUP BY thiếu price_list_name/currency_code. Bỏ 2 cột Rev Tgt/%TGT Rev khỏi customer table.
+- Commits staging: 3b27f48→94be160 (đã LỠ merge main), d7c88ec (GROUP BY fix, staging), 84c0f5b (filter squad + target squad, staging).
+- ⚠️ Hiếu nhắc: KHÔNG tự merge main — chỉ merge khi yêu cầu rõ trong chính tin đó.
 
 ## ══════ SESSION 155 (2026-08-19) ══════
 **Wave 1.2 Cà Thread Multi-group** (staging b743bd7):

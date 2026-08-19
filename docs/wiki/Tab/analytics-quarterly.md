@@ -187,3 +187,36 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+
+---
+
+## § Subtab Squad Progress (s155 — 2026-08-19)
+
+Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã về target pro-rata chưa.
+
+**Squad = 1 nhóm sale PIC.** Map customer vào squad qua `dim_customer.sales_pic_code`.
+
+**Cấu hình Squad** (admin/creator) — lưu `app_settings.squad_config`:
+- Tên squad + **Leader** (chọn từ bảng `users`) + danh sách **sales_pics** (click-only từ available list; pic đã gán biến khỏi list; chip có nút × để bỏ).
+
+**Bảng progress** — mỗi squad: Revenue / GP(~CM1) / 3HK Rev với **Actual · Pro-rata · Target · %**.
+- Pro-rata = `actual × (quarter_days / elapsed_days)`.
+- GP dùng làm proxy CM1 (chưa trừ phí kênh/nhóm).
+
+**Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK):
+| Mức | Điều kiện |
+|-----|-----------|
+| Rất an toàn (very_safe) | cả 2 metric ≥ 100% |
+| An toàn (safe) | 1 trong 2 ≥ 100% |
+| An toàn ít (safe_low) | cả 2 trong [85%, 100%) |
+| Nguy hiểm ít (danger_low) | 1 trong 2 ≥ 85% |
+| Nguy hiểm nhiều (danger_high) | cả 2 < 85% |
+
+- `%TGT CM1 = GP_pro-rata / target_cm1` · `%TGT 3HK = 3HK%_actual / target_3hk_pct`.
+
+**Filter + Sort**: search KH · region VN/US · tier (Strategic/VIP/Gold/Silver) · squad · PIC chips (bấm → hiện KH của người đó) · risk chips. Có filter → flat view (bảng phẳng gộp mọi squad) + sort cột (KH/Rev PR/%TGT CM1/%TGT 3HK/Đánh giá). Không filter → per-squad expand.
+
+**Target squad theo quý** (admin/creator) — lưu `app_settings.squad_targets` keyed `{Q}_{year}`:
+- Nhập Target Revenue / CM1 / 3HK Rev cho từng squad. Ưu tiên hơn tổng target per-customer khi > 0; để trống = fallback tổng per-customer.
+
+**API**: `analytics/squad-progress` (GET) · `config/squad-config` (GET/POST) · `analytics/squad-targets` (GET/POST). Auth = `session.user.role` (admin/creator). Write dùng POST (không PUT).
