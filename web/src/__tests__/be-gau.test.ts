@@ -1,4 +1,4 @@
-import { vi, describe, test, expect, beforeEach } from "vitest"
+import { vi, describe, test, expect, beforeEach, beforeAll } from "vitest"
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 vi.mock("@/lib/supabase", () => ({
@@ -10,18 +10,19 @@ vi.mock("@/lib/analytics-db",  () => ({ queryAnalytics: vi.fn().mockResolvedValu
 vi.mock("@/lib/ga4",           () => ({ runGA4Report: vi.fn(), runGSC: vi.fn(), ga4Sites: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/analytics-helpers", () => ({ getPartnerTiers: vi.fn().mockResolvedValue({}) }))
 vi.mock("@/lib/lark",          () => ({ sendLarkDM: vi.fn() }))
+const _mockGenerateContent = vi.fn().mockResolvedValue({
+  response: {
+    text: () => "Xin chào! Mình là Bé Gấu 🐻",
+    candidates: [],
+    functionCalls: () => [],
+  },
+})
+const _mockGetModel = vi.fn().mockReturnValue({ generateContent: _mockGenerateContent })
+
 vi.mock("@google/generative-ai", () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: vi.fn().mockReturnValue({
-      generateContent: vi.fn().mockResolvedValue({
-        response: {
-          text: () => "Xin chào! Mình là Bé Gấu 🐻",
-          candidates: [],
-          functionCalls: () => [],
-        },
-      }),
-    }),
-  })),
+  GoogleGenerativeAI: vi.fn().mockImplementation(function() {
+    return { getGenerativeModel: _mockGetModel }
+  }),
   SchemaType: { OBJECT: "object", STRING: "string", ARRAY: "array", NUMBER: "number", BOOLEAN: "boolean" },
 }))
 
@@ -93,5 +94,153 @@ describe("be-gau: module structure", () => {
   test("be-gau.ts export runBeGau function", async () => {
     const mod = await import("../lib/agents/be-gau")
     expect(typeof mod.runBeGau).toBe("function")
+  })
+})
+
+// ─── runBeGau: smoke tests ─────────────────────────────────────────────────────
+describe("be-gau: runBeGau smoke", () => {
+  let runBeGau: Function
+
+  beforeAll(async () => {
+    const mod = await import("../lib/agents/be-gau")
+    runBeGau = mod.runBeGau
+  })
+
+  test("trả về {text, sources} với empty history", async () => {
+    const result = await runBeGau({ geminiHistory: [], lastMsg: "Xin chào", role: "staff" })
+    expect(result).toMatchObject({ text: expect.any(String), sources: expect.any(Array) })
+  })
+
+  test("text không rỗng", async () => {
+    const result = await runBeGau({ geminiHistory: [], lastMsg: "Doanh thu tháng này?", role: "admin" })
+    expect(result.text.length).toBeGreaterThan(0)
+  })
+
+  test("sources là mảng (không webSearch → rỗng)", async () => {
+    const result = await runBeGau({ geminiHistory: [], lastMsg: "tìm gói eSIM Nhật", role: "staff" })
+    expect(Array.isArray(result.sources)).toBe(true)
+  })
+
+  test("không throw với tất cả role hợp lệ", async () => {
+    for (const role of ["creator", "admin", "manager", "bod", "staff"]) {
+      await expect(runBeGau({ geminiHistory: [], lastMsg: "test", role })).resolves.not.toThrow()
+    }
+  })
+
+  test("nhận history có sẵn mà không crash", async () => {
+    const history = [
+      { role: "user",  parts: [{ text: "doanh thu tháng 6?" }] },
+      { role: "model", parts: [{ text: "Doanh thu T6: 3.2 tỷ VND." }] },
+    ]
+    const result = await runBeGau({ geminiHistory: history, lastMsg: "so sánh với T5?", role: "admin" })
+    expect(result).toHaveProperty("text")
+  })
+})
+
+// ─── runBeGau: tool declarations & role filter ─────────────────────────────────
+describe("be-gau: tool declarations & role filter", () => {
+  let runBeGau: Function
+
+  beforeAll(async () => {
+    const mod = await import("../lib/agents/be-gau")
+    runBeGau = mod.runBeGau
+  })
+
+  test("Gemini được cấu hình với đúng 8 function declarations", async () => {
+    let capturedArgs: any
+    _mockGetModel.mockImplementationOnce((args: any) => {
+      capturedArgs = args
+      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+    })
+
+    await runBeGau({ geminiHistory: [], lastMsg: "test", role: "staff" })
+
+    const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
+    expect(decls).toHaveLength(8)
+    const names = decls.map((d: any) => d.name)
+    expect(names).toContain("executeSQL")
+    expect(names).toContain("querySupabase")
+    expect(names).toContain("listSupabaseTables")
+    expect(names).toContain("queryProduct")
+    expect(names).toContain("queryGA4")
+    expect(names).toContain("queryGSC")
+    expect(names).toContain("webSearch")
+    expect(names).toContain("readKnowledgeBase")
+  })
+
+  test("role staff + isCost=false → systemInstruction chứa giới hạn COGS", async () => {
+    let capturedSI = ""
+    _mockGetModel.mockImplementationOnce((args: any) => {
+      capturedSI = args.systemInstruction || ""
+      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+    })
+
+    await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "staff", isCost: false })
+    expect(capturedSI).toContain("KHÔNG được xem giá vốn")
+  })
+
+  test("role admin + isCost=true → systemInstruction KHÔNG có giới hạn COGS", async () => {
+    let capturedSI = ""
+    _mockGetModel.mockImplementationOnce((args: any) => {
+      capturedSI = args.systemInstruction || ""
+      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+    })
+
+    await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "admin", isCost: true })
+    expect(capturedSI).not.toContain("KHÔNG được xem giá vốn")
+  })
+})
+
+// ─── runBeGau: executeSQL safety ───────────────────────────────────────────────
+describe("be-gau: executeSQL safety", () => {
+  let runBeGau: Function
+
+  beforeAll(async () => {
+    const mod = await import("../lib/agents/be-gau")
+    runBeGau = mod.runBeGau
+  })
+
+  beforeEach(() => { vi.clearAllMocks() })
+
+  test("non-SELECT SQL → queryAnalytics KHÔNG được gọi", async () => {
+    const { queryAnalytics: qa } = await import("@/lib/analytics-db") as any
+    const qaMock = vi.mocked(qa)
+
+    _mockGenerateContent
+      .mockResolvedValueOnce({
+        response: {
+          text: () => "",
+          candidates: [{ content: { parts: [], role: "model" } }],
+          functionCalls: () => [{ name: "executeSQL", args: { sql: "DROP TABLE users" } }],
+        },
+      })
+      .mockResolvedValueOnce({
+        response: { text: () => "Xin lỗi không thực hiện được", candidates: [], functionCalls: () => [] },
+      })
+
+    await runBeGau({ geminiHistory: [], lastMsg: "drop table users", role: "admin" })
+    expect(qaMock).not.toHaveBeenCalled()
+  })
+
+  test("SELECT SQL hợp lệ → queryAnalytics được gọi", async () => {
+    const { queryAnalytics: qa } = await import("@/lib/analytics-db") as any
+    const qaMock = vi.mocked(qa)
+    qaMock.mockResolvedValue([{ total_revenue: 5_000_000_000 }])
+
+    _mockGenerateContent
+      .mockResolvedValueOnce({
+        response: {
+          text: () => "",
+          candidates: [{ content: { parts: [], role: "model" } }],
+          functionCalls: () => [{ name: "executeSQL", args: { sql: "SELECT SUM(fulfilled_revenue_amount_vnd) as total FROM fact_fulfillment_revenue" } }],
+        },
+      })
+      .mockResolvedValueOnce({
+        response: { text: () => "Doanh thu: 5,000,000,000 VND", candidates: [], functionCalls: () => [] },
+      })
+
+    const result = await runBeGau({ geminiHistory: [], lastMsg: "tổng doanh thu?", role: "admin" })
+    expect(qaMock).toHaveBeenCalledWith(expect.stringContaining("SELECT"))
+    expect(result.text).toContain("VND")
   })
 })

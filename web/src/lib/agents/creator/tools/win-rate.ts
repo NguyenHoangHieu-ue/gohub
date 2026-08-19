@@ -38,21 +38,24 @@ export async function runTrackSKUWinRate(args: {
     }).join(",")
 
     const rows = await queryAnalytics<{
-      sku: string; orders_in_window: string; orders_total: string
+      sku: string; vendor: string; orders_in_window: string; orders_total: string
     }>(
       `WITH sku_windows(sku_code, window_end) AS (VALUES ${valuesList})
        SELECT
          TRIM(f.sku) as sku,
+         MIN(TRIM(sk.vendor)) as vendor,
          COUNT(DISTINCT CASE WHEN f.fulfiled_date::date <= sw.window_end THEN f.order_code END) as orders_in_window,
          COUNT(DISTINCT f.order_code) as orders_total
        FROM fact_fulfillment_revenue f
        JOIN sku_windows sw ON TRIM(f.sku) = sw.sku_code
+       LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
        WHERE TRIM(f.sku) IN (${skuList})
          AND f.fulfiled_date::date <= CURRENT_DATE - 1
        GROUP BY TRIM(f.sku)`
     )
 
     const ordersMap = new Map(rows.map(r => [r.sku, {
+      vendor:         r.vendor || "",
       ordersInWindow: parseInt(r.orders_in_window || "0"),
       ordersTotal:    parseInt(r.orders_total    || "0"),
     }]))
@@ -66,13 +69,16 @@ export async function runTrackSKUWinRate(args: {
       const won         = ordersInWin >= winOrders
       const pending     = !won && agedays < winDays
       const failed      = !won && agedays >= winDays
+      const winDeadline = new Date(createdAt.getTime() + winDays * 86400000).toISOString().slice(0, 10)
 
       return {
         sku_code:       s.sku_code,
+        vendor:         data?.vendor ?? "",
         created_at:     s.created_at.slice(0, 10),
+        win_deadline:   winDeadline,
         age_days:       agedays,
-        orders_14d:     ordersInWin,   // chỉ đơn trong 14 ngày đầu từ ngày tạo
-        total_orders:   ordersTotal,   // toàn bộ đơn tính đến hôm qua
+        orders_14d:     ordersInWin,
+        total_orders:   ordersTotal,
         status:         won ? "WIN" : pending ? "PENDING" : "FAILED",
         win_pct:        Math.min(100, Math.round((ordersInWin / winOrders) * 100)),
       }
@@ -81,20 +87,25 @@ export async function runTrackSKUWinRate(args: {
       return order.indexOf(a.status) - order.indexOf(b.status)
     })
 
-    const won     = result.filter(r => r.status === "WIN")
-    const pending = result.filter(r => r.status === "PENDING")
-    const failed  = result.filter(r => r.status === "FAILED")
+    // Filter vendor sau khi join dim_sku (dùng tên thực thay vì sku_code prefix)
+    const filtered = args.vendor
+      ? result.filter(s => s.vendor.toUpperCase().includes(args.vendor!.toUpperCase()))
+      : result
+
+    const won     = filtered.filter(r => r.status === "WIN")
+    const pending = filtered.filter(r => r.status === "PENDING")
+    const failed  = filtered.filter(r => r.status === "FAILED")
 
     return {
       config:   { lookback_days: lookback, win_threshold: winOrders, win_days: winDays },
       summary:  {
-        total: result.length,
+        total: filtered.length,
         win:   won.length,
         pending: pending.length,
         failed:  failed.length,
-        win_rate_pct: result.length ? Math.round((won.length / result.length) * 100) : 0,
+        win_rate_pct: filtered.length ? Math.round((won.length / filtered.length) * 100) : 0,
       },
-      skus: result,
+      skus: filtered,
     }
   } catch (e: any) {
     return { error: e.message }

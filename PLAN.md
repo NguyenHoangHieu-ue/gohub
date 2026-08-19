@@ -255,7 +255,7 @@ Còn lại (chờ external):
 - Gửi kết quả vào Lark group qua `sendLarkMessage()`
 - Cần: ENV `LARK_WEEKLY_REPORT_GROUP_ID`
 
-### C2. Product Win Rate Dashboard
+### C2. ✅ XONG (s155, staging 5a04de3) — Product Win Rate Dashboard
 
 **Mục tiêu**: Hiển thị SKU nào "thắng" (≥5 đơn/14 ngày kể từ khi tạo) vs "chưa đủ".
 
@@ -264,7 +264,7 @@ Còn lại (chờ external):
 - Filter: vendor, ngày tạo SKU, khoảng thời gian
 - Output: bảng SKU + Win Rate % + số đơn + ngày đạt mục tiêu
 
-### C3. B2B Bulk Cost Import
+### C3. ✅ ĐÃ CÓ SẴN — B2B Bulk Cost Import
 
 **Mục tiêu**: Thay vì nhập từng KH trong Quarter Report, cho phép upload Excel → import nhiều dòng cùng lúc vào `b2b_customer_cost_monthly` Turso.
 
@@ -277,7 +277,7 @@ Còn lại (chờ external):
 
 ## D. AI / GẤU PRO — Cải thiện
 
-### D1. Thêm test cho be-gau.ts 🔴
+### D1. ✅ XONG (s155, staging fc95584) — Tests be-gau.ts
 
 **Vấn đề**: Chatbot team đang không có bất kỳ test nào sau rebuild s131.
 
@@ -297,7 +297,7 @@ Còn lại (chờ external):
 - Poll status → trả URL video khi done
 - Cron timeout: Kling mất 2-5 phút → dùng callback hoặc poll từ FE
 
-### D3. Gấu Pro Image — Prompt Engineering
+### D3. ✅ XONG (s155, staging dd50be0) — Gấu Pro Image style presets
 
 **Mục tiêu**: Nâng chất lượng ảnh Pollinations thêm (enhance=true đã thêm).
 
