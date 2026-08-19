@@ -948,9 +948,11 @@ export default function ProductPerformancePage() {
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Vendor (tùy chọn)</label>
-                  <input type="text" placeholder="Vd: 3D, GB..." value={wrVendor}
-                    onChange={e => setWrVendor(e.target.value)}
-                    className="w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                  <select value={wrVendor} onChange={e => setWrVendor(e.target.value)}
+                    className="w-44 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-300 focus:outline-none bg-white">
+                    <option value="">Tất cả vendor</option>
+                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
                 </div>
                 <button onClick={fetchWinRate} disabled={wrLoading}
                   className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
@@ -986,13 +988,29 @@ export default function ProductPerformancePage() {
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                   <h2 className="text-base font-bold text-slate-900">Danh sách SKU mới — {wrData.config?.lookback_days ?? wrDays} ngày gần nhất</h2>
-                  <span className="text-xs text-slate-400">{wrData.skus.length} SKU</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">{wrData.skus.length} SKU</span>
+                    <button onClick={() => exportRawRows(wrData.skus.map((s: any) => ({
+                      "SKU": s.sku_code,
+                      "Vendor": s.vendor || "",
+                      "Ngày tạo": s.created_at,
+                      "Deadline Win": s.win_deadline,
+                      "Tuổi (ngày)": s.age_days,
+                      "Trạng thái": s.status,
+                      [`Đơn ${wrData.config?.win_days ?? 14}d đầu`]: s.orders_14d,
+                      "Win%": s.win_pct,
+                      "Tổng đơn": s.total_orders,
+                    })), `win_rate_${wrDays}d`, "Win Rate")}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                      <Download className="w-3.5 h-3.5" /> Export
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs border-collapse">
                     <thead>
                       <tr className="bg-indigo-600">
-                        {["SKU", "Ngày tạo", "Tuổi (ngày)", "Trạng thái", `Đơn ${wrData.config?.win_days ?? 14}d đầu`, "Win%", "Tổng đơn"].map(h => (
+                        {["SKU", "Vendor", "Ngày tạo", "Deadline Win", "Tuổi (ngày)", "Trạng thái", `Đơn ${wrData.config?.win_days ?? 14}d đầu`, "Win%", "Tổng đơn"].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-200 uppercase tracking-wider whitespace-nowrap first:pl-5">{h}</th>
                         ))}
                       </tr>
@@ -1003,7 +1021,9 @@ export default function ProductPerformancePage() {
                         return (
                           <tr key={s.sku_code} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                             <td className="px-5 py-3 font-mono font-semibold text-slate-800">{s.sku_code}</td>
+                            <td className="px-4 py-3 text-slate-500 text-[11px]">{s.vendor || "—"}</td>
                             <td className="px-4 py-3 text-slate-500">{s.created_at}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.win_deadline}</td>
                             <td className="px-4 py-3 text-slate-600 tabular-nums">{s.age_days}</td>
                             <td className="px-4 py-3">
                               <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-bold", statusCls)}>{s.status}</span>
