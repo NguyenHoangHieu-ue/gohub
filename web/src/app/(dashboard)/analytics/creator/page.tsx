@@ -75,8 +75,31 @@ function CreatorSettings() {
   const [creatorInfo, setCreatorInfo] = useState<{ creatorCount: number; canAssignCreator: boolean } | null>(null)
 
   const dirty = JSON.stringify(visibility) !== savedSnap
+  const [previewRole, setPreviewRole] = useState<string | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
+
+  const allHiddenForRole = (role: string) => ALL_TABS.every(tab => isHidden(role, tab.id))
+  const toggleAllForRole = (role: string) => {
+    setVisibility(prev => ({
+      ...prev,
+      [role]: allHiddenForRole(role) ? [] : ALL_TABS.map(t => t.id),
+    }))
+  }
+
+  const allHiddenForTab = (tabId: string) => ROLES_TO_MANAGE.every(role => isHidden(role, tabId))
+  const toggleAllForTab = (tabId: string) => {
+    const shouldHide = !allHiddenForTab(tabId)
+    setVisibility(prev => {
+      const next = { ...prev }
+      for (const role of ROLES_TO_MANAGE) {
+        const hidden = new Set(next[role] || [])
+        shouldHide ? hidden.add(tabId) : hidden.delete(tabId)
+        next[role] = Array.from(hidden)
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     Promise.all([
@@ -160,7 +183,16 @@ function CreatorSettings() {
                   <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-48">Tab</th>
                   {ROLES_TO_MANAGE.map(r => (
                     <th key={r} className="px-3 py-2.5 text-center text-[9px] font-bold text-slate-500 uppercase tracking-wider">
-                      {ROLE_LABELS[r] ?? r}
+                      <div className="flex flex-col items-center gap-1">
+                        <button onClick={() => setPreviewRole(r)} className="hover:text-sky-600 hover:underline transition-colors" title="Xem trước role này thấy gì">
+                          {ROLE_LABELS[r] ?? r}
+                        </button>
+                        <button onClick={() => toggleAllForRole(r)}
+                          className={cn("w-5 h-5 rounded inline-flex items-center justify-center transition-all border", allHiddenForRole(r) ? "bg-rose-100 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-slate-300 hover:bg-slate-100")}
+                          title={allHiddenForRole(r) ? "Hiện tất cả tab cho role này" : "Ẩn tất cả tab cho role này"}>
+                          {allHiddenForRole(r) ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                        </button>
+                      </div>
                     </th>
                   ))}
                 </tr>
@@ -168,7 +200,16 @@ function CreatorSettings() {
               <tbody className="divide-y divide-slate-50">
                 {ALL_TABS.map(tab => (
                   <tr key={tab.id} className="hover:bg-slate-50/30">
-                    <td className="px-4 py-2 text-xs font-medium text-slate-700">{tab.label}</td>
+                    <td className="px-4 py-2 text-xs font-medium text-slate-700">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => toggleAllForTab(tab.id)}
+                          className={cn("w-5 h-5 rounded inline-flex items-center justify-center shrink-0 transition-all border", allHiddenForTab(tab.id) ? "bg-rose-100 border-rose-200 text-rose-500" : "bg-slate-50 border-slate-200 text-slate-300 hover:bg-slate-100")}
+                          title={allHiddenForTab(tab.id) ? "Hiện tab này cho tất cả role" : "Ẩn tab này cho tất cả role"}>
+                          {allHiddenForTab(tab.id) ? <EyeOff className="w-2.5 h-2.5" /> : <Eye className="w-2.5 h-2.5" />}
+                        </button>
+                        {tab.label}
+                      </div>
+                    </td>
                     {ROLES_TO_MANAGE.map(role => {
                       const hidden = isHidden(role, tab.id)
                       return (
@@ -200,6 +241,36 @@ function CreatorSettings() {
 
       {/* Cà Thread */}
       <CaThreadSection />
+
+      {/* Preview modal — xem trước role này thấy gì */}
+      {previewRole && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setPreviewRole(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-80 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-800">Xem trước: {ROLE_LABELS[previewRole] ?? previewRole}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Tab role này thấy được (creator thấy tất cả)</p>
+              </div>
+              <button onClick={() => setPreviewRole(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
+              {(() => {
+                const visible = ALL_TABS.filter(tab => !isHidden(previewRole, tab.id))
+                return visible.length === 0
+                  ? <div className="text-center py-6 text-sm text-slate-400">Role này không thấy tab nào</div>
+                  : <div className="space-y-1">{visible.map(tab => (
+                      <div key={tab.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-700 bg-slate-50">
+                        <Eye className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        {tab.label}
+                      </div>
+                    ))}</div>
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
