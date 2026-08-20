@@ -4,18 +4,18 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-19, s155)
+## Trạng thái hiện tại (2026-08-20, s156)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | Squad Progress: fix GROUP BY (d7c88ec) + filter squad/nhập target squad (84c0f5b) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress bản đầu (đến 94be160) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 0ff2e62) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report (đến 0ff2e62) |
 
-**➡️ TIẾP THEO:** Hiếu test Squad Progress trên staging → nếu OK → merge main.
+**➡️ TIẾP THEO:** Hiếu dùng thực tế Quarter Report (Squad Progress + Overview mới) → báo bug nếu có.
 
-**⚠️ QUY TẮC MERGE (nhắc lại s155):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
+**⚠️ QUY TẮC MERGE (nhắc lại):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31–v35 (cũ) · v36 BC Datapool · v37 staff hk3 split
@@ -32,6 +32,11 @@
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark)
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
 
+**s156 — đã làm (2026-08-20):**
+- ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):
+  - **Squad Progress** S1–S5: admin toolbar compact · squad card progress bar · filter 1 tầng dropdown · customer table 9 cột · flat view banner · Export Excel (2 sheet). Bug fix: pct shadow, expandedSquads reset, total row GP PR.
+  - **Overview** O1–O3: target card collapsible · monthly table toggle B2B/B2C · skeleton loading.
+
 **s155 — đã làm (2026-08-19):**
 - ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.
 - ✅ **Wave 2.1** Tab Visibility bulk toggle + preview modal (main).
@@ -40,8 +45,7 @@
 - ✅ **Wave 3** Usage compare kỳ trước · DevTools saved queries/history · cron ca-thread-remind (main).
 - ✅ **C2** Product Win Rate: JOIN dim_sku lấy vendor thực + win_deadline + export Excel (main).
 - ✅ **D1** Tests be-gau.ts (24/24 PASS) · **D3** Gấu Pro 6 image style presets (main).
-- ✅ **Quarter Report — subtab Squad Progress** (staging, chưa merge): cấu hình squad (tên+leader từ users+sales_pics click-only, pic đã chọn biến khỏi list) · progress table Rev/GP~CM1/3HK Actual/PR/Target/% · **đánh giá risk per-customer** (very_safe/safe/safe_low/danger_low/danger_high theo %TGT CM1 & %TGT 3HK) · filter (search KH/region VN-US/tier/squad/PIC chips/risk chips) + sort + flat-view khi có filter · nhập **target squad theo quý** (Rev/CM1/3HK Rev → `app_settings.squad_targets` keyed `{Q}_{year}`, ưu tiên hơn tổng per-customer).
-  - Bug đã fix: PUT→POST (405), auth JWT role thay getDbRole, GROUP BY thiếu price_list_name/currency_code.
+- ✅ **Quarter Report — subtab Squad Progress** (main 0ff2e62): cấu hình squad · progress table Rev/GP~CM1/3HK · risk per-customer · filter + sort · target squad theo quý.
 
 **s153 — đã làm (2026-08-18):**
 - ✅ **Quarter Report — fix save target không được** (→ main b15b354)
