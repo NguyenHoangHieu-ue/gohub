@@ -304,9 +304,13 @@ function QuarterlyContent() {
   const [sqFilterTier,   setSqFilterTier]   = useState<string>("ALL")
   const [sqFilterPic,    setSqFilterPic]    = useState<string>("ALL")
   const [sqFilterRisk,   setSqFilterRisk]   = useState<string>("ALL")
-  const [sqFilterLeader, setSqFilterLeader] = useState<string>("ALL")
+  const [sqFilterSquad,  setSqFilterSquad]  = useState<string>("ALL")
   const [sqSortCol,      setSqSortCol]      = useState<string>("risk_level")
   const [sqSortDir,      setSqSortDir]      = useState<"asc"|"desc">("asc")
+  // Squad targets (theo quý)
+  const [editingTargets, setEditingTargets] = useState(false)
+  const [draftTargets,   setDraftTargets]   = useState<Record<string, { rev: string; cm1: string; hk3rev: string }>>({})
+  const [savingTargets,  setSavingTargets]  = useState(false)
 
   const RISK_ORDER = ["danger_high","danger_low","safe_low","safe","very_safe","no_target"]
 
@@ -355,6 +359,47 @@ function QuarterlyContent() {
       } else notifySquad(false, d.error || `Lỗi ${r.status}: ${r.statusText}`)
     } catch (e: any) { notifySquad(false, `Lỗi kết nối: ${e.message}`) }
     finally { setSavingSquad(false) }
+  }
+
+  // Mở form nhập target: seed draft từ manual_target hiện có của mỗi squad
+  const openEditTargets = () => {
+    const seed: Record<string, { rev: string; cm1: string; hk3rev: string }> = {}
+    for (const sq of (squadData?.squads ?? [])) {
+      const mt = sq.manual_target ?? {}
+      seed[sq.name] = {
+        rev:    mt.rev    > 0 ? String(mt.rev)    : "",
+        cm1:    mt.cm1    > 0 ? String(mt.cm1)    : "",
+        hk3rev: mt.hk3rev > 0 ? String(mt.hk3rev) : "",
+      }
+    }
+    setDraftTargets(seed)
+    setEditingTargets(true)
+  }
+
+  const saveSquadTargets = async () => {
+    setSavingTargets(true)
+    try {
+      const targets: Record<string, { rev: number; cm1: number; hk3rev: number }> = {}
+      for (const [name, t] of Object.entries(draftTargets)) {
+        targets[name] = {
+          rev:    Math.round(Number(t.rev)    || 0),
+          cm1:    Math.round(Number(t.cm1)    || 0),
+          hk3rev: Math.round(Number(t.hk3rev) || 0),
+        }
+      }
+      const r = await fetch("/api/analytics/squad-targets", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quarter: selQ, year: selYear, targets }),
+      })
+      let d: any = {}
+      try { d = await r.json() } catch {}
+      if (r.ok) {
+        setEditingTargets(false)
+        notifySquad(true, `Đã lưu target squad ${selQ} ${selYear}`)
+        fetchSquadProgress()
+      } else notifySquad(false, d.error || `Lỗi ${r.status}`)
+    } catch (e: any) { notifySquad(false, `Lỗi kết nối: ${e.message}`) }
+    finally { setSavingTargets(false) }
   }
 
   const RISK_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -1149,6 +1194,66 @@ function QuarterlyContent() {
             </div>
           )}
 
+          {/* ── Nhập target Squad theo quý (admin/creator) ── */}
+          {canEditSettings && squadData?.squads?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <button onClick={() => { if (!editingTargets) openEditTargets(); else setEditingTargets(false) }}
+                className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm font-bold text-slate-800">Target Squad — {selQ} {selYear}</span>
+                  <span className="text-xs text-slate-400">(nhập Revenue / CM1 / 3HK Revenue cho từng squad)</span>
+                </div>
+                {editingTargets ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+              {editingTargets && (
+                <div className="p-5 space-y-3">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                          <th className="px-3 py-2 text-left font-semibold">Squad</th>
+                          <th className="px-3 py-2 text-right font-semibold">Target Revenue (VND)</th>
+                          <th className="px-3 py-2 text-right font-semibold">Target CM1 (VND)</th>
+                          <th className="px-3 py-2 text-right font-semibold">Target 3HK Rev (VND)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {squadData.squads.map((sq: any) => {
+                          const t = draftTargets[sq.name] ?? { rev: "", cm1: "", hk3rev: "" }
+                          const upd = (field: "rev"|"cm1"|"hk3rev", v: string) =>
+                            setDraftTargets(prev => ({ ...prev, [sq.name]: { ...(prev[sq.name] ?? { rev:"", cm1:"", hk3rev:"" }), [field]: v.replace(/[^0-9]/g, "") } }))
+                          return (
+                            <tr key={sq.name}>
+                              <td className="px-3 py-2 font-medium text-slate-700">{sq.name}</td>
+                              {(["rev","cm1","hk3rev"] as const).map(f => (
+                                <td key={f} className="px-3 py-2 text-right">
+                                  <input value={t[f]} onChange={e => upd(f, e.target.value)}
+                                    placeholder="0"
+                                    className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
+                                </td>
+                              ))}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={saveSquadTargets} disabled={savingTargets}
+                      className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                      {savingTargets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      {savingTargets ? "Đang lưu…" : "Lưu target"}
+                    </button>
+                    <button onClick={() => setEditingTargets(false)}
+                      className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Để trống hoặc 0 = dùng tổng target per-customer (nhập ở phần B2B customers). Target squad nhập ở đây sẽ được ưu tiên.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Squad progress table ── */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -1176,9 +1281,9 @@ function QuarterlyContent() {
               const allCusts: any[] = squadData.squads.flatMap((sq: any) =>
                 (sq.customers ?? []).map((c: any) => ({ ...c, squad_name: sq.name, leader: sq.leader })))
               const uniquePics = [...new Set(allCusts.map((c: any) => c.sales_pic).filter(Boolean))] as string[]
-              const leaders = squadData.squads.filter((sq: any) => sq.leader).map((sq: any) => ({ username: sq.leader, name: squadUsers.find(u => u.username === sq.leader)?.name ?? sq.leader }))
+              const squadNames = squadData.squads.map((sq: any) => sq.name)
 
-              const hasFilter = sqSearch || sqFilterRegion !== "ALL" || sqFilterTier !== "ALL" || sqFilterPic !== "ALL" || sqFilterRisk !== "ALL" || sqFilterLeader !== "ALL"
+              const hasFilter = sqSearch || sqFilterRegion !== "ALL" || sqFilterTier !== "ALL" || sqFilterPic !== "ALL" || sqFilterRisk !== "ALL" || sqFilterSquad !== "ALL"
 
               // Apply filters
               let filtered = allCusts.filter(c => {
@@ -1187,7 +1292,7 @@ function QuarterlyContent() {
                 if (sqFilterTier   !== "ALL" && c.tier   !== sqFilterTier)   return false
                 if (sqFilterPic    !== "ALL" && c.sales_pic !== sqFilterPic) return false
                 if (sqFilterRisk   !== "ALL" && c.risk_level !== sqFilterRisk) return false
-                if (sqFilterLeader !== "ALL" && c.leader !== sqFilterLeader)  return false
+                if (sqFilterSquad  !== "ALL" && c.squad_name !== sqFilterSquad) return false
                 return true
               })
 
@@ -1245,16 +1350,16 @@ function QuarterlyContent() {
                         <option value="ALL">Tất cả tier</option>
                         {["Strategic","VIP","Gold","Silver"].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      {/* Leader */}
-                      {leaders.length > 0 && (
-                        <select value={sqFilterLeader} onChange={e => setSqFilterLeader(e.target.value)}
+                      {/* Squad */}
+                      {squadNames.length > 0 && (
+                        <select value={sqFilterSquad} onChange={e => setSqFilterSquad(e.target.value)}
                           className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
-                          <option value="ALL">Tất cả leader</option>
-                          {leaders.map((l: any) => <option key={l.username} value={l.username}>{l.name}</option>)}
+                          <option value="ALL">Tất cả squad</option>
+                          {squadNames.map((n: string) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       )}
                       {hasFilter && (
-                        <button onClick={() => { setSqSearch(""); setSqFilterRegion("ALL"); setSqFilterTier("ALL"); setSqFilterPic("ALL"); setSqFilterRisk("ALL"); setSqFilterLeader("ALL") }}
+                        <button onClick={() => { setSqSearch(""); setSqFilterRegion("ALL"); setSqFilterTier("ALL"); setSqFilterPic("ALL"); setSqFilterRisk("ALL"); setSqFilterSquad("ALL") }}
                           className="flex items-center gap-1 px-2 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
                           <X className="w-3 h-3" /> Xóa filter
                         </button>

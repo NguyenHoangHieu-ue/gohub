@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, b2c]
 created: 2026-06-28
-updated: 2026-08-05
+updated: 2026-08-20
 status: active
 ---
 
@@ -29,10 +29,31 @@ Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận t
 - **Tại sao 5 section tách biệt**: mỗi câu hỏi kinh doanh (bán được bao nhiêu? khách ở đâu ra? tốn bao nhiêu để có khách? web chốt tốt không? quảng cáo lời không?) là 1 section riêng → dễ đọc.
 
 ## 2. Đường dẫn & file
-- **Web**: `/analytics/b2c` — `web/src/app/(dashboard)/analytics/b2c/page.tsx` (+ `components/b2c-advanced-dashboard.tsx`)
-- **API**: `/api/analytics/b2c/{monthly, kpis, trend, loss-skus}`
+- **Web**: `/analytics/b2c` — `web/src/app/(dashboard)/analytics/b2c/page.tsx` (+ `components/b2c-advanced-dashboard.tsx`, `components/b2c-metric.tsx`)
+- **API**: `/api/analytics/b2c/{monthly, kpis, trend, loss-skus, metric}`
+- **Subtab "Metric"** (s156, 2026-08-20): xem mục 3b bên dưới.
 
-## 3. Cấu trúc 5 section
+## 3. Cấu trúc subtab
+
+**3a. Advanced** (default): doanh thu 6 tháng VN/US/Total, khách hàng, CAC/Leads, Website CR, Marketing ROAS.
+
+**3b. Metric** (s156, 2026-08-20) — `components/b2c-metric.tsx` + API `/api/analytics/b2c/metric`:
+- Bảng YTD monthly với các metrics + %MoM so tháng liền kề:
+  - **Revenue** (Total / Web / App) — từ `fact_fulfillment_revenue` filter `sub_group_name`
+  - **Gross Profit** (Total / Web / App) — GP = `gross_profit_vnd` hoặc `revenue - cogs`
+  - **CM1** (Total) — GP total - OpCost (channel_costs + group_costs pro-rata tháng hiện tại)
+  - **% CM1** = CM1 / Revenue total
+  - **Orders** (Total / Web / App) — `COUNT(DISTINCT order_code)`
+  - **AOV** (Total / Web / App) = Revenue / Orders
+  - **Traffic** (Total / Web / App) — GA4 `sessions` theo `yearMonth` dimension
+  - **User** (Total / Web / App) — GA4 `activeUsers` theo `yearMonth`
+  - **Customer** (Web: New/Returning; App: New/Returning) — `customer_code` đầu tiên = New
+- Web traffic: GA4 filter `hostName` (mặc định). App traffic: GA4 filter `platform IN (ios, android)`.
+- Tháng hiện tại (MTD) header hiển thị "(1-N)" chỉ số ngày đã qua.
+
+**3c. Performance**: intel-main style channel breakdown.
+
+## 3. Cấu trúc 5 section (Advanced)
 - **S1 Revenue Rolling**: doanh thu 6 tháng VN/US/Total + tiến độ MTD/MoM/Prorata so KPI.
 - **S2 Customers**: khách mới (New) vs quay lại (Returning), có MoM.
 - **S3 CAC & Leads**: leads từ Chatwoot → so đơn thực tế (conversion).

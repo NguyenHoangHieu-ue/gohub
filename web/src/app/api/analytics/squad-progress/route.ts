@@ -68,10 +68,18 @@ export async function GET(req: NextRequest) {
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
 
   try {
-    // 1. Load squad config
-    const { data: cfgRow } = await supabaseAdmin.from("app_settings").select("value").eq("key", "squad_config").maybeSingle()
+    // 1. Load squad config + manual squad targets (theo quý)
+    const [cfgRes, tgtRes] = await Promise.all([
+      supabaseAdmin.from("app_settings").select("value").eq("key", "squad_config").maybeSingle(),
+      supabaseAdmin.from("app_settings").select("value").eq("key", "squad_targets").maybeSingle(),
+    ])
     const squadsConfig: { name: string; leader?: string; sales_pics: string[] }[] =
-      cfgRow?.value ? (JSON.parse(cfgRow.value).squads ?? []) : []
+      cfgRes.data?.value ? (JSON.parse(cfgRes.data.value).squads ?? []) : []
+    let squadTargets: Record<string, { rev?: number; cm1?: number; hk3rev?: number }> = {}
+    try {
+      const allTgt = tgtRes.data?.value ? JSON.parse(tgtRes.data.value) : {}
+      squadTargets = allTgt[`${quarter}_${year}`] ?? {}
+    } catch { squadTargets = {} }
 
     // 2. Revenue + GP + 3HK per customer WITH sales_pic_code
     const [custRows, picRows] = await Promise.all([
@@ -104,7 +112,7 @@ export async function GET(req: NextRequest) {
           AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
           AND COALESCE(c.name, TRIM(f.customer_code))
               NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')
-        GROUP BY 1, 2, 3
+        GROUP BY 1, 2, 3, c.price_list_name, c.currency_code
       `),
       queryAnalytics<{ code: string; name: string }>(`
         SELECT DISTINCT
@@ -204,7 +212,12 @@ export async function GET(req: NextRequest) {
 
       const revPr = Math.round(rev * prFactor)
       const gmPr  = Math.round(gm  * prFactor)
-      const cm1PctSquad = tgtCm1 > 0 ? Math.round(gmPr / tgtCm1 * 100) : null
+
+      // Manual target squad (theo quý) — ưu tiên hơn tổng per-customer nếu > 0
+      const mt = squadTargets[sq.name] ?? {}
+      const effTgtRev = Number(mt.rev)    > 0 ? Number(mt.rev)    : tgtRev
+      const effTgtCm1 = Number(mt.cm1)    > 0 ? Number(mt.cm1)    : tgtCm1
+      const effTgtHk3 = Number(mt.hk3rev) > 0 ? Number(mt.hk3rev) : tgtHk3
 
       // Risk summary
       const riskCounts: Record<RiskLevel, number> = {
@@ -216,13 +229,16 @@ export async function GET(req: NextRequest) {
         name: sq.name, leader: sq.leader,
         sales_pics: sq.sales_pics,
         customer_count: codes.length,
-        revenue: rev,   revenue_pr: revPr,   target_rev: tgtRev,
-        rev_pct: tgtRev > 0 ? Math.round(revPr / tgtRev * 100) : null,
-        gp: gm,         gp_pr: gmPr,         target_cm1: tgtCm1,
-        gp_cm1_pct: cm1PctSquad,
+        // Manual target flags (để FE hiển thị nguồn)
+        manual_target: { rev: Number(mt.rev) || 0, cm1: Number(mt.cm1) || 0, hk3rev: Number(mt.hk3rev) || 0 },
+        revenue: rev,   revenue_pr: revPr,   target_rev: effTgtRev,
+        rev_pct: effTgtRev > 0 ? Math.round(revPr / effTgtRev * 100) : null,
+        gp: gm,         gp_pr: gmPr,         target_cm1: effTgtCm1,
+        gp_cm1_pct: effTgtCm1 > 0 ? Math.round(gmPr / effTgtCm1 * 100) : null,
         gp_pct: rev > 0 ? Math.round(gm / rev * 1000) / 10 : 0,
         hk3, hk3_pct: rev > 0 ? Math.round(hk3 / rev * 1000) / 10 : 0,
-        target_hk3: tgtHk3,
+        target_hk3: effTgtHk3,
+        hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3 / effTgtHk3 * 100) : null,
         risk_counts: riskCounts,
         customers,
       }

@@ -4,12 +4,12 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { B2CPerformance } from "@/components/b2c-performance"
 import { B2CAdvancedDashboard } from "@/components/b2c-advanced-dashboard"
+import { B2CMetric } from "@/components/b2c-metric"
 
 // Default = Advanced (executive rolling-table dashboard, giống mockup).
-// Performance = intel-main style channel breakdown. Mọi user có quyền B2C đều thấy cả 2 tab.
+// Performance = intel-main style channel breakdown. Metric = YTD table Web+App.
 export default function B2CPage() {
-  // Tất cả role mặc định thấy Advanced trước
-  const [view, setView] = useState<"advanced" | "main">("advanced")
+  const [view, setView] = useState<"advanced" | "main" | "metric">("advanced")
 
   return (
     <div className="flex flex-col">
@@ -32,8 +32,17 @@ export default function B2CPage() {
         >
           Performance
         </button>
+        <button
+          onClick={() => setView("metric")}
+          className={cn(
+            "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
+            view === "metric" ? "bg-blue-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+          )}
+        >
+          Metric
+        </button>
       </div>
-      {view === "advanced" ? <B2CAdvancedDashboard /> : <B2CPerformance />}
+      {view === "advanced" ? <B2CAdvancedDashboard /> : view === "main" ? <B2CPerformance /> : <B2CMetric />}
     </div>
   )
 }

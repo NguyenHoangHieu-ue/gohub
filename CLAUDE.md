@@ -8,12 +8,14 @@
 
 | | |
 |---|---|
-| Branch làm việc | `staging` (làm việc ở đây, merge main khi Hiếu yêu cầu) |
+| Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | Wave 1.1–1.3 + Wave 2 (2.1/2.2/2.3) + Wave 3 (3.1/3.2/3.3) |
-| ✅ Đã lên main | Port B2C (GA4 hostname + MKT Profit Report) + PLAN.md |
+| ⏳ Trên staging CHƯA merge main | Squad Progress: fix GROUP BY (d7c88ec) + filter squad/nhập target squad (84c0f5b) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress bản đầu (đến 94be160) |
 
-**➡️ TIẾP THEO:** Test Wave 1.1 trên staging → nếu OK → merge main (kéo theo toàn bộ Wave 1+2+3).
+**➡️ TIẾP THEO:** Hiếu test Squad Progress trên staging → nếu OK → merge main.
+
+**⚠️ QUY TẮC MERGE (nhắc lại s155):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31–v35 (cũ) · v36 BC Datapool · v37 staff hk3 split
@@ -31,13 +33,15 @@
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
 
 **s155 — đã làm (2026-08-19):**
-- ✅ **Wave 1.2** Cà Thread multi-group (staging b743bd7): selector tabs, thêm/sửa/xóa group, backward-compat.
-- ✅ **Wave 2.1** Tab Visibility bulk toggle + preview modal (b661452).
-- ✅ **Wave 2.2** Access Audit Log + autocomplete username — v41 migration, gp-access/my-metrics-access ghi log, UserSearchInput, AuditLogSection (597f7d5).
-- ✅ **Wave 2.3** Knowledge Search + Import batch Excel/CSV (cd669fc).
-- ✅ **Wave 3.1** Usage Analytics compare kỳ trước (delta % ▲/▼ trong KPI cards) (6040aec).
-- ✅ **Wave 3.2** DevTools saved queries + history localStorage (6040aec).
-- ✅ **Wave 3.3** Cron ca-thread-remind — Lark DM nhắc hàng thứ 2 10h ICT (6040aec).
+- ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.
+- ✅ **Wave 2.1** Tab Visibility bulk toggle + preview modal (main).
+- ✅ **Wave 2.2** Access Audit Log + autocomplete username — v41 migration, gp-access/my-metrics-access ghi log (main).
+- ✅ **Wave 2.3** Knowledge Search + Import batch Excel/CSV (main).
+- ✅ **Wave 3** Usage compare kỳ trước · DevTools saved queries/history · cron ca-thread-remind (main).
+- ✅ **C2** Product Win Rate: JOIN dim_sku lấy vendor thực + win_deadline + export Excel (main).
+- ✅ **D1** Tests be-gau.ts (24/24 PASS) · **D3** Gấu Pro 6 image style presets (main).
+- ✅ **Quarter Report — subtab Squad Progress** (staging, chưa merge): cấu hình squad (tên+leader từ users+sales_pics click-only, pic đã chọn biến khỏi list) · progress table Rev/GP~CM1/3HK Actual/PR/Target/% · **đánh giá risk per-customer** (very_safe/safe/safe_low/danger_low/danger_high theo %TGT CM1 & %TGT 3HK) · filter (search KH/region VN-US/tier/squad/PIC chips/risk chips) + sort + flat-view khi có filter · nhập **target squad theo quý** (Rev/CM1/3HK Rev → `app_settings.squad_targets` keyed `{Q}_{year}`, ưu tiên hơn tổng per-customer).
+  - Bug đã fix: PUT→POST (405), auth JWT role thay getDbRole, GROUP BY thiếu price_list_name/currency_code.
 
 **s153 — đã làm (2026-08-18):**
 - ✅ **Quarter Report — fix save target không được** (→ main b15b354)
