@@ -24,9 +24,10 @@ export async function GET(req: NextRequest) {
   const metrics    = metricsRaw.split(",").map(s => s.trim()).filter(Boolean)
   const limitRaw   = sp.get("limit")
   const limit      = limitRaw ? parseInt(limitRaw) : undefined
+  const platform   = (sp.get("platform") || undefined) as "web" | "app" | undefined
 
   try {
-    const report = await runGA4Report({ siteId, startDate, endDate, dimensions, metrics, limit })
+    const report = await runGA4Report({ siteId, startDate, endDate, dimensions, metrics, limit, platform })
     return NextResponse.json(report)
   } catch (err: any) {
     console.error("[analytics/ga4]", err.message)

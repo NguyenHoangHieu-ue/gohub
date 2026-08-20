@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import {
   Globe, Users, MousePointer2, TrendingUp, TrendingDown, ShoppingBag,
-  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp,
+  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone,
 } from "lucide-react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -71,6 +71,7 @@ export default function WebsiteAnalyticsPage() {
     }
   })
   const [expandedDestinations, setExpandedDestinations] = useState<Set<string>>(new Set())
+  const [platform, setPlatform] = useState<"web" | "app">("web")
 
   const toggleDestination = (dest: string) => {
     const newSet = new Set(expandedDestinations)
@@ -90,8 +91,9 @@ export default function WebsiteAnalyticsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Ngày (dateRange/compareRange) chỉ áp khi bấm "Lọc" — không tự lọc mỗi lần đổi ngày.
+    // platform đổi → re-fetch ngay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compareEnabled, selectedSiteId])
+  }, [compareEnabled, selectedSiteId, platform])
 
   const fetchSites = async () => {
     setLoadingSites(true)
@@ -122,19 +124,23 @@ export default function WebsiteAnalyticsPage() {
     setLoading(true)
     setError(null)
     try {
+      const platformParam = platform === "app" ? "&platform=app" : ""
       const query = `siteId=${selectedSiteId}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`
 
-      // Fetch tất cả song song
-      const [genRes, ecoRes, prodRes, countryRes, sourceRes, esimRes, gscRes, gscQueriesRes] = await Promise.all([
-        fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`),
-        fetch(`/api/analytics/ga4?${query}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`),
-        fetch(`/api/analytics/ga4?${query}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`),
-        fetch(`/api/analytics/ga4?${query}&dimensions=country&metrics=activeUsers,sessions,conversions`),
-        fetch(`/api/analytics/ga4?${query}&dimensions=sessionSourceMedium&metrics=activeUsers,sessions,conversions`),
-        fetch(`/api/analytics/ga4?${query}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`),
-        fetch(`/api/analytics/gsc?${query}&dimensions=date`),
-        fetch(`/api/analytics/gsc?${query}&dimensions=query`),
-      ])
+      // Fetch tất cả song song; GSC chỉ áp cho web (app không có Search Console)
+      const ga4Promises = [
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`),
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`),
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`),
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=country&metrics=activeUsers,sessions,conversions`),
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=sessionSourceMedium&metrics=activeUsers,sessions,conversions`),
+        fetch(`/api/analytics/ga4?${query}${platformParam}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`),
+      ]
+      const gscPromises = platform === "web"
+        ? [fetch(`/api/analytics/gsc?${query}&dimensions=date`), fetch(`/api/analytics/gsc?${query}&dimensions=query`)]
+        : [Promise.resolve(new Response("null")), Promise.resolve(new Response("null"))]
+
+      const [genRes, ecoRes, prodRes, countryRes, sourceRes, esimRes, gscRes, gscQueriesRes] = await Promise.all([...ga4Promises, ...gscPromises])
 
       if (!genRes.ok) { const err = await genRes.json(); throw new Error(err.error || "Failed to fetch general analytics") }
       setGeneralData(await genRes.json())
@@ -144,35 +150,47 @@ export default function WebsiteAnalyticsPage() {
       setTrafficSources(sourceRes.ok ? await sourceRes.json() : null)
       setEsimPages(esimRes.ok ? await esimRes.json() : null)
 
-      setGscError(null)
-      if (gscRes.ok) { setSearchConsoleData(await gscRes.json()) }
-      else { const gscErr = await gscRes.json(); setGscError(gscErr.error || "Failed to fetch search console data"); setSearchConsoleData(null) }
-      setTopSearchQueries(gscQueriesRes.ok ? await gscQueriesRes.json() : null)
+      if (platform === "web") {
+        setGscError(null)
+        if (gscRes.ok) { setSearchConsoleData(await gscRes.json()) }
+        else { const gscErr = await gscRes.json(); setGscError(gscErr.error || "Failed to fetch search console data"); setSearchConsoleData(null) }
+        setTopSearchQueries(gscQueriesRes.ok ? await gscQueriesRes.json() : null)
+      } else {
+        setSearchConsoleData(null)
+        setTopSearchQueries(null)
+        setGscError(null)
+      }
 
       if (compareEnabled) {
         const compQuery = `siteId=${selectedSiteId}&startDate=${compareRange.startDate}&endDate=${compareRange.endDate}`
+        const compGscArr = platform === "web"
+          ? [fetch(`/api/analytics/gsc?${compQuery}&dimensions=date`), fetch(`/api/analytics/gsc?${compQuery}&dimensions=query`)]
+          : [Promise.resolve(new Response("null")), Promise.resolve(new Response("null"))]
         const [
-          compGenRes, compEcoRes, compGscRes, compProdRes,
-          compCountryRes, compSrcRes, compEsimRes, compGscQueriesRes,
+          compGenRes, compEcoRes, compProdRes, compCountryRes, compSrcRes, compEsimRes, compGscRes, compGscQueriesRes,
         ] = await Promise.all([
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`),
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`),
-          fetch(`/api/analytics/gsc?${compQuery}&dimensions=date`),
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`),
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=country&metrics=sessions,conversions`),
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=sessionSourceMedium&metrics=sessions,conversions`),
-          fetch(`/api/analytics/ga4?${compQuery}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`),
-          fetch(`/api/analytics/gsc?${compQuery}&dimensions=query`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=date&metrics=activeUsers,sessions,screenPageViews,conversions,bounceRate`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=date&metrics=purchaseRevenue,ecommercePurchases`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=itemName&metrics=itemRevenue,itemsPurchased`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=country&metrics=sessions,conversions`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=sessionSourceMedium&metrics=sessions,conversions`),
+          fetch(`/api/analytics/ga4?${compQuery}${platformParam}&dimensions=itemCategory,itemName&metrics=itemsViewed,itemsPurchased`),
+          ...compGscArr,
         ])
 
         if (compGenRes.ok) setCompareGeneralData(await compGenRes.json()); else setCompareGeneralData(null)
         if (compEcoRes.ok) setCompareEcommerceData(await compEcoRes.json()); else setCompareEcommerceData(null)
-        if (compGscRes.ok) setCompareSearchConsoleData(await compGscRes.json()); else setCompareSearchConsoleData(null)
         if (compProdRes.ok) setCompareTopProducts(await compProdRes.json()); else setCompareTopProducts(null)
         if (compCountryRes.ok) setCompareTopCountries(await compCountryRes.json()); else setCompareTopCountries(null)
         if (compSrcRes.ok) setCompareTrafficSources(await compSrcRes.json()); else setCompareTrafficSources(null)
         if (compEsimRes.ok) setCompareEsimPages(await compEsimRes.json()); else setCompareEsimPages(null)
-        if (compGscQueriesRes.ok) setCompareTopSearchQueries(await compGscQueriesRes.json()); else setCompareTopSearchQueries(null)
+        if (platform === "web") {
+          if (compGscRes.ok) setCompareSearchConsoleData(await compGscRes.json()); else setCompareSearchConsoleData(null)
+          if (compGscQueriesRes.ok) setCompareTopSearchQueries(await compGscQueriesRes.json()); else setCompareTopSearchQueries(null)
+        } else {
+          setCompareSearchConsoleData(null)
+          setCompareTopSearchQueries(null)
+        }
       } else {
         setCompareGeneralData(null)
         setCompareEcommerceData(null)
@@ -511,11 +529,32 @@ export default function WebsiteAnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Website Analytics</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold text-slate-900">{platform === "app" ? "App Analytics" : "Website Analytics"}</h1>
+            {platform === "app" && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">GoHub App</span>}
+          </div>
           <p className="text-slate-500">Real-time insights from Google Analytics 4 (GA4).</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Platform toggle */}
+          <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setPlatform("web")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                platform === "web" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+            >
+              <Globe className="w-3.5 h-3.5" />Web
+            </button>
+            <button
+              onClick={() => setPlatform("app")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                platform === "app" ? "bg-white text-purple-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+            >
+              <Smartphone className="w-3.5 h-3.5" />App
+            </button>
+          </div>
+
           {sites.length > 0 && (
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-500">
               <Globe className="w-4 h-4 text-blue-500" />
@@ -628,7 +667,7 @@ export default function WebsiteAnalyticsPage() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        {platform === "web" && <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Search Trends</h2>
@@ -661,7 +700,7 @@ export default function WebsiteAnalyticsPage() {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </div>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -826,7 +865,7 @@ export default function WebsiteAnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
+      {platform === "web" && <div className="grid grid-cols-1 gap-8">
         {/* Top Search Queries */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
@@ -875,7 +914,7 @@ export default function WebsiteAnalyticsPage() {
             </table>
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
         {/* eSIM Destinations (CR) */}

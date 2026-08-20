@@ -5,13 +5,15 @@ is_hidden: true
 department: all
 tags: [tab, analytics, website, ga4, gsc]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-08-20
 status: active
 ---
 
 # Website Analytics (Phân Tích Website GA4 & GSC)
 
-Số liệu website từ **Google Analytics 4** (sessions, users, conversion, revenue) + **Search Console** (impressions, clicks, position). KHÔNG dùng gohub_dw.
+Số liệu từ **Google Analytics 4** (sessions, users, conversion, revenue) + **Search Console** (clicks, position). KHÔNG dùng gohub_dw.
+
+**s156 (2026-08-20)**: thêm platform toggle **Web / App**. Khi App: filter GA4 bằng `platform=ios|android` thay vì `hostName`; ẩn GSC section (không áp dụng cho app). Cần GA4 property là cross-platform (Web+App) — nếu chỉ có web property thì App tab trả 0.
 
 ---
 
