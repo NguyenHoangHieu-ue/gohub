@@ -313,6 +313,8 @@ function QuarterlyContent() {
   const [savingTargets,  setSavingTargets]  = useState(false)
 
   const RISK_ORDER = ["danger_high","danger_low","safe_low","safe","very_safe","no_target"]
+  const [showMonthBreakdown, setShowMonthBreakdown] = useState(false)
+  const [targetCardOpen, setTargetCardOpen] = useState(false)
 
   const notifySquad = (ok: boolean, text: string) => { setSquadMsg({ ok, text }); setTimeout(() => setSquadMsg(null), 3000) }
 
@@ -327,8 +329,46 @@ function QuarterlyContent() {
     })
   }, [activeSection])
 
+  const exportSquadProgress = async () => {
+    if (!squadData?.squads?.length) return
+    const XLSX = await import("xlsx")
+    const wb = XLSX.utils.book_new()
+    const squadRows = squadData.squads.map((sq: any) => ({
+      Squad: sq.name, Leader: sq.leader || "", "Số KH": sq.customer_count,
+      "Revenue Actual": sq.revenue, "Revenue PR": sq.revenue_pr, "Target Revenue": sq.target_rev || "",
+      "%TGT Rev": sq.rev_pct != null ? `${sq.rev_pct}%` : "",
+      "GP Actual": sq.gp, "GP PR": sq.gp_pr, "Target CM1": sq.target_cm1 || "",
+      "%TGT CM1 (GP/Tgt)": sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "",
+      "3HK Rev": sq.hk3, "3HK%": `${sq.hk3_pct}%`, "Target 3HK Rev": sq.target_hk3 || "",
+      "%TGT 3HK": sq.hk3_tgt_pct != null ? `${sq.hk3_tgt_pct}%` : "",
+      "Rất an toàn": sq.risk_counts?.very_safe || 0, "An toàn": sq.risk_counts?.safe || 0,
+      "An toàn ít": sq.risk_counts?.safe_low || 0, "Nguy hiểm ít": sq.risk_counts?.danger_low || 0,
+      "Nguy hiểm nhiều": sq.risk_counts?.danger_high || 0, "Chưa target": sq.risk_counts?.no_target || 0,
+    }))
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(squadRows), "Squad Summary")
+    const custRows = squadData.squads.flatMap((sq: any) =>
+      (sq.customers ?? []).map((c: any) => {
+        const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
+        return {
+          Squad: sq.name, Leader: sq.leader || "", "Mã KH": c.customer_code, "Tên KH": c.customer_name,
+          Region: c.region, Tier: c.tier, PIC: picInfo?.name || c.sales_pic || "",
+          "Revenue Actual": c.revenue, "Revenue PR": c.revenue_pr, "Target Revenue": c.target_rev || "",
+          "%TGT Rev": c.rev_pct != null ? `${c.rev_pct}%` : "",
+          "GP PR": c.gp_pr, "Target CM1": c.target_cm1 || "",
+          "%TGT CM1 (GP/Tgt)": c.cm1_pct != null ? `${c.cm1_pct}%` : "",
+          "3HK%": `${c.hk3_pct}%`, "Target 3HK%": c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "",
+          "%TGT 3HK": c.hk3_tgt_pct != null ? `${c.hk3_tgt_pct}%` : "",
+          "Đánh giá": RISK_META[c.risk_level as keyof typeof RISK_META]?.label || c.risk_level,
+        }
+      })
+    )
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custRows), "Customer Detail")
+    XLSX.writeFile(wb, `squad_progress_${selQ}_${selYear}.xlsx`)
+  }
+
   const fetchSquadProgress = useCallback(async () => {
     setSquadLoading(true)
+    setExpandedSquads(new Set())
     try {
       const params = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
       const res = await fetch(`/api/analytics/squad-progress?${params}`)
@@ -836,52 +876,96 @@ function QuarterlyContent() {
         </div>
       )}
 
-      {/* ── Target inputs ── */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-slate-900">Target {selQ}-{selYear}</h2>
-          {canEditCost && (
-            editTarget ? (
-              <div className="flex items-center gap-2">
-                <button onClick={cancelEditTarget}
-                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all">Hủy</button>
-                <button onClick={saveTargets} disabled={saving || !targetDirty}
-                  className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
-                    targetDirty && !saving ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
-                  <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu"}
+      {/* ── Target inputs (collapsible) ── */}
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <button onClick={() => setTargetCardOpen(v => !v)}
+          className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold text-slate-800">Target {selQ}-{selYear}</h2>
+            {!targetCardOpen && targets.b2bRev > 0 && (
+              <span className="text-[11px] text-slate-400 font-mono hidden md:flex items-center gap-2">
+                <span>B2B Rev: {fck(targets.b2bRev)}</span>
+                {targets.b2bCm1 > 0 && <span>· CM1: {fck(targets.b2bCm1)}</span>}
+                {targets.b2cRev > 0 && <span>· B2C Rev: {fck(targets.b2cRev)}</span>}
+              </span>
+            )}
+            {!targetCardOpen && targets.b2bRev === 0 && (
+              <span className="text-[11px] text-amber-500 font-medium">Chưa nhập target</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {canEditCost && targetCardOpen && (
+              editTarget ? (
+                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                  <button onClick={cancelEditTarget}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all">Hủy</button>
+                  <button onClick={saveTargets} disabled={saving || !targetDirty}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                      targetDirty && !saving ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                    <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu"}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); startEditTarget() }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#003B95] border border-[#003B95]/30 hover:bg-blue-50 text-xs font-semibold rounded-lg transition-all">
+                  <Pencil className="w-3.5 h-3.5" />Sửa
                 </button>
-              </div>
-            ) : (
-              <button onClick={startEditTarget}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#003B95] border border-[#003B95]/30 hover:bg-blue-50 text-xs font-semibold rounded-lg transition-all">
-                <Pencil className="w-3.5 h-3.5" />Sửa target
-              </button>
-            )
-          )}
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
-            { id: "b2bRev",  label: "B2B Doanh thu" },
-            { id: "b2bCm1",  label: "B2B CM1 (VND)" },
-            { id: "b2bThk",  label: "B2B %3HK" },
-            { id: "b2cRev",  label: "B2C Doanh thu" },
-            { id: "b2cCm1",  label: "B2C CM1 (VND)" },
-            { id: "b2cThk",  label: "B2C %3HK" },
-          ].map(f => (
-            <div key={f.id} className="space-y-1">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">{f.label}</label>
-              <input
-                type="text" value={(tgtInputs as any)[f.id]} disabled={!editTarget}
-                onChange={e => setTgtInputs(prev => ({ ...prev, [f.id]: e.target.value }))}
-                className={cn("w-full border outline-none font-semibold text-sm font-mono rounded-lg px-3 py-2 transition-colors",
-                  editTarget
-                    ? "bg-white border-[#003B95]/40 focus:border-[#003B95] focus:ring-1 focus:ring-[#003B95]/30 text-slate-800"
-                    : "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed")}
-              />
+              )
+            )}
+            <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", targetCardOpen && "rotate-180")} />
+          </div>
+        </button>
+        {targetCardOpen && (
+          <div className="p-5">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { id: "b2bRev",  label: "B2B Doanh thu" },
+                { id: "b2bCm1",  label: "B2B CM1 (VND)" },
+                { id: "b2bThk",  label: "B2B %3HK" },
+                { id: "b2cRev",  label: "B2C Doanh thu" },
+                { id: "b2cCm1",  label: "B2C CM1 (VND)" },
+                { id: "b2cThk",  label: "B2C %3HK" },
+              ].map(f => (
+                <div key={f.id} className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">{f.label}</label>
+                  <input
+                    type="text" value={(tgtInputs as any)[f.id]} disabled={!editTarget}
+                    onChange={e => setTgtInputs(prev => ({ ...prev, [f.id]: e.target.value }))}
+                    className={cn("w-full border outline-none font-semibold text-sm font-mono rounded-lg px-3 py-2 transition-colors",
+                      editTarget
+                        ? "bg-white border-[#003B95]/40 focus:border-[#003B95] focus:ring-1 focus:ring-[#003B95]/30 text-slate-800"
+                        : "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed")}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* ── O3: Skeleton loading ── */}
+      {loading && !report && (
+        <div className="space-y-4 animate-pulse">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[0,1,2].map(i => (
+              <div key={i} className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 bg-slate-200 rounded w-1/3" />
+                  <div className="h-8 bg-slate-200 rounded w-16" />
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full" />
+                <div className="space-y-2 pt-1">
+                  {[0,1,2].map(j => <div key={j} className="flex justify-between"><div className="h-3 bg-slate-100 rounded w-1/4" /><div className="h-3 bg-slate-100 rounded w-1/3" /></div>)}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2.5">
+            <div className="h-5 bg-slate-200 rounded w-1/4 mb-4" />
+            {[0,1,2,3,4,5,6,7,8].map(i => <div key={i} className="h-8 bg-slate-100 rounded" />)}
+          </div>
+        </div>
+      )}
 
       {/* ── KPI Progress cards ── */}
       {report && (
@@ -904,8 +988,13 @@ function QuarterlyContent() {
       {/* ── Monthly summary table ── */}
       {summary.length > 0 && (
         <div className={cn("bg-white border border-slate-200 rounded-xl overflow-hidden transition-opacity", loading && "opacity-50 pointer-events-none")}>
-          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp theo Tháng</h2>
+            <button onClick={() => setShowMonthBreakdown(v => !v)}
+              className={cn("flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all",
+                showMonthBreakdown ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+              {showMonthBreakdown ? "Ẩn B2B/B2C" : "Xem B2B/B2C"}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse">
@@ -957,8 +1046,8 @@ function QuarterlyContent() {
                           </tr>
                         )
                       })()}
-                      <MonthSubRow label="B2B" stats={m.b2b} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2bRev} momCm1={mom.b2bCm1} qoqCm1={b2bQoQ} />
-                      <MonthSubRow label="B2C" stats={m.b2c} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2cRev} momCm1={mom.b2cCm1} qoqCm1={b2cQoQ} />
+                      {showMonthBreakdown && <MonthSubRow label="B2B" stats={m.b2b} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2bRev} momCm1={mom.b2bCm1} qoqCm1={b2bQoQ} />}
+                      {showMonthBreakdown && <MonthSubRow label="B2C" stats={m.b2c} kpiFactor={m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1} showPr={hasCurrentMonth} momRev={mom.b2cRev} momCm1={mom.b2cCm1} qoqCm1={b2cQoQ} />}
                     </React.Fragment>
                   )
                 }) })()}
@@ -1072,7 +1161,7 @@ function QuarterlyContent() {
 
       {/* ── Squad Progress tab ── */}
       {activeSection === "squad" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
 
           {squadMsg && (
             <div className={cn("px-4 py-2.5 rounded-lg text-sm", squadMsg.ok ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700")}>
@@ -1080,212 +1169,196 @@ function QuarterlyContent() {
             </div>
           )}
 
-          {/* ── Manage squads (admin/creator) ── */}
+          {/* ── S1: Admin toolbar compact ── */}
           {canEditSettings && (
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Admin</span>
+              <div className="w-px h-4 bg-slate-200" />
               <button onClick={() => {
                 if (!editingSquad) {
                   setDraftSquads((squadConfig?.squads ?? []).map(s => ({ name: s.name, leader: s.leader ?? "", sales_pics: [...s.sales_pics] })))
                   setEditingSquad(true)
                 } else { setEditingSquad(false) }
-              }} className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-800">Cấu hình Squad</span>
-                  {squadConfig && <span className="text-xs text-slate-400">({squadConfig.squads.length} squad)</span>}
-                </div>
-                {editingSquad ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              }} className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
+                editingSquad ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-600 border-slate-200 hover:border-[#003B95]/60 hover:text-[#003B95]")}>
+                <Shield className="w-3.5 h-3.5" />
+                Cấu hình Squad
+                {squadConfig && <span className="ml-1 opacity-60 text-[10px]">({squadConfig.squads.length})</span>}
               </button>
+              {squadData?.squads?.length > 0 && (
+                <button onClick={() => { if (!editingTargets) openEditTargets(); else setEditingTargets(false) }}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
+                    editingTargets ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200 hover:border-amber-400 hover:text-amber-600")}>
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Target Squad — {selQ} {selYear}
+                </button>
+              )}
+            </div>
+          )}
 
-              {editingSquad && (
-                <div className="p-5 space-y-4">
-                  {draftSquads.map((sq, si) => {
-                    // Danh sách available pics = tất cả - đã chọn trong squad này - đã chọn ở squad khác
-                    const usedInOthers = new Set(draftSquads.flatMap((s, i) => i !== si ? s.sales_pics : []))
-                    const availPics = (squadData?.available_pics ?? []).filter((p: any) => !sq.sales_pics.includes(p.code) && !usedInOthers.has(p.code))
-                    return (
-                      <div key={si} className="border border-slate-200 rounded-xl p-4 space-y-3">
-                        {/* Header: tên squad + xóa */}
-                        <div className="flex items-center gap-2">
-                          <input value={sq.name} onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, name: e.target.value } : s))}
-                            placeholder="Tên squad (VD: Squad 1 Ngọc)"
-                            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
-                          <button onClick={() => setDraftSquads(prev => prev.filter((_, i) => i !== si))}
-                            className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+          {/* ── Cấu hình Squad (collapsible panel) ── */}
+          {canEditSettings && editingSquad && (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm">
+              {draftSquads.map((sq, si) => {
+                const usedInOthers = new Set(draftSquads.flatMap((s, i) => i !== si ? s.sales_pics : []))
+                const availPics = (squadData?.available_pics ?? []).filter((p: any) => !sq.sales_pics.includes(p.code) && !usedInOthers.has(p.code))
+                return (
+                  <div key={si} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input value={sq.name} onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, name: e.target.value } : s))}
+                        placeholder="Tên squad (VD: Squad 1 Ngọc)"
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
+                      <button onClick={() => setDraftSquads(prev => prev.filter((_, i) => i !== si))}
+                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-1">Leader</p>
+                      <select value={sq.leader ?? ""}
+                        onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, leader: e.target.value } : s))}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95] bg-white">
+                        <option value="">— Chọn leader —</option>
+                        {squadUsers.map(u => <option key={u.username} value={u.username}>{u.name} (@{u.username})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-1.5">Sales PIC trong squad</p>
+                      {sq.sales_pics.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">Chưa có — click thêm từ danh sách bên dưới</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {sq.sales_pics.map(code => {
+                            const info = (squadData?.available_pics ?? []).find((p: any) => p.code === code)
+                            return (
+                              <span key={code} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#003B95] text-white text-xs rounded-full font-medium">
+                                {info?.name ?? code}
+                                <button onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, sales_pics: s.sales_pics.filter(c => c !== code) } : s))}
+                                  className="hover:text-red-300 ml-0.5"><X className="w-3 h-3" /></button>
+                              </span>
+                            )
+                          })}
                         </div>
-
-                        {/* Leader dropdown từ users list */}
+                      )}
+                      {availPics.length > 0 && (
                         <div>
-                          <p className="text-xs font-medium text-slate-500 mb-1">Leader</p>
-                          <select value={sq.leader ?? ""}
-                            onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, leader: e.target.value } : s))}
-                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95] bg-white">
-                            <option value="">— Chọn leader —</option>
-                            {squadUsers.map(u => (
-                              <option key={u.username} value={u.username}>{u.name} (@{u.username})</option>
+                          <p className="text-[10px] text-slate-400 mb-1">Click để thêm:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {availPics.map((p: any) => (
+                              <button key={p.code}
+                                onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, sales_pics: [...s.sales_pics, p.code] } : s))}
+                                className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#003B95] hover:text-white transition-colors">
+                                <Plus className="w-2.5 h-2.5 inline-block mr-0.5" />{p.name}
+                              </button>
                             ))}
-                          </select>
+                          </div>
                         </div>
-
-                        {/* Sales PIC: chip đã chọn */}
-                        <div>
-                          <p className="text-xs font-medium text-slate-500 mb-1.5">Sales PIC trong squad</p>
-                          {sq.sales_pics.length === 0 ? (
-                            <p className="text-xs text-slate-400 italic">Chưa có — click thêm từ danh sách bên dưới</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                              {sq.sales_pics.map(code => {
-                                const info = (squadData?.available_pics ?? []).find((p: any) => p.code === code)
-                                return (
-                                  <span key={code} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#003B95] text-white text-xs rounded-full font-medium">
-                                    {info?.name ?? code}
-                                    <button onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si
-                                      ? { ...s, sales_pics: s.sales_pics.filter(c => c !== code) } : s))}
-                                      className="hover:text-red-300 transition-colors ml-0.5">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </span>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* Available pics (đã lọc bỏ đã chọn) */}
-                          {availPics.length > 0 && (
-                            <div>
-                              <p className="text-[10px] text-slate-400 mb-1">Click để thêm:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {availPics.map((p: any) => (
-                                  <button key={p.code}
-                                    onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si
-                                      ? { ...s, sales_pics: [...s.sales_pics, p.code] } : s))}
-                                    className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#003B95] hover:text-white transition-colors">
-                                    <Plus className="w-2.5 h-2.5 inline-block mr-0.5" />{p.name} ({p.code})
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {availPics.length === 0 && sq.sales_pics.length > 0 && (
-                            <p className="text-[10px] text-slate-400">Tất cả sales PIC đã được phân vào squad.</p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  <div className="flex gap-2">
-                    <button onClick={() => setDraftSquads(prev => [...prev, { name: "", leader: "", sales_pics: [] }])}
-                      className="flex items-center gap-1.5 px-4 py-2 text-sm border border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-[#003B95] hover:text-[#003B95] transition-colors">
-                      <Plus className="w-3.5 h-3.5" /> Thêm squad
-                    </button>
-                    <button onClick={saveSquadConfig} disabled={savingSquad}
-                      className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
-                      {savingSquad ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      {savingSquad ? "Đang lưu…" : "Lưu cấu hình"}
-                    </button>
-                    <button onClick={() => setEditingSquad(false)}
-                      className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
+                      )}
+                      {availPics.length === 0 && sq.sales_pics.length > 0 && (
+                        <p className="text-[10px] text-slate-400">Tất cả PIC đã được phân vào squad.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })}
+              <div className="flex gap-2">
+                <button onClick={() => setDraftSquads(prev => [...prev, { name: "", leader: "", sales_pics: [] }])}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm border border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-[#003B95] hover:text-[#003B95] transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Thêm squad
+                </button>
+                <button onClick={saveSquadConfig} disabled={savingSquad}
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  {savingSquad ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingSquad ? "Đang lưu…" : "Lưu cấu hình"}
+                </button>
+                <button onClick={() => setEditingSquad(false)} className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
+              </div>
             </div>
           )}
 
-          {/* ── Nhập target Squad theo quý (admin/creator) ── */}
-          {canEditSettings && squadData?.squads?.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <button onClick={() => { if (!editingTargets) openEditTargets(); else setEditingTargets(false) }}
-                className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-bold text-slate-800">Target Squad — {selQ} {selYear}</span>
-                  <span className="text-xs text-slate-400">(nhập Revenue / CM1 / 3HK Revenue cho từng squad)</span>
-                </div>
-                {editingTargets ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-              </button>
-              {editingTargets && (
-                <div className="p-5 space-y-3">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
-                          <th className="px-3 py-2 text-left font-semibold">Squad</th>
-                          <th className="px-3 py-2 text-right font-semibold">Target Revenue (VND)</th>
-                          <th className="px-3 py-2 text-right font-semibold">Target CM1 (VND)</th>
-                          <th className="px-3 py-2 text-right font-semibold">Target 3HK Rev (VND)</th>
+          {/* ── Target Squad panel (collapsible) ── */}
+          {canEditSettings && editingTargets && squadData?.squads?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500">Nhập Revenue / CM1 / 3HK Revenue mục tiêu cho từng squad — {selQ} {selYear}</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                      <th className="px-3 py-2 text-left font-semibold">Squad</th>
+                      <th className="px-3 py-2 text-right font-semibold">Target Revenue (VND)</th>
+                      <th className="px-3 py-2 text-right font-semibold">Target CM1 (VND)</th>
+                      <th className="px-3 py-2 text-right font-semibold">Target 3HK Rev (VND)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {squadData.squads.map((sq: any) => {
+                      const t = draftTargets[sq.name] ?? { rev: "", cm1: "", hk3rev: "" }
+                      const upd = (field: "rev"|"cm1"|"hk3rev", v: string) =>
+                        setDraftTargets(prev => ({ ...prev, [sq.name]: { ...(prev[sq.name] ?? { rev:"", cm1:"", hk3rev:"" }), [field]: v.replace(/[^0-9]/g, "") } }))
+                      return (
+                        <tr key={sq.name}>
+                          <td className="px-3 py-2 font-medium text-slate-700">{sq.name}</td>
+                          {(["rev","cm1","hk3rev"] as const).map(f => (
+                            <td key={f} className="px-3 py-2 text-right">
+                              <input value={t[f]} onChange={e => upd(f, e.target.value)} placeholder="0"
+                                className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
+                            </td>
+                          ))}
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {squadData.squads.map((sq: any) => {
-                          const t = draftTargets[sq.name] ?? { rev: "", cm1: "", hk3rev: "" }
-                          const upd = (field: "rev"|"cm1"|"hk3rev", v: string) =>
-                            setDraftTargets(prev => ({ ...prev, [sq.name]: { ...(prev[sq.name] ?? { rev:"", cm1:"", hk3rev:"" }), [field]: v.replace(/[^0-9]/g, "") } }))
-                          return (
-                            <tr key={sq.name}>
-                              <td className="px-3 py-2 font-medium text-slate-700">{sq.name}</td>
-                              {(["rev","cm1","hk3rev"] as const).map(f => (
-                                <td key={f} className="px-3 py-2 text-right">
-                                  <input value={t[f]} onChange={e => upd(f, e.target.value)}
-                                    placeholder="0"
-                                    className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
-                                </td>
-                              ))}
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={saveSquadTargets} disabled={savingTargets}
-                      className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
-                      {savingTargets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      {savingTargets ? "Đang lưu…" : "Lưu target"}
-                    </button>
-                    <button onClick={() => setEditingTargets(false)}
-                      className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
-                  </div>
-                  <p className="text-[10px] text-slate-400">Để trống hoặc 0 = dùng tổng target per-customer (nhập ở phần B2B customers). Target squad nhập ở đây sẽ được ưu tiên.</p>
-                </div>
-              )}
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-2 items-center">
+                <button onClick={saveSquadTargets} disabled={savingTargets}
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  {savingTargets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingTargets ? "Đang lưu…" : "Lưu target"}
+                </button>
+                <button onClick={() => setEditingTargets(false)} className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
+                <p className="text-[10px] text-slate-400 ml-2">Để trống / 0 = dùng tổng target per-customer. Target squad được ưu tiên.</p>
+              </div>
             </div>
           )}
 
-          {/* ── Squad progress table ── */}
+          {/* ── Squad progress main card ── */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+
+            {/* Header */}
+            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="text-base font-bold text-slate-900">Squad Progress — {selQ} {selYear}</h2>
-                {squadData && <p className="text-xs text-slate-400 mt-0.5">{squadData.elapsed_days}/{squadData.quarter_days} ngày · Pro-rata × {squadData.pr_factor?.toFixed(2)}</p>}
+                {squadData && <p className="text-xs text-slate-400 mt-0.5">{squadData.elapsed_days}/{squadData.quarter_days} ngày · Pro-rata ×{squadData.pr_factor?.toFixed(2)}</p>}
               </div>
-              <button onClick={fetchSquadProgress} disabled={squadLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white text-xs font-semibold rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
-                <RefreshCw className={cn("w-3.5 h-3.5", squadLoading && "animate-spin")} />
-                {squadLoading ? "Đang tải…" : "Làm mới"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={exportSquadProgress} disabled={!squadData?.squads?.length || squadLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 text-xs font-semibold rounded-lg disabled:opacity-40 transition-all">
+                  <FileDown className="w-3.5 h-3.5" />Export Excel
+                </button>
+                <button onClick={fetchSquadProgress} disabled={squadLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white text-xs font-semibold rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  <RefreshCw className={cn("w-3.5 h-3.5", squadLoading && "animate-spin")} />
+                  {squadLoading ? "Đang tải…" : "Làm mới"}
+                </button>
+              </div>
             </div>
 
             {squadLoading ? (
               <div className="flex items-center justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-[#003B95]" /></div>
             ) : !squadData ? (
-              <div className="py-12 text-center text-slate-400 text-sm">Bấm "Làm mới" để tải dữ liệu.</div>
+              <div className="py-12 text-center text-slate-400 text-sm">Đang tải dữ liệu…</div>
             ) : !squadData.squads?.length ? (
               <div className="py-12 text-center text-slate-400 text-sm">
-                Chưa có squad nào. {canEditSettings && "Bấm \"Cấu hình Squad\" để thêm."}
+                Chưa có squad nào. {canEditSettings && <span>Dùng nút <b className="text-slate-600">Cấu hình Squad</b> bên trên để thêm.</span>}
               </div>
             ) : (() => {
-              // Collect unique values for filters
               const allCusts: any[] = squadData.squads.flatMap((sq: any) =>
                 (sq.customers ?? []).map((c: any) => ({ ...c, squad_name: sq.name, leader: sq.leader })))
               const uniquePics = [...new Set(allCusts.map((c: any) => c.sales_pic).filter(Boolean))] as string[]
               const squadNames = squadData.squads.map((sq: any) => sq.name)
-
               const hasFilter = sqSearch || sqFilterRegion !== "ALL" || sqFilterTier !== "ALL" || sqFilterPic !== "ALL" || sqFilterRisk !== "ALL" || sqFilterSquad !== "ALL"
 
-              // Apply filters
               let filtered = allCusts.filter(c => {
                 if (sqSearch && !c.customer_name?.toLowerCase().includes(sqSearch.toLowerCase())) return false
                 if (sqFilterRegion !== "ALL" && c.region !== sqFilterRegion) return false
@@ -1296,7 +1369,6 @@ function QuarterlyContent() {
                 return true
               })
 
-              // Sort
               filtered = [...filtered].sort((a, b) => {
                 let av: any, bv: any
                 if (sqSortCol === "risk_level") { av = RISK_ORDER.indexOf(a.risk_level); bv = RISK_ORDER.indexOf(b.risk_level) }
@@ -1320,22 +1392,22 @@ function QuarterlyContent() {
                 )
               }
 
-              const pct = (v: number | null) => v != null ? `${v}%` : "—"
+              // B1 fix: renamed to pctV to avoid shadowing outer pct
+              const pctV = (v: number | null) => v != null ? `${v}%` : "—"
               const pctCol = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
+              const pctColor = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600" : v >= 85 ? "text-amber-600" : "text-red-500"
 
               return (
                 <>
-                  {/* Filters */}
-                  <div className="px-4 py-3 border-b border-slate-100 space-y-2">
+                  {/* S3: Filter bar — 1 tầng */}
+                  <div className="px-4 py-3 border-b border-slate-100">
                     <div className="flex flex-wrap items-center gap-2">
-                      {/* Search */}
                       <div className="relative">
                         <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                         <input value={sqSearch} onChange={e => setSqSearch(e.target.value)}
                           placeholder="Tìm khách hàng..."
-                          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] w-44" />
+                          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] w-40" />
                       </div>
-                      {/* Region */}
                       <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
                         {(["ALL","VN","US"] as const).map(v => (
                           <button key={v} onClick={() => setSqFilterRegion(v)}
@@ -1344,231 +1416,265 @@ function QuarterlyContent() {
                           </button>
                         ))}
                       </div>
-                      {/* Tier */}
                       <select value={sqFilterTier} onChange={e => setSqFilterTier(e.target.value)}
                         className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
                         <option value="ALL">Tất cả tier</option>
                         {["Strategic","VIP","Gold","Silver"].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      {/* Squad */}
-                      {squadNames.length > 0 && (
+                      {squadNames.length > 1 && (
                         <select value={sqFilterSquad} onChange={e => setSqFilterSquad(e.target.value)}
                           className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
                           <option value="ALL">Tất cả squad</option>
                           {squadNames.map((n: string) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       )}
+                      {uniquePics.length > 0 && (
+                        <select value={sqFilterPic} onChange={e => setSqFilterPic(e.target.value)}
+                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                          <option value="ALL">Tất cả PIC</option>
+                          {uniquePics.map(code => {
+                            const info = squadData.available_pics?.find((p: any) => p.code === code)
+                            return <option key={code} value={code}>{info?.name ?? code}</option>
+                          })}
+                        </select>
+                      )}
+                      <select value={sqFilterRisk} onChange={e => setSqFilterRisk(e.target.value)}
+                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                        <option value="ALL">Tất cả rủi ro</option>
+                        {Object.entries(RISK_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
                       {hasFilter && (
                         <button onClick={() => { setSqSearch(""); setSqFilterRegion("ALL"); setSqFilterTier("ALL"); setSqFilterPic("ALL"); setSqFilterRisk("ALL"); setSqFilterSquad("ALL") }}
                           className="flex items-center gap-1 px-2 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
-                          <X className="w-3 h-3" /> Xóa filter
+                          <X className="w-3 h-3" />Xóa filter
                         </button>
                       )}
                     </div>
-                    {/* PIC chips */}
-                    {uniquePics.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <span className="text-[10px] text-slate-400 font-medium">PIC:</span>
-                        <button onClick={() => setSqFilterPic("ALL")}
-                          className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterPic === "ALL" ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
-                          Tất cả
-                        </button>
-                        {uniquePics.map(code => {
-                          const info = squadData.available_pics?.find((p: any) => p.code === code)
-                          return (
-                            <button key={code} onClick={() => setSqFilterPic(sqFilterPic === code ? "ALL" : code)}
-                              className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterPic === code ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
-                              {info?.name ?? code}
-                            </button>
-                          )
-                        })}
+                    {/* S5: Flat view banner */}
+                    {hasFilter && (
+                      <div className="mt-2 text-[11px] text-[#003B95] bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                        <span className="font-semibold">Đang xem phẳng</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="text-slate-500">{filtered.length} khách hàng phù hợp</span>
                       </div>
                     )}
-                    {/* Risk chips */}
-                    <div className="flex flex-wrap gap-1.5 items-center">
-                      <span className="text-[10px] text-slate-400 font-medium">Mức độ:</span>
-                      <button onClick={() => setSqFilterRisk("ALL")}
-                        className={cn("px-2 py-0.5 text-[11px] rounded-full border transition-all", sqFilterRisk === "ALL" ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-500 border-slate-200 hover:border-[#003B95]")}>
-                        Tất cả
-                      </button>
-                      {Object.entries(RISK_META).map(([k, v]) => (
-                        <button key={k} onClick={() => setSqFilterRisk(sqFilterRisk === k ? "ALL" : k)}
-                          className={cn("px-2 py-0.5 text-[11px] rounded-full border font-medium transition-all",
-                            sqFilterRisk === k ? `${v.bg} ${v.color} border-transparent` : "bg-white text-slate-500 border-slate-200 hover:border-slate-400")}>
-                          {v.label}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
-              <div className="divide-y divide-slate-100">
-                {hasFilter ? (
-                  /* ── Flat filtered view ── */
-                  <>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[11px] border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
-                            <th className="px-4 py-2 text-left">{sortBtn("customer_name","KH")}</th>
-                            <th className="px-3 py-2 text-left font-semibold">Squad</th>
-                            <th className="px-3 py-2 text-left font-semibold">Tier</th>
-                            <th className="px-3 py-2 text-left font-semibold">PIC</th>
-                            <th className="px-3 py-2 text-right">{sortBtn("revenue_pr","Rev PR")}</th>
-                            <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">GP PR</th>
-                            <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
-                            <th className="px-3 py-2 text-right">{sortBtn("cm1_pct","%TGT CM1")}</th>
-                            <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">3HK%</th>
-                            <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
-                            <th className="px-3 py-2 text-right">{sortBtn("hk3_tgt_pct","%TGT 3HK")}</th>
-                            <th className="px-3 py-2 text-center border-l border-slate-200">{sortBtn("risk_level","Đánh giá")}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {filtered.length === 0 ? (
-                            <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">Không có kết quả phù hợp.</td></tr>
-                          ) : filtered.map((c: any, ci: number) => {
-                            const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
-                            const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
-                            return (
-                              <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                <td className="px-4 py-2 font-medium text-slate-700">
-                                  {c.customer_name}
-                                  <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                </td>
-                                <td className="px-3 py-2 text-slate-500">{c.squad_name}</td>
-                                <td className="px-3 py-2 text-slate-500">{c.tier}</td>
-                                <td className="px-3 py-2 text-slate-500">{picInfo?.name ?? c.sales_pic}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
-                                <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
-                                <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
-                                <td className="px-3 py-2 text-center border-l border-slate-100">
-                                  <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="px-4 py-1.5 text-[10px] text-slate-400">{filtered.length} kết quả</p>
-                  </>
-                ) : (
-                  /* ── Per-squad view (no filter) ── */
-                  <>
-                    {squadData.squads.map((sq: any, si: number) => {
-                      const expanded = expandedSquads.has(si)
-                      const pctColor = (v: number | null) => v == null ? "text-slate-400" : v >= 100 ? "text-emerald-600 font-bold" : v >= 85 ? "text-amber-600 font-semibold" : "text-red-500 font-semibold"
-                      const leaderUser = squadUsers.find(u => u.username === sq.leader)
-                      return (
-                        <div key={si}>
-                          <div className={cn("px-5 py-3 hover:bg-slate-50 transition-colors", si % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
-                            <div className="flex items-center gap-3 mb-2">
-                              <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
-                                className="flex items-center gap-2 flex-1 text-left">
-                                <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
-                                <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
-                                {leaderUser && <span className="text-xs text-slate-400">· Leader: {leaderUser.name}</span>}
-                                <span className="text-xs text-slate-400">· {sq.customer_count} KH</span>
-                              </button>
-                              <div className="flex flex-wrap gap-1 shrink-0">
-                                {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => {
-                                  const cnt = sq.risk_counts?.[k] ?? 0
-                                  if (!cnt) return null
-                                  const m = RISK_META[k]
-                                  return <span key={k} className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums", m.bg, m.color)}>{cnt} {m.label}</span>
-                                })}
+                  <div>
+                    {hasFilter ? (
+                      /* ── S4: Flat filtered view — 10 cột (bỏ bớt Rev Actual, gộp 3HK) ── */
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[11px] border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                              <th className="px-4 py-2 text-left">{sortBtn("customer_name","Khách hàng")}</th>
+                              <th className="px-3 py-2 text-left font-semibold">Squad · PIC</th>
+                              <th className="px-3 py-2 text-left font-semibold">Tier</th>
+                              <th className="px-3 py-2 text-right">{sortBtn("revenue_pr","Rev PR")}</th>
+                              <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">GP PR</th>
+                              <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
+                              <th className="px-3 py-2 text-right">{sortBtn("cm1_pct","%TGT CM1")}</th>
+                              <th className="px-3 py-2 text-right border-l border-slate-200 font-semibold">3HK% / Tgt%</th>
+                              <th className="px-3 py-2 text-right">{sortBtn("hk3_tgt_pct","%TGT 3HK")}</th>
+                              <th className="px-3 py-2 text-center border-l border-slate-200">{sortBtn("risk_level","Đánh giá")}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filtered.length === 0 ? (
+                              <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-400">Không có kết quả phù hợp.</td></tr>
+                            ) : filtered.map((c: any, ci: number) => {
+                              const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
+                              const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
+                              return (
+                                <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                  <td className="px-4 py-2 font-medium text-slate-700">
+                                    {c.customer_name}
+                                    <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-500 text-[11px]">
+                                    <span className="font-medium text-slate-700">{c.squad_name}</span>
+                                    {picInfo && <span className="text-slate-400"> · {picInfo.name}</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-500">{c.tier}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
+                                  <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pctV(c.cm1_pct)}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">
+                                    <span className="font-medium">{c.hk3_pct}%</span>
+                                    {c.target_hk3pct > 0 && <span className="text-slate-400"> / {c.target_hk3pct}%</span>}
+                                  </td>
+                                  <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
+                                  <td className="px-3 py-2 text-center border-l border-slate-100">
+                                    <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      /* ── S2: Per-squad view với redesigned card header ── */
+                      <>
+                        {squadData.squads.map((sq: any, si: number) => {
+                          const expanded = expandedSquads.has(si)
+                          const leaderUser = squadUsers.find(u => u.username === sq.leader)
+                          const cm1TgtPct = sq.gp_cm1_pct
+                          const RISK_SHORT: Record<string, string> = {
+                            very_safe: "Rất AT", safe: "AT", safe_low: "AT Ít", danger_low: "NH Ít", danger_high: "NH Nhiều",
+                          }
+                          return (
+                            <div key={si} className={cn("border-b border-slate-100 last:border-0", si % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
+                              {/* ── Squad card header ── */}
+                              <div className="px-5 py-4">
+                                {/* Row 1: expand + name + leader + count + risk chips */}
+                                <div className="flex items-center gap-2 mb-2.5">
+                                  <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
+                                    className="flex items-center gap-2 flex-1 text-left min-w-0">
+                                    <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0", expanded && "rotate-90")} />
+                                    <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
+                                    {leaderUser && (
+                                      <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">{leaderUser.name}</span>
+                                    )}
+                                    <span className="text-[11px] text-slate-400 shrink-0">{sq.customer_count} KH</span>
+                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                    {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => {
+                                      const cnt = sq.risk_counts?.[k] ?? 0
+                                      if (!cnt) return null
+                                      const m = RISK_META[k]
+                                      return (
+                                        <span key={k} className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums", m.bg, m.color)}>
+                                          {cnt} {RISK_SHORT[k]}
+                                        </span>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Row 2: CM1 progress bar */}
+                                {sq.target_cm1 > 0 && (
+                                  <div className="ml-6 mb-2.5">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[10px] text-slate-400">GP ≈ CM1 vs Target</span>
+                                      <span className={cn("text-[11px] font-bold tabular-nums", pctColor(cm1TgtPct))}>
+                                        {cm1TgtPct != null ? `${cm1TgtPct}%` : "—"}
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                      <div className="h-full rounded-full transition-all duration-500"
+                                        style={{
+                                          width: `${Math.min(Math.max(cm1TgtPct ?? 0, 0), 100)}%`,
+                                          background: (cm1TgtPct ?? 0) >= 100 ? "#059669" : (cm1TgtPct ?? 0) >= 85 ? "#d97706" : "#003B95",
+                                        }} />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Row 3: key metrics */}
+                                <div className="ml-6 flex items-center gap-4 text-xs flex-wrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-400">Rev</span>
+                                    <span className="tabular-nums text-slate-700 font-medium">{formatCompactNumber(sq.revenue)}</span>
+                                    <span className="text-blue-600 font-medium">→ {formatCompactNumber(sq.revenue_pr)} PR</span>
+                                    {sq.target_rev > 0 && sq.rev_pct != null && (
+                                      <span className={cn("font-semibold", pctColor(sq.rev_pct))}>{sq.rev_pct}% tgt</span>
+                                    )}
+                                  </div>
+                                  <div className="w-px h-3.5 bg-slate-200 shrink-0" />
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-400">GP</span>
+                                    <span className="tabular-nums text-slate-700 font-medium">{formatCompactNumber(sq.gp)}</span>
+                                    <span className="text-blue-600">→ {formatCompactNumber(sq.gp_pr)} PR</span>
+                                  </div>
+                                  <div className="w-px h-3.5 bg-slate-200 shrink-0" />
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-400">3HK</span>
+                                    <span className="tabular-nums text-slate-700 font-medium">{sq.hk3_pct}%</span>
+                                    {sq.target_hk3 > 0 && sq.hk3_tgt_pct != null && (
+                                      <span className={cn("font-semibold", pctColor(sq.hk3_tgt_pct))}>{sq.hk3_tgt_pct}% tgt</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
+
+                              {/* S4: Expanded customer table — 9 cột */}
+                              {expanded && sq.customers?.length > 0 && (
+                                <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
+                                  <table className="w-full text-[11px] border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
+                                        <th className="px-4 py-2 text-left font-semibold">Khách hàng</th>
+                                        <th className="px-3 py-2 text-left font-semibold">PIC · Tier</th>
+                                        <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
+                                        <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
+                                        <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
+                                        <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
+                                        <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK% / Tgt%</th>
+                                        <th className="px-3 py-2 text-right font-semibold">%TGT 3HK</th>
+                                        <th className="px-3 py-2 text-center font-semibold border-l border-slate-200">Đánh giá</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {sq.customers.map((c: any, ci: number) => {
+                                        const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
+                                        const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
+                                        return (
+                                          <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                            <td className="px-4 py-2 font-medium text-slate-700">
+                                              {c.customer_name}
+                                              <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                            </td>
+                                            <td className="px-3 py-2 text-slate-500">
+                                              {picInfo?.name ?? c.sales_pic}
+                                              <span className="text-slate-300 mx-1">·</span>
+                                              {c.tier}
+                                            </td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
+                                            <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pctV(c.cm1_pct)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">
+                                              <span className="font-medium">{c.hk3_pct}%</span>
+                                              {c.target_hk3pct > 0 && <span className="text-slate-400"> / {c.target_hk3pct}%</span>}
+                                            </td>
+                                            <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
+                                            <td className="px-3 py-2 text-center border-l border-slate-100">
+                                              <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
                             </div>
-                            <div className="ml-6 grid grid-cols-3 gap-x-6 gap-y-1 text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-400 w-16 shrink-0">Revenue</span>
-                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.revenue)}</span>
-                                <span className="tabular-nums text-blue-600 font-medium">→ {formatCompactNumber(sq.revenue_pr)} PR</span>
-                                {sq.target_rev > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.rev_pct))}>{sq.rev_pct != null ? `${sq.rev_pct}%` : "—"} tgt</span>}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-400 w-16 shrink-0">GP~CM1</span>
-                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.gp)}</span>
-                                {sq.target_cm1 > 0 && <span className={cn("tabular-nums font-semibold", pctColor(sq.gp_cm1_pct))}>{sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "—"} tgt</span>}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-slate-400 w-10 shrink-0">3HK</span>
-                                <span className="tabular-nums text-slate-700">{formatCompactNumber(sq.hk3)}</span>
-                                <span className="text-slate-500">{sq.hk3_pct}%</span>
-                              </div>
+                          )
+                        })}
+
+                        {/* B4: Total row + CM1 */}
+                        {squadData.totals && (
+                          <div className="px-5 py-3 bg-[#003B95]/5 border-t-2 border-[#003B95]/20">
+                            <div className="flex items-center gap-4 text-xs font-bold text-slate-800 flex-wrap">
+                              <span className="font-semibold text-slate-500">
+                                Tổng · {squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH
+                              </span>
+                              <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
+                              <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
+                              <span className="text-slate-600">GP: {formatCompactNumber(squadData.totals.gp)}</span>
+                              <span className="text-blue-700">GP PR: {formatCompactNumber(squadData.totals.gp_pr)}</span>
+                              <span className="text-slate-500">3HK: {squadData.totals.hk3_pct}%</span>
                             </div>
                           </div>
-                          {/* Expand: customer table (bỏ Rev Tgt + %TGT Rev) */}
-                          {expanded && sq.customers?.length > 0 && (
-                            <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
-                              <table className="w-full text-[11px] border-collapse">
-                                <thead>
-                                  <tr className="bg-slate-100 text-slate-500 uppercase text-[9px]">
-                                    <th className="px-4 py-2 text-left font-semibold">KH</th>
-                                    <th className="px-3 py-2 text-left font-semibold">Tier</th>
-                                    <th className="px-3 py-2 text-right font-semibold">Rev Actual</th>
-                                    <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
-                                    <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
-                                    <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
-                                    <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
-                                    <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK%</th>
-                                    <th className="px-3 py-2 text-right font-semibold">3HK Tgt%</th>
-                                    <th className="px-3 py-2 text-right font-semibold">%TGT 3HK</th>
-                                    <th className="px-3 py-2 text-center font-semibold border-l border-slate-200">Đánh giá</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {sq.customers.map((c: any, ci: number) => {
-                                    const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
-                                    return (
-                                      <tr key={ci} className={ci % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                                        <td className="px-4 py-2 font-medium text-slate-700">
-                                          {c.customer_name}
-                                          <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                        </td>
-                                        <td className="px-3 py-2 text-slate-500">{c.tier}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatCompactNumber(c.revenue)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
-                                        <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pct(c.cm1_pct)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{c.hk3_pct}%</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "—"}</td>
-                                        <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pct(c.hk3_tgt_pct)}</td>
-                                        <td className="px-3 py-2 text-center border-l border-slate-100">
-                                          <span className={cn("px-1.5 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap", rm.bg, rm.color)}>{rm.label}</span>
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                    {squadData.totals && (
-                      <div className="px-5 py-3 bg-[#003B95]/5 border-t-2 border-[#003B95]/20">
-                        <div className="flex items-center gap-3 text-xs font-bold text-slate-800">
-                          <span>Tổng · {squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH</span>
-                          <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
-                          <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
-                          <span className="text-slate-500">GP: {formatCompactNumber(squadData.totals.gp)}</span>
-                          <span className="text-slate-500">3HK: {squadData.totals.hk3_pct}%</span>
-                        </div>
-                      </div>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-                <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-                  GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK%actual / 3HK%target.
-                </p>
-              </div>
+                    <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+                      GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK% / Target 3HK%.
+                    </p>
+                  </div>
                 </>
               )
             })()}
