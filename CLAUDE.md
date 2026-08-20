@@ -4,18 +4,18 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-19, s155)
+## Trạng thái hiện tại (2026-08-20, s156)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | Squad Progress: fix GROUP BY (d7c88ec) + filter squad/nhập target squad (84c0f5b) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress bản đầu (đến 94be160) |
+| ⏳ Trên staging CHƯA merge main | (clean — s155+s156 đã merge main 8169cb1) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + Web Analytics App toggle + B2C Metric subtab (đến 8169cb1) |
 
-**➡️ TIẾP THEO:** Hiếu test Squad Progress trên staging → nếu OK → merge main.
+**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics.
 
-**⚠️ QUY TẮC MERGE (nhắc lại s155):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
+**⚠️ QUY TẮC MERGE (nhắc lại):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
 **Migrations & ENV — đã xong:**
 - [x] ✅ v31–v35 (cũ) · v36 BC Datapool · v37 staff hk3 split
@@ -31,6 +31,11 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark)
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
+
+**s156 — đã làm (2026-08-20):**
+- ✅ **Web Analytics — App platform toggle**: toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App. `lib/ga4.ts` + `api/analytics/ga4/route.ts` + `analytics/website/page.tsx` (main 8169cb1).
+- ✅ **B2C — subtab Metric**: bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge. API `/api/analytics/b2c/metric` + component `b2c-metric.tsx` (main 8169cb1).
+- ⏳ **GA4 App connect** (Hiếu cần làm): property ID = `465150028` (Firebase Analytics GoHub App). Service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` cần được add Viewer vào property này (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management). Sau đó thêm entry `gohub-app` vào `app_settings.ga4_configs` trong Supabase.
 
 **s155 — đã làm (2026-08-19):**
 - ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.
