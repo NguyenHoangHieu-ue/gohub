@@ -4,14 +4,14 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-20, s156)
+## Trạng thái hiện tại (2026-08-21, s157)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main ca712c5) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report + Web Analytics App toggle + B2C Metric subtab + fix Daily Report revenue filter (đến ca712c5) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main ebd6ac8) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report + Web Analytics App + B2C Metric + fix Daily Report revenue + fix query timeout (đến ebd6ac8) |
 
 **➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics.
 
@@ -31,15 +31,20 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark)
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
+- [ ] **GA4 App connect**: add service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` Viewer vào property `465150028` (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management) → thêm entry `gohub-app` vào `app_settings.ga4_configs` Supabase
+
+**s157 — đã làm (2026-08-21):**
+- ✅ **fix Daily Report revenue lệch Dashboard** (main 8014e27, `lib/scheduled-report-data.ts`):
+  - Root cause: 5 query revenue (`revByMarketGroup`, `rev3hkByMarket`, `revByDay`, `b2bCustomersByDay`, `b2cChannelsByDay`) thiếu filter `SHIPPINGFEE0` + `INTERNAL-TRANSACTION` mà toàn bộ web tab đều áp.
+  - Fix: thêm `STD_FILTER` constant (`shipFilter(false)` + `internalOpsFilterByCode(false)`) → áp vào WHERE của tất cả 5 query. Số Daily/Weekly/Monthly report nay khớp Dashboard.
 
 **s156 — đã làm (2026-08-20/21):**
 - ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):
   - **Squad Progress** S1–S5: admin toolbar compact · squad card progress bar · filter 1 tầng dropdown · customer table 9 cột · flat view banner · Export Excel (2 sheet). Bug fix: pct shadow, expandedSquads reset, total row GP PR.
   - **Overview** O1–O3: target card collapsible · monthly table toggle B2B/B2C · skeleton loading.
-- ✅ **Web Analytics — App platform toggle**: toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App. `lib/ga4.ts` + `api/analytics/ga4/route.ts` + `analytics/website/page.tsx` (main 8169cb1).
-- ✅ **B2C — subtab Metric**: bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge. API `/api/analytics/b2c/metric` + component `b2c-metric.tsx` (main 8169cb1).
-- ✅ **fix Daily Report revenue filter** (ca712c5): thêm STD_FILTER (SHIPPINGFEE0 + INTERNAL-TRANSACTION) vào 5 query trong `scheduled-report-data.ts` để khớp Dashboard.
-- ⏳ **GA4 App connect** (Hiếu cần làm): property ID = `465150028` (Firebase Analytics GoHub App). Service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` cần được add Viewer vào property này (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management). Sau đó thêm entry `gohub-app` vào `app_settings.ga4_configs` trong Supabase.
+- ✅ **Web Analytics — App platform toggle** (main 8169cb1): toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App.
+- ✅ **B2C — subtab Metric** (main 8169cb1): bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge.
+- ✅ **fix Daily Report revenue + query timeout** (ebd6ac8): thêm filter SHIPPINGFEE0 + INTERNAL-TRANSACTION; dùng alias `s.group_name` thay NOT IN subquery để tránh timeout; serialize gohub_dw queries.
 
 **s155 — đã làm (2026-08-19):**
 - ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.

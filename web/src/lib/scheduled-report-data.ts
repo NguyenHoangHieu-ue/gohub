@@ -1,4 +1,4 @@
-import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
+import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 import { supabaseAdmin } from "@/lib/supabase"
 import { tursoQuery } from "@/lib/turso"
@@ -17,8 +17,10 @@ const REV = "fulfilled_revenue_amount_vnd"
 const GP = "gross_profit_vnd"
 // 3HK vendor ghi 2 kiểu trong DB ('3HKDATAPOOL' và '3HK DATAPOOL') → REPLACE bỏ space để bắt cả hai.
 const SKU_3HK = `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL')`
-// Khớp định nghĩa Dashboard: loại phí ship (SHIPPINGFEE0) + đơn nội bộ (INTERNAL-TRANSACTION).
-const STD_FILTER = `${shipFilter(false)} ${internalOpsFilterByCode(false)}`
+// Khớp định nghĩa Dashboard: loại phí ship + đơn nội bộ (dùng alias s đã JOIN, không subquery).
+const STD_FILTER_S = `AND f.sku != 'SHIPPINGFEE0' AND UPPER(COALESCE(s.group_name,'')) != 'INTERNAL-TRANSACTION'`
+// rev3hkByMarket không JOIN dim_order_source → chỉ loại ship (3HK DataPool SKU không có trong internal ops).
+const STD_FILTER_3HK = `AND f.sku != 'SHIPPINGFEE0'`
 
 // ── Date helpers (giờ ICT = UTC+7; dùng getUTC* sau khi shift) ────────────────
 function ictNow(): Date { return new Date(Date.now() + 7 * 3600_000) }
@@ -145,7 +147,7 @@ async function revByMarketGroup(start: string, end: string) {
            SUM(f.${REV}) AS revenue, SUM(f.${GP}) AS gp
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER_S}
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ cc: string; grp: string; revenue: string; gp: string }>(sql)
 }
@@ -154,7 +156,7 @@ async function rev3hkByMarket(start: string, end: string) {
   const sql = `
     SELECT COALESCE(f.company_code,'NA') AS cc, SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND ${SKU_3HK} ${STD_FILTER}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND ${SKU_3HK} ${STD_FILTER_3HK}
     GROUP BY 1`
   return cachedAnalyticsQuery<{ cc: string; revenue: string }>(sql)
 }
@@ -169,7 +171,7 @@ async function revByDay(start: string, end: string) {
            SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER_S}
     GROUP BY 1,2,3`
   return cachedAnalyticsQuery<{ d: string; cc: string; grp: string; revenue: string }>(sql)
 }
@@ -186,7 +188,7 @@ async function b2bCustomersByDay(start: string, end: string) {
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2B' ${STD_FILTER}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2B' AND f.sku != 'SHIPPINGFEE0'
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ cust: string; d: string; revenue: string }>(sql)
 }
@@ -199,7 +201,7 @@ async function b2cChannelsByDay(start: string, end: string) {
            SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2C' ${STD_FILTER}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2C' AND f.sku != 'SHIPPINGFEE0'
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ ch: string; d: string; revenue: string }>(sql)
 }
@@ -270,31 +272,28 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     qKey   = `Q${qIdx}-${todayD.getUTCFullYear()}`   // format Turso: "Q3-2026"
   }
 
-  const [allResults, qtdTargetRev] = await Promise.all([
-    Promise.all([
-      revByMarketGroup(r.curStart, r.curEnd),                                              // 0
-      revByMarketGroup(r.prevStart, r.prevEnd),                                            // 1
-      rev3hkByMarket(r.curStart, r.curEnd),                                                // 2
-      rev3hkByMarket(r.prevStart, r.prevEnd),                                              // 3
-      isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),           // 4
-      isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),             // 5
-      fetchBODGroupMarginData(r.curStart, r.curEnd),                                       // 6
-      getTargetRows(r.monthStr),                                                           // 7
-      isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD revenue
-    ]),
-    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),  // target quý từ Turso
+  // Supabase/Turso: chạy song song (không dùng gohub_dw pool).
+  const [targetRows, qtTargets] = await Promise.all([
+    getTargetRows(r.monthStr),
+    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),
   ])
 
-  const curRows    = allResults[0] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const prevRows   = allResults[1] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const cur3hk     = allResults[2] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const prev3hk    = allResults[3] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const mtdRows    = allResults[4] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const mtd3hkRows = allResults[5] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const bodCur     = allResults[6] as Awaited<ReturnType<typeof fetchBODGroupMarginData>>
-  const targetRows = allResults[7] as Awaited<ReturnType<typeof getTargetRows>>
-  const qtdRevRows = allResults[8] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const qtTargets  = qtdTargetRev as QuarterTargets
+  // gohub_dw: chạy tối đa 2 song song (pool max=3, tránh tranh kết nối khi cache cold).
+  // Thứ tự: nhẹ trước (1 ngày) → trung bình (MTD) → nặng (BOD join + QTD 50+ ngày).
+  const [curRows, prevRows] = await Promise.all([
+    revByMarketGroup(r.curStart, r.curEnd),
+    revByMarketGroup(r.prevStart, r.prevEnd),
+  ])
+  const [cur3hk, prev3hk] = await Promise.all([
+    rev3hkByMarket(r.curStart, r.curEnd),
+    rev3hkByMarket(r.prevStart, r.prevEnd),
+  ])
+  const [mtdRows, mtd3hkRows] = await Promise.all([
+    isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),
+    isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),
+  ])
+  const bodCur = await fetchBODGroupMarginData(r.curStart, r.curEnd)
+  const qtdRevRows = isDaily ? await revByMarketGroup(qStartStr, qEndStr) : [] as Awaited<ReturnType<typeof revByMarketGroup>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -511,15 +510,20 @@ async function buildQuarterlyReportData(r: Ranges): Promise<{ block: string; ran
     })
   }
 
-  const [curRows, prevRows, cur3hk, prev3hk, bodCur, bodPrev, ...monthRows] = await Promise.all([
+  // gohub_dw: chạy tối đa 2 song song để tránh tranh pool khi cache cold.
+  const [curRows, prevRows] = await Promise.all([
     revByMarketGroup(r.curStart, r.curEnd),
     revByMarketGroup(r.prevStart, r.prevEnd),
+  ])
+  const [cur3hk, prev3hk] = await Promise.all([
     rev3hkByMarket(r.curStart, r.curEnd),
     rev3hkByMarket(r.prevStart, r.prevEnd),
+  ])
+  const [bodCur, bodPrev] = await Promise.all([
     fetchBODGroupMarginData(r.curStart, r.curEnd),
     fetchBODGroupMarginData(r.prevStart, r.prevEnd),
-    ...months.map(m => revByMarketGroup(m.start, m.end)),
   ])
+  const monthRows = await Promise.all(months.map(m => revByMarketGroup(m.start, m.end)))
 
   // QTD aggregates
   const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero(), qtdGp = zero()
