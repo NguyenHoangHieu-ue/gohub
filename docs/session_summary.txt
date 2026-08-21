@@ -1,5 +1,30 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-19 (Session 155 — Wave 1-3 + C2/D1/D3 + Squad Progress).
+Cập nhật lần cuối: 2026-08-20 (Session 156 — Quarter Report UI/UX polish + export Excel).
+
+## ══════ SESSION 156 (2026-08-20) — QUARTER REPORT UI/UX POLISH ══════
+**Audit + redesign toàn bộ subtab Squad Progress + Tổng quan trong Quarter Report** (→ main 0ff2e62):
+
+Files: `web/src/app/(dashboard)/analytics/quarterly/page.tsx`
+
+**Squad Progress — S1–S5 + Bugs + Export:**
+- S1: 2 admin panel header rời → 1 compact toolbar `"Admin | [Cấu hình Squad (N)] [Target Squad]"`. Panel form vẫn collapsible khi click button.
+- S2: Squad card header redesign — progress bar CM1%target (màu đỏ/vàng/xanh) + metrics inline (Rev → PR, GP → PR, 3HK%) thay grid text lộn xộn. Risk badges rút gọn: "Rất AT / AT / AT Ít / NH Ít / NH Nhiều".
+- S3: Filter bar 3 tầng (search+region+tier+squad / PIC chips / Risk chips) → 1 tầng duy nhất: PIC + Risk chuyển thành dropdown select.
+- S4: Customer expand table 11 → 9 cột: bỏ "Rev Actual", gộp "3HK% / Tgt%" vào 1 cột.
+- S5: Banner "Đang xem phẳng · N khách hàng" khi filter active (flat view không báo trước).
+- Export Excel: nút "Export Excel" → 2 sheet (Squad Summary + Customer Detail).
+- B1 fix: `pct` shadow — inner scope dùng `pctV` thay `pct` để không ghi đè outer.
+- B3 fix: `setExpandedSquads(new Set())` khi fetch/refresh → không giữ trạng thái cũ.
+- B4 fix: Total row hiện thêm GP PR bên cạnh Rev/GP/3HK.
+
+**Overview — O1–O3:**
+- O1: Target card collapsible (mặc định đóng; khi đóng hiện summary inline B2B/B2C Rev+CM1).
+- O2: Toggle "Xem B2B/B2C" / "Ẩn B2B/B2C" cho monthly table (mặc định off → bảng 3 rows thay 9).
+- O3: Skeleton loading 3 KPI card + table khi fetch lần đầu (thay khoảng trắng).
+
+**State thêm mới:** `showMonthBreakdown`, `targetCardOpen`.
+**Function thêm mới:** `exportSquadProgress()` (XLSX 2 sheet), `fetchSquadProgress` reset `expandedSquads`.
+**tsc:** PASS. Commit staging 1cdba98 → merge main 0ff2e62.
 
 ## ══════ SESSION 155b (2026-08-19) — SQUAD PROGRESS ══════
 **Subtab Squad Progress trong Quarter Report** (staging, CHƯA merge main từ d7c88ec):

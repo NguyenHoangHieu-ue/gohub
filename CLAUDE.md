@@ -10,8 +10,8 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — s155+s156 đã merge main 8169cb1) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + Web Analytics App toggle + B2C Metric subtab (đến 8169cb1) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main ca712c5) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report + Web Analytics App toggle + B2C Metric subtab + fix Daily Report revenue filter (đến ca712c5) |
 
 **➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics.
 
@@ -32,9 +32,13 @@
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark)
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
 
-**s156 — đã làm (2026-08-20):**
+**s156 — đã làm (2026-08-20/21):**
+- ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):
+  - **Squad Progress** S1–S5: admin toolbar compact · squad card progress bar · filter 1 tầng dropdown · customer table 9 cột · flat view banner · Export Excel (2 sheet). Bug fix: pct shadow, expandedSquads reset, total row GP PR.
+  - **Overview** O1–O3: target card collapsible · monthly table toggle B2B/B2C · skeleton loading.
 - ✅ **Web Analytics — App platform toggle**: toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App. `lib/ga4.ts` + `api/analytics/ga4/route.ts` + `analytics/website/page.tsx` (main 8169cb1).
 - ✅ **B2C — subtab Metric**: bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge. API `/api/analytics/b2c/metric` + component `b2c-metric.tsx` (main 8169cb1).
+- ✅ **fix Daily Report revenue filter** (ca712c5): thêm STD_FILTER (SHIPPINGFEE0 + INTERNAL-TRANSACTION) vào 5 query trong `scheduled-report-data.ts` để khớp Dashboard.
 - ⏳ **GA4 App connect** (Hiếu cần làm): property ID = `465150028` (Firebase Analytics GoHub App). Service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` cần được add Viewer vào property này (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management). Sau đó thêm entry `gohub-app` vào `app_settings.ga4_configs` trong Supabase.
 
 **s155 — đã làm (2026-08-19):**
@@ -45,8 +49,7 @@
 - ✅ **Wave 3** Usage compare kỳ trước · DevTools saved queries/history · cron ca-thread-remind (main).
 - ✅ **C2** Product Win Rate: JOIN dim_sku lấy vendor thực + win_deadline + export Excel (main).
 - ✅ **D1** Tests be-gau.ts (24/24 PASS) · **D3** Gấu Pro 6 image style presets (main).
-- ✅ **Quarter Report — subtab Squad Progress** (staging, chưa merge): cấu hình squad (tên+leader từ users+sales_pics click-only, pic đã chọn biến khỏi list) · progress table Rev/GP~CM1/3HK Actual/PR/Target/% · **đánh giá risk per-customer** (very_safe/safe/safe_low/danger_low/danger_high theo %TGT CM1 & %TGT 3HK) · filter (search KH/region VN-US/tier/squad/PIC chips/risk chips) + sort + flat-view khi có filter · nhập **target squad theo quý** (Rev/CM1/3HK Rev → `app_settings.squad_targets` keyed `{Q}_{year}`, ưu tiên hơn tổng per-customer).
-  - Bug đã fix: PUT→POST (405), auth JWT role thay getDbRole, GROUP BY thiếu price_list_name/currency_code.
+- ✅ **Quarter Report — subtab Squad Progress** (main 0ff2e62): cấu hình squad · progress table Rev/GP~CM1/3HK · risk per-customer · filter + sort · target squad theo quý.
 
 **s153 — đã làm (2026-08-18):**
 - ✅ **Quarter Report — fix save target không được** (→ main b15b354)

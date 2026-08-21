@@ -1,4 +1,4 @@
-import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery } from "@/lib/analytics-helpers"
+import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 import { supabaseAdmin } from "@/lib/supabase"
 import { tursoQuery } from "@/lib/turso"
@@ -17,6 +17,8 @@ const REV = "fulfilled_revenue_amount_vnd"
 const GP = "gross_profit_vnd"
 // 3HK vendor ghi 2 kiểu trong DB ('3HKDATAPOOL' và '3HK DATAPOOL') → REPLACE bỏ space để bắt cả hai.
 const SKU_3HK = `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL')`
+// Khớp định nghĩa Dashboard: loại phí ship (SHIPPINGFEE0) + đơn nội bộ (INTERNAL-TRANSACTION).
+const STD_FILTER = `${shipFilter(false)} ${internalOpsFilterByCode(false)}`
 
 // ── Date helpers (giờ ICT = UTC+7; dùng getUTC* sau khi shift) ────────────────
 function ictNow(): Date { return new Date(Date.now() + 7 * 3600_000) }
@@ -143,7 +145,7 @@ async function revByMarketGroup(start: string, end: string) {
            SUM(f.${REV}) AS revenue, SUM(f.${GP}) AS gp
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER}
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ cc: string; grp: string; revenue: string; gp: string }>(sql)
 }
@@ -152,7 +154,7 @@ async function rev3hkByMarket(start: string, end: string) {
   const sql = `
     SELECT COALESCE(f.company_code,'NA') AS cc, SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND ${SKU_3HK}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND ${SKU_3HK} ${STD_FILTER}
     GROUP BY 1`
   return cachedAnalyticsQuery<{ cc: string; revenue: string }>(sql)
 }
@@ -167,7 +169,7 @@ async function revByDay(start: string, end: string) {
            SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")}
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER}
     GROUP BY 1,2,3`
   return cachedAnalyticsQuery<{ d: string; cc: string; grp: string; revenue: string }>(sql)
 }
@@ -184,7 +186,7 @@ async function b2bCustomersByDay(start: string, end: string) {
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2B'
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2B' ${STD_FILTER}
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ cust: string; d: string; revenue: string }>(sql)
 }
@@ -197,7 +199,7 @@ async function b2cChannelsByDay(start: string, end: string) {
            SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2C'
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2C' ${STD_FILTER}
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ ch: string; d: string; revenue: string }>(sql)
 }
