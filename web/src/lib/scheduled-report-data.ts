@@ -270,31 +270,28 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     qKey   = `Q${qIdx}-${todayD.getUTCFullYear()}`   // format Turso: "Q3-2026"
   }
 
-  const [allResults, qtdTargetRev] = await Promise.all([
-    Promise.all([
-      revByMarketGroup(r.curStart, r.curEnd),                                              // 0
-      revByMarketGroup(r.prevStart, r.prevEnd),                                            // 1
-      rev3hkByMarket(r.curStart, r.curEnd),                                                // 2
-      rev3hkByMarket(r.prevStart, r.prevEnd),                                              // 3
-      isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),           // 4
-      isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),             // 5
-      fetchBODGroupMarginData(r.curStart, r.curEnd),                                       // 6
-      getTargetRows(r.monthStr),                                                           // 7
-      isDaily  ? revByMarketGroup(qStartStr, qEndStr) : Promise.resolve([]),              // 8: QTD revenue
-    ]),
-    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),  // target quý từ Turso
+  // Supabase/Turso: chạy song song (không dùng gohub_dw pool).
+  const [targetRows, qtTargets] = await Promise.all([
+    getTargetRows(r.monthStr),
+    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),
   ])
 
-  const curRows    = allResults[0] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const prevRows   = allResults[1] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const cur3hk     = allResults[2] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const prev3hk    = allResults[3] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const mtdRows    = allResults[4] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const mtd3hkRows = allResults[5] as Awaited<ReturnType<typeof rev3hkByMarket>>
-  const bodCur     = allResults[6] as Awaited<ReturnType<typeof fetchBODGroupMarginData>>
-  const targetRows = allResults[7] as Awaited<ReturnType<typeof getTargetRows>>
-  const qtdRevRows = allResults[8] as Awaited<ReturnType<typeof revByMarketGroup>>
-  const qtTargets  = qtdTargetRev as QuarterTargets
+  // gohub_dw: chạy tối đa 2 song song (pool max=3, tránh tranh kết nối khi cache cold).
+  // Thứ tự: nhẹ trước (1 ngày) → trung bình (MTD) → nặng (BOD join + QTD 50+ ngày).
+  const [curRows, prevRows] = await Promise.all([
+    revByMarketGroup(r.curStart, r.curEnd),
+    revByMarketGroup(r.prevStart, r.prevEnd),
+  ])
+  const [cur3hk, prev3hk] = await Promise.all([
+    rev3hkByMarket(r.curStart, r.curEnd),
+    rev3hkByMarket(r.prevStart, r.prevEnd),
+  ])
+  const [mtdRows, mtd3hkRows] = await Promise.all([
+    isMonthly ? Promise.resolve([]) : revByMarketGroup(r.mtdStart, r.mtdEnd),
+    isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),
+  ])
+  const bodCur = await fetchBODGroupMarginData(r.curStart, r.curEnd)
+  const qtdRevRows = isDaily ? await revByMarketGroup(qStartStr, qEndStr) : [] as Awaited<ReturnType<typeof revByMarketGroup>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -511,15 +508,20 @@ async function buildQuarterlyReportData(r: Ranges): Promise<{ block: string; ran
     })
   }
 
-  const [curRows, prevRows, cur3hk, prev3hk, bodCur, bodPrev, ...monthRows] = await Promise.all([
+  // gohub_dw: chạy tối đa 2 song song để tránh tranh pool khi cache cold.
+  const [curRows, prevRows] = await Promise.all([
     revByMarketGroup(r.curStart, r.curEnd),
     revByMarketGroup(r.prevStart, r.prevEnd),
+  ])
+  const [cur3hk, prev3hk] = await Promise.all([
     rev3hkByMarket(r.curStart, r.curEnd),
     rev3hkByMarket(r.prevStart, r.prevEnd),
+  ])
+  const [bodCur, bodPrev] = await Promise.all([
     fetchBODGroupMarginData(r.curStart, r.curEnd),
     fetchBODGroupMarginData(r.prevStart, r.prevEnd),
-    ...months.map(m => revByMarketGroup(m.start, m.end)),
   ])
+  const monthRows = await Promise.all(months.map(m => revByMarketGroup(m.start, m.end)))
 
   // QTD aggregates
   const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero(), qtdGp = zero()
