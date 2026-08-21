@@ -4,16 +4,16 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-20, s156)
+## Trạng thái hiện tại (2026-08-21, s157)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 0ff2e62) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report (đến 0ff2e62) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 8014e27) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report + Web Analytics App + B2C Metric + fix Daily Report (đến 8014e27) |
 
-**➡️ TIẾP THEO:** Hiếu dùng thực tế Quarter Report (Squad Progress + Overview mới) → báo bug nếu có.
+**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics.
 
 **⚠️ QUY TẮC MERGE (nhắc lại):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
@@ -31,11 +31,19 @@
 - [ ] **Cà Thread**: thêm bot Bé Gấu vào group Lark + bật scope `im:message` & `im:message.reaction:readonly` + publish version mới
 - [ ] **Cà Thread**: Kết nối Lark cá nhân (Creator page → Kết nối Lark)
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
+- [ ] **GA4 App connect**: add service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` Viewer vào property `465150028` (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management) → thêm entry `gohub-app` vào `app_settings.ga4_configs` Supabase
+
+**s157 — đã làm (2026-08-21):**
+- ✅ **fix Daily Report revenue lệch Dashboard** (main 8014e27, `lib/scheduled-report-data.ts`):
+  - Root cause: 5 query revenue (`revByMarketGroup`, `rev3hkByMarket`, `revByDay`, `b2bCustomersByDay`, `b2cChannelsByDay`) thiếu filter `SHIPPINGFEE0` + `INTERNAL-TRANSACTION` mà toàn bộ web tab đều áp.
+  - Fix: thêm `STD_FILTER` constant (`shipFilter(false)` + `internalOpsFilterByCode(false)`) → áp vào WHERE của tất cả 5 query. Số Daily/Weekly/Monthly report nay khớp Dashboard.
 
 **s156 — đã làm (2026-08-20):**
 - ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):
   - **Squad Progress** S1–S5: admin toolbar compact · squad card progress bar · filter 1 tầng dropdown · customer table 9 cột · flat view banner · Export Excel (2 sheet). Bug fix: pct shadow, expandedSquads reset, total row GP PR.
   - **Overview** O1–O3: target card collapsible · monthly table toggle B2B/B2C · skeleton loading.
+- ✅ **Web Analytics — App platform toggle** (main 8169cb1): toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App.
+- ✅ **B2C — subtab Metric** (main 8169cb1): bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge.
 
 **s155 — đã làm (2026-08-19):**
 - ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.
