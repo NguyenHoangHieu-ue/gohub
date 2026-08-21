@@ -12,7 +12,7 @@ import { useRoleGuard } from "@/lib/use-role-guard"
 interface MonthStats {
   revenue: number; gp: number; gpPct: number
   channelCost: number; groupCost: number; cm1: number; cm1Pct: number
-  hk3Pct?: number
+  hk3Pct?: number; hk3Rev?: number
   actualRevenue?: number; actualGp?: number; actualCc?: number; actualGc?: number; actualCm1?: number; actualHk3?: number
 }
 interface MonthSummary {
@@ -58,8 +58,8 @@ const prColor   = "text-slate-500"
 
 const fck = (n: number) => formatCompactNumber(n)  // compact cho card (tránh overflow)
 
-function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Target, expectedPct = 0, accent = "#003B95" }:
-  { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Target: number; expectedPct?: number; accent?: string }) {
+function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, expectedPct = 0, accent = "#003B95" }:
+  { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Rev?: number; hk3Target: number; expectedPct?: number; accent?: string }) {
 
   const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
   const revPrPct = target    > 0 ? (prRev / target)    * 100 : 0
@@ -132,10 +132,13 @@ function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, c
           <span className="text-right text-slate-500 tabular-nums">{cm1Target > 0 ? fck(cm1Target) : "—"}</span>
           <span className="text-right">{cm1Target > 0 ? badge(cm1PrPct) : <span className="text-slate-300">—</span>}</span>
         </div>
-        {/* 3HK% */}
+        {/* 3HK% + 3HK Rev */}
         <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">3HK%</span>
-          <span className="text-right text-slate-700 font-semibold tabular-nums">{pct(hk3Pct)}</span>
+          <span className="font-bold text-slate-400 uppercase text-[9px]">3HK</span>
+          <span className="text-right text-slate-700 font-semibold tabular-nums">
+            {hk3Rev > 0 && <span className="block text-[10px]">{fck(hk3Rev)}</span>}
+            <span className="text-slate-500 font-normal">{pct(hk3Pct)}</span>
+          </span>
           <span className="text-right text-slate-300">—</span>
           <span className="text-right text-slate-500 tabular-nums">{hk3Target > 0 ? pct(hk3Target) : "—"}</span>
           <span className="text-right text-slate-300">—</span>
@@ -973,15 +976,15 @@ function QuarterlyContent() {
           <KpiCard label="B2B" icon={Building2} accent="#003B95" expectedPct={expectedPct}
             actual={b2bRevRaw} prRev={b2bRevPr} target={targets.b2bRev}
             cm1Actual={b2bCm1Raw} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
-            hk3Pct={b2bThkPct} hk3Target={targets.b2bThk} />
+            hk3Pct={b2bThkPct} hk3Rev={b2bThkAct} hk3Target={targets.b2bThk} />
           <KpiCard label="B2C" icon={ShoppingBag} accent="#0ea5e9" expectedPct={expectedPct}
             actual={b2cRevRaw} prRev={b2cRevPr} target={targets.b2cRev}
             cm1Actual={b2cCm1Raw} prCm1={b2cCm1Pr} cm1Target={targets.b2cCm1}
-            hk3Pct={b2cThkPct} hk3Target={targets.b2cThk} />
+            hk3Pct={b2cThkPct} hk3Rev={b2cThkAct} hk3Target={targets.b2cThk} />
           <KpiCard label="Tổng" icon={TrendingUp} accent="#1e3a8a" expectedPct={expectedPct}
             actual={totRevRaw} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
             cm1Actual={totCm1Raw} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
-            hk3Pct={totThkPct} hk3Target={0} />
+            hk3Pct={totThkPct} hk3Rev={b2bThkAct + b2cThkAct} hk3Target={0} />
         </div>
       )}
 
@@ -1042,7 +1045,7 @@ function QuarterlyContent() {
                             <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(prCm1Total))}>{showPr ? fc(prCm1Total) : <span className="text-slate-300">—</span>}</td>
                             <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
-                            <td className="px-4 py-3 text-right text-slate-500">{pct(m.hk3Pct ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-slate-400 text-[10px]">({pct(m.hk3Pct ?? 0)})</span></td>
                           </tr>
                         )
                       })()}
@@ -1074,7 +1077,7 @@ function QuarterlyContent() {
                       actRev={b2bRevRaw} prRev={b2bRevPr}
                       gmRaw={b2bGmRaw} ccRaw={b2bCcRaw} gcRaw={b2bGcRaw}
                       cm1Raw={b2bCm1Raw} prCm1={b2bCm1Pr}
-                      hk3Pct={b2bThkPct} qoqPct={b2bQoQ}
+                      hk3Pct={b2bThkPct} hk3Rev={b2bThkAct} qoqPct={b2bQoQ}
                     />
                     {targets.b2bRev > 0 && (
                       <QtTargetRow
@@ -1092,7 +1095,7 @@ function QuarterlyContent() {
                       actRev={b2cRevRaw} prRev={b2cRevPr}
                       gmRaw={b2cGmRaw} ccRaw={b2cCcRaw} gcRaw={b2cGcRaw}
                       cm1Raw={b2cCm1Raw} prCm1={b2cCm1Pr}
-                      hk3Pct={b2cThkPct} qoqPct={b2cQoQ}
+                      hk3Pct={b2cThkPct} hk3Rev={b2cThkAct} qoqPct={b2cQoQ}
                     />
                     {targets.b2cRev > 0 && (
                       <QtTargetRow
@@ -1114,7 +1117,7 @@ function QuarterlyContent() {
                   <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totCm1Raw)}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
                   <td className={cn("px-2 py-2 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
-                  <td className="px-2 py-2 text-right text-slate-300">{pct(totThkPct)}</td>
+                  <td className="px-2 py-2 text-right text-slate-300 whitespace-nowrap">{fc(b2bThkAct + b2cThkAct)} <span className="opacity-70 text-[10px]">({pct(totThkPct)})</span></td>
                   <td className={cn("px-2 py-2 text-right font-bold tabular-nums", totQoQ == null ? "text-slate-400" : totQoQ >= 0 ? "text-green-300" : "text-red-300")}>
                     {totQoQ != null ? `${totQoQ >= 0 ? "+" : ""}${totQoQ.toFixed(1)}%` : "—"}
                   </td>
@@ -1501,8 +1504,9 @@ function QuarterlyContent() {
                                   <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                   <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pctV(c.cm1_pct)}</td>
                                   <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                    <span className="font-medium">{c.hk3_pct}%</span>
-                                    {c.target_hk3pct > 0 && <span className="text-slate-400"> / {c.target_hk3pct}%</span>}
+                                    <span className="text-[10px] text-slate-500">{formatCompactNumber(c.hk3)}</span>
+                                    <span className="text-slate-400 ml-0.5 text-[10px]">({c.hk3_pct}%)</span>
+                                    {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
                                   </td>
                                   <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
                                   <td className="px-3 py-2 text-center border-l border-slate-100">
@@ -1597,9 +1601,13 @@ function QuarterlyContent() {
                                   <div className="w-px h-3.5 bg-slate-200 shrink-0" />
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-slate-400">3HK</span>
-                                    <span className="tabular-nums text-slate-700 font-medium">{sq.hk3_pct}%</span>
-                                    {sq.target_hk3 > 0 && sq.hk3_tgt_pct != null && (
-                                      <span className={cn("font-semibold", pctColor(sq.hk3_tgt_pct))}>{sq.hk3_tgt_pct}% tgt</span>
+                                    <span className="tabular-nums text-slate-700 font-medium">{formatCompactNumber(sq.hk3)}</span>
+                                    <span className="text-slate-400 text-[10px]">({sq.hk3_pct}%)</span>
+                                    {sq.target_hk3 > 0 && (
+                                      <span className="text-slate-400 text-[10px]">/ {formatCompactNumber(sq.target_hk3)} tgt</span>
+                                    )}
+                                    {sq.hk3_tgt_pct != null && sq.target_hk3 > 0 && (
+                                      <span className={cn("font-semibold", pctColor(sq.hk3_tgt_pct))}>{sq.hk3_tgt_pct}%</span>
                                     )}
                                   </div>
                                 </div>
@@ -1644,8 +1652,9 @@ function QuarterlyContent() {
                                             <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                             <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                             <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                              <span className="font-medium">{c.hk3_pct}%</span>
-                                              {c.target_hk3pct > 0 && <span className="text-slate-400"> / {c.target_hk3pct}%</span>}
+                                              <span className="font-medium text-[10px] text-slate-500">{formatCompactNumber(c.hk3)}</span>
+                                              <span className="text-slate-400 ml-0.5 text-[10px]">({c.hk3_pct}%)</span>
+                                              {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
                                             </td>
                                             <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
                                             <td className="px-3 py-2 text-center border-l border-slate-100">
@@ -1676,7 +1685,7 @@ function QuarterlyContent() {
                               {squadData.totals.cm1_pct != null && (
                                 <span className="text-slate-500">CM1%: {squadData.totals.cm1_pct}%</span>
                               )}
-                              <span className="text-slate-500">3HK: {squadData.totals.hk3_pct}%</span>
+                              <span className="text-slate-500">3HK: {formatCompactNumber(squadData.totals.hk3)} <span className="font-normal text-slate-400">({squadData.totals.hk3_pct}%)</span></span>
                             </div>
                           </div>
                         )}
@@ -1745,15 +1754,15 @@ function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRev, momC
         qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
         {qoqCm1 != null ? `${qoqCm1 >= 0 ? "+" : ""}${qoqCm1.toFixed(1)}%` : "—"}
       </td>
-      <td className="px-4 py-2 text-right text-slate-400">{pct((stats.hk3Pct as number | undefined) ?? 0)}</td>
+      <td className="px-4 py-2 text-right text-slate-400 whitespace-nowrap">{fc((stats.hk3Rev as number | undefined) ?? 0)} <span className="text-[10px]">({pct((stats.hk3Pct as number | undefined) ?? 0)})</span></td>
     </tr>
   )
 }
 
 // ─── Quarter summary row — actual (raw) values ────────────────────────────────
 
-function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct, qoqPct }:
-  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number; qoqPct?: number | null }) {
+function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct, hk3Rev = 0, qoqPct }:
+  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number; hk3Rev?: number; qoqPct?: number | null }) {
   const gmPct  = actRev > 0 ? gmRaw  / actRev * 100 : 0
   const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
   const qoqCls = qoqPct == null ? "text-slate-300" : qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
@@ -1769,7 +1778,7 @@ function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1
       <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
       <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
       <td className={cn("px-2 py-2 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
-      <td className="px-2 py-2 text-right text-slate-500">{pct(hk3Pct)}</td>
+      <td className="px-2 py-2 text-right text-slate-500 whitespace-nowrap">{hk3Rev > 0 ? <>{fc(hk3Rev)} <span className="text-[10px] text-slate-400">({pct(hk3Pct)})</span></> : pct(hk3Pct)}</td>
       <td className={cn("px-2 py-2 text-right tabular-nums", qoqCls)}>
         {qoqPct != null ? `${qoqPct >= 0 ? "+" : ""}${qoqPct.toFixed(1)}%` : "—"}
       </td>
@@ -2383,7 +2392,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                           <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
-                          <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">{pct(d.hk3Pct)}</td>,
+                          <td key="3hk" className="px-2 py-2.5 text-right text-slate-500 whitespace-nowrap">{fc(d.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(d.hk3Pct)})</span></td>,
                         ]
                       })}
                       {/* Tổng Quý: PR = BE per-month projected sum, Act = actualYTD */}
@@ -2401,7 +2410,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                           </td>
                         )
                       })()}
-                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60">{pct(tier.totalHk3Pct)}</td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
                     </tr>
                   )
                 })}
@@ -2519,7 +2528,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                   </td>
                                   <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
-                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(c.hk3Pct)}</td>
+                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></td>
                                   {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed */}
                                   {(() => {
                                     const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev
@@ -2611,11 +2620,11 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
                                       prCell:  (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[10px]", cm1Color(r))}>{pct(r)}</span> },
                                       single:  (mk) => { const m = ms[mk]; if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>; return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className={cn("text-[10px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
-                                    { label: "3HK%",
-                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px]">{pct(ms[mk].hk3Pct)}</span>,
-                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px]">{pct(ms[mk].hk3Pct)}</span>,
-                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[10px]">{pct(m.hk3Pct)}</span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
-                                      tot: <span className="tabular-nums text-slate-500 text-[10px]">{pct(c.hk3Pct)}</span> },
+                                    { label: "3HK",
+                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(ms[mk].hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(ms[mk].hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(m.hk3Pct)})</span></span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
+                                      tot: <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></span> },
                                   ]
                                   // Creator orders explorer state
                                   const gb = ordersGroupBy[c.code] ?? "month"
@@ -2945,7 +2954,7 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
 
 function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
   { title: string; icon: React.ElementType; channels: Channel[]; months: string[]; expanded: boolean; onToggle: () => void }) {
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK%"]
+  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev (%)"]
   const colCount = SUB.length
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
