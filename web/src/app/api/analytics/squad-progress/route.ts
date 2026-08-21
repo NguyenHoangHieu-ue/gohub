@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { analyticsGuard } from "@/lib/analytics-helpers"
+import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 
 export const dynamic = "force-dynamic"
 
@@ -28,7 +29,6 @@ function getRiskLevel(cm1Pct: number | null, hk3Pct: number | null): RiskLevel {
   const hasHk3 = hk3Pct != null
   if (!hasCm1 && !hasHk3) return "no_target"
 
-  // Nếu chỉ có 1 metric, dùng metric đó
   if (!hasCm1 || !hasHk3) {
     const v = (cm1Pct ?? hk3Pct)!
     if (v >= 100) return "safe"
@@ -37,11 +37,23 @@ function getRiskLevel(cm1Pct: number | null, hk3Pct: number | null): RiskLevel {
   }
 
   const c = cm1Pct!, h = hk3Pct!
-  if (c >= 100 && h >= 100) return "very_safe"   // Rất an toàn: cả 2 >= 100%
-  if (c >= 100 || h >= 100) return "safe"         // An toàn: 1 trong 2 >= 100%
-  if (c >= 85  && h >= 85)  return "safe_low"     // An toàn ít: cả 2 >= 85%
-  if (c >= 85  || h >= 85)  return "danger_low"   // Nguy hiểm ít: 1 trong 2 >= 85%
-  return "danger_high"                             // Nguy hiểm nhiều: cả 2 < 85%
+  if (c >= 100 && h >= 100) return "very_safe"  // Rất an toàn:  cả 2 >= 100%
+  if (c >= 100 || h >= 100) return "safe"        // An toàn:      1 trong 2 >= 100%
+  if (c >= 85  && h >= 85)  return "safe_low"    // An toàn ít:   85% <= cả 2 <= 100%
+  if (c >= 85  || h >= 85)  return "danger_low"  // Nguy hiểm ít: 85% <= 1 trong 2 <= 100%, còn lại < 85%
+  return "danger_high"                            // Nguy hiểm nhiều: cả 2 < 85%
+}
+
+// CM1 = GP − chi phí KH (b2b_customer_cost_monthly, Turso).
+// Dùng revenue/numMonths làm proxy doanh thu tháng cho percent-type cost (xấp xỉ hợp lý cho squad view).
+function calcCm1(gm: number, revenue: number, code: string, months: string[], costMap: Map<string, import("@/lib/b2b-customer-cost").CostRecord>): number {
+  const n = months.length || 1
+  let cost = 0
+  for (const m of months) {
+    const rec = costMap.get(`${m}_${code}`)
+    if (rec) cost += calcRecordCostProjected(rec, revenue / n, 1, 1)
+  }
+  return gm - cost
 }
 
 export async function GET(req: NextRequest) {
@@ -66,6 +78,14 @@ export async function GET(req: NextRequest) {
   const elapsedDays = Math.max(1, Math.round((new Date(qEnd).getTime() - new Date(qStart).getTime()) / 86400000) + 1)
   const prFactor    = qTotalDays / elapsedDays
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
+
+  // Tháng trong quý đã có data (để fetch chi phí KH)
+  const months: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const mStart = new Date(Date.UTC(year, qStartM - 1 + i, 1))
+    if (mStart.getTime() <= new Date(qEnd + "T00:00:00Z").getTime())
+      months.push(`${year}-${String(qStartM + i).padStart(2, "0")}`)
+  }
 
   try {
     // 1. Load squad config + manual squad targets (theo quý)
@@ -126,40 +146,49 @@ export async function GET(req: NextRequest) {
       `),
     ])
 
-    // 3. Load targets per customer từ Supabase
+    // 3. Load targets per customer + chi phí KH (để tính CM1 đúng)
     const custCodes = [...new Set(custRows.map(r => r.customer_code))]
     let targetMap: Record<string, { rev: number; cm1: number; hk3rev: number; hk3pct: number }> = {}
-    if (custCodes.length > 0) {
-      const { data: tgts } = await supabaseAdmin
-        .from("b2b_customer_targets")
-        .select("customer_code, target_rev, target_cm1, target_3hk_rev, target_3hk_pct")
-        .eq("quarter", quarter)
-        .eq("year", String(year))
-        .in("customer_code", custCodes)
-      for (const t of tgts ?? []) {
-        targetMap[t.customer_code] = {
-          rev:    Number(t.target_rev)      || 0,
-          cm1:    Number(t.target_cm1)      || 0,
-          hk3rev: Number(t.target_3hk_rev)  || 0,
-          hk3pct: Number(t.target_3hk_pct)  || 0,
-        }
-      }
-    }
+    let costMap = new Map<string, import("@/lib/b2b-customer-cost").CostRecord>()
+    await Promise.all([
+      custCodes.length > 0
+        ? supabaseAdmin
+            .from("b2b_customer_targets")
+            .select("customer_code, target_rev, target_cm1, target_3hk_rev, target_3hk_pct")
+            .eq("quarter", quarter)
+            .eq("year", String(year))
+            .in("customer_code", custCodes)
+            .then(({ data: tgts }) => {
+              for (const t of tgts ?? []) {
+                targetMap[t.customer_code] = {
+                  rev:    Number(t.target_rev)      || 0,
+                  cm1:    Number(t.target_cm1)      || 0,
+                  hk3rev: Number(t.target_3hk_rev)  || 0,
+                  hk3pct: Number(t.target_3hk_pct)  || 0,
+                }
+              }
+            })
+        : Promise.resolve(),
+      fetchCustomerCosts(months).then(m => { costMap = m }).catch(() => {}),
+    ])
 
-    // 4. Build customer map with risk
+    // 4. Build customer map (CM1 = GP − chi phí KH)
     const custMap: Record<string, {
       customer_name: string; sales_pic: string; tier: string; region: string
-      revenue: number; gm: number; hk3: number
+      revenue: number; gm: number; cm1: number; hk3: number
       tgt_rev: number; tgt_cm1: number; tgt_hk3: number; tgt_hk3pct: number
     }> = {}
     for (const r of custRows) {
+      const gm = Number(r.gm) || 0
+      const revenue = Number(r.revenue) || 0
       custMap[r.customer_code] = {
         customer_name: r.customer_name,
         sales_pic:  r.sales_pic_code || "",
         tier:       classifyTier(r.price_list_name),
         region:     classifyRegion(r.price_list_name, r.currency_code),
-        revenue:    Number(r.revenue) || 0,
-        gm:         Number(r.gm)     || 0,
+        revenue,
+        gm,
+        cm1:        calcCm1(gm, revenue, r.customer_code, months, costMap),
         hk3:        Number(r.hk3)    || 0,
         tgt_rev:    targetMap[r.customer_code]?.rev    || 0,
         tgt_cm1:    targetMap[r.customer_code]?.cm1    || 0,
@@ -173,24 +202,24 @@ export async function GET(req: NextRequest) {
       const members = custRows.filter(r => sq.sales_pics.includes(r.sales_pic_code || ""))
       const codes   = members.map(m => m.customer_code)
 
-      let rev = 0, gm = 0, hk3 = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
+      let rev = 0, cm1 = 0, hk3 = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
 
       const customers = codes.map(code => {
         const c = custMap[code]
         if (!c) return null
         rev    += c.revenue
-        gm     += c.gm
+        cm1    += c.cm1
         hk3    += c.hk3
         tgtRev += c.tgt_rev
         tgtCm1 += c.tgt_cm1
         tgtHk3 += c.tgt_hk3
 
         const revPr   = Math.round(c.revenue * prFactor)
-        const gpPr    = Math.round(c.gm      * prFactor)
+        const cm1Pr   = Math.round(c.cm1     * prFactor)
         const hk3ActPct = c.revenue > 0 ? Math.round(c.hk3 / c.revenue * 1000) / 10 : 0
 
-        // %Tgt CM1 = pro-rata GP vs target CM1
-        const cm1Pct: number | null = c.tgt_cm1 > 0 ? Math.round(gpPr / c.tgt_cm1 * 100) : null
+        // %TGT CM1 = CM1 pro-rata / target CM1
+        const cm1TgtPct: number | null = c.tgt_cm1 > 0 ? Math.round(cm1Pr / c.tgt_cm1 * 100) : null
         // %Tgt 3HK = actual 3HK% vs target 3HK%
         const hk3TgtPct: number | null = c.tgt_hk3pct > 0 ? Math.round(hk3ActPct / c.tgt_hk3pct * 100) : null
 
@@ -202,16 +231,17 @@ export async function GET(req: NextRequest) {
           region: c.region,
           revenue: c.revenue, revenue_pr: revPr, target_rev: c.tgt_rev,
           rev_pct: c.tgt_rev > 0 ? Math.round(revPr / c.tgt_rev * 100) : null,
-          gp: c.gm, gp_pr: gpPr, target_cm1: c.tgt_cm1,
-          cm1_pct: cm1Pct,
+          cm1: c.cm1, cm1_pr: cm1Pr, target_cm1: c.tgt_cm1,
+          cm1_pct: c.revenue > 0 ? Math.round(c.cm1 / c.revenue * 1000) / 10 : 0,
+          cm1_tgt_pct: cm1TgtPct,
           hk3: c.hk3, hk3_pct: hk3ActPct, target_hk3pct: c.tgt_hk3pct,
           hk3_tgt_pct: hk3TgtPct,
-          risk_level: getRiskLevel(cm1Pct, hk3TgtPct),
+          risk_level: getRiskLevel(cm1TgtPct, hk3TgtPct),
         }
       }).filter(Boolean) as any[]
 
-      const revPr = Math.round(rev * prFactor)
-      const gmPr  = Math.round(gm  * prFactor)
+      const revPr = Math.round(rev  * prFactor)
+      const cm1Pr = Math.round(cm1  * prFactor)
 
       // Manual target squad (theo quý) — ưu tiên hơn tổng per-customer nếu > 0
       const mt = squadTargets[sq.name] ?? {}
@@ -229,13 +259,12 @@ export async function GET(req: NextRequest) {
         name: sq.name, leader: sq.leader,
         sales_pics: sq.sales_pics,
         customer_count: codes.length,
-        // Manual target flags (để FE hiển thị nguồn)
         manual_target: { rev: Number(mt.rev) || 0, cm1: Number(mt.cm1) || 0, hk3rev: Number(mt.hk3rev) || 0 },
-        revenue: rev,   revenue_pr: revPr,   target_rev: effTgtRev,
+        revenue: rev,  revenue_pr: revPr,  target_rev: effTgtRev,
         rev_pct: effTgtRev > 0 ? Math.round(revPr / effTgtRev * 100) : null,
-        gp: gm,         gp_pr: gmPr,         target_cm1: effTgtCm1,
-        gp_cm1_pct: effTgtCm1 > 0 ? Math.round(gmPr / effTgtCm1 * 100) : null,
-        gp_pct: rev > 0 ? Math.round(gm / rev * 1000) / 10 : 0,
+        cm1,           cm1_pr: cm1Pr,      target_cm1: effTgtCm1,
+        cm1_pct: rev > 0 ? Math.round(cm1 / rev * 1000) / 10 : 0,
+        cm1_tgt_pct: effTgtCm1 > 0 ? Math.round(cm1Pr / effTgtCm1 * 100) : null,
         hk3, hk3_pct: rev > 0 ? Math.round(hk3 / rev * 1000) / 10 : 0,
         target_hk3: effTgtHk3,
         hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3 / effTgtHk3 * 100) : null,
@@ -245,7 +274,7 @@ export async function GET(req: NextRequest) {
     })
 
     const totRev = squads.reduce((s, sq) => s + sq.revenue, 0)
-    const totGp  = squads.reduce((s, sq) => s + sq.gp,      0)
+    const totCm1 = squads.reduce((s, sq) => s + sq.cm1,     0)
     const totHk3 = squads.reduce((s, sq) => s + sq.hk3,     0)
 
     return NextResponse.json({
@@ -253,7 +282,8 @@ export async function GET(req: NextRequest) {
       squads,
       totals: {
         revenue: totRev, revenue_pr: Math.round(totRev * prFactor),
-        gp: totGp, gp_pr: Math.round(totGp * prFactor),
+        cm1: totCm1, cm1_pr: Math.round(totCm1 * prFactor),
+        cm1_pct: totRev > 0 ? Math.round(totCm1 / totRev * 1000) / 10 : 0,
         hk3: totHk3, hk3_pct: totRev > 0 ? Math.round(totHk3 / totRev * 1000) / 10 : 0,
       },
       available_pics: picRows,

@@ -337,8 +337,8 @@ function QuarterlyContent() {
       Squad: sq.name, Leader: sq.leader || "", "Số KH": sq.customer_count,
       "Revenue Actual": sq.revenue, "Revenue PR": sq.revenue_pr, "Target Revenue": sq.target_rev || "",
       "%TGT Rev": sq.rev_pct != null ? `${sq.rev_pct}%` : "",
-      "GP Actual": sq.gp, "GP PR": sq.gp_pr, "Target CM1": sq.target_cm1 || "",
-      "%TGT CM1 (GP/Tgt)": sq.gp_cm1_pct != null ? `${sq.gp_cm1_pct}%` : "",
+      "CM1 Actual": sq.cm1, "CM1 PR": sq.cm1_pr, "CM1%": sq.cm1_pct != null ? `${sq.cm1_pct}%` : "", "Target CM1": sq.target_cm1 || "",
+      "%TGT CM1": sq.cm1_tgt_pct != null ? `${sq.cm1_tgt_pct}%` : "",
       "3HK Rev": sq.hk3, "3HK%": `${sq.hk3_pct}%`, "Target 3HK Rev": sq.target_hk3 || "",
       "%TGT 3HK": sq.hk3_tgt_pct != null ? `${sq.hk3_tgt_pct}%` : "",
       "Rất an toàn": sq.risk_counts?.very_safe || 0, "An toàn": sq.risk_counts?.safe || 0,
@@ -354,8 +354,8 @@ function QuarterlyContent() {
           Region: c.region, Tier: c.tier, PIC: picInfo?.name || c.sales_pic || "",
           "Revenue Actual": c.revenue, "Revenue PR": c.revenue_pr, "Target Revenue": c.target_rev || "",
           "%TGT Rev": c.rev_pct != null ? `${c.rev_pct}%` : "",
-          "GP PR": c.gp_pr, "Target CM1": c.target_cm1 || "",
-          "%TGT CM1 (GP/Tgt)": c.cm1_pct != null ? `${c.cm1_pct}%` : "",
+          "CM1 PR": c.cm1_pr, "CM1%": c.cm1_pct != null ? `${c.cm1_pct}%` : "", "Target CM1": c.target_cm1 || "",
+          "%TGT CM1": c.cm1_tgt_pct != null ? `${c.cm1_tgt_pct}%` : "",
           "3HK%": `${c.hk3_pct}%`, "Target 3HK%": c.target_hk3pct > 0 ? `${c.target_hk3pct}%` : "",
           "%TGT 3HK": c.hk3_tgt_pct != null ? `${c.hk3_tgt_pct}%` : "",
           "Đánh giá": RISK_META[c.risk_level as keyof typeof RISK_META]?.label || c.risk_level,
@@ -1520,7 +1520,7 @@ function QuarterlyContent() {
                         {squadData.squads.map((sq: any, si: number) => {
                           const expanded = expandedSquads.has(si)
                           const leaderUser = squadUsers.find(u => u.username === sq.leader)
-                          const cm1TgtPct = sq.gp_cm1_pct
+                          const cm1TgtPct = sq.cm1_tgt_pct
                           const RISK_SHORT: Record<string, string> = {
                             very_safe: "Rất AT", safe: "AT", safe_low: "AT Ít", danger_low: "NH Ít", danger_high: "NH Nhiều",
                           }
@@ -1557,7 +1557,7 @@ function QuarterlyContent() {
                                 {sq.target_cm1 > 0 && (
                                   <div className="ml-6 mb-2.5">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[10px] text-slate-400">GP ≈ CM1 vs Target</span>
+                                      <span className="text-[10px] text-slate-400">CM1 vs Target</span>
                                       <span className={cn("text-[11px] font-bold tabular-nums", pctColor(cm1TgtPct))}>
                                         {cm1TgtPct != null ? `${cm1TgtPct}%` : "—"}
                                       </span>
@@ -1584,9 +1584,15 @@ function QuarterlyContent() {
                                   </div>
                                   <div className="w-px h-3.5 bg-slate-200 shrink-0" />
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-slate-400">GP</span>
-                                    <span className="tabular-nums text-slate-700 font-medium">{formatCompactNumber(sq.gp)}</span>
-                                    <span className="text-blue-600">→ {formatCompactNumber(sq.gp_pr)} PR</span>
+                                    <span className="text-slate-400">CM1</span>
+                                    <span className="tabular-nums text-slate-700 font-medium">{formatCompactNumber(sq.cm1)}</span>
+                                    <span className="text-blue-600">→ {formatCompactNumber(sq.cm1_pr)} PR</span>
+                                    {sq.cm1_pct != null && (
+                                      <span className="text-slate-400 text-[10px]">{sq.cm1_pct}%</span>
+                                    )}
+                                    {sq.cm1_tgt_pct != null && sq.target_cm1 > 0 && (
+                                      <span className={cn("font-semibold", pctColor(sq.cm1_tgt_pct))}>{sq.cm1_tgt_pct}% tgt</span>
+                                    )}
                                   </div>
                                   <div className="w-px h-3.5 bg-slate-200 shrink-0" />
                                   <div className="flex items-center gap-1.5">
@@ -1608,7 +1614,8 @@ function QuarterlyContent() {
                                         <th className="px-4 py-2 text-left font-semibold">Khách hàng</th>
                                         <th className="px-3 py-2 text-left font-semibold">PIC · Tier</th>
                                         <th className="px-3 py-2 text-right font-semibold">Rev PR</th>
-                                        <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">GP PR</th>
+                                        <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">CM1 PR</th>
+                                        <th className="px-3 py-2 text-right font-semibold">CM1%</th>
                                         <th className="px-3 py-2 text-right font-semibold">CM1 Tgt</th>
                                         <th className="px-3 py-2 text-right font-semibold">%TGT CM1</th>
                                         <th className="px-3 py-2 text-right font-semibold border-l border-slate-200">3HK% / Tgt%</th>
@@ -1632,9 +1639,10 @@ function QuarterlyContent() {
                                               {c.tier}
                                             </td>
                                             <td className="px-3 py-2 text-right tabular-nums text-blue-600">{formatCompactNumber(c.revenue_pr)}</td>
-                                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.cm1_pr)}</td>
+                                            <td className={cn("px-3 py-2 text-right tabular-nums text-[10px]", c.cm1_pct >= 0 ? "text-slate-500" : "text-red-500")}>{c.cm1_pct != null ? `${c.cm1_pct}%` : "—"}</td>
                                             <td className="px-3 py-2 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
-                                            <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_pct))}>{pctV(c.cm1_pct)}</td>
+                                            <td className={cn("px-3 py-2 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                             <td className="px-3 py-2 text-right tabular-nums text-slate-600 border-l border-slate-100">
                                               <span className="font-medium">{c.hk3_pct}%</span>
                                               {c.target_hk3pct > 0 && <span className="text-slate-400"> / {c.target_hk3pct}%</span>}
@@ -1663,8 +1671,11 @@ function QuarterlyContent() {
                               </span>
                               <span>Rev: {formatCompactNumber(squadData.totals.revenue)}</span>
                               <span className="text-blue-700">PR: {formatCompactNumber(squadData.totals.revenue_pr)}</span>
-                              <span className="text-slate-600">GP: {formatCompactNumber(squadData.totals.gp)}</span>
-                              <span className="text-blue-700">GP PR: {formatCompactNumber(squadData.totals.gp_pr)}</span>
+                              <span className="text-slate-600">CM1: {formatCompactNumber(squadData.totals.cm1)}</span>
+                              <span className="text-blue-700">CM1 PR: {formatCompactNumber(squadData.totals.cm1_pr)}</span>
+                              {squadData.totals.cm1_pct != null && (
+                                <span className="text-slate-500">CM1%: {squadData.totals.cm1_pct}%</span>
+                              )}
                               <span className="text-slate-500">3HK: {squadData.totals.hk3_pct}%</span>
                             </div>
                           </div>
@@ -1672,7 +1683,7 @@ function QuarterlyContent() {
                       </>
                     )}
                     <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
-                      GP ≈ Gross Profit (chưa trừ phí kênh/nhóm). %TGT CM1 = GP PR / Target CM1 · %TGT 3HK = 3HK% / Target 3HK%.
+                      CM1 = GP − chi phí KH (b2b_customer_cost_monthly). %TGT CM1 = CM1 PR / Target CM1 · %TGT 3HK = 3HK% / Target 3HK%.
                     </p>
                   </div>
                 </>
