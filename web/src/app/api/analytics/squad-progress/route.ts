@@ -37,11 +37,11 @@ function getRiskLevel(cm1Pct: number | null, hk3Pct: number | null): RiskLevel {
   }
 
   const c = cm1Pct!, h = hk3Pct!
-  if (c >= 100 && h >= 100) return "very_safe"
-  if (c >= 100 || h >= 100) return "safe"
-  if (c >= 85  && h >= 85)  return "safe_low"
-  if (c >= 85  || h >= 85)  return "danger_low"
-  return "danger_high"
+  if (c >= 100 && h >= 100) return "very_safe"  // Rất an toàn:  cả 2 >= 100%
+  if (c >= 100 || h >= 100) return "safe"        // An toàn:      1 trong 2 >= 100%
+  if (c >= 85  && h >= 85)  return "safe_low"    // An toàn ít:   85% <= cả 2 <= 100%
+  if (c >= 85  || h >= 85)  return "danger_low"  // Nguy hiểm ít: 85% <= 1 trong 2 <= 100%, còn lại < 85%
+  return "danger_high"                            // Nguy hiểm nhiều: cả 2 < 85%
 }
 
 // CM1 = GP − chi phí KH (b2b_customer_cost_monthly, Turso).
