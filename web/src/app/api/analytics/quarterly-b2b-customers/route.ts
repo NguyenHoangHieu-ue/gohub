@@ -364,13 +364,13 @@ export async function GET(req: NextRequest) {
       const ma = agg.get(m)
       const meta = monthMeta.find(x => x.month === m)
       const isProjected = meta?.isProjected ?? false
-      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, hk3Pct: 0, hasData: false, isProjected }
+      if (!ma || ma.revenue === 0) return { month: m, revenue: 0, gm: 0, cc: 0, cm1: 0, cm1Pct: 0, hk3Pct: 0, hk3Rev: 0, hasData: false, isProjected }
       const isRunning = !!(meta && !meta.isFuture && meta.elapsed > 0 && meta.elapsed < meta.dim)
       return {
         month: m, hasData: true, isProjected,
         revenue: r2(ma.revenue), gm: r2(ma.gm), cc: r2(ma.cc),
         cm1: r2(ma.cm1), cm1Pct: pct(ma.cm1, ma.revenue),
-        hk3Pct: pct(ma.hk3, ma.revenue),
+        hk3Rev: r2(ma.hk3), hk3Pct: pct(ma.hk3, ma.revenue),
         ...(isRunning && {
           ...(isProjected && {
             actualRevenue: r2(ma.rawRevenue),
@@ -410,7 +410,7 @@ export async function GET(req: NextRequest) {
       return {
         totalRevenue: r2(totRev), totalGm: r2(totGm), totalGmPct: pct(totGm, totRev),
         totalCc: r2(totCc), totalCm1: r2(totCm1), totalCm1Pct: pct(totCm1, totRev),
-        totalHk3Pct: pct(totHk3, totRev), qoqPct,
+        totalHk3Rev: r2(totHk3), totalHk3Pct: pct(totHk3, totRev), qoqPct,
         prevCm1: r2(prevTotCm1),  // để FE recompute QoQ với CM1 đã gồm ước tính T9 (futureScale)
       }
     }
