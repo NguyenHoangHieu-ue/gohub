@@ -10,10 +10,10 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 8014e27) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish Quarter Report + Web Analytics App + B2C Metric + fix Daily Report (đến 8014e27) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main b2bff89) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish + fix Daily Report + Squad CM1 + 3HK Rev display (đến b2bff89) |
 
-**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics.
+**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard.
 
 **⚠️ QUY TẮC MERGE (nhắc lại):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
@@ -34,9 +34,18 @@
 - [ ] **GA4 App connect**: add service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` Viewer vào property `465150028` (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management) → thêm entry `gohub-app` vào `app_settings.ga4_configs` Supabase
 
 **s157 — đã làm (2026-08-21):**
-- ✅ **fix Daily Report revenue lệch Dashboard** (main 8014e27, `lib/scheduled-report-data.ts`):
-  - Root cause: 5 query revenue (`revByMarketGroup`, `rev3hkByMarket`, `revByDay`, `b2bCustomersByDay`, `b2cChannelsByDay`) thiếu filter `SHIPPINGFEE0` + `INTERNAL-TRANSACTION` mà toàn bộ web tab đều áp.
-  - Fix: thêm `STD_FILTER` constant (`shipFilter(false)` + `internalOpsFilterByCode(false)`) → áp vào WHERE của tất cả 5 query. Số Daily/Weekly/Monthly report nay khớp Dashboard.
+- ✅ **fix Daily Report revenue lệch Dashboard** (ca712c5→82d7347, `lib/scheduled-report-data.ts`):
+  - Root cause: 5 query revenue thiếu filter `SHIPPINGFEE0` + `INTERNAL-TRANSACTION`.
+  - Fix lần 1: thêm `STD_FILTER` = `shipFilter` + `internalOpsFilterByCode` → timeout (NOT IN subquery chậm + cache cold → 8 query đồng thời vượt pool max=3).
+  - Fix lần 2: đổi sang `s.group_name` alias (không subquery) + serialize gohub_dw queries (2/lần) theo thứ tự nhẹ→nặng.
+- ✅ **Squad Progress — CM1 thực thay GP** (ee1c095→b2bff89, `api/analytics/squad-progress/route.ts`):
+  - GP → CM1 = GP − chi phí KH (`b2b_customer_cost_monthly` Turso).
+  - Đồng bộ logic với quarterly-report Overview: `buildQuarterMonthMeta` per-month factor, `SHIPPINGFEE0` filter, `fetchQuarterlySettings()` dynamic excluded customers.
+  - Risk level: cập nhật comment 5 mức (rất AT/AT/AT Ít/NH Ít/NH Nhiều).
+  - FE: nhãn GP→CM1, thêm %CM1 + %TGT CM1 squad card, bảng KH, total row, Excel export.
+- ✅ **Quarter Report — thêm 3HK Revenue (số) bên cạnh 3HK%** (71edf3c→b2bff89):
+  - 12 vị trí: KPI card · monthly table · total row · MonthSubRow · QtSummaryRow · Squad card/table/total · B2B customer row · B2B per-month · tier total · sub-row.
+  - API quarterly-b2b-customers: thêm `hk3Rev` vào monthly data, `totalHk3Rev` vào tier totals.
 
 **s156 — đã làm (2026-08-20):**
 - ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):

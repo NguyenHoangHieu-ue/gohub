@@ -1,5 +1,75 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-20 (Session 156 — Quarter Report UI/UX polish + export Excel).
+Cập nhật lần cuối: 2026-08-21 (Session 157 — fix Daily Report + Squad Progress CM1 + 3HK Rev display).
+
+## ══════ SESSION 157 (2026-08-21) — DAILY REPORT FIX + SQUAD PROGRESS CM1 + 3HK REV ══════
+
+### A. Fix Daily Report revenue lệch Dashboard (→ main 82d7347)
+**File:** `web/src/lib/scheduled-report-data.ts`
+
+**Root cause:** 5 query trong `buildReportData` (`revByMarketGroup`, `rev3hkByMarket`, `revByDay`, `b2bCustomersByDay`, `b2cChannelsByDay`) thiếu 2 filter mà tất cả web tab đều áp:
+- `SHIPPINGFEE0` (phí ship)
+- `INTERNAL-TRANSACTION` (đơn nội bộ)
+→ Daily/Weekly/Monthly report tính revenue cao hơn Dashboard.
+
+**Fix lần 1 (ca712c5):** Thêm `STD_FILTER = shipFilter(false) + internalOpsFilterByCode(false)`. Nhưng `internalOpsFilterByCode` dùng `NOT IN (SELECT ...)` subquery → query planner chậm + cache cold sau khi SQL hash thay đổi → 8 query đồng thời hit gohub_dw (pool max=3) → `query_timeout` 25s.
+
+**Fix lần 2 (ebd6ac8):**
+- Đổi `NOT IN (subquery)` → dùng alias `s.group_name` trực tiếp (query đã JOIN `dim_order_source s`) → không subquery.
+- `rev3hkByMarket` (không JOIN) → chỉ filter `SHIPPINGFEE0` (3HK DataPool SKU không phải internal ops).
+- `b2bCustomersByDay`/`b2cChannelsByDay` → đã filter `group_name='B2B'/'B2C'` nên INTERNAL-TRANSACTION tự loại, chỉ thêm `SHIPPINGFEE0`.
+- Serialize gohub_dw queries (2/lần thay vì 8 đồng thời), thứ tự nhẹ→nặng.
+
+**Lesson (→ ERRORS.md):** `NOT IN (subquery)` trên `fact_fulfillment_revenue` lớn + cache cold → timeout. Dùng alias JOIN trực tiếp. Serialize queries khi pool max=3.
+
+### B. Squad Progress — CM1 thực thay GP (→ main b2bff89)
+**Files:** `web/src/app/api/analytics/squad-progress/route.ts`, `quarterly/page.tsx`
+
+**Bug cũ:** API dùng `gross_profit_vnd` (GP) làm proxy cho CM1 → `%TGT CM1 = GP_PR / Target_CM1` → phồng % vì GP > CM1.
+
+**Fix API (ee1c095):**
+- Import `fetchCustomerCosts`, `calcRecordCostProjected` từ `b2b-customer-cost`.
+- `CM1 = GP − chi phí KH` (Turso `b2b_customer_cost_monthly`) per tháng.
+- `%TGT CM1 = CM1_PR / Target_CM1` (đúng).
+- Thêm `cm1_pct` (%CM1 actual = CM1/Revenue), `cm1_tgt_pct` cho cả customer và squad.
+
+**Fix đồng bộ với quarterly-report Overview (e8cebbf):**
+3 điểm lệch với Overview tab:
+1. **prFactor**: đổi từ quarter-wide `(92/51)` → `buildQuarterMonthMeta` per-month (tháng xong×1, hiện tại×dim/elapsed, tương lai×0). Thêm per-month CASE WHEN columns vào SQL.
+2. **SHIPPINGFEE0**: thêm `AND f.sku != 'SHIPPINGFEE0'`.
+3. **Excluded customers**: từ hardcode 3 tên → `fetchQuarterlySettings()` + `makeExcludeSql()` (dynamic Supabase).
+
+**Fix FE (ee1c095):**
+- Đổi nhãn GP→CM1 toàn bộ: squad card, bảng KH, total row, Excel export.
+- Progress bar: "GP ≈ CM1 vs Target" → "CM1 vs Target".
+- Squad card: hiện CM1 actual + PR + %CM1 + %TGT CM1 cùng hàng.
+- Bảng KH: thêm cột CM1%, đổi GP PR → CM1 PR.
+
+**Risk level (5b38cb2):** Cập nhật comment getRiskLevel đúng theo mô tả:
+- Rất an toàn: cả 2 ≥ 100% | An toàn: 1 trong 2 ≥ 100%
+- An toàn ít: 85% ≤ cả 2 ≤ 100% | Nguy hiểm ít: 85% ≤ 1 trong 2 ≤ 100%
+- Nguy hiểm nhiều: cả 2 < 85% (code đã đúng, chỉ cập nhật comment)
+
+### C. Quarter Report — 3HK Revenue (số) bên cạnh 3HK% (→ main b2bff89)
+**Files:** `quarterly/page.tsx`, `api/analytics/quarterly-b2b-customers/route.ts`
+
+**API (71edf3c):** Thêm `hk3Rev` vào `buildMonthRows` response (per-month data per customer), `totalHk3Rev` vào `buildTotals` (tier totals).
+
+**FE (71edf3c) — 12 vị trí:**
+1. KPI card B2B/B2C/Tổng: thêm `hk3Rev` prop → hiện `{fck(hk3Rev)} ({pct(hk3Pct)})`
+2. Overview monthly table: `fc(m.hk3Rev) (pct%)`
+3. Overview total summary row: `fc(b2bThkAct+b2cThkAct) (pct%)`
+4. MonthSubRow B2B/B2C: `fc(stats.hk3Rev) (pct%)`
+5. QtSummaryRow: thêm `hk3Rev` prop
+6. Squad card: `{formatCompactNumber(sq.hk3)} ({sq.hk3_pct}%) / target tgt n%`
+7. Squad flat view customer table: số + %
+8. Squad expanded customer table: số + %
+9. Squad total row: `3HK: {fc(totals.hk3)} (pct%)`
+10. B2B customer row: `fc(c.hk3Rev) (pct%)`
+11. B2B per-month table: `fc(d.hk3Rev) (pct%)`
+12. B2B tier total column: `fc(tier.totalHk3Rev) (pct%)`
+13. B2B sub-row 3HK per tháng: `fc(ms[mk].hk3Rev) (pct%)`
+
+**tsc:** PASS. Commits ca712c5→82d7347 (fix daily) + ee1c095→b2bff89 (squad CM1 + 3HK) → main b2bff89.
 
 ## ══════ SESSION 156 (2026-08-20) — QUARTER REPORT UI/UX POLISH ══════
 **Audit + redesign toàn bộ subtab Squad Progress + Tổng quan trong Quarter Report** (→ main 0ff2e62):
