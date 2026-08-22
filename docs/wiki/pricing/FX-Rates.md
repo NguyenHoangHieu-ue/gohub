@@ -2,10 +2,14 @@
 title: "Tỷ Giá Nội Bộ GoHub"
 page_type: pricing_rule
 department: finance
-tags: [ty-gia, fx-rates, usd, vnd, hkd, pricing]
+audience: cs-product
+visibility: all
+tags: [ty-gia, fx-rates, usd, vnd, hkd, pricing, tu-van]
 aliases: ["Tỷ giá", "FX Rates", "Exchange Rates"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 

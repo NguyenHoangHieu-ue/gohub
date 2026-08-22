@@ -1161,6 +1161,283 @@ function NotesPanel({
   )
 }
 
+// ── Wiki Panel ──
+interface WikiPage {
+  id:             string
+  title:          string
+  audience:       string
+  page_type:      string
+  tags:           string[]
+  updated_at:     string
+  last_edited_by: string
+  last_edited_at: string
+  preview:        string
+  content?:       string
+}
+
+const AUDIENCE_LABEL: Record<string, { label: string; color: string }> = {
+  "cs-product": { label: "Sản phẩm & Vendor", color: "bg-blue-50 text-blue-700 border-blue-200" },
+  "staff":      { label: "Nhân viên",          color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  "system":     { label: "Hệ thống",           color: "bg-slate-100 text-slate-600 border-slate-200" },
+}
+
+function renderMarkdown(md: string): string {
+  // Bỏ YAML frontmatter
+  const body = md.replace(/^---[\s\S]*?---\n?/, "")
+  return body
+    .replace(/^### (.+)$/gm, '<h3 class="text-[14px] font-semibold text-slate-700 mt-4 mb-1">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-[15px] font-semibold text-slate-800 mt-5 mb-2 border-b border-slate-100 pb-1">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold text-slate-900 mb-3">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded text-[12px] font-mono">$1</code>')
+    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-[#003B95] pl-3 text-slate-600 italic text-[13px] my-2">$1</blockquote>')
+    .replace(/^\| (.+) \|$/gm, (line) => {
+      const cells = line.split("|").filter(c => c.trim()).map(c => `<td class="px-2 py-1 text-[12px] border border-slate-200">${c.trim()}</td>`)
+      return `<tr>${cells.join("")}</tr>`
+    })
+    .replace(/(<tr>[\s\S]*?<\/tr>)/g, '<table class="w-full border-collapse my-3 text-[12px]">$1</table>')
+    .replace(/^- (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-disc">$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-decimal">$2</li>')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/✅/g, '<span class="text-emerald-600">✅</span>')
+    .replace(/⚠️/g, '<span class="text-amber-600">⚠️</span>')
+    .replace(/ℹ️/g, '<span class="text-blue-500">ℹ️</span>')
+}
+
+function WikiPanel({ isPrivileged, editorName }: { isPrivileged: boolean; editorName: string }) {
+  const toast = useToast()
+  const [pages, setPages]           = useState<WikiPage[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState("")
+  const [audienceFilter, setAudienceFilter] = useState("")
+  const [selected, setSelected]     = useState<WikiPage | null>(null)
+  const [fullContent, setFullContent] = useState<string>("")
+  const [loadingPage, setLoadingPage] = useState(false)
+  const [editMode, setEditMode]     = useState(false)
+  const [editDraft, setEditDraft]   = useState("")
+  const [saving, setSaving]         = useState(false)
+
+  const loadPages = useCallback(async (q = "") => {
+    setLoading(true)
+    try {
+      const qs  = q ? `?q=${encodeURIComponent(q)}` : ""
+      const res = await fetch(`/api/to-gau/kb${qs}`)
+      const json = await res.json()
+      setPages(json.data ?? [])
+    } catch { setPages([]) }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { loadPages() }, [loadPages])
+
+  useEffect(() => {
+    const t = setTimeout(() => loadPages(search), 300)
+    return () => clearTimeout(t)
+  }, [search, loadPages])
+
+  async function openPage(page: WikiPage) {
+    setSelected(page)
+    setEditMode(false)
+    setEditDraft("")
+    if (page.content) { setFullContent(page.content); return }
+    setLoadingPage(true)
+    try {
+      const res  = await fetch("/api/to-gau/kb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: page.id }) })
+      const json = await res.json()
+      setFullContent(json.data?.content ?? "")
+    } catch { setFullContent("") }
+    finally { setLoadingPage(false) }
+  }
+
+  async function handleSave() {
+    if (!selected || !editDraft.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch("/api/to-gau/kb", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected.id, content: editDraft, editor_name: editorName }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setFullContent(editDraft)
+      setEditMode(false)
+      setSelected(prev => prev ? { ...prev, last_edited_by: json.last_edited_by, last_edited_at: json.last_edited_at } : prev)
+      setPages(prev => prev.map(p => p.id === selected.id ? { ...p, last_edited_by: json.last_edited_by, last_edited_at: json.last_edited_at } : p))
+      toast.success("Đã lưu tài liệu")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    } finally { setSaving(false) }
+  }
+
+  const audiences = isPrivileged
+    ? ["", "cs-product", "staff", "system"]
+    : ["", "cs-product", "staff"]
+
+  const filtered = audienceFilter ? pages.filter(p => p.audience === audienceFilter) : pages
+
+  // Grouped by audience
+  const grouped = filtered.reduce((acc, p) => {
+    const a = p.audience || "staff"
+    if (!acc[a]) acc[a] = []
+    acc[a].push(p)
+    return acc
+  }, {} as Record<string, WikiPage[]>)
+
+  const audienceOrder = isPrivileged
+    ? ["cs-product", "staff", "system"]
+    : ["cs-product", "staff"]
+
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* List panel */}
+      <div className={cn("flex flex-col border-r border-slate-200 bg-white", selected ? "hidden md:flex md:w-72 flex-shrink-0" : "flex-1")}>
+        {/* Search + filter */}
+        <div className="px-3 py-3 border-b border-slate-100 space-y-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm tài liệu..."
+              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+            />
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {audiences.map(a => (
+              <button
+                key={a}
+                onClick={() => setAudienceFilter(a)}
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                  audienceFilter === a
+                    ? "bg-[#003B95] text-white border-[#003B95]"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                )}
+              >
+                {a ? AUDIENCE_LABEL[a]?.label ?? a : "Tất cả"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto py-2">
+          {loading ? (
+            <div className="flex items-center justify-center h-24 text-slate-400 text-[13px]">Đang tải...</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-24 text-slate-400 text-[13px]">
+              <span>Không tìm thấy tài liệu</span>
+            </div>
+          ) : (
+            audienceOrder.map(aud => {
+              const group = grouped[aud]
+              if (!group?.length) return null
+              const { label, color } = AUDIENCE_LABEL[aud] ?? { label: aud, color: "bg-slate-100 text-slate-600 border-slate-200" }
+              return (
+                <div key={aud}>
+                  <div className="px-3 py-1.5 flex items-center gap-1.5">
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full border", color)}>{label}</span>
+                  </div>
+                  {group.map(page => (
+                    <button
+                      key={page.id}
+                      onClick={() => openPage(page)}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-50",
+                        selected?.id === page.id && "bg-blue-50 border-l-2 border-l-[#003B95]"
+                      )}
+                    >
+                      <p className="text-[13px] font-medium text-slate-800 leading-snug line-clamp-2">{page.title}</p>
+                      {page.preview && (
+                        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{page.preview.slice(0, 80)}</p>
+                      )}
+                      {page.last_edited_by && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">Sửa bởi {page.last_edited_by} · {page.last_edited_at}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Content panel */}
+      {selected && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Content header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
+            <button onClick={() => setSelected(null)} className="md:hidden text-slate-400 hover:text-slate-700 mr-1">
+              <ArrowLeft size={16} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-slate-800 truncate">{selected.title}</p>
+              {selected.last_edited_by && (
+                <p className="text-[11px] text-slate-400">Sửa lần cuối: {selected.last_edited_by} · {selected.last_edited_at}</p>
+              )}
+            </div>
+            {isPrivileged && !editMode && (
+              <button
+                onClick={() => { setEditDraft(fullContent); setEditMode(true) }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
+              >
+                <Edit2 size={11} /> Sửa
+              </button>
+            )}
+            {editMode && (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1 rounded-lg bg-[#003B95] text-white text-[12px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors"
+                >
+                  {saving ? "Đang lưu..." : "Lưu"}
+                </button>
+                <button
+                  onClick={() => setEditMode(false)}
+                  className="px-3 py-1 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
+                >
+                  Hủy
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Content body */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 bg-white">
+            {loadingPage ? (
+              <div className="flex items-center justify-center h-32 text-slate-400 text-[13px]">Đang tải...</div>
+            ) : editMode ? (
+              <textarea
+                value={editDraft}
+                onChange={e => setEditDraft(e.target.value)}
+                className="w-full h-full min-h-[400px] border border-slate-200 rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:border-[#003B95] resize-none"
+              />
+            ) : (
+              <div
+                className="prose-sm max-w-none text-slate-800 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(fullContent) }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state khi chưa chọn trang (desktop) */}
+      {!selected && !loading && (
+        <div className="hidden md:flex flex-1 items-center justify-center text-center text-slate-400">
+          <div>
+            <FileText size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-[13px]">Chọn tài liệu để xem nội dung</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Chat Room ──
 export default function ToGauRoomPage() {
   const { data: session } = useSession()
@@ -1188,7 +1465,7 @@ export default function ToGauRoomPage() {
   const [askingAI, setAskingAI] = useState(false)
 
   // Phase 3: tabs
-  const [activeTab, setActiveTab] = useState<"chat" | "docs" | "notes">("chat")
+  const [activeTab, setActiveTab] = useState<"chat" | "docs" | "notes" | "wiki">("chat")
 
   // Phase 4: @mention
   const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
@@ -1873,8 +2150,8 @@ export default function ToGauRoomPage() {
         {/* Tab bar */}
         <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4">
           <div className="flex gap-0">
-            {(["chat", "docs", "notes"] as const).map(tab => {
-              const labels: Record<typeof tab, string> = { chat: "💬 Chat", docs: "📄 Docs", notes: "📌 Notes" }
+            {(["chat", "docs", "notes", "wiki"] as const).map(tab => {
+              const labels: Record<typeof tab, string> = { chat: "💬 Chat", docs: "📄 Docs", notes: "📌 Notes", wiki: "📚 Wiki" }
               return (
                 <button
                   key={tab}
@@ -2241,6 +2518,10 @@ export default function ToGauRoomPage() {
 
         {activeTab === "notes" && (
           <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
+        )}
+
+        {activeTab === "wiki" && (
+          <WikiPanel isPrivileged={isPrivileged} editorName={myName || myEmail} />
         )}
       </div>
 

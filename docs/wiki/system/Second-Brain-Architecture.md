@@ -2,10 +2,14 @@
 title: "GoHub Second Brain — Kiến Trúc & Flow Diagram"
 page_type: reference
 department: tech
-tags: [architecture, diagram, second-brain, flow, mermaid]
+audience: system
+visibility: admin-only
+tags: [architecture, diagram, second-brain, flow, mermaid, system]
 aliases: ["Second Brain Architecture", "System Diagram", "Flow Diagram"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-08-09
+updated: 2026-08-22
 status: active
 ---
 

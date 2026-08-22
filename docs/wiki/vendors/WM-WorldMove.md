@@ -1,139 +1,110 @@
 ---
-title: "Vendor — WorldMove (WM)"
+title: "Vendor WorldMove (WM) — Hướng Dẫn Tư Vấn"
+audience: cs-product
+visibility: all
 page_type: vendor_profile
-department: product
-tags: [vendor, worldmove, wm, apn, esim, sim]
+department: cs-sale
+tags: [vendor, worldmove, wm, apn, esim, sim, tu-van]
 aliases: ["WorldMove", "WM", "WORLDMOVE"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 
-# WorldMove (WM)
+# Vendor WorldMove (WM) — Hướng Dẫn Tư Vấn
 
-## Thông Tin Cơ Bản
+> **TL;DR — Đọc nhanh:** WM là vendor chính, có 8.900+ gói, phủ sóng hầu hết các nước, không cần KYC. **Luôn thử WM trước** khi xét vendor khác. CS chỉ cần biết 5 loại gói và cách giải thích cho KH.
 
-| Thuộc tính | Giá trị |
+---
+
+## WM Là Lựa Chọn Đầu Tiên Khi Nào?
+
+**Dùng WM trước** cho tất cả các nước, **ngoại trừ:**
+
+| Ngoại lệ | Thay bằng |
 |---|---|
-| Mã vendor | `WM` |
-| Ký tự trong SKU (vị trí 6–7) | `WM` |
-| Loại báo giá | Gói cố định |
-| Tổng sản phẩm | **8.921 gói** |
-| Yêu cầu KYC | Không |
-| Hỗ trợ eSIM | Có (tùy gói) |
+| Nhật Bản | KDDI (partnership riêng, chất lượng cao hơn) |
+| Nước không có trong WM | 3HK |
+| WM có nhưng giá kém cạnh tranh hơn 3HK | 3HK |
 
 ---
 
-## Các Loại Gói WM
+## 5 Loại Gói WM — CS Cần Nắm
 
-### 1. Titanium AYCE (All You Can Eat)
-- **Data:** Không giới hạn, không giảm tốc độ
-- **Data Policy:** `D`
+| Loại | Tốc độ sau hết quota | Giải thích ngắn cho KH | Phù hợp khi |
+|---|---|---|---|
+| **Titanium AYCE** | Không giảm (true unlimited) | "Dùng thoải mái, tốc độ không đổi cả chuyến" | KH cần stream nhiều, làm việc online |
+| **Premium Unlimited** | 10 Mbps sau 1GB/ngày | "Tốc độ cao 1GB/ngày, sau đó vẫn dùng được bình thường" | KH du lịch, dùng vừa phải |
+| **Standard Unlimited** | 5 Mbps sau 2GB/ngày | "2GB tốc độ cao mỗi ngày, sau đó 5Mbps — đủ dùng" | KH phổ thông, ngân sách vừa |
+| **Fixed Data** | 128 kbps | "Tổng [X]GB, hết thì vẫn kết nối được nhẹ" | Du lịch ngắn ngày, biết nhu cầu |
+| **Daily Data** | 128 kbps | "[X]GB mỗi ngày, reset lúc nửa đêm" | KH muốn dùng đều hàng ngày |
 
-### 2. Premium Unlimited
-- **Data:** Không giới hạn — tốc độ cao 1 GB/ngày, sau đó tối thiểu **10 Mbps**
-- **Data Policy:** `A`
-
-### 3. Standard Unlimited
-- **Data:** Không giới hạn — tốc độ cao 2 GB/ngày, sau đó tối thiểu **5 Mbps**
-- **Data Policy:** `B`
-
-### 4. Fixed Data
-- **Data:** Tổng cố định (ví dụ 5 GB, 10 GB)
-- **Sau khi hết:** Tốc độ giảm xuống 128 kbps
-- **Data Policy:** `F` hoặc `P`
-
-### 5. Daily Data
-- **Data:** Cấp theo từng ngày (ví dụ 1 GB/ngày)
-- **Sau khi hết quota ngày:** Tốc độ giảm xuống 128 kbps
-- **Data Policy:** `P`
-
-> Bảng đầy đủ: [[products/Data-Policy-Codes]]
+> Mã data policy tương ứng: [[products/Data-Policy-Codes]]
 
 ---
 
-## Thông Tin APN
+## Câu Hỏi Thường Gặp Từ KH (Q&A Copy-Paste)
 
-APN (Access Point Name) là cấu hình mạng thiết bị cần để kết nối internet khi dùng gói WM.
+**Q: Gói có dùng được ở [nước] không?**
+> "Dạ WM phủ sóng [nước] qua mạng [nhà mạng địa phương]. Em kiểm tra ngay trong hệ thống — anh/chị cần [SIM hay eSIM]?"
 
-### Cách hiển thị trong hệ thống
+**Q: SIM hay eSIM, cái nào tốt hơn?**
+> "eSIM tiện hơn vì cài trực tiếp trên điện thoại, không cần chờ giao hàng. Điện thoại từ iPhone XS (2018) hoặc Android hỗ trợ eSIM là dùng được. Còn lại thì dùng SIM vật lý."
 
-```
-Vietnam (Mobifone, Viettel, Vinaphone)
-```
-→ Tên vùng/nước + danh sách nhà mạng hỗ trợ
+**Q: Hết data thì sao?**
+> "Tùy gói: gói Unlimited vẫn dùng được với tốc độ thấp hơn. Gói Fixed/Daily vẫn kết nối được nhẹ (128 kbps — đủ chat, không stream được)."
 
-### APN theo nhà mạng Việt Nam
+**Q: Cài đặt APN như thế nào?**
+> "Đa số điện thoại tự cài khi gắn SIM hoặc cài eSIM. Nếu cần nhập tay, em gửi thông tin APN riêng cho gói đó."
 
-| Nhà mạng | APN |
+**Q: Gói có KYC không (cần đăng ký giấy tờ)?**
+> "Gói WM **không cần KYC** — anh/chị cài là dùng được ngay, không cần gửi CCCD hay hộ chiếu."
+
+---
+
+## Thông Tin APN (Hỗ Trợ KH Cài Tay)
+
+Mỗi gói WM có APN riêng. Tra APN đúng tại: tab **Danh mục SKU → tìm mã SKU → xem APN**.
+
+| Nhà mạng VN phổ biến | APN thường gặp |
 |---|---|
 | Mobifone | `m-wap` |
 | Viettel | `v-internet` |
-| Vietnamobile | Riêng theo gói |
 
-### Thông tin kèm theo mỗi gói
-
-- Loại mạng (4G/LTE, 5G)
-- Nhà mạng chính và danh sách nhà mạng hỗ trợ
-- Vùng phủ sóng
-- Giờ reset data hàng ngày
-- Thông báo khi hết quota
+> Lưu ý: APN thay đổi theo gói và nước — luôn tra trong hệ thống, không nhớ cứng.
 
 ---
 
-## Format File Báo Giá
+## Lưu Ý Khi Tư Vấn
 
-### WM Native Format (CSV/XLSX cũ)
-Nhận dạng bằng cột `wmproductId`.
-
-Các cột: ID sản phẩm, tên, khu vực, loại SIM/eSIM, giá nhập, có leSIM hay không.
-
-### GoHub Standard Format (XLSX mới)
-
-Template chuẩn GoHub — WM (và các vendor khác) điền theo. Tải template tại web **SP Vendor → Tải template**.
-
-**Sheet "Goi co san"** — gói cố định:
-
-| Cột | Bắt buộc | Mô tả |
-|---|---|---|
-| `vendor_code` | ✅ | `WM` |
-| `vendor_id` | ✅ | ID nội bộ vendor |
-| `product_name` | ✅ | Tên gói |
-| `region` | ✅ | Khu vực / nước |
-| `sim_type` | ✅ | `SIM` hoặc `eSIM` |
-| `days` | ✅ | Số ngày |
-| `data_gb` | ✅ | Dung lượng GB |
-| `is_daily` | ✅ | `true` / `false` |
-| `is_unlimited` | ✅ | `true` / `false` |
-| `throttle_mbps` | — | Tốc độ tối thiểu sau hết quota (để trống = không giới hạn) |
-| `cost_price` | ✅ | Giá nhập |
-| `currency` | ✅ | Đơn vị tiền |
-| `apn` | — | APN string |
-| `network_type` | — | `4G/LTE`, `5G` |
-| `is_kyc` | ✅ | `true` / `false` |
-| `is_lesim` | — | `true` / `false` |
-| `notes` | — | Ghi chú |
-
-> Quy trình import: [[processes/Import-NCC]]
+- ✅ WM **không yêu cầu KYC** — lợi thế lớn, nhấn mạnh với KH
+- ✅ 8.921 gói — hầu hết nước đều có
+- ✅ Thông tin APN đầy đủ cho từng gói
+- ⚠️ Kiểm tra **eSIM hay SIM** trước khi chốt (không phải gói nào cũng có cả hai)
+- ⚠️ WM là "phủ rộng" — nếu KH cần chất lượng cao nhất ở Nhật → dùng KDDI
 
 ---
 
-## Gap Analysis
+## Thông Tin Kỹ Thuật (Cho Team Product / BD)
 
-Mỗi sản phẩm WM được đánh dấu:
-- **Đã tạo** — GoHub đã có SKU tương ứng
-- **Chưa tạo** — GoHub chưa nhập vào hệ thống
+| Thuộc tính | Giá trị |
+|---|---|
+| Mã vendor trong SKU (vị trí 6–7) | `GB` (mã nội bộ GoHub cho WM) |
+| Loại báo giá | Gói cố định (không tính theo GB như 3HK) |
+| Tổng sản phẩm hiện có | 8.921 gói |
+| Yêu cầu KYC | Không |
 
-Trạng thái cập nhật tự động mỗi ngày sau khi đồng bộ.
+**Format file báo giá:** GoHub Standard XLSX, sheet "Goi co san". Tải template tại **SP Vendor → Tải template**.
 
-> Xem chi tiết: Web **SP Vendor** → Tab WM → Bộ lọc "Chưa có trong HT"
+Gap analysis tự động: tab **SP Vendor → WM → Bộ lọc "Chưa có trong HT"**.
 
 ---
 
-## Ưu Tiên Vendor
+## Xem Thêm
 
-WM là lựa chọn **ưu tiên** cho:
-- **Hồng Kông** — không cần KYC, giá cạnh tranh
-- **Đài Loan** — không cần KYC, phủ sóng tốt
-
-> Bảng ưu tiên đầy đủ: [[pricing/Vendor-Priority]]
+- [[pricing/Vendor-Priority|Khi nào WM vs 3HK vs KDDI?]]
+- [[products/SKU-Code-Structure|Đọc mã SKU]]
+- [[products/Data-Policy-Codes|Các mã data policy (A/B/C/D...)]]
+- [[processes/Import-NCC|Quy trình import báo giá WM]]

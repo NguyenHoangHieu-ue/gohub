@@ -2,10 +2,14 @@
 title: "Công Thức Tính Giá Nhập — 3HK"
 page_type: pricing_rule
 department: finance
-tags: [3hk, cogs, formula, pricing, zone]
+audience: cs-product
+visibility: all
+tags: [3hk, cogs, formula, pricing, zone, product]
 aliases: ["3HK COGS", "Công thức 3HK", "3HK Formula"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 

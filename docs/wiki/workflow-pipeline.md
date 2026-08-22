@@ -1,3 +1,18 @@
+---
+title: "Quy Trình Vận Hành Chuẩn — GoHub Intel"
+audience: system
+visibility: admin-only
+page_type: reference
+department: tech
+tags: [workflow, pipeline, system, devops, quy-trinh]
+aliases: ["Workflow Pipeline", "Vận hành chuẩn", "Standard Pipeline"]
+last_edited_by: ""
+last_edited_at: ""
+created: 2026-06-13
+updated: 2026-08-22
+status: active
+---
+
 # Quy Trình Vận Hành Chuẩn (Workflow Standard Pipeline)
 
 > Tài liệu hướng dẫn thiết lập, triển khai, tự động hóa kiểm thử và bảo mật hệ thống GoHub Intel.

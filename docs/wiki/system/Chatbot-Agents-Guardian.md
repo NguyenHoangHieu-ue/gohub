@@ -2,10 +2,14 @@
 title: "Chatbot Agents & Guardian"
 page_type: reference
 department: tech
-tags: [chatbot, agent, guardian, rbac, permission, ai]
+audience: system
+visibility: admin-only
+tags: [chatbot, agent, guardian, rbac, permission, ai, system]
 aliases: ["Guardian", "Chatbot Agents", "Phân quyền chatbot", "Agent Routing"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-21
-updated: 2026-07-20
+updated: 2026-08-22
 status: active
 ---
 
