@@ -4,14 +4,14 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-21, s157)
+## Trạng thái hiện tại (2026-08-22, s158)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main b2bff89) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish + fix Daily Report + Squad CM1 + 3HK Rev display (đến b2bff89) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 668c2cf) |
+| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish + fix Daily Report + Squad CM1 + 3HK Rev + Tổ Gấu fixes + Wiki 3-tier (đến 668c2cf) |
 
 **➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard.
 
@@ -33,6 +33,23 @@
 - [ ] **Test Wave 1.1** trên staging: cà 1 thread → reload → còn badge "Đã cà" + section Lịch sử → nếu OK → merge main
 - [ ] **GA4 App connect**: add service account `ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com` Viewer vào property `465150028` (Firebase Console → Project Settings → Integrations → GA → Manage → Property Access Management) → thêm entry `gohub-app` vào `app_settings.ga4_configs` Supabase
 
+**s158 — đã làm (2026-08-22):**
+- ✅ **Tổ Gấu — fix toàn diện** (25a8129→da0a197):
+  - Smart scroll: không auto-jump khi user đang đọc lịch sử; badge "N tin mới ↓" khi realtime có tin
+  - Load more: nút "Tải thêm tin cũ" + cursor pagination `?before=<uuid>` + preserve scroll position
+  - N+1 query → 2 batch queries; sort groups theo last activity
+  - ConfirmModal + useConfirm hook thay toàn bộ `confirm()` native (DocsPanel, NotesPanel, SettingsModal, handleRecall)
+  - Textarea auto-resize; @mention keyboard nav (ArrowUp/Down); Manager badge sidebar
+  - Search click miss → toast hướng dẫn
+- ✅ **Wiki 3-tier + KB tab Tổ Gấu** (c2d147c):
+  - Rewrite 3HK, WM, Vendor-Priority theo format tư vấn CS (TL;DR, Q&A, script copy-paste)
+  - Frontmatter mới: `audience`/`visibility`/`last_edited_by`/`last_edited_at` trên 12 files
+  - API `/api/to-gau/kb`: browse/search/PATCH (edit tracking không cần migration)
+  - AI Gấu Tổ inject KB context trước khi gọi Gemini
+  - Tab 📚 Wiki trong Tổ Gấu: 2-pane, search, filter, render markdown, edit mode
+
+**➡️ TIẾP THEO s158:** Chạy `python backend/seeding/import/import_wiki.py` để sync wiki mới lên Supabase KB. Cấp quyền GA4 App cho service account.
+
 **s157 — đã làm (2026-08-21):**
 - ✅ **fix Daily Report revenue lệch Dashboard** (ca712c5→82d7347, `lib/scheduled-report-data.ts`):
   - Root cause: 5 query revenue thiếu filter `SHIPPINGFEE0` + `INTERNAL-TRANSACTION`.
@@ -47,12 +64,13 @@
   - 12 vị trí: KPI card · monthly table · total row · MonthSubRow · QtSummaryRow · Squad card/table/total · B2B customer row · B2B per-month · tier total · sub-row.
   - API quarterly-b2b-customers: thêm `hk3Rev` vào monthly data, `totalHk3Rev` vào tier totals.
 
-**s156 — đã làm (2026-08-20):**
+**s156 — đã làm (2026-08-20/21):**
 - ✅ **Quarter Report — UI/UX polish toàn bộ** (→ main 0ff2e62, `quarterly/page.tsx`):
   - **Squad Progress** S1–S5: admin toolbar compact · squad card progress bar · filter 1 tầng dropdown · customer table 9 cột · flat view banner · Export Excel (2 sheet). Bug fix: pct shadow, expandedSquads reset, total row GP PR.
   - **Overview** O1–O3: target card collapsible · monthly table toggle B2B/B2C · skeleton loading.
 - ✅ **Web Analytics — App platform toggle** (main 8169cb1): toggle Web/App ở header; App → GA4 filter `platform=ios|android` thay `hostName`; ẩn GSC section khi App.
 - ✅ **B2C — subtab Metric** (main 8169cb1): bảng YTD monthly Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer với Web+App breakdown, %MoM badge.
+- ✅ **fix Daily Report revenue + query timeout** (ebd6ac8): thêm filter SHIPPINGFEE0 + INTERNAL-TRANSACTION; dùng alias `s.group_name` thay NOT IN subquery để tránh timeout; serialize gohub_dw queries.
 
 **s155 — đã làm (2026-08-19):**
 - ✅ **Wave 1.2** Cà Thread multi-group (main): selector tabs, thêm/sửa/xóa group, backward-compat.
