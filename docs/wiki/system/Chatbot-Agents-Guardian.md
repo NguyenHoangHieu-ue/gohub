@@ -4,6 +4,7 @@ page_type: reference
 department: tech
 audience: system
 visibility: admin-only
+is_hidden: true
 tags: [chatbot, agent, guardian, rbac, permission, ai, system]
 aliases: ["Guardian", "Chatbot Agents", "Phân quyền chatbot", "Agent Routing"]
 last_edited_by: ""
