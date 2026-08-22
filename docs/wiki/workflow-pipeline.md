@@ -2,6 +2,7 @@
 title: "Quy Trình Vận Hành Chuẩn — GoHub Intel"
 audience: system
 visibility: admin-only
+is_hidden: true
 page_type: reference
 department: tech
 tags: [workflow, pipeline, system, devops, quy-trinh]

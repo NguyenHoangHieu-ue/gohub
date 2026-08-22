@@ -4,6 +4,7 @@ page_type: reference
 department: tech
 audience: system
 visibility: admin-only
+is_hidden: true
 tags: [architecture, diagram, second-brain, flow, mermaid, system]
 aliases: ["Second Brain Architecture", "System Diagram", "Flow Diagram"]
 last_edited_by: ""
