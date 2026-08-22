@@ -1145,14 +1145,19 @@ export default function ToGauRoomPage() {
   const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([])
   const [pinnedExpanded, setPinnedExpanded] = useState(false)
 
-  // Phase 4: scroll-to-bottom
+  // scroll-to-bottom
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const messagesAreaRef = useRef<HTMLDivElement>(null)
+
+  // load more
+  const [hasMore, setHasMore]         = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [newMsgCount, setNewMsgCount] = useState(0)
 
   // Pinned message hover
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
 
-  // Phase 5: edit/recall (#4)
+  // edit/recall
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editContent, setEditContent]   = useState("")
   const [savingEdit, setSavingEdit]     = useState(false)
@@ -1165,8 +1170,12 @@ export default function ToGauRoomPage() {
   const myName       = session?.user?.name  || ""
   const myRole       = session?.user?.role  || ""
   const isPrivileged = myRole === "creator" || myRole === "admin"
-  // isManager: creator/admin toàn hệ thống, hoặc manager của group này (#2)
+  // isManager: creator/admin toàn hệ thống, hoặc manager của group này
   const isManager    = isPrivileged || (group?.my_member_role === "manager")
+
+  // Dùng ref để realtime callback luôn đọc myEmail mới nhất (tránh stale closure)
+  const myEmailRef = useRef(myEmail)
+  useEffect(() => { myEmailRef.current = myEmail }, [myEmail])
 
   // Load group info
   useEffect(() => {
@@ -1184,20 +1193,50 @@ export default function ToGauRoomPage() {
       .catch(() => setLoading(false))
   }, [groupId])
 
-  // Load messages
+  // Load messages (initial)
   const loadMessages = useCallback(async () => {
     if (!groupId) return
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50`)
       if (!res.ok) return
       const json = await res.json()
-      setMessages(json.data ?? [])
+      const data = json.data ?? []
+      setMessages(data)
+      setHasMore(data.length === 50)
+      // Scroll to bottom sau khi load lần đầu
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView())
     } catch {
       // ignore
     } finally {
       setMsgLoading(false)
     }
   }, [groupId])
+
+  // Load thêm tin nhắn cũ (cursor pagination)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !messages.length) return
+    const oldestId = messages[0].id
+    const el = messagesAreaRef.current
+    const prevScrollHeight = el?.scrollHeight ?? 0
+    setLoadingMore(true)
+    try {
+      const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50&before=${oldestId}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const older = json.data ?? []
+      if (!older.length) { setHasMore(false); return }
+      setMessages(prev => [...older, ...prev])
+      setHasMore(older.length === 50)
+      // Giữ nguyên scroll position sau khi prepend
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - prevScrollHeight
+      })
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [groupId, loadingMore, hasMore, messages])
 
   useEffect(() => { loadMessages() }, [loadMessages])
 
@@ -1216,21 +1255,25 @@ export default function ToGauRoomPage() {
 
   useEffect(() => { loadPinned() }, [loadPinned])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  // Kiểm tra user có đang ở gần đáy không (ngưỡng 120px)
+  const isAtBottom = useCallback(() => {
+    const el = messagesAreaRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }, [])
 
-  // Scroll button visibility
+  // Scroll button visibility + reset badge khi user kéo xuống đáy
   function handleMessagesScroll() {
     const el = messagesAreaRef.current
     if (!el) return
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     setShowScrollBtn(distFromBottom > 200)
+    if (distFromBottom < 60) setNewMsgCount(0)
   }
 
   function scrollToBottom() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    setNewMsgCount(0)
   }
 
   // Supabase Realtime subscription
@@ -1243,10 +1286,16 @@ export default function ToGauRoomPage() {
         { event: "INSERT", schema: "public", table: "chat_messages", filter: `group_id=eq.${groupId}` },
         (payload) => {
           const newMsg = payload.new as ChatMessage
+          const wasAtBottom = isAtBottom()
           setMessages(prev => {
             if (prev.some(m => m.id === newMsg.id)) return prev
             return [...prev, newMsg]
           })
+          if (wasAtBottom) {
+            requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+          } else if (newMsg.sender_email !== myEmailRef.current) {
+            setNewMsgCount(prev => prev + 1)
+          }
         }
       )
       .on(
@@ -1488,6 +1537,7 @@ export default function ToGauRoomPage() {
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
     }
     setMessages(prev => [...prev, optimistic])
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
 
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/messages`, {
@@ -1683,16 +1733,17 @@ export default function ToGauRoomPage() {
                         key={msg.id}
                         className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
                         onClick={() => {
-                          // Scroll to message in chat (find in messages list)
+                          setSearchOpen(false)
+                          setSearchQuery("")
+                          setSearchResults([])
                           const el = document.getElementById(`msg-${msg.id}`)
                           if (el) {
                             el.scrollIntoView({ behavior: "smooth", block: "center" })
                             el.classList.add("bg-yellow-50")
                             setTimeout(() => el.classList.remove("bg-yellow-50"), 2000)
+                          } else {
+                            toast.success("Tin nhắn nằm trong lịch sử cũ — nhấn \"Tải thêm\" để xem")
                           }
-                          setSearchOpen(false)
-                          setSearchQuery("")
-                          setSearchResults([])
                         }}
                       >
                         <div className="flex items-center gap-2 mb-1">
@@ -1781,6 +1832,23 @@ export default function ToGauRoomPage() {
                 </div>
               ) : (
                 <>
+                  {/* Nút tải thêm tin nhắn cũ */}
+                  {hasMore && (
+                    <div className="flex justify-center py-3">
+                      <button
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-500 text-[13px] hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 transition-colors shadow-sm"
+                      >
+                        {loadingMore ? (
+                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin" />
+                        ) : (
+                          <ChevronUp size={14} />
+                        )}
+                        {loadingMore ? "Đang tải..." : "Tải thêm tin cũ"}
+                      </button>
+                    </div>
+                  )}
                   {messages.map((msg, idx) => {
                     const isMe  = msg.sender_email === myEmail
                     const isAI  = msg.msg_type === "ai" || msg.sender_email === "ai@to-gau"
@@ -1955,14 +2023,23 @@ export default function ToGauRoomPage() {
                 </>
               )}
 
-              {/* Scroll to bottom button */}
-              {showScrollBtn && (
+              {/* Scroll to bottom button — hiện khi cách đáy xa hoặc có tin mới chưa đọc */}
+              {(showScrollBtn || newMsgCount > 0) && (
                 <button
                   onClick={scrollToBottom}
-                  className="fixed bottom-24 right-72 z-20 w-9 h-9 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95] transition-colors"
+                  className={cn(
+                    "fixed bottom-24 right-72 z-20 rounded-full shadow-md flex items-center justify-center transition-all",
+                    newMsgCount > 0
+                      ? "h-8 px-3 gap-1.5 bg-[#003B95] text-white border border-[#003B95] text-[12px] font-medium hover:bg-[#002d73]"
+                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95]"
+                  )}
                   title="Cuộn xuống"
                 >
-                  <ChevronDown size={18} />
+                  {newMsgCount > 0 ? (
+                    <>{newMsgCount} tin mới <ChevronDown size={14} /></>
+                  ) : (
+                    <ChevronDown size={18} />
+                  )}
                 </button>
               )}
             </div>
