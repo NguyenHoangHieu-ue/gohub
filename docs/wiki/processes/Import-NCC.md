@@ -2,10 +2,14 @@
 title: "Quy Trình Import NCC — Upload → Kiểm tra → Xác nhận"
 page_type: process_sop
 department: product
-tags: [process, import, ncc, wm, 3hk, upload, diff]
+audience: staff
+visibility: all
+tags: [process, import, ncc, wm, 3hk, upload, diff, quy-trinh]
 aliases: ["Import NCC", "Upload NCC", "Cập nhật giá vendor"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 

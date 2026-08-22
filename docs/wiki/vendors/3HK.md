@@ -1,87 +1,103 @@
 ---
-title: "Vendor — 3HK"
+title: "Vendor 3HK — Hướng Dẫn Tư Vấn"
+audience: cs-product
+visibility: all
 page_type: vendor_profile
-department: product
-tags: [vendor, 3hk, zone, pricing-per-gb, esim, sim]
-aliases: ["3HK", "3 Hong Kong"]
+department: cs-sale
+tags: [vendor, 3hk, zone, tu-van, sim, esim, data-pool]
+aliases: ["3HK", "3 Hong Kong", "3HK Datapool"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 
-# 3HK (3 Hong Kong)
+# Vendor 3HK — Hướng Dẫn Tư Vấn
 
-## Thông Tin Cơ Bản
+> **TL;DR — Đọc nhanh:** 3HK là vendor data quốc tế, GoHub mua theo GB và tạo gói bán lại. Dùng khi nước KH hỏi không có WM hoặc WM kém cạnh tranh. CS không cần tra 3HK nếu GoHub đã có SKU — chỉ bán SKU sẵn có.
 
-| Thuộc tính | Giá trị |
+---
+
+## Khi Nào CS Cần Biết Đến 3HK?
+
+| Tình huống | CS làm gì |
 |---|---|
-| Mã vendor | `3H` |
-| Loại báo giá | **Giá theo GB**, phân theo vùng địa lý |
-| Tổng số vùng | **45 vùng** |
-| KYC | Tùy vùng |
+| KH hỏi nước **đã có SKU GoHub** | Bán SKU bình thường — không cần tra 3HK |
+| KH hỏi nước **chưa có SKU** | Kiểm tra 3HK có vùng đó không → báo team Product tạo thêm |
+| KH hỏi "dùng mạng gì ở nước X?" | Tra tab **NCC → 3HK** → xem vùng tương ứng |
+| Team Product tạo gói mới | Dùng giá 3HK + công thức tính COGS → tạo SKU |
 
 ---
 
-## Mô Hình Giá (Giá theo GB)
+## Vùng Phủ Sóng & Giá (Tra Nhanh)
 
-3HK **không** cung cấp gói cố định như WM. Thay vào đó, mỗi vùng có **giá/GB** — GoHub tự tạo gói theo nhu cầu từ mức giá này.
-
-### Giá Theo Vùng (HKD/GB)
-
-| Vùng | Các nước chính | Giá |
+| Khu vực | Các nước tiêu biểu | Giá/GB |
 |---|---|---|
-| Châu Á (12 nước chính) | Nhật, Hàn, Singapore, Thái, Malaysia, HK, Đài Loan, Indonesia, Philippines, Việt Nam, Cambodia, Lào | **5 HKD/GB** |
-| Châu Âu + Mỹ | Anh, Đức, Pháp, Ý, Tây Ban Nha, USA... | **7 HKD/GB** |
-| Úc + New Zealand | AU, NZ | **6.5 HKD/GB** |
+| **Châu Á — Tier 1** | Nhật, Hàn, Singapore, Thái, Malaysia, HK, Đài Loan, Indonesia, Philippines, Việt Nam, Cambodia, Lào | **5 HKD/GB** |
+| **Châu Âu + Mỹ** | Anh, Đức, Pháp, Ý, Tây Ban Nha, USA, Canada | **7 HKD/GB** |
+| **Úc + New Zealand** | AU, NZ | **6.5 HKD/GB** |
 
-> Tỷ giá quy đổi: [[pricing/FX-Rates]]
+> Tỷ giá HKD → VND: xem [[pricing/FX-Rates]] hoặc tab **Cài đặt → Tỷ giá**
+
+**Tổng cộng: 45 vùng địa lý.** Tra đầy đủ tại tab **NCC Catalog → 3HK**.
 
 ---
 
-## Tính COGS
+## Các Loại Gói GoHub Tạo Từ 3HK
 
-3HK dùng **dung lượng thực tế tiêu thụ** (không phải gói danh nghĩa) để tính giá — vì người dùng thường không dùng hết 100%.
-
-> Công thức chi tiết: [[pricing/3HK-COGS-Formula]]
-
-**Tóm tắt nhanh:**
-
-| Loại gói | Cách tính GB thực | Hệ số |
+| Loại gói | Data hoạt động như thế nào | Tốt cho KH nào |
 |---|---|---|
-| Fixed Data | GB gói × 55% | 0.55 |
-| Daily Data | GB/ngày × số ngày × 40% | 0.40 |
-| Unlimited 10 Mbps | 1.8 GB/ngày × số ngày | 100% |
-| Unlimited 5 Mbps | 1.6 GB/ngày × số ngày | 100% |
+| **Fixed Data** | Tổng cố định (3/5/10/20GB), hết thì hết | KH biết rõ nhu cầu, đi ngắn ngày |
+| **Daily Data** | Cấp mỗi ngày (1GB/ngày), reset lúc nửa đêm | KH muốn dùng đều, không lo bùng data |
+| **Unlimited 10 Mbps** | Dùng thoải mái, sau 1.8GB/ngày giảm về 10 Mbps | Du lịch dài ngày, cần stream / map |
+| **Unlimited 5 Mbps** | Dùng thoải mái, sau 1.6GB/ngày giảm về 5 Mbps | Ngân sách hạn chế, dùng chat / browse nhẹ |
 
 ---
 
-## Format File Báo Giá (GoHub Standard)
+## Script Tư Vấn KH (Copy-Paste)
 
-**Sheet "Datapool"** trong GoHub NCC Standard Template:
+**KH hỏi: "Đi [nước] thì dùng SIM nào?"**
+> "Dạ bên em có gói eSIM/SIM cho [nước] từ mạng 3HK, phủ sóng tốt, không cần đăng ký giấy tờ. Anh/chị dùng khoảng [số ngày] ngày, nhu cầu data [nhiều/ít]? Em có thể tư vấn gói phù hợp nhất."
 
-| Cột | Bắt buộc | Mô tả |
+**KH hỏi về tốc độ:**
+> "Gói Unlimited có tốc độ cao không giới hạn trong ngày, sau [1.8/1.6]GB sẽ giảm về [10/5] Mbps — vẫn dùng được thoải mái cho chat, map, browse."
+
+**KH lo về vùng phủ sóng:**
+> "3HK dùng hạ tầng [nhà mạng địa phương] tại [nước], phủ sóng [4G/5G]."
+
+---
+
+## Lưu Ý Quan Trọng Khi Tư Vấn
+
+- ✅ Không cần KYC cho đa số các vùng — **lợi thế lớn** khi tư vấn
+- ✅ GoHub đã tạo sẵn các combo chuẩn — CS chỉ cần chọn SKU đúng
+- ⚠️ **Không bán "gói 3HK"** — bán SKU GoHub đã build từ 3HK
+- ⚠️ Nếu KH hỏi nước chưa có SKU → không báo "không có" ngay; kiểm tra team Product trước
+- ℹ️ COGS 3HK được tính theo hệ số (không phải giá trọn gói) — không tiết lộ giá nhập
+
+---
+
+## Thông Tin Kỹ Thuật (Cho Team Product)
+
+**Mã vendor trong SKU:** `3D` (vị trí 6–7)
+
+**Công thức COGS (tóm tắt):**
+
+| Loại gói | Hệ số tính GB thực | Ví dụ (zone châu Á, 5 HKD/GB) |
 |---|---|---|
-| `vendor_code` | ✅ | `3H` |
-| `zone_id` | ✅ | ID vùng (duy nhất) |
-| `zone_name` | ✅ | Tên vùng |
-| `countries` | ✅ | Danh sách nước trong vùng |
-| `sim_type` | ✅ | `SIM` hoặc `eSIM` |
-| `price_per_gb` | ✅ | Giá/GB |
-| `currency` | ✅ | `HKD` |
-| `network_type` | — | `4G/LTE`, `5G` |
-| `is_kyc` | ✅ | `true` / `false` |
-| `notes` | — | Ghi chú |
+| Fixed Data | GB gói × **0.55** | 5GB → 5×0.55×5 = 13.75 HKD |
+| Daily Data | GB/ngày × ngày × **0.40** | 1GB×7ngày → 7×0.4×5 = 14 HKD |
+| Unlimited 10 Mbps | **1.8** GB/ngày × ngày | 7 ngày → 1.8×7×5 = 63 HKD |
+| Unlimited 5 Mbps | **1.6** GB/ngày × ngày | 7 ngày → 1.6×7×5 = 56 HKD |
+
+> Chi tiết công thức: [[pricing/3HK-COGS-Formula]]
 
 ---
 
-## Lưu Ý Quan Trọng
+## Xem Thêm
 
-> **3HK là nguồn tham khảo để tạo sản phẩm** — không phải gói GoHub đang bán trực tiếp cho khách.
-> Khi tư vấn cho nước dùng 3HK, cần thông báo: vùng phủ sóng, loại mạng, giá HKD/GB, yêu cầu KYC.
-> **Việc tính giá và tạo sản phẩm từ 3HK do team product thực hiện.**
-
-### Khi nào dùng 3HK?
-- Khách cần nước mà WM không có (hoặc giá WM không cạnh tranh)
-- Team cần tham khảo để tạo sản phẩm mới → dùng zone 3HK + công thức tính COGS
-
-> Ưu tiên vendor: [[pricing/Vendor-Priority]]
+- [[pricing/Vendor-Priority|Khi nào chọn 3HK vs WM?]]
+- [[pricing/FX-Rates|Tỷ giá HKD/USD/VND]]
+- [[products/SKU-Code-Structure|Cách đọc mã SKU]]
+- [[products/Combo-Chuan-GoHub|42 combo chuẩn GoHub]]

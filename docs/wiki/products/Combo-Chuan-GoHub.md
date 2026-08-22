@@ -2,10 +2,14 @@
 title: "Combo Chuẩn GoHub (42 combo/country)"
 page_type: product_guide
 department: product
-tags: [combo, sku, standard, gap-analysis, product-guide]
+audience: cs-product
+visibility: all
+tags: [combo, sku, standard, gap-analysis, product-guide, tu-van]
 aliases: ["Combo Chuẩn", "42 combo", "GoHub Standard Combo"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 

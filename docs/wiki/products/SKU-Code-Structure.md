@@ -2,12 +2,18 @@
 title: "Cấu Trúc Mã SKU (13 ký tự)"
 page_type: reference
 department: all
-tags: [sku, ma-hoa, product-code, reference]
+audience: cs-product
+visibility: all
+tags: [sku, ma-hoa, product-code, reference, tu-van]
 aliases: ["SKU Code", "Mã SKU", "SKU Structure", "13 ký tự"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-08-04
+updated: 2026-08-22
 status: active
 ---
+
+> **TL;DR (CS):** Mã SKU 13 ký tự = biết ngay gói đó của pháp nhân nào, nước nào, vendor nào, bao nhiêu GB, bao nhiêu ngày. Ví dụ: `3CUSAGBY00507` = VN company / eSIM Full / USA / WM / Fixed 5GB / 7 ngày.
 
 # Cấu Trúc Mã SKU (13 ký tự)
 

@@ -213,6 +213,7 @@ function SettingsModal({
   isManager:       boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [name, setName]           = useState(group.name)
   const [desc, setDesc]           = useState(group.description ?? "")
   const [emoji, setEmoji]         = useState(group.avatar_emoji || "🐻")
@@ -221,7 +222,7 @@ function SettingsModal({
   const [addingMember, setAddingMember] = useState(false)
   const [members, setMembers]     = useState<Member[]>(group.members)
 
-  // User search autocomplete (#3)
+  // User search autocomplete
   const [userSuggestions, setUserSuggestions]   = useState<{email: string; name: string}[]>([])
   const [showSuggestions, setShowSuggestions]   = useState(false)
   const searchDebounce                          = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -313,6 +314,7 @@ function SettingsModal({
   }
 
   async function handleRemoveMember(email: string) {
+    if (!await confirmDialog(`Xóa ${email} khỏi nhóm?`)) return
     try {
       const res = await fetch(`/api/to-gau/groups/${group.id}/members?email=${encodeURIComponent(email)}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -344,6 +346,7 @@ function SettingsModal({
   const roleLabel: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Thành viên" }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
@@ -526,6 +529,8 @@ function SettingsModal({
         </div>
       </div>
     </div>
+    {ConfirmDialog}
+    </>
   )
 }
 
@@ -603,6 +608,53 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
   )
 }
 
+// ── Confirm Modal + hook ──
+function ConfirmModal({ message, onConfirm, onCancel }: {
+  message:   string
+  onConfirm: () => void
+  onCancel:  () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+        <p className="text-[14px] text-slate-700 mb-4">{message}</p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[13px] hover:bg-slate-50 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 rounded-lg bg-rose-500 text-white text-[13px] font-medium hover:bg-rose-600 transition-colors"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function useConfirm() {
+  const [pending, setPending] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null)
+  const confirm = useCallback((message: string) => new Promise<boolean>(resolve => {
+    setPending({ message, resolve })
+  }), [])
+  const ConfirmDialog = pending ? (
+    <ConfirmModal
+      message={pending.message}
+      onConfirm={() => { pending.resolve(true);  setPending(null) }}
+      onCancel={() =>  { pending.resolve(false); setPending(null) }}
+    />
+  ) : null
+  return { confirm, ConfirmDialog }
+}
+
 // ── Docs Panel ──
 function DocsPanel({
   groupId, myEmail, isPrivileged,
@@ -612,6 +664,7 @@ function DocsPanel({
   isPrivileged: boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [docs, setDocs]           = useState<DocItem[]>([])
   const [docsLoading, setDocsLoading] = useState(true)
   const [showUpload, setShowUpload]   = useState(false)
@@ -711,7 +764,7 @@ function DocsPanel({
   }
 
   async function handleDelete(docId: string) {
-    if (!confirm("Xóa tài liệu này?")) return
+    if (!await confirmDialog("Xóa tài liệu này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/docs?doc_id=${docId}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -723,6 +776,7 @@ function DocsPanel({
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -906,6 +960,8 @@ function DocsPanel({
         </div>
       )}
     </div>
+    {ConfirmDialog}
+    </>
   )
 }
 
@@ -918,6 +974,7 @@ function NotesPanel({
   isPrivileged: boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [notes, setNotes]           = useState<NoteItem[]>([])
   const [notesLoading, setNotesLoading] = useState(true)
   const [newNoteContent, setNewNoteContent] = useState("")
@@ -983,7 +1040,7 @@ function NotesPanel({
   }
 
   async function handleDeleteNote(noteId: string) {
-    if (!confirm("Xóa ghi chú này?")) return
+    if (!await confirmDialog("Xóa ghi chú này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/notes?note_id=${noteId}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -995,6 +1052,7 @@ function NotesPanel({
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       <div className="flex items-center gap-2 mb-4">
         <Pin size={16} className="text-[#003B95]" />
@@ -1098,6 +1156,285 @@ function NotesPanel({
         </div>
       )}
     </div>
+    {ConfirmDialog}
+    </>
+  )
+}
+
+// ── Wiki Panel ──
+interface WikiPage {
+  id:             string
+  title:          string
+  audience:       string
+  page_type:      string
+  tags:           string[]
+  updated_at:     string
+  last_edited_by: string
+  last_edited_at: string
+  preview:        string
+  content?:       string
+}
+
+const AUDIENCE_LABEL: Record<string, { label: string; color: string }> = {
+  "cs-product": { label: "Sản phẩm & Vendor", color: "bg-blue-50 text-blue-700 border-blue-200" },
+  "staff":      { label: "Nhân viên",          color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  "system":     { label: "Hệ thống",           color: "bg-slate-100 text-slate-600 border-slate-200" },
+}
+
+function renderMarkdown(md: string): string {
+  // Bỏ YAML frontmatter
+  const body = md.replace(/^---[\s\S]*?---\n?/, "")
+  return body
+    .replace(/^### (.+)$/gm, '<h3 class="text-[14px] font-semibold text-slate-700 mt-4 mb-1">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-[15px] font-semibold text-slate-800 mt-5 mb-2 border-b border-slate-100 pb-1">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold text-slate-900 mb-3">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded text-[12px] font-mono">$1</code>')
+    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-[#003B95] pl-3 text-slate-600 italic text-[13px] my-2">$1</blockquote>')
+    .replace(/^\| (.+) \|$/gm, (line) => {
+      const cells = line.split("|").filter(c => c.trim()).map(c => `<td class="px-2 py-1 text-[12px] border border-slate-200">${c.trim()}</td>`)
+      return `<tr>${cells.join("")}</tr>`
+    })
+    .replace(/(<tr>[\s\S]*?<\/tr>)/g, '<table class="w-full border-collapse my-3 text-[12px]">$1</table>')
+    .replace(/^- (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-disc">$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-decimal">$2</li>')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/✅/g, '<span class="text-emerald-600">✅</span>')
+    .replace(/⚠️/g, '<span class="text-amber-600">⚠️</span>')
+    .replace(/ℹ️/g, '<span class="text-blue-500">ℹ️</span>')
+}
+
+function WikiPanel({ isPrivileged, editorName }: { isPrivileged: boolean; editorName: string }) {
+  const toast = useToast()
+  const [pages, setPages]           = useState<WikiPage[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState("")
+  const [audienceFilter, setAudienceFilter] = useState("")
+  const [selected, setSelected]     = useState<WikiPage | null>(null)
+  const [fullContent, setFullContent] = useState<string>("")
+  const [loadingPage, setLoadingPage] = useState(false)
+  const [editMode, setEditMode]     = useState(false)
+  const [editDraft, setEditDraft]   = useState("")
+  const [saving, setSaving]         = useState(false)
+
+  const loadPages = useCallback(async (q = "") => {
+    setLoading(true)
+    try {
+      const qs  = q ? `?q=${encodeURIComponent(q)}` : ""
+      const res = await fetch(`/api/to-gau/kb${qs}`)
+      const json = await res.json()
+      setPages(json.data ?? [])
+    } catch { setPages([]) }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { loadPages() }, [loadPages])
+
+  useEffect(() => {
+    const t = setTimeout(() => loadPages(search), 300)
+    return () => clearTimeout(t)
+  }, [search, loadPages])
+
+  async function openPage(page: WikiPage) {
+    setSelected(page)
+    setEditMode(false)
+    setEditDraft("")
+    if (page.content) { setFullContent(page.content); return }
+    setLoadingPage(true)
+    try {
+      const res  = await fetch("/api/to-gau/kb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: page.id }) })
+      const json = await res.json()
+      setFullContent(json.data?.content ?? "")
+    } catch { setFullContent("") }
+    finally { setLoadingPage(false) }
+  }
+
+  async function handleSave() {
+    if (!selected || !editDraft.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch("/api/to-gau/kb", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selected.id, content: editDraft, editor_name: editorName }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setFullContent(editDraft)
+      setEditMode(false)
+      setSelected(prev => prev ? { ...prev, last_edited_by: json.last_edited_by, last_edited_at: json.last_edited_at } : prev)
+      setPages(prev => prev.map(p => p.id === selected.id ? { ...p, last_edited_by: json.last_edited_by, last_edited_at: json.last_edited_at } : p))
+      toast.success("Đã lưu tài liệu")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
+    } finally { setSaving(false) }
+  }
+
+  const audiences = isPrivileged
+    ? ["", "cs-product", "staff", "system"]
+    : ["", "cs-product", "staff"]
+
+  const filtered = audienceFilter ? pages.filter(p => p.audience === audienceFilter) : pages
+
+  // Grouped by audience
+  const grouped = filtered.reduce((acc, p) => {
+    const a = p.audience || "staff"
+    if (!acc[a]) acc[a] = []
+    acc[a].push(p)
+    return acc
+  }, {} as Record<string, WikiPage[]>)
+
+  const audienceOrder = isPrivileged
+    ? ["cs-product", "staff", "system"]
+    : ["cs-product", "staff"]
+
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden">
+      {/* List panel */}
+      <div className={cn("flex flex-col border-r border-slate-200 bg-white", selected ? "hidden md:flex md:w-72 flex-shrink-0" : "flex-1")}>
+        {/* Search + filter */}
+        <div className="px-3 py-3 border-b border-slate-100 space-y-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Tìm tài liệu..."
+              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+            />
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {audiences.map(a => (
+              <button
+                key={a}
+                onClick={() => setAudienceFilter(a)}
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                  audienceFilter === a
+                    ? "bg-[#003B95] text-white border-[#003B95]"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                )}
+              >
+                {a ? AUDIENCE_LABEL[a]?.label ?? a : "Tất cả"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto py-2">
+          {loading ? (
+            <div className="flex items-center justify-center h-24 text-slate-400 text-[13px]">Đang tải...</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-24 text-slate-400 text-[13px]">
+              <span>Không tìm thấy tài liệu</span>
+            </div>
+          ) : (
+            audienceOrder.map(aud => {
+              const group = grouped[aud]
+              if (!group?.length) return null
+              const { label, color } = AUDIENCE_LABEL[aud] ?? { label: aud, color: "bg-slate-100 text-slate-600 border-slate-200" }
+              return (
+                <div key={aud}>
+                  <div className="px-3 py-1.5 flex items-center gap-1.5">
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full border", color)}>{label}</span>
+                  </div>
+                  {group.map(page => (
+                    <button
+                      key={page.id}
+                      onClick={() => openPage(page)}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-50",
+                        selected?.id === page.id && "bg-blue-50 border-l-2 border-l-[#003B95]"
+                      )}
+                    >
+                      <p className="text-[13px] font-medium text-slate-800 leading-snug line-clamp-2">{page.title}</p>
+                      {page.preview && (
+                        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{page.preview.slice(0, 80)}</p>
+                      )}
+                      {page.last_edited_by && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">Sửa bởi {page.last_edited_by} · {page.last_edited_at}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Content panel */}
+      {selected && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Content header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
+            <button onClick={() => setSelected(null)} className="md:hidden text-slate-400 hover:text-slate-700 mr-1">
+              <ArrowLeft size={16} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-[14px] font-semibold text-slate-800 truncate">{selected.title}</p>
+              {selected.last_edited_by && (
+                <p className="text-[11px] text-slate-400">Sửa lần cuối: {selected.last_edited_by} · {selected.last_edited_at}</p>
+              )}
+            </div>
+            {isPrivileged && !editMode && (
+              <button
+                onClick={() => { setEditDraft(fullContent); setEditMode(true) }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
+              >
+                <Edit2 size={11} /> Sửa
+              </button>
+            )}
+            {editMode && (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1 rounded-lg bg-[#003B95] text-white text-[12px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors"
+                >
+                  {saving ? "Đang lưu..." : "Lưu"}
+                </button>
+                <button
+                  onClick={() => setEditMode(false)}
+                  className="px-3 py-1 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
+                >
+                  Hủy
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Content body */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 bg-white">
+            {loadingPage ? (
+              <div className="flex items-center justify-center h-32 text-slate-400 text-[13px]">Đang tải...</div>
+            ) : editMode ? (
+              <textarea
+                value={editDraft}
+                onChange={e => setEditDraft(e.target.value)}
+                className="w-full h-full min-h-[400px] border border-slate-200 rounded-lg px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:border-[#003B95] resize-none"
+              />
+            ) : (
+              <div
+                className="prose-sm max-w-none text-slate-800 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(fullContent) }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state khi chưa chọn trang (desktop) */}
+      {!selected && !loading && (
+        <div className="hidden md:flex flex-1 items-center justify-center text-center text-slate-400">
+          <div>
+            <FileText size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-[13px]">Chọn tài liệu để xem nội dung</p>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1107,6 +1444,7 @@ export default function ToGauRoomPage() {
   const params  = useParams()
   const router  = useRouter()
   const toast   = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const groupId = params.id as string
 
   const [group, setGroup]         = useState<GroupInfo | null>(null)
@@ -1127,12 +1465,13 @@ export default function ToGauRoomPage() {
   const [askingAI, setAskingAI] = useState(false)
 
   // Phase 3: tabs
-  const [activeTab, setActiveTab] = useState<"chat" | "docs" | "notes">("chat")
+  const [activeTab, setActiveTab] = useState<"chat" | "docs" | "notes" | "wiki">("chat")
 
   // Phase 4: @mention
   const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionCursorPos, setMentionCursorPos] = useState(0)
+  const [mentionIdx, setMentionIdx]       = useState(0)
 
   // Phase 4: search
   const [searchOpen, setSearchOpen]       = useState(false)
@@ -1145,14 +1484,19 @@ export default function ToGauRoomPage() {
   const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([])
   const [pinnedExpanded, setPinnedExpanded] = useState(false)
 
-  // Phase 4: scroll-to-bottom
+  // scroll-to-bottom
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const messagesAreaRef = useRef<HTMLDivElement>(null)
+
+  // load more
+  const [hasMore, setHasMore]         = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [newMsgCount, setNewMsgCount] = useState(0)
 
   // Pinned message hover
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
 
-  // Phase 5: edit/recall (#4)
+  // edit/recall
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editContent, setEditContent]   = useState("")
   const [savingEdit, setSavingEdit]     = useState(false)
@@ -1165,8 +1509,12 @@ export default function ToGauRoomPage() {
   const myName       = session?.user?.name  || ""
   const myRole       = session?.user?.role  || ""
   const isPrivileged = myRole === "creator" || myRole === "admin"
-  // isManager: creator/admin toàn hệ thống, hoặc manager của group này (#2)
+  // isManager: creator/admin toàn hệ thống, hoặc manager của group này
   const isManager    = isPrivileged || (group?.my_member_role === "manager")
+
+  // Dùng ref để realtime callback luôn đọc myEmail mới nhất (tránh stale closure)
+  const myEmailRef = useRef(myEmail)
+  useEffect(() => { myEmailRef.current = myEmail }, [myEmail])
 
   // Load group info
   useEffect(() => {
@@ -1184,20 +1532,50 @@ export default function ToGauRoomPage() {
       .catch(() => setLoading(false))
   }, [groupId])
 
-  // Load messages
+  // Load messages (initial)
   const loadMessages = useCallback(async () => {
     if (!groupId) return
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50`)
       if (!res.ok) return
       const json = await res.json()
-      setMessages(json.data ?? [])
+      const data = json.data ?? []
+      setMessages(data)
+      setHasMore(data.length === 50)
+      // Scroll to bottom sau khi load lần đầu
+      requestAnimationFrame(() => bottomRef.current?.scrollIntoView())
     } catch {
       // ignore
     } finally {
       setMsgLoading(false)
     }
   }, [groupId])
+
+  // Load thêm tin nhắn cũ (cursor pagination)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !messages.length) return
+    const oldestId = messages[0].id
+    const el = messagesAreaRef.current
+    const prevScrollHeight = el?.scrollHeight ?? 0
+    setLoadingMore(true)
+    try {
+      const res  = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50&before=${oldestId}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const older = json.data ?? []
+      if (!older.length) { setHasMore(false); return }
+      setMessages(prev => [...older, ...prev])
+      setHasMore(older.length === 50)
+      // Giữ nguyên scroll position sau khi prepend
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - prevScrollHeight
+      })
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [groupId, loadingMore, hasMore, messages])
 
   useEffect(() => { loadMessages() }, [loadMessages])
 
@@ -1216,21 +1594,25 @@ export default function ToGauRoomPage() {
 
   useEffect(() => { loadPinned() }, [loadPinned])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  // Kiểm tra user có đang ở gần đáy không (ngưỡng 120px)
+  const isAtBottom = useCallback(() => {
+    const el = messagesAreaRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }, [])
 
-  // Scroll button visibility
+  // Scroll button visibility + reset badge khi user kéo xuống đáy
   function handleMessagesScroll() {
     const el = messagesAreaRef.current
     if (!el) return
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     setShowScrollBtn(distFromBottom > 200)
+    if (distFromBottom < 60) setNewMsgCount(0)
   }
 
   function scrollToBottom() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    setNewMsgCount(0)
   }
 
   // Supabase Realtime subscription
@@ -1243,10 +1625,16 @@ export default function ToGauRoomPage() {
         { event: "INSERT", schema: "public", table: "chat_messages", filter: `group_id=eq.${groupId}` },
         (payload) => {
           const newMsg = payload.new as ChatMessage
+          const wasAtBottom = isAtBottom()
           setMessages(prev => {
             if (prev.some(m => m.id === newMsg.id)) return prev
             return [...prev, newMsg]
           })
+          if (wasAtBottom) {
+            requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+          } else if (newMsg.sender_email !== myEmailRef.current) {
+            setNewMsgCount(prev => prev + 1)
+          }
         }
       )
       .on(
@@ -1297,6 +1685,7 @@ export default function ToGauRoomPage() {
         setMentionQuery(afterAt)
         setMentionCursorPos(atIdx)
         setShowMentionDropdown(true)
+        setMentionIdx(0)
         return
       }
     }
@@ -1361,6 +1750,14 @@ export default function ToGauRoomPage() {
     if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [searchOpen])
 
+  // Auto-resize textarea theo nội dung
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = "42px"
+    ta.style.height = `${Math.min(ta.scrollHeight, 128)}px`
+  }, [content])
+
   // Highlight matching text in search results
   function highlightMatch(text: string, query: string): React.ReactNode {
     if (!query) return text
@@ -1420,7 +1817,7 @@ export default function ToGauRoomPage() {
 
   // Thu hồi tin nhắn (#4)
   async function handleRecall(msgId: string) {
-    if (!confirm("Thu hồi tin nhắn này?")) return
+    if (!await confirmDialog("Thu hồi tin nhắn này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/messages/${msgId}`, {
         method: "PATCH",
@@ -1488,6 +1885,7 @@ export default function ToGauRoomPage() {
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
     }
     setMessages(prev => [...prev, optimistic])
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
 
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/messages`, {
@@ -1546,15 +1944,26 @@ export default function ToGauRoomPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // If mention dropdown open, Enter selects first suggestion
-    if (showMentionDropdown && mentionSuggestions.length > 0 && e.key === "Enter") {
-      e.preventDefault()
-      selectMention(mentionSuggestions[0])
-      return
-    }
-    if (showMentionDropdown && e.key === "Escape") {
-      setShowMentionDropdown(false)
-      return
+    if (showMentionDropdown && mentionSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setMentionIdx(i => Math.min(i + 1, mentionSuggestions.length - 1))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setMentionIdx(i => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === "Enter") {
+        e.preventDefault()
+        selectMention(mentionSuggestions[mentionIdx])
+        return
+      }
+      if (e.key === "Escape") {
+        setShowMentionDropdown(false)
+        return
+      }
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -1683,16 +2092,17 @@ export default function ToGauRoomPage() {
                         key={msg.id}
                         className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
                         onClick={() => {
-                          // Scroll to message in chat (find in messages list)
+                          setSearchOpen(false)
+                          setSearchQuery("")
+                          setSearchResults([])
                           const el = document.getElementById(`msg-${msg.id}`)
                           if (el) {
                             el.scrollIntoView({ behavior: "smooth", block: "center" })
                             el.classList.add("bg-yellow-50")
                             setTimeout(() => el.classList.remove("bg-yellow-50"), 2000)
+                          } else {
+                            toast.success("Tin nhắn nằm trong lịch sử cũ — nhấn \"Tải thêm\" để xem")
                           }
-                          setSearchOpen(false)
-                          setSearchQuery("")
-                          setSearchResults([])
                         }}
                       >
                         <div className="flex items-center gap-2 mb-1">
@@ -1740,8 +2150,8 @@ export default function ToGauRoomPage() {
         {/* Tab bar */}
         <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4">
           <div className="flex gap-0">
-            {(["chat", "docs", "notes"] as const).map(tab => {
-              const labels: Record<typeof tab, string> = { chat: "💬 Chat", docs: "📄 Docs", notes: "📌 Notes" }
+            {(["chat", "docs", "notes", "wiki"] as const).map(tab => {
+              const labels: Record<typeof tab, string> = { chat: "💬 Chat", docs: "📄 Docs", notes: "📌 Notes", wiki: "📚 Wiki" }
               return (
                 <button
                   key={tab}
@@ -1781,6 +2191,23 @@ export default function ToGauRoomPage() {
                 </div>
               ) : (
                 <>
+                  {/* Nút tải thêm tin nhắn cũ */}
+                  {hasMore && (
+                    <div className="flex justify-center py-3">
+                      <button
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-500 text-[13px] hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 transition-colors shadow-sm"
+                      >
+                        {loadingMore ? (
+                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin" />
+                        ) : (
+                          <ChevronUp size={14} />
+                        )}
+                        {loadingMore ? "Đang tải..." : "Tải thêm tin cũ"}
+                      </button>
+                    </div>
+                  )}
                   {messages.map((msg, idx) => {
                     const isMe  = msg.sender_email === myEmail
                     const isAI  = msg.msg_type === "ai" || msg.sender_email === "ai@to-gau"
@@ -1955,14 +2382,23 @@ export default function ToGauRoomPage() {
                 </>
               )}
 
-              {/* Scroll to bottom button */}
-              {showScrollBtn && (
+              {/* Scroll to bottom button — hiện khi cách đáy xa hoặc có tin mới chưa đọc */}
+              {(showScrollBtn || newMsgCount > 0) && (
                 <button
                   onClick={scrollToBottom}
-                  className="fixed bottom-24 right-72 z-20 w-9 h-9 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95] transition-colors"
+                  className={cn(
+                    "fixed bottom-24 right-72 z-20 rounded-full shadow-md flex items-center justify-center transition-all",
+                    newMsgCount > 0
+                      ? "h-8 px-3 gap-1.5 bg-[#003B95] text-white border border-[#003B95] text-[12px] font-medium hover:bg-[#002d73]"
+                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95]"
+                  )}
                   title="Cuộn xuống"
                 >
-                  <ChevronDown size={18} />
+                  {newMsgCount > 0 ? (
+                    <>{newMsgCount} tin mới <ChevronDown size={14} /></>
+                  ) : (
+                    <ChevronDown size={18} />
+                  )}
                 </button>
               )}
             </div>
@@ -1982,12 +2418,16 @@ export default function ToGauRoomPage() {
                 {/* @mention dropdown */}
                 {showMentionDropdown && mentionSuggestions.length > 0 && (
                   <div className="mb-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    {mentionSuggestions.map(member => (
+                    {mentionSuggestions.map((member, idx) => (
                       <button
                         key={member.id}
                         type="button"
                         onMouseDown={e => { e.preventDefault(); selectMention(member) }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 transition-colors text-left"
+                        onMouseEnter={() => setMentionIdx(idx)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
+                          idx === mentionIdx ? "bg-blue-50" : "hover:bg-blue-50"
+                        )}
                       >
                         <Avatar name={member.user_name} email={member.user_email} size="sm" />
                         <div>
@@ -2079,6 +2519,10 @@ export default function ToGauRoomPage() {
         {activeTab === "notes" && (
           <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
         )}
+
+        {activeTab === "wiki" && (
+          <WikiPanel isPrivileged={isPrivileged} editorName={myName || myEmail} />
+        )}
       </div>
 
       {/* Right sidebar: Members */}
@@ -2097,6 +2541,9 @@ export default function ToGauRoomPage() {
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
                     <Crown size={9} /> Admin
                   </span>
+                )}
+                {m.role === "manager" && (
+                  <span className="text-[10px] text-blue-600 font-medium">Manager</span>
                 )}
               </div>
             </div>
@@ -2126,6 +2573,7 @@ export default function ToGauRoomPage() {
           isManager={isManager}
         />
       )}
+      {ConfirmDialog}
     </div>
   )
 }

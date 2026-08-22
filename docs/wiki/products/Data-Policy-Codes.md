@@ -2,10 +2,14 @@
 title: "Data Policy Codes (Mã Loại Data)"
 page_type: reference
 department: all
-tags: [data-policy, sku, throttle, unlimited, reference]
+audience: cs-product
+visibility: all
+tags: [data-policy, sku, throttle, unlimited, reference, tu-van]
 aliases: ["Data Policy", "Mã Data Policy", "Data Policy Code"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-13
-updated: 2026-06-15
+updated: 2026-08-22
 status: active
 ---
 

@@ -2,10 +2,14 @@
 title: "Thuật Ngữ Chỉ Số Kinh Doanh (Business Metrics)"
 page_type: reference
 department: finance
-tags: [metrics, cm1, gpm, revenue, 3hk, management-report, glossary]
+audience: staff
+visibility: all
+tags: [metrics, cm1, gpm, revenue, 3hk, management-report, glossary, thuat-ngu]
 aliases: ["CM1", "Contribution Margin 1", "GPM", "3HK Contribution", "Business Metrics", "Management Report Terms"]
+last_edited_by: ""
+last_edited_at: ""
 created: 2026-06-23
-updated: 2026-06-23
+updated: 2026-08-22
 status: active
 ---
 
