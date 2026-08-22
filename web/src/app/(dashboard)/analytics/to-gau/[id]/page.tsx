@@ -213,6 +213,7 @@ function SettingsModal({
   isManager:       boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [name, setName]           = useState(group.name)
   const [desc, setDesc]           = useState(group.description ?? "")
   const [emoji, setEmoji]         = useState(group.avatar_emoji || "🐻")
@@ -221,7 +222,7 @@ function SettingsModal({
   const [addingMember, setAddingMember] = useState(false)
   const [members, setMembers]     = useState<Member[]>(group.members)
 
-  // User search autocomplete (#3)
+  // User search autocomplete
   const [userSuggestions, setUserSuggestions]   = useState<{email: string; name: string}[]>([])
   const [showSuggestions, setShowSuggestions]   = useState(false)
   const searchDebounce                          = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -313,6 +314,7 @@ function SettingsModal({
   }
 
   async function handleRemoveMember(email: string) {
+    if (!await confirmDialog(`Xóa ${email} khỏi nhóm?`)) return
     try {
       const res = await fetch(`/api/to-gau/groups/${group.id}/members?email=${encodeURIComponent(email)}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -344,6 +346,7 @@ function SettingsModal({
   const roleLabel: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Thành viên" }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
@@ -526,6 +529,8 @@ function SettingsModal({
         </div>
       </div>
     </div>
+    {ConfirmDialog}
+    </>
   )
 }
 
@@ -603,6 +608,53 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
   )
 }
 
+// ── Confirm Modal + hook ──
+function ConfirmModal({ message, onConfirm, onCancel }: {
+  message:   string
+  onConfirm: () => void
+  onCancel:  () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+        <p className="text-[14px] text-slate-700 mb-4">{message}</p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[13px] hover:bg-slate-50 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 rounded-lg bg-rose-500 text-white text-[13px] font-medium hover:bg-rose-600 transition-colors"
+          >
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function useConfirm() {
+  const [pending, setPending] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null)
+  const confirm = useCallback((message: string) => new Promise<boolean>(resolve => {
+    setPending({ message, resolve })
+  }), [])
+  const ConfirmDialog = pending ? (
+    <ConfirmModal
+      message={pending.message}
+      onConfirm={() => { pending.resolve(true);  setPending(null) }}
+      onCancel={() =>  { pending.resolve(false); setPending(null) }}
+    />
+  ) : null
+  return { confirm, ConfirmDialog }
+}
+
 // ── Docs Panel ──
 function DocsPanel({
   groupId, myEmail, isPrivileged,
@@ -612,6 +664,7 @@ function DocsPanel({
   isPrivileged: boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [docs, setDocs]           = useState<DocItem[]>([])
   const [docsLoading, setDocsLoading] = useState(true)
   const [showUpload, setShowUpload]   = useState(false)
@@ -711,7 +764,7 @@ function DocsPanel({
   }
 
   async function handleDelete(docId: string) {
-    if (!confirm("Xóa tài liệu này?")) return
+    if (!await confirmDialog("Xóa tài liệu này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/docs?doc_id=${docId}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -723,6 +776,7 @@ function DocsPanel({
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -906,6 +960,8 @@ function DocsPanel({
         </div>
       )}
     </div>
+    {ConfirmDialog}
+    </>
   )
 }
 
@@ -918,6 +974,7 @@ function NotesPanel({
   isPrivileged: boolean
 }) {
   const toast = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const [notes, setNotes]           = useState<NoteItem[]>([])
   const [notesLoading, setNotesLoading] = useState(true)
   const [newNoteContent, setNewNoteContent] = useState("")
@@ -983,7 +1040,7 @@ function NotesPanel({
   }
 
   async function handleDeleteNote(noteId: string) {
-    if (!confirm("Xóa ghi chú này?")) return
+    if (!await confirmDialog("Xóa ghi chú này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/notes?note_id=${noteId}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
@@ -995,6 +1052,7 @@ function NotesPanel({
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       <div className="flex items-center gap-2 mb-4">
         <Pin size={16} className="text-[#003B95]" />
@@ -1098,6 +1156,8 @@ function NotesPanel({
         </div>
       )}
     </div>
+    {ConfirmDialog}
+    </>
   )
 }
 
@@ -1107,6 +1167,7 @@ export default function ToGauRoomPage() {
   const params  = useParams()
   const router  = useRouter()
   const toast   = useToast()
+  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
   const groupId = params.id as string
 
   const [group, setGroup]         = useState<GroupInfo | null>(null)
@@ -1133,6 +1194,7 @@ export default function ToGauRoomPage() {
   const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionCursorPos, setMentionCursorPos] = useState(0)
+  const [mentionIdx, setMentionIdx]       = useState(0)
 
   // Phase 4: search
   const [searchOpen, setSearchOpen]       = useState(false)
@@ -1346,6 +1408,7 @@ export default function ToGauRoomPage() {
         setMentionQuery(afterAt)
         setMentionCursorPos(atIdx)
         setShowMentionDropdown(true)
+        setMentionIdx(0)
         return
       }
     }
@@ -1410,6 +1473,14 @@ export default function ToGauRoomPage() {
     if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [searchOpen])
 
+  // Auto-resize textarea theo nội dung
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = "42px"
+    ta.style.height = `${Math.min(ta.scrollHeight, 128)}px`
+  }, [content])
+
   // Highlight matching text in search results
   function highlightMatch(text: string, query: string): React.ReactNode {
     if (!query) return text
@@ -1469,7 +1540,7 @@ export default function ToGauRoomPage() {
 
   // Thu hồi tin nhắn (#4)
   async function handleRecall(msgId: string) {
-    if (!confirm("Thu hồi tin nhắn này?")) return
+    if (!await confirmDialog("Thu hồi tin nhắn này?")) return
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/messages/${msgId}`, {
         method: "PATCH",
@@ -1596,15 +1667,26 @@ export default function ToGauRoomPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // If mention dropdown open, Enter selects first suggestion
-    if (showMentionDropdown && mentionSuggestions.length > 0 && e.key === "Enter") {
-      e.preventDefault()
-      selectMention(mentionSuggestions[0])
-      return
-    }
-    if (showMentionDropdown && e.key === "Escape") {
-      setShowMentionDropdown(false)
-      return
+    if (showMentionDropdown && mentionSuggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setMentionIdx(i => Math.min(i + 1, mentionSuggestions.length - 1))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setMentionIdx(i => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === "Enter") {
+        e.preventDefault()
+        selectMention(mentionSuggestions[mentionIdx])
+        return
+      }
+      if (e.key === "Escape") {
+        setShowMentionDropdown(false)
+        return
+      }
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -2059,12 +2141,16 @@ export default function ToGauRoomPage() {
                 {/* @mention dropdown */}
                 {showMentionDropdown && mentionSuggestions.length > 0 && (
                   <div className="mb-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    {mentionSuggestions.map(member => (
+                    {mentionSuggestions.map((member, idx) => (
                       <button
                         key={member.id}
                         type="button"
                         onMouseDown={e => { e.preventDefault(); selectMention(member) }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 transition-colors text-left"
+                        onMouseEnter={() => setMentionIdx(idx)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
+                          idx === mentionIdx ? "bg-blue-50" : "hover:bg-blue-50"
+                        )}
                       >
                         <Avatar name={member.user_name} email={member.user_email} size="sm" />
                         <div>
@@ -2175,6 +2261,9 @@ export default function ToGauRoomPage() {
                     <Crown size={9} /> Admin
                   </span>
                 )}
+                {m.role === "manager" && (
+                  <span className="text-[10px] text-blue-600 font-medium">Manager</span>
+                )}
               </div>
             </div>
           ))}
@@ -2203,6 +2292,7 @@ export default function ToGauRoomPage() {
           isManager={isManager}
         />
       )}
+      {ConfirmDialog}
     </div>
   )
 }
