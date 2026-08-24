@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 function cronAuthorized(req: NextRequest): boolean {
-  if (!process.env.CRON_SECRET) return true
-  return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false  // CRON_SECRET bắt buộc phải set
+  return req.headers.get("authorization") === `Bearer ${secret}`
 }
 
 function warmPath(path: string): string {

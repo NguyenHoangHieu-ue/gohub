@@ -2,6 +2,7 @@ import { NextRequest, NextResponse }  from "next/server"
 import { getServerSession }           from "next-auth"
 import { authOptions }                from "@/lib/auth"
 import { supabaseAdmin }              from "@/lib/supabase"
+import { checkRateLimit }             from "@/lib/rate-limit"
 import { runCreatorAI, FileContext, type GPEvent } from "@/lib/agents/creator-ai"
 import { classifySensitivity }        from "@/lib/agents/guardian-classify"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
@@ -150,6 +151,16 @@ async function loadGpAllowed(): Promise<string[]> {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Rate limit: 10 req/min/user cho Gấu Pro (model nặng hơn Bé Gấu)
+  const rlKey = `gau-pro:${session.user.username || session.user.email || "anon"}`
+  const rl = checkRateLimit(rlKey, 10, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Quá nhiều yêu cầu. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
+  }
 
   const username  = session.user.username
   const isCreator = session.user.role === "creator"

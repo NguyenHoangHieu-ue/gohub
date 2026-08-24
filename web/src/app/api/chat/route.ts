@@ -6,6 +6,7 @@ import { getChannelFromRole }                  from "@/lib/agents/tools"
 import { runBeGau }                            from "@/lib/agents/be-gau"
 import type { Message, UserRole }              from "@/lib/agents/types"
 import { supabaseAdmin }                       from "@/lib/supabase"
+import { checkRateLimit }                      from "@/lib/rate-limit"
 
 export const maxDuration = 60
 
@@ -33,6 +34,16 @@ async function logChat(
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  // Rate limit: 20 req/min/user (ngăn spam Gemini API)
+  const rlKey = `chat:${(session.user as any).username || session.user.email || "anon"}`
+  const rl = checkRateLimit(rlKey, 20, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Bạn gửi quá nhiều tin nhắn. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s rồi thử lại.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
+  }
 
   const { messages, userName } = await req.json()
   const role       = (session.user.role || "staff") as UserRole
