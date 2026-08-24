@@ -4,7 +4,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-22, s158)
+## Trạng thái hiện tại (2026-08-24, s159)
 
 | | |
 |---|---|
@@ -14,6 +14,20 @@
 | ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish + fix Daily Report + Squad CM1 + 3HK Rev + Tổ Gấu fixes + Wiki 3-tier (đến 668c2cf) |
 
 **➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard.
+
+**s159 — đã làm (2026-08-24):**
+- ✅ **Full system audit** (luồng vận hành, bảo mật, rate limit, UX, cron, DB)
+- ✅ **Security hardening** — 2 commit (e190aaf + 8c64e9c):
+  - Rate limiting: 20 req/min Bé Gấu, 10 req/min Gấu Pro (`lib/rate-limit.ts`)
+  - Cron auth: refresh-trends đổi `?secret=` → `Authorization` header; fix bypass khi CRON_SECRET rỗng (4 cron routes)
+  - Lark signature: `verifyLarkSignature` (HMAC-SHA256, cần set `LARK_VERIFICATION_TOKEN`)
+  - SSL gohub_dw: conditional `rejectUnauthorized: true` khi có `ANALYTICS_DB_SSL_CA` env
+  - JWT maxAge: 7 ngày → 1 ngày
+  - Cron timing: prewarm/kpis/b2c dời sang 08:30-09:30 ICT (sau ETL 08:00)
+  - Lark dedup cleanup: ca-thread-remind xóa entries >7 ngày mỗi thứ 2
+  - Hardcode fallback: xóa host IP/DB name/user fallback → throw Error nếu env chưa set
+  - CSP headers: X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, CSP
+- ✅ **Ops wiki**: `docs/wiki/system/Operations-Runbook.md` (luồng, auth, cron, incident response)
 
 **⚠️ QUY TẮC MERGE (nhắc lại):** KHÔNG tự merge main. "tiếp tục"/"làm tiếp" = chỉ push staging. Chỉ merge khi Hiếu nói "merge main" trong CHÍNH tin đó.
 
