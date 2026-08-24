@@ -1,5 +1,31 @@
 /** @type {import('next').NextConfig} */
+
+// Security headers — áp cho tất cả routes.
+// CSP dùng 'unsafe-inline' vì Next.js inject inline styles; 'unsafe-eval' không dùng.
+const securityHeaders = [
+  { key: "X-Content-Type-Options",    value: "nosniff" },
+  { key: "X-Frame-Options",           value: "SAMEORIGIN" },
+  { key: "X-XSS-Protection",          value: "1; mode=block" },
+  { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy",        value: "camera=(), microphone=(), geolocation=()" },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",           // Next.js inline scripts
+      "style-src 'self' 'unsafe-inline'",            // Tailwind inline styles
+      "img-src 'self' data: blob: https:",           // avatars, chart images
+      "font-src 'self'",
+      "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com https://open.larksuite.com https://image.pollinations.ai",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  },
+]
+
 const nextConfig = {
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }]
+  },
   // Server-only packages — TUYỆT ĐỐI không bundle vào client. pdf-parse/pdfjs-dist mang theo
   // qcms_bg.wasm (wasm-bindgen) → nếu leak vào client, browser fetch .wasm → 404 (__wbg_fetch).
   // pg = node-postgres (server DB). googleapis = GA4 server. Khai báo external = chặn tận gốc.

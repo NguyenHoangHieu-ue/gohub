@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse }  from "next/server"
-import { createDecipheriv, createHash } from "crypto"
+import { createDecipheriv, createHash, createHmac } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
@@ -89,6 +89,20 @@ export async function GET() {
   return NextResponse.json({ ok: true, service: "lark-bot" })
 }
 
+// Verify X-Lark-Signature nếu LARK_VERIFICATION_TOKEN đã set.
+// Signature = SHA256(timestamp + nonce + token + rawBody) — Lark Events API spec.
+// Nếu token chưa set thì bỏ qua (vẫn được bảo vệ bởi AES-256-CBC encryption).
+function verifyLarkSignature(req: NextRequest, rawBody: string): boolean {
+  const token = process.env.LARK_VERIFICATION_TOKEN
+  if (!token) return true
+  const timestamp = req.headers.get("x-lark-request-timestamp") ?? ""
+  const nonce     = req.headers.get("x-lark-request-nonce")     ?? ""
+  const expected  = createHmac("sha256", token)
+    .update(timestamp + nonce + token + rawBody)
+    .digest("hex")
+  return req.headers.get("x-lark-signature") === expected
+}
+
 function decryptLark(encrypted: string): any {
   const encryptKey = process.env.LARK_ENCRYPT_KEY!
   const key = createHash("sha256").update(encryptKey).digest()
@@ -104,6 +118,13 @@ export async function POST(req: NextRequest) {
   let body: any
   try {
     const raw = await req.text()
+
+    // Verify signature trước khi parse (nếu LARK_VERIFICATION_TOKEN đã set)
+    if (!verifyLarkSignature(req, raw)) {
+      console.warn("[Lark] signature mismatch — request rejected")
+      return NextResponse.json({ ok: true })  // trả 200 để Lark không retry
+    }
+
     const parsed = raw ? JSON.parse(raw) : {}
 
     // Decrypt if encrypted

@@ -5,13 +5,24 @@ let _pool: pg.Pool | null = null
 
 export function getAnalyticsPool(): pg.Pool {
   if (!_pool) {
+    // Tất cả DB credentials bắt buộc qua env — không fallback hardcode để tránh infra disclosure.
+    const host = process.env.ANALYTICS_DB_HOST
+    const database = process.env.ANALYTICS_DB_NAME
+    const user = process.env.ANALYTICS_DB_USER
+    if (!host || !database || !user) {
+      throw new Error("ANALYTICS_DB_HOST / ANALYTICS_DB_NAME / ANALYTICS_DB_USER chưa set trong Vercel env.")
+    }
     _pool = new Pool({
-      host:               process.env.ANALYTICS_DB_HOST     ?? "34.61.204.98",
+      host,
       port:               parseInt(process.env.ANALYTICS_DB_PORT ?? "5432"),
-      database:           process.env.ANALYTICS_DB_NAME     ?? "gohub_dw",
-      user:               process.env.ANALYTICS_DB_USER     ?? "gohub_dw_user",
+      database,
+      user,
       password:           process.env.ANALYTICS_DB_PASSWORD,
-      ssl:                { rejectUnauthorized: false },
+      // Nếu có ANALYTICS_DB_SSL_CA (cert từ GCP Cloud SQL) → verify đầy đủ.
+      // Chưa set → fallback rejectUnauthorized:false (backward-compat) nhưng log cảnh báo.
+      ssl: process.env.ANALYTICS_DB_SSL_CA
+        ? { rejectUnauthorized: true, ca: process.env.ANALYTICS_DB_SSL_CA }
+        : (() => { console.warn("[analytics-db] SSL: rejectUnauthorized=false. Hãy set ANALYTICS_DB_SSL_CA để enable cert verification."); return { rejectUnauthorized: false } })(),
       // ⚠️ TOÁN CONNECTION TRÊN SERVERLESS: Vercel chạy NHIỀU instance, MỖI instance có pool RIÊNG.
       // Tổng kết nối gohub_dw ≈ (số instance ấm) × max. gohub_dw dùng chung nhiều service → slot hữu hạn →
       // "remaining connection slots reserved for superuser". App phải dùng ÍT + NHẢ NHANH:
