@@ -188,7 +188,7 @@ POST /api/lark/events
 | S3 | CRON_SECRET rỗng → skip auth | HIGH | ✅ **Fixed** — return false |
 | S4 | `refresh-b2c-report` không auth | HIGH | ✅ **Fixed** |
 | S5 | `ssl: {rejectUnauthorized: false}` | HIGH | ⚠️ **Partial** — conditional khi có ANALYTICS_DB_SSL_CA; gohub_dw không phải DB của GoHub → bỏ qua |
-| S6 | Lark không verify X-Lark-Signature | MEDIUM | ✅ **Fixed** — cần set `LARK_VERIFICATION_TOKEN` trên Vercel |
+| S6 | Lark không verify X-Lark-Signature | MEDIUM | ✅ **Fixed** — `LARK_VERIFICATION_TOKEN` đã set Vercel ✅ |
 | S7 | JWT 7-day maxAge, role stale | MEDIUM | ✅ **Fixed** — 1 ngày |
 | S8 | Hardcode fallback host IP/DB | MEDIUM | ✅ **Fixed** — throw Error nếu env thiếu |
 | S9 | Netlify URL hardcode trong auth.ts | LOW | ⚠️ Tồn tại (legacy, ít ảnh hưởng) |

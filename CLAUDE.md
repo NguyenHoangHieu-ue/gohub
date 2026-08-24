@@ -39,8 +39,8 @@
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
-- [ ] **Vercel env**: set `LARK_VERIFICATION_TOKEN=Q0487325V0jzSe3q1PxU1d1RWghrF736` lên Vercel Production + Preview (hiện chỉ có trong .env.local)
-- [ ] **Vercel env**: xác nhận `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã set (sau fix M3, nếu thiếu app fail khi khởi tạo pool)
+- [x] ✅ **Vercel env**: `LARK_VERIFICATION_TOKEN` đã set Production + Preview
+- [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
 
 **Hiếu cần làm (còn lại, cũ):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
