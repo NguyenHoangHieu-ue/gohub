@@ -8026,3 +8026,34 @@ feat(bc-datapool): Tich hop API BC Datapool (Billion Connect). Sync tu dong F001
 - components/b2c-metric.tsx: bảng sticky header, Web+App breakdown, %MoM badge
 - analytics/b2c/page.tsx: thêm subtab Metric
 - tsc PASS, pushed to staging (b99a882)
+
+## Session s159 (2026-08-24)
+### Full System Audit + Security Hardening
+Vai trò: Senior Systems Architect + DevSecOps Engineer.
+Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron jobs, chatbot pipeline, DB pools, Lark webhook, UX patterns.
+
+#### Đã sửa — Commit 1 (e190aaf): security: fix cron auth + rate limiting + ops wiki
+- Rate limiting: lib/rate-limit.ts (sliding-window, in-memory)
+  + /api/chat: 20 req/min/user (Bé Gấu)
+  + /api/creator-ai/chat: 10 req/min/user (Gấu Pro)
+- Cron auth chuẩn hóa:
+  + refresh-trends: đổi ?secret= query param → Authorization: Bearer (secret không còn leak vào logs)
+  + prewarm-analytics / scheduled-messages / refresh-b2c-report: fix bypass auth khi CRON_SECRET rỗng
+- Ops wiki mới: docs/wiki/system/Operations-Runbook.md
+
+#### Đã sửa — Commit 2 (8c64e9c): security H1-H3/M1-M3/L1
+- H1 Lark signature: verifyLarkSignature() HMAC-SHA256 X-Lark-Signature (cần LARK_VERIFICATION_TOKEN env)
+- H2 SSL gohub_dw: conditional rejectUnauthorized:true khi có ANALYTICS_DB_SSL_CA; fallback+warn nếu chưa
+- H3 JWT maxAge: 7 ngày → 1 ngày (role changes phản ánh trong 24h)
+- M1 Cron timing: refresh-kpis 08:30 ICT → prewarm 09:00 → b2c-report 09:30 (sau ETL 08:00 ICT)
+- M2 Lark dedup cleanup: ca-thread-remind xóa app_settings lark_dedup entries >7 ngày
+- M3 Hardcode fallback: xóa host IP/DB name/user default trong analytics-db.ts, throw Error nếu env thiếu
+- L1 CSP headers: X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Content-Security-Policy (next.config.js)
+
+#### Env đã xác nhận
+- ANALYTICS_DB_HOST / ANALYTICS_DB_NAME / ANALYTICS_DB_USER: ✅ đã set
+- LARK_VERIFICATION_TOKEN: ✅ set trong .env.local; ⚠️ cần set thêm trên Vercel Production+Preview
+- ANALYTICS_DB_SSL_CA: bỏ qua (gohub_dw không phải DB của GoHub → không lấy được cert)
+
+#### Còn lại chưa làm (cần Hiếu)
+- Set LARK_VERIFICATION_TOKEN trên Vercel (Vercel → Settings → Environment Variables)

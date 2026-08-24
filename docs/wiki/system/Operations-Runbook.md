@@ -1,5 +1,6 @@
 # GoHub Intel — Operations Runbook
-> Audit s158 · 2026-08-24 · Vai trò: Senior Systems Architect + DevSecOps
+> Audit + Hardening s159 · 2026-08-24 · Vai trò: Senior Systems Architect + DevSecOps
+> Commits: e190aaf (rate limit + cron auth) · 8c64e9c (H1-H3/M1-M3/L1)
 
 ---
 
@@ -71,31 +72,31 @@ Tất cả route trên đều yêu cầu session. API routes thêm `getServerSes
 |---|---|---|---|
 | `scheduled-messages` | `0 1 * * *` | 08:00 | Gửi Lark messages theo lịch |
 | `sync-lark-tickets` | `0 2 * * *` | 09:00 | Sync CS tickets từ Lark Base |
-| `prewarm-analytics` | `30 23 * * *` | 06:30 (sáng hôm sau) | Cache warm analytics queries |
-| `refresh-b2c-report` | `0 17 * * *` | 00:00 | B2C monthly snapshot |
-| `refresh-monthly-kpis` | `0 0 * * *` | 07:00 | Update analytics_monthly_kpis |
+| `refresh-monthly-kpis` | `30 1 * * *` | 08:30 | Update analytics_monthly_kpis |
+| `prewarm-analytics` | `0 2 * * *` | 09:00 | Cache warm analytics queries |
+| `refresh-b2c-report` | `30 2 * * *` | 09:30 | B2C monthly snapshot |
 | `refresh-trends` | `0 1 * * *` | 08:00 | Thu thập trend data (web search) |
 | `bc-sync` | `0 0 * * *` | 07:00 | Sync BC Datapool |
 | `ca-thread-remind` | `0 3 * * 1` | 10:00 Thứ Hai | Nhắc cà thread Lark |
 
-**⚠️ Timing issue:** ETL gohub_dw chạy ~08:00 ICT. `prewarm-analytics` (06:30) và `refresh-monthly-kpis` (07:00) chạy **TRƯỚC ETL** → warm/refresh dữ liệu cũ. Nên dời sang ~09:00-09:30 ICT (02:00-02:30 UTC).
+ETL gohub_dw chạy ~08:00 ICT. Thứ tự cron sau s159: ETL (08:00) → kpis (08:30) → prewarm (09:00) → b2c-report (09:30). ✅ Đúng thứ tự.
 
 ### 3.1 Dedup scheduled-messages
 
 Có 2 trigger đồng thời: Vercel cron (1 lần/ngày) + GitHub Actions (*/15 min). Hệ thống xử lý bằng **atomic claim** — chỉ 1 caller "chiếm" slot qua Supabase optimistic lock. Pattern đúng, nhưng GitHub Actions gửi request thừa nhiều lần/ngày.
 
-### 3.2 Cron auth pattern hiện tại
+### 3.2 Cron auth pattern (sau s159)
 
-| Cron | Auth method |
-|---|---|
-| `prewarm-analytics` | `Authorization: Bearer $CRON_SECRET` (bỏ qua nếu env rỗng ⚠️) |
-| `scheduled-messages` | `Authorization: Bearer $CRON_SECRET` (bỏ qua nếu env rỗng ⚠️) |
-| `refresh-trends` | `?secret=$CRON_SECRET` trong **URL** ⚠️ **NGUY HIỂM** |
-| `bc-sync` | `Authorization: Bearer $CRON_SECRET` |
-| `ca-thread-remind` | `Authorization: Bearer $CRON_SECRET` |
-| `refresh-b2c-report` | Không có auth ⚠️ |
-| `refresh-monthly-kpis` | Không có auth ⚠️ |
-| `sync-lark-tickets` | Admin session required ✅ |
+| Cron | Auth method | Trạng thái |
+|---|---|---|
+| `prewarm-analytics` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
+| `scheduled-messages` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
+| `refresh-trends` | `Authorization: Bearer $CRON_SECRET` | ✅ fixed s159 |
+| `bc-sync` | `Authorization: Bearer $CRON_SECRET` | ✅ |
+| `ca-thread-remind` | `Authorization: Bearer $CRON_SECRET` | ✅ |
+| `refresh-b2c-report` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ fixed s159 |
+| `refresh-monthly-kpis` | `isCronReq()` Bearer header | ✅ |
+| `sync-lark-tickets` | Admin session required | ✅ |
 
 ---
 
@@ -178,22 +179,22 @@ POST /api/lark/events
 - Guardian chatbot: regex-based pre-flight + multi-tier blocking
 - Chat error differentiation: lỗi chi tiết chỉ cho admin/creator
 
-### 6.2 Cần cải thiện (⚠️)
+### 6.2 Status sau s159
 
-| # | Vấn đề | Mức độ | Ảnh hưởng |
+| # | Vấn đề | Mức độ | Trạng thái |
 |---|---|---|---|
-| S1 | **Không có rate limiting** | CRITICAL | Spam Gemini API (chi phí), DDoS analytics |
-| S2 | **`refresh-trends` dùng `?secret=` query param** | HIGH | Secret leak trong Vercel/proxy logs |
-| S3 | **CRON_SECRET rỗng → skip auth** (prewarm, scheduled) | HIGH | Ai cũng trigger được cron |
-| S4 | **`refresh-b2c-report`, `refresh-monthly-kpis` không auth** | HIGH | Ai cũng trigger được |
-| S5 | **`ssl: {rejectUnauthorized: false}`** trên gohub_dw | HIGH | MITM có thể chặn query |
-| S6 | **Lark không verify X-Lark-Signature** | MEDIUM | Replay attack được |
-| S7 | **JWT 7-day maxAge, role stale** | MEDIUM | Role đổi không phản ánh ngay |
-| S8 | **Hardcode fallback**: host IP + DB name trong analytics-db.ts | MEDIUM | Infrastructure disclosure |
-| S9 | **Netlify URL hardcode** trong auth.ts | LOW | Wrong redirect nếu deploy mới |
-| S10 | **Lark dedup entries không bao giờ xóa** trong app_settings | LOW | Table bloat dần theo thời gian |
-| S11 | **Không có CSP headers** | LOW | XSS risk (minimal do SSR) |
-| S12 | **Không có request body size limit** trên /api/chat | LOW | OOM attack vector |
+| S1 | Rate limiting chat/creator-ai | CRITICAL | ✅ **Fixed** — 20/10 req/min |
+| S2 | `refresh-trends` dùng `?secret=` query param | HIGH | ✅ **Fixed** — đổi sang header |
+| S3 | CRON_SECRET rỗng → skip auth | HIGH | ✅ **Fixed** — return false |
+| S4 | `refresh-b2c-report` không auth | HIGH | ✅ **Fixed** |
+| S5 | `ssl: {rejectUnauthorized: false}` | HIGH | ⚠️ **Partial** — conditional khi có ANALYTICS_DB_SSL_CA; gohub_dw không phải DB của GoHub → bỏ qua |
+| S6 | Lark không verify X-Lark-Signature | MEDIUM | ✅ **Fixed** — cần set `LARK_VERIFICATION_TOKEN` trên Vercel |
+| S7 | JWT 7-day maxAge, role stale | MEDIUM | ✅ **Fixed** — 1 ngày |
+| S8 | Hardcode fallback host IP/DB | MEDIUM | ✅ **Fixed** — throw Error nếu env thiếu |
+| S9 | Netlify URL hardcode trong auth.ts | LOW | ⚠️ Tồn tại (legacy, ít ảnh hưởng) |
+| S10 | Lark dedup entries không bao giờ xóa | LOW | ✅ **Fixed** — ca-thread-remind cleanup mỗi thứ 2 |
+| S11 | Không có CSP headers | LOW | ✅ **Fixed** — next.config.js |
+| S12 | Không có request body size limit | LOW | ⚠️ Còn đó (risk thấp, internal tool) |
 
 ---
 
