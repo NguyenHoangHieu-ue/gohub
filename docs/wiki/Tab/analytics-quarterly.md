@@ -203,13 +203,13 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
 - Pro-rata = `actual × (quarter_days / elapsed_days)`.
 - GP dùng làm proxy CM1 (chưa trừ phí kênh/nhóm).
 
-**Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK):
+**Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK) — **ưu tiên từ dưới lên: mức xấu nhất thắng**, 1 metric rơi vào nguy hiểm thì cả cặp bị kéo xuống nguy hiểm dù metric kia vượt target:
 | Mức | Điều kiện |
 |-----|-----------|
 | Rất an toàn (very_safe) | cả 2 metric ≥ 100% |
-| An toàn (safe) | 1 trong 2 ≥ 100% |
+| An toàn (safe) | không metric nào < 85%, và ít nhất 1 metric chưa đạt 100% |
 | An toàn ít (safe_low) | cả 2 trong [85%, 100%) |
-| Nguy hiểm ít (danger_low) | 1 trong 2 ≥ 85% |
+| Nguy hiểm ít (danger_low) | ít nhất 1 metric < 85% (metric kia có thể ở mức bất kỳ, kể cả ≥ 100%) |
 | Nguy hiểm nhiều (danger_high) | cả 2 < 85% |
 
 - `%TGT CM1 = GP_pro-rata / target_cm1` · `%TGT 3HK = 3HK%_actual / target_3hk_pct`.

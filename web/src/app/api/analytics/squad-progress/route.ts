@@ -38,12 +38,14 @@ function getRiskLevel(cm1Pct: number | null, hk3Pct: number | null): RiskLevel {
     return "danger_high"
   }
 
+  // Ưu tiên từ dưới lên (mức xấu nhất thắng): 1 cột rơi vào nguy hiểm thì cả cặp
+  // bị kéo xuống nguy hiểm, dù cột còn lại vượt target (tránh 1 metric cao che mất metric thấp).
   const c = cm1Pct!, h = hk3Pct!
-  if (c >= 100 && h >= 100) return "very_safe"  // Rất an toàn:  cả 2 >= 100%
-  if (c >= 100 || h >= 100) return "safe"        // An toàn:      1 trong 2 >= 100%
-  if (c >= 85  && h >= 85)  return "safe_low"    // An toàn ít:   85% <= cả 2 <= 100%
-  if (c >= 85  || h >= 85)  return "danger_low"  // Nguy hiểm ít: 85% <= 1 trong 2 <= 100%, còn lại < 85%
-  return "danger_high"                            // Nguy hiểm nhiều: cả 2 < 85%
+  if (c < 85  && h < 85)  return "danger_high"  // Nguy hiểm nhiều: cả 2 < 85%
+  if (c < 85  || h < 85)  return "danger_low"   // Nguy hiểm ít:    ít nhất 1 < 85%
+  if (c < 100 && h < 100) return "safe_low"     // An toàn ít:      cả 2 trong [85%, 100%)
+  if (c < 100 || h < 100) return "safe"         // An toàn:         ít nhất 1 chưa đạt 100% (còn lại đều >= 85%)
+  return "very_safe"                             // Rất an toàn:     cả 2 >= 100%
 }
 
 export async function GET(req: NextRequest) {
