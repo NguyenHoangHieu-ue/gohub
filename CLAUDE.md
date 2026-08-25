@@ -4,16 +4,21 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-24, s159)
+## Trạng thái hiện tại (2026-08-25, s160)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main 668c2cf) |
-| ✅ Đã lên main | Wave 1+2+3 + C2/D1/D3 + Squad Progress + UI polish + fix Daily Report + Squad CM1 + 3HK Rev + Tổ Gấu fixes + Wiki 3-tier (đến 668c2cf) |
+| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main dacc99d) |
+| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-level fix + UI redesign (đến dacc99d) |
 
-**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard.
+**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard. Xem lại UI mới Squad Progress trên production, báo nếu cần chỉnh.
+
+**s160 — đã làm (2026-08-25):**
+- ✅ **Squad Progress — fix logic đánh giá risk** (`api/analytics/squad-progress/route.ts`, commit d7d9218): `getRiskLevel` đổi sang **ưu tiên mức xấu nhất** — trước đây 1 trong 2 metric (CM1%/3HK%) ≥100% là đủ để lên "An toàn" dù metric còn lại rất thấp (case thật: ShopeePaySG CM1 50%/3HK 106% bị gắn nhầm "An toàn"). Nay chỉ cần 1 metric <85% là kéo cả cặp xuống nhóm nguy hiểm. Cập nhật `docs/wiki/Tab/analytics-quarterly.md` khớp logic mới.
+- ✅ **Squad Progress — redesign UI** (commit cea6214, chỉ UI không đổi logic/công thức): badge đánh giá dot+màu rõ hơn + legend dùng chung; 3 stat tile Doanh thu/CM1/3HK thay dòng text dồn cục (số PR trọng tâm, tile tự viền đỏ khi %TGT <85%); dải màu risk bên trái mỗi dòng squad/KH để quét nhanh; footer "Tổng" thành thanh tóm tắt nền brand blue.
+- ⚠️ **Máy dev (D:\gohub) chưa có `web/.env.local`** → không chạy được dev server live để test UI trực tiếp; đã tsc PASS + dựng preview tĩnh minh hoạ bằng số liệu thật để tự kiểm tra bố cục trước khi merge.
 
 **s159 — đã làm (2026-08-24):**
 - ✅ **Full system audit** (luồng vận hành, bảo mật, rate limit, UX, cron, DB)
