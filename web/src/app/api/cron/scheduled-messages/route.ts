@@ -16,11 +16,9 @@ import { alertCronFailure } from "@/lib/cron-alert"
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
-  if (process.env.CRON_SECRET) {
-    const auth = req.headers.get("authorization")
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   // Thời gian theo ICT (UTC+7) — matcher đọc qua getUTC* nên shift trước

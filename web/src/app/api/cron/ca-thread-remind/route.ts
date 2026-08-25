@@ -78,6 +78,14 @@ export async function GET(req: NextRequest) {
 
     const msg = `🐾 Nhắc cà thread:\n${results.join("\n")}\n\nVào Creator → Cà Thread để quét và nhắc.`
     await sendLarkDM(recipientId, msg, appToken)
+
+    // Dọn Lark dedup entries cũ >7 ngày để app_settings không phình to
+    await supabaseAdmin
+      .from("app_settings")
+      .delete()
+      .eq("category", "lark_dedup")
+      .lt("updated_at", new Date(Date.now() - 7 * 86400_000).toISOString())
+
     return NextResponse.json({ ok: true, notified: true, details: results })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

@@ -240,5 +240,6 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages:   { signIn: "/login" },
-  session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
+  // maxAge 1 ngày: nếu role user thay đổi, JWT cũ hết hạn trong tối đa 24h (không phải 7 ngày).
+  session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
 }

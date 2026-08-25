@@ -76,8 +76,9 @@ const TREND_QUERIES = [
 ]
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get("secret")
-  if (secret !== process.env.CRON_SECRET) {
+  // Xác thực qua Authorization header (KHÔNG dùng query param vì secret sẽ lộ trong server logs)
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
