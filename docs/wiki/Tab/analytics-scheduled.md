@@ -58,8 +58,33 @@ Dữ liệu lịch hẹn giờ lưu tại bảng `lark_scheduled_messages` trong
 4. **Gửi tin nhắn qua Lark Bot**:
    - Sử dụng helper kết nối Lark API `lib/lark.ts` để bắn thông điệp trực tiếp vào nhóm chat của công ty.
 
-> **Timeout**: cron route cấu hình `maxDuration: 60` trong `web/vercel.json`; nút "Test ngay" (`[id]/route.ts`)
-> set `export const maxDuration = 60` inline (route này không nằm trong vercel.json).
+> **Timeout**: cron route cấu hình `maxDuration: 180` trong `web/vercel.json`; nút "Test ngay" (`[id]/route.ts`)
+> set `export const maxDuration = 180` inline (route này không nằm trong vercel.json). Nâng từ 60→180 (s160,
+> 2026-08-25) — xem mục D bên dưới.
+
+### D. ⚠️ Sự cố "không tự chạy mấy ngày" — Daily report timeout im lặng (s160, 2026-08-25)
+
+**Triệu chứng**: cron-job.org (scheduler ngoài, gọi endpoint mỗi phút — xem workflow GitHub Actions đã tắt từ
+2026-08-10) báo lỗi timeout ~30s; group Lark hoàn toàn không nhận được báo cáo nào nhiều ngày liền.
+
+**Nguyên nhân**: Daily report (nặng nhất) phải chạy TUẦN TỰ ~6 batch query `gohub_dw` (revenue theo thị
+trường, 3HK, MTD, `fetchBODGroupMarginData` "nặng", QTD ~90 ngày, + 3 query ma trận 3-ngày/top-KH/kênh B2C)
+rồi mới gọi Gemini format + gửi Lark — tổng thời gian vượt `maxDuration=60s` cũ trên Vercel → **Vercel kill
+function giữa chừng**. Vì ATOMIC CLAIM (ghi `last_run_at = slot`) chạy **TRƯỚC** khi gọi `runScheduledMessage`,
+slot đã bị đánh dấu "đã chạy" trong DB dù tin **chưa từng được gửi tới Lark** — lỗi này không throw exception
+nên nhánh catch/alert cũ (chỉ bắt lỗi ở bước đọc danh sách đầu route) không phát hiện được → thất bại HOÀN
+TOÀN ÂM THẦM, lặp lại mỗi ngày (slot mới lại bị đánh dấu xong rồi lại chết).
+
+**Fix**:
+- `maxDuration` 60→180 (cron route + nút Test ngay `[id]/route.ts`) — dự án đã dùng plan hỗ trợ ≥300s
+  (Gấu Pro `creator-ai/chat` đã set 300s) nên nâng an toàn.
+- Soft-timeout guard (`withSoftTimeout`, `Promise.race`) bailout chủ động ở 160s (còn buffer trước 180s cứng)
+  → LUÔN đi qua nhánh catch (release claim + alert) thay vì bị platform kill câm lặng.
+- Ngân sách tổng cả request (`REQUEST_BUDGET_MS=165s`) chia đều khi NHIỀU message đến hạn cùng lúc (vd
+  catch-up sau downtime) — hết ngân sách thì bỏ qua message còn lại (không claim), để lần chạy kế tiếp xử lý
+  tiếp, tránh message sau bị kill câm lặng vì message trước ăn hết giờ.
+- **Alert Lark khi 1 message thất bại** (`alertCronFailure`) — trước chỉ alert khi lỗi đọc danh sách active
+  messages ở đầu route, lỗi per-message (kể cả timeout) hoàn toàn im lặng. Nay mọi thất bại đều có Lark alert.
 
 ### C. Chống gửi TRÙNG & đúng slot (`scheduled-cron.ts` + `scheduled-runner.ts`)
 Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/15 * * * *` + Vercel Cron `0 0 * * *` (backstop 1 lần/ngày).

@@ -8,7 +8,7 @@
       "maxDuration": 60
     },
     "src/app/api/cron/scheduled-messages/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 180
     },
     "src/app/api/admin/sync-lark-tickets/route.ts": {
       "maxDuration": 60

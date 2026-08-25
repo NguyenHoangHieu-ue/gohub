@@ -6,8 +6,10 @@ import { runScheduledMessage } from "@/lib/scheduled-runner"
 import { getDbRole } from "@/lib/db-role"
 
 // Nút "Test ngay" (POST) chạy đồng bộ runScheduledMessage (gọi Gemini) → cần thời gian > default Vercel.
-// Trước đây thiếu maxDuration → Daily (report nặng nhất) bị timeout. Set 60s như cron route.
-export const maxDuration = 60
+// Daily (report nặng nhất — ~6 batch query gohub_dw tuần tự + Gemini format + gửi Lark) từng bị timeout ở
+// 60s (s160: cron-job.org báo timeout, tin không tới Lark vì atomic claim ghi last_run_at TRƯỚC khi build
+// report xong → slot bị đánh dấu "đã chạy" dù chưa gửi). Nâng lên 180s khớp cron route.
+export const maxDuration = 180
 
 // Dùng DB role (getDbRole) thay JWT role — tránh JWT cũ khiến admin vừa được assign vẫn bị 403.
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
