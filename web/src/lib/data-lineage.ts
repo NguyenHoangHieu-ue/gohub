@@ -67,7 +67,7 @@ export const TABS: TabNode[] = [
   { id: 'customers',     label: 'Customers',        route: '/analytics/customers',    group: 'Sales',      description: 'Phân tích khách hàng: top customers, purchase patterns' },
   { id: 'vendors',       label: 'Vendors',          route: '/analytics/vendors',      group: 'Sales',      description: 'Hiệu suất nhà cung cấp: revenue, GP per vendor' },
   { id: 'orders',        label: 'Orders',           route: '/analytics/orders',       group: 'Operations', description: 'Danh sách đơn hàng chi tiết, search và filter theo nhiều tiêu chí' },
-  { id: 'fulfillment',   label: 'Fulfillment',      route: '/analytics/fulfillment',  group: 'Operations', description: 'Báo cáo fulfillment: doanh thu theo ngày fulfillment (T-1)' },
+  { id: 'fulfillment',   label: 'Inventory',        route: '/analytics/fulfillment',  group: 'Operations', description: 'Kế hoạch nhập hàng theo tuần từng SKU (VN/US) + PO tracker — gợi ý bán/nhập từ tốc độ bán 30 ngày gohub_dw' },
   { id: '3hk-usage',     label: '3HK Data Usage',   route: '/analytics/3hk-usage',   group: 'Operations', description: 'Theo dõi usage data 3HK: GB/ngày/SIM, speed map, usage by country' },
   { id: 'cs-troubleshoot', label: 'CS Troubleshoot', route: '/analytics/cs-troubleshoot', group: 'Operations', description: 'Tra cứu đơn hàng theo mã khách, hỗ trợ CS xử lý sự cố' },
   { id: 'feedback',      label: 'Feedback',         route: '/analytics/feedback',     group: 'Operations', description: 'Thu thập và xem phản hồi từ nội bộ và khách hàng' },
@@ -323,9 +323,9 @@ export const CONNECTIONS: Connection[] = [
   { tabId: 'orders', tableId: 'dim_order_source', fields: ['code', 'channel_name'], metrics: ['Channel name trong order list'] },
   { tabId: 'orders', tableId: 'dim_staff', fields: ['code', 'name'], metrics: ['Staff name trong order list'] },
   { tabId: 'orders', tableId: 'dim_customer', fields: ['code', 'name'], metrics: ['Customer name trong order list'] },
-  // Fulfillment
-  { tabId: 'fulfillment', tableId: 'fact_fulfillment_revenue', fields: ['fulfiled_date', 'fulfilled_revenue_amount_vnd', 'gross_profit_vnd', 'cogs_amount_vnd', 'order_source_code'], metrics: ['Fulfillment report: daily/monthly summary'] },
-  { tabId: 'fulfillment', tableId: 'dim_order_source', fields: ['code', 'channel_name', 'group_name'], metrics: ['Channel breakdown trong fulfillment'] },
+  // Inventory (kế hoạch nhập hàng — s160, xem docs/wiki/Tab/analytics-fulfillment.md)
+  { tabId: 'fulfillment', tableId: 'fact_fulfillment_revenue', fields: ['fulfiled_date', 'fulfilled_quantity', 'sku'], metrics: ['Vận tốc bán 30 ngày/SKU cho gợi ý Bán dự kiến/Số nhập'] },
+  { tabId: 'fulfillment', tableId: 'dim_sku', fields: ['sku', 'vendor'], metrics: ['Auto-lookup vendor khi thêm SKU theo dõi'] },
   // 3HK Usage
   { tabId: '3hk-usage', tableId: 'fact_data_usage', fields: ['iccid', 'sku', 'sku_type', 'data_amount_gb', 'total_data_gb', 'activation_date'], metrics: ['Usage overview: GB/ngày/SIM, budget vs actual', 'Unlimited plan calculation'] },
   { tabId: '3hk-usage', tableId: 'data_usage_log', fields: ['iccid', 'offer_name', 'data_gb', 'report_date', 'country'], metrics: ['Speed map (3HK zone → country)', 'Usage by country × month sub-report', 'Daily usage trend'] },
