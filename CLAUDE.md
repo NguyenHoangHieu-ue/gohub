@@ -4,16 +4,29 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-25, s160)
+## Trạng thái hiện tại (2026-08-25, s161)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — tất cả đã lên main dacc99d) |
+| ⏳ Trên staging CHƯA merge main | s161: fix timeout scheduled-messages (881e436) + tab Inventory thay Fulfillment (a358c70) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-level fix + UI redesign (đến dacc99d) |
 
-**➡️ TIẾP THEO:** Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Test Daily Report để xác nhận số khớp Dashboard. Xem lại UI mới Squad Progress trên production, báo nếu cần chỉnh.
+**➡️ TIẾP THEO (2026-08-26):**
+- **Inventory tab**: Hiếu chạy `cd web && node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (máy có `.env.local`) để seed dữ liệu từ Excel Ops đang dùng → gửi output cho Claude kiểm tra khớp. Sau đó QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên staging trước khi merge main.
+- **Scheduled Messages**: theo dõi vài ngày xem còn timeout/Lark alert lỗi không (đã fix s161, nâng maxDuration 60→180s + soft-timeout + alert).
+- Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Xem lại UI Squad Progress trên production, báo nếu cần chỉnh.
+
+**s161 — đã làm (2026-08-25):**
+- ✅ **Fix Scheduled Messages không tự gửi** (`api/cron/scheduled-messages/route.ts`, commit 881e436): root cause — Daily report (nặng nhất, ~6 batch query gohub_dw tuần tự + Gemini + Lark) vượt `maxDuration=60s` cũ → Vercel kill giữa chừng SAU khi atomic claim đã ghi `last_run_at` nhưng TRƯỚC khi gửi Lark → slot bị đánh dấu "đã chạy" dù tin chưa từng tới, lặp lại mỗi ngày, không alert (khớp đúng triệu chứng: cron-job.org báo timeout ~30s, Lark im lặng hoàn toàn). Fix: `maxDuration` 60→180 (cron + nút Test ngay), soft-timeout guard bailout chủ động ở 160s, chia ngân sách khi nhiều message đến hạn cùng lúc, **thêm Lark alert khi 1 message thất bại** (trước chỉ alert lỗi đọc danh sách đầu route).
+- ✅ **Tab Inventory thay hoàn toàn Fulfillment cũ** (commit a358c70, theo yêu cầu Hiếu dựa trên `Plan nhập hàng theo tháng.xlsx` Ops dùng): bỏ hẳn theo dõi tồn kho theo kho vật lý PQ/DD/TSN + vendor balance (s147) → thay bằng **dự phóng tồn kho theo tuần từng SKU (VN/US)** + **PO tracker**. Route/permission giữ nguyên `/analytics/fulfillment` (id `"fulfillment"`), chỉ đổi nhãn hiển thị "Fulfillment"→"Inventory".
+  - Migration `v42_inventory_plan.sql`: `inventory_plan_skus` (watchlist) + `inventory_plan_weekly` (actual_stock/sales_forecast/import_qty theo tuần, `*_auto` đánh dấu OPS đã ghi đè) + `inventory_po` (thay sheet PO Dự kiến nhập). **Hiếu đã chạy migration trên Supabase.**
+  - Gợi ý tự động (`lib/inventory-plan.ts`): Bán dự kiến từ vận tốc bán 30 ngày (`gohub_dw`), Số nhập theo rule reorder-to-target khi tồn dự phóng dưới ngưỡng an toàn — OPS ghi đè thì giữ nguyên, không bị tính lại đè lên.
+  - `actual_stock` (tồn thực tế) **chưa có nguồn `gohub_dw`** — OPS nhập tay tạm, Hiếu sẽ báo cột khi tech bổ sung để nối tự động.
+  - `scripts/import_inventory_plan.mjs`: import 1 lần dữ liệu Excel hiện có — **CHỜ Hiếu chạy** (máy dev không có `.env.local`).
+  - Wiki `docs/wiki/Tab/analytics-fulfillment.md` viết lại toàn bộ.
+- ✅ **Cài skill `caveman`** (plugin marketplace `JuliusBrussee/caveman`, scope user) — chế độ trả lời tối giản token, active mặc định toàn máy theo yêu cầu Hiếu. Không liên quan trực tiếp code GoHub, ghi chú lại để nhớ nguồn nếu cần gỡ (`claude plugin uninstall caveman@caveman`, hoặc `/caveman off` tắt tạm 1 phiên).
 
 **s160 — đã làm (2026-08-25):**
 - ✅ **Squad Progress — fix logic đánh giá risk** (`api/analytics/squad-progress/route.ts`, commit d7d9218): `getRiskLevel` đổi sang **ưu tiên mức xấu nhất** — trước đây 1 trong 2 metric (CM1%/3HK%) ≥100% là đủ để lên "An toàn" dù metric còn lại rất thấp (case thật: ShopeePaySG CM1 50%/3HK 106% bị gắn nhầm "An toàn"). Nay chỉ cần 1 metric <85% là kéo cả cặp xuống nhóm nguy hiểm. Cập nhật `docs/wiki/Tab/analytics-quarterly.md` khớp logic mới.
@@ -41,11 +54,13 @@
 - [x] ✅ v38 `target_rev` + v39 `target_3hk_rev` trên `b2b_customer_targets`
 - [x] ✅ **v40 `ca_thread_log`** (lịch sử cà thread)
 - [x] ✅ **v41 `access_audit_log`** (audit log cấp quyền)
+- [x] ✅ **v42 `inventory_plan_skus/inventory_plan_weekly/inventory_po`** (tab Inventory, s161 — Hiếu đã chạy)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
 - [x] ✅ **Vercel env**: `LARK_VERIFICATION_TOKEN` đã set Production + Preview
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
+- [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 
 **Hiếu cần làm (còn lại, cũ):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI
