@@ -43,6 +43,13 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 - **Channel Performance** (`bod-channel-performance`): doanh thu/margin theo tháng × kênh.
 
 ## 5. Gotchas
+- **⚠️ Fix s162 (2026-08-26) — B2B op-cost thiếu Turso per-customer**: `fetchBODGroupMarginData` (Group Margin
+  cards + bod-summary), `fetchBODChannelPerformanceData` (Channel Performance) và `fetchBODReportData` (daily
+  trend) trước chỉ trừ `analytics_channel_costs` (Supabase channel-level, gần như luôn rỗng cho B2B — cost B2B
+  thật ra được Ops nhập ở Quarter Report qua Turso `b2b_customer_cost_monthly`) → CM1/GPM2 B2B trên BOD tab
+  **cao hơn thực tế**, khác Quarter Report/B2B tab dù cùng kỳ dữ liệu. Nay B2B group đổi sang Turso per-customer
+  cost (query customer×tháng riêng, cùng phân loại Strategic/Non), B2C/Other giữ nguyên channel cost cũ. Group
+  cost (mục dưới) không đổi.
 - **⚠️ Định nghĩa B2B-Strategic (s131, 2026-08-03)**: **Group Margin cards** (`bod-group-margin` → `fetchBODGroupMarginData`) và **bod-summary** phân B2B-Strategic/Non theo **KHÁCH `price_list_name`**, đọc cấu hình chung **`quarterly-settings`** (`quarterly_tier_keywords` + `quarterly_excluded_customers`) qua `getCustomerStrategicSql()` — CÙNG nguồn với Quarter Report (chỉnh 1 chỗ, mọi tab theo). Default: Strategic = NULL/không VIP-Gold-Silver; Non = VIP/Gold/Silver; exclude B2C Customer US/VN + B2B Ops. Cache key kèm hash config → tự tươi khi đổi. Nhất quán Dashboard/tier-performance/All-Time (ISSUE-DASH-4). Trước dùng `partner_tiers` (KÊNH) đang rỗng → Strategic=0. Channel op-cost amount-type chia theo revenue-share khi 1 channel span 2 tier (tránh cộng 2 lần). Tổng B2B revenue GIỮ NGUYÊN (verify T7: Strategic 5,22 tỷ + Non 1,04 tỷ = 6,26 tỷ). **LƯU Ý**: bảng chi tiết "**Strategic Channels**" (per-đối-tác, `b2b/strategic-performance`) VẪN theo `partner_tiers` (đang rỗng → có thể trống) — Hiếu chốt giữ view này riêng, chưa đổi.
 - **Group cost B2B (BOD-1, 2026-08-02)**: chi phí group-level `B2B` (Turso `analytics_channel_group_costs`) được **chia theo revenue-share** giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng đầy đủ vào cả 2 → tránh đếm 2 lần). Áp cho `fetchBODGroupMarginData` (revenue-share per group) và daily `fetchBODReportData` (dedupe theo tursoGroupName vì là TỔNG). Hiện Supabase chưa có B2B group cost → 0 tác động số; fix để đúng ngay khi nhập. Xem cả `all-time-performance`.
 - **Nút Download 2 chart (BOD-2, 2026-08-02)**: "Revenue vs COGS" + "Margin Analysis (%)" trước là nút chết (không onClick) → đã wire `exportRevenueCogsCSV` (Date/Revenue/COGS/CM1) + `exportMarginAnalysisCSV` (Date/Margin%/CM1%) xuất .xlsx.
@@ -60,7 +67,7 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 | Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY month |
 | GP (Gross Profit) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
 | GPM% | Tính từ GP / Revenue | `GP / Revenue × 100` |
-| CM1 | GP − Operation Cost | GP − `SUM(analytics_channel_group_costs.amount)` theo group |
+| CM1 | GP − Operation Cost | B2B: GP − Turso `b2b_customer_cost_monthly` (per-customer, s162) − group cost · B2C/Other: GP − `analytics_channel_costs` (per-channel) − group cost |
 | CM1% | CM1 / Revenue × 100 | Tính từ 2 cột trên |
 | 3HK Contribution % | `fact_fulfillment_revenue` + `dim_sku.vendor` | `SUM(revenue WHERE vendor ILIKE '3HKDATAPOOL') / SUM(total_revenue) × 100` |
 | Operation Cost | Supabase `analytics_channel_group_costs` | `SUM(amount)` WHERE `group_name` IN ('B2B','B2C') theo tháng |

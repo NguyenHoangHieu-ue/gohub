@@ -28,6 +28,14 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
 - Trả: `period`, `derived_group`, `channel_name`, `revenue`, `margin`, `tier`.
 
 ## 3. Gotchas
+- **⚠️ Fix s162 (2026-08-26) — thiếu Turso B2B per-customer cost**: `gpm2` (CM1) trước chỉ trừ
+  `analytics_channel_costs` (Supabase channel-level, gần như rỗng cho B2B) + group cost → CM1 B2B cao hơn thực
+  tế, khác Quarter Report cùng kỳ. Nay B2B-Strategic/B2B-Non-Strategic đổi sang Turso `b2b_customer_cost_monthly`
+  (query customer×tháng riêng, CÙNG phân loại Strategic/Non), B2C/Other giữ nguyên channel cost cũ.
+- **⚠️ Bug tồn tại (chưa fix, phát hiện cùng lúc s162)**: query chính (`rows`) dùng `isStrategicSql`/`excludeList`
+  tham chiếu alias `c` (`dim_customer`) trong CASE nhưng KHÔNG có `LEFT JOIN dim_customer c` trong `FROM` — chỉ
+  không lỗi khi `tierKeywords`/`excludedCustomers` rỗng (biểu thức rút gọn còn `(TRUE)`/không tham chiếu `c`).
+  Cần Hiếu xác nhận có đang lỗi thật không trước khi sửa (đổi query gốc, ngoài phạm vi fix cost model lần này).
 - **Group cost B2B (BOD-1, 2026-08-02)**: chi phí group-level `B2B` chia theo **revenue-share** giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng đầy đủ vào cả 2 → tránh đếm 2 lần). Hiện Supabase chưa có B2B group cost → 0 tác động; fix để đúng khi nhập. (Giống `bod-data.ts`.)
 - **Amount-type channel op-cost (s131)**: khi 1 channel có cả KH Strategic lẫn Non → chia theo revenue-share per (tháng, channel) để KHÔNG cộng 2 lần (percent-type theo revenue nên đúng sẵn).
 - Không giới hạn kỳ ngắn → dữ liệu lớn, dựa vào cache 12h.

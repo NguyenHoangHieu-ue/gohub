@@ -8,7 +8,8 @@ import {
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
 } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS, calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -37,6 +38,15 @@ export async function GET(req: NextRequest) {
   try {
     const key = `ch-kpis:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
+    // Xác định scope hiện tại có phải B2B không — để dùng Turso per-customer cost thay analytics_channel_costs
+    // (tránh double-count, khớp Quarter Report/b2b-kpis).
+    let isB2BScope = channelGroup === "B2B"
+    if (!isB2BScope && channelName) {
+      const chGroupRows = await queryAnalytics<{ group_name: string }>(
+        `SELECT DISTINCT UPPER(group_name) as group_name FROM dim_order_source WHERE TRIM(channel_name) = '${channelName.replace(/'/g, "''")}' LIMIT 1`
+      )
+      isB2BScope = chGroupRows[0]?.group_name === "B2B"
+    }
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
         `SELECT SUM(f.${source.revenueCol}) as revenue,
@@ -81,20 +91,43 @@ export async function GET(req: NextRequest) {
       const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
       let opCost = 0
 
-      // Channel-level costs (theo channelName hoặc tất cả channels nếu không filter)
-      const relevantChannelCosts = channelName
-        ? channelCosts.filter(cc => cc.channel === channelName)
-        : channelCosts  // all channels (group aggregate)
-
-      relevantChannelCosts.forEach(cc => {
-        const dayRatio = getDaysInMonth(cc.month) > 0
-          ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
-        COST_KEYS.forEach(key => {
-          const cv = cc[key]
-          // percent type: dùng cRev (tổng revenue kỳ) — xấp xỉ đủ cho KPI card
-          if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cRev * cv.value) / 100
+      if (isB2BScope) {
+        // B2B: Turso per-customer cost thay analytics_channel_costs (tránh double-count).
+        const [custRevRows, customerCostMap] = await Promise.all([
+          queryAnalytics<{ customer_code: string; month: string; revenue: string }>(
+            `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+                    SUM(f.${source.revenueCol}) as revenue
+             FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+             WHERE ${filter} ${chFilter} ${sfx}
+             GROUP BY 1, 2`
+          ),
+          fetchCustomerCosts(months),
+        ])
+        const custRevMap = new Map<string, number>()
+        custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+        customerCostMap.forEach((rec, ckey) => {
+          const mo = ckey.slice(0, 7); const code = ckey.slice(8)
+          const custRev = custRevMap.get(`${mo}_${code}`) || 0
+          if (custRev === 0) return
+          const dayRatio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate || "", endDate || "", mo) / getDaysInMonth(mo) : 0
+          opCost += calcChCostForPeriod(rec, custRev, dayRatio)
         })
-      })
+      } else {
+        // Channel-level costs (theo channelName hoặc tất cả channels nếu không filter)
+        const relevantChannelCosts = channelName
+          ? channelCosts.filter(cc => cc.channel === channelName)
+          : channelCosts  // all channels (group aggregate)
+
+        relevantChannelCosts.forEach(cc => {
+          const dayRatio = getDaysInMonth(cc.month) > 0
+            ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+          COST_KEYS.forEach(key => {
+            const cv = cc[key]
+            // percent type: dùng cRev (tổng revenue kỳ) — xấp xỉ đủ cho KPI card
+            if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cRev * cv.value) / 100
+          })
+        })
+      }
 
       // Group-level costs (B2B / B2C) — revShare=1 khi query toàn group
       const tursoGroup = channelGroup === "B2B" ? "B2B" : channelGroup === "B2C" ? "B2C" : null

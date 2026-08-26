@@ -74,6 +74,10 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s162 (2026-08-26)**: KPI card (`b2b/kpis`) và Revenue&CM1 Trend chart (`b2b/trend`) trước dùng
+  `analytics_channel_costs` (Supabase channel-level, gần như luôn rỗng cho B2B) → CM1 ở đó khác với bảng chi tiết
+  bên dưới (vốn đã dùng Turso per-customer). Nay cả 2 đổi sang Turso `b2b_customer_cost_monthly`, khớp bảng chi
+  tiết + Quarter Report.
 - `dim_customer`: 355k rows, 99.7% là B2C với `price_list_name=NULL` → luôn dùng `LEFT JOIN`.
 - Danh sách Strategic partners cấu hình ở **Settings → Partner Tiers**.
 - Created mode → margin/CM1 = 0 (fact_sales_revenue không có gross_profit).
