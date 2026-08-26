@@ -8129,3 +8129,84 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
 - Lưu ý UI dễ hiểu nhầm (không phải bug, đã giải thích Hiếu): cột chính "Revenue"/"CM1" ở Tổng quan hiển thị
   PR, ở Squad Progress hiển thị Actual (PR nằm field phụ revenue_pr/cm1_pr) — so tên cột giống nhau giữa 2 tab
   dễ tưởng lệch dù đúng logic.
+
+## Session s163 (2026-08-26)
+### Gộp Note (/info) + Knowledge Base (/kb) vào Tổ Gấu, phân quyền tài liệu theo group
+- Yêu cầu Hiếu: tối ưu/gộp Note+KB vào Tổ Gấu, tách biệt tài liệu creator push (chính thức) vs tài liệu member
+  trong nhóm push (của nhóm), phân quyền theo Nhóm nào được thấy tài liệu nào. Lên plan qua plan mode trước,
+  Hiếu duyệt plan rồi mới code.
+- Migration v43_kb_wiki_group_scope.sql (CHƯA CHẠY, cần Hiếu): kb_wiki_pages.visibility_mode ('all'|'groups',
+  default 'all' = không phá dữ liệu cũ) + bảng nối kb_wiki_page_groups (page_id x group_id) — tái dùng
+  chat_groups của Tổ Gấu làm đơn vị phân quyền, không tạo khái niệm nhóm riêng (quyết định Hiếu).
+- API: mở rộng /api/kb/wiki* (route cũ từ /kb, chất lượng tốt hơn bản /api/to-gau/kb thử nghiệm trước — giữ lại
+  làm nguồn duy nhất, xoá /api/to-gau/kb). GET thêm groupId filter + member check. POST thêm role gate
+  admin/creator (trước KHÔNG gate, chỉ ẩn nút FE — lỗ hổng nhỏ đã vá luôn). Route mới GET/PUT
+  /api/kb/wiki/[id]/groups (gán/xem nhóm).
+- UI to-gau/[id]/page.tsx: tab bar 4 tab cũ (Chat/Docs/Notes/Wiki) gộp còn 2 (Chat | Tài liệu), Tài liệu có
+  sub-tab Chính thức (WikiPanel viết lại toàn bộ — full CRUD + version history + modal gán nhóm, trước chỉ
+  view+edit không tạo/xoá được) và Của nhóm (DocsPanel/NotesPanel cũ, không đổi logic, chỉ đổi vị trí render).
+- Bug phát hiện giữa chừng (đã sửa): sidebar.tsx gate nav "Tổ Gấu" bằng isCreatorUser — CHỈ creator thấy link
+  trong sidebar dù API đã hỗ trợ member thường từ lâu. Nếu không sửa, xoá tab Note sẽ làm toàn bộ staff mất
+  đường vào tài liệu. Đổi sang hiện mọi role (gate còn lại = hiddenTabs config như Note trước), đồng bộ cả
+  lib/nav.ts (Command Palette).
+- Dọn permission chết: bỏ perm_kb_upload/wiki_view/wiki_edit (Track A giờ hardcode admin/creator), bỏ "kb" khỏi
+  DEPT_UNLOCKABLE_TABS/PM tabs, bỏ "info" khỏi ALL_ANALYTICS_IDS/REPORTS matrix.
+- Pipeline Upload->MRP (kb_documents/kb_chunks/kb_processing_jobs) giữ nguyên logic, dời UI từ /kb sang
+  analytics/creator/kb-docs-section.tsx (Creator Settings).
+- Bỏ hẳn theo quyết định Hiếu (không port): Overview tra cứu nước, ghi chú cá nhân (user_notes), file tham
+  khảo cá nhân (bucket Information) — bảng/bucket KHÔNG xoá, chỉ mất UI truy cập.
+- Xoá file: app/(dashboard)/kb/, app/(dashboard)/info/, app/api/info/*, app/api/to-gau/kb/.
+- tsc PASS. CHƯA test bằng tay (máy dev thiếu Supabase key trong .env.local) — checklist QA để trong CLAUDE.md.
+- Wiki: viết lại docs/wiki/Tab/analytics-to-gau.md, xoá docs/wiki/Tab/kb.md + Tab/info.md (nội dung gộp vào
+  analytics-to-gau.md). Lưu ý: 2 trang wiki cũ "Knowledge Base…"/"Note…" (tab_guide, sync từ file .md cũ) còn
+  tồn tại trong Supabase kb_wiki_pages — sync script chỉ upsert theo title, không tự xoá khi file nguồn mất,
+  Hiếu cân nhắc xoá tay nếu muốn dọn sạch (không bắt buộc).
+
+### s163 follow-up (cùng ngày) — test tay qua HTTP + phát hiện bug nghiêm trọng có sẵn từ s142
+- Hiếu xác nhận đã chạy migration v43. Claude test bằng cách tự ký JWT session hợp lệ (dùng NEXTAUTH_SECRET có
+  sẵn trong .env.local, không đụng password ai) để giả lập gọi API như user thật (role staff + admin seikobao)
+  trên dev server local — vì không có Claude in Chrome/credential để test qua browser thật.
+- Xác nhận bằng direct Supabase query trước: migration v43 đúng, query lọc theo group đúng với data thật (2
+  group "Test"/"Team CS" đang tồn tại).
+- Test qua HTTP (route thật, không bypass): staff không phải member → 403 xem group lạ; join group → chỉ thấy
+  đúng group đó; admin tạo/gán/đổi visibility_mode 1 trang Wiki qua API → lọc đúng theo group; staff bị chặn
+  tạo/gán trang (403 đúng thiết kế); Docs API cũ không bị ảnh hưởng (regression check). ALL PASS. Dọn sạch data
+  test, verify lại bằng query — không còn rác.
+- PHÁT HIỆN BUG NGHIÊM TRỌNG (không phải do s163 gây ra, có từ s142 — lộ ra vì test lần đầu với user email
+  rỗng): toàn bộ Tổ Gấu định danh member bằng chat_group_members.user_email = session.user.email || "". 43 user
+  hiện có email=NULL trong DB (đa số qua Lark OAuth chưa gắn email, gồm cả account creator của Hiếu) → tất cả
+  cùng chung identity chuỗi rỗng "". Test lần đầu (staff giả với email="") vô tình trùng với 2 dòng
+  chat_group_members thật của Hiếu (cũng user_email="") → thấy hết mọi group dù chưa từng được add — ban đầu
+  tưởng là bug của code mới, sau khi đổi sang email giả duy nhất mới lộ ra đây là bug định danh có sẵn, không
+  phải bug của feature mới. Ảnh hưởng thật: nếu Hiếu add 1 user không-email vào group, MỌI user không-email khác
+  (43 tài khoản) mặc nhiên thấy được nội dung riêng-nhóm đó. Chưa fix (blast radius lớn, ~8 route file, có thể
+  cần migrate data) — để Hiếu quyết ưu tiên.
+
+### s163 follow-up (2) — fix bug định danh member Tổ Gấu (task riêng, theo yêu cầu Hiếu "fix ngay")
+- Root cause: chat_group_members.user_email (+ sender_email/uploaded_by/created_by/added_by/chat_groups.created_by)
+  lấy từ session.user.email || "". 43 user (đa số Lark OAuth, gồm cả creator Hiếu) có email=NULL trong DB →
+  tất cả cùng chung identity chuỗi rỗng "" → user không-email bất kỳ mặc nhiên là member mọi group có 1
+  user không-email khác đã join, dù chưa từng được mời.
+- Fix: đổi khoá định danh sang session.user.username (luôn duy nhất + luôn có, cả Lark lẫn credentials) xuyên
+  suốt 10 route file api/to-gau/groups/** + api/to-gau/upload + api/kb/wiki/route.ts (isGroupMember thêm ở
+  s163 cũng bị lỗi tương tự, đã fix cùng lúc). Giữ nguyên tên cột DB (user_email/sender_email/uploaded_by/
+  created_by/added_by) — chỉ đổi giá trị lưu, tránh phải viết migration đổi tên cột.
+- API POST /members đổi contract: nhận {username, user_name} thay vì {user_email} — không còn cho gõ email tay
+  (nhiều user không có). user-search route trả thêm field username, tìm được cả theo tên (trước chỉ tìm theo
+  email/tên). FE (to-gau/[id]/page.tsx SettingsModal) bắt buộc chọn từ gợi ý autocomplete mới add được, không
+  cho gõ tự do nữa. PATCH (đổi role) đổi key user_email->username; DELETE đổi query param ?email=->?username=.
+- notifyLarkMembers (Lark DM khi có tin/@mention): đổi join users từ .eq("email",...) sang .eq("username",...)
+  — trước đây user không-email không nhận được DM dù có lark_open_id vì lookup theo email rỗng không match ai.
+- Backfill data thật trên Supabase (owned toàn bộ bởi Hiếu, review kỹ trước khi ghi): 2 chat_groups.created_by,
+  2 chat_group_members.user_email + added_by, 8 chat_messages.sender_email (5 dòng "" + 3 dòng
+  hieunh862@gmail.com — email cá nhân rò rỉ từ session Lark cũ, không phải users.email thật), 1
+  chat_notes.created_by — tất cả "" hoặc email cá nhân -> username thật lark_ou_e5af3c7f447984052c1c5a5c2f5.
+  Verify lại bằng query sau backfill — đúng hết, không còn "".
+- Test bằng HTTP thật (session tự ký qua NEXTAUTH_SECRET, không đụng password ai): tạo 2 user giả không-email
+  khác nhau, chỉ add 1 người vào group Test -> xác nhận người còn lại KHÔNG còn thấy group (trước đây sẽ thấy
+  do collision, đã verify tái tạo đúng bug trước khi fix) -> PASS sau fix. Full regression s163 (group-scoped
+  wiki, docs API) chạy lại -> ALL PASS. Luồng add/đổi-role/xoá-member qua username test riêng -> PASS (user-search
+  trả username, POST/PATCH/DELETE đều đúng). Dọn sạch toàn bộ data test + script scratch sau khi xong.
+- tsc PASS toàn bộ 2 lần (giữa chừng + cuối).
+- Wiki: docs/wiki/Tab/analytics-to-gau.md thêm §"Fix identity-collision" ngay dưới bảng chat_group_members,
+  đánh dấu cột user_email/added_by giờ lưu username không phải email thật.

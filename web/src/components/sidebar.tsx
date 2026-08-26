@@ -4,15 +4,14 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, MessageCircle, Link2 } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Link2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
-// Note tab — nổi bật, hiển thị cho tất cả role (Knowledge Base đã gộp vào trong trang Note)
-const NAV_INFO   = { href: "/info",              label: "Note",    icon: StickyNote,    key: "info"    }
-// Tổ Gấu — chỉ creator
+// Tổ Gấu — nổi bật, hiển thị cho tất cả role (Note + Knowledge Base đã gộp vào đây, mỗi group tự
+// quản tab Tài liệu riêng; group nào user không phải member thì API tự trả rỗng, không cần gate ở đây)
 const NAV_TO_GAU = { href: "/analytics/to-gau", label: "Tổ Gấu", icon: MessageCircle, key: "to-gau"  }
 
 // Tabs luôn hiển thị ở trên (KB đã chuyển vào trong Note → bỏ khỏi sidebar)
@@ -362,7 +361,7 @@ export function Sidebar() {
   const allowedKeys  = new Set(navItems.map(n => n.key))
   const topItems     = NAV_TOP.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
   const productItems = NAV_PRODUCT.filter(n => allowedKeys.has(n.key) && !hiddenTabs.has(n.key))
-  const showInfoTab  = !hiddenTabs.has("info")   // creator có thể ẩn Information tab
+  const showToGauTab = !hiddenTabs.has("to-gau")   // creator có thể ẩn Tổ Gấu tab cho 1 role
   const isAdminUser  = effectiveRole === "admin"
   // "/analytics" và "/analytics/creator" là parent có route con → match chính xác để không sáng cùng lúc với route con
   const isActive = (href: string) =>
@@ -411,8 +410,7 @@ export function Sidebar() {
         {effCollapsed ? (
           /* Chế độ thu gọn: icon rail phẳng (tất cả mục được phép) */
           <>
-            {showInfoTab && <NavRow href={NAV_INFO.href} label={NAV_INFO.label} Icon={NAV_INFO.icon} active={isActive(NAV_INFO.href)} collapsed accent="violet" />}
-            {isCreatorUser && <NavRow href={NAV_TO_GAU.href} label={NAV_TO_GAU.label} Icon={NAV_TO_GAU.icon} active={isActive(NAV_TO_GAU.href)} collapsed accent="brand" />}
+            {showToGauTab && <NavRow href={NAV_TO_GAU.href} label={NAV_TO_GAU.label} Icon={NAV_TO_GAU.icon} active={isActive(NAV_TO_GAU.href)} collapsed accent="brand" />}
             {topItems.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
             ))}
@@ -442,25 +440,10 @@ export function Sidebar() {
             )}
           </>
         ) : (
-          /* Chế độ mở rộng: Note → Bé Gấu/Promotion → Analytics → Product */
+          /* Chế độ mở rộng: Tổ Gấu → Bé Gấu/Promotion → Analytics → Product */
           <>
-            {/* Note — NỔI BẬT, ẩn nếu creator config ẩn cho role này */}
-            {showInfoTab && (
-              <Link
-                href={NAV_INFO.href}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-2 text-[13px] font-semibold transition-all
-                  ${isActive(NAV_INFO.href)
-                    ? "bg-violet-600 text-white shadow-md ring-1 ring-violet-400/50"
-                    : "bg-violet-500/15 text-violet-200 ring-1 ring-violet-400/30 hover:bg-violet-500/25 hover:text-white"}`}
-              >
-                <StickyNote size={16} className="flex-shrink-0" />
-                <span className="flex-1">Note</span>
-                <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">+ KB</span>
-              </Link>
-            )}
-
-            {/* Tổ Gấu — chỉ creator */}
-            {isCreatorUser && (
+            {/* Tổ Gấu — NỔI BẬT, hiển thị mọi role (ẩn nếu creator config ẩn cho role này) */}
+            {showToGauTab && (
               <Link
                 href={NAV_TO_GAU.href}
                 className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-2 text-[13px] font-semibold transition-all

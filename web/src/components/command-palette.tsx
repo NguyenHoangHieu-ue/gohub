@@ -109,7 +109,7 @@ export function CommandPalette() {
     // 2. Hành động nhanh
     const actions: Cmd[] = [
       { id: "a:promo", label: "Tạo Promotion",  icon: Gift,          group: "Hành động", run: () => go("/promotions") },
-      { id: "a:note",  label: "Mở Note / KB",   icon: StickyNote,    group: "Hành động", run: () => go("/info") },
+      { id: "a:note",  label: "Mở Tổ Gấu / Tài liệu", icon: StickyNote, group: "Hành động", run: () => go("/analytics/to-gau") },
       { id: "a:ncc",   label: "Import NCC",     icon: Truck,         group: "Hành động", run: () => go("/ncc") },
       { id: "a:sql",   label: "SQL Explorer",   icon: Terminal,      group: "Hành động", run: () => go("/analytics/sql") },
     ]

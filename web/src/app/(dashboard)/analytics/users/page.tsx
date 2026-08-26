@@ -22,11 +22,9 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
   { id: "scheduled",  label: "Scheduled Messages" },
-  { id: "info",       label: "Note" },
   { id: "my-metrics", label: "My Metrics" },
 ]
 const PM_TABS = [
-  { key: "kb",   label: "Kiến Thức"   },
   { key: "skus", label: "SP Hệ Thống" },
   { key: "ncc",  label: "SP Vendor"   },
 ]

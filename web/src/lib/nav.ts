@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  MessageSquare, Database, Clock, Settings, StickyNote, Crown, Cpu, BookOpen, BarChart2,
+  MessageSquare, Database, Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -12,7 +12,9 @@ import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 export interface NavDef { href: string; label: string; icon: LucideIcon; key?: string }
 export interface NavGroup { label: string; items: NavDef[] }
 
-export const NAV_INFO: NavDef = { href: "/info", label: "Note", icon: StickyNote, key: "info" }
+// Note + Knowledge Base đã gộp vào Tổ Gấu (mỗi group có tab Tài liệu riêng) — hiển thị mọi role,
+// chỉ ẩn qua creator config hiddenTabs (giống Note trước đây), không gate theo pmAllowed.
+export const NAV_TO_GAU: NavDef = { href: "/analytics/to-gau", label: "Tổ Gấu", icon: MessageCircle, key: "to-gau" }
 
 export const NAV_TOP: NavDef[] = [
   { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
@@ -94,8 +96,13 @@ export function visibleNavForPalette(ctx: PaletteCtx): PaletteNavItem[] {
   const isPriv = role === "admin" || role === "creator"
   const out: PaletteNavItem[] = []
 
-  // Top-level tabs (Note / Bé Gấu / Promotions / Product) — gate theo key
-  const topLevel: NavDef[] = [NAV_INFO, ...NAV_TOP, ...NAV_PRODUCT]
+  // Tổ Gấu — hiển thị mọi role (chỉ ẩn qua hiddenTabs), mirror sidebar.tsx
+  if (!hiddenTabs.has(NAV_TO_GAU.key ?? "")) {
+    out.push({ href: NAV_TO_GAU.href, label: NAV_TO_GAU.label, icon: NAV_TO_GAU.icon, group: "Điều hướng" })
+  }
+
+  // Top-level tabs (Bé Gấu / Promotions / Product) — gate theo key
+  const topLevel: NavDef[] = [...NAV_TOP, ...NAV_PRODUCT]
   const pmAllowed = new Set<string>([...DEFAULT_STANDARD_TABS, ...(allowedTabs ?? [])])
   for (const it of topLevel) {
     const key = it.key ?? ""

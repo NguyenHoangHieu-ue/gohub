@@ -8,12 +8,13 @@ function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
 }
 
-async function isMember(groupId: string, email: string): Promise<boolean> {
+// NOTE: chat_group_members.user_email / chat_messages.sender_email lưu USERNAME, không phải email thật.
+async function isMember(groupId: string, username: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("chat_group_members")
     .select("id")
     .eq("group_id", groupId)
-    .eq("user_email", email)
+    .eq("user_email", username)
     .maybeSingle()
   return !!data
 }
@@ -29,43 +30,42 @@ function parseMentionHandles(content: string): string[] {
 async function notifyLarkMembers(
   groupId: string,
   msg: { sender_name: string; content: string; msg_type: string },
-  senderEmail: string,
+  senderUsername: string,
 ) {
   // 1. Lấy group info + tất cả members (cần cho mention matching)
   const [{ data: group }, { data: members }] = await Promise.all([
     supabaseAdmin.from("chat_groups").select("name, avatar_emoji, notify_lark").eq("id", groupId).maybeSingle(),
-    supabaseAdmin.from("chat_group_members").select("user_email, user_name").eq("group_id", groupId).neq("user_email", senderEmail),
+    supabaseAdmin.from("chat_group_members").select("user_email, user_name").eq("group_id", groupId).neq("user_email", senderUsername),
   ])
   if (!group || !members?.length) return
 
-  // 2. Phát hiện @mention → tìm member được nhắc đến
+  // 2. Phát hiện @mention → tìm member được nhắc đến (theo tên hiển thị, không còn prefix-email)
   const handles = parseMentionHandles(msg.content)
-  const mentionedEmails = new Set<string>()
+  const mentionedUsernames = new Set<string>()
   if (handles.length > 0) {
     for (const handle of handles) {
       const matched = members.find(m => {
-        const prefix = m.user_email.split("@")[0].toLowerCase()
-        const name   = (m.user_name || "").replace(/\s+/g, "").toLowerCase()
-        return handle === prefix || (name && handle === name)
+        const name = (m.user_name || "").replace(/\s+/g, "").toLowerCase()
+        return handle === m.user_email.toLowerCase() || (name && handle === name)
       })
-      if (matched) mentionedEmails.add(matched.user_email)
+      if (matched) mentionedUsernames.add(matched.user_email)
     }
   }
 
   // 3. Xác định danh sách cần notify:
   //    - @mention: luôn gửi cho mentioned users (bất kể notify_lark flag)
   //    - General: gửi cho all members nếu notify_lark không bị tắt
-  const generalEmails: string[] = group.notify_lark !== false
+  const generalUsernames: string[] = group.notify_lark !== false
     ? members.map(m => m.user_email)
     : []
-  const allTargetEmails = [...new Set([...mentionedEmails, ...generalEmails])]
-  if (!allTargetEmails.length) return
+  const allTargetUsernames = [...new Set([...mentionedUsernames, ...generalUsernames])]
+  if (!allTargetUsernames.length) return
 
-  // 4. Lấy lark_open_id
+  // 4. Lấy lark_open_id theo username (ổn định, không phụ thuộc email có hay không)
   const { data: users } = await supabaseAdmin
     .from("users")
-    .select("email, lark_open_id")
-    .in("email", allTargetEmails)
+    .select("username, lark_open_id")
+    .in("username", allTargetUsernames)
   if (!users?.length) return
 
   // 5. Build text — @mention dùng text khác
@@ -77,7 +77,7 @@ async function notifyLarkMembers(
     users
       .filter(u => u.lark_open_id)
       .map(u => {
-        const isMentioned = mentionedEmails.has(u.email)
+        const isMentioned = mentionedUsernames.has(u.username)
         const text = isMentioned
           ? `🔔 ${msg.sender_name} đã nhắc đến bạn trong ${groupTag}:\n${preview}`
           : `${groupTag} ${msg.sender_name}: ${preview}`
@@ -90,11 +90,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email = session.user.email || ""
-  const role  = session.user.role  || ""
+  const username = session.user.username || ""
+  const role     = session.user.role     || ""
   const { id } = params
 
-  if (!isPrivileged(role) && !(await isMember(id, email))) {
+  if (!isPrivileged(role) && !(await isMember(id, username))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -149,12 +149,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email = session.user.email || ""
-  const role  = session.user.role  || ""
-  const name  = session.user.name  || email
+  const username = session.user.username || ""
+  const role     = session.user.role     || ""
+  const name     = session.user.name     || username
   const { id } = params
 
-  if (!isPrivileged(role) && !(await isMember(id, email))) {
+  if (!isPrivileged(role) && !(await isMember(id, username))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .from("chat_messages")
     .insert({
       group_id:     id,
-      sender_email: email,
+      sender_email: username,
       sender_name:  name,
       content:      content || "",
       msg_type:     msgType,
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Fire-and-forget Lark notification (không block response)
-  notifyLarkMembers(id, { sender_name: name, content: content || "", msg_type: msgType }, email).catch(() => {})
+  notifyLarkMembers(id, { sender_name: name, content: content || "", msg_type: msgType }, username).catch(() => {})
 
   return NextResponse.json({ data }, { status: 201 })
 }
