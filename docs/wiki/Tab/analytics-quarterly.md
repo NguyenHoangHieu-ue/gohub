@@ -199,9 +199,10 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
 **Cấu hình Squad** (admin/creator) — lưu `app_settings.squad_config`:
 - Tên squad + **Leader** (chọn từ bảng `users`) + danh sách **sales_pics** (click-only từ available list; pic đã gán biến khỏi list; chip có nút × để bỏ).
 
-**Bảng progress** — mỗi squad: Revenue / GP(~CM1) / 3HK Rev với **Actual · Pro-rata · Target · %**.
-- Pro-rata = `actual × (quarter_days / elapsed_days)`.
-- GP dùng làm proxy CM1 (chưa trừ phí kênh/nhóm).
+**Bảng progress** — mỗi squad: Revenue / CM1 / 3HK Rev với **Actual · Pro-rata · Target · %**.
+- Pro-rata = per-month factor (khớp `buildQuarterMonthMeta`, không dùng `quarter_days/elapsed_days` phẳng).
+- **CM1 = GP − chi phí per-customer (Turso) − Group Cost B2B (Supabase, phân bổ theo revenue-share)**.
+  ⚠️ **Fix s162 (2026-08-26)**: trước đây Squad Progress chỉ trừ chi phí per-customer, **KHÔNG trừ Group Cost B2B** → CM1 cao hơn có hệ thống so với tab Tổng quan (`quarterly-report`) và bảng tier (`quarterly-b2b-customers`), cả 2 đều trừ Group Cost. Nay áp cùng công thức "#4 NHẤT QUÁN GROUP COST" của tier route: `totalB2BGroupCost` (pro-rate tháng hiện tại) phân bổ vào mỗi squad theo tỷ trọng revenue (`squad.revenue / grandTotalB2BRevenue`), trừ ở CẢ mức Actual và PR (2 mẫu số revenue riêng: actual dùng revenue thật, PR dùng revenue projected). Chỉ điều chỉnh ở mức **squad/tổng**, KHÔNG xuống từng customer (giống tier route — customer.cm1 giữ nguyên = GP − cost riêng KH đó).
 
 **Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK) — **ưu tiên từ dưới lên: mức xấu nhất thắng**, 1 metric rơi vào nguy hiểm thì cả cặp bị kéo xuống nguy hiểm dù metric kia vượt target:
 | Mức | Điều kiện |

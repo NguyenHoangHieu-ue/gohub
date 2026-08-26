@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
+import { fetchCosts } from "@/lib/bod-data"
 import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
 import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
 
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
                THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)                              AS hk3_m${i}`).join(",")
 
     // Revenue + GP + 3HK per customer, tách theo tháng
-    const [custRows, picRows] = await Promise.all([
+    const [custRows, picRows, { groupCosts }] = await Promise.all([
       queryAnalytics<Record<string, string>>(`
         SELECT
           TRIM(f.customer_code)                               AS customer_code,
@@ -149,6 +150,7 @@ export async function GET(req: NextRequest) {
           AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
         ORDER BY 2
       `),
+      fetchCosts(months),
     ])
 
     // Load targets + chi phí KH song song
@@ -193,6 +195,19 @@ export async function GET(req: NextRequest) {
     // Helper: projected revenue/hk3 dùng per-month factors
     const calcPrByMonth = (r: Record<string, string>, field: string) =>
       Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * monthMeta[i].factor, 0))
+
+    // Group Cost B2B — phân bổ theo revenue-share (khớp #4 NHẤT QUÁN GROUP COST trong quarterly-b2b-customers,
+    // trước đây Squad Progress KHÔNG trừ khoản này → CM1 lệch cao hơn Tổng quan/tier).
+    const grandTotalRevAct = custRows.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
+    const grandTotalRevPr  = custRows.reduce((s, r) => s + calcPrByMonth(r, "rev"), 0)
+    let totalB2BGCAct = 0, totalB2BGCPr = 0
+    months.forEach((m, i) => {
+      const budget = groupCosts.filter((g: any) => g.group_name === "B2B" && g.month === m).reduce((s: number, g: any) => s + (g.amount || 0), 0)
+      const mr = monthMeta[i]
+      const gcRatio = (mr.elapsed > 0 && mr.elapsed < mr.dim) ? mr.elapsed / mr.dim : 1
+      totalB2BGCAct += budget * gcRatio
+      totalB2BGCPr  += mr.isProjected ? budget : budget * gcRatio
+    })
 
     // Aggregate per squad
     const squads = squadsConfig.map(sq => {
@@ -253,7 +268,10 @@ export async function GET(req: NextRequest) {
           cm1Pr += (mGm - mCost) * monthMeta[i].factor
         }
       }
-      cm1Pr = Math.round(cm1Pr)
+      const groupShareAct = grandTotalRevAct > 0 ? (rev / grandTotalRevAct) * totalB2BGCAct : 0
+      const groupSharePr  = grandTotalRevPr  > 0 ? (revPr / grandTotalRevPr)  * totalB2BGCPr  : 0
+      cm1 = Math.round(cm1 - groupShareAct)
+      cm1Pr = Math.round(cm1Pr - groupSharePr)
 
       const mt = squadTargets[sq.name] ?? {}
       const effTgtRev = Number(mt.rev)    > 0 ? Number(mt.rev)    : tgtRev
