@@ -4,21 +4,66 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-26, s162)
+## Trạng thái hiện tại (2026-08-26, s163)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — s160-s162 + %MoM fix đã lên main 3d75eac) |
+| ⏳ Trên staging CHƯA merge main | s163 gộp Note+KB vào Tổ Gấu (CHƯA test bằng tay — chờ Hiếu chạy migration v43 rồi QA trên staging trước merge main) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix (đến 3d75eac, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
+- **s163 (QUAN TRỌNG, MỚI) — chưa test bằng tay**: máy dev không có `web/.env.local` (Supabase key) nên Claude
+  KHÔNG tự test được luồng gán nhóm/xem tài liệu trên UI thật. **Việc cần Hiếu làm trước khi QA**:
+  1. Chạy migration `web/db/migrations/v43_kb_wiki_group_scope.sql` trên Supabase.
+  2. Vào `/analytics/to-gau` bằng vài tài khoản role khác nhau → xác nhận sidebar giờ hiện "Tổ Gấu" (trước đây
+     CHỈ creator thấy — đã sửa bug này cùng đợt, xem Gotcha trong `docs/wiki/Tab/analytics-to-gau.md`).
+  3. Vào 1 group → tab "📚 Tài liệu" → thử "Soạn trang mới" (Chính thức), gán nhóm, xác nhận group khác không
+     thấy trang gán riêng. Thử "Của nhóm" (Docs/Notes cũ) vẫn hoạt động bình thường (regression check).
+  4. Xác nhận `/info` và `/kb` không còn truy cập được (đã xoá route).
+  5. Vào Creator Settings (`/analytics/creator`) → section "Tài liệu chính thức — Upload & AI đề xuất Wiki" →
+     thử upload 1 file, xác nhận MRP vẫn hoạt động (port từ `/kb` cũ, chưa test lại end-to-end).
 - **QA số liệu s162 (QUAN TRỌNG — đã lên main)**: Claude chưa verify được B2B CM1 fix bằng live gohub_dw (máy dev thiếu `ANALYTICS_DB_*`). Hiếu so B2B CM1 giữa BOD/Channels/Dashboard/B2B tab trước và sau fix trên production — số sẽ THẤP HƠN (nay trừ thêm Turso B2B cost). Đặc biệt **BOD tab** (leadership xem) — báo Claude nếu số lệch không hợp lý.
 - **Squad Progress vs Tổng quan**: đã fix 4 nguyên nhân (group cost, gộp KH trùng dòng, futureScale, %TGT 3HK) — Hiếu tự so số từng KH/PIC cụ thể trên production, báo nếu còn lệch.
 - ✅ **Inventory tab — đã seed xong (2026-08-26)**: chạy `import_inventory_plan.mjs` thành công. Kết quả: `inventory_plan_skus` 12 dòng (9 VN+3 US) · `inventory_plan_weekly` 276 dòng · `inventory_po` 9 dòng — khớp Excel. 4 dòng PO ngày AMBIGUOUS (cả 2 số ≤12, tạm lấy mặc định MM/DD) **cần Hiếu soát tay trong Supabase `inventory_po`**: `1ETHATMF01507`/`AB0003DK00000`/`1D0003DK00000`/`ACTHATMF05010`. Còn lại: QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên production.
 - **Scheduled Messages**: theo dõi vài ngày xem còn timeout/Lark alert lỗi không (đã fix s161, nâng maxDuration 60→180s + soft-timeout + alert).
 - Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Xem lại UI Squad Progress trên production, báo nếu cần chỉnh.
+
+**s163 — đã làm (2026-08-26):**
+- ✅ **Gộp Note (`/info`) + Knowledge Base (`/kb`) vào Tổ Gấu, phân quyền tài liệu theo group** — theo yêu cầu
+  Hiếu ("tách biệt tài liệu creator push vs tài liệu member trong nhóm push, phân theo Nhóm nào thấy"). Plan đầy
+  đủ (đã Hiếu duyệt qua plan mode) lưu ở phiên chat, tóm tắt:
+  - **Migration `v43_kb_wiki_group_scope.sql`** (CHƯA CHẠY — cần Hiếu): thêm `kb_wiki_pages.visibility_mode`
+    ('all'|'groups', default 'all' = không phá dữ liệu cũ) + bảng nối `kb_wiki_page_groups` (page_id × group_id,
+    tái dùng `chat_groups` của Tổ Gấu làm đơn vị phân quyền — KHÔNG tạo khái niệm nhóm riêng).
+  - **API `/api/kb/wiki*` mở rộng** (route CŨ đã tồn tại từ trang `/kb`, chất lượng tốt hơn bản `/api/to-gau/kb`
+    thử nghiệm trước đó — giữ lại làm nguồn DUY NHẤT, xoá `/api/to-gau/kb`): GET thêm `groupId` filter + member
+    check; POST thêm role gate admin/creator (TRƯỚC ĐÂY KHÔNG GATE, chỉ ẩn nút ở FE — lỗ hổng nhỏ đã vá) +
+    `group_ids`/`visibility_mode`. Route mới `GET/PUT /api/kb/wiki/[id]/groups` (gán/xem nhóm, admin/creator only).
+  - **UI Tổ Gấu** (`to-gau/[id]/page.tsx`): tab bar 4 tab cũ (Chat/Docs/Notes/Wiki) gộp còn 2 (**Chat | 📚 Tài
+    liệu**), Tài liệu có sub-tab **Chính thức** (WikiPanel viết lại toàn bộ — full CRUD + version history + modal
+    gán nhóm, trước chỉ có view+edit không tạo/xoá được) và **Của nhóm** (DocsPanel/NotesPanel CŨ, không đổi 1
+    dòng logic, chỉ đổi vị trí render).
+  - **🐛 Bug phát hiện giữa chừng (đã sửa)**: sidebar (`components/sidebar.tsx`) gate nav "Tổ Gấu" bằng
+    `isCreatorUser` — CHỈ role `creator` thấy link trong sidebar dù API đã hỗ trợ member thường từ lâu. Nếu không
+    sửa, xoá tab Note sẽ làm TOÀN BỘ staff mất đường vào tài liệu. Đổi sang hiện cho MỌI role (gate còn lại =
+    `hiddenTabs` config như Note trước đây), đồng bộ cả `lib/nav.ts` (Command Palette).
+  - **Dọn permission chết**: bỏ `perm_kb_upload/wiki_view/wiki_edit` (3 role-toggle không còn ý nghĩa vì Track A
+    giờ hardcode admin/creator), bỏ `"kb"` khỏi `DEPT_UNLOCKABLE_TABS`/PM tabs, bỏ `"info"` khỏi
+    `ALL_ANALYTICS_IDS`/REPORTS matrix (`analytics-roles.ts`, `user-admin.tsx`, `api/permissions/route.ts`,
+    `analytics/users/page.tsx`).
+  - **Pipeline Upload→MRP giữ nguyên, dời UI**: `/kb` DocsTab (upload/parse/chunk/embed/AI-đề-xuất-Wiki) port
+    gần như nguyên khối sang `analytics/creator/kb-docs-section.tsx`, render trong Creator Settings.
+  - **Đã bỏ hẳn theo quyết định Hiếu** (không port): Overview tra cứu nước, ghi chú cá nhân (`user_notes`), file
+    tham khảo cá nhân (bucket `Information`) — bảng/bucket KHÔNG xoá (an toàn), chỉ mất UI truy cập.
+  - **Xoá file**: `app/(dashboard)/kb/`, `app/(dashboard)/info/`, `app/api/info/*`, `app/api/to-gau/kb/`.
+  - tsc PASS. **CHƯA test bằng tay** (máy dev thiếu Supabase key) — xem checklist ở mục TIẾP THEO trên.
+  - Wiki: viết lại `docs/wiki/Tab/analytics-to-gau.md` (§"s163"), xoá `docs/wiki/Tab/kb.md` + `Tab/info.md`
+    (nội dung gộp vào analytics-to-gau.md). ⚠️ 2 trang wiki cũ "Knowledge Base…"/"Note…" (`page_type: tab_guide`,
+    sync từ file .md cũ) còn tồn tại trong Supabase `kb_wiki_pages` — sync script chỉ upsert theo title, không tự
+    xoá page khi file nguồn mất → **Hiếu cân nhắc xoá tay 2 dòng đó** trong tab Tài liệu (Creator Settings hoặc
+    trực tiếp Supabase) nếu muốn dọn sạch, không bắt buộc (chỉ admin/creator thấy vì `is_hidden` cũ = true).
 
 **s162 — đã làm (2026-08-26):**
 - ✅ **Fix Squad Progress thiếu Group Cost B2B** (`api/analytics/squad-progress/route.ts`, commit ea2296b): CM1 Squad Progress chỉ trừ chi phí per-customer (Turso), thiếu trừ Group Cost B2B (Supabase `analytics_channel_group_costs`) mà Tổng quan (`quarterly-report`) + tier (`quarterly-b2b-customers`) đều trừ → CM1 cao hơn Tổng quan có hệ thống. Áp lại công thức phân bổ theo revenue-share y hệt route tier (#4 NHẤT QUÁN GROUP COST), trừ ở cả mức Actual và PR, chỉ ở mức squad/tổng (từng customer giữ nguyên).
@@ -71,11 +116,13 @@
 - [x] ✅ **v40 `ca_thread_log`** (lịch sử cà thread)
 - [x] ✅ **v41 `access_audit_log`** (audit log cấp quyền)
 - [x] ✅ **v42 `inventory_plan_skus/inventory_plan_weekly/inventory_po`** (tab Inventory, s161 — Hiếu đã chạy)
+- [ ] ⏳ **v43 `kb_wiki_pages.visibility_mode` + `kb_wiki_page_groups`** (gộp Note/KB vào Tổ Gấu, s163 — CẦN Hiếu chạy trước khi QA)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
 - [x] ✅ **Vercel env**: `LARK_VERIFICATION_TOKEN` đã set Production + Preview
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
+- [ ] **s163 — chạy migration `v43_kb_wiki_group_scope.sql`** trên Supabase trước khi QA gộp Note/KB vào Tổ Gấu.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 
 **Hiếu cần làm (còn lại, cũ):**

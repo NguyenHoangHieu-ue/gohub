@@ -6,16 +6,16 @@ import { useRouter } from "next/navigation"
 import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
+import KbDocsSection from "./kb-docs-section"
 
 // Tất cả tab/route có thể ẩn
 const ALL_TABS = [
   { id: "chatbot",         label: "Bé Gấu (Chatbot)" },
-  { id: "kb",              label: "Knowledge Base & Wiki" },
+  { id: "to-gau",          label: "Tổ Gấu (Chat + Tài liệu)" },
   { id: "promotions",      label: "Promotions" },
   { id: "skus",            label: "System SKUs" },
   { id: "ncc",             label: "NCC Catalog" },
   { id: "countries",       label: "Reference" },
-  { id: "info",            label: "Note (Notes/Files)" },
   { id: "dashboard",       label: "Analytics Dashboard" },
   { id: "quarterly",       label: "Quarter Report" },
   { id: "bod",             label: "BOD Report" },
@@ -244,6 +244,12 @@ function CreatorSettings() {
 
       {/* Cà Thread */}
       <CaThreadSection />
+
+      {/* Upload tài liệu → AI đề xuất Wiki chính thức (gán nhóm trong Tổ Gấu) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <h2 className="font-bold text-slate-800 mb-4">Tài liệu chính thức — Upload & AI đề xuất Wiki</h2>
+        <KbDocsSection />
+      </div>
 
       {/* Preview modal — xem trước role này thấy gì */}
       {previewRole && (

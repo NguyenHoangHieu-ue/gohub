@@ -4,7 +4,7 @@
 // Trước đây nằm rải trong /admin (AddUser, ChangePassword, PermissionsTab, DeptTabMatrix) — gộp về 1 nơi.
 
 import { useEffect, useState } from "react"
-import { Save, CheckSquare, Square, FileSpreadsheet, Eye, Pencil, BookOpen } from "lucide-react"
+import { Save, CheckSquare, Square, BookOpen } from "lucide-react"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 
 export interface AdminUser {
@@ -120,24 +120,21 @@ export function ChangePasswordForm({ users, onNotify }: { users: AdminUser[]; on
 
 // ── Phân quyền hệ thống (nâng cao): Role × Tính năng + Phòng ban × Tab ────────
 const PERM_FEATURES = [
-  { key: "perm_kb_upload",    icon: FileSpreadsheet, label: "KB — Upload tài liệu", desc: "Ai có thể upload PDF/DOCX vào Knowledge Base" },
-  { key: "perm_kb_wiki_view", icon: Eye,             label: "KB — Xem tab Wiki",    desc: "Ai thấy tab Wiki trong trang Kiến Thức" },
-  { key: "perm_kb_wiki_edit", icon: Pencil,          label: "KB — Tạo / Sửa Wiki",  desc: "Ai có thể tạo và chỉnh sửa wiki pages" },
   { key: "perm_ncc_import",   icon: BookOpen,        label: "NCC — Import dữ liệu",  desc: "Ai có thể upload file NCC để cập nhật giá" },
 ] as const
 const PERM_ROLES = CONFIGURABLE_ROLES
 const PERM_DEFAULTS: Record<string, string[]> = {
-  perm_kb_upload: [], perm_kb_wiki_view: ["staff"], perm_kb_wiki_edit: [], perm_ncc_import: [],
+  perm_ncc_import: [],
 }
 
 const DEPT_UNLOCKABLE_TABS = [
-  { key: "kb", label: "Kiến Thức" }, { key: "skus", label: "SP Hệ Thống" }, { key: "ncc", label: "SP Vendor" },
+  { key: "skus", label: "SP Hệ Thống" }, { key: "ncc", label: "SP Vendor" },
 ] as const
 const DEPARTMENTS = [
   { key: "sales", label: "Sales" }, { key: "product", label: "Product" }, { key: "tech", label: "Tech" }, { key: "finance", label: "Finance" },
 ] as const
 const DEPT_DEFAULTS: Record<string, string[]> = {
-  sales: ["kb"], product: ["kb", "skus", "ncc"], tech: ["kb", "skus", "ncc"], finance: ["skus"],
+  sales: [], product: ["skus", "ncc"], tech: ["skus", "ncc"], finance: ["skus"],
 }
 
 function ToggleBtn({ on, onClick }: { on: boolean; onClick: () => void }) {

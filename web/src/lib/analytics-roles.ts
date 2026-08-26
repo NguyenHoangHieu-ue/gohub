@@ -5,7 +5,7 @@
 export const ALL_ANALYTICS_IDS = [
   "dashboard", "quarterly", "bod", "all-time", "channels", "b2b", "b2c", "website",
   "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
-  "cs-troubleshoot", "feedback", "products", "targets", "sql", "scheduled", "info",
+  "cs-troubleshoot", "feedback", "products", "targets", "sql", "scheduled",
   "my-metrics",
 ]
 

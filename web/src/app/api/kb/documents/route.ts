@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (session.user.role !== "admin" && session.user.role !== "creator") {
+    return NextResponse.json({ error: "Chỉ admin/creator được upload tài liệu" }, { status: 403 })
+  }
 
   const username = session.user.name!
 

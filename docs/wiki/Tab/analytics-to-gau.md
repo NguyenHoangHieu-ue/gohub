@@ -1,9 +1,29 @@
-# Tab: Tổ Gấu (Group Chat)
+# Tab: Tổ Gấu (Group Chat + Tài liệu)
 
 **Route:** `/analytics/to-gau`  
 **Room:** `/analytics/to-gau/[id]`  
-**Phase:** 4 (final) — Lark notify, @mention, search, pin, polish  
-**Added:** s142 · s142 Phase 4
+**Phase:** 5 — gộp Note + Knowledge Base vào Tổ Gấu, phân quyền tài liệu theo group  
+**Added:** s142 · s142 Phase 4 · **s163 (2026-08-26): gộp Note/KB, xem §"Tab Tài liệu" bên dưới**
+
+---
+
+## ⚠️ s163 — Gộp Note (`/info`) + Knowledge Base (`/kb`) vào Tổ Gấu
+
+Tab **Note** (sidebar, mọi role thấy) và trang **`/kb`** (nhúng bên trong Note, không có entry riêng) đã
+**xoá hoàn toàn** — sidebar nay chỉ còn 1 entry nổi bật duy nhất: **Tổ Gấu**, hiển thị cho **mọi role** (trước đây
+Tổ Gấu chỉ hiện cho `creator` trong sidebar dù API đã hỗ trợ member thường — đây là bug tồn tại từ trước, đã sửa
+cùng đợt này, nếu không fix thì gộp Note/KB vào Tổ Gấu sẽ làm staff mất hẳn đường vào tài liệu).
+
+Bỏ hẳn không port: Overview tra cứu `ref_categories`/`ref_support_countries`, ghi chú cá nhân (`user_notes`),
+file tham khảo cá nhân (Storage bucket `Information`) — quyết định của Hiếu, ít người dùng. Bảng `user_notes` +
+bucket `Information` **không bị xoá** (không viết migration DROP, tránh mất dữ liệu ai còn cần đọc lại), chỉ
+ngừng có UI truy cập.
+
+Pipeline **Upload tài liệu → AI đề xuất Wiki (MRP)** (`kb_documents`/`kb_chunks`/`kb_processing_jobs`, API
+`/api/kb/documents`, `/api/kb/process`) **giữ nguyên, dời UI** từ `/kb` sang **Creator Settings**
+(`/analytics/creator` → section "Tài liệu chính thức — Upload & AI đề xuất Wiki",
+`analytics/creator/kb-docs-section.tsx`) — chỉ admin/creator, API POST đã thêm gate role (trước đây không gate,
+chỉ ẩn nút ở FE).
 
 ---
 
@@ -36,7 +56,7 @@ Group chat nội bộ trên GoHub Intel. Mỗi group có thể có thành viên 
 | group_id | uuid FK → chat_groups | CASCADE |
 | user_email | text | |
 | user_name | text | Lookup từ users table |
-| role | text | 'member' hoặc 'admin' |
+| role | text | 'member' \| 'manager' \| 'admin' — manager thêm/xoá được member + ghim tin nhắn, KHÔNG đổi role/xoá group |
 | added_by | text | Email người thêm |
 | added_at | timestamptz | |
 | UNIQUE | (group_id, user_email) | |
@@ -58,6 +78,19 @@ Group chat nội bộ trên GoHub Intel. Mỗi group có thể có thành viên 
 Index: `idx_chat_messages_group_created ON chat_messages(group_id, created_at DESC)`
 
 **Yêu cầu users table:** cột `lark_open_id text` để gửi Lark DM.
+
+### Tài liệu Chính thức — mở rộng `kb_wiki_pages` (migration v43, s163)
+
+Track "Chính thức" (creator/admin viết) dùng **chung bảng `kb_wiki_pages`** với trang `/kb` cũ (đã xoá) — KHÔNG
+phải bảng riêng cho Tổ Gấu. Thêm 2 thứ, additive, không phá dữ liệu cũ:
+
+| Thay đổi | Ghi chú |
+|---|---|
+| `kb_wiki_pages.visibility_mode` (TEXT, default `'all'`) | `'all'` = hiện cho MỌI group Tổ Gấu (mặc định, khớp hành vi cũ). `'groups'` = chỉ hiện cho group được gán trong `kb_wiki_page_groups`. |
+| `kb_wiki_page_groups` (`page_id`, `group_id` — PK kép) | Bảng nối N-N: 1 trang có thể gán cho nhiều group. `is_hidden` (cột cũ) vẫn giữ nghĩa draft/nháp — chỉ admin/creator thấy; `visibility_mode`/`kb_wiki_page_groups` chỉ áp dụng SAU khi đã publish (`is_hidden=false`). |
+
+Trang tạo TỪ trong 1 group Tổ Gấu → mặc định `visibility_mode='groups'` gán riêng cho group đó (không tự động
+"toàn công ty"). Đổi phân phối qua modal "Gán nhóm" (chỉ admin/creator) — gọi `GET/PUT /api/kb/wiki/[id]/groups`.
 
 ---
 
@@ -82,6 +115,15 @@ Index: `idx_chat_messages_group_created ON chat_messages(group_id, created_at DE
 | GET/POST/DELETE | `/api/to-gau/groups/[id]/docs` | member / creator | CRUD tài liệu nhóm |
 | GET/POST/PATCH/DELETE | `/api/to-gau/groups/[id]/notes` | member / creator | CRUD ghi chú chung |
 | POST | `/api/to-gau/upload` | member / creator | Upload file lên Supabase Storage |
+| GET | `/api/kb/wiki?groupId=<id>&search=` | member / creator | List trang Chính thức hiện cho group đó (`visibility_mode='all'` hoặc gán riêng group) |
+| GET/PATCH/DELETE | `/api/kb/wiki/[id]` | creator/admin (PATCH/DELETE) | Đọc 1 trang (+ lịch sử version) / sửa nội dung / xoá — dùng chung với pipeline MRP (Creator Settings) |
+| GET/PUT | `/api/kb/wiki/[id]/groups` | creator/admin | Xem/đổi danh sách group được gán (`visibility_mode` + `group_ids`) |
+| POST | `/api/kb/wiki` | creator/admin | Tạo trang mới — có thêm `group_ids`/`visibility_mode` trong body |
+
+> ⚠️ **s163**: route cũ `/api/to-gau/kb` (đọc `kb_wiki_pages` riêng, tự suy "audience" bằng regex parse frontmatter
+> trong `content`) đã **xoá hoàn toàn** — thay bằng `/api/kb/wiki*` ở trên (nguồn đọc/ghi Wiki DUY NHẤT trong hệ
+> thống, tránh lặp lại lệch logic giữa 2 route như trước). `last_edited_by`/`last_edited_at` nay dùng thẳng cột
+> thật `updated_by`/`updated_at` (trước đây parse regex từ YAML frontmatter chèn trong `content` — hack, đã bỏ).
 
 ---
 
@@ -136,7 +178,8 @@ Index: `idx_chat_messages_group_created ON chat_messages(group_id, created_at DE
 - Header: ArrowLeft + emoji + tên + badge AI + nút Search
 - (nếu archived) Banner warning + disable input
 - (nếu có pinned) Strip amber collapsible trước tab bar
-- Tab bar: 💬 Chat | 📄 Docs | 📌 Notes
+- Tab bar: **💬 Chat | 📚 Tài liệu**. Tab Tài liệu có sub-tab: **Chính thức** (Wiki, chỉ admin/creator viết,
+  gán nhóm) | **Của nhóm** (📄 Docs + 📌 Notes như cũ, member trong group tự up — không đổi logic, chỉ đổi vị trí UI)
 - Messages: ASC (cũ → mới), scroll-to-bottom auto, real-time INSERT + UPDATE
 - Bubble: mình = `bg-[#003B95] text-white` right; người khác = `bg-white border` left; AI = indigo gradient
 - Hover trên bubble → nút Ghim (creator/admin) absolute

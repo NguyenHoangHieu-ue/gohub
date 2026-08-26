@@ -8129,3 +8129,35 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
 - Lưu ý UI dễ hiểu nhầm (không phải bug, đã giải thích Hiếu): cột chính "Revenue"/"CM1" ở Tổng quan hiển thị
   PR, ở Squad Progress hiển thị Actual (PR nằm field phụ revenue_pr/cm1_pr) — so tên cột giống nhau giữa 2 tab
   dễ tưởng lệch dù đúng logic.
+
+## Session s163 (2026-08-26)
+### Gộp Note (/info) + Knowledge Base (/kb) vào Tổ Gấu, phân quyền tài liệu theo group
+- Yêu cầu Hiếu: tối ưu/gộp Note+KB vào Tổ Gấu, tách biệt tài liệu creator push (chính thức) vs tài liệu member
+  trong nhóm push (của nhóm), phân quyền theo Nhóm nào được thấy tài liệu nào. Lên plan qua plan mode trước,
+  Hiếu duyệt plan rồi mới code.
+- Migration v43_kb_wiki_group_scope.sql (CHƯA CHẠY, cần Hiếu): kb_wiki_pages.visibility_mode ('all'|'groups',
+  default 'all' = không phá dữ liệu cũ) + bảng nối kb_wiki_page_groups (page_id x group_id) — tái dùng
+  chat_groups của Tổ Gấu làm đơn vị phân quyền, không tạo khái niệm nhóm riêng (quyết định Hiếu).
+- API: mở rộng /api/kb/wiki* (route cũ từ /kb, chất lượng tốt hơn bản /api/to-gau/kb thử nghiệm trước — giữ lại
+  làm nguồn duy nhất, xoá /api/to-gau/kb). GET thêm groupId filter + member check. POST thêm role gate
+  admin/creator (trước KHÔNG gate, chỉ ẩn nút FE — lỗ hổng nhỏ đã vá luôn). Route mới GET/PUT
+  /api/kb/wiki/[id]/groups (gán/xem nhóm).
+- UI to-gau/[id]/page.tsx: tab bar 4 tab cũ (Chat/Docs/Notes/Wiki) gộp còn 2 (Chat | Tài liệu), Tài liệu có
+  sub-tab Chính thức (WikiPanel viết lại toàn bộ — full CRUD + version history + modal gán nhóm, trước chỉ
+  view+edit không tạo/xoá được) và Của nhóm (DocsPanel/NotesPanel cũ, không đổi logic, chỉ đổi vị trí render).
+- Bug phát hiện giữa chừng (đã sửa): sidebar.tsx gate nav "Tổ Gấu" bằng isCreatorUser — CHỈ creator thấy link
+  trong sidebar dù API đã hỗ trợ member thường từ lâu. Nếu không sửa, xoá tab Note sẽ làm toàn bộ staff mất
+  đường vào tài liệu. Đổi sang hiện mọi role (gate còn lại = hiddenTabs config như Note trước), đồng bộ cả
+  lib/nav.ts (Command Palette).
+- Dọn permission chết: bỏ perm_kb_upload/wiki_view/wiki_edit (Track A giờ hardcode admin/creator), bỏ "kb" khỏi
+  DEPT_UNLOCKABLE_TABS/PM tabs, bỏ "info" khỏi ALL_ANALYTICS_IDS/REPORTS matrix.
+- Pipeline Upload->MRP (kb_documents/kb_chunks/kb_processing_jobs) giữ nguyên logic, dời UI từ /kb sang
+  analytics/creator/kb-docs-section.tsx (Creator Settings).
+- Bỏ hẳn theo quyết định Hiếu (không port): Overview tra cứu nước, ghi chú cá nhân (user_notes), file tham
+  khảo cá nhân (bucket Information) — bảng/bucket KHÔNG xoá, chỉ mất UI truy cập.
+- Xoá file: app/(dashboard)/kb/, app/(dashboard)/info/, app/api/info/*, app/api/to-gau/kb/.
+- tsc PASS. CHƯA test bằng tay (máy dev thiếu Supabase key trong .env.local) — checklist QA để trong CLAUDE.md.
+- Wiki: viết lại docs/wiki/Tab/analytics-to-gau.md, xoá docs/wiki/Tab/kb.md + Tab/info.md (nội dung gộp vào
+  analytics-to-gau.md). Lưu ý: 2 trang wiki cũ "Knowledge Base…"/"Note…" (tab_guide, sync từ file .md cũ) còn
+  tồn tại trong Supabase kb_wiki_pages — sync script chỉ upsert theo title, không tự xoá khi file nguồn mất,
+  Hiếu cân nhắc xoá tay nếu muốn dọn sạch (không bắt buộc).
