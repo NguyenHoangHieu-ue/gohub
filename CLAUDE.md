@@ -4,19 +4,27 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-25, s161)
+## Trạng thái hiện tại (2026-08-26, s162)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | s161: fix timeout scheduled-messages (881e436) + tab Inventory thay Fulfillment (a358c70) |
+| ⏳ Trên staging CHƯA merge main | s161 (881e436, a358c70) + s162: B2B CM1 cost-model audit + fix (ea2296b, 921cf9c) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-level fix + UI redesign (đến dacc99d) |
 
-**➡️ TIẾP THEO (2026-08-26):**
-- **Inventory tab**: Hiếu chạy `cd web && node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (máy có `.env.local`) để seed dữ liệu từ Excel Ops đang dùng → gửi output cho Claude kiểm tra khớp. Sau đó QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên staging trước khi merge main.
+**➡️ TIẾP THEO (2026-08-26+):**
+- **QA số liệu s162 (QUAN TRỌNG, làm trước khi merge main)**: máy dev không có `.env.local` thật (secret bị sandbox redact khi Claude chạm vào — xem s162), Claude KHÔNG tự verify được số liệu live. Hiếu tự chạy dev/staging, so B2B CM1 giữa BOD/Channels/Dashboard/B2B tab trước và sau fix — số sẽ THẤP HƠN ở các tab đó (nay trừ thêm Turso B2B cost). Đặc biệt **BOD tab** (leadership xem) — báo Claude nếu số lệch không hợp lý.
+- **Inventory tab**: Hiếu chạy `cd web && node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (máy có `.env.local` THẬT — máy dev Claude không dùng được, xem s162) để seed dữ liệu từ Excel Ops đang dùng → gửi output cho Claude kiểm tra khớp. Sau đó QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên staging trước khi merge main.
 - **Scheduled Messages**: theo dõi vài ngày xem còn timeout/Lark alert lỗi không (đã fix s161, nâng maxDuration 60→180s + soft-timeout + alert).
 - Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Xem lại UI Squad Progress trên production, báo nếu cần chỉnh.
+
+**s162 — đã làm (2026-08-26):**
+- ✅ **Fix Squad Progress thiếu Group Cost B2B** (`api/analytics/squad-progress/route.ts`, commit ea2296b): CM1 Squad Progress chỉ trừ chi phí per-customer (Turso), thiếu trừ Group Cost B2B (Supabase `analytics_channel_group_costs`) mà Tổng quan (`quarterly-report`) + tier (`quarterly-b2b-customers`) đều trừ → CM1 cao hơn Tổng quan có hệ thống. Áp lại công thức phân bổ theo revenue-share y hệt route tier (#4 NHẤT QUÁN GROUP COST), trừ ở cả mức Actual và PR, chỉ ở mức squad/tổng (từng customer giữ nguyên).
+- ✅ **Audit + fix B2B CM1 toàn hệ thống — 3 "thế hệ" cost model chạy song song** (commit 921cf9c): phát hiện B2B cost thật (Ops nhập qua Turso `b2b_customer_cost_monthly`, tab Quarter Report) KHÔNG được các route sau biết tới, chúng chỉ trừ `analytics_channel_costs` Supabase (gần như luôn rỗng cho B2B) hoặc chỉ group cost → CM1 B2B cao ảo, khác Quarter Report/B2B-detail-table cùng kỳ dù "code theo OOP dùng chung `cost-engine.ts`" (OOP chỉ chung CÔNG THỨC 1 dòng cost, KHÔNG chung việc chọn NGUỒN cost — đây là root cause thật). Đồng bộ Turso cho: `b2b/kpis` (KPI card đầu tab B2B — trước khác cả với bảng chi tiết CÙNG TAB), `b2b/trend`, `channels/kpis`, `channels/performance`, `monthly-kpis` (Dashboard), **cron `refresh-monthly-kpis`** (snapshot Bé Gấu dùng trả lời câu hỏi CM1 theo tháng — TRƯỚC FIX CHATBOT TRẢ LỜI SAI SỐ CM1), `bod-data.ts` (`fetchBODGroupMarginData`/`fetchBODChannelPerformanceData`/`fetchBODReportData` → cả 4 route BOD), `all-time-performance`. B2C/Other giữ nguyên channel cost Supabase (đúng, không đổi).
+  - ⚠️ **Biết trước, CHƯA fix**: Dashboard/`monthly-kpis` vẫn thiếu channel-level cost cho B2C (chỉ group cost) — khác Channels/B2B tab đã có. `all-time-performance` có bug tồn tại từ trước (query chính thiếu `JOIN dim_customer c` dù CASE tham chiếu `c.price_list_name` — chỉ không lỗi khi tier keywords rỗng) — cần Hiếu xác nhận trước khi sửa riêng.
+  - **KHÔNG verify được bằng live query** — máy dev Claude không cầm được secret thật (`.env.local` bị harness sandbox redact thành literal `"[SENSITIVE]"` ngay khi Claude/bất kỳ process nào trong session này chạm tới file, kể cả sau khi Hiếu tự `vercel env pull` — thử 2 lần đều vậy). Toàn bộ fix dựa trên đọc code + đối chiếu công thức, **Hiếu cần tự QA số trên staging** trước merge main.
+  - Wiki cập nhật: `analytics-b2b.md`, `analytics-bod.md`, `analytics-channels.md`, `analytics-dashboard.md`, `analytics-all-time.md`, `analytics-quarterly.md`.
 
 **s161 — đã làm (2026-08-25):**
 - ✅ **Fix Scheduled Messages không tự gửi** (`api/cron/scheduled-messages/route.ts`, commit 881e436): root cause — Daily report (nặng nhất, ~6 batch query gohub_dw tuần tự + Gemini + Lark) vượt `maxDuration=60s` cũ → Vercel kill giữa chừng SAU khi atomic claim đã ghi `last_run_at` nhưng TRƯỚC khi gửi Lark → slot bị đánh dấu "đã chạy" dù tin chưa từng tới, lặp lại mỗi ngày, không alert (khớp đúng triệu chứng: cron-job.org báo timeout ~30s, Lark im lặng hoàn toàn). Fix: `maxDuration` 60→180 (cron + nút Test ngay), soft-timeout guard bailout chủ động ở 160s, chia ngân sách khi nhiều message đến hạn cùng lúc, **thêm Lark alert khi 1 message thất bại** (trước chỉ alert lỗi đọc danh sách đầu route).
