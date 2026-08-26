@@ -184,7 +184,9 @@ export async function GET(req: NextRequest) {
         const mRev = Number(r[`rev_m${i}`]) || 0
         const mGm  = Number(r[`gm_m${i}`])  || 0
         const rec  = costMap.get(`${months[i]}_${code}`)
-        const mCost = rec ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
+        // Bỏ qua tháng KH không có doanh thu — nhất quán quarterly-report/tier (KH không có orders tháng đó
+        // thì không hiện trong bảng chi tiết → cost không nên tính vào).
+        const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
         const mCm1 = mGm - mCost
         cm1Act += mCm1
         cm1Pr  += mCm1 * monthMeta[i].factor
@@ -264,7 +266,7 @@ export async function GET(req: NextRequest) {
           const mRev = Number(r[`rev_m${i}`]) || 0
           const mGm  = Number(r[`gm_m${i}`])  || 0
           const rec  = costMap.get(`${months[i]}_${r.customer_code}`)
-          const mCost = rec ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
+          const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
           cm1Pr += (mGm - mCost) * monthMeta[i].factor
         }
       }
