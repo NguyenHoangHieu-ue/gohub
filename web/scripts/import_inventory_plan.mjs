@@ -37,13 +37,21 @@ const sb = createClient(SB_URL, SB_KEY)
 
 const num = v => { const n = Number(String(v ?? "").replace(/,/g, "").trim()); return Number.isFinite(n) && String(v).trim() !== "" ? n : null }
 
-// "MM/DD/YYYY" -> "YYYY-MM-DD"
-function parseUsDate(v) {
+// Sheet "PO Dự kiến nhập" lẫn lộn format ngày (Ops nhập tay): đa số MM/DD/YYYY nhưng có dòng DD/MM/YYYY
+// (vd "16/09/2026" — 16 không thể là tháng). Tự nhận diện: số >12 chắc chắn là ngày → đảo lại; cả 2 số ≤12 →
+// không xác định được, giữ mặc định MM/DD (khớp đa số + mốc ngày sheet Plan VN/US) và CẢNH BÁO để soát tay.
+function parseUsDate(v, ctxLabel) {
   const s = String(v ?? "").trim()
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s)
   if (!m) return null
-  const [, mm, dd, yyyy] = m
-  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`
+  let [, a, b, yyyy] = m
+  let mm = parseInt(a, 10), dd = parseInt(b, 10)
+  if (mm > 12 && dd > 12) { console.warn(`  ! ngày không hợp lệ "${s}"${ctxLabel ? ` (${ctxLabel})` : ""} — bỏ qua`); return null }
+  if (mm > 12 && dd <= 12) { [mm, dd] = [dd, mm] }               // chắc chắn DD/MM → đảo lại
+  else if (mm <= 12 && dd <= 12 && mm !== dd) {                   // cả 2 ≤12 → không chắc, MẶC ĐỊNH MM/DD
+    console.warn(`  ! ngày "${s}"${ctxLabel ? ` (${ctxLabel})` : ""} không rõ MM/DD hay DD/MM — tạm lấy MM/DD, soát tay`)
+  }
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`
 }
 
 function inferCompany(sku) {
@@ -129,12 +137,12 @@ async function importPoSheet(wb) {
     if (!vendor || !sku) continue
     poRows.push({
       vendor, sku_code: sku, qty: num(r[3]) ?? 0, company_code: inferCompany(sku),
-      expected_stockout_date: parseUsDate(r[4]),
-      need_by_date: parseUsDate(r[5]),
-      payment_deadline: parseUsDate(r[6]),
-      expected_arrival_date: parseUsDate(r[7]),
+      expected_stockout_date: parseUsDate(r[4], `${sku} ngày hết hàng`),
+      need_by_date: parseUsDate(r[5], `${sku} ngày cần có hàng`),
+      payment_deadline: parseUsDate(r[6], `${sku} ngày trễ nhất thanh toán`),
+      expected_arrival_date: parseUsDate(r[7], `${sku} ngày có hàng dự kiến`),
       payment_status: String(r[8] || "Chưa thanh toán").trim() || "Chưa thanh toán",
-      payment_date: parseUsDate(r[9]),
+      payment_date: parseUsDate(r[9], `${sku} ngày thanh toán`),
       delivery_status: String(r[10] || "Chờ thanh toán").trim() || "Chờ thanh toán",
       expected_arrival_week: String(r[11] || "").trim() || null,
       created_by: "import_inventory_plan",
