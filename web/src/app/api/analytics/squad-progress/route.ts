@@ -198,6 +198,29 @@ export async function GET(req: NextRequest) {
     const calcPrByMonth = (r: Record<string, string>, field: string) =>
       Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * monthMeta[i].factor, 0))
 
+    // Gộp custRows theo customer_code — query GROUP BY cả price_list_name/currency_code/sales_pic_code nên
+    // 1 KH có thể ra NHIỀU dòng SQL nếu giá trị các cột này không ổn định suốt quý (đổi PIC/bảng giá giữa quý,
+    // join dim_customer lệch ở vài đơn cũ...). Trước đây lấy `.find()` dòng đầu → MẤT doanh thu các dòng còn lại
+    // + có thể gán sai squad. Gộp đúng: sum số liệu, chọn text field (PIC/tên/bảng giá) từ dòng revenue lớn nhất.
+    const isNumCol = (k: string) => k === "revenue" || k === "gm" || k === "hk3" || /^(rev|gm|hk3)_m\d+$/.test(k)
+    const rowsByCode = new Map<string, Record<string, string>[]>()
+    custRows.forEach(r => {
+      const arr = rowsByCode.get(r.customer_code) ?? []
+      arr.push(r)
+      rowsByCode.set(r.customer_code, arr)
+    })
+    const custAgg = new Map<string, Record<string, string>>()
+    rowsByCode.forEach((group, code) => {
+      if (group.length === 1) { custAgg.set(code, group[0]); return }
+      console.warn(`  ! KH ${code} có ${group.length} dòng SQL (price_list_name/PIC không ổn định) — đã gộp`)
+      const best = group.reduce((a, b) => (Number(b.revenue) || 0) > (Number(a.revenue) || 0) ? b : a)
+      const merged: Record<string, string> = { ...best }
+      Object.keys(group[0]).forEach(k => {
+        if (isNumCol(k)) merged[k] = String(group.reduce((s, g) => s + (Number(g[k]) || 0), 0))
+      })
+      custAgg.set(code, merged)
+    })
+
     // Group Cost B2B — phân bổ theo revenue-share (khớp #4 NHẤT QUÁN GROUP COST trong quarterly-b2b-customers,
     // trước đây Squad Progress KHÔNG trừ khoản này → CM1 lệch cao hơn Tổng quan/tier).
     const grandTotalRevAct = custRows.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
@@ -213,13 +236,13 @@ export async function GET(req: NextRequest) {
 
     // Aggregate per squad
     const squads = squadsConfig.map(sq => {
-      const members = custRows.filter(r => sq.sales_pics.includes(r.sales_pic_code || ""))
+      const members = Array.from(custAgg.values()).filter(r => sq.sales_pics.includes(r.sales_pic_code || ""))
       const codes   = members.map(m => m.customer_code)
 
       let rev = 0, cm1 = 0, hk3 = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
 
       const customers = codes.map(code => {
-        const r = custRows.find(x => x.customer_code === code)
+        const r = custAgg.get(code)
         if (!r) return null
 
         const revenue    = Number(r.revenue) || 0
