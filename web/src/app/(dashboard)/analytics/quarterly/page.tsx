@@ -561,23 +561,28 @@ function QuarterlyContent() {
   const summary  = report?.summary ?? []
   const qt       = report?.quarterTotal
 
-  // MoM: so sánh tháng hiện tại vs tháng trước trong cùng quý
+  // MoM: so sánh tháng hiện tại vs tháng trước trong cùng quý.
+  // Tháng hiện tại CHƯA hết tháng → phải so PRO-RATA (dim/elapsed) của tháng này với ACTUAL (đã hoàn thành)
+  // tháng trước, không so actual-vs-actual (actual tháng chưa xong luôn thấp hơn actual tháng đã xong → %MoM
+  // âm ảo). Tháng đã xong: prFactor=1 nên PR=actual, không đổi kết quả.
   const momData = useMemo(() => {
     const chg = (a: number, b: number) => b > 0 ? ((a - b) / b) * 100 : null
+    const prFactor = (m: MonthSummary) => m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1
     return summary.map((m, i) => {
       if (i === 0) return { rev: null as number | null, cm1: null as number | null, b2bRev: null as number | null, b2bCm1: null as number | null, b2cRev: null as number | null, b2cCm1: null as number | null }
       const p = summary[i - 1]
-      const aR   = m.total.actualRevenue ?? m.total.revenue
+      const f    = prFactor(m)
+      const aR   = (m.total.actualRevenue ?? m.total.revenue) * f
       const pR   = p.total.actualRevenue ?? p.total.revenue
-      const aC   = m.total.actualCm1 ?? m.total.cm1
+      const aC   = (m.total.actualCm1 ?? m.total.cm1) * f
       const pC   = p.total.actualCm1 ?? p.total.cm1
       return {
         rev:    chg(aR, pR),
         cm1:    chg(aC, pC),
-        b2bRev: chg(m.b2b.actualRevenue ?? m.b2b.revenue, p.b2b.actualRevenue ?? p.b2b.revenue),
-        b2bCm1: chg(m.b2b.actualCm1 ?? m.b2b.cm1, p.b2b.actualCm1 ?? p.b2b.cm1),
-        b2cRev: chg(m.b2c.actualRevenue ?? m.b2c.revenue, p.b2c.actualRevenue ?? p.b2c.revenue),
-        b2cCm1: chg(m.b2c.actualCm1 ?? m.b2c.cm1, p.b2c.actualCm1 ?? p.b2c.cm1),
+        b2bRev: chg((m.b2b.actualRevenue ?? m.b2b.revenue) * f, p.b2b.actualRevenue ?? p.b2b.revenue),
+        b2bCm1: chg((m.b2b.actualCm1 ?? m.b2b.cm1) * f, p.b2b.actualCm1 ?? p.b2b.cm1),
+        b2cRev: chg((m.b2c.actualRevenue ?? m.b2c.revenue) * f, p.b2c.actualRevenue ?? p.b2c.revenue),
+        b2cCm1: chg((m.b2c.actualCm1 ?? m.b2c.cm1) * f, p.b2c.actualCm1 ?? p.b2c.cm1),
       }
     })
   }, [summary])
@@ -1032,23 +1037,31 @@ function QuarterlyContent() {
                               {factorLabel && <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR {factorLabel}</span>}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">
-                              <div className="flex flex-col items-end gap-0.5">
-                                {fc(m.total.actualRevenue ?? m.total.revenue)}
-                                <MomBadge v={mom.rev} />
-                              </div>
+                              {fc(m.total.actualRevenue ?? m.total.revenue)}
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-500">{showPr ? fc(prRevTotal) : <span className="text-slate-300">—</span>}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-500">
+                              {showPr ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {fc(prRevTotal)}
+                                  <MomBadge v={mom.rev} />
+                                </div>
+                              ) : <span className="text-slate-300">—</span>}
+                            </td>
                             <td className="px-4 py-3 text-right text-slate-700 tabular-nums">{fc(m.total.actualGp ?? m.total.gp)}</td>
                             <td className="px-4 py-3 text-right text-slate-500">{pct(m.total.gpPct)}</td>
                             <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.channelCost > 0 ? fc(m.total.actualCc ?? m.total.channelCost) : <span className="text-slate-300">—</span>}</td>
                             <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{m.total.groupCost > 0 ? fc(m.total.actualGc ?? m.total.groupCost) : <span className="text-slate-300">—</span>}</td>
                             <td className={cn("px-4 py-3 text-right font-bold tabular-nums text-[13px]", cm1Color(m.total.actualCm1 ?? m.total.cm1))}>
-                              <div className="flex flex-col items-end gap-0.5">
-                                {fc(m.total.actualCm1 ?? m.total.cm1)}
-                                <MomBadge v={mom.cm1} />
-                              </div>
+                              {fc(m.total.actualCm1 ?? m.total.cm1)}
                             </td>
-                            <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(prCm1Total))}>{showPr ? fc(prCm1Total) : <span className="text-slate-300">—</span>}</td>
+                            <td className={cn("px-4 py-3 text-right tabular-nums", cm1Color(prCm1Total))}>
+                              {showPr ? (
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {fc(prCm1Total)}
+                                  <MomBadge v={mom.cm1} />
+                                </div>
+                              ) : <span className="text-slate-300">—</span>}
+                            </td>
                             <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
                             <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-slate-400 text-[10px]">({pct(m.hk3Pct ?? 0)})</span></td>
@@ -1754,24 +1767,28 @@ function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRev, momC
   return (
     <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">
-        <div className="flex flex-col items-end gap-0.5">
-          {fc(actRev)}
-          {momRev !== undefined && <MomBadge v={momRev ?? null} />}
-        </div>
+      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
+      <td className="px-4 py-2 text-right tabular-nums text-slate-400">
+        {showPr ? (
+          <div className="flex flex-col items-end gap-0.5">
+            {fc(prRev)}
+            {momRev !== undefined && <MomBadge v={momRev ?? null} />}
+          </div>
+        ) : <span className="text-slate-300">—</span>}
       </td>
-      <td className="px-4 py-2 text-right tabular-nums text-slate-400">{showPr ? fc(prRev) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actGp)}</td>
       <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actCc > 0 ? fc(actCc) : <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actGc > 0 ? fc(actGc) : <span className="text-slate-300">—</span>}</td>
-      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>
-        <div className="flex flex-col items-end gap-0.5">
-          {fc(actCm1)}
-          {momCm1 !== undefined && <MomBadge v={momCm1 ?? null} />}
-        </div>
+      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>{fc(actCm1)}</td>
+      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(prCm1))}>
+        {showPr ? (
+          <div className="flex flex-col items-end gap-0.5">
+            {fc(prCm1)}
+            {momCm1 !== undefined && <MomBadge v={momCm1 ?? null} />}
+          </div>
+        ) : <span className="text-slate-300">—</span>}
       </td>
-      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(prCm1))}>{showPr ? fc(prCm1) : <span className="text-slate-300">—</span>}</td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
         qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
