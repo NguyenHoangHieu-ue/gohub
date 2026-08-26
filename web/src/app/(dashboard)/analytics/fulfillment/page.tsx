@@ -2,249 +2,168 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react"
 import {
-  Package, Plus, Save, XCircle, Pencil, Trash2, Download,
-  ChevronDown, ChevronRight, AlertTriangle, Clock, CheckCircle,
-  History, RefreshCw, Filter, Eye, EyeOff, Wallet, Settings,
+  Package, Plus, Save, XCircle, Pencil, Trash2, Download, ChevronDown, ChevronRight,
+  AlertTriangle, Clock, CheckCircle, Settings, Truck, ClipboardList,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
-import { formatCompactNumber } from "@/lib/analytics-formatters"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface InventoryItem {
-  sku_code: string; sim_type: string; vendor: string; status: string
-  retail_price: number; safety_stock: number; reorder_point: number; note_permanent: string | null
-  snapshot_date: string | null; stock_total: number; stock_warehouse: number
-  stock_pq_hcm: number; stock_dd_hn: number; stock_tsn_hcm: number; stock_kg: number
-  expiry_date: string | null; expiry_qty: number
-  ops_qty: number; telco_qty: number; od_qty: number; ws_qty: number; b2c_qty: number; marketing_qty: number
-  note: string; updated_by: string | null; updated_at: string | null
-  sold_15d: number; sold_30d: number; avg_per_day: number; doi: number | null; est_out_of_stock: string | null
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory — kế hoạch nhập hàng theo tuần (VN/US) + PO tracker.
+// Thay tab Fulfillment cũ (theo dõi tồn kho theo kho vật lý + vendor balance, s147).
+// Dựa theo "Plan nhập hàng theo tháng.xlsx" (Ops): mỗi SKU dự phóng Tồn thực tế / Bán dự kiến /
+// Số nhập / Tồn cuối tuần theo từng tuần. Web tự gợi ý Bán dự kiến (tốc độ bán 30 ngày, gohub_dw)
+// + Số nhập (reorder-to-target khi tồn dự phóng dưới ngưỡng an toàn); OPS chỉnh tay khi cần —
+// xem docs/wiki/Tab/analytics-fulfillment.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AlertLevel = "critical" | "warning" | "ok" | "none"
+type Company = "VN" | "US"
+
+interface WeekMeta { weekStart: string; isActual: boolean }
+interface ComputedWeek extends WeekMeta {
+  beginStock: number; actualStock: number | null
+  salesForecast: number; salesForecastAuto: boolean
+  importQty: number; importQtyAuto: boolean
+  suggestedImport: number; endStock: number; coverageWeeks: number | null
 }
-
-interface VendorBalance {
-  vendor: string; balance: number; currency: string; credit_limit: number; note: string | null
-  updated_by: string | null; updated_at: string | null
+interface SkuRow {
+  sku_code: string; vendor: string | null
+  target_weeks_coverage: number; safety_weeks: number; lead_time_weeks: number; note: string | null
+  velocity: number; currentStock: number; alert: AlertLevel
+  needsOrderSoon: boolean; firstCriticalWeek: string | null
+  weeks: ComputedWeek[]
 }
+interface GridResponse { weeks: WeekMeta[]; skus: SkuRow[] }
 
-type SnapshotDraft = Pick<InventoryItem,
-  "stock_total"|"stock_warehouse"|"stock_pq_hcm"|"stock_dd_hn"|"stock_tsn_hcm"|"stock_kg"|
-  "expiry_date"|"expiry_qty"|"ops_qty"|"telco_qty"|"od_qty"|"ws_qty"|"b2c_qty"|"marketing_qty"|"note">
-
-type ItemMeta = Pick<InventoryItem,
-  "retail_price"|"safety_stock"|"reorder_point"|"status"|"vendor"|"sim_type"|"note_permanent">
+interface PoRow {
+  id: number; vendor: string; sku_code: string; qty: number; company_code: string | null
+  expected_stockout_date: string | null; need_by_date: string | null; payment_deadline: string | null
+  expected_arrival_date: string | null; payment_status: string; payment_date: string | null
+  delivery_status: string; expected_arrival_week: string | null; note: string | null
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
-const todayStr = fmt(new Date())
+const fmtWeek = (ymd: string) => { const [, m, d] = ymd.split("-"); return `${d}/${m}` }
+const n0 = (v: number) => Math.round(v).toLocaleString("vi-VN")
 
-function doiLevel(doi: number | null, stock: number): "critical" | "warning" | "ok" | "none" {
-  if (stock === 0 || doi === null) return "none"
-  if (doi < 7)  return "critical"
-  if (doi < 30) return "warning"
-  return "ok"
-}
-
-function DoiBadge({ doi, stock }: { doi: number | null; stock: number }) {
-  const lvl = doiLevel(doi, stock)
+function AlertBadge({ level }: { level: AlertLevel }) {
+  const cfg: Record<AlertLevel, { cls: string; icon: React.ReactNode; label: string }> = {
+    critical: { cls: "bg-red-100 text-red-700", icon: <AlertTriangle className="w-3 h-3" />, label: "Nguy hiểm" },
+    warning:  { cls: "bg-amber-100 text-amber-700", icon: <Clock className="w-3 h-3" />, label: "Cần chú ý" },
+    ok:       { cls: "bg-emerald-100 text-emerald-700", icon: <CheckCircle className="w-3 h-3" />, label: "Đủ hàng" },
+    none:     { cls: "bg-slate-100 text-slate-400", icon: null, label: "—" },
+  }
+  const c = cfg[level]
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap",
-      lvl === "critical" && "bg-red-100 text-red-700",
-      lvl === "warning"  && "bg-amber-100 text-amber-700",
-      lvl === "ok"       && "bg-emerald-100 text-emerald-700",
-      lvl === "none"     && "bg-slate-100 text-slate-400",
-    )}>
-      {lvl === "critical" && <AlertTriangle className="w-3 h-3" />}
-      {lvl === "warning"  && <Clock className="w-3 h-3" />}
-      {lvl === "ok"       && <CheckCircle className="w-3 h-3" />}
-      {doi !== null ? `${doi}d` : stock === 0 ? "Out" : "—"}
+    <span className={cn("inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap", c.cls)}>
+      {c.icon}{c.label}
     </span>
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusPill({ text }: { text: string }) {
   const cfg: Record<string, string> = {
-    Active: "bg-emerald-100 text-emerald-700", Inactive: "bg-slate-100 text-slate-500",
-    Temporary: "bg-blue-100 text-blue-700",    Deleted: "bg-red-100 text-red-500",
+    "Đã thanh toán": "bg-emerald-100 text-emerald-700", "Chưa thanh toán": "bg-slate-100 text-slate-500",
+    "Đã nhập kho": "bg-emerald-100 text-emerald-700", "Chờ nhận": "bg-blue-100 text-blue-700",
+    "Chờ thanh toán": "bg-amber-100 text-amber-700",
   }
-  return <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide", cfg[status] ?? "bg-slate-100 text-slate-500")}>{status}</span>
+  return <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap", cfg[text] ?? "bg-slate-100 text-slate-500")}>{text}</span>
 }
 
-function NumInput({ value, onChange, className }: { value: number; onChange: (v: number) => void; className?: string }) {
+// Component ở MODULE LEVEL (không định nghĩa trong .map()) — tránh remount/mất focus mỗi phím gõ
+// (lý do y hệt TargetCell ở tab Staff).
+function WeekCell({ value, placeholder, isAuto, disabled, onChange }: {
+  value: number | null; placeholder: number; isAuto: boolean; disabled?: boolean; onChange: (v: number | null) => void
+}) {
+  const [str, setStr] = useState(value != null ? String(value) : "")
+  useEffect(() => { setStr(value != null ? String(value) : "") }, [value])
+  if (disabled) return <span className="text-xs font-bold text-slate-600">{value != null ? n0(value) : n0(placeholder)}</span>
   return (
-    <input type="number" min={0} value={value || ""}
-      onChange={e => onChange(parseInt(e.target.value) || 0)}
-      placeholder="0"
-      className={cn("w-20 text-right text-xs font-bold bg-white border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500", className)}
+    <input
+      type="number" value={str}
+      placeholder={String(Math.round(placeholder))}
+      onChange={e => {
+        const s = e.target.value
+        setStr(s)
+        onChange(s === "" ? null : Number(s))
+      }}
+      className={cn(
+        "w-16 text-right text-xs font-bold border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500",
+        isAuto && str === "" ? "border-dashed border-slate-300 text-slate-400 bg-slate-50" : "border-slate-300 bg-white",
+      )}
     />
   )
 }
 
-function Th({ children, right, border, className }: { children: React.ReactNode; right?: boolean; border?: boolean; className?: string }) {
-  return (
-    <th className={cn(
-      "px-3 py-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap",
-      right && "text-right", border && "border-l border-slate-200", className
-    )}>{children}</th>
-  )
-}
-
-function Td({ children, right, border, className }: { children: React.ReactNode; right?: boolean; border?: boolean; className?: string }) {
-  return (
-    <td className={cn("px-3 py-2.5 text-xs", right && "text-right", border && "border-l border-slate-100", className)}>
-      {children}
-    </td>
-  )
-}
-
-// ─── Add SKU Modal ─────────────────────────────────────────────────────────────
-function AddSkuModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [form, setForm] = useState({ sku_code:"", sim_type:"SIM", vendor:"", status:"Active",
-    retail_price:0, safety_stock:0, reorder_point:0, note_permanent:"" })
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState("")
-  const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
-
-  const submit = async () => {
-    if (!form.sku_code.trim()) { setError("SKU code is required"); return }
-    setSaving(true); setError("")
-    const r = await fetch("/api/analytics/inventory-items", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ ...form, sku_code: form.sku_code.trim(), note_permanent: form.note_permanent || null }),
-    })
-    const j = await r.json()
-    if (!r.ok) { setError(j.error ?? "Error"); setSaving(false); return }
-    onAdded(); onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-black text-slate-900 mb-4">Add SKU to Track</h3>
-        <div className="space-y-3">
-          <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
-            <input value={form.sku_code} onChange={e => set("sku_code", e.target.value)} placeholder="e.g. 1D0003DK00000"
-              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Type</label>
-              <select value={form.sim_type} onChange={e => set("sim_type", e.target.value)}
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50">
-                <option value="SIM">SIM</option><option value="ESIM">ESIM</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</label>
-              <select value={form.status} onChange={e => set("status", e.target.value)}
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50">
-                {["Active","Inactive","Temporary","Deleted"].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor <span className="normal-case font-normal">(auto-filled if blank)</span></label>
-            <input value={form.vendor} onChange={e => set("vendor", e.target.value)} placeholder="e.g. 3HKDATAPOOL"
-              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[["Retail Price", "retail_price"],["Safety Stock (15D)", "safety_stock"],["Reorder Point (30D)", "reorder_point"]].map(([label, key]) => (
-              <div key={key}>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
-                <input type="number" value={(form as any)[key] || ""} onChange={e => set(key, Number(e.target.value))}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
-              </div>
-            ))}
-          </div>
-          <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Permanent Note</label>
-            <textarea value={form.note_permanent} onChange={e => set("note_permanent", e.target.value)} rows={2}
-              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          {error && <p className="text-xs text-red-600 font-bold">{error}</p>}
-        </div>
-        <div className="flex gap-2 mt-5">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Cancel</button>
-          <button onClick={submit} disabled={saving}
-            className="flex-1 py-2 rounded-lg text-sm font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-            {saving ? "Saving…" : "Add SKU"}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Edit Item Modal ───────────────────────────────────────────────────────────
-function EditItemModal({ item, onClose, onSaved }: { item: InventoryItem; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<ItemMeta>({
-    retail_price: item.retail_price, safety_stock: item.safety_stock, reorder_point: item.reorder_point,
-    status: item.status, vendor: item.vendor, sim_type: item.sim_type, note_permanent: item.note_permanent,
+// ─── Add / Edit SKU Modal ──────────────────────────────────────────────────────
+function SkuModal({ company, existing, onClose, onSaved }: {
+  company: Company; existing?: SkuRow; onClose: () => void; onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    sku_code: existing?.sku_code ?? "", vendor: existing?.vendor ?? "",
+    target_weeks_coverage: existing?.target_weeks_coverage ?? 8,
+    safety_weeks: existing?.safety_weeks ?? 3, lead_time_weeks: existing?.lead_time_weeks ?? 4,
+    note: existing?.note ?? "",
   })
   const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState("")
+  const [error, setError] = useState("")
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const submit = async () => {
+    if (!existing && !form.sku_code.trim()) { setError("SKU code bắt buộc"); return }
     setSaving(true); setError("")
-    const r = await fetch("/api/analytics/inventory-items", {
-      method:"PATCH", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ sku_code: item.sku_code, ...form }),
-    })
-    if (!r.ok) { const j = await r.json(); setError(j.error ?? "Error"); setSaving(false); return }
+    const url = "/api/analytics/inventory-plan/skus"
+    const method = existing ? "PATCH" : "POST"
+    const body = existing
+      ? { sku_code: existing.sku_code, vendor: form.vendor, target_weeks_coverage: form.target_weeks_coverage,
+          safety_weeks: form.safety_weeks, lead_time_weeks: form.lead_time_weeks, note: form.note || null }
+      : { ...form, sku_code: form.sku_code.trim(), company_code: company, note: form.note || null }
+    const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    const j = await r.json()
+    if (!r.ok) { setError(j.error ?? "Lỗi"); setSaving(false); return }
     onSaved(); onClose()
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-black text-slate-900 mb-1">Edit SKU Settings</h3>
-        <p className="text-xs text-slate-500 mb-4 font-bold">{item.sku_code}</p>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-black text-slate-900 mb-1">{existing ? "Sửa SKU theo dõi" : "Thêm SKU theo dõi"}</h3>
+        <p className="text-xs text-slate-500 mb-4 font-bold">Thị trường {company}</p>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          {!existing && (
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Type</label>
-              <select value={form.sim_type ?? "SIM"} onChange={e => set("sim_type", e.target.value)}
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50">
-                <option value="SIM">SIM</option><option value="ESIM">ESIM</option>
-              </select>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
+              <input value={form.sku_code} onChange={e => set("sku_code", e.target.value)} placeholder="vd. 1D0003DK00000"
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</label>
-              <select value={form.status} onChange={e => set("status", e.target.value)}
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold bg-slate-50">
-                {["Active","Inactive","Temporary","Deleted"].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
+          )}
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
-            <input value={form.vendor ?? ""} onChange={e => set("vendor", e.target.value)}
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor <span className="normal-case font-normal">(tự lookup nếu để trống)</span></label>
+            <input value={form.vendor} onChange={e => set("vendor", e.target.value)}
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            {[["Retail Price", "retail_price"],["Safety Stock (15D)", "safety_stock"],["Reorder Point (30D)", "reorder_point"]].map(([label, key]) => (
+            {[["Mục tiêu (tuần)", "target_weeks_coverage"], ["An toàn (tuần)", "safety_weeks"], ["Lead time (tuần)", "lead_time_weeks"]].map(([label, key]) => (
               <div key={key}>
                 <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
-                <input type="number" value={(form as any)[key] || ""}
-                  onChange={e => set(key, Number(e.target.value))}
+                <input type="number" min={0} value={(form as any)[key]} onChange={e => set(key, Number(e.target.value))}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
               </div>
             ))}
           </div>
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Permanent Note</label>
-            <textarea value={form.note_permanent ?? ""} onChange={e => set("note_permanent", e.target.value || null)} rows={2}
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ghi chú</label>
+            <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2}
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           {error && <p className="text-xs text-red-600 font-bold">{error}</p>}
         </div>
         <div className="flex gap-2 mt-5">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
           <button onClick={submit} disabled={saving}
             className="flex-1 py-2 rounded-lg text-sm font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-            {saving ? "Saving…" : "Save Changes"}
+            {saving ? "Đang lưu…" : existing ? "Lưu" : "Thêm SKU"}
           </button>
         </div>
       </div>
@@ -252,698 +171,402 @@ function EditItemModal({ item, onClose, onSaved }: { item: InventoryItem; onClos
   )
 }
 
-// ─── Vendor Balance Section ────────────────────────────────────────────────────
-const EMPTY_NEW_ROW = () => ({ vendor: "", balance: 0, currency: "USD", credit_limit: 0, note: "" })
+// ─── Weekly grid row (expand) ──────────────────────────────────────────────────
+type WeeklyDraft = Record<string, { actual_stock?: number | null; sales_forecast?: number | null; import_qty?: number | null }>
 
-function VendorBalanceSection({ vendors }: { vendors: string[] }) {
-  const [balances,  setBalances]  = useState<VendorBalance[]>([])
-  const [editMode,  setEditMode]  = useState(false)
-  const [drafts,    setDrafts]    = useState<Record<string, VendorBalance>>({})
-  const [newRows,   setNewRows]   = useState<ReturnType<typeof EMPTY_NEW_ROW>[]>([])
-  const [saving,    setSaving]    = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) {
+  const [drafts, setDrafts] = useState<WeeklyDraft>({})
+  const [saving, setSaving] = useState(false)
+  const hasChanges = Object.keys(drafts).length > 0
 
-  const fetchBalances = useCallback(async () => {
-    const r = await fetch("/api/analytics/vendor-balances")
-    if (r.ok) setBalances(await r.json())
-  }, [])
-
-  useEffect(() => { fetchBalances() }, [fetchBalances])
-
-  const rows = useMemo(() => {
-    const map = Object.fromEntries(balances.map(b => [b.vendor, b]))
-    const allV = [...new Set([...vendors, ...balances.map(b => b.vendor)])].sort()
-    return allV.map(v => map[v] ?? { vendor: v, balance: 0, currency: "USD", credit_limit: 0, note: null, updated_by: null, updated_at: null })
-  }, [balances, vendors])
-
-  const enterEdit = () => {
-    const d: Record<string, VendorBalance> = {}
-    for (const r of rows) d[r.vendor] = { ...r }
-    setDrafts(d); setEditMode(true)
+  const setField = (week: string, field: "actual_stock" | "sales_forecast" | "import_qty", v: number | null) => {
+    setDrafts(p => ({ ...p, [week]: { ...p[week], [field]: v } }))
   }
-
-  const addNewRow = () => {
-    if (!editMode) enterEdit()
-    setNewRows(p => [...p, EMPTY_NEW_ROW()])
-  }
-
-  const setNewField = (idx: number, field: string, val: any) =>
-    setNewRows(p => p.map((r, i) => i === idx ? { ...r, [field]: val } : r))
-
-  const removeNewRow = (idx: number) =>
-    setNewRows(p => p.filter((_, i) => i !== idx))
-
-  const cancel = () => { setEditMode(false); setDrafts({}); setNewRows([]) }
 
   const save = async () => {
     setSaving(true)
-    const existing = Object.values(drafts)
-    const added    = newRows.filter(r => r.vendor.trim())
-    const updates  = [...existing, ...added.map(r => ({ ...r, vendor: r.vendor.trim() }))]
-    const r = await fetch("/api/analytics/vendor-balances", {
-      method:"PATCH", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ updates }),
+    const updates = Object.entries(drafts).map(([week_start_date, fields]) => ({ sku_code: sku.sku_code, week_start_date, ...fields }))
+    await fetch("/api/analytics/inventory-plan/weekly", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }),
     })
-    if (r.ok) { await fetchBalances(); setEditMode(false); setDrafts({}); setNewRows([]) }
-    setSaving(false)
+    setSaving(false); setDrafts({}); onRefresh()
   }
 
-  const setField = (vendor: string, field: keyof VendorBalance, val: any) =>
-    setDrafts(p => ({ ...p, [vendor]: { ...p[vendor], [field]: val } }))
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-        <button onClick={() => setCollapsed(v => !v)} className="flex items-center gap-2 text-left group">
-          <Wallet className="w-4 h-4 text-slate-500" />
-          <span className="text-sm font-black text-slate-900">Vendor Balances</span>
-          <span className="text-xs text-slate-400 font-medium">{collapsed ? "▶ Show" : "▼ Hide"}</span>
-        </button>
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <button onClick={addNewRow}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Add Vendor
+    <div className="p-3 bg-slate-50 border-t border-slate-200">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          Lưới tuần · Vận tốc bán trung bình {n0(sku.velocity)}/tuần
+        </p>
+        {hasChanges && (
+          <div className="flex gap-2">
+            <button onClick={() => setDrafts({})} className="text-[11px] font-bold text-slate-500 hover:text-slate-700 px-2 py-1">Hủy</button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-1 text-[11px] font-black bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+              <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
             </button>
-            {editMode ? (
-              <>
-                <button onClick={cancel}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">
-                  <XCircle className="w-3.5 h-3.5" /> Cancel
-                </button>
-                <button onClick={save} disabled={saving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50">
-                  <Save className="w-3.5 h-3.5" /> {saving ? "Saving…" : "Save"}
-                </button>
-              </>
-            ) : (
-              <button onClick={enterEdit}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">
-                <Pencil className="w-3.5 h-3.5" /> Edit
-              </button>
-            )}
           </div>
         )}
       </div>
-      {!collapsed && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <Th>Vendor</Th>
-                <Th right>Balance</Th>
-                <Th>Currency</Th>
-                <Th right>Credit Limit</Th>
-                <Th>Note</Th>
-                <Th>Last Updated</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {rows.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-4 text-center text-slate-400 text-xs">No vendors yet. Add SKUs first.</td></tr>
-              )}
-              {rows.map(row => {
-                const d = drafts[row.vendor] ?? row
-                const lowBalance = d.credit_limit > 0 && d.balance < d.credit_limit * 0.2
-                return (
-                  <tr key={row.vendor} className={cn("hover:bg-slate-50/60 transition-colors", lowBalance && "bg-red-50/40")}>
-                    <Td><span className="font-bold text-slate-800">{row.vendor}</span></Td>
-                    <Td right>
-                      {editMode
-                        ? <input type="number" value={d.balance || ""} onChange={e => setField(row.vendor,"balance",Number(e.target.value))}
-                            className="w-28 text-right text-xs font-bold border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        : <span className={cn("font-black", lowBalance ? "text-red-600" : "text-slate-900")}>
-                            {d.balance.toLocaleString()}
-                          </span>
-                      }
-                    </Td>
-                    <Td>
-                      {editMode
-                        ? <select value={d.currency} onChange={e => setField(row.vendor,"currency",e.target.value)}
-                            className="border border-slate-300 rounded px-1.5 py-0.5 text-xs font-bold bg-white">
-                            {["USD","VND","EUR","HKD","SGD"].map(c => <option key={c}>{c}</option>)}
-                          </select>
-                        : <span className="font-bold text-slate-500">{d.currency}</span>
-                      }
-                    </Td>
-                    <Td right>
-                      {editMode
-                        ? <input type="number" value={d.credit_limit || ""} onChange={e => setField(row.vendor,"credit_limit",Number(e.target.value))}
-                            className="w-28 text-right text-xs font-bold border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        : <span className="font-bold text-slate-500">{d.credit_limit ? d.credit_limit.toLocaleString() : "—"}</span>
-                      }
-                    </Td>
-                    <Td>
-                      {editMode
-                        ? <input value={d.note ?? ""} onChange={e => setField(row.vendor,"note",e.target.value || null)}
-                            placeholder="Note…"
-                            className="w-48 text-xs border border-slate-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        : <span className="text-slate-500">{d.note ?? "—"}</span>
-                      }
-                    </Td>
-                    <Td>
-                      {row.updated_by
-                        ? <span className="text-slate-400">{row.updated_by} · {row.updated_at?.slice(0,10)}</span>
-                        : <span className="text-slate-300">—</span>
-                      }
-                    </Td>
-                  </tr>
-                )
-              })}
-              {/* New rows being added */}
-              {newRows.map((nr, idx) => (
-                <tr key={`new-${idx}`} className="bg-blue-50/40">
-                  <Td>
-                    <input
-                      autoFocus={idx === newRows.length - 1}
-                      value={nr.vendor}
-                      onChange={e => setNewField(idx, "vendor", e.target.value)}
-                      placeholder="Vendor name…"
-                      className="w-36 text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                    />
-                  </Td>
-                  <Td right>
-                    <input type="number" value={nr.balance || ""} onChange={e => setNewField(idx,"balance",Number(e.target.value))}
-                      placeholder="0"
-                      className="w-28 text-right text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
-                  </Td>
-                  <Td>
-                    <select value={nr.currency} onChange={e => setNewField(idx,"currency",e.target.value)}
-                      className="border border-blue-300 rounded px-1.5 py-0.5 text-xs font-bold bg-white focus:outline-none">
-                      {["USD","VND","EUR","HKD","SGD"].map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </Td>
-                  <Td right>
-                    <input type="number" value={nr.credit_limit || ""} onChange={e => setNewField(idx,"credit_limit",Number(e.target.value))}
-                      placeholder="0"
-                      className="w-28 text-right text-xs font-bold border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
-                  </Td>
-                  <Td>
-                    <input value={nr.note ?? ""} onChange={e => setNewField(idx,"note",e.target.value)}
-                      placeholder="Note…"
-                      className="w-48 text-xs border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
-                  </Td>
-                  <Td>
-                    <button onClick={() => removeNewRow(idx)}
-                      className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                      <XCircle className="w-3.5 h-3.5" />
-                    </button>
-                  </Td>
-                </tr>
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-10 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-500 uppercase w-32">Tuần</th>
+              {sku.weeks.map(w => (
+                <th key={w.weekStart} className={cn("px-2 py-1 text-center text-[10px] font-bold whitespace-nowrap",
+                  w.isActual ? "text-slate-400" : "text-blue-600")}>
+                  {fmtWeek(w.weekStart)}<br /><span className="font-normal">{w.isActual ? "Actual" : "Forecast"}</span>
+                </th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { key: "actual", label: "Tồn thực tế" },
+              { key: "begin", label: "Đầu tuần", readonly: true },
+              { key: "sales", label: "Bán dự kiến" },
+              { key: "import", label: "Số nhập" },
+              { key: "end", label: "Cuối tuần", readonly: true },
+            ].map(row => (
+              <tr key={row.key} className="border-t border-slate-200">
+                <td className="sticky left-0 z-10 bg-slate-50 px-2 py-1 font-bold text-slate-600 whitespace-nowrap">{row.label}</td>
+                {sku.weeks.map(w => {
+                  const d = drafts[w.weekStart]
+                  if (row.key === "begin") return <td key={w.weekStart} className="px-2 py-1 text-right text-slate-500">{n0(w.beginStock)}</td>
+                  if (row.key === "end") return (
+                    <td key={w.weekStart} className={cn("px-2 py-1 text-right font-bold", w.endStock < 0 ? "text-red-600" : "text-slate-700")}>
+                      {n0(w.endStock)}
+                    </td>
+                  )
+                  if (row.key === "actual") return (
+                    <td key={w.weekStart} className="px-2 py-1 text-right">
+                      <WeekCell value={d?.actual_stock !== undefined ? d.actual_stock : w.actualStock} placeholder={0} isAuto={false}
+                        onChange={v => setField(w.weekStart, "actual_stock", v)} />
+                    </td>
+                  )
+                  if (row.key === "sales") return (
+                    <td key={w.weekStart} className="px-2 py-1 text-right">
+                      <WeekCell value={d?.sales_forecast !== undefined ? d.sales_forecast : (w.salesForecastAuto ? null : w.salesForecast)}
+                        placeholder={w.salesForecast} isAuto={w.salesForecastAuto}
+                        onChange={v => setField(w.weekStart, "sales_forecast", v)} />
+                    </td>
+                  )
+                  return (
+                    <td key={w.weekStart} className="px-2 py-1 text-right">
+                      <WeekCell value={d?.import_qty !== undefined ? d.import_qty : (w.importQtyAuto ? null : w.importQty)}
+                        placeholder={w.suggestedImport} isAuto={w.importQtyAuto}
+                        onChange={v => setField(w.weekStart, "import_qty", v)} />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-slate-400 mt-1.5">Ô nét đứt = số gợi ý tự động (chưa chỉnh tay). Gõ số để ghi đè — số đã ghi đè không bị gợi ý tính lại đè lên nữa.</p>
     </div>
   )
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────────
-function FulfillmentInner() {
-  const [items,        setItems]        = useState<InventoryItem[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [dates,        setDates]        = useState<string[]>([])
-  const [selectedDate, setSelectedDate] = useState("")
-  const [filterType,   setFilterType]   = useState<"ALL"|"SIM"|"ESIM">("ALL")
-  const [filterAlert,  setFilterAlert]  = useState<""|"critical"|"warning">("")
-  const [filterVendor, setFilterVendor] = useState("")
-  const [showChannels, setShowChannels] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editItemFor,  setEditItemFor]  = useState<InventoryItem | null>(null)
-  const [expandedSku,  setExpandedSku]  = useState<string | null>(null)
-  const [historyData,  setHistoryData]  = useState<{ snapshot_date: string; stock_total: number }[]>([])
-  // Snapshot edit
-  const [editMode,     setEditMode]     = useState(false)
-  const [snapshotDate, setSnapshotDate] = useState(todayStr)
-  const [drafts,       setDrafts]       = useState<Record<string, SnapshotDraft>>({})
-  const [saving,       setSaving]       = useState(false)
+// ─── PO Tracker ────────────────────────────────────────────────────────────────
+const EMPTY_PO = () => ({
+  vendor: "", sku_code: "", qty: 0, expected_stockout_date: "", need_by_date: "", payment_deadline: "",
+  expected_arrival_date: "", payment_status: "Chưa thanh toán", payment_date: "", delivery_status: "Chờ thanh toán",
+  expected_arrival_week: "", note: "",
+})
 
-  const fetchItems = useCallback(async (date?: string) => {
+function PoTracker({ company }: { company: Company }) {
+  const [rows, setRows] = useState<PoRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editMode, setEditMode] = useState(false)
+  const [drafts, setDrafts] = useState<Record<number, Partial<PoRow>>>({})
+  const [newRows, setNewRows] = useState<ReturnType<typeof EMPTY_PO>[]>([])
+  const [saving, setSaving] = useState(false)
+
+  const fetchRows = useCallback(async () => {
     setLoading(true)
-    try {
-      const url = date ? `/api/analytics/inventory-items?date=${date}` : "/api/analytics/inventory-items"
-      const r = await fetch(url)
-      if (r.ok) setItems(await r.json())
-    } catch {} finally { setLoading(false) }
-  }, [])
+    const r = await fetch(`/api/analytics/inventory-po?company=${company}`)
+    setRows(r.ok ? await r.json() : [])
+    setLoading(false)
+  }, [company])
+  useEffect(() => { fetchRows() }, [fetchRows])
 
-  const fetchDates = useCallback(async () => {
-    try {
-      const r = await fetch("/api/analytics/inventory-snapshots/dates")
-      if (r.ok) setDates(await r.json())
-    } catch {}
-  }, [])
+  const enterEdit = () => { setDrafts({}); setNewRows([]); setEditMode(true) }
+  const setDraft = (id: number, field: keyof PoRow, v: any) => setDrafts(p => ({ ...p, [id]: { ...p[id], [field]: v } }))
+  const addRow = () => setNewRows(p => [...p, EMPTY_PO()])
+  const setNewField = (i: number, field: string, v: any) => setNewRows(p => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r))
 
-  useEffect(() => { fetchItems(); fetchDates() }, [fetchItems, fetchDates])
-
-  const filtered = useMemo(() => items.filter(it => {
-    if (filterType !== "ALL" && it.sim_type !== filterType) return false
-    if (filterVendor && it.vendor !== filterVendor) return false
-    if (filterAlert && doiLevel(it.doi, it.stock_total) !== filterAlert) return false
-    return true
-  }), [items, filterType, filterVendor, filterAlert])
-
-  const allVendors = useMemo(() => [...new Set(items.map(i => i.vendor).filter(Boolean))].sort(), [items])
-  const alerts = useMemo(() => ({
-    critical: items.filter(i => doiLevel(i.doi, i.stock_total) === "critical").length,
-    warning:  items.filter(i => doiLevel(i.doi, i.stock_total) === "warning").length,
-    expiry:   items.filter(i => i.expiry_date && new Date(i.expiry_date) <= new Date(Date.now() + 30*86400000)).length,
-  }), [items])
-
-  // Snapshot edit
-  const enterEdit = () => {
-    const d: Record<string, SnapshotDraft> = {}
-    for (const it of filtered) {
-      d[it.sku_code] = {
-        stock_total: it.stock_total, stock_warehouse: it.stock_warehouse,
-        stock_pq_hcm: it.stock_pq_hcm, stock_dd_hn: it.stock_dd_hn,
-        stock_tsn_hcm: it.stock_tsn_hcm, stock_kg: it.stock_kg,
-        expiry_date: it.expiry_date, expiry_qty: it.expiry_qty,
-        ops_qty: it.ops_qty, telco_qty: it.telco_qty, od_qty: it.od_qty,
-        ws_qty: it.ws_qty, b2c_qty: it.b2c_qty, marketing_qty: it.marketing_qty,
-        note: it.note,
-      }
+  const save = async () => {
+    setSaving(true)
+    const updates = Object.entries(drafts).map(([id, f]) => ({ id: Number(id), ...f }))
+    if (updates.length) {
+      await fetch("/api/analytics/inventory-po", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ updates }) })
     }
-    setDrafts(d); setEditMode(true)
+    for (const nr of newRows) {
+      if (!nr.vendor || !nr.sku_code || !nr.qty) continue
+      await fetch("/api/analytics/inventory-po", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...nr, company_code: company, qty: Number(nr.qty) || 0 }),
+      })
+    }
+    setSaving(false); setEditMode(false); fetchRows()
   }
 
-  const setDraftField = (code: string, field: keyof SnapshotDraft, val: any) =>
-    setDrafts(p => ({ ...p, [code]: { ...p[code], [field]: val } }))
-
-  const hasChanges = useMemo(() => {
-    if (!editMode) return false
-    return Object.entries(drafts).some(([code, d]) => {
-      const it = items.find(i => i.sku_code === code)
-      return it && (d.stock_total !== it.stock_total || d.note !== it.note ||
-        d.stock_pq_hcm !== it.stock_pq_hcm || d.stock_dd_hn !== it.stock_dd_hn ||
-        d.stock_tsn_hcm !== it.stock_tsn_hcm || d.stock_kg !== it.stock_kg ||
-        d.expiry_date !== it.expiry_date || d.expiry_qty !== it.expiry_qty)
-    })
-  }, [editMode, drafts, items])
-
-  const saveSnapshot = async () => {
-    if (saving) return; setSaving(true)
-    const updates = Object.entries(drafts).map(([sku_code, d]) => ({ sku_code, ...d }))
-    const r = await fetch("/api/analytics/inventory-snapshots", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ snapshot_date: snapshotDate, updates }),
-    })
-    if (r.ok) { setEditMode(false); setDrafts({}); await fetchItems(selectedDate || undefined); await fetchDates() }
-    setSaving(false)
+  const del = async (id: number) => {
+    if (!confirm("Xoá PO này?")) return
+    await fetch("/api/analytics/inventory-po", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) })
+    fetchRows()
   }
 
-  const deleteItem = async (code: string) => {
-    if (!confirm(`Remove "${code}" from tracking?`)) return
-    await fetch("/api/analytics/inventory-items", {
-      method:"DELETE", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sku_code: code }),
-    })
-    await fetchItems(selectedDate || undefined)
-  }
+  const dateCols: [string, keyof PoRow][] = [
+    ["Ngày hết hàng DK", "expected_stockout_date"], ["Ngày cần có hàng", "need_by_date"],
+    ["Trễ nhất TT", "payment_deadline"], ["Ngày về kho DK", "expected_arrival_date"],
+  ]
 
-  const expandHistory = async (code: string) => {
-    if (expandedSku === code) { setExpandedSku(null); return }
-    setExpandedSku(code)
-    const r = await fetch(`/api/analytics/inventory-snapshots?sku_code=${code}`)
-    if (r.ok) setHistoryData(await r.json())
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Truck className="w-4 h-4 text-blue-600" />
+          <h3 className="text-sm font-black text-slate-900">PO Tracker — Đơn nhập hàng</h3>
+        </div>
+        {editMode ? (
+          <div className="flex gap-2">
+            <button onClick={addRow} className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 px-2 py-1">
+              <Plus className="w-3 h-3" />Thêm PO
+            </button>
+            <button onClick={() => setEditMode(false)} className="text-[11px] font-bold text-slate-500 px-2 py-1">Hủy</button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-1 text-[11px] font-black bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+              <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
+            </button>
+          </div>
+        ) : (
+          <button onClick={enterEdit} className="flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 px-2 py-1">
+            <Pencil className="w-3 h-3" />Sửa
+          </button>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50">
+            <tr>
+              {["Vendor", "SKU", "SL", ...dateCols.map(c => c[0]), "TT Thanh toán", "TT Giao hàng", "Ghi chú", ""].map(h => (
+                <th key={h} className="px-2 py-2 text-left text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={11} className="px-4 py-6 text-center text-slate-400">Đang tải…</td></tr>}
+            {!loading && !rows.length && !editMode && <tr><td colSpan={11} className="px-4 py-6 text-center text-slate-400">Chưa có PO nào</td></tr>}
+            {rows.map(r => {
+              const d = drafts[r.id]
+              return (
+                <tr key={r.id} className="border-t border-slate-100">
+                  <td className="px-2 py-1.5 font-bold">{editMode ? <input defaultValue={r.vendor} onChange={e => setDraft(r.id, "vendor", e.target.value)} className="w-24 border rounded px-1 py-0.5" /> : r.vendor}</td>
+                  <td className="px-2 py-1.5 font-mono">{editMode ? <input defaultValue={r.sku_code} onChange={e => setDraft(r.id, "sku_code", e.target.value)} className="w-32 border rounded px-1 py-0.5" /> : r.sku_code}</td>
+                  <td className="px-2 py-1.5 text-right">{editMode ? <input type="number" defaultValue={r.qty} onChange={e => setDraft(r.id, "qty", Number(e.target.value))} className="w-16 border rounded px-1 py-0.5 text-right" /> : n0(r.qty)}</td>
+                  {dateCols.map(([, key]) => (
+                    <td key={key as string} className="px-2 py-1.5 whitespace-nowrap">
+                      {editMode
+                        ? <input type="date" defaultValue={(r[key] as string) ?? ""} onChange={e => setDraft(r.id, key, e.target.value || null)} className="border rounded px-1 py-0.5 text-[11px]" />
+                        : (r[key] ? String(r[key]) : "—")}
+                    </td>
+                  ))}
+                  <td className="px-2 py-1.5">
+                    {editMode
+                      ? <select defaultValue={r.payment_status} onChange={e => setDraft(r.id, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                          <option>Chưa thanh toán</option><option>Đã thanh toán</option>
+                        </select>
+                      : <StatusPill text={r.payment_status} />}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editMode
+                      ? <select defaultValue={r.delivery_status} onChange={e => setDraft(r.id, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                          <option>Chờ thanh toán</option><option>Chờ nhận</option><option>Đã nhập kho</option>
+                        </select>
+                      : <StatusPill text={r.delivery_status} />}
+                  </td>
+                  <td className="px-2 py-1.5 max-w-[160px] truncate">{editMode ? <input defaultValue={r.note ?? ""} onChange={e => setDraft(r.id, "note", e.target.value)} className="w-full border rounded px-1 py-0.5" /> : (r.note || "—")}</td>
+                  <td className="px-2 py-1.5">{editMode && <button onClick={() => del(r.id)}><Trash2 className="w-3.5 h-3.5 text-red-400 hover:text-red-600" /></button>}</td>
+                </tr>
+              )
+            })}
+            {editMode && newRows.map((nr, i) => (
+              <tr key={`new-${i}`} className="border-t border-blue-100 bg-blue-50/40">
+                <td className="px-2 py-1.5"><input value={nr.vendor} onChange={e => setNewField(i, "vendor", e.target.value)} placeholder="Vendor" className="w-24 border rounded px-1 py-0.5" /></td>
+                <td className="px-2 py-1.5"><input value={nr.sku_code} onChange={e => setNewField(i, "sku_code", e.target.value)} placeholder="SKU" className="w-32 border rounded px-1 py-0.5" /></td>
+                <td className="px-2 py-1.5"><input type="number" value={nr.qty || ""} onChange={e => setNewField(i, "qty", e.target.value)} className="w-16 border rounded px-1 py-0.5 text-right" /></td>
+                {dateCols.map(([, key]) => (
+                  <td key={key as string} className="px-2 py-1.5"><input type="date" value={(nr as any)[key]} onChange={e => setNewField(i, key as string, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]" /></td>
+                ))}
+                <td className="px-2 py-1.5">
+                  <select value={nr.payment_status} onChange={e => setNewField(i, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                    <option>Chưa thanh toán</option><option>Đã thanh toán</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  <select value={nr.delivery_status} onChange={e => setNewField(i, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                    <option>Chờ thanh toán</option><option>Chờ nhận</option><option>Đã nhập kho</option>
+                  </select>
+                </td>
+                <td className="px-2 py-1.5"><input value={nr.note} onChange={e => setNewField(i, "note", e.target.value)} className="w-full border rounded px-1 py-0.5" /></td>
+                <td />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
+function InventoryInner() {
+  const [company, setCompany] = useState<Company>("VN")
+  const [grid, setGrid] = useState<GridResponse>({ weeks: [], skus: [] })
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [filter, setFilter] = useState<"critical" | "orderSoon" | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editSku, setEditSku] = useState<SkuRow | null>(null)
+
+  const fetchGrid = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch(`/api/analytics/inventory-plan/weekly?company=${company}&weeks=14`)
+    setGrid(r.ok ? await r.json() : { weeks: [], skus: [] })
+    setLoading(false)
+  }, [company])
+  useEffect(() => { fetchGrid() }, [fetchGrid])
+
+  const filtered = useMemo(() => {
+    if (filter === "critical") return grid.skus.filter(s => s.alert === "critical")
+    if (filter === "orderSoon") return grid.skus.filter(s => s.needsOrderSoon)
+    return grid.skus
+  }, [grid.skus, filter])
+
+  const criticalCount = grid.skus.filter(s => s.alert === "critical").length
+  const orderSoonCount = grid.skus.filter(s => s.needsOrderSoon).length
+
+  const deleteSku = async (sku_code: string) => {
+    if (!confirm(`Bỏ theo dõi SKU ${sku_code}? (xoá luôn dữ liệu tuần đã nhập)`)) return
+    await fetch("/api/analytics/inventory-plan/skus", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku_code }) })
+    fetchGrid()
   }
 
   const exportData = () => {
-    const rows = filtered.map((it, i) => ({
-      "#": i+1, "SKU Code": it.sku_code, "Type": it.sim_type, "Vendor": it.vendor, "Status": it.status,
-      "Snapshot Date": it.snapshot_date ?? "",
-      "Total Stock": it.stock_total, "Main Warehouse": it.stock_warehouse,
-      "Pho Quang (HCM)": it.stock_pq_hcm, "Dong Da (HN)": it.stock_dd_hn,
-      "Tan Son Nhat (HCM)": it.stock_tsn_hcm, "Consignment": it.stock_kg,
-      "Sold 15D": it.sold_15d, "Sold 30D": it.sold_30d, "Avg/Day": it.avg_per_day,
-      "DOI (Days)": it.doi ?? "", "Est. Out of Stock": it.est_out_of_stock ?? "",
-      "Safety Stock": it.safety_stock, "Reorder Point": it.reorder_point,
-      "Expiry Date": it.expiry_date ?? "", "Expiry Qty": it.expiry_qty,
-      "Retail Price": it.retail_price, "Total Retail Value": it.stock_total * it.retail_price,
-      "OPS": it.ops_qty, "Telco": it.telco_qty, "OD": it.od_qty,
-      "WS": it.ws_qty, "B2C": it.b2c_qty, "Marketing": it.marketing_qty,
-      "Note": it.note, "Updated By": it.updated_by ?? "",
-    }))
-    exportRawRows(rows, `Inventory_${todayStr}`, "Inventory")
+    const rows = grid.skus.flatMap(s => s.weeks.map(w => ({
+      sku_code: s.sku_code, vendor: s.vendor, company, week: w.weekStart, loai: w.isActual ? "Actual" : "Forecast",
+      ton_thuc_te: w.actualStock ?? "", ton_dau_tuan: w.beginStock, ban_du_kien: w.salesForecast,
+      so_nhap: w.importQty, ton_cuoi_tuan: w.endStock, canh_bao: s.alert,
+    })))
+    exportRawRows(rows, `inventory_plan_${company}`)
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 lg:p-8 space-y-5 max-w-[1900px] mx-auto pb-24 lg:pb-8">
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center text-white shadow-lg">
-            <Package className="w-6 h-6" />
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Package className="w-5 h-5 text-white" /></div>
           <div>
-            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Inventory Management</h1>
-            <p className="text-sm text-slate-500 font-medium italic">OPS stock tracking · Sold 15D/30D auto-pulled from system</p>
+            <h1 className="text-lg font-black text-slate-900">Inventory — Kế hoạch nhập hàng</h1>
+            <p className="text-xs text-slate-500 font-bold">Dự phóng tồn kho theo tuần từng SKU · gợi ý bán/nhập tự động, OPS chỉnh tay khi cần</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors">
-            <Plus className="w-3.5 h-3.5" /> Add SKU
-          </button>
-          <button onClick={exportData}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
-            <Download className="w-3.5 h-3.5" /> Export
-          </button>
-        </div>
-      </div>
-
-      {/* Alert banner */}
-      {(alerts.critical > 0 || alerts.warning > 0 || alerts.expiry > 0) && (
-        <div className="flex flex-wrap gap-3">
-          {alerts.critical > 0 && (
-            <button onClick={() => setFilterAlert(filterAlert === "critical" ? "" : "critical")}
-              className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all text-left",
-                filterAlert === "critical" ? "border-red-500 bg-red-50" : "border-red-200 bg-red-50/70 hover:border-red-400")}>
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-              <div><span className="text-base font-black text-red-700">{alerts.critical}</span>
-                <span className="text-xs text-red-600 font-semibold ml-1">SKUs — Reorder Urgent (DOI &lt; 7 days)</span></div>
-            </button>
-          )}
-          {alerts.warning > 0 && (
-            <button onClick={() => setFilterAlert(filterAlert === "warning" ? "" : "warning")}
-              className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all text-left",
-                filterAlert === "warning" ? "border-amber-500 bg-amber-50" : "border-amber-200 bg-amber-50/70 hover:border-amber-400")}>
-              <Clock className="w-5 h-5 text-amber-600 shrink-0" />
-              <div><span className="text-base font-black text-amber-700">{alerts.warning}</span>
-                <span className="text-xs text-amber-600 font-semibold ml-1">SKUs — Running Low (7–30 days)</span></div>
-            </button>
-          )}
-          {alerts.expiry > 0 && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 border-orange-200 bg-orange-50/70">
-              <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0" />
-              <div><span className="text-base font-black text-orange-700">{alerts.expiry}</span>
-                <span className="text-xs text-orange-600 font-semibold ml-1">SKUs — Expiry Within 30 Days</span></div>
-            </div>
-          )}
-          {filterAlert && (
-            <button onClick={() => setFilterAlert("")}
-              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 bg-white border border-slate-200 hover:bg-slate-50">
-              <XCircle className="w-3.5 h-3.5" /> Clear filter
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Vendor Balances */}
-      <VendorBalanceSection vendors={allVendors} />
-
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-        {(["ALL","SIM","ESIM"] as const).map(t => (
-          <button key={t} onClick={() => setFilterType(t)}
-            className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
-              filterType === t ? "bg-slate-800 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>
-            {t === "ALL" ? "All Types" : t}
-          </button>
-        ))}
-        <select value={filterVendor} onChange={e => setFilterVendor(e.target.value)}
-          className="bg-white border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1 border">
-          <option value="">All Vendors</option>
-          {allVendors.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <button onClick={() => setShowChannels(v => !v)}
-          className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-50">
-          {showChannels ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-          {showChannels ? "Hide" : "Show"} Channel Qty
-        </button>
-        <div className="flex items-center gap-2 ml-auto">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">View date:</label>
-          <select value={selectedDate}
-            onChange={e => { setSelectedDate(e.target.value); fetchItems(e.target.value || undefined) }}
-            className="bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 px-2 py-1">
-            <option value="">Latest</option>
-            {dates.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <button onClick={() => fetchItems(selectedDate || undefined)}
-            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors">
-            <RefreshCw className={cn("w-3.5 h-3.5 text-slate-500", loading && "animate-spin")} />
-          </button>
-        </div>
-      </div>
-
-      {/* Main table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-black text-slate-900">Stock Inventory</h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {filtered.length} SKU{selectedDate ? ` · Snapshot ${selectedDate}` : " · Latest snapshot"}
-              {" · "}Sold figures auto from gohub_dw
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {editMode ? (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <label className="text-[11px] font-bold text-slate-500">Snapshot date:</label>
-                  <input type="date" value={snapshotDate} onChange={e => setSnapshotDate(e.target.value)}
-                    className="border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                </div>
-                <button onClick={() => { setEditMode(false); setDrafts({}) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                  <XCircle className="w-3.5 h-3.5" /> Cancel
-                </button>
-                <button onClick={saveSnapshot} disabled={!hasChanges || saving}
-                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
-                    hasChanges && !saving ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
-                  <Save className="w-3.5 h-3.5" /> {saving ? "Saving…" : "Save Snapshot"}
-                </button>
-              </>
-            ) : (
-              <button onClick={enterEdit}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> Update Stock
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 rounded-lg p-0.5">
+            {(["VN", "US"] as Company[]).map(c => (
+              <button key={c} onClick={() => setCompany(c)}
+                className={cn("px-3 py-1.5 rounded-md text-xs font-black", company === c ? "bg-white shadow text-blue-600" : "text-slate-500")}>
+                {c}
               </button>
-            )}
+            ))}
           </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <Th className="w-8">#</Th>
-                <Th>SKU Code</Th>
-                <Th>Vendor</Th>
-                <Th>Type</Th>
-                <Th>Status</Th>
-                {/* Stock */}
-                <Th right border>Total Stock</Th>
-                <Th right>Main Warehouse</Th>
-                <Th right>Pho Quang (HCM)</Th>
-                <Th right>Dong Da (HN)</Th>
-                <Th right>Tan Son Nhat (HCM)</Th>
-                <Th right>Consignment</Th>
-                {/* Sales */}
-                <Th right border>Sold 15D</Th>
-                <Th right>Sold 30D</Th>
-                <Th right>Avg/Day</Th>
-                <Th border>DOI</Th>
-                <Th right>Est. Out of Stock</Th>
-                {/* Config */}
-                <Th right border>Safety Stock</Th>
-                <Th right>Reorder Point</Th>
-                <Th right>Retail Price</Th>
-                {/* Expiry */}
-                <Th border>Expiry Date</Th>
-                <Th right>Expiry Qty</Th>
-                {/* Channels */}
-                {showChannels && <>
-                  <Th right border>OPS</Th>
-                  <Th right>Telco</Th>
-                  <Th right>OD</Th>
-                  <Th right>WS</Th>
-                  <Th right>B2C</Th>
-                  <Th right>Marketing</Th>
-                </>}
-                <Th border>Note</Th>
-                <Th>Actions</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading && (
-                <tr><td colSpan={30} className="px-6 py-10 text-center text-sm text-slate-400">
-                  <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />Loading…
-                </td></tr>
-              )}
-              {!loading && filtered.length === 0 && (
-                <tr><td colSpan={30} className="px-6 py-10 text-center text-sm text-slate-400">
-                  No SKUs tracked yet. Click "Add SKU" to start.
-                </td></tr>
-              )}
-              {!loading && filtered.map((it, idx) => {
-                const d     = drafts[it.sku_code]
-                const isEx  = expandedSku === it.sku_code
-                const level = doiLevel(it.doi, it.stock_total)
-                const expiryAlert = it.expiry_date && new Date(it.expiry_date) <= new Date(Date.now() + 30*86400000)
-                const rowBg = level === "critical" ? "bg-red-50/40" : level === "warning" ? "bg-amber-50/20" : ""
-
-                return (
-                  <React.Fragment key={it.sku_code}>
-                    <tr className={cn("transition-colors hover:bg-slate-50/60", rowBg)}>
-                      <Td><span className="text-slate-400 font-bold">{idx+1}</span></Td>
-                      {/* SKU */}
-                      <Td>
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => expandHistory(it.sku_code)} className="text-slate-300 hover:text-blue-500 transition-colors shrink-0">
-                            {isEx ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                          </button>
-                          <span className="font-black text-slate-900 whitespace-nowrap">{it.sku_code}</span>
-                        </div>
-                      </Td>
-                      <Td><span className="font-bold text-slate-700">{it.vendor || "—"}</span></Td>
-                      <Td><span className="font-bold text-slate-500">{it.sim_type}</span></Td>
-                      <Td><StatusBadge status={it.status} /></Td>
-
-                      {/* Stock */}
-                      {editMode && d ? <>
-                        <td className="px-2 py-2 border-l border-slate-200">
-                          <NumInput value={d.stock_total} onChange={v => setDraftField(it.sku_code,"stock_total",v)} className="w-24" />
-                        </td>
-                        <td className="px-2 py-2"><NumInput value={d.stock_warehouse} onChange={v => setDraftField(it.sku_code,"stock_warehouse",v)} /></td>
-                        <td className="px-2 py-2"><NumInput value={d.stock_pq_hcm}    onChange={v => setDraftField(it.sku_code,"stock_pq_hcm",v)} /></td>
-                        <td className="px-2 py-2"><NumInput value={d.stock_dd_hn}     onChange={v => setDraftField(it.sku_code,"stock_dd_hn",v)} /></td>
-                        <td className="px-2 py-2"><NumInput value={d.stock_tsn_hcm}   onChange={v => setDraftField(it.sku_code,"stock_tsn_hcm",v)} /></td>
-                        <td className="px-2 py-2"><NumInput value={d.stock_kg}         onChange={v => setDraftField(it.sku_code,"stock_kg",v)} /></td>
-                      </> : <>
-                        <Td right border><span className="font-black text-slate-900">{it.stock_total.toLocaleString()}</span></Td>
-                        <Td right><span className="font-bold text-slate-600">{it.stock_warehouse || "—"}</span></Td>
-                        <Td right><span className="font-bold text-slate-600">{it.stock_pq_hcm    || "—"}</span></Td>
-                        <Td right><span className="font-bold text-slate-600">{it.stock_dd_hn     || "—"}</span></Td>
-                        <Td right><span className="font-bold text-slate-600">{it.stock_tsn_hcm   || "—"}</span></Td>
-                        <Td right><span className="font-bold text-slate-600">{it.stock_kg         || "—"}</span></Td>
-                      </>}
-
-                      {/* Sales — read only */}
-                      <Td right border><span className="font-bold text-slate-700">{it.sold_15d.toLocaleString()}</span></Td>
-                      <Td right><span className="font-bold text-slate-700">{it.sold_30d.toLocaleString()}</span></Td>
-                      <Td right><span className="font-bold text-slate-600">{it.avg_per_day.toFixed(1)}</span></Td>
-                      <Td border><DoiBadge doi={it.doi} stock={it.stock_total} /></Td>
-                      <Td right>
-                        <span className={cn("font-bold", level === "critical" ? "text-red-600" : level === "warning" ? "text-amber-600" : "text-slate-500")}>
-                          {it.est_out_of_stock ?? "—"}
-                        </span>
-                      </Td>
-
-                      {/* Config — read only (edit via Settings icon) */}
-                      <Td right border><span className="font-bold text-slate-600">{it.safety_stock  || "—"}</span></Td>
-                      <Td right>      <span className="font-bold text-slate-600">{it.reorder_point  || "—"}</span></Td>
-                      <Td right>      <span className="font-bold text-slate-600">{it.retail_price   ? it.retail_price.toLocaleString() : "—"}</span></Td>
-
-                      {/* Expiry */}
-                      {editMode && d ? <>
-                        <td className="px-2 py-2 border-l border-slate-200">
-                          <input type="date" value={d.expiry_date ?? ""}
-                            onChange={e => setDraftField(it.sku_code,"expiry_date", e.target.value || null)}
-                            className="text-[11px] font-bold border border-slate-300 rounded px-1.5 py-0.5 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        </td>
-                        <td className="px-2 py-2">
-                          <NumInput value={d.expiry_qty} onChange={v => setDraftField(it.sku_code,"expiry_qty",v)} />
-                        </td>
-                      </> : <>
-                        <Td border>
-                          <span className={cn("font-bold", expiryAlert ? "text-orange-600" : "text-slate-500")}>
-                            {it.expiry_date ?? "—"}
-                          </span>
-                        </Td>
-                        <Td right><span className={cn("font-bold", expiryAlert && it.expiry_qty ? "text-orange-600" : "text-slate-500")}>{it.expiry_qty || "—"}</span></Td>
-                      </>}
-
-                      {/* Channels */}
-                      {showChannels && (editMode && d ? <>
-                        {(["ops_qty","telco_qty","od_qty","ws_qty","b2c_qty","marketing_qty"] as (keyof SnapshotDraft)[]).map((f,fi) => (
-                          <td key={f} className={cn("px-1 py-2", fi===0 && "border-l border-slate-200")}>
-                            <NumInput value={d[f] as number} onChange={v => setDraftField(it.sku_code,f,v)} className="w-16" />
-                          </td>
-                        ))}
-                      </> : <>
-                        {([it.ops_qty,it.telco_qty,it.od_qty,it.ws_qty,it.b2c_qty,it.marketing_qty]).map((v,fi) => (
-                          <Td key={fi} right border={fi===0}><span className="font-bold text-slate-600">{v || "—"}</span></Td>
-                        ))}
-                      </>)}
-
-                      {/* Note */}
-                      <Td border>
-                        {editMode && d ? (
-                          <input value={d.note} onChange={e => setDraftField(it.sku_code,"note",e.target.value)}
-                            placeholder="Note…"
-                            className="w-44 text-xs border border-slate-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                        ) : (
-                          <div className="max-w-[200px]">
-                            {it.note && <p className="text-slate-600 truncate" title={it.note}>{it.note}</p>}
-                            {it.note_permanent && <p className="text-purple-500 italic text-[10px] truncate" title={it.note_permanent}>[{it.note_permanent}]</p>}
-                          </div>
-                        )}
-                      </Td>
-
-                      {/* Actions */}
-                      <Td>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setEditItemFor(it)} title="Edit SKU settings"
-                            className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                            <Settings className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => deleteItem(it.sku_code)} title="Remove SKU"
-                            className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </Td>
-                    </tr>
-
-                    {/* History */}
-                    {isEx && (
-                      <tr>
-                        <td colSpan={showChannels ? 32 : 26} className="px-0 py-0">
-                          <div className="bg-slate-50 border-b border-slate-200 px-6 py-3">
-                            <p className="text-[11px] font-black text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                              <History className="w-3.5 h-3.5" /> Stock History — {it.sku_code}
-                            </p>
-                            {historyData.length === 0
-                              ? <p className="text-xs text-slate-400">No history yet</p>
-                              : <div className="flex flex-wrap gap-2">
-                                  {historyData.map(h => (
-                                    <button key={h.snapshot_date}
-                                      onClick={() => { setSelectedDate(h.snapshot_date); fetchItems(h.snapshot_date) }}
-                                      className="bg-white rounded-lg px-3 py-2 border border-slate-200 text-center hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                                      <p className="text-[10px] text-slate-500 font-bold">{h.snapshot_date}</p>
-                                      <p className="text-sm font-black text-slate-900">{h.stock_total.toLocaleString()}</p>
-                                    </button>
-                                  ))}
-                                </div>
-                            }
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 text-xs font-bold bg-white border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50">
+            <Plus className="w-3.5 h-3.5" />Thêm SKU
+          </button>
+          <button onClick={exportData} className="flex items-center gap-1 text-xs font-bold bg-white border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50">
+            <Download className="w-3.5 h-3.5" />Export
+          </button>
         </div>
       </div>
 
-      {showAddModal && (
-        <AddSkuModal onClose={() => setShowAddModal(false)}
-          onAdded={() => { fetchItems(selectedDate || undefined); fetchDates() }} />
+      {(criticalCount > 0 || orderSoonCount > 0) && (
+        <div className="flex gap-2 flex-wrap">
+          {criticalCount > 0 && (
+            <button onClick={() => setFilter(filter === "critical" ? null : "critical")}
+              className={cn("flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border",
+                filter === "critical" ? "bg-red-600 text-white border-red-600" : "bg-red-50 text-red-700 border-red-200")}>
+              <AlertTriangle className="w-3.5 h-3.5" />{criticalCount} SKU nguy hiểm (dưới ngưỡng an toàn)
+            </button>
+          )}
+          {orderSoonCount > 0 && (
+            <button onClick={() => setFilter(filter === "orderSoon" ? null : "orderSoon")}
+              className={cn("flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border",
+                filter === "orderSoon" ? "bg-amber-600 text-white border-amber-600" : "bg-amber-50 text-amber-700 border-amber-200")}>
+              <ClipboardList className="w-3.5 h-3.5" />{orderSoonCount} SKU cần đặt PO trong lead time
+            </button>
+          )}
+        </div>
       )}
-      {editItemFor && (
-        <EditItemModal item={editItemFor} onClose={() => setEditItemFor(null)}
-          onSaved={() => { fetchItems(selectedDate || undefined); setEditItemFor(null) }} />
-      )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50">
+            <tr>
+              {["", "SKU", "Vendor", "Tồn hiện tại", "Vận tốc bán/tuần", "Số nhập tuần này", "Cảnh báo", ""].map(h => (
+                <th key={h} className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Đang tải…</td></tr>}
+            {!loading && !filtered.length && <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Chưa có SKU nào theo dõi cho {company}</td></tr>}
+            {filtered.map(s => {
+              const isOpen = expanded === s.sku_code
+              const thisWeek = s.weeks.find(w => !w.isActual) ?? s.weeks[s.weeks.length - 1]
+              return (
+                <React.Fragment key={s.sku_code}>
+                  <tr className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setExpanded(isOpen ? null : s.sku_code)}>
+                    <td className="px-3 py-2.5">{isOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-900">{s.sku_code}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{s.vendor || "—"}</td>
+                    <td className="px-3 py-2.5 font-bold">{n0(s.currentStock)}</td>
+                    <td className="px-3 py-2.5 text-slate-500">{n0(s.velocity)}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="font-bold">{n0(thisWeek?.importQty ?? 0)}</span>
+                      {thisWeek?.importQtyAuto && thisWeek.importQty > 0 && <span className="ml-1 text-[10px] text-blue-500 font-bold">(gợi ý)</span>}
+                    </td>
+                    <td className="px-3 py-2.5"><AlertBadge level={s.alert} /></td>
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setEditSku(s)}><Settings className="w-3.5 h-3.5 text-slate-400 hover:text-slate-700" /></button>
+                        <button onClick={() => deleteSku(s.sku_code)}><Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-600" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={8} className="p-0"><WeeklyGrid sku={s} onRefresh={fetchGrid} /></td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <PoTracker company={company} />
+
+      {showAdd && <SkuModal company={company} onClose={() => setShowAdd(false)} onSaved={fetchGrid} />}
+      {editSku && <SkuModal company={company} existing={editSku} onClose={() => setEditSku(null)} onSaved={fetchGrid} />}
     </div>
   )
 }
 
 export default function FulfillmentPage() {
-  return <Suspense><FulfillmentInner /></Suspense>
+  return <Suspense><InventoryInner /></Suspense>
 }

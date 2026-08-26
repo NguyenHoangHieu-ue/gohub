@@ -28,7 +28,7 @@ const ALL_TABS = [
   { id: "customers",       label: "Customers" },
   { id: "vendors",         label: "Vendors" },
   { id: "orders",          label: "Orders" },
-  { id: "fulfillment",     label: "Fulfillment" },
+  { id: "fulfillment",     label: "Inventory" },
   { id: "3hk-usage",       label: "3HK Usage" },
   { id: "cs-troubleshoot", label: "CS Troubleshoot" },
   { id: "feedback",        label: "Feedback" },

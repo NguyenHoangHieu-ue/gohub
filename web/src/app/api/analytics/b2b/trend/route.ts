@@ -4,10 +4,10 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter,
-  getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
+  getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-
-const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   try {
     const key = `b2b-trend:${dateColumn}:${startDate}:${endDate}:${granularity}`
     const payload = await cachedQuery(key, async () => {
-    const [result, channelGrouped] = await Promise.all([
+    const [result, groupGrouped, custGrouped] = await Promise.all([
       queryAnalytics<Record<string, any>>(
         `SELECT ${groupBySQL} as name,
                 SUM(f.${source.revenueCol}) as revenue,
@@ -44,20 +44,30 @@ export async function GET(req: NextRequest) {
       ),
       queryAnalytics<Record<string, string>>(
         `SELECT ${groupBySQL} as group_date,
-                TRIM(s.channel_name) as channel,
                 UPPER(s.group_name) as group_name,
+                TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month
+         FROM ${source.mainTable} f
+         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+         WHERE UPPER(s.group_name) = 'B2B' AND ${filter}
+         GROUP BY 1, 2, 3`
+      ),
+      // B2B per-customer revenue per bucket — để áp Turso cost thay analytics_channel_costs (tránh double-count,
+      // khớp Quarter Report/b2b-kpis/b2b-performance).
+      queryAnalytics<Record<string, string>>(
+        `SELECT ${groupBySQL} as group_date,
+                TRIM(f.customer_code) as customer_code,
                 SUM(f.${source.revenueCol}) as revenue,
                 TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE UPPER(s.group_name) = 'B2B' AND ${filter}
-         GROUP BY 1, 2, 3, 5`
+         GROUP BY 1, 2, 4`
       ),
     ])
 
     const allMonths = Array.from(new Set(result.flatMap(r => (r.months as string[]) || [])))
-    const allCosts  = await getChannelCostsForMonths(allMonths)
     const groupCosts = await getGroupCostsForMonths(allMonths) as Array<{ group_name: string; month: string; amount: string }>
+    const customerCostMap = await fetchCustomerCosts(allMonths)
 
     const trend = result.map(r => {
       const groupDate = r.name as string
@@ -65,26 +75,8 @@ export async function GET(req: NextRequest) {
       const totalMargin  = parseFloat(r.margin || "0")
       let totalOpCost = 0
 
-      channelGrouped.filter(cr => cr.group_date === groupDate).forEach(dc => {
+      groupGrouped.filter(cr => cr.group_date === groupDate).forEach(dc => {
         const monthDays = new Date(parseInt(dc.month.slice(0, 4)), parseInt(dc.month.slice(5, 7)), 0).getDate()
-        const groupRevenue = parseFloat(dc.revenue || "0")
-
-        allCosts.filter(c => c.channel === dc.channel && c.month === dc.month).forEach(c => {
-          COST_KEYS.forEach(key => {
-            const cv = c[key]
-            if (cv) {
-              if (cv.type === "amount") {
-                const monthlyVal = cv.value || 0
-                if (granularity === "month") totalOpCost += monthlyVal
-                else if (granularity === "day") totalOpCost += monthlyVal / monthDays
-                else totalOpCost += (monthlyVal / monthDays) * 7
-              } else {
-                totalOpCost += (groupRevenue * (cv.value || 0)) / 100
-              }
-            }
-          })
-        })
-
         const groupName = dc.group_name || "Other"
         groupCosts.filter(c => c.group_name === groupName && c.month === dc.month).forEach(mgc => {
           const monthlyVal = parseFloat(mgc.amount || "0")
@@ -92,6 +84,17 @@ export async function GET(req: NextRequest) {
           else if (granularity === "day") totalOpCost += monthlyVal / monthDays
           else totalOpCost += (monthlyVal / monthDays) * 7
         })
+      })
+
+      // B2B per-customer cost (Turso) — thay analytics_channel_costs, dùng dayRatio khớp granularity.
+      custGrouped.filter(cr => cr.group_date === groupDate).forEach(dc => {
+        const monthDays = new Date(parseInt(dc.month.slice(0, 4)), parseInt(dc.month.slice(5, 7)), 0).getDate()
+        const custRev = parseFloat(dc.revenue || "0")
+        if (custRev === 0) return
+        const rec = customerCostMap.get(`${dc.month}_${dc.customer_code}`)
+        if (!rec) return
+        const dayRatio = granularity === "month" ? 1 : granularity === "day" ? 1 / monthDays : 7 / monthDays
+        totalOpCost += calcChCostForPeriod(rec, custRev, dayRatio)
       })
 
       return { name: groupDate, revenue: totalRevenue, gpm2: totalMargin - totalOpCost }

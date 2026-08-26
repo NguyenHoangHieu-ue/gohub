@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
 
 function getMonthStr(d: Date) {
@@ -97,6 +100,34 @@ export async function GET(req: NextRequest) {
         .in("month", months)
       const groupCosts = (gcData || []) as { group_name: string; month: string; amount: string }[]
 
+      // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
+      // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count với Turso).
+      const { excludedCustomers } = await fetchQuarterlySettings()
+      const b2bSfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeOpsByCode(excludedCustomers)}`
+      const [custRevRows, customerCostMap] = await Promise.all([
+        queryAnalytics<{ customer_code: string; month: string; revenue: string }>(`
+          SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+                 SUM(f.${source.revenueCol}) as revenue
+          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.${source.dateCol}::date >= '${startDate}' AND f.${source.dateCol}::date <= '${endDate}'
+            AND UPPER(COALESCE(s.group_name,'')) = 'B2B' ${companyFilter} ${b2bSfx}
+          GROUP BY 1, 2
+        `),
+        fetchCustomerCosts(months),
+      ])
+      const custRevMap = new Map<string, number>()
+      custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+      const b2bCustCostByMonth = (m: string, dayRatio: number): number => {
+        let tot = 0
+        customerCostMap.forEach((rec, key) => {
+          if (key.slice(0, 7) !== m) return
+          const custRev = custRevMap.get(`${m}_${key.slice(8)}`) || 0
+          if (custRev === 0) return
+          tot += calcChCostForPeriod(rec, custRev, dayRatio)
+        })
+        return tot
+      }
+
       // Build summary per month
       const todayStr = today.toISOString().split("T")[0]
       const summary = months.map(m => {
@@ -105,8 +136,8 @@ export async function GET(req: NextRequest) {
         const gp      = parseFloat(row?.gp      || "0")
         const hk3     = parseFloat(row?.hk3     || "0")
 
-        // Op cost = sum of group costs for this month (full monthly budget)
-        const totalOpCost = groupCosts
+        // Op cost = group costs (full monthly budget) + B2B per-customer cost (Turso)
+        const groupCostBudget = groupCosts
           .filter(c => c.month === m)
           .reduce((s, c) => s + parseFloat(c.amount || "0"), 0)
 
@@ -114,11 +145,14 @@ export async function GET(req: NextRequest) {
         const monthStart = `${m}-01`
         const factor = getProjectionFactor(monthStart, todayStr)
         const isProjected = factor > 1
+        const dayRatio = isProjected ? getDaysInRange(monthStart, todayStr, m) / getDaysInMonth(m) : 1
+        const b2bCCAct = b2bCustCostByMonth(m, dayRatio)
 
-        // Actual CM1 (op cost prorated for partial month)
-        const actualOpCost = isProjected
-          ? totalOpCost * (getDaysInRange(monthStart, todayStr, m) / getDaysInMonth(m))
-          : totalOpCost
+        // Actual CM1 (op cost prorated for partial month; percent-cost dùng revenue thực tới hôm nay)
+        const actualOpCost = (isProjected ? groupCostBudget * dayRatio : groupCostBudget) + b2bCCAct
+        // Projected/display cost — scale TOÀN BỘ actual cost (amount + percent) theo factor, khớp cách
+        // Quarter Report chiếu (elapsedRatio × factor = full month cho amount; custRev × factor ≈ revenue projected).
+        const totalOpCost = groupCostBudget + (isProjected ? b2bCCAct * factor : b2bCCAct)
         const cm1 = gp - actualOpCost
 
         // Projected (current month only)

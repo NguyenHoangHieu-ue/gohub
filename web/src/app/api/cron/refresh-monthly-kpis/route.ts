@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { isCronReq } from "@/lib/analytics-helpers"
+import { isCronReq, shipFilter, internalOpsFilter, excludeOpsByCode } from "@/lib/analytics-helpers"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { alertCronFailure } from "@/lib/cron-alert"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 // Cron: refresh analytics_monthly_kpis (snapshot CM1/GP/3HK theo tháng cho chatbot query).
 // Vercel cron hoặc gọi thủ công từ Settings: POST /api/cron/refresh-monthly-kpis
@@ -48,7 +51,33 @@ async function computeMonthlyKpis(month: string, companyCode: string) {
   const { data: gcData } = await supabaseAdmin
     .from("analytics_channel_group_costs").select("amount").eq("month", month)
   const totalBudget = (gcData || []).reduce((s, c: any) => s + parseFloat(c.amount || "0"), 0)
-  const actualOpCost = isCurrent ? totalBudget * (elapsed / dim) : totalBudget
+  const dayRatio = isCurrent ? elapsed / dim : 1
+
+  // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
+  // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count).
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const b2bSfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeOpsByCode(excludedCustomers)}`
+  const [custRevRows, customerCostMap] = await Promise.all([
+    queryAnalytics<{ customer_code: string; revenue: string }>(`
+      SELECT TRIM(f.customer_code) as customer_code, SUM(f.fulfilled_revenue_amount_vnd) as revenue
+      FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+      WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= '${endDate}'
+        AND UPPER(COALESCE(s.group_name,'')) = 'B2B' ${companyFilter} ${b2bSfx}
+      GROUP BY 1
+    `),
+    fetchCustomerCosts([month]),
+  ])
+  const custRevMap = new Map<string, number>()
+  custRevRows.forEach(r => custRevMap.set(r.customer_code, parseFloat(r.revenue || "0")))
+  let b2bCustCost = 0
+  customerCostMap.forEach((rec, key) => {
+    if (key.slice(0, 7) !== month) return
+    const custRev = custRevMap.get(key.slice(8)) || 0
+    if (custRev === 0) return
+    b2bCustCost += calcChCostForPeriod(rec, custRev, dayRatio)
+  })
+
+  const actualOpCost = totalBudget * dayRatio + b2bCustCost
   const cm1 = gp - actualOpCost
 
   return {

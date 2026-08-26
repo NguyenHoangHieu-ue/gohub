@@ -43,7 +43,7 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
   ]},
   { label: "Operations & Support", items: [
     { href: "/analytics/orders",          label: "Orders",          icon: ClipboardList },
-    { href: "/analytics/fulfillment",     label: "Fulfillment",     icon: Zap           },
+    { href: "/analytics/fulfillment",     label: "Inventory",       icon: Zap           },
     { href: "/analytics/3hk-usage",       label: "3HK Data Usage",  icon: Activity      },
     { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse    },
     { href: "/analytics/feedback",        label: "Feedback",        icon: MessageSquare },

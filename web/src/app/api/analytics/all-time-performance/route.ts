@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -89,6 +91,45 @@ export async function GET(req: NextRequest) {
       const channelPeriodRev: Record<string, number> = {}
       rows.forEach(r => { const k = `${r.period}_${r.channel_name}`; channelPeriodRev[k] = (channelPeriodRev[k] || 0) + parseFloat(r.revenue || "0") })
 
+      // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
+      // (tránh double-count, khớp Quarter Report/bod-group-margin). Cần revenue theo KH×tháng, CÙNG phân loại
+      // Strategic/Non-Strategic để cộng đúng nhóm derived_group.
+      const b2bTursoCostByMonthGroup: Record<string, number> = {}
+      if (months.length > 0) {
+        const custRevRows = await queryAnalytics<{ customer_code: string; period: string; derived_group: string; revenue: string }>(
+          `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as period,
+                  CASE
+                    WHEN COALESCE(c.name, TRIM(f.customer_code)) IN (${excludeList}) THEN 'Excluded'
+                    WHEN ${isStrategicSql} THEN 'B2B-Strategic'
+                    ELSE 'B2B-Non-Strategic'
+                  END as derived_group,
+                  SUM(COALESCE(f.fulfilled_revenue_amount_vnd, 0)) as revenue
+           FROM fact_fulfillment_revenue f
+           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+           ${whereClause}
+           AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+           GROUP BY 1, 2, 3`
+        )
+        const custRevMap = new Map<string, number>()
+        const custGroupMap = new Map<string, string>()
+        custRevRows.forEach(r => {
+          custRevMap.set(`${r.period}_${r.customer_code}`, parseFloat(r.revenue || "0"))
+          custGroupMap.set(`${r.period}_${r.customer_code}`, r.derived_group)
+        })
+        const customerCostMap = await fetchCustomerCosts(months)
+        customerCostMap.forEach((rec, key) => {
+          const month = key.slice(0, 7), code = key.slice(8)
+          const custRev = custRevMap.get(`${month}_${code}`) || 0
+          if (custRev === 0) return
+          const dg = custGroupMap.get(`${month}_${code}`)
+          if (dg !== "B2B-Strategic" && dg !== "B2B-Non-Strategic") return
+          const cost = calcChCostForPeriod(rec, custRev, 1)  // period là tháng đủ (như channel/group cost khác) — KHÔNG prorate
+          const bucket = `${month}_${dg}`
+          b2bTursoCostByMonthGroup[bucket] = (b2bTursoCostByMonthGroup[bucket] || 0) + cost
+        })
+      }
+
       // Group by period+derived_group (monthly and quarterly)
       function processRows(isQuarterly: boolean) {
         const grouped = new Map<string, { period: string; group_name: string; revenue: number; margin: number; op_costs: number }>()
@@ -107,14 +148,27 @@ export async function GET(req: NextRequest) {
           item.revenue += rowRev
           item.margin  += parseFloat(row.margin  || "0")
 
-          // amount channel cost: chia theo revenue-share (channel span 2 tier trong tháng) → tránh cộng 2 lần.
-          const chShare = channelPeriodRev[`${row.period}_${row.channel_name}`] > 0 ? rowRev / channelPeriodRev[`${row.period}_${row.channel_name}`] : 0
-          channelCosts.filter(c => c.channel === row.channel_name && c.month === row.period).forEach(c => {
-            COST_KEYS.forEach(k => {
-              const v = c[k]
-              if (!v) return
-              item.op_costs += v.type === "amount" ? (v.value || 0) * chShare : (rowRev * (v.value || 0)) / 100
+          if (!row.derived_group.startsWith("B2B")) {
+            // amount channel cost: chia theo revenue-share (channel span 2 tier trong tháng) → tránh cộng 2 lần.
+            // B2B bỏ qua — dùng Turso per-customer cost (b2bTursoCostByMonthGroup) ở dưới, tránh double-count.
+            const chShare = channelPeriodRev[`${row.period}_${row.channel_name}`] > 0 ? rowRev / channelPeriodRev[`${row.period}_${row.channel_name}`] : 0
+            channelCosts.filter(c => c.channel === row.channel_name && c.month === row.period).forEach(c => {
+              COST_KEYS.forEach(k => {
+                const v = c[k]
+                if (!v) return
+                item.op_costs += v.type === "amount" ? (v.value || 0) * chShare : (rowRev * (v.value || 0)) / 100
+              })
             })
+          }
+        })
+
+        // B2B per-customer cost (Turso) — cộng vào đúng bucket period+derived_group.
+        months.forEach(m => {
+          const [yr, mo] = m.split("-")
+          const period = isQuarterly ? `${yr}-Q${Math.ceil(parseInt(mo) / 3)}` : m
+          ;["B2B-Strategic", "B2B-Non-Strategic"].forEach(dg => {
+            const item = grouped.get(`${period}_${dg}`)
+            if (item) item.op_costs += b2bTursoCostByMonthGroup[`${m}_${dg}`] || 0
           })
         })
 

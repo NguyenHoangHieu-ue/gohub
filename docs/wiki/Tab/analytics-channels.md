@@ -75,8 +75,11 @@ ORDER BY c.group_name, c.revenue DESC;
 ```
 
 **CM1 trong API:** `gpm2 = margin - opCost` — opCost tổng hợp từ:
-- `analytics_channel_costs` per kênh (ads/platform_fee/sponsor_products/media × ratio ngày).
-- `analytics_channel_group_costs` phân bổ theo revenue share.
+- B2B: Turso `b2b_customer_cost_monthly` (per-customer, **fix s162** — trước dùng `analytics_channel_costs`
+  gần như luôn rỗng cho B2B → CM1 B2B cao ảo), phân bổ vào từng channel theo revenue-share (Turso không có
+  dimension channel).
+- B2C/Other: `analytics_channel_costs` per kênh (ads/platform_fee/sponsor_products/media × ratio ngày) — không đổi.
+- Mọi group: `analytics_channel_group_costs` phân bổ theo revenue share.
 
 ## 4. Manage Costs — ĐÃ NGẮT (2026-07-28)
 
@@ -86,6 +89,8 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **Fix s162**: `channels/kpis` (KPI card) cũng đổi sang Turso per-customer cost khi scope là B2B (channelGroup=B2B
+  hoặc 1 channel cụ thể thuộc nhóm B2B) — trước cùng lỗi analytics_channel_costs rỗng như bảng performance.
 - `groupFilter` = `AND UPPER(s.group_name) = 'B2B'|'B2C'` khi user lọc theo nhóm.
 - Created mode → margin = 0 (fact_sales_revenue không có gross_profit_vnd).
 - eSIM (3HK, WorldMove): `location_id = 0` ("Unknown") — bình thường, không phải lỗi.
@@ -104,7 +109,7 @@ Admin, Creator, BOD, Manager, Staff đều xem được. Không có role restric
 | Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` GROUP BY channel |
 | GP (Margin) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
 | Margin% | GP / Revenue × 100 | Tính từ 2 cột trên |
-| CM1 (gpm2) | GP − Operation Cost | `margin - opCost`; opCost từ `analytics_channel_costs` + `analytics_channel_group_costs` |
+| CM1 (gpm2) | GP − Operation Cost | `margin - opCost`; B2B: Turso `b2b_customer_cost_monthly` (s162) + group cost · B2C/Other: `analytics_channel_costs` + group cost |
 | CM1% (gpm2%) | CM1 / Revenue × 100 | Tính từ 2 cột trên |
 | Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
 | Group (B2B/B2C) | `dim_order_source.group_name` | `UPPER(group_name)` |

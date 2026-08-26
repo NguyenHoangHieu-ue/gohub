@@ -4,13 +4,14 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
-  getMonthsInRange, getChannelCostsForMonths, getDaysInRange, getDaysInMonth,
+  getMonthsInRange, getDaysInRange, getDaysInMonth,
   shipFilter, internalOpsFilter, excludeOpsByCode,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { supabaseAdmin } from "@/lib/supabase"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     const key = `b2b-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-    const [main, channelRows] = await Promise.all([
+    const [main, custRevRows] = await Promise.all([
       queryAnalytics<Record<string, string>>(
         `WITH current_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin, COUNT(DISTINCT f.order_code) as orders
@@ -52,14 +53,16 @@ export async function GET(req: NextRequest) {
                 cur.orders as current_orders, prv.orders as prev_orders
          FROM current_period cur, previous_period prv`
       ),
+      // Revenue theo KH×tháng — để áp Turso per-customer cost (nhất quán b2b/performance + Quarter Report,
+      // KHÔNG dùng analytics_channel_costs cho B2B để tránh double-count với Turso).
       queryAnalytics<Record<string, string>>(
-        `SELECT TRIM(s.channel_name) as channel,
+        `SELECT TRIM(f.customer_code) as customer_code,
                 TO_CHAR(f.${source.dateCol}::DATE, 'YYYY-MM') as month,
                 SUM(CASE WHEN ${filter} THEN f.${source.revenueCol} ELSE 0 END) as current_revenue,
                 SUM(CASE WHEN ${prevFilter} THEN f.${source.revenueCol} ELSE 0 END) as prev_revenue
          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE UPPER(s.group_name) = 'B2B' AND (${filter} OR ${prevFilter}) ${sfx}
-         GROUP BY TRIM(s.channel_name), month`
+         GROUP BY TRIM(f.customer_code), month`
       ),
     ])
 
@@ -83,34 +86,29 @@ export async function GET(req: NextRequest) {
       const pStartString = prevStart.toISOString().split("T")[0]
       const pEndString   = prevEnd.toISOString().split("T")[0]
 
-      // 1. Per-channel costs (analytics_channel_costs)
-      // Lặp qua channelCosts (không phải channelRows) để KHÔNG bỏ sót channel nào
-      // dù channelRows bị lọc bởi sfx (ship/internalOps/excludeOps filters).
-      // Percent-type cost: cần revenue từ channelRows; amount-type: áp thẳng.
-      const channelCosts = await getChannelCostsForMonths(allMonths)
-      const revMapCur: Record<string, number> = {}
-      const revMapPrv: Record<string, number> = {}
-      channelRows.forEach(row => {
-        revMapCur[`${row.channel}_${row.month}`] = parseFloat(row.current_revenue || "0")
-        revMapPrv[`${row.channel}_${row.month}`] = parseFloat(row.prev_revenue || "0")
+      // 1. Per-customer costs (Turso b2b_customer_cost_monthly) — khớp b2b/performance + Quarter Report.
+      const customerCostMap = await fetchCustomerCosts(allMonths)
+      const custRevMapCur: Record<string, number> = {}
+      const custRevMapPrv: Record<string, number> = {}
+      custRevRows.forEach(row => {
+        custRevMapCur[`${row.month}_${row.customer_code}`] = parseFloat(row.current_revenue || "0")
+        custRevMapPrv[`${row.month}_${row.customer_code}`] = parseFloat(row.prev_revenue || "0")
       })
-      channelCosts.forEach(c => {
-        const mo = c.month
+      customerCostMap.forEach((rec, key) => {
+        const mo = key.slice(0, 7); const code = key.slice(8)
         if (currentMonths.includes(mo)) {
-          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
-          const cRev = revMapCur[`${c.channel}_${mo}`] || 0
-          COST_KEYS.forEach(key => {
-            const cv = c[key]
-            if (cv && cv.value) totalOpCost += cv.type === "amount" ? cv.value * ratio : (cRev * cv.value) / 100
-          })
+          const cRev = custRevMapCur[`${mo}_${code}`] || 0
+          if (cRev !== 0) {
+            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
+            totalOpCost += calcChCostForPeriod(rec, cRev, ratio)
+          }
         }
         if (prevMonths.includes(mo)) {
-          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
-          const pRev = revMapPrv[`${c.channel}_${mo}`] || 0
-          COST_KEYS.forEach(key => {
-            const cv = c[key]
-            if (cv && cv.value) prevTotalOpCost += cv.type === "amount" ? cv.value * ratio : (pRev * cv.value) / 100
-          })
+          const pRev = custRevMapPrv[`${mo}_${code}`] || 0
+          if (pRev !== 0) {
+            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
+            prevTotalOpCost += calcChCostForPeriod(rec, pRev, ratio)
+          }
         }
       })
 
