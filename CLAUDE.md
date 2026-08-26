@@ -14,13 +14,34 @@
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix (đến 3d75eac, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
-- **s163 (QUAN TRỌNG, MỚI) — chưa test bằng tay**: máy dev không có `web/.env.local` (Supabase key) nên Claude
-  KHÔNG tự test được luồng gán nhóm/xem tài liệu trên UI thật. **Việc cần Hiếu làm trước khi QA**:
-  1. Chạy migration `web/db/migrations/v43_kb_wiki_group_scope.sql` trên Supabase.
+- **🚨 BUG NGHIÊM TRỌNG PHÁT HIỆN KHI TEST s163 (KHÔNG PHẢI DO s163 GÂY RA — có từ s142, lộ ra khi test kỹ)**:
+  Toàn bộ Tổ Gấu (group/docs/notes/messages/pin/AI, và cả tính năng gán-nhóm Wiki MỚI ở s163) xác định "có phải
+  member của group X không" bằng cột `chat_group_members.user_email`, lấy từ `session.user.email || ""`.
+  **43 user hiện có `email = NULL`** trong bảng `users` (đa số tài khoản qua Lark OAuth chưa gắn email, GỒM CẢ
+  tài khoản `creator` của chính Hiếu). Với mọi user như vậy, `email || ""` → **tất cả cùng chung 1 "danh tính"
+  chuỗi rỗng `""`**. Test trực tiếp xác nhận: 2 dòng `chat_group_members` hiện có (Hiếu, cả 2 group) đều
+  `user_email=""`. Hệ quả: **nếu 1 user KHÔNG có email được thêm vào 1 group Tổ Gấu, MỌI user không-email khác
+  trong hệ thống (43 tài khoản) mặc nhiên "là thành viên" group đó luôn** (vì cùng khớp `user_email=""`) — kể cả
+  chưa từng được add. Ảnh hưởng: xem được Docs/Notes/tin nhắn/Wiki riêng-nhóm của group đó dù không được mời.
+  **Chưa fix trong s163** (out of scope, blast radius lớn — sửa đúng cần đổi khoá định danh member từ `email`
+  sang `username` xuyên suốt ~8 route file `api/to-gau/groups/**`, có thể cần migrate dữ liệu `chat_group_members`
+  hiện có). **Cần Hiếu quyết**: ưu tiên fix ngay (task riêng) hay tạm chấp nhận rủi ro (hiện tại tất cả member
+  thật đều là Hiếu — admin nên không bị lộ gì thêm do isPrivileged bypass check này; rủi ro chỉ phát sinh THẬT
+  khi Hiếu bắt đầu add user thường (không email) vào group).
+- **s163 — đã test bằng tay qua HTTP (session giả lập, không qua browser)**: dùng `NEXTAUTH_SECRET` sẵn có để tự
+  ký session hợp lệ (không đụng password ai), gọi thẳng API như 1 user `staff` (email giả không trùng ai) + 1
+  user `admin` thật (`seikobao`) trên dev server local, dữ liệu Supabase thật. **Toàn bộ PASS**: staff không phải
+  member → 403 khi xem group không thuộc về mình; thêm vào group → chỉ thấy đúng group đó; tạo/gán/đổi phạm vi
+  nhóm cho 1 trang Wiki qua API → lọc đúng theo từng group; staff bị chặn tạo/gán trang (403, đúng thiết kế
+  admin/creator-only); Docs API (chưa đổi) không bị ảnh hưởng. Đã dọn sạch toàn bộ dữ liệu test sau khi xong
+  (xác nhận lại bằng query — không còn dòng rác). **Chưa test được**: click UI thật qua browser (không có
+  Claude in Chrome/credential) — logic BE đã xác nhận đúng, còn lại là UI polish Hiếu tự xem qua khi rảnh.
+  1. Chạy migration `web/db/migrations/v43_kb_wiki_group_scope.sql` trên Supabase — ⚠️ **Hiếu báo đã chạy
+     (2026-08-26)**, đã test xác nhận cột/bảng hoạt động đúng.
   2. Vào `/analytics/to-gau` bằng vài tài khoản role khác nhau → xác nhận sidebar giờ hiện "Tổ Gấu" (trước đây
      CHỈ creator thấy — đã sửa bug này cùng đợt, xem Gotcha trong `docs/wiki/Tab/analytics-to-gau.md`).
   3. Vào 1 group → tab "📚 Tài liệu" → thử "Soạn trang mới" (Chính thức), gán nhóm, xác nhận group khác không
-     thấy trang gán riêng. Thử "Của nhóm" (Docs/Notes cũ) vẫn hoạt động bình thường (regression check).
+     thấy trang gán riêng (đã verify đúng qua API — chỉ còn xem UI có hiển thị đúng modal/badge không).
   4. Xác nhận `/info` và `/kb` không còn truy cập được (đã xoá route).
   5. Vào Creator Settings (`/analytics/creator`) → section "Tài liệu chính thức — Upload & AI đề xuất Wiki" →
      thử upload 1 file, xác nhận MRP vẫn hoạt động (port từ `/kb` cũ, chưa test lại end-to-end).

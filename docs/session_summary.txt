@@ -8161,3 +8161,23 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
   analytics-to-gau.md). Lưu ý: 2 trang wiki cũ "Knowledge Base…"/"Note…" (tab_guide, sync từ file .md cũ) còn
   tồn tại trong Supabase kb_wiki_pages — sync script chỉ upsert theo title, không tự xoá khi file nguồn mất,
   Hiếu cân nhắc xoá tay nếu muốn dọn sạch (không bắt buộc).
+
+### s163 follow-up (cùng ngày) — test tay qua HTTP + phát hiện bug nghiêm trọng có sẵn từ s142
+- Hiếu xác nhận đã chạy migration v43. Claude test bằng cách tự ký JWT session hợp lệ (dùng NEXTAUTH_SECRET có
+  sẵn trong .env.local, không đụng password ai) để giả lập gọi API như user thật (role staff + admin seikobao)
+  trên dev server local — vì không có Claude in Chrome/credential để test qua browser thật.
+- Xác nhận bằng direct Supabase query trước: migration v43 đúng, query lọc theo group đúng với data thật (2
+  group "Test"/"Team CS" đang tồn tại).
+- Test qua HTTP (route thật, không bypass): staff không phải member → 403 xem group lạ; join group → chỉ thấy
+  đúng group đó; admin tạo/gán/đổi visibility_mode 1 trang Wiki qua API → lọc đúng theo group; staff bị chặn
+  tạo/gán trang (403 đúng thiết kế); Docs API cũ không bị ảnh hưởng (regression check). ALL PASS. Dọn sạch data
+  test, verify lại bằng query — không còn rác.
+- PHÁT HIỆN BUG NGHIÊM TRỌNG (không phải do s163 gây ra, có từ s142 — lộ ra vì test lần đầu với user email
+  rỗng): toàn bộ Tổ Gấu định danh member bằng chat_group_members.user_email = session.user.email || "". 43 user
+  hiện có email=NULL trong DB (đa số qua Lark OAuth chưa gắn email, gồm cả account creator của Hiếu) → tất cả
+  cùng chung identity chuỗi rỗng "". Test lần đầu (staff giả với email="") vô tình trùng với 2 dòng
+  chat_group_members thật của Hiếu (cũng user_email="") → thấy hết mọi group dù chưa từng được add — ban đầu
+  tưởng là bug của code mới, sau khi đổi sang email giả duy nhất mới lộ ra đây là bug định danh có sẵn, không
+  phải bug của feature mới. Ảnh hưởng thật: nếu Hiếu add 1 user không-email vào group, MỌI user không-email khác
+  (43 tài khoản) mặc nhiên thấy được nội dung riêng-nhóm đó. Chưa fix (blast radius lớn, ~8 route file, có thể
+  cần migrate data) — để Hiếu quyết ưu tiên.
