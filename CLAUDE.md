@@ -10,12 +10,13 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | s161 (881e436, a358c70) + s162: B2B CM1 cost-model audit + fix (ea2296b, 921cf9c) |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-level fix + UI redesign (đến dacc99d) |
+| ⏳ Trên staging CHƯA merge main | (clean — s160-s162 đã lên main 1d6f628) |
+| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix (đến 1d6f628, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
-- **QA số liệu s162 (QUAN TRỌNG, làm trước khi merge main)**: Claude chưa verify được B2B CM1 fix bằng live gohub_dw (máy dev thiếu `ANALYTICS_DB_*`). Hiếu tự chạy dev/staging, so B2B CM1 giữa BOD/Channels/Dashboard/B2B tab trước và sau fix — số sẽ THẤP HƠN ở các tab đó (nay trừ thêm Turso B2B cost). Đặc biệt **BOD tab** (leadership xem) — báo Claude nếu số lệch không hợp lý.
-- ✅ **Inventory tab — đã seed xong (2026-08-26)**: chạy `import_inventory_plan.mjs` thành công (Supabase creds Hiếu gửi qua `tmp.txt` — SUPABASE_SECRET_KEY định dạng mới `sb_secret_...`, map vào `SUPABASE_SERVICE_KEY`). Kết quả: `inventory_plan_skus` 12 dòng (9 VN+3 US) · `inventory_plan_weekly` 276 dòng · `inventory_po` 9 dòng — khớp Excel. Fix kèm: `parseUsDate` trong script không nhận diện được ngày DD/MM lẫn trong sheet PO (Ops nhập tay lẫn 2 format) → sửa tự nhận diện khi 1 số >12; 4 dòng PO ngày AMBIGUOUS (cả 2 số ≤12) tạm lấy mặc định MM/DD, **cần Hiếu soát tay trong Supabase `inventory_po`**: `1ETHATMF01507`/`AB0003DK00000`/`1D0003DK00000`/`ACTHATMF05010` (chi tiết hỏi Claude nếu quên). Còn lại: QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên staging trước khi merge main.
+- **QA số liệu s162 (QUAN TRỌNG — đã lên main)**: Claude chưa verify được B2B CM1 fix bằng live gohub_dw (máy dev thiếu `ANALYTICS_DB_*`). Hiếu so B2B CM1 giữa BOD/Channels/Dashboard/B2B tab trước và sau fix trên production — số sẽ THẤP HƠN (nay trừ thêm Turso B2B cost). Đặc biệt **BOD tab** (leadership xem) — báo Claude nếu số lệch không hợp lý.
+- **Squad Progress vs Tổng quan**: đã fix 4 nguyên nhân (group cost, gộp KH trùng dòng, futureScale, %TGT 3HK) — Hiếu tự so số từng KH/PIC cụ thể trên production, báo nếu còn lệch.
+- ✅ **Inventory tab — đã seed xong (2026-08-26)**: chạy `import_inventory_plan.mjs` thành công. Kết quả: `inventory_plan_skus` 12 dòng (9 VN+3 US) · `inventory_plan_weekly` 276 dòng · `inventory_po` 9 dòng — khớp Excel. 4 dòng PO ngày AMBIGUOUS (cả 2 số ≤12, tạm lấy mặc định MM/DD) **cần Hiếu soát tay trong Supabase `inventory_po`**: `1ETHATMF01507`/`AB0003DK00000`/`1D0003DK00000`/`ACTHATMF05010`. Còn lại: QA trực quan tab `/analytics/fulfillment` (đã đổi nội dung, giữ URL) trên production.
 - **Scheduled Messages**: theo dõi vài ngày xem còn timeout/Lark alert lỗi không (đã fix s161, nâng maxDuration 60→180s + soft-timeout + alert).
 - Hiếu cấp quyền GA4 App cho service account → test toggle App trong Web Analytics. Xem lại UI Squad Progress trên production, báo nếu cần chỉnh.
 
