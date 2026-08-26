@@ -8057,3 +8057,75 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
 
 #### Còn lại chưa làm (cần Hiếu)
 - Set LARK_VERIFICATION_TOKEN trên Vercel (Vercel → Settings → Environment Variables)
+
+## Session s160 (2026-08-25)
+### Squad Progress — fix logic risk + redesign UI
+- api/analytics/squad-progress/route.ts (d7d9218): getRiskLevel đổi sang ưu tiên mức xấu nhất — trước 1 trong 2
+  metric (CM1%/3HK%) ≥100% đủ để lên "An toàn" dù metric kia thấp (case ShopeePaySG CM1 50%/3HK 106% gắn nhầm
+  An toàn). Nay 1 metric <85% kéo cả cặp xuống nhóm nguy hiểm.
+- UI redesign (cea6214, chỉ UI không đổi logic): badge dot+màu, 3 stat tile Doanh thu/CM1/3HK tự viền đỏ khi
+  %TGT<85%, dải màu risk bên trái mỗi dòng, footer Tổng thành thanh brand blue.
+- Cài skill caveman (plugin marketplace, scope user) — không liên quan code GoHub.
+
+## Session s161 (2026-08-25)
+### Fix Scheduled Messages timeout + Tab Inventory thay Fulfillment
+- api/cron/scheduled-messages/route.ts (881e436): root cause Daily report (~6 batch query gohub_dw tuần tự +
+  Gemini + Lark) vượt maxDuration=60s cũ → Vercel kill giữa chừng SAU khi atomic claim ghi last_run_at nhưng
+  TRƯỚC khi gửi Lark → slot bị đánh dấu "đã chạy" dù tin chưa tới. Fix: maxDuration 60→180, soft-timeout guard
+  160s, chia ngân sách nhiều message cùng hạn, thêm Lark alert khi 1 message thất bại.
+- Tab Inventory thay hoàn toàn Fulfillment cũ (a358c70, theo yêu cầu Hiếu dựa trên Excel "Plan nhập hàng theo
+  tháng"): bỏ theo dõi tồn kho PQ/DD/TSN + vendor balance (s147) → thay bằng dự phóng tồn kho theo tuần từng
+  SKU (VN/US) + PO tracker. Route/permission giữ nguyên /analytics/fulfillment, chỉ đổi nhãn hiển thị.
+  Migration v42 (inventory_plan_skus/inventory_plan_weekly/inventory_po) — Hiếu đã chạy trên Supabase.
+
+## Session s162 (2026-08-26)
+### A. Audit + fix B2B CM1 cost-model toàn hệ thống (3 "thế hệ" chạy song song)
+- Root cause: Turso b2b_customer_cost_monthly (cost B2B thật, Ops nhập qua Quarter Report) không được biết tới
+  ở nhiều route — chúng chỉ trừ analytics_channel_costs Supabase (gần như luôn rỗng cho B2B) hoặc chỉ group
+  cost → CM1 B2B cao ảo, khác Quarter Report cùng kỳ dù "code theo OOP dùng chung cost-engine.ts" (OOP chỉ
+  chung công thức 1 dòng cost, không chung việc chọn NGUỒN cost).
+- squad-progress/route.ts (ea2296b): thêm Group Cost B2B (trước chỉ trừ per-customer cost) — phân bổ theo
+  revenue-share khớp #4 NHẤT QUÁN GROUP COST của quarterly-b2b-customers.
+- Đồng bộ Turso cho (921cf9c): b2b/kpis (KPI card đầu tab — trước khác cả bảng chi tiết CÙNG TAB), b2b/trend,
+  channels/kpis, channels/performance, monthly-kpis (Dashboard), cron refresh-monthly-kpis (snapshot Bé Gấu
+  dùng trả lời CM1 theo tháng — TRƯỚC FIX CHATBOT TRẢ LỜI SAI SỐ), bod-data.ts (fetchBODGroupMarginData/
+  fetchBODChannelPerformanceData/fetchBODReportData → 4 route BOD), all-time-performance. B2C/Other giữ
+  nguyên channel cost Supabase (đúng, không đổi).
+- squad-progress (b68a06a): bỏ qua tháng KH doanh thu=0 khi tính CH.Cost — khớp quarterly-report/tier (dùng
+  cột CASE-WHEN cố định 3 tháng nên trước không tự skip như các route khác).
+- Chưa fix (biết trước): Dashboard/monthly-kpis vẫn thiếu channel-level cost cho B2C (chỉ group cost);
+  all-time-performance có bug tồn tại từ trước (query chính thiếu JOIN dim_customer c dù CASE tham chiếu
+  c.price_list_name — chỉ không lỗi khi tier keywords rỗng), cần Hiếu xác nhận riêng.
+- KHÔNG verify được bằng live gohub_dw (máy dev thiếu ANALYTICS_DB_*, xem mục C) — dựa hoàn toàn vào đọc code
+  đối chiếu công thức.
+
+### B. Inventory tab — seed dữ liệu Excel thành công
+- Chạy import_inventory_plan.mjs (Supabase creds Hiếu gửi qua tmp.txt, SUPABASE_SECRET_KEY định dạng mới
+  sb_secret_...). Kết quả: inventory_plan_skus 12 dòng (9 VN+3 US) · inventory_plan_weekly 276 · inventory_po
+  9 dòng, khớp Excel.
+- Fix parseUsDate trong script (39db49a): sheet PO Dự kiến nhập Ops nhập tay lẫn 2 format ngày (DD/MM và
+  MM/DD trong cùng cột) → parser cũ giả định thuần MM/DD, crash khi gặp tháng >12. Nay tự nhận diện khi 1 số
+  >12 (chắc chắn là ngày, đảo lại); cả 2 số ≤12 (ambiguous) giữ mặc định MM/DD + cảnh báo log soát tay. 4 dòng
+  PO ambiguous cần Hiếu xác nhận: 1ETHATMF01507/AB0003DK00000/1D0003DK00000/ACTHATMF05010.
+
+### C. Sự cố: sandbox redact secret trong .env.local
+- vercel env pull ghi .env.local nhưng giá trị thực tế bị Claude Code sandbox redact thành literal
+  "[SENSITIVE]" ngay khi bất kỳ process nào trong session chạm tới (kể cả sau khi Hiếu tự pull lại) — không
+  verify được bằng char-code test là do redact thật ở tầng filesystem/sandbox, không phải hiển thị. KHÔNG rõ
+  cơ chế chính xác. Workaround: dùng file env nhỏ riêng Hiếu tạo tay (map đúng tên biến, vd SUPABASE_SECRET_KEY
+  → SUPABASE_SERVICE_KEY) — đọc được bình thường, dùng thành công cho import Inventory. Vẫn CHƯA có
+  ANALYTICS_DB_* (gohub_dw) hoạt động trên máy dev.
+
+### D. Squad Progress vs Tổng quan — Hiếu báo lệch mọi số liệu per-customer, tìm ra 4 nguyên nhân
+1. Gộp KH bị SQL trả nhiều dòng (mục A, b68a06a phần đầu — thực ra tách commit 6b38009): query GROUP BY cả
+   price_list_name/currency_code/sales_pic_code → KH đổi PIC/bảng giá giữa quý ra NHIỀU dòng SQL; `.find()`
+   cũ chỉ lấy dòng đầu → mất doanh thu + gán sai squad. Gộp đúng theo customer_code trước khi build squad.
+2. Thiếu futureScale (1ffc095): Tổng quan (quarterly/page.tsx custPr()) ước tính CẢ tháng CHƯA TỚI trong quý
+   (T9 khi mới qua T7-T8) bằng futureScale = tổng_ngày_cả_quý/tổng_ngày_các_tháng_đã_có. Squad Progress trước
+   bỏ qua bước này → PR luôn thấp hơn Tổng quan đáng kể giữa quý.
+3. %TGT 3HK sai không gian tính (1ffc095): Tổng quan so DOANH THU 3HK PR với target doanh thu; Squad Progress
+   trước so % với %. Đổi sang so revenue.
+4. Zero-revenue-month (mục A, b68a06a).
+- Lưu ý UI dễ hiểu nhầm (không phải bug, đã giải thích Hiếu): cột chính "Revenue"/"CM1" ở Tổng quan hiển thị
+  PR, ở Squad Progress hiển thị Actual (PR nằm field phụ revenue_pr/cm1_pr) — so tên cột giống nhau giữa 2 tab
+  dễ tưởng lệch dù đúng logic.
