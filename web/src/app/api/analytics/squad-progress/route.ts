@@ -82,6 +82,12 @@ export async function GET(req: NextRequest) {
   const monthMeta = buildQuarterMonthMeta(months, asOf, todayStr)
   const qTotalDays   = Math.round((qEndDateObj.getTime() - new Date(qStart).getTime()) / 86400000) + 1
   const elapsedDays  = Math.max(1, Math.round((new Date(qEnd).getTime() - new Date(qStart).getTime()) / 86400000) + 1)
+  // futureScale — ước tính tháng CHƯA TỚI trong quý (khớp Tổng quan `quarterly/page.tsx` futureScale).
+  // `months`/`monthMeta` chỉ gồm tháng đã bắt đầu → PR tính từ đó thiếu hẳn tháng tương lai (vd T9 khi mới
+  // qua T7-T8). existingDays = tổng SỐ NGÀY ĐẦY ĐỦ của các tháng đã có (không phải elapsedDays — đã tính riêng
+  // ở trên cho mục đích khác); futureScale = qTotalDays / existingDays để nới PR lên đủ cả quý.
+  const existingDaysFull = monthMeta.reduce((s, mr) => s + mr.dim, 0)
+  const futureScale = existingDaysFull > 0 ? qTotalDays / existingDaysFull : 1
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
 
@@ -191,12 +197,12 @@ export async function GET(req: NextRequest) {
         cm1Act += mCm1
         cm1Pr  += mCm1 * monthMeta[i].factor
       }
-      return { cm1Act, cm1Pr: Math.round(cm1Pr) }
+      return { cm1Act, cm1Pr: Math.round(cm1Pr * futureScale) }
     }
 
-    // Helper: projected revenue/hk3 dùng per-month factors
+    // Helper: projected revenue/hk3 dùng per-month factors × futureScale (ước tính tháng chưa tới, khớp Tổng quan).
     const calcPrByMonth = (r: Record<string, string>, field: string) =>
-      Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * monthMeta[i].factor, 0))
+      Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * monthMeta[i].factor, 0) * futureScale)
 
     // Gộp custRows theo customer_code — query GROUP BY cả price_list_name/currency_code/sales_pic_code nên
     // 1 KH có thể ra NHIỀU dòng SQL nếu giá trị các cột này không ổn định suốt quý (đổi PIC/bảng giá giữa quý,
@@ -233,13 +239,14 @@ export async function GET(req: NextRequest) {
       totalB2BGCAct += budget * gcRatio
       totalB2BGCPr  += mr.isProjected ? budget : budget * gcRatio
     })
+    totalB2BGCPr *= futureScale  // ước tính group cost tháng chưa tới, khớp cách revPr/cm1Pr được nới
 
     // Aggregate per squad
     const squads = squadsConfig.map(sq => {
       const members = Array.from(custAgg.values()).filter(r => sq.sales_pics.includes(r.sales_pic_code || ""))
       const codes   = members.map(m => m.customer_code)
 
-      let rev = 0, cm1 = 0, hk3 = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
+      let rev = 0, cm1 = 0, hk3 = 0, hk3Pr = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
 
       const customers = codes.map(code => {
         const r = custAgg.get(code)
@@ -249,19 +256,24 @@ export async function GET(req: NextRequest) {
         const hk3Act     = Number(r.hk3) || 0
         const { cm1Act, cm1Pr } = calcCustCm1AndPr(r, code)
         const revPr      = calcPrByMonth(r, "rev")
-        const hk3Pr      = calcPrByMonth(r, "hk3")
+        const custHk3Pr  = calcPrByMonth(r, "hk3")
         const hk3ActPct  = revenue > 0 ? Math.round(hk3Act / revenue * 1000) / 10 : 0
 
         const tgt = targetMap[code] ?? { rev: 0, cm1: 0, hk3rev: 0, hk3pct: 0 }
+        // %TGT 3HK: so DOANH THU 3HK PR với target doanh thu 3HK (khớp Tổng quan `custPr`/tgt3hk trong
+        // quarterly/page.tsx) — KHÔNG so % với % như trước (2 không gian khác nhau, ra số khác).
+        // Target doanh thu 3HK: dùng target_3hk_rev nếu đã nhập, fallback target_rev × target_3hk_pct/100.
+        const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev : (tgt.rev > 0 && tgt.hk3pct > 0 ? Math.round(tgt.rev * tgt.hk3pct / 100) : 0)
         rev    += revenue
         cm1    += cm1Act
         hk3    += hk3Act
+        hk3Pr  += custHk3Pr
         tgtRev += tgt.rev
         tgtCm1 += tgt.cm1
-        tgtHk3 += tgt.hk3rev
+        tgtHk3 += tgt3hk
 
         const cm1TgtPct: number | null  = tgt.cm1 > 0 ? Math.round(cm1Pr / tgt.cm1 * 100) : null
-        const hk3TgtPct: number | null  = tgt.hk3pct > 0 ? Math.round(hk3ActPct / tgt.hk3pct * 100) : null
+        const hk3TgtPct: number | null  = tgt3hk > 0 ? Math.round(custHk3Pr / tgt3hk * 100) : null
 
         return {
           customer_code: code,
@@ -274,15 +286,15 @@ export async function GET(req: NextRequest) {
           cm1: cm1Act, cm1_pr: cm1Pr, target_cm1: tgt.cm1,
           cm1_pct: revenue > 0 ? Math.round(cm1Act / revenue * 1000) / 10 : 0,
           cm1_tgt_pct: cm1TgtPct,
-          hk3: hk3Act, hk3_pct: hk3ActPct, target_hk3pct: tgt.hk3pct,
+          hk3: hk3Act, hk3_pct: hk3ActPct, hk3_pr: custHk3Pr, target_hk3pct: tgt.hk3pct, target_hk3rev: tgt3hk,
           hk3_tgt_pct: hk3TgtPct,
           risk_level: getRiskLevel(cm1TgtPct, hk3TgtPct),
         }
       }).filter(Boolean) as any[]
 
-      // Squad-level projected values: dùng per-month factors (giống monthly-breakdown trong quarterly-report)
+      // Squad-level projected values: dùng per-month factors × futureScale (khớp Tổng quan, ước tính tháng chưa tới)
       const revPr = Math.round(months.reduce((s, _, i) =>
-        s + members.reduce((ms, r) => ms + (Number(r[`rev_m${i}`]) || 0), 0) * monthMeta[i].factor, 0))
+        s + members.reduce((ms, r) => ms + (Number(r[`rev_m${i}`]) || 0), 0) * monthMeta[i].factor, 0) * futureScale)
       let cm1Pr = 0
       for (let i = 0; i < months.length; i++) {
         for (const r of members) {
@@ -293,6 +305,7 @@ export async function GET(req: NextRequest) {
           cm1Pr += (mGm - mCost) * monthMeta[i].factor
         }
       }
+      cm1Pr *= futureScale
       const groupShareAct = grandTotalRevAct > 0 ? (rev / grandTotalRevAct) * totalB2BGCAct : 0
       const groupSharePr  = grandTotalRevPr  > 0 ? (revPr / grandTotalRevPr)  * totalB2BGCPr  : 0
       cm1 = Math.round(cm1 - groupShareAct)
@@ -317,9 +330,9 @@ export async function GET(req: NextRequest) {
         cm1,           cm1_pr: cm1Pr,      target_cm1: effTgtCm1,
         cm1_pct: rev > 0 ? Math.round(cm1 / rev * 1000) / 10 : 0,
         cm1_tgt_pct: effTgtCm1 > 0 ? Math.round(cm1Pr / effTgtCm1 * 100) : null,
-        hk3, hk3_pct: rev > 0 ? Math.round(hk3 / rev * 1000) / 10 : 0,
+        hk3, hk3_pct: rev > 0 ? Math.round(hk3 / rev * 1000) / 10 : 0, hk3_pr: Math.round(hk3Pr),
         target_hk3: effTgtHk3,
-        hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3 / effTgtHk3 * 100) : null,
+        hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3Pr / effTgtHk3 * 100) : null,
         risk_counts: riskCounts,
         customers,
       }
