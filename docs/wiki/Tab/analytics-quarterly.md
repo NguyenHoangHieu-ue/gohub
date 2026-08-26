@@ -200,9 +200,12 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
 - Tên squad + **Leader** (chọn từ bảng `users`) + danh sách **sales_pics** (click-only từ available list; pic đã gán biến khỏi list; chip có nút × để bỏ).
 
 **Bảng progress** — mỗi squad: Revenue / CM1 / 3HK Rev với **Actual · Pro-rata · Target · %**.
-- Pro-rata = per-month factor (khớp `buildQuarterMonthMeta`, không dùng `quarter_days/elapsed_days` phẳng).
+- Pro-rata = per-month factor (khớp `buildQuarterMonthMeta`) **× `futureScale`** (xem Fix s162 bên dưới).
 - **CM1 = GP − chi phí per-customer (Turso) − Group Cost B2B (Supabase, phân bổ theo revenue-share)**.
   ⚠️ **Fix s162 (2026-08-26)**: trước đây Squad Progress chỉ trừ chi phí per-customer, **KHÔNG trừ Group Cost B2B** → CM1 cao hơn có hệ thống so với tab Tổng quan (`quarterly-report`) và bảng tier (`quarterly-b2b-customers`), cả 2 đều trừ Group Cost. Nay áp cùng công thức "#4 NHẤT QUÁN GROUP COST" của tier route: `totalB2BGroupCost` (pro-rate tháng hiện tại) phân bổ vào mỗi squad theo tỷ trọng revenue (`squad.revenue / grandTotalB2BRevenue`), trừ ở CẢ mức Actual và PR (2 mẫu số revenue riêng: actual dùng revenue thật, PR dùng revenue projected). Chỉ điều chỉnh ở mức **squad/tổng**, KHÔNG xuống từng customer (giống tier route — customer.cm1 giữ nguyên = GP − cost riêng KH đó).
+  ⚠️ **Fix s162 (b) — gộp KH bị SQL trả nhiều dòng**: query `custRows` GROUP BY cả `price_list_name`/`currency_code`/`sales_pic_code` → 1 KH có PIC/bảng giá không ổn định suốt quý (đổi PIC giữa quý, join `dim_customer` lệch ở vài đơn cũ) ra NHIỀU dòng SQL. Code cũ `.find()` chỉ lấy dòng đầu → MẤT doanh thu/GP các dòng còn lại + có thể gán sai squad. Nay gộp đúng theo `customer_code` (sum số liệu, chọn PIC/tên/bảng giá từ dòng revenue lớn nhất) trước khi build squad — log cảnh báo khi phát hiện KH bị split.
+  ⚠️ **Fix s162 (c) — thiếu `futureScale` (ước tính tháng chưa tới)**: Tổng quan (`quarterly/page.tsx` `custPr()`) ước tính CẢ tháng CHƯA BẮT ĐẦU trong quý (vd T9 khi mới qua T7-T8): `PR = Σ(actual_tháng × per-month factor) × (tổng_ngày_cả_quý / tổng_ngày_các_tháng_đã_có)`. Squad Progress trước chỉ tính đến tháng đã bắt đầu (`months` không gồm tháng tương lai) → `revenue_pr`/`cm1_pr` luôn **thấp hơn** Tổng quan đáng kể khi chưa hết quý. Nay thêm `futureScale` áp cho MỌI giá trị PR (revenue/cm1/group-cost-PR), khớp chính xác Tổng quan.
+  ⚠️ **Fix s162 (d) — %TGT 3HK sai không gian tính**: Tổng quan so **DOANH THU 3HK PR** với **target doanh thu 3HK** (`target_3hk_rev`, fallback `target_rev × target_3hk_pct/100`). Squad Progress trước so **% 3HK thực tế** với **%target** — 2 không gian khác nhau (revenue vs %) cho số khác hẳn. Đổi `hk3_tgt_pct` sang so revenue như Tổng quan, cả customer và squad level.
 
 **Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK) — **ưu tiên từ dưới lên: mức xấu nhất thắng**, 1 metric rơi vào nguy hiểm thì cả cặp bị kéo xuống nguy hiểm dù metric kia vượt target:
 | Mức | Điều kiện |
@@ -213,7 +216,7 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
 | Nguy hiểm ít (danger_low) | ít nhất 1 metric < 85% (metric kia có thể ở mức bất kỳ, kể cả ≥ 100%) |
 | Nguy hiểm nhiều (danger_high) | cả 2 < 85% |
 
-- `%TGT CM1 = GP_pro-rata / target_cm1` · `%TGT 3HK = 3HK%_actual / target_3hk_pct`.
+- `%TGT CM1 = CM1_PR / target_cm1` · `%TGT 3HK = 3HK_Rev_PR / target_3hk_rev` (fallback `target_rev × target_3hk_pct/100` nếu chưa nhập `target_3hk_rev`) — **sửa s162**, trước so % với %.
 
 **Filter + Sort**: search KH · region VN/US · tier (Strategic/VIP/Gold/Silver) · squad · PIC chips (bấm → hiện KH của người đó) · risk chips. Có filter → flat view (bảng phẳng gộp mọi squad) + sort cột (KH/Rev PR/%TGT CM1/%TGT 3HK/Đánh giá). Không filter → per-squad expand.
 
