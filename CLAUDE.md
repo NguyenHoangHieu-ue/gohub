@@ -10,8 +10,8 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — s160-s162 đã lên main 1d6f628) |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix (đến 1d6f628, 2026-08-26) |
+| ⏳ Trên staging CHƯA merge main | (clean — s160-s162 + %MoM fix đã lên main 3d75eac) |
+| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix (đến 3d75eac, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
 - **QA số liệu s162 (QUAN TRỌNG — đã lên main)**: Claude chưa verify được B2B CM1 fix bằng live gohub_dw (máy dev thiếu `ANALYTICS_DB_*`). Hiếu so B2B CM1 giữa BOD/Channels/Dashboard/B2B tab trước và sau fix trên production — số sẽ THẤP HƠN (nay trừ thêm Turso B2B cost). Đặc biệt **BOD tab** (leadership xem) — báo Claude nếu số lệch không hợp lý.
