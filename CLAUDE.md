@@ -10,8 +10,8 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | s163 gộp Note+KB vào Tổ Gấu (CHƯA test bằng tay — chờ Hiếu chạy migration v43 rồi QA trên staging trước merge main) |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix (đến 3d75eac, 2026-08-26) |
+| ⏳ Trên staging CHƯA merge main | (clean — s163 gộp Note+KB vào Tổ Gấu + fix identity-collision đã lên main b7730c0) |
+| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision (đến b7730c0, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
 - **✅ ĐÃ FIX bug định danh member Tổ Gấu (task riêng, cùng ngày, theo yêu cầu Hiếu "fix ngay")** — bug phát hiện
