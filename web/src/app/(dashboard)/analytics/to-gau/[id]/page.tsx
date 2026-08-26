@@ -220,12 +220,14 @@ function SettingsModal({
   const [desc, setDesc]           = useState(group.description ?? "")
   const [emoji, setEmoji]         = useState(group.avatar_emoji || "🐻")
   const [saving, setSaving]       = useState(false)
-  const [addEmail, setAddEmail]   = useState("")
+  const [addEmail, setAddEmail]   = useState("") // ô tìm kiếm (theo tên/email/username) — không gửi thẳng lên API
   const [addingMember, setAddingMember] = useState(false)
   const [members, setMembers]     = useState<Member[]>(group.members)
 
-  // User search autocomplete
-  const [userSuggestions, setUserSuggestions]   = useState<{email: string; name: string}[]>([])
+  // User search autocomplete — bắt buộc chọn 1 gợi ý (username, không phải email) mới thêm được,
+  // vì nhiều tài khoản Lark không có email để gõ trực tiếp.
+  const [userSuggestions, setUserSuggestions]   = useState<{username: string; email: string | null; name: string}[]>([])
+  const [selectedUser, setSelectedUser]         = useState<{username: string; name: string} | null>(null)
   const [showSuggestions, setShowSuggestions]   = useState(false)
   const searchDebounce                          = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -234,16 +236,16 @@ function SettingsModal({
   const [aiScope, setAiScope]     = useState<string>(group.ai_scope ?? "")
   const [savingAI, setSavingAI]   = useState(false)
 
-  // User search effect (#3)
+  // User search effect (#3) — tìm theo tên/email/username, lọc bỏ user đã là member (so username)
   useEffect(() => {
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    if (!addEmail || addEmail.includes("@")) { setUserSuggestions([]); setShowSuggestions(false); return }
+    if (!addEmail) { setUserSuggestions([]); setShowSuggestions(false); return }
     searchDebounce.current = setTimeout(async () => {
       try {
         const res  = await fetch(`/api/to-gau/user-search?q=${encodeURIComponent(addEmail)}`)
         const json = await res.json()
-        const filtered = (json.data ?? []).filter((u: {email: string}) =>
-          !members.some(m => m.user_email === u.email)
+        const filtered = (json.data ?? []).filter((u: { username: string }) =>
+          !members.some(m => m.user_email === u.username)
         )
         setUserSuggestions(filtered)
         setShowSuggestions(filtered.length > 0)
@@ -294,20 +296,21 @@ function SettingsModal({
 
   async function handleAddMember(e: React.FormEvent) {
     e.preventDefault()
-    if (!addEmail.trim()) return
+    if (!selectedUser) return
     setAddingMember(true)
     setShowSuggestions(false)
     try {
       const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_email: addEmail.trim() }),
+        body: JSON.stringify({ username: selectedUser.username, user_name: selectedUser.name }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      toast.success(`Đã thêm ${addEmail.trim()}`)
+      toast.success(`Đã thêm ${selectedUser.name || selectedUser.username}`)
       setMembers(prev => [...prev, json.data])
       setAddEmail("")
+      setSelectedUser(null)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
@@ -315,13 +318,13 @@ function SettingsModal({
     }
   }
 
-  async function handleRemoveMember(email: string) {
-    if (!await confirmDialog(`Xóa ${email} khỏi nhóm?`)) return
+  async function handleRemoveMember(username: string) {
+    if (!await confirmDialog(`Xóa ${username} khỏi nhóm?`)) return
     try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}/members?email=${encodeURIComponent(email)}`, { method: "DELETE" })
+      const res = await fetch(`/api/to-gau/groups/${group.id}/members?username=${encodeURIComponent(username)}`, { method: "DELETE" })
       if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
-      setMembers(prev => prev.filter(m => m.user_email !== email))
-      onMemberRemoved(email)
+      setMembers(prev => prev.filter(m => m.user_email !== username))
+      onMemberRemoved(username)
       toast.success("Đã xóa thành viên")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
@@ -329,16 +332,16 @@ function SettingsModal({
   }
 
   // Đổi role thành viên (#2)
-  async function handleRoleChange(email: string, newRole: string) {
+  async function handleRoleChange(username: string, newRole: string) {
     try {
       const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_email: email, role: newRole }),
+        body: JSON.stringify({ username, role: newRole }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      setMembers(prev => prev.map(m => m.user_email === email ? { ...m, role: newRole } : m))
+      setMembers(prev => prev.map(m => m.user_email === username ? { ...m, role: newRole } : m))
       toast.success("Đã cập nhật quyền")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
@@ -436,31 +439,31 @@ function SettingsModal({
                 <div className="relative">
                   <input
                     value={addEmail}
-                    onChange={e => { setAddEmail(e.target.value); setShowSuggestions(false) }}
+                    onChange={e => { setAddEmail(e.target.value); setSelectedUser(null); setShowSuggestions(false) }}
                     onFocus={() => userSuggestions.length > 0 && setShowSuggestions(true)}
-                    placeholder="Tìm theo tên hoặc email *"
+                    placeholder="Tìm theo tên hoặc email — bấm chọn từ danh sách *"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
                   />
                   {showSuggestions && (
                     <div className="absolute top-full left-0 right-0 z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 overflow-hidden">
                       {userSuggestions.map(u => (
                         <button
-                          key={u.email}
+                          key={u.username}
                           type="button"
-                          onMouseDown={e => { e.preventDefault(); setAddEmail(u.email); setShowSuggestions(false) }}
+                          onMouseDown={e => { e.preventDefault(); setSelectedUser({ username: u.username, name: u.name }); setAddEmail(u.name || u.email || u.username); setShowSuggestions(false) }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
                         >
-                          <Avatar name={u.name} email={u.email} size="sm" />
+                          <Avatar name={u.name} email={u.email || u.username} size="sm" />
                           <div>
-                            <p className="text-[13px] font-medium text-slate-700">{u.name || u.email}</p>
-                            <p className="text-[11px] text-slate-400">{u.email}</p>
+                            <p className="text-[13px] font-medium text-slate-700">{u.name || u.username}</p>
+                            <p className="text-[11px] text-slate-400">{u.email || u.username}</p>
                           </div>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                <button type="submit" disabled={addingMember || !addEmail.trim()}
+                <button type="submit" disabled={addingMember || !selectedUser}
                   className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                   <UserPlus size={14} />
                   {addingMember ? "Đang thêm..." : "Thêm thành viên"}
@@ -1710,7 +1713,10 @@ export default function ToGauRoomPage() {
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const myEmail      = session?.user?.email || ""
+  // myEmail giữ tên biến cũ nhưng thực chất chứa USERNAME (không phải email thật) — fix bug identity-collision:
+  // nhiều user Lark chưa gắn email → session.user.email rỗng cho MỌI user như vậy → cùng chung "" → lộ chéo
+  // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/Tab/analytics-to-gau.md.
+  const myEmail      = session?.user?.username || ""
   const myName       = session?.user?.name  || ""
   const myRole       = session?.user?.role  || ""
   const isPrivileged = myRole === "creator" || myRole === "admin"

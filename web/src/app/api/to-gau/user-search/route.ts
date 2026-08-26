@@ -11,10 +11,11 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? ""
   if (q.length < 1) return NextResponse.json({ data: [] })
 
+  // Tìm theo email/tên/username — nhiều tài khoản Lark không có email nên phải cho tìm cả theo tên/username
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("email, name")
-    .or(`email.ilike.%${q}%,name.ilike.%${q}%`)
+    .select("username, email, name")
+    .or(`email.ilike.%${q}%,name.ilike.%${q}%,username.ilike.%${q}%`)
     .limit(10)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

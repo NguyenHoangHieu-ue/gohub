@@ -54,12 +54,43 @@ Group chat nội bộ trên GoHub Intel. Mỗi group có thể có thành viên 
 |---|---|---|
 | id | uuid PK | |
 | group_id | uuid FK → chat_groups | CASCADE |
-| user_email | text | |
+| user_email | text | ⚠️ **Lưu USERNAME, không phải email thật** — xem §"Fix identity-collision" ngay dưới |
 | user_name | text | Lookup từ users table |
 | role | text | 'member' \| 'manager' \| 'admin' — manager thêm/xoá được member + ghim tin nhắn, KHÔNG đổi role/xoá group |
-| added_by | text | Email người thêm |
+| added_by | text | ⚠️ Username người thêm (không phải email) |
 | added_at | timestamptz | |
 | UNIQUE | (group_id, user_email) | |
+
+### ⚠️ Fix identity-collision (s163, cùng ngày, task riêng sau khi test s163 phát hiện)
+
+**Bug (có từ s142, không phải do gộp Note/KB s163)**: mọi route Tổ Gấu định danh "tôi là ai" bằng
+`session.user.email || ""`. Rất nhiều tài khoản (43 user, đa số login qua Lark OAuth, **gồm cả `creator` của
+Hiếu**) có `users.email = NULL` → với các user này, `email || ""` luôn ra cùng 1 giá trị `""` — **mọi user
+không-email cùng chung 1 "danh tính"**. Hậu quả thật: 1 user không-email được add vào group X → MỌI user
+không-email khác mặc nhiên "là member" group X (khớp `user_email=""`), dù chưa từng được mời — thấy được
+Docs/Notes/tin nhắn/Wiki riêng-nhóm. Phát hiện khi test s163 (dùng session giả lập trùng email rỗng với data
+thật của Hiếu, ban đầu tưởng nhầm là bug tính năng mới, sau mới lộ ra là bug định danh có sẵn).
+
+**Fix**: đổi khoá định danh từ `email` sang **`session.user.username`** (luôn duy nhất + luôn có, kể cả login
+qua Lark không gắn email) ở **toàn bộ** route `api/to-gau/**` + `api/kb/wiki/route.ts` (check `isGroupMember`
+thêm ở s163). **Giữ nguyên tên cột DB** (`user_email`, `sender_email`, `uploaded_by`, `created_by`, `added_by`)
+để tránh viết migration đổi tên — các cột này nay lưu **username, không phải email thật** (đã ghi comment tại
+mỗi route). Đã backfill 2 group + 2 member + 8 message (Hiếu) + 1 note hiện có từ `""`/email cá nhân
+(`hieunh862@gmail.com`, rò rỉ từ session Lark cũ) sang username thật của Hiếu (`lark_ou_e5af3c7...`).
+
+**Đổi API "Thêm thành viên"** (`POST /api/to-gau/groups/[id]/members`): body đổi từ `{user_email}` sang
+`{username, user_name}` — không còn nhận email gõ tay (nhiều user không có email để gõ). FE bắt buộc **chọn từ
+gợi ý autocomplete** (`/api/to-gau/user-search`, nay trả thêm `username`, tìm được cả theo tên khi user không
+email) thay vì gõ tự do — tránh gõ sai/không resolve được username thật. `PATCH` (đổi role) đổi key
+`user_email`→`username`; `DELETE` đổi query param `?email=`→`?username=`.
+
+**Lark DM lookup** (`notifyLarkMembers`): đổi join `users` từ `.eq("email",...)` sang `.eq("username",...)` —
+ổn định hơn (trước đây user không-email không nhận được @mention DM dù có `lark_open_id`, vì lookup theo email
+rỗng không match ai).
+
+**Test**: verify bằng HTTP thật (session tự ký qua `NEXTAUTH_SECRET`, không đụng password) — 2 user giả không-
+email khác nhau, chỉ 1 người được add vào group → xác nhận người còn lại KHÔNG còn thấy group đó (trước đây sẽ
+thấy do collision). Toàn bộ luồng add/đổi-role/xoá-member qua username cũng test PASS qua HTTP thật.
 
 ### `chat_messages`
 | Cột | Kiểu | Ghi chú |

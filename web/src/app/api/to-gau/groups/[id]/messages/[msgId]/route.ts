@@ -7,12 +7,13 @@ function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
 }
 
-async function getMemberRole(groupId: string, email: string): Promise<string | null> {
+// NOTE: chat_group_members.user_email / chat_messages.sender_email lưu USERNAME, không phải email thật.
+async function getMemberRole(groupId: string, username: string): Promise<string | null> {
   const { data } = await supabaseAdmin
     .from("chat_group_members")
     .select("role")
     .eq("group_id", groupId)
-    .eq("user_email", email)
+    .eq("user_email", username)
     .maybeSingle()
   return data?.role ?? null
 }
@@ -25,8 +26,8 @@ export async function PATCH(
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email      = session.user.email || ""
-  const role       = session.user.role  || ""
+  const username   = session.user.username || ""
+  const role       = session.user.role     || ""
   const { id, msgId } = params
 
   const { data: msg, error: fetchErr } = await supabaseAdmin
@@ -37,9 +38,9 @@ export async function PATCH(
     .maybeSingle()
   if (fetchErr || !msg) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
-  const memberRole       = isPrivileged(role) ? "admin" : await getMemberRole(id, email)
+  const memberRole       = isPrivileged(role) ? "admin" : await getMemberRole(id, username)
   const isManagerOrAbove = isPrivileged(role) || memberRole === "manager"
-  const isAuthor         = msg.sender_email === email
+  const isAuthor         = msg.sender_email === username
 
   if (!isAuthor && !isManagerOrAbove) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })

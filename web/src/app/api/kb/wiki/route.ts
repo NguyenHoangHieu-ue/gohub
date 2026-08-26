@@ -10,12 +10,13 @@ function isPrivilegedRole(role: string) {
   return role === "admin" || role === "creator"
 }
 
-async function isGroupMember(groupId: string, email: string): Promise<boolean> {
+// NOTE: chat_group_members.user_email lưu USERNAME (không phải email thật) — xem CLAUDE.md §fix identity Tổ Gấu.
+async function isGroupMember(groupId: string, username: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("chat_group_members")
     .select("id")
     .eq("group_id", groupId)
-    .eq("user_email", email)
+    .eq("user_email", username)
     .maybeSingle()
   return !!data
 }
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   const groupId = req.nextUrl.searchParams.get("groupId") || ""
 
   // Xem theo 1 group Tổ Gấu cụ thể → phải là member của group đó (hoặc admin/creator)
-  if (groupId && !isPrivilegedRole(role) && !(await isGroupMember(groupId, session.user.email || ""))) {
+  if (groupId && !isPrivilegedRole(role) && !(await isGroupMember(groupId, session.user.username || ""))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

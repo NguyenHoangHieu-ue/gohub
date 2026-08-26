@@ -8181,3 +8181,32 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
   phải bug của feature mới. Ảnh hưởng thật: nếu Hiếu add 1 user không-email vào group, MỌI user không-email khác
   (43 tài khoản) mặc nhiên thấy được nội dung riêng-nhóm đó. Chưa fix (blast radius lớn, ~8 route file, có thể
   cần migrate data) — để Hiếu quyết ưu tiên.
+
+### s163 follow-up (2) — fix bug định danh member Tổ Gấu (task riêng, theo yêu cầu Hiếu "fix ngay")
+- Root cause: chat_group_members.user_email (+ sender_email/uploaded_by/created_by/added_by/chat_groups.created_by)
+  lấy từ session.user.email || "". 43 user (đa số Lark OAuth, gồm cả creator Hiếu) có email=NULL trong DB →
+  tất cả cùng chung identity chuỗi rỗng "" → user không-email bất kỳ mặc nhiên là member mọi group có 1
+  user không-email khác đã join, dù chưa từng được mời.
+- Fix: đổi khoá định danh sang session.user.username (luôn duy nhất + luôn có, cả Lark lẫn credentials) xuyên
+  suốt 10 route file api/to-gau/groups/** + api/to-gau/upload + api/kb/wiki/route.ts (isGroupMember thêm ở
+  s163 cũng bị lỗi tương tự, đã fix cùng lúc). Giữ nguyên tên cột DB (user_email/sender_email/uploaded_by/
+  created_by/added_by) — chỉ đổi giá trị lưu, tránh phải viết migration đổi tên cột.
+- API POST /members đổi contract: nhận {username, user_name} thay vì {user_email} — không còn cho gõ email tay
+  (nhiều user không có). user-search route trả thêm field username, tìm được cả theo tên (trước chỉ tìm theo
+  email/tên). FE (to-gau/[id]/page.tsx SettingsModal) bắt buộc chọn từ gợi ý autocomplete mới add được, không
+  cho gõ tự do nữa. PATCH (đổi role) đổi key user_email->username; DELETE đổi query param ?email=->?username=.
+- notifyLarkMembers (Lark DM khi có tin/@mention): đổi join users từ .eq("email",...) sang .eq("username",...)
+  — trước đây user không-email không nhận được DM dù có lark_open_id vì lookup theo email rỗng không match ai.
+- Backfill data thật trên Supabase (owned toàn bộ bởi Hiếu, review kỹ trước khi ghi): 2 chat_groups.created_by,
+  2 chat_group_members.user_email + added_by, 8 chat_messages.sender_email (5 dòng "" + 3 dòng
+  hieunh862@gmail.com — email cá nhân rò rỉ từ session Lark cũ, không phải users.email thật), 1
+  chat_notes.created_by — tất cả "" hoặc email cá nhân -> username thật lark_ou_e5af3c7f447984052c1c5a5c2f5.
+  Verify lại bằng query sau backfill — đúng hết, không còn "".
+- Test bằng HTTP thật (session tự ký qua NEXTAUTH_SECRET, không đụng password ai): tạo 2 user giả không-email
+  khác nhau, chỉ add 1 người vào group Test -> xác nhận người còn lại KHÔNG còn thấy group (trước đây sẽ thấy
+  do collision, đã verify tái tạo đúng bug trước khi fix) -> PASS sau fix. Full regression s163 (group-scoped
+  wiki, docs API) chạy lại -> ALL PASS. Luồng add/đổi-role/xoá-member qua username test riêng -> PASS (user-search
+  trả username, POST/PATCH/DELETE đều đúng). Dọn sạch toàn bộ data test + script scratch sau khi xong.
+- tsc PASS toàn bộ 2 lần (giữa chừng + cuối).
+- Wiki: docs/wiki/Tab/analytics-to-gau.md thêm §"Fix identity-collision" ngay dưới bảng chat_group_members,
+  đánh dấu cột user_email/added_by giờ lưu username không phải email thật.

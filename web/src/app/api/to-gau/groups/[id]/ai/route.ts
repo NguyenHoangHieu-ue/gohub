@@ -11,12 +11,13 @@ function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
 }
 
-async function isMember(groupId: string, email: string): Promise<boolean> {
+// NOTE: chat_group_members.user_email lưu USERNAME, không phải email thật.
+async function isMember(groupId: string, username: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("chat_group_members")
     .select("id")
     .eq("group_id", groupId)
-    .eq("user_email", email)
+    .eq("user_email", username)
     .maybeSingle()
   return !!data
 }
@@ -59,12 +60,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email      = session.user.email || ""
-  const role       = session.user.role  || ""
+  const username   = session.user.username || ""
+  const role       = session.user.role     || ""
   const privileged = isPrivileged(role)
   const { id }     = params
 
-  if (!privileged && !(await isMember(id, email))) {
+  if (!privileged && !(await isMember(id, username))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

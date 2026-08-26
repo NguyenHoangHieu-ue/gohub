@@ -14,20 +14,17 @@
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix (đến 3d75eac, 2026-08-26) |
 
 **➡️ TIẾP THEO (2026-08-26+):**
-- **🚨 BUG NGHIÊM TRỌNG PHÁT HIỆN KHI TEST s163 (KHÔNG PHẢI DO s163 GÂY RA — có từ s142, lộ ra khi test kỹ)**:
-  Toàn bộ Tổ Gấu (group/docs/notes/messages/pin/AI, và cả tính năng gán-nhóm Wiki MỚI ở s163) xác định "có phải
-  member của group X không" bằng cột `chat_group_members.user_email`, lấy từ `session.user.email || ""`.
-  **43 user hiện có `email = NULL`** trong bảng `users` (đa số tài khoản qua Lark OAuth chưa gắn email, GỒM CẢ
-  tài khoản `creator` của chính Hiếu). Với mọi user như vậy, `email || ""` → **tất cả cùng chung 1 "danh tính"
-  chuỗi rỗng `""`**. Test trực tiếp xác nhận: 2 dòng `chat_group_members` hiện có (Hiếu, cả 2 group) đều
-  `user_email=""`. Hệ quả: **nếu 1 user KHÔNG có email được thêm vào 1 group Tổ Gấu, MỌI user không-email khác
-  trong hệ thống (43 tài khoản) mặc nhiên "là thành viên" group đó luôn** (vì cùng khớp `user_email=""`) — kể cả
-  chưa từng được add. Ảnh hưởng: xem được Docs/Notes/tin nhắn/Wiki riêng-nhóm của group đó dù không được mời.
-  **Chưa fix trong s163** (out of scope, blast radius lớn — sửa đúng cần đổi khoá định danh member từ `email`
-  sang `username` xuyên suốt ~8 route file `api/to-gau/groups/**`, có thể cần migrate dữ liệu `chat_group_members`
-  hiện có). **Cần Hiếu quyết**: ưu tiên fix ngay (task riêng) hay tạm chấp nhận rủi ro (hiện tại tất cả member
-  thật đều là Hiếu — admin nên không bị lộ gì thêm do isPrivileged bypass check này; rủi ro chỉ phát sinh THẬT
-  khi Hiếu bắt đầu add user thường (không email) vào group).
+- **✅ ĐÃ FIX bug định danh member Tổ Gấu (task riêng, cùng ngày, theo yêu cầu Hiếu "fix ngay")** — bug phát hiện
+  khi test s163, có từ s142 (KHÔNG phải do s163 gây ra): toàn bộ Tổ Gấu xác định "có phải member group X không"
+  bằng `chat_group_members.user_email` lấy từ `session.user.email || ""`. 43 user có `email=NULL` (đa số qua
+  Lark OAuth, GỒM CẢ account `creator` của Hiếu) → tất cả cùng chung "" → user không-email bất kỳ mặc nhiên "là
+  member" group nào có 1 user không-email khác đã join. Fix: đổi khoá định danh sang `session.user.username`
+  (luôn duy nhất + luôn có) xuyên suốt 10 route `api/to-gau/**` + `api/kb/wiki/route.ts`; đổi API thêm-thành-
+  viên nhận `username` thay vì gõ email tay (`user-search` nay trả thêm `username`, FE bắt buộc chọn từ gợi ý);
+  backfill 2 group + 2 member + 8 message + 1 note cũ của Hiếu sang username thật. Verify bằng HTTP thật (session
+  tự ký qua NEXTAUTH_SECRET): 2 user giả không-email khác nhau → chỉ người được add mới thấy group, người kia
+  KHÔNG còn thấy nữa (trước đây sẽ thấy do collision) — PASS. Toàn bộ add/đổi-role/xoá-member qua username cũng
+  PASS. Chi tiết: `docs/wiki/Tab/analytics-to-gau.md` §"Fix identity-collision".
 - **s163 — đã test bằng tay qua HTTP (session giả lập, không qua browser)**: dùng `NEXTAUTH_SECRET` sẵn có để tự
   ký session hợp lệ (không đụng password ai), gọi thẳng API như 1 user `staff` (email giả không trùng ai) + 1
   user `admin` thật (`seikobao`) trên dev server local, dữ liệu Supabase thật. **Toàn bộ PASS**: staff không phải

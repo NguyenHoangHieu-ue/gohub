@@ -8,6 +8,9 @@ function isPrivileged(role: string) {
 }
 
 // 2 batch queries thay vì N×2 queries; sort theo hoạt động mới nhất
+// NOTE (fix identity-collision bug, xem CLAUDE.md): chat_group_members.user_email / chat_groups.created_by
+// v.v. lưu USERNAME (không phải email thật) — nhiều user login qua Lark chưa gắn email (session.user.email
+// rỗng cho MỌI user như vậy → cùng chung "" → lộ chéo dữ liệu nhóm). username luôn duy nhất + luôn có.
 async function enrichBatch(data: Record<string, unknown>[]) {
   if (!data.length) return []
   const ids = data.map(g => g.id as string)
@@ -58,7 +61,7 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const email    = session.user.email || ""
+  const username = session.user.username || ""
   const role     = session.user.role  || ""
   const archived = req.nextUrl.searchParams.get("archived") === "true"
 
@@ -76,7 +79,7 @@ export async function GET(req: NextRequest) {
   const { data: memberRows, error: memberErr } = await supabaseAdmin
     .from("chat_group_members")
     .select("group_id")
-    .eq("user_email", email)
+    .eq("user_email", username)
   if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 500 })
 
   const groupIds = (memberRows ?? []).map(r => r.group_id)
@@ -100,23 +103,23 @@ export async function POST(req: NextRequest) {
   const role = session.user.role || ""
   if (!isPrivileged(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const email = session.user.email || ""
-  const name  = session.user.name  || ""
-  const body  = await req.json()
+  const username = session.user.username || ""
+  const name     = session.user.name     || ""
+  const body     = await req.json()
   const { name: groupName, description, avatar_emoji } = body
 
   if (!groupName?.trim()) return NextResponse.json({ error: "name required" }, { status: 400 })
 
   const { data: group, error } = await supabaseAdmin
     .from("chat_groups")
-    .insert({ name: groupName.trim(), description: description ?? null, avatar_emoji: avatar_emoji ?? "🐻", created_by: email })
+    .insert({ name: groupName.trim(), description: description ?? null, avatar_emoji: avatar_emoji ?? "🐻", created_by: username })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Auto-add creator as admin member
   await supabaseAdmin.from("chat_group_members").insert({
-    group_id: group.id, user_email: email, user_name: name, role: "admin", added_by: email,
+    group_id: group.id, user_email: username, user_name: name, role: "admin", added_by: username,
   })
 
   return NextResponse.json({ data: group }, { status: 201 })
