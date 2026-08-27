@@ -38,11 +38,12 @@ doanh thu + SKU mới (không giữ cách tag tay cũ).
   toàn trang) — bảng SKU scan (search + phân trang), bảng evidence records (nguồn 🤳/🤖 + trạng thái), bảng %3HK
   theo tháng, bảng Bé Gấu theo tháng. Badge độ tin cậy thống nhất: Auto (xanh dương) / AI-detected chờ duyệt
   (vàng) / đã duyệt (tím) / Context (xám).
-- Migration `v45_okr_lark_events.sql` (CHƯA CHẠY — cần Hiếu): bảng `okr_lark_events` + nới
-  `okr_sku_tags.effective_date` thành nullable.
+- Migration `v45_okr_lark_events.sql`: bảng `okr_lark_events` + nới `okr_sku_tags.effective_date` thành nullable.
+  ✅ Hiếu đã chạy v44+v45 trên Supabase (2026-08-27).
 - tsc PASS + `next build` PASS. **CHƯA verify số thật** (máy dev thiếu `ANALYTICS_DB_*`, chưa test được
-  cron/Gemini với dữ liệu Lark thật) — Hiếu cần: (1) chạy migration v45, (2) nhập `chat_id` group Lark thật qua
-  modal "⚙️ Lark Bot", (3) theo dõi vài ngày đầu xem AI phân loại đúng không trước khi tin số báo cáo hiệu suất.
+  cron/Gemini với dữ liệu Lark thật) — còn lại cần Hiếu: (1) nhập `chat_id` group Lark thật qua modal "⚙️ Lark
+  Bot", (2) QA tay UI My Metrics trên staging (bảng SKU scan/evidence không lỗi), (3) theo dõi vài ngày đầu xem
+  AI phân loại đúng không trước khi tin số báo cáo hiệu suất.
 - Wiki: viết lại `docs/wiki/Tab/analytics-my-metrics.md` toàn bộ theo kiến trúc mới.
 
 **s166 — đã làm (2026-08-27): fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan.**
@@ -248,16 +249,17 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [x] ✅ **v41 `access_audit_log`** (audit log cấp quyền)
 - [x] ✅ **v42 `inventory_plan_skus/inventory_plan_weekly/inventory_po`** (tab Inventory, s161 — Hiếu đã chạy)
 - [ ] ⏳ **v43 `kb_wiki_pages.visibility_mode` + `kb_wiki_page_groups`** (gộp Note/KB vào Tổ Gấu, s163 — CẦN Hiếu chạy trước khi QA)
-- [ ] ⏳ **v44 `okr_evidence_records`/`okr_sku_tags`** (My Metrics, s164 — CẦN Hiếu chạy)
-- [ ] ⏳ **v45 `okr_lark_events` + nới `okr_sku_tags.effective_date`** (My Metrics rebuild bot Lark, s167 — CẦN Hiếu chạy, PHẢI chạy sau v44)
+- [x] ✅ **v44 `okr_evidence_records`/`okr_sku_tags`** (My Metrics, s164 — Hiếu đã chạy 2026-08-27)
+- [x] ✅ **v45 `okr_lark_events` + nới `okr_sku_tags.effective_date`** (My Metrics rebuild bot Lark, s167 — Hiếu đã chạy 2026-08-27)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
 - [x] ✅ **Vercel env**: `LARK_VERIFICATION_TOKEN` đã set Production + Preview
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
 - [ ] **s163 — chạy migration `v43_kb_wiki_group_scope.sql`** trên Supabase trước khi QA gộp Note/KB vào Tổ Gấu.
-- [ ] **s164/s167 — chạy migration `v44_okr_tracking.sql` rồi `v45_okr_lark_events.sql`** (theo đúng thứ tự) trên Supabase trước khi dùng My Metrics.
+- [x] ✅ **s164/s167 — chạy migration `v44_okr_tracking.sql` rồi `v45_okr_lark_events.sql`** — Hiếu đã chạy 2026-08-27.
 - [ ] **s167 — nhập `chat_id` group Lark thật** vào modal "⚙️ Lark Bot" (`/analytics/my-metrics`, admin/creator) — bot không chạy tới khi có chat_id.
+- [ ] **s167 — QA UI My Metrics trên staging**: mở tab, kiểm bảng SKU scan/evidence không lỗi 500 (bảng mới cần cột `okr_sku_tags.effective_date` nullable từ v45), thử gắn/xoá ghi chú SKU, thử thêm case evidence tay.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 
 **Hiếu cần làm (còn lại, cũ):**
