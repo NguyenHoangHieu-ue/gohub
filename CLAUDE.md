@@ -8,11 +8,10 @@
 
 | | |
 |---|---|
-| s165 | Fix quyền ghi admin toàn hệ thống (34 route) — xem chi tiết ngay dưới |
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s164 rebuild tab My Metrics (đã push 626e220) + s165 fix quyền ghi admin 34 route (xem mục ngay dưới) |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision (đến b7730c0, 2026-08-26) |
+| ⏳ Trên staging CHƯA merge main | (clean — s164 rebuild My Metrics + s165 fix quyền ghi admin đã merge main) |
+| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision + s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route (đến 3d3a841, 2026-08-27) |
 
 **s165 — đã làm (2026-08-27): fix quyền ghi (write) admin bị 403 oan trên nhiều tab analytics.**
 Hiếu báo: admin không sửa được Target Squad trong Squad Progress (tab Quarter Report). Root cause tìm
