@@ -9,6 +9,9 @@ const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
 
 // GET ?quarter=Q3-2026&metric=sla
+// Trung bình hợp nhất 2 nguồn "verified": (a) evidence tự nhập đủ 2 ảnh (như trước), (b) case Lark
+// đã được Hiếu XÁC NHẬN trong hàng chờ duyệt (okr_lark_events, status=confirmed) — cả 2 đều có dấu
+// vết kiểm chứng được (ảnh, hoặc log chat + người duyệt), không phải số tự khai.
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -18,29 +21,43 @@ export async function GET(req: NextRequest) {
   const quarter = req.nextUrl.searchParams.get("quarter") ?? "Q3-2026"
   const metric  = req.nextUrl.searchParams.get("metric")  ?? "sla"
 
-  const { data, error } = await supabaseAdmin
-    .from("okr_evidence_records")
-    .select("*")
-    .eq("quarter", quarter)
-    .eq("metric", metric)
-    .order("request_time", { ascending: false })
+  const [{ data: manualData, error: manualErr }, { data: larkData, error: larkErr }] = await Promise.all([
+    supabaseAdmin.from("okr_evidence_records").select("*").eq("quarter", quarter).eq("metric", metric)
+      .order("request_time", { ascending: false }),
+    supabaseAdmin.from("okr_lark_events").select("*").eq("quarter", quarter).eq("metric", metric)
+      .eq("status", "confirmed").order("request_time", { ascending: false }),
+  ])
+  if (manualErr) return NextResponse.json({ error: manualErr.message }, { status: 500 })
+  if (larkErr)   return NextResponse.json({ error: larkErr.message },   { status: 500 })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const records = data ?? []
+  const records = (manualData ?? []).map(r => ({ ...r, source: "manual" as const }))
   // "Verified" = có đủ CẢ 2 ảnh (request + completion) — chỉ case này mới tính vào TB KPI.
   // Case thiếu ảnh vẫn hiển thị (minh bạch là có ghi nhận) nhưng loại khỏi số trung bình báo cáo.
-  const verified = records.filter(r => r.duration_value != null && r.request_image_url && r.completion_image_url)
-  const avg = verified.length > 0
-    ? verified.reduce((a, r) => a + Number(r.duration_value), 0) / verified.length
+  const manualVerified = records.filter(r => r.duration_value != null && r.request_image_url && r.completion_image_url)
+
+  const larkConfirmed = (larkData ?? []).map(r => ({
+    id: r.id, quarter: r.quarter, metric: r.metric, title: null,
+    request_time: r.request_time, request_note: r.request_snippet, request_image_url: null,
+    completion_time: r.completion_time, completion_note: r.completion_snippet, completion_image_url: null,
+    duration_value: r.duration_value, created_by: r.request_sender, created_at: r.created_at,
+    updated_by: r.reviewed_by, updated_at: r.reviewed_at, source: "lark_auto" as const,
+  })).filter(r => r.duration_value != null)
+
+  const allVerified = [...manualVerified, ...larkConfirmed]
+  const avg = allVerified.length > 0
+    ? allVerified.reduce((a, r) => a + Number(r.duration_value), 0) / allVerified.length
     : null
 
+  const merged = [...records, ...larkConfirmed].sort((a, b) =>
+    new Date(b.request_time).getTime() - new Date(a.request_time).getTime())
+
   return NextResponse.json({
-    records,
+    records: merged,
     avg,
-    count: records.length,
-    completed: records.filter(r => r.duration_value != null).length,
-    verified: verified.length,
+    count: records.length + larkConfirmed.length,
+    completed: records.filter(r => r.duration_value != null).length + larkConfirmed.length,
+    verified: allVerified.length,
+    sources: { manual: manualVerified.length, lark_auto: larkConfirmed.length },
     locked: isQuarterLocked(quarter),
   })
 }

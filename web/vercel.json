@@ -36,6 +36,9 @@
     },
     "src/app/api/cron/ca-thread-remind/route.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/cron/my-metrics-lark-scan/route.ts": {
+      "maxDuration": 90
     }
   },
   "crons": [
@@ -70,6 +73,10 @@
     {
       "path": "/api/cron/ca-thread-remind",
       "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/cron/my-metrics-lark-scan",
+      "schedule": "0 */3 * * *"
     }
   ]
 }
