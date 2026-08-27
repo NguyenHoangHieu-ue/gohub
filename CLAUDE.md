@@ -4,14 +4,47 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-27, s166)
+## Trạng thái hiện tại (2026-08-27, s167)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s166 fix %TGT CM1 Squad Progress lệch Tổng quan (xem chi tiết ngay dưới) |
+| ⏳ Trên staging CHƯA merge main | s167 rebuild My Metrics (auto-scan toàn hệ thống + bot Lark tự động SLA/Vendor Speed + UI/UX) · s166 fix %TGT CM1 Squad Progress lệch Tổng quan |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision + s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route (đến 3d3a841, 2026-08-27) |
+
+**s167 — đã làm (2026-08-27): rebuild My Metrics lần 2 — theo yêu cầu Hiếu sau khi đọc offer letter thật
+(`Hieu/Offer Letter...pdf`, trang 2 bảng KPI bị PDF gốc cắt cứng ở cột Target Q3 — Target Q4 KHÔNG có trong tài
+liệu gốc, xác nhận số Q4 trong code trước đó là ước lượng đúng như đã ghi chú).** Hỏi Hiếu chốt 3 quyết định qua
+AskUserQuestion trước khi code (không tự đoán): nguồn Lark = 1 group có sẵn (Hiếu tự nhập chat_id sau) · nhận
+diện = AI đề xuất + Hiếu duyệt 1-click (không tự động tính luôn) · SKU scope = quét toàn hệ thống theo Pareto
+doanh thu + SKU mới (không giữ cách tag tay cũ).
+- **SKU Gross Margin — bỏ hẳn tag tay, quét TOÀN BỘ SKU công ty** (`api/analytics/my-metrics/sku-scan`, route
+  mới): mọi SKU có đơn trong quý, so GM% quý này vs quý trước, xếp Pareto 80% doanh thu = "trọng điểm" + SKU
+  mới trong quý, weighted theo revenue → **số KPI chính thức**. `okr_sku_tags` (bảng cũ) hạ cấp thành ghi chú
+  tuỳ chọn gắn vào 1 dòng trong bảng scan (bỏ yêu cầu `effective_date`, migration v45 nới NOT NULL).
+- **Bot Lark tự động phát hiện SLA/Vendor Speed** (theo đúng yêu cầu "setup bot tự động lấy thông tin, đánh
+  giá, nhận diện"): cron `api/cron/my-metrics-lark-scan` (4x/ngày) quét 1 group Lark (config qua modal "⚙️ Lark
+  Bot", admin/creator, Hiếu tự nhập chat_id — CHƯA hoạt động tới khi nhập) → Gemini (`okr-lark-classify.ts`,
+  cùng convention `agents/classifier.ts`) phân loại thread là Product Request (SLA) hay Vendor Rate Query, tìm
+  tin hoàn thành → ghi `okr_lark_events` (status=pending_review) + DM Lark báo Hiếu có case mới. Hiếu duyệt
+  Xác nhận/Sửa giờ/Từ chối trong panel "🤖 Bé Gấu phát hiện N case" ngay trong tab — chỉ case `confirmed` mới
+  gộp vào TB SLA/Vendor Speed cùng evidence ảnh cũ (route `evidence` nay merge 2 nguồn, trả thêm
+  `sources:{manual, lark_auto}`).
+  - Refactor: tách `lib/lark-thread-scan.ts` (`fetchRecentThreads`) từ logic quét thread của Cà Thread
+    (`api/creator/ca-thread/route.ts`) ra dùng chung — Cà Thread đã đổi sang gọi hàm này, hành vi giữ nguyên
+    (đã đối chiếu kỹ từng điều kiện lọc reaction/participant/mention khi tách).
+- **UI/UX rebuild**: mọi KPI lấy từ DB nay có bảng dữ liệu gốc kèm theo (`DataTable` component mới, dùng chung
+  toàn trang) — bảng SKU scan (search + phân trang), bảng evidence records (nguồn 🤳/🤖 + trạng thái), bảng %3HK
+  theo tháng, bảng Bé Gấu theo tháng. Badge độ tin cậy thống nhất: Auto (xanh dương) / AI-detected chờ duyệt
+  (vàng) / đã duyệt (tím) / Context (xám).
+- Migration `v45_okr_lark_events.sql`: bảng `okr_lark_events` + nới `okr_sku_tags.effective_date` thành nullable.
+  ✅ Hiếu đã chạy v44+v45 trên Supabase (2026-08-27).
+- tsc PASS + `next build` PASS. **CHƯA verify số thật** (máy dev thiếu `ANALYTICS_DB_*`, chưa test được
+  cron/Gemini với dữ liệu Lark thật) — còn lại cần Hiếu: (1) nhập `chat_id` group Lark thật qua modal "⚙️ Lark
+  Bot", (2) QA tay UI My Metrics trên staging (bảng SKU scan/evidence không lỗi), (3) theo dõi vài ngày đầu xem
+  AI phân loại đúng không trước khi tin số báo cáo hiệu suất.
+- Wiki: viết lại `docs/wiki/Tab/analytics-my-metrics.md` toàn bộ theo kiến trúc mới.
 
 **s166 — đã làm (2026-08-27): fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan.**
 Hiếu yêu cầu audit lại logic %TGT CM1/%TGT 3HK per-customer, đảm bảo Squad Progress khớp y hệt Tổng quan
@@ -216,12 +249,17 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [x] ✅ **v41 `access_audit_log`** (audit log cấp quyền)
 - [x] ✅ **v42 `inventory_plan_skus/inventory_plan_weekly/inventory_po`** (tab Inventory, s161 — Hiếu đã chạy)
 - [ ] ⏳ **v43 `kb_wiki_pages.visibility_mode` + `kb_wiki_page_groups`** (gộp Note/KB vào Tổ Gấu, s163 — CẦN Hiếu chạy trước khi QA)
+- [x] ✅ **v44 `okr_evidence_records`/`okr_sku_tags`** (My Metrics, s164 — Hiếu đã chạy 2026-08-27)
+- [x] ✅ **v45 `okr_lark_events` + nới `okr_sku_tags.effective_date`** (My Metrics rebuild bot Lark, s167 — Hiếu đã chạy 2026-08-27)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
 - [x] ✅ **Vercel env**: `LARK_VERIFICATION_TOKEN` đã set Production + Preview
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
 - [ ] **s163 — chạy migration `v43_kb_wiki_group_scope.sql`** trên Supabase trước khi QA gộp Note/KB vào Tổ Gấu.
+- [x] ✅ **s164/s167 — chạy migration `v44_okr_tracking.sql` rồi `v45_okr_lark_events.sql`** — Hiếu đã chạy 2026-08-27.
+- [ ] **s167 — nhập `chat_id` group Lark thật** vào modal "⚙️ Lark Bot" (`/analytics/my-metrics`, admin/creator) — bot không chạy tới khi có chat_id.
+- [ ] **s167 — QA UI My Metrics trên staging**: mở tab, kiểm bảng SKU scan/evidence không lỗi 500 (bảng mới cần cột `okr_sku_tags.effective_date` nullable từ v45), thử gắn/xoá ghi chú SKU, thử thêm case evidence tay.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 
 **Hiếu cần làm (còn lại, cũ):**

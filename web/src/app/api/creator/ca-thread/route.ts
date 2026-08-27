@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getLarkToken, getLarkUserToken } from "@/lib/lark"
 import { supabaseAdmin } from "@/lib/supabase"
+import { fetchRecentThreads } from "@/lib/lark-thread-scan"
 
 const LARK = "https://open.larksuite.com/open-apis"
 const CONFIG_KEY = "ca_thread_config"
@@ -17,23 +18,6 @@ async function requireCreatorOrAdmin() {
 async function larkGet(path: string, token: string) {
   const res = await fetch(`${LARK}${path}`, { headers: { Authorization: `Bearer ${token}` } })
   return res.json()
-}
-
-function parseLarkContent(msg: any): string {
-  try {
-    const body = JSON.parse(msg.body?.content ?? '"[trống]"')
-    if (msg.msg_type === "text") return String(body?.text ?? "")
-    if (msg.msg_type === "post") {
-      const c = body?.zh_cn?.content ?? body?.en_us?.content ?? []
-      return c.flat().map((el: any) => {
-        if (el.tag === "text") return el.text ?? ""
-        if (el.tag === "at") return `@${el.user_name ?? el.user_id}`
-        if (el.tag === "a") return el.text ?? el.href ?? ""
-        return ""
-      }).join("").trim()
-    }
-    return ""
-  } catch { return "" }
 }
 
 function normalizeConfig(raw: any): { groups: { chat_id: string; emoji_type?: string; days_back?: number; my_open_id?: string; name?: string }[] } {
@@ -116,113 +100,49 @@ interface ThreadScanResult {
 async function handleScan({ chat_id, emoji_type = "THUMBSUP", days_back = 7, my_open_id, max_threads = 20 }: any) {
   if (!chat_id) return NextResponse.json({ error: "Thiếu chat_id" }, { status: 400 })
 
-  const appToken = await getLarkToken()
-  // Lark create_time = milliseconds → so sánh ms với ms
-  const since = Date.now() - days_back * 86400 * 1000
   const now = Date.now()
-  // Lấy danh sách thành viên group để map open_id → tên
-  const nameMap: Record<string, string> = {}
+  let rawThreads
   try {
-    const membersData = await larkGet(
-      `/im/v1/chats/${encodeURIComponent(chat_id)}/members?member_id_type=open_id&page_size=100`,
-      appToken
-    )
-    for (const m of (membersData.data?.items ?? [])) {
-      if (m.member_id) nameMap[m.member_id] = m.name ?? m.member_id
-    }
-  } catch {} // fallback vào mentions nếu API members lỗi
-
-  // Paginate qua messages (mới nhất trước, tối đa 5 trang = 250 msgs)
-  // Dừng sớm khi gặp message cũ hơn since để tránh timeout
-  const allItems: any[] = []
-  let pageToken: string | undefined
-  for (let page = 0; page < 5; page++) {
-    const url = `/im/v1/messages?container_id=${encodeURIComponent(chat_id)}&container_id_type=chat&page_size=50&sort_type=ByCreateTimeDesc${pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : ""}`
-    const pageData = await larkGet(url, appToken)
-    if (pageData.code !== 0) {
-      if (page === 0) return NextResponse.json({ error: `Lark [${pageData.code}]: ${pageData.msg}` }, { status: 500 })
-      break
-    }
-    const items: any[] = pageData.data?.items ?? []
-    if (items.length === 0) break
-
-    const inWindow = items.filter((m: any) => parseInt(m.create_time) >= since)
-    allItems.push(...inWindow)
-
-    // Dừng nếu trang này có message ngoài window (tức đã quét đủ)
-    if (inWindow.length < items.length || !pageData.data?.has_more || !pageData.data?.page_token) break
-    pageToken = pageData.data.page_token
+    rawThreads = await fetchRecentThreads(chat_id, days_back, max_threads)
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
-
-  // Chỉ lấy root messages trong window
-  const rootMessages = allItems
-    .filter((msg: any) => !msg.root_id)
-    .slice(0, max_threads)
 
   const threads: ThreadScanResult[] = []
 
-  await Promise.all(rootMessages.map(async (msg: any) => {
-    const msgId: string = msg.message_id
-    // thread_id ưu tiên; nếu không có thì dùng message_id làm container (Lark cho phép)
-    const containerId: string = msg.thread_id || msgId
-    const containerType = msg.thread_id ? "thread" : "thread"
+  for (const t of rawThreads) {
+    // Lark reaction field path: emoji_type (không phải r.emoji)
+    if (t.reaction_emojis.includes(emoji_type)) continue // bỏ qua thread đã có reaction YES
+    if (t.replies.length === 0) continue // bỏ qua thread chưa có reply
 
-    const [threadData, reactionData] = await Promise.all([
-      larkGet(`/im/v1/messages?container_id=${encodeURIComponent(containerId)}&container_id_type=${containerType}&page_size=50`, appToken),
-      larkGet(`/im/v1/messages/${msgId}/reactions?page_size=50`, appToken),
-    ])
-
-    const reactions: any[] = reactionData.data?.items ?? []
-    // Lark reaction field path: r.reaction_type.emoji_type (không phải r.emoji)
-    const hasYes = reactions.some((r: any) => r.reaction_type?.emoji_type === emoji_type)
-    if (hasYes) return // bỏ qua thread đã có reaction YES
-
-    const threadMsgs: any[] = threadData.data?.items ?? []
-    // replies = các tin khác trong thread (có root_id hoặc đơn giản là không phải root message này)
-    const replies = threadMsgs.filter((m: any) => m.message_id !== msgId)
-    if (replies.length === 0) return // bỏ qua thread chưa có reply
-
-    // Bổ sung nameMap từ mentions trong các tin nhắn
-    for (const m of [msg, ...replies]) {
-      for (const mention of (m.mentions ?? [])) {
-        if (mention.id && !nameMap[mention.id]) {
-          nameMap[mention.id] = mention.name ?? mention.id
-        }
-      }
-    }
-
-    // Thu thập participants: người gửi + người được mention trong toàn thread
+    // Thu thập participants: người gửi (user thật, không phải bot) + người được mention trong toàn thread
     const participantSet = new Set<string>()
-    for (const m of [msg, ...replies]) {
-      if (m.sender?.id && m.sender.sender_type === "user") participantSet.add(m.sender.id)
-      for (const mention of (m.mentions ?? [])) {
-        if (mention.id && mention.id_type === "open_id") participantSet.add(mention.id)
-      }
+    if (t.sender_open_id && t.sender_type === "user") participantSet.add(t.sender_open_id)
+    for (const mention of t.mentions) if (mention.id && mention.id_type === "open_id") participantSet.add(mention.id)
+    for (const r of t.replies) {
+      if (r.open_id && r.sender_type === "user") participantSet.add(r.open_id)
+      for (const mention of r.mentions) if (mention.id && mention.id_type === "open_id") participantSet.add(mention.id)
     }
     if (my_open_id) participantSet.delete(my_open_id)
     participantSet.delete("")
 
-    const participants = Array.from(participantSet).map(id => ({
-      open_id: id,
-      name: nameMap[id] ?? id,
-    }))
-    if (participants.length === 0) return
+    const nameOf = (id: string) =>
+      t.sender_open_id === id ? t.sender_name : (t.replies.find(r => r.open_id === id)?.name
+        ?? [...t.mentions, ...t.replies.flatMap(r => r.mentions)].find(m => m.id === id)?.name ?? id)
+
+    const participants = Array.from(participantSet).map(id => ({ open_id: id, name: nameOf(id) }))
+    if (participants.length === 0) continue
 
     threads.push({
-      message_id: msgId,
-      thread_id: containerId,
-      create_time: msg.create_time,
-      days_ago: Math.floor((now - parseInt(msg.create_time)) / (86400 * 1000)),
-      content: parseLarkContent(msg),
+      message_id: t.message_id,
+      thread_id: t.thread_id,
+      create_time: t.create_time,
+      days_ago: Math.floor((now - parseInt(t.create_time)) / (86400 * 1000)),
+      content: t.content,
       participants,
-      replies: replies.map((r: any) => ({
-        open_id: r.sender?.id ?? "",
-        name: nameMap[r.sender?.id ?? ""] ?? (r.sender?.id ?? "?"),
-        content: parseLarkContent(r),
-        create_time: r.create_time,
-      })),
+      replies: t.replies.map(r => ({ open_id: r.open_id, name: r.name, content: r.content, create_time: r.create_time })),
     })
-  }))
+  }
 
   // Đánh dấu thread đã cà (persistent) từ ca_thread_log
   if (threads.length > 0) {
