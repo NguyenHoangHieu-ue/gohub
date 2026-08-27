@@ -124,6 +124,16 @@ mentions từ 1 group Lark" ra khỏi `api/creator/ca-thread/route.ts` (Cà Thre
 `fetchRecentThreads()` — Cà Thread giờ gọi hàm này rồi tự áp lọc reaction-YES/participant riêng, tránh 2 nơi
 chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 
+## § Bảng chi tiết + filter (2026-08-27, feedback tiếp theo)
+
+- **Datapool Rev — chi tiết theo SKU** (mới, `GET /api/analytics/my-metrics/datapool-detail`): Hiếu yêu cầu xem
+  đơn/rev/SKU thay vì chỉ số tổng theo tháng — bảng mới ngay dưới card %Datapool Rev, group theo `(sku, vendor,
+  category)` trong quý, cột SKU/Vendor/Category/Đơn/Units/Revenue, có filter vendor (3HK/BC/Mọi) + search SKU.
+  Cache 12h như các route khác.
+- **SKU Gross Margin — quét toàn hệ thống**: thêm 3 filter cạnh ô search (trước chỉ có search): **Loại**
+  (Mọi loại/Chỉ Trọng điểm/Chỉ Mới), **Category**, **Vendor** — options tự sinh từ dữ liệu trả về (không
+  hardcode danh sách). Dòng "đang lọc còn N SKU" hiện khi có filter đang áp.
+
 ## § UI/màu (2026-08-27, sau feedback "màu chưa ổn")
 
 Dùng skill thiết kế [Hallmark](https://github.com/Nutlope/hallmark) (cài `~/.claude/skills/hallmark/`) để audit +
