@@ -122,22 +122,21 @@ function ProgressBar({ actual, target }: { actual: number; target: number }) {
 
 function SourceBox({ type, table, filter }: { type: "auto"|"manual"|"context"; table: string; filter?: string }) {
   const [open, setOpen] = useState(false)
-  const badge = type === "auto" ? "bg-blue-100 text-blue-700" : type === "manual" ? "bg-purple-100 text-purple-700" : "bg-slate-200 text-slate-600"
   return (
     <div className="mt-2">
       <button onClick={() => setOpen(v => !v)}
         className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors">
         <Info className="w-3 h-3" />
-        📊 Data source
+        Nguồn dữ liệu
         {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
       {open && (
-        <div className="mt-1 bg-slate-50 rounded-lg px-3 py-2 text-[11px] font-mono text-slate-500 space-y-0.5">
+        <div className="mt-1.5 pl-2.5 border-l-2 border-slate-200 text-[11px] font-mono text-slate-500 space-y-0.5">
           <div className="flex items-center gap-1.5">
-            <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-black uppercase", badge)}>{type}</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wide">{type}</span>
             <span className="font-bold text-slate-600">{table}</span>
           </div>
-          {filter && <div className="text-slate-400 pl-1 break-all">{filter}</div>}
+          {filter && <div className="text-slate-400 break-all">{filter}</div>}
         </div>
       )}
     </div>
@@ -426,18 +425,18 @@ function EvidenceCard({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-black text-slate-800">{cardTitle}</span>
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">Manual + Lark auto · verified</span>
-            {locked && <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase"><Lock className="w-2.5 h-2.5" />Khoá</span>}
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Manual + Lark auto</span>
+            {locked && <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide"><Lock className="w-2.5 h-2.5" />Khoá</span>}
           </div>
           {!locked && (
             <button onClick={() => { setEditRec(null); setForm(emptyForm); setShowForm(v => !v) }}
-              className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+              className="flex items-center gap-1 text-xs font-bold text-[#003B95] hover:text-[#002d70] transition-colors">
               <Plus className="w-3.5 h-3.5" /> Thêm case tay
             </button>
           )}
         </div>
         <div className="flex items-baseline gap-2">
-          <span className={cn("text-3xl font-black", avg === null ? "text-slate-300" : avg <= targetValue ? "text-emerald-600" : avg <= targetValue*2 ? "text-[#003B95]" : "text-amber-600")}>
+          <span className={cn("text-3xl font-black tabular-nums", avg === null ? "text-slate-300" : avg <= targetValue ? "text-emerald-600" : avg <= targetValue*2 ? "text-[#003B95]" : "text-amber-600")}>
             {loading ? "…" : avg !== null ? avg.toFixed(1) : "—"}
           </span>
           <span className="text-slate-400 font-bold">{unit} TB</span>
@@ -458,19 +457,19 @@ function EvidenceCard({
         )}
 
         {showForm && !locked && (
-          <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/40 space-y-3">
-            <p className="text-xs font-black text-blue-700 uppercase tracking-wider">
+          <div className="border border-[#003B95]/20 rounded-xl p-4 bg-[#003B95]/[0.04] space-y-3">
+            <p className="text-xs font-black text-[#003B95] uppercase tracking-wider">
               {editRec ? "Sửa case" : "Thêm case tay (case Lark không bắt được)"}
             </p>
             {err && <p className="text-[11px] text-red-600 font-bold">{err}</p>}
             <input value={form.title} onChange={e => setF("title", e.target.value)}
               placeholder="Mô tả yêu cầu (tuỳ chọn)"
-              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <p className="text-[11px] font-black text-slate-600 uppercase tracking-wider">📩 Request</p>
                 <input type="datetime-local" value={form.request_time} onChange={e => setF("request_time", e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
                 <textarea value={form.request_note} onChange={e => setF("request_note", e.target.value)}
                   placeholder="Ghi chú request…" rows={2}
                   className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs resize-none focus:outline-none" />
@@ -482,7 +481,7 @@ function EvidenceCard({
                   )}
                   <button onClick={() => reqImgRef.current?.click()}
                     disabled={!!uploading}
-                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2 py-1">
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:text-[#002d70] border border-[#003B95]/20 rounded-lg px-2 py-1">
                     {uploading === "request_image_url" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                     Ảnh <span className="text-red-500">*</span>
                   </button>
@@ -493,7 +492,7 @@ function EvidenceCard({
               <div className="space-y-1.5">
                 <p className="text-[11px] font-black text-slate-600 uppercase tracking-wider">✅ Hoàn thành</p>
                 <input type="datetime-local" value={form.completion_time} onChange={e => setF("completion_time", e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
                 <textarea value={form.completion_note} onChange={e => setF("completion_note", e.target.value)}
                   placeholder="Ghi chú hoàn thành…" rows={2}
                   className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs resize-none focus:outline-none" />
@@ -505,7 +504,7 @@ function EvidenceCard({
                   )}
                   <button onClick={() => compImgRef.current?.click()}
                     disabled={!!uploading}
-                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2 py-1">
+                    className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:text-[#002d70] border border-[#003B95]/20 rounded-lg px-2 py-1">
                     {uploading === "completion_image_url" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                     Ảnh <span className="text-red-500">*</span>
                   </button>
@@ -524,7 +523,7 @@ function EvidenceCard({
               <button onClick={() => { setShowForm(false); setEditRec(null); setForm(emptyForm); setErr(null) }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
               <button onClick={submit} disabled={saving || !!uploading}
-                className="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                className="px-3 py-1.5 rounded-lg text-xs font-black bg-[#003B95] text-white hover:bg-[#002d70] disabled:opacity-50">
                 {saving ? "Đang lưu…" : editRec ? "Cập nhật" : "Thêm"}
               </button>
             </div>
@@ -536,9 +535,11 @@ function EvidenceCard({
           rowKey={r => r.id}
           emptyLabel={loading ? "Đang tải…" : "Chưa có case nào — thêm tay hoặc chờ Bé Gấu phát hiện từ Lark."}
           columns={[
-            { key: "src", label: "Nguồn", render: r => r.source === "lark_auto"
-                ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">🤖 Lark</span>
-                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">🤳 Ảnh</span> },
+            { key: "src", label: "Nguồn", render: r => (
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
+                {r.source === "lark_auto" ? "Lark" : "Ảnh"}
+              </span>
+            ) },
             { key: "req", label: "Request", render: r => (
               <div>
                 <span className="font-bold">{hhmm(r.request_time)}</span>
@@ -552,12 +553,12 @@ function EvidenceCard({
             { key: "verified", label: "Trạng thái", align: "center", render: r => {
               const isVerified = r.source === "lark_auto" || !!(r.request_image_url && r.completion_image_url && r.duration_value != null)
               return isVerified
-                ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
-                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">Thiếu ảnh</span>
+                ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
+                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">Thiếu ảnh</span>
             } },
             { key: "act", label: "", align: "right", render: r => r.source === "manual" && !locked ? (
               <div className="flex gap-1 justify-end">
-                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50"><Pencil className="w-3 h-3" /></button>
+                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-[#003B95] hover:bg-[#003B95]/5"><Pencil className="w-3 h-3" /></button>
                 <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
               </div>
             ) : null },
@@ -635,16 +636,16 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-black text-slate-800">SKU Gross Margin — quét toàn hệ thống</span>
-            <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase"><ShieldCheck className="w-2.5 h-2.5" />Auto · mọi SKU</span>
+            <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide"><ShieldCheck className="w-2.5 h-2.5" />Auto · mọi SKU</span>
           </div>
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm SKU / category / vendor…"
-              className="pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-52" />
+              className="pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] w-52" />
           </div>
         </div>
         <div className="flex items-baseline gap-2">
-          <span className={cn("text-3xl font-black", loading ? "text-slate-300" : wd === null ? "text-slate-300" : wd >= targetDelta ? "text-emerald-600" : wd >= 0 ? "text-[#003B95]" : "text-amber-600")}>
+          <span className={cn("text-3xl font-black tabular-nums", loading ? "text-slate-300" : wd === null ? "text-slate-300" : wd >= targetDelta ? "text-emerald-600" : wd >= 0 ? "text-[#003B95]" : "text-amber-600")}>
             {loading ? "…" : wd !== null ? `${wd >= 0 ? "+" : ""}${wd.toFixed(2)}%` : "—"}
           </span>
           <span className="text-slate-400 text-sm font-bold">weighted, {data ? `${data.scored_count} SKU trọng điểm/mới tính KPI` : "…"}</span>
@@ -670,8 +671,8 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
             { key: "sku", label: "SKU", render: it => (
               <div className="flex items-center gap-1 flex-wrap">
                 <span className="font-black text-slate-800">{it.sku}</span>
-                {it.is_key && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Key</span>}
-                {it.is_new && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 uppercase">Mới</span>}
+                {it.is_key && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-[#003B95]/10 text-[#003B95] uppercase">Key</span>}
+                {it.is_new && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase">Mới</span>}
               </div>
             ) },
             { key: "cat", label: "Category / Vendor", render: it => <span className="text-slate-500">{it.category ?? "—"} · {it.vendor ?? "—"}</span> },
@@ -696,7 +697,7 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
               return (
                 <div className="flex items-center gap-1">
                   <button disabled={locked} onClick={() => { setEditingSku(it.sku); setNoteDraft(n?.note ?? "") }}
-                    className={cn("text-left hover:text-blue-600 disabled:hover:text-slate-400 truncate max-w-[140px]", n?.note ? "text-slate-600" : "text-slate-300 italic")}>
+                    className={cn("text-left hover:text-[#003B95] disabled:hover:text-slate-400 truncate max-w-[140px]", n?.note ? "text-slate-600" : "text-slate-300 italic")}>
                     {n?.note || (locked ? "—" : "+ thêm ghi chú")}
                   </button>
                   {n?.note && !locked && (
@@ -756,13 +757,13 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
               <label className="text-[11px] font-bold text-slate-500 uppercase">Chat ID group Lark</label>
               <input value={cfg.chat_id} onChange={e => setCfg(p => ({ ...p, chat_id: e.target.value }))}
                 placeholder="oc_xxxxxxxxxxxxx"
-                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
               <p className="text-[10px] text-slate-400 mt-1">Group Sales/PIC nhắn yêu cầu sản phẩm / hỏi giá NCC. Bot quét thread trong group này mỗi vài giờ.</p>
             </div>
             <div>
               <label className="text-[11px] font-bold text-slate-500 uppercase">Quét ngược N ngày</label>
               <input type="number" min={1} value={cfg.days_back} onChange={e => setCfg(p => ({ ...p, days_back: parseInt(e.target.value) || 3 }))}
-                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
@@ -934,23 +935,29 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             <Gauge className="w-8 h-8 text-white/70" />
             <div>
               <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Weighted OKR Score — {qLabel}</p>
-              <p className="text-4xl font-black">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
+              <p className="text-4xl font-black tabular-nums">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
             </div>
           </div>
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-center">
+          <div className="flex flex-wrap gap-2.5 text-center flex-1">
             {[
               ["SLA", achSla, WEIGHTS.sla],
               ["Vendor Speed", achVendor, WEIGHTS.vendor_speed],
               ["SKU GM", achSku, WEIGHTS.sku_gm],
               ["%3HK", achHk3, WEIGHTS.hk3],
               ["Bé Gấu", achBegau, WEIGHTS.begau],
-            ].map(([label, ach, w]) => (
-              <div key={label as string} className="bg-white/10 rounded-xl px-2 py-2 min-w-[64px]">
-                <p className="text-[9px] font-bold text-white/50 uppercase">{label}</p>
-                <p className="text-sm font-black">{(ach as number).toFixed(0)}%</p>
-                <p className="text-[9px] text-white/40">w={w}%</p>
-              </div>
-            ))}
+            ].map(([label, ach, w]) => {
+              const achNum = ach as number
+              const tier = achNum >= 100 ? "bg-emerald-400" : achNum >= 75 ? "bg-white/60" : "bg-amber-400"
+              return (
+                <div key={label as string} className="bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative"
+                  style={{ flexGrow: w as number, flexBasis: `${(w as number) * 2}px` }}>
+                  <p className="text-[9px] font-bold text-white/50 uppercase truncate">{label}</p>
+                  <p className="text-lg font-black tabular-nums">{achNum.toFixed(0)}%</p>
+                  <p className="text-[9px] text-white/40">w={w}%</p>
+                  <div className={cn("absolute bottom-0 left-0 h-[3px]", tier)} style={{ width: `${Math.min(achNum, 100)}%` }} />
+                </div>
+              )
+            })}
           </div>
         </div>
         <p className="text-[10px] text-white/40 mt-3 leading-relaxed">
@@ -962,20 +969,19 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
       </div>
 
       {/* Data freshness / trust bar */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[11px] text-amber-700 font-medium space-y-1">
-        <div>📌 <strong>Baseline T8/2026:</strong> SLA = {BASELINE_NOTE.sla} · Vendor Speed = {BASELINE_NOTE.vendor_speed} · SKU GM = {OKR_GM_BASELINE_DISPLAY}% · Datapool = {auto?.hk3.baseline ?? "…"}% · Tasks = {BASELINE_NOTE.begau_weekly}</div>
-        {auto && <div className="text-amber-500">🕐 {auto.data_cutoff} · Trang tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</div>}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] text-slate-500 font-medium space-y-1">
+        <div>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA = {BASELINE_NOTE.sla} · Vendor Speed = {BASELINE_NOTE.vendor_speed} · SKU GM = {OKR_GM_BASELINE_DISPLAY}% · Datapool = {auto?.hk3.baseline ?? "…"}% · Tasks = {BASELINE_NOTE.begau_weekly}</div>
+        {auto && <div className="text-slate-400">🕐 {auto.data_cutoff} · Trang tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</div>}
         <div className="flex flex-wrap gap-3 pt-1">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Auto = tính thẳng từ DB, không sửa được</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />AI-detected · chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" />Manual/AI đã duyệt = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt)</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" />Context = số tham khảo, KHÔNG phải KPI chính thức</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Verified = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt)</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />Auto/Context = tính thẳng từ DB hoặc chỉ tham khảo — không phải case cần duyệt</span>
         </div>
       </div>
 
       {/* Target edit modal */}
       {editTarget && (
-        <div className="bg-white border border-blue-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-[#003B95]/20 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <p className="text-sm font-black text-slate-900">Sửa Target — {qLabel}</p>
@@ -1011,7 +1017,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                     value={(draftT[field] as number) ?? ""}
                     onChange={e => setDraftT(p => ({ ...p, [field]: parseFloat(e.target.value) || 0 }))}
                     placeholder="0"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-[#003B95]"
                   />
                   <span className="text-xs text-slate-400 shrink-0">{unit}</span>
                 </div>
@@ -1056,10 +1062,10 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="w-4 h-4 text-slate-400" />
                 <span className="text-sm font-black text-slate-800">%3HK + Other Datapool Vendor</span>
-                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Auto</span>
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className={cn("text-3xl font-black", loading ? "text-slate-300" : hk3Pct >= targets.hk3_pct ? "text-emerald-600" : hk3Pct >= targets.hk3_pct*0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                <span className={cn("text-3xl font-black tabular-nums", loading ? "text-slate-300" : hk3Pct >= targets.hk3_pct ? "text-emerald-600" : hk3Pct >= targets.hk3_pct*0.75 ? "text-[#003B95]" : "text-amber-600")}>
                   {loading ? "…" : pct(hk3Pct)}
                 </span>
                 <span className="text-slate-400 text-sm font-bold">of revenue</span>
@@ -1097,7 +1103,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
           <div className="bg-slate-50 rounded-2xl border border-slate-200 px-5 py-4">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-black text-slate-600">SKU Gross Margin — blended toàn công ty</span>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">Context, không phải KPI chính</span>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Context, không phải KPI chính</span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className={cn("text-xl font-black", gmDelta >= 0 ? "text-slate-700" : "text-amber-600")}>
@@ -1121,10 +1127,10 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 <div className="flex items-center gap-2 mb-2">
                   <Bot className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-black text-slate-800">Tasks Completed via Bé Gấu</span>
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Auto</span>
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className={cn("text-4xl font-black", loading ? "text-slate-300" :
+                  <span className={cn("text-4xl font-black tabular-nums", loading ? "text-slate-300" :
                     (auto?.begau.total ?? 0) >= targets.begau ? "text-emerald-600" :
                     (auto?.begau.total ?? 0) >= targets.begau*0.75 ? "text-[#003B95]" : "text-slate-900")}>
                     {loading ? "…" : (auto?.begau.total ?? 0).toLocaleString()}
@@ -1176,7 +1182,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
 
             <div className="mt-4 border-t border-slate-100 pt-4">
               <button onClick={() => setShowConvs(v => !v)}
-                className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-blue-700 transition-colors">
+                className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#003B95] transition-colors">
                 <MessageSquare className="w-4 h-4" />
                 {showConvs ? "Ẩn" : "Xem"} danh sách cuộc hội thoại được tính ({convTotal > 0 ? convTotal : "…"})
                 {showConvs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1193,8 +1199,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase",
-                              c.channel === "Lark" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600")}>
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-500 tracking-wide">
                               {c.channel}
                             </span>
                             <span className="text-[10px] text-slate-400">{c.user}</span>
@@ -1210,8 +1215,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">User</p>
                             <p className="text-xs text-slate-700">{c.user_message}</p>
                           </div>
-                          <div className="bg-blue-50 rounded-lg p-2.5">
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-1">Bé Gấu</p>
+                          <div className="bg-[#003B95]/[0.04] rounded-lg p-2.5">
+                            <p className="text-[10px] font-black text-[#003B95] uppercase tracking-wider mb-1">Bé Gấu</p>
                             <p className="text-xs text-slate-700 whitespace-pre-wrap">{c.ai_response}{c.ai_response?.length >= 400 ? "…" : ""}</p>
                           </div>
                         </div>

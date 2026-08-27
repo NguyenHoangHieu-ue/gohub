@@ -124,6 +124,26 @@ mentions từ 1 group Lark" ra khỏi `api/creator/ca-thread/route.ts` (Cà Thre
 `fetchRecentThreads()` — Cà Thread giờ gọi hàm này rồi tự áp lọc reaction-YES/participant riêng, tránh 2 nơi
 chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 
+## § UI/màu (2026-08-27, sau feedback "màu chưa ổn")
+
+Dùng skill thiết kế [Hallmark](https://github.com/Nutlope/hallmark) (cài `~/.claude/skills/hallmark/`) để audit +
+sửa — bug thật: trước có **5 màu badge cạnh tranh nhau** (blue=Auto, purple=Manual, amber=pending,
+emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, chỉ là color-code tuỳ hứng — đúng kiểu
+"AI slop" (xem `references/color.md`: *"One accent. Maximum two. Everything else is neutral."*).
+
+**Hệ màu mới:**
+- **1 accent duy nhất** = navy thương hiệu GoHub `#003B95` (đã dùng sẵn toàn app — giữ nguyên, không bịa màu
+  mới) — chỉ dùng cho: nút hành động chính, link/hover, focus ring, badge "Key" (SKU trọng điểm).
+- **Neutral (slate)** cho MỌI tag chỉ mang tính phân loại/nguồn (Auto, Manual, Context, Lark/Web, Khoá) — không
+  còn tô màu theo loại, phân biệt bằng chữ.
+- **2 màu semantic thật** (chỉ dùng khi đúng nghĩa trạng thái): emerald = verified/đạt target/SKU mới; amber =
+  chờ duyệt/thiếu ảnh/dưới target. Không dùng amber cho khối thông tin không phải cảnh báo (trước đây banner
+  "Baseline" tô nền amber dù không phải warning — đã đổi neutral).
+- `SourceBox`: bỏ nested box-trong-box (card-in-card), chuyển sang hairline rule bên trái.
+- Thanh "Weighted OKR Score": 5 ô trọng số trước đều nhau (`grid-cols-5`) — đổi sang `flex` tỉ lệ theo trọng số
+  (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
+- Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
+
 ## Gotchas
 
 - **Quarter lock**: `isQuarterLocked(label)` = `true` khi hôm nay > ngày cuối quý → evidence + SKU note + duyệt
