@@ -208,6 +208,12 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   `enabled=false` hoặc thiếu `chat_id`, không lỗi, chỉ trả `{skipped: "..."}`.
 - **Chất lượng AI phân loại chưa verify với dữ liệu thật** — đây chính là lý do có hàng chờ duyệt thay vì tự
   động tính luôn; Hiếu nên soát kỹ đợt case đầu tiên trước khi tin tưởng số.
+- **Cách kiểm tra nhanh "bot đã chạy lần nào chưa" khi debug** (2026-08-27, verify qua query Supabase thật):
+  đọc `app_settings` key `my_metrics_lark_scan_config` (config đúng chưa: `enabled`/`chat_id`/`days_back`) +
+  đếm `okr_lark_events` theo mọi `status` (kể cả `not_matched`) cho quarter hiện tại — 0 dòng nghĩa là cron/
+  "Quét ngay" chưa từng chạy thành công lần nào, KHÔNG phải bot chạy rồi mà không tìm thấy gì. Trường hợp
+  thật gặp: config đúng (`enabled=true`, có `chat_id`) nhưng `okr_lark_events` = 0 dòng → do vừa mới cấu hình
+  xong, cron 1x/ngày (17h ICT) chưa tới lượt chạy — bấm "Quét ngay để test" để có dữ liệu ngay thay vì đợi.
 - **Bé Gấu task ≠ "thành công" theo nghĩa nghiêm ngặt** — chỉ lọc được độ dài response (không có structured
   success flag từ `be-gau.ts`). Nếu muốn phân loại chuẩn hơn cần thêm cột đánh giá thủ công hoặc structured
   output ở `be-gau.ts` (chưa làm, out of scope).
