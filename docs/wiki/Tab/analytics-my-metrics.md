@@ -63,7 +63,7 @@ Quyết định Hiếu chốt (không tự đoán):
 | 1 | SLA Handling Time | ≤5h, 80% requests | Manual (2 ảnh) **hoặc** Lark bot đã duyệt → TB hợp nhất 2 nguồn |
 | 1 | Vendor Selection Speed | ≤15 phút/query | Tương tự SLA |
 | 2 | SKU Gross Margin | +2.5% GM SKU trọng điểm/mới | **Auto-scan toàn hệ thống** (sku-scan) — weighted theo revenue, không cần tag tay |
-| 2 | %3HK + Datapool Vendor | 74% revenue | `SUM(rev WHERE vendor 3HKDATAPOOL)/SUM(rev)` toàn công ty — auto, không đổi |
+| 2 | %3HK + Datapool Vendor | 74% revenue | `SUM(rev WHERE vendor IN (3HKDATAPOOL, BCDATAPOOL))/SUM(rev)` toàn công ty — auto |
 | 3 (w=30%) | Tasks via Bé Gấu | 450/quý | `app_usage_events` chat có `ai_response` dài ≥15 ký tự, company-wide, breakdown theo `user_role` |
 
 **Weighted OKR Score** = Σ(đạt-%ᵢ × trọng-sốᵢ)/100, `WEIGHTS` trong `page.tsx`: SLA/VendorSpeed/SKU-GM/%3HK mỗi
@@ -145,3 +145,8 @@ chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 - Máy dev không có `ANALYTICS_DB_*` → chưa chạy được SQL sku-scan live để verify số thật; cũng không test được
   cron/Gemini call với dữ liệu Lark thật. Hiếu cần: (1) chạy migration v45, (2) nhập `chat_id` thật, (3) theo
   dõi vài ngày đầu xem bot phân loại đúng không trước khi tin số báo cáo.
+- **%3HK + Other Datapool Vendor (2026-08-27)**: đúng tên KPI offer letter, gộp CẢ 3HK Datapool VÀ **BC Datapool**
+  (`dim_sku.vendor = 'BC Datapool'`, Hiếu xác nhận qua SQL Explorer) — filter
+  `REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')`. **Chỉ áp trong My Metrics** — KPI
+  "3HK Contribution %" ở BOD/Dashboard/Quarterly/Channels là chỉ số RIÊNG (chỉ 3HK, không có BC), cố ý KHÔNG
+  đổi theo vì đó là số đã báo cáo lâu dài cho leadership, đổi định nghĩa ở đó cần Hiếu chốt riêng.

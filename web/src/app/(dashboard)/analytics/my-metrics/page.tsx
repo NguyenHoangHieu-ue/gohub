@@ -1089,7 +1089,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 ]}
               />
               <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue"
-                filter="REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'" />
+                filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
             </div>
           </div>
 

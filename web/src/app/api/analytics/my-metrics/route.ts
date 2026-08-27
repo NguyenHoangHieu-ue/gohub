@@ -23,7 +23,11 @@ export async function GET(req: NextRequest) {
   const year    = parseInt(req.nextUrl.searchParams.get("year") ?? "2026")
   const { start, end } = quarterRange(quarter, year)
 
-  // ── 1. 3HK % Revenue (gohub_dw) ──────────────────────────────────────────
+  // ── 1. %3HK + Other Datapool Vendor Revenue (gohub_dw) ─────────────────────
+  // Đúng theo tên KPI offer letter "%3HK + Other Datapool Vendor" — gộp CẢ 3HK Datapool
+  // VÀ BC Datapool (vendor "BC Datapool" trong dim_sku, xác nhận qua SQL Explorer với Hiếu
+  // 2026-08-27), không chỉ riêng 3HK như bản v1. Chỉ áp DUY NHẤT ở My Metrics — KPI "3HK
+  // Contribution %" ở BOD/Dashboard/Quarterly là chỉ số khác (chỉ 3HK), KHÔNG đổi theo đây.
   let hk3Data: { month: string; hk3_rev: number; total_rev: number }[] = []
   try {
     const rows = await queryAnalytics<{ month: string; hk3_rev: string; total_rev: string }>(
@@ -31,7 +35,7 @@ export async function GET(req: NextRequest) {
          TO_CHAR(DATE_TRUNC('month', f.fulfiled_date::date), 'YYYY-MM') AS month,
          SUM(CASE WHEN TRIM(f.sku) IN (
            SELECT DISTINCT TRIM(sku) FROM dim_sku
-           WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+           WHERE REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL', 'BCDATAPOOL')
          ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
          SUM(f.fulfilled_revenue_amount_vnd)::bigint                AS total_rev
        FROM fact_fulfillment_revenue f
