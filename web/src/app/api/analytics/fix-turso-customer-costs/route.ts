@@ -5,11 +5,14 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // ─── DELETE: Xóa records tạo nhầm (customer_code chứa ký tự < > là placeholder) ──────────────
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "quarterly", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   await ensureB2bCostTable()
@@ -32,7 +35,7 @@ export async function DELETE(req: NextRequest) {
 // ?autofix=1 → tự động migrate những case có 1 match chắc chắn (không cần confirm)
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "quarterly", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const autofix = req.nextUrl.searchParams.get("autofix") === "1"
@@ -164,7 +167,7 @@ export async function GET(req: NextRequest) {
 // Body: { mappings: [{ virtual_code, real_code, months? }] }
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "quarterly", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

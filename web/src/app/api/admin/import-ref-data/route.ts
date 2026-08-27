@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
 import * as XLSX from "xlsx"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // Mapping Excel header → DB column name cho từng bảng
 function mapRow(row: Record<string, any>, table: string): Record<string, any> | null {
@@ -70,7 +73,7 @@ function getPK(table: string): string {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "settings", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   let formData: FormData

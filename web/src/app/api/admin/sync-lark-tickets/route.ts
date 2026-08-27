@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLarkToken } from "@/lib/lark"
+import { canWrite } from "@/lib/writable-tabs"
 
+const WRITE_ROLES = ["admin", "creator"]
 const LARK_API = "https://open.larksuite.com/open-apis"
 
 function getLarkString(val: unknown): string {
@@ -32,7 +34,7 @@ export async function POST(_req: NextRequest) {
   if (!session && !isCronAuthed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  if (session && !["admin", "creator"].includes(session.user.role)) {
+  if (session && !(await canWrite(session, "cs-troubleshoot", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

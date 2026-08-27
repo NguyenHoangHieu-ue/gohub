@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // b2c_budget = { [month "YYYY-MM"]: { vn: number, us: number } } — ngân sách marketing B2C theo tháng × thị trường.
 // Total = vn + us (tự cộng). Dùng tính spend pace = spend / budget ở Section 5. Backward-compat: format cũ
@@ -36,7 +39,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || (!["admin", "creator"].includes(session.user.role))) {
+  if (!session || !(await canWrite(session, "b2c", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()

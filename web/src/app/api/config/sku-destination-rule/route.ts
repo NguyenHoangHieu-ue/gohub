@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
 
 const KEY = "sku_destination_rules"
+const WRITE_ROLES = ["admin", "creator"]
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -17,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWrite(session, "products", WRITE_ROLES))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const body = await req.json()
     const { error } = await supabaseAdmin.from("app_settings").upsert({ key: KEY, value: JSON.stringify(body) }, { onConflict: "key" })

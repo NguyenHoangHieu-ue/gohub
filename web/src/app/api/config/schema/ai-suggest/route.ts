@@ -2,13 +2,16 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // AI suggest mô tả bảng/cột (port intel generateAIDescriptions) — chạy server-side với GEMINI_KEY.
 // Body: { tableName, fields: [{ name, type }] } → { tableDescription, fields: { [name]: description } }.
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role)) {
+  if (!session || !(await canWrite(session, "schema", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   try {

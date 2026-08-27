@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { isQuarterLocked } from "@/lib/okr-helpers"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
@@ -27,12 +28,21 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const records = data ?? []
-  const completed = records.filter(r => r.duration_value != null)
-  const avg = completed.length > 0
-    ? completed.reduce((a, r) => a + Number(r.duration_value), 0) / completed.length
+  // "Verified" = có đủ CẢ 2 ảnh (request + completion) — chỉ case này mới tính vào TB KPI.
+  // Case thiếu ảnh vẫn hiển thị (minh bạch là có ghi nhận) nhưng loại khỏi số trung bình báo cáo.
+  const verified = records.filter(r => r.duration_value != null && r.request_image_url && r.completion_image_url)
+  const avg = verified.length > 0
+    ? verified.reduce((a, r) => a + Number(r.duration_value), 0) / verified.length
     : null
 
-  return NextResponse.json({ records, avg, count: records.length, completed: completed.length })
+  return NextResponse.json({
+    records,
+    avg,
+    count: records.length,
+    completed: records.filter(r => r.duration_value != null).length,
+    verified: verified.length,
+    locked: isQuarterLocked(quarter),
+  })
 }
 
 // POST — tạo hoặc cập nhật 1 record
@@ -47,6 +57,10 @@ export async function POST(req: NextRequest) {
     quarter: string; metric: string; title?: string
     request_time: string; request_note?: string; request_image_url?: string
     completion_time?: string; completion_note?: string; completion_image_url?: string
+  }
+
+  if (isQuarterLocked(body.quarter)) {
+    return NextResponse.json({ error: "Quý này đã đóng — không thể thêm/sửa evidence nữa (khoá để đảm bảo số liệu không bị đổi ngược sau khi báo cáo)." }, { status: 403 })
   }
 
   const name = session.user.name ?? session.user.email ?? session.user.username
@@ -71,18 +85,19 @@ export async function POST(req: NextRequest) {
     completion_note:      body.completion_note || null,
     completion_image_url: body.completion_image_url || null,
     duration_value,
-    created_by:           name,
   }
 
   if (body.id) {
     const { error } = await supabaseAdmin
-      .from("okr_evidence_records").update(row).eq("id", body.id)
+      .from("okr_evidence_records")
+      .update({ ...row, updated_by: name, updated_at: new Date().toISOString() })
+      .eq("id", body.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, id: body.id })
   }
 
   const { data, error } = await supabaseAdmin
-    .from("okr_evidence_records").insert(row).select("id").single()
+    .from("okr_evidence_records").insert({ ...row, created_by: name }).select("id").single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, id: data.id })
 }
@@ -96,6 +111,12 @@ export async function DELETE(req: NextRequest) {
 
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
+
+  const { data: rec } = await supabaseAdmin
+    .from("okr_evidence_records").select("quarter").eq("id", id).maybeSingle()
+  if (rec && isQuarterLocked(rec.quarter)) {
+    return NextResponse.json({ error: "Quý này đã đóng — không thể xoá evidence nữa." }, { status: 403 })
+  }
 
   const { error } = await supabaseAdmin
     .from("okr_evidence_records").delete().eq("id", id)

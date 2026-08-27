@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator", "manager", "bod"]
 
 // POST /api/analytics/sync-b2b-customers
 // Sync toàn bộ B2B customers có dữ liệu từ gohub_dw → Supabase b2b_customers_cache.
@@ -27,7 +30,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator", "manager", "bod"].includes(session.user.role))
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWrite(session, "settings", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {

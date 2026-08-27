@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // Schema Config (port intel SchemaConfig): mô tả bảng/cột để AI (BI analyst) hiểu dữ liệu.
 // Lưu trong app_settings key 'schema_config' = JSON { tables: [{ id, name, description, fields:[{id,name,type,description}] }] }.
@@ -19,7 +22,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role)) {
+  if (!session || !(await canWrite(session, "schema", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()

@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
 
 const KEY = "squad_config"
+const WRITE_ROLES = ["admin", "creator"]
 
 export async function GET() {
   try {
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (!["admin", "creator"].includes(session.user.role ?? ""))
+    if (!(await canWrite(session, "quarterly", WRITE_ROLES)))
       return NextResponse.json({ error: "Chỉ admin/creator mới có thể lưu cấu hình squad" }, { status: 403 })
 
     const body = await req.json()
