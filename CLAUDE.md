@@ -4,14 +4,28 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-27, s165)
+## Trạng thái hiện tại (2026-08-27, s166)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — s164 rebuild My Metrics + s165 fix quyền ghi admin đã merge main) |
+| ⏳ Trên staging CHƯA merge main | s166 fix %TGT CM1 Squad Progress lệch Tổng quan (xem chi tiết ngay dưới) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision + s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route (đến 3d3a841, 2026-08-27) |
+
+**s166 — đã làm (2026-08-27): fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan.**
+Hiếu yêu cầu audit lại logic %TGT CM1/%TGT 3HK per-customer, đảm bảo Squad Progress khớp y hệt Tổng quan
+(chỉ khác đánh giá risk thêm vào). Đối chiếu `custPr()` (`quarterly/page.tsx`) với `calcCustCm1AndPr`
+(`squad-progress/route.ts`) — tìm ra: cost dạng "amount" (tiền cố định/tháng) trong `calcRecordCostProjected`
+bị Squad Progress hardcode `elapsedRatio=1` (trừ nguyên tiền cố định dù mới giữa tháng) rồi VẪN nhân cả CM1
+với `factor=dim/elapsed` để chiếu hết tháng → phần cost amount bị nhân đúp theo factor, CM1 (cả actual lẫn
+PR) thấp hơn Tổng quan có hệ thống cho KH đang có cost dạng amount trong tháng đang chạy (cost dạng percent
+không bị ảnh hưởng — tự triệt tiêu factor ở cả 2 route). Bug chỉ lộ GIỮA THÁNG (đầu/cuối tháng elapsed≈dim
+nên không khác biệt) → dễ sót khi QA. Fix: thêm `elapsedRatioOf(i)` (giống hệt công thức Tổng quan), áp cho
+CẢ 2 chỗ gọi `calcRecordCostProjected` trong file (per-customer + squad-level cm1Pr recompute — thiếu 1 chỗ
+thì squad-total lệch tổng customer). tsc + `next build` PASS. **CHƯA verify số thật** (máy dev thiếu
+`ANALYTICS_DB_*`) — Hiếu tự so vài KH có cost dạng amount giữa tháng trên staging, %TGT CM1/3HK phải khớp
+đúng cột tương ứng bên Tổng quan. Wiki: `docs/wiki/Tab/analytics-quarterly.md` §Squad Progress đã thêm.
 
 **s165 — đã làm (2026-08-27): fix quyền ghi (write) admin bị 403 oan trên nhiều tab analytics.**
 Hiếu báo: admin không sửa được Target Squad trong Squad Progress (tab Quarter Report). Root cause tìm

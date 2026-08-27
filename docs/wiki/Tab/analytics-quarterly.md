@@ -206,6 +206,23 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
   ⚠️ **Fix s162 (b) — gộp KH bị SQL trả nhiều dòng**: query `custRows` GROUP BY cả `price_list_name`/`currency_code`/`sales_pic_code` → 1 KH có PIC/bảng giá không ổn định suốt quý (đổi PIC giữa quý, join `dim_customer` lệch ở vài đơn cũ) ra NHIỀU dòng SQL. Code cũ `.find()` chỉ lấy dòng đầu → MẤT doanh thu/GP các dòng còn lại + có thể gán sai squad. Nay gộp đúng theo `customer_code` (sum số liệu, chọn PIC/tên/bảng giá từ dòng revenue lớn nhất) trước khi build squad — log cảnh báo khi phát hiện KH bị split.
   ⚠️ **Fix s162 (c) — thiếu `futureScale` (ước tính tháng chưa tới)**: Tổng quan (`quarterly/page.tsx` `custPr()`) ước tính CẢ tháng CHƯA BẮT ĐẦU trong quý (vd T9 khi mới qua T7-T8): `PR = Σ(actual_tháng × per-month factor) × (tổng_ngày_cả_quý / tổng_ngày_các_tháng_đã_có)`. Squad Progress trước chỉ tính đến tháng đã bắt đầu (`months` không gồm tháng tương lai) → `revenue_pr`/`cm1_pr` luôn **thấp hơn** Tổng quan đáng kể khi chưa hết quý. Nay thêm `futureScale` áp cho MỌI giá trị PR (revenue/cm1/group-cost-PR), khớp chính xác Tổng quan.
   ⚠️ **Fix s162 (d) — %TGT 3HK sai không gian tính**: Tổng quan so **DOANH THU 3HK PR** với **target doanh thu 3HK** (`target_3hk_rev`, fallback `target_rev × target_3hk_pct/100`). Squad Progress trước so **% 3HK thực tế** với **%target** — 2 không gian khác nhau (revenue vs %) cho số khác hẳn. Đổi `hk3_tgt_pct` sang so revenue như Tổng quan, cả customer và squad level.
+  ⚠️ **Fix s166 (2026-08-27) — %TGT CM1 per-customer lệch Tổng quan khi KH có cost dạng "amount" (tiền cố định)**:
+  Hiếu yêu cầu audit lại vì Squad Progress phải **y hệt** bảng KH nhóm bên Tổng quan (Squad Progress chỉ cộng thêm
+  đánh giá risk, không được đổi số). Đọc kỹ `custPr()` (`quarterly/page.tsx`) đối chiếu `calcCustCm1AndPr`
+  (`squad-progress/route.ts`) phát hiện: `calcRecordCostProjected(rec, mRev, factor, elapsedRatio)` — với cost
+  dạng `amount` (tiền cố định/tháng), phần amount = `val × elapsedRatio` (không nhân theo revenue). Tổng quan
+  dùng `elapsedRatio = elapsed/dim` (tỷ lệ ngày đã qua) cho tháng đang chạy trước khi nhân actualCm1 với
+  `factor = dim/elapsed` để chiếu cả tháng — 2 phép nhân triệt tiêu đúng 1 lần `val` (đúng bản chất: chi phí cố
+  định cả tháng chỉ trừ đúng 1 lần khi chiếu hết tháng). Squad Progress hardcode `elapsedRatio=1` (trừ NGUYÊN
+  `val` dù mới giữa tháng) rồi VẪN nhân `mCm1 × factor` để chiếu → phần cost bị nhân đúp theo factor
+  (`val × dim/elapsed` thay vì `val`), làm CM1 (cả `cm1` actual lẫn `cm1_pr`) thấp hơn Tổng quan có hệ thống
+  cho MỌI KH đang có cost dạng amount trong tháng chạy (cost dạng percent không bị ảnh hưởng — tỷ lệ tự nhiên
+  triệt tiêu factor giống nhau ở cả 2 route). Fix: thêm `elapsedRatioOf(i) = monthMeta[i].elapsed/monthMeta[i].dim`
+  (giống hệt Tổng quan), áp cho cả 2 chỗ gọi `calcRecordCostProjected` (per-customer `calcCustCm1AndPr` VÀ
+  squad-level `cm1Pr` recompute loop — trước fix 2 chỗ cùng bug, sửa thiếu 1 chỗ thì squad-total ≠ Σ customer).
+  Bug chỉ lộ giữa tháng (tháng đã xong thì `elapsed=dim` nên tỷ lệ =1, không khác biệt) — vì vậy dễ bị bỏ sót
+  khi test đầu/cuối tháng. **CHƯA verify số liệu thật** (máy dev thiếu `ANALYTICS_DB_*`) — Hiếu tự so 1 vài KH
+  có cost dạng amount giữa tháng trên staging, %TGT CM1/3HK phải khớp con số ở cột tương ứng bên Tổng quan.
 
 **Đánh giá risk per-customer** (từ %TGT CM1 và %TGT 3HK) — **ưu tiên từ dưới lên: mức xấu nhất thắng**, 1 metric rơi vào nguy hiểm thì cả cặp bị kéo xuống nguy hiểm dù metric kia vượt target:
 | Mức | Điều kiện |

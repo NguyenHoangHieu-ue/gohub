@@ -183,6 +183,12 @@ export async function GET(req: NextRequest) {
       fetchCustomerCosts(months).then(m => { costMap = m }).catch(() => {}),
     ])
 
+    // elapsedRatio theo tháng (1 = tháng đã xong, <1 = tháng đang chạy) — dùng để pro-rate phần cost
+    // dạng "amount" (tiền cố định) đúng số ngày đã qua. Khớp elapsedRatio trong quarterly-b2b-customers
+    // (`meta.dim > 0 ? meta.elapsed / meta.dim : 1`) — thiếu bước này thì cost amount cố định bị nhân
+    // ĐÚP theo factor chiếu tháng (×dim/elapsed) khi cộng cm1Pr, làm CM1 Squad Progress thấp hơn Tổng quan.
+    const elapsedRatioOf = (i: number) => monthMeta[i].dim > 0 ? monthMeta[i].elapsed / monthMeta[i].dim : 1
+
     // Helper: CM1 thực + PR dùng per-month data để áp đúng factor (khớp quarterly-report)
     const calcCustCm1AndPr = (r: Record<string, string>, code: string) => {
       let cm1Act = 0, cm1Pr = 0
@@ -192,7 +198,7 @@ export async function GET(req: NextRequest) {
         const rec  = costMap.get(`${months[i]}_${code}`)
         // Bỏ qua tháng KH không có doanh thu — nhất quán quarterly-report/tier (KH không có orders tháng đó
         // thì không hiện trong bảng chi tiết → cost không nên tính vào).
-        const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
+        const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, elapsedRatioOf(i)) : 0
         const mCm1 = mGm - mCost
         cm1Act += mCm1
         cm1Pr  += mCm1 * monthMeta[i].factor
@@ -301,7 +307,7 @@ export async function GET(req: NextRequest) {
           const mRev = Number(r[`rev_m${i}`]) || 0
           const mGm  = Number(r[`gm_m${i}`])  || 0
           const rec  = costMap.get(`${months[i]}_${r.customer_code}`)
-          const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, 1) : 0
+          const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, elapsedRatioOf(i)) : 0
           cm1Pr += (mGm - mCost) * monthMeta[i].factor
         }
       }
