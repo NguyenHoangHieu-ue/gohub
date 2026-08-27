@@ -10,8 +10,9 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s167 rebuild My Metrics (auto-scan toàn hệ thống + bot Lark tự động SLA/Vendor Speed + UI/UX) · s166 fix %TGT CM1 Squad Progress lệch Tổng quan |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision + s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route (đến 3d3a841, 2026-08-27) |
+| ⏳ Trên staging CHƯA merge main | fix cron `my-metrics-lark-scan` 1x/ngày (vụ deploy fail — xem ngay dưới) |
+| ✅ Đã lên main | ...+ s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route + s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 (đến 9c5e3b9, 2026-08-27) |
+| ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 
 **s167 — đã làm (2026-08-27): rebuild My Metrics lần 2 — theo yêu cầu Hiếu sau khi đọc offer letter thật
 (`Hieu/Offer Letter...pdf`, trang 2 bảng KPI bị PDF gốc cắt cứng ở cột Target Q3 — Target Q4 KHÔNG có trong tài
@@ -24,7 +25,8 @@ doanh thu + SKU mới (không giữ cách tag tay cũ).
   mới trong quý, weighted theo revenue → **số KPI chính thức**. `okr_sku_tags` (bảng cũ) hạ cấp thành ghi chú
   tuỳ chọn gắn vào 1 dòng trong bảng scan (bỏ yêu cầu `effective_date`, migration v45 nới NOT NULL).
 - **Bot Lark tự động phát hiện SLA/Vendor Speed** (theo đúng yêu cầu "setup bot tự động lấy thông tin, đánh
-  giá, nhận diện"): cron `api/cron/my-metrics-lark-scan` (4x/ngày) quét 1 group Lark (config qua modal "⚙️ Lark
+  giá, nhận diện"): cron `api/cron/my-metrics-lark-scan` (1x/ngày 17:00 ICT — ban đầu đặt 4x/ngày nhưng bị
+  Vercel Hobby plan reject, xem mục "Deploy bị FAIL" ở bảng trên) quét 1 group Lark (config qua modal "⚙️ Lark
   Bot", admin/creator, Hiếu tự nhập chat_id — CHƯA hoạt động tới khi nhập) → Gemini (`okr-lark-classify.ts`,
   cùng convention `agents/classifier.ts`) phân loại thread là Product Request (SLA) hay Vendor Rate Query, tìm
   tin hoàn thành → ghi `okr_lark_events` (status=pending_review) + DM Lark báo Hiếu có case mới. Hiếu duyệt

@@ -97,7 +97,11 @@ sai thread sẽ làm lệch số báo cáo hiệu suất thật.
 1. **Config** (`/lark-config`, admin/creator only, nút "⚙️ Lark Bot" ở header trang): `{enabled, chat_id,
    days_back}` — Hiếu tự nhập `chat_id` group Lark (Sales/PIC hỏi sản phẩm/giá NCC) sau khi deploy, giống hệt
    cơ chế `ca_thread_config` (không hardcode group nào).
-2. **Cron** `GET /api/cron/my-metrics-lark-scan` (vercel.json `0 */3 * * *`, 4x/ngày, `maxDuration:90`):
+2. **Cron** `GET /api/cron/my-metrics-lark-scan` (vercel.json `0 10 * * *`, 1x/ngày 17:00 ICT, `maxDuration:90` —
+   **CHỈ 1x/ngày vì project trên Vercel Hobby plan, giới hạn cron tối đa 1 lần/ngày** — plan cũ `0 */3 * * *`
+   (3 giờ/lần) từng bị Vercel REJECT thẳng deployment, khiến staging/main không deploy được gì suốt 2 tiếng
+   cho tới khi phát hiện qua GitHub commit status "Vercel: Deployment failed" trỏ tới
+   `vercel.com/docs/cron-jobs/usage-and-pricing`. Nếu Hiếu nâng lên Pro plan, có thể tăng tần suất lại):
    - `fetchRecentThreads()` (helper dùng chung) lấy thread root + replies + reaction trong `days_back` ngày.
    - Bỏ qua thread đã có trong `okr_lark_events` (dedupe theo `message_id`) và thread chưa có reply.
    - Với thread mới (tối đa 20/lần chạy): gọi `classifyLarkThread()` (Gemini `gemini-3.6-flash`, JSON-mode,
