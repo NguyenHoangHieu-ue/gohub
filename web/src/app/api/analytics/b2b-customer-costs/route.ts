@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES_DELETE = ["admin", "creator"]
+const WRITE_ROLES_POST   = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
 // GET /api/analytics/b2b-customer-costs?month=YYYY-MM&customer_code=XXX
 // Đọc costs từ Turso (và fallback Supabase nếu cần) — dùng để admin xem dữ liệu hiện tại.
@@ -57,7 +61,8 @@ export async function GET(req: NextRequest) {
 // DELETE /api/analytics/b2b-customer-costs?id=<id>  → xóa 1 record cụ thể
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWrite(session, "quarterly", WRITE_ROLES_DELETE)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const id = req.nextUrl.searchParams.get("id") || ""
@@ -80,7 +85,8 @@ export async function DELETE(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(session.user.role))
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!(await canWrite(session, "quarterly", WRITE_ROLES_POST)))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // Repair mode: đọc tất cả records, cross-check với b2b_customers_cache, báo stale records

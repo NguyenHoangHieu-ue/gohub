@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // POST /api/admin/init-b2b-cost-table
 // Tạo bảng b2b_customer_cost_monthly trên Turso nếu chưa có.
@@ -9,7 +12,7 @@ import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "settings", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {

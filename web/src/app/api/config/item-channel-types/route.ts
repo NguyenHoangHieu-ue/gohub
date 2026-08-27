@@ -2,8 +2,10 @@ import { NextResponse }    from "next/server"
 import { supabaseAdmin }  from "@/lib/supabase"
 import { getServerSession } from "next-auth"
 import { authOptions }    from "@/lib/auth"
+import { canWrite } from "@/lib/writable-tabs"
 
 const KEY = "item_channel_types"
+const WRITE_ROLES = ["admin", "creator"]
 
 const ITEM_CHANNEL_DEFAULTS: Record<string, string[]> = {
   B2C: ["B2C", "ECO"],
@@ -28,7 +30,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role)) {
+  if (!session || !(await canWrite(session, "products", WRITE_ROLES))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   const body = await req.json() as Record<string, string[]>

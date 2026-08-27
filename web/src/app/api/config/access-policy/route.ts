@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { invalidatePolicyCache } from "@/lib/agents/guardian"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // access_policy = { [category]: { [role]: "allow" | "deny" | "dept" } }
 // Ma trận quyền cho Guardian Agent (cổng kiểm soát câu hỏi chatbot theo role + dept).
@@ -20,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || (!["admin", "creator"].includes(session.user.role))) {
+  if (!session || !(await canWrite(session, "settings", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()

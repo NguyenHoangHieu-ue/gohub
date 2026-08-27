@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // ── Quarter helpers ─────────────────────────────────────────────────────────
 function getQuarterMonths(quarter: string): string[] {
@@ -148,7 +151,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) {
+  if (!(await canWrite(session, "targets", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

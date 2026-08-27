@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // POST /api/analytics/channel-costs-repair
 // Tự động reconcile analytics_channel_costs.source_code bằng cách:
@@ -13,7 +16,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "channels", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const dryRun = req.nextUrl.searchParams.get("dry") === "1"

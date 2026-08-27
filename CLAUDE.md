@@ -4,14 +4,50 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-27, s164)
+## Trạng thái hiện tại (2026-08-27, s165)
 
 | | |
 |---|---|
+| s165 | Fix quyền ghi admin toàn hệ thống (34 route) — xem chi tiết ngay dưới |
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s164 rebuild tab My Metrics (chưa commit/push — xem mục ngay dưới) |
+| ⏳ Trên staging CHƯA merge main | s164 rebuild tab My Metrics (đã push 626e220) + s165 fix quyền ghi admin 34 route (xem mục ngay dưới) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision (đến b7730c0, 2026-08-26) |
+
+**s165 — đã làm (2026-08-27): fix quyền ghi (write) admin bị 403 oan trên nhiều tab analytics.**
+Hiếu báo: admin không sửa được Target Squad trong Squad Progress (tab Quarter Report). Root cause tìm
+được — KHÔNG phải bug logic FE, mà **JWT stale**: `squad-targets/route.ts` (và 33 route ghi khác) check
+role bằng `session.user.role` (JWT) trực tiếp, không fallback đọc role TƯƠI từ DB. JWT maxAge = 1 ngày
+(giảm từ 7 ngày ở s159) → nếu role DB đổi (vd cấp thêm quyền admin) mà user chưa re-login trong ngày đó,
+JWT vẫn mang role CŨ → check `["admin","creator"].includes(session.user.role)` fail dù DB đã đúng là
+admin → 403 dù FE đã cho hiện nút (FE gate `canEditSettings` dùng role TƯƠI qua `/api/user/me` nên nút
+vẫn hiện — hai tầng lệch nhau, đúng như gotcha đã ghi ở s110-111 cho 5 trang admin-only, nhưng CHƯA áp
+cho các route ghi (POST/PATCH/DELETE) của tab analytics — lỗ hổng cùng họ, khác chỗ).
+- Thêm hàm dùng chung `canWrite(session, tabKey, baseRoles)` trong `lib/writable-tabs.ts`: fast-path
+  check role JWT trước (đỡ round-trip DB case thường) → fallback `canWriteTab` (đọc role TƯƠI qua
+  `getDbRole`) khi fast-path fail. Thay thế MỌI chỗ check `session.user.role` một mình trong route ghi.
+- Quét toàn bộ `web/src/app/api/**` tìm route có POST/PATCH/DELETE gate bằng `session.user.role` không
+  fallback fresh — tìm ra 34 file dính, áp `canWrite()` cho tất cả (KHÔNG đổi role nào được phép, chỉ
+  thêm fallback khi JWT stale — an toàn, chỉ nới không siết):
+  - **Quarter Report** (đúng cái Hiếu báo): `squad-targets`, `b2b-customer-targets`, `b2b-customer-costs`
+    (POST+DELETE), `config/squad-config`, `fix-turso-customer-costs` (DELETE+GET).
+  - **Channels**: `channel-costs`, `channel-cost-settings`, `channel-group-costs` (+`[id]`),
+    `analytics/channel-costs-repair`, `analytics/channel-costs-fix-renamed`, `admin/sync-turso-costs`.
+  - **Settings/Users/Products/B2C/Targets/SQL/Schema**: `config/access-policy`, `config/chatbot-rules`,
+    `config/partner-tiers`, `config/role-filters`, `config/role-permissions`, `config/b2c-budget`,
+    `config/b2c-kpi-targets`, `config/item-channel-types`, `config/sku-destination-rule`, `config/schema`
+    (+`ai-suggest`), `planning/targets`, `admin/sql-query`, `admin/settings`, `admin/promotions`,
+    `admin/template`, `admin/flush-analytics-cache`, `admin/import-ref-data`, `admin/init-b2b-cost-table`,
+    `admin/migrate-turso-tickets`, `admin/sync-lark-tickets`, `analytics/sync-b2b-customers`.
+- **KHÔNG đụng** (khác họ, cố ý giữ nguyên): `config/tab-visibility` (creator-only theo thiết kế, không
+  phải bug) · `usage-stats/classify|evaluate` (creator-only theo thiết kế) · `to-gau/*`/`kb/documents`/
+  `ncc/import-*`/`feedbacks`/`chat`/`creator-ai/*` (permission model khác — theo group-membership hoặc
+  mở cho mọi role đăng nhập, không phải role-gate đơn giản) · `analytics/query` (đọc-only, không phải
+  bug "không sửa được").
+- tsc PASS + `next build` PASS. **CHƯA test tay** (không có tài khoản admin JWT stale sẵn để tái tạo bug
+  thật trên máy dev) — Hiếu tự thử lại "Target Squad" trên staging, báo nếu vẫn 403.
+- Wiki: chưa cập nhật riêng (đây là fix hạ tầng permission xuyên nhiều tab, không thuộc 1 file wiki cụ
+  thể) — nếu gặp thêm route nào khác 403 oan cho admin, áp lại đúng pattern `canWrite()` này.
 
 **s164 — đã làm (2026-08-27): rebuild tab My Metrics (OKR cá nhân Hiếu) cho minh bạch/đáng tin hơn.**
 Lý do: Hiếu chưa ưng ý số liệu, sếp (Bảo) chưa tin số chính xác. Đọc offer letter thật

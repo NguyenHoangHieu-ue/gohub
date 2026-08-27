@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
 // Target CM1, 3HK%, Revenue, 3HK Revenue per-KH per-quý — lưu Supabase b2b_customer_targets.
 
@@ -34,7 +37,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator", "bod", "b2b", "b2c", "staff"].includes(session.user.role))
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!(await canWrite(session, "quarterly", WRITE_ROLES)))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

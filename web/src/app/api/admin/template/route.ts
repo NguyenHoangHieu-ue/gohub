@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import * as XLSX from "xlsx"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role))
+  if (!session || !(await canWrite(session, "products", WRITE_ROLES)))
     throw new Error("Unauthorized")
   return session
 }

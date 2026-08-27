@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { canWrite } from "@/lib/writable-tabs"
 
 const ALLOWED = /^\s*(SELECT|WITH|EXPLAIN)\b/i
 const BLOCKED  = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|VACUUM|ANALYZE)\b/i
+const WRITE_ROLES = ["admin", "creator"]
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) return NextResponse.json({ error: "Forbidden — admin/creator only" }, { status: 403 })
+  if (!(await canWrite(session, "sql", WRITE_ROLES))) return NextResponse.json({ error: "Forbidden — admin/creator only" }, { status: 403 })
 
   const { query } = await req.json()
   if (!query?.trim()) return NextResponse.json({ error: "Query is required" }, { status: 400 })

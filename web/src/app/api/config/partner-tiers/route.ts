@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getPartnerTiers, cachedQuery, flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -13,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user.role)) {
+  if (!session || !(await canWrite(session, "settings", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()

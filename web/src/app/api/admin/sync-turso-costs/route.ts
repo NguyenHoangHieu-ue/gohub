@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 function tursoHttpUrl(url: string): string {
   return url.replace(/^libsql:\/\//, "https://").replace(/^http:\/\//, "https://")
@@ -37,7 +40,7 @@ async function tursoHttp(sql: string): Promise<Record<string, any>[]> {
 export async function POST(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWrite(session, "channels", WRITE_ROLES))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {
     const rows = await tursoHttp(
@@ -76,7 +79,7 @@ export async function POST(_req: NextRequest) {
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await canWrite(session, "channels", WRITE_ROLES))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {
     const [tursoRows, { count: sbCount }] = await Promise.all([
