@@ -4,14 +4,46 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-26, s163)
+## Trạng thái hiện tại (2026-08-27, s164)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
-| tsc | PASS |
-| ⏳ Trên staging CHƯA merge main | (clean — s163 gộp Note+KB vào Tổ Gấu + fix identity-collision đã lên main b7730c0) |
+| tsc + `next build` | PASS |
+| ⏳ Trên staging CHƯA merge main | s164 rebuild tab My Metrics (chưa commit/push — xem mục ngay dưới) |
 | ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision (đến b7730c0, 2026-08-26) |
+
+**s164 — đã làm (2026-08-27): rebuild tab My Metrics (OKR cá nhân Hiếu) cho minh bạch/đáng tin hơn.**
+Lý do: Hiếu chưa ưng ý số liệu, sếp (Bảo) chưa tin số chính xác. Đọc offer letter thật
+(`D:\gohub\Hieu\Offer Letter...pdf`, KHÔNG commit) lấy đúng 5 KPI + trọng số 70/30 time-allocation.
+Hỏi Hiếu chốt 3 quyết định trước khi code (không tự đoán): SKU GM giữ cả verified+blended; Bé Gấu
+đếm company-wide có lọc "trả lời được"; SLA/Vendor Speed giữ manual nhưng siết trust (chưa có event
+hệ thống thật để tự động hoá — product onboarding vẫn thủ công).
+- **Migration `v44_okr_tracking.sql`** (CHƯA CHẠY — cần Hiếu): ghi lại schema `okr_evidence_records`
+  (bảng cũ tạo tay ngoài Supabase, không có migration từ trước) + thêm cột audit `updated_by/updated_at`
+  + bảng mới `okr_sku_tags` (chỉ lưu sku_code + ngày áp dụng, KHÔNG cho nhập tay số margin).
+- **SKU GM verified (mới)**: `api/analytics/my-metrics/sku-tags` — Hiếu tag SKU + ngày áp dụng giá/rate
+  mới → API tự so margin THẬT (gohub_dw `fact_fulfillment_revenue`) trước/sau ngày đó, không thể tự
+  khai khống. SKU mới (không có giai đoạn trước) so với baseline công ty 36.7%. Weighted theo revenue.
+  Số blended toàn công ty (cách tính cũ) giữ lại làm context phụ, nhãn rõ "không phải KPI chính".
+- **Evidence SLA/Vendor Speed siết trust**: bắt buộc đủ 2 ảnh (request+completion) mới tính vào TB
+  KPI (thiếu ảnh vẫn lưu, badge riêng "không tính"); thêm audit trail hiển thị (created_by/at,
+  updated_by/at); **khoá quý đã đóng** (`isQuarterLocked` — qua ngày cuối quý thì không sửa/xoá được
+  evidence/SKU tag nữa, tránh số bị đổi ngược sau khi đã báo cáo).
+- **Bé Gấu tasks**: vẫn đếm company-wide (đúng tinh thần "AI Agent giúp Sales/CSKH/Ops") nhưng loại
+  response <15 ký tự (chào hỏi/lỗi cụt); thêm breakdown theo `user_role` (phòng ban).
+- **Weighted OKR Score** (card mới đầu trang): Σ(đạt-%ᵢ × trọng-sốᵢ)/100, trọng số 70/30 lấy đúng
+  offer letter, 4 chỉ số trong nhóm 70% chia đều 17.5% (offer letter không ghi riêng từng chỉ số —
+  giả định minh bạch, hiện công thức ngay trong UI, sửa hằng số `WEIGHTS` trong `page.tsx` nếu sếp
+  chốt khác). Data-freshness bar hiển thị cutoff gohub_dw + giờ tải trang.
+- Dọn `ManualMetrics`: xoá 5 field chết (`sla_time/sla_pct/vendor_speed/gm_baseline/gm_actual`) không
+  hiển thị ở đâu từ trước, chỉ giữ `target_*`.
+- File mới: `web/src/lib/okr-helpers.ts` (quarterRange/parseQuarterLabel/isQuarterLocked/baseline
+  constants, dùng chung 3 route). Wiki mới: `docs/wiki/Tab/analytics-my-metrics.md` (tab này TRƯỚC
+  ĐÂY CHƯA CÓ WIKI — vi phạm rule sync, đã bổ sung).
+- tsc PASS + `next build` PASS. **CHƯA test tay** (máy dev thiếu `ANALYTICS_DB_*`/Supabase key) —
+  cần Hiếu: (1) chạy migration v44, (2) QA UI trên staging, (3) thử tag vài SKU thật đã renegotiate
+  rate trong Q3 để xem số verified có hợp lý không trước khi show sếp.
 
 **➡️ TIẾP THEO (2026-08-26+):**
 - **✅ ĐÃ FIX bug định danh member Tổ Gấu (task riêng, cùng ngày, theo yêu cầu Hiếu "fix ngay")** — bug phát hiện
