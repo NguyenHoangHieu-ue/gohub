@@ -14,14 +14,14 @@ import { formatCompactNumber } from "@/lib/analytics-formatters"
 interface AutoMetrics {
   quarter: string; year: number; start: string; end: string
   data_cutoff: string; generated_at: string
-  hk3: { pct: number; hk3_rev: number; total_rev: number; monthly: MonthStat[]; baseline: number }
+  hk3: { pct: number; hk3_rev: number; hk3_only_rev: number; bc_only_rev: number; total_rev: number; monthly: MonthStat[]; baseline: number }
   gm:  { qtd_pct: number; total_gp: number; total_rev: number; monthly: GmStat[]; baseline: number }
   begau: {
     total: number; web: number; lark: number; excluded_short: number
     by_role: Record<string, number>; monthly: Record<string, MonthCount>
   }
 }
-interface MonthStat    { month: string; hk3_rev: number; total_rev: number }
+interface MonthStat    { month: string; hk3_rev: number; bc_rev: number; total_rev: number }
 interface GmStat       { month: string; gp: number; rev: number; gm_pct: number }
 interface MonthCount   { total: number; web: number; lark: number }
 interface EvidenceRecord {
@@ -1056,12 +1056,12 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         <div className="space-y-4">
           <SkuScanSection quarter={qLabel} targetDelta={targets.gm_delta} onSummary={setSkuDelta} />
 
-          {/* 3HK % — auto */}
+          {/* Datapool Rev (3HK + BC) % — auto */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-black text-slate-800">%3HK + Other Datapool Vendor</span>
+                <span className="text-sm font-black text-slate-800">%Datapool Rev (3HK + BC Datapool)</span>
                 <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
               </div>
               <div className="flex items-baseline gap-2">
@@ -1076,9 +1076,11 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             </div>
             <div className="px-5 py-3 space-y-2">
               <ProgressBar actual={hk3Pct} target={targets.hk3_pct} />
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                <span>3HK: <strong className="text-slate-700">{fck(auto?.hk3.hk3_rev ?? 0)}</strong></span>
-                <span>Total: <strong className="text-slate-700">{fck(auto?.hk3.total_rev ?? 0)}</strong></span>
+              <div className="flex gap-4 text-[11px] text-slate-500">
+                <span>Datapool Rev (tổng): <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.hk3_rev ?? 0)}</strong></span>
+                <span className="pl-3 border-l border-slate-200">↳ 3HK Rev: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.hk3_only_rev ?? 0)}</strong></span>
+                <span>↳ BC Rev: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.bc_only_rev ?? 0)}</strong></span>
+                <span>Total Rev công ty: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.total_rev ?? 0)}</strong></span>
               </div>
               <DataTable<MonthStat>
                 rows={hk3TableRows}
@@ -1086,11 +1088,12 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 emptyLabel="Chưa có dữ liệu tháng nào."
                 columns={[
                   { key: "m", label: "Tháng", render: m => m.month },
-                  { key: "pct", label: "%3HK", align: "right", render: m => {
-                    const mp = m.total_rev > 0 ? (m.hk3_rev / m.total_rev) * 100 : 0
+                  { key: "pct", label: "%Datapool", align: "right", render: m => {
+                    const mp = m.total_rev > 0 ? ((m.hk3_rev + m.bc_rev) / m.total_rev) * 100 : 0
                     return <span className="font-black text-slate-700">{pct(mp)}</span>
                   } },
                   { key: "hk3", label: "3HK Rev", align: "right", render: m => fck(m.hk3_rev) },
+                  { key: "bc", label: "BC Rev", align: "right", render: m => fck(m.bc_rev) },
                   { key: "total", label: "Total Rev", align: "right", render: m => fck(m.total_rev) },
                 ]}
               />

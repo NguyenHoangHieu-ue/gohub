@@ -166,7 +166,11 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   cron/Gemini call với dữ liệu Lark thật. Hiếu cần: (1) chạy migration v45, (2) nhập `chat_id` thật, (3) theo
   dõi vài ngày đầu xem bot phân loại đúng không trước khi tin số báo cáo.
 - **%3HK + Other Datapool Vendor (2026-08-27)**: đúng tên KPI offer letter, gộp CẢ 3HK Datapool VÀ **BC Datapool**
-  (`dim_sku.vendor = 'BC Datapool'`, Hiếu xác nhận qua SQL Explorer) — filter
-  `REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')`. **Chỉ áp trong My Metrics** — KPI
-  "3HK Contribution %" ở BOD/Dashboard/Quarterly/Channels là chỉ số RIÊNG (chỉ 3HK, không có BC), cố ý KHÔNG
-  đổi theo vì đó là số đã báo cáo lâu dài cho leadership, đổi định nghĩa ở đó cần Hiếu chốt riêng.
+  (`dim_sku.vendor = 'BC Datapool'`, Hiếu xác nhận qua SQL Explorer) — % KPI vẫn tính trên TỔNG 2 vendor:
+  `REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')`. **UI tách rõ 2 subtotal** (Hiếu yêu
+  cầu) — card hiện "Datapool Rev" (tổng) làm số chính, kèm 2 dòng phụ "↳ 3HK Rev" / "↳ BC Rev" riêng biệt;
+  bảng theo tháng có cột riêng "3HK Rev" và "BC Rev". API `hk3` object trả thêm `hk3_only_rev`/`bc_only_rev`
+  (aggregate) và mỗi dòng `monthly[]` có `hk3_rev`(=3HK riêng)/`bc_rev`(=BC riêng)/`total_rev`. **Chỉ áp trong
+  My Metrics** — KPI "3HK Contribution %" ở BOD/Dashboard/Quarterly/Channels là chỉ số RIÊNG (chỉ 3HK, không
+  có BC), cố ý KHÔNG đổi theo vì đó là số đã báo cáo lâu dài cho leadership, đổi định nghĩa ở đó cần Hiếu
+  chốt riêng.

@@ -26,17 +26,20 @@ export async function GET(req: NextRequest) {
   // ── 1. %3HK + Other Datapool Vendor Revenue (gohub_dw) ─────────────────────
   // Đúng theo tên KPI offer letter "%3HK + Other Datapool Vendor" — gộp CẢ 3HK Datapool
   // VÀ BC Datapool (vendor "BC Datapool" trong dim_sku, xác nhận qua SQL Explorer với Hiếu
-  // 2026-08-27), không chỉ riêng 3HK như bản v1. Chỉ áp DUY NHẤT ở My Metrics — KPI "3HK
+  // 2026-08-27), không chỉ riêng 3HK như bản v1. Tách riêng 2 cột (Hiếu yêu cầu xem breakdown
+  // từng vendor) — %KPI vẫn tính trên tổng cả 2. Chỉ áp DUY NHẤT ở My Metrics — KPI "3HK
   // Contribution %" ở BOD/Dashboard/Quarterly là chỉ số khác (chỉ 3HK), KHÔNG đổi theo đây.
-  let hk3Data: { month: string; hk3_rev: number; total_rev: number }[] = []
+  let hk3Data: { month: string; hk3_rev: number; bc_rev: number; total_rev: number }[] = []
   try {
-    const rows = await queryAnalytics<{ month: string; hk3_rev: string; total_rev: string }>(
+    const rows = await queryAnalytics<{ month: string; hk3_rev: string; bc_rev: string; total_rev: string }>(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', f.fulfiled_date::date), 'YYYY-MM') AS month,
          SUM(CASE WHEN TRIM(f.sku) IN (
-           SELECT DISTINCT TRIM(sku) FROM dim_sku
-           WHERE REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL', 'BCDATAPOOL')
+           SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
          ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
+         SUM(CASE WHEN TRIM(f.sku) IN (
+           SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = 'BCDATAPOOL'
+         ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS bc_rev,
          SUM(f.fulfilled_revenue_amount_vnd)::bigint                AS total_rev
        FROM fact_fulfillment_revenue f
        WHERE f.fulfiled_date IS NOT NULL
@@ -49,13 +52,16 @@ export async function GET(req: NextRequest) {
     hk3Data = rows.map(r => ({
       month:     r.month,
       hk3_rev:   Number(r.hk3_rev)   || 0,
+      bc_rev:    Number(r.bc_rev)    || 0,
       total_rev: Number(r.total_rev) || 0,
     }))
   } catch {}
 
-  const hk3TotalRev = hk3Data.reduce((a, r) => a + r.total_rev, 0)
-  const hk3Rev      = hk3Data.reduce((a, r) => a + r.hk3_rev,   0)
-  const hk3Pct      = hk3TotalRev > 0 ? (hk3Rev / hk3TotalRev) * 100 : 0
+  const hk3TotalRev  = hk3Data.reduce((a, r) => a + r.total_rev, 0)
+  const hk3OnlyRev    = hk3Data.reduce((a, r) => a + r.hk3_rev,   0)
+  const bcOnlyRev     = hk3Data.reduce((a, r) => a + r.bc_rev,    0)
+  const hk3Rev        = hk3OnlyRev + bcOnlyRev
+  const hk3Pct        = hk3TotalRev > 0 ? (hk3Rev / hk3TotalRev) * 100 : 0
 
   // ── 2. SKU Gross Margin — blended TOÀN CÔNG TY (gohub_dw) ─────────────────
   // ⚠️ Đây là số MACRO (bị nhiễu bởi channel-mix/khuyến mãi), KHÔNG PHẢI KPI chính —
@@ -129,11 +135,13 @@ export async function GET(req: NextRequest) {
     data_cutoff: "gohub_dw cập nhật tới CURRENT_DATE - 1 (ETL chạy ~08:00 ICT hôm sau)",
     generated_at: new Date().toISOString(),
     hk3: {
-      pct:       +hk3Pct.toFixed(2),
-      hk3_rev:   hk3Rev,
-      total_rev: hk3TotalRev,
-      monthly:   hk3Data,
-      baseline:  OKR_HK3_BASELINE,
+      pct:         +hk3Pct.toFixed(2),
+      hk3_rev:     hk3Rev,          // = hk3_only_rev + bc_only_rev (tổng datapool, dùng tính %)
+      hk3_only_rev: hk3OnlyRev,     // riêng 3HK Datapool
+      bc_only_rev:  bcOnlyRev,      // riêng BC Datapool
+      total_rev:   hk3TotalRev,
+      monthly:     hk3Data,
+      baseline:    OKR_HK3_BASELINE,
     },
     gm: {
       qtd_pct:   gmQtdPct,
