@@ -67,9 +67,15 @@ export async function fetchRecentThreads(
     }
   } catch { /* fallback vào mentions bên dưới */ }
 
+  // Trần trang là VALVE AN TOÀN, không phải điều kiện dừng chính (điều kiện dừng thật là "đã ra
+  // ngoài cửa sổ daysBack" hoặc "hết trang" — xem check inWindow bên dưới). Trước hardcode 5 trang
+  // (250 tin) — với group nhiều tin/ngày, 250 tin đầu có thể chỉ phủ vài ngày thay vì đủ daysBack
+  // yêu cầu, phần còn lại cửa sổ KHÔNG BAO GIỜ được fetch tới dù message vẫn còn trong Lark. Scale
+  // theo daysBack để nhóm chat bận vẫn quét đủ (2026-08-27, Hiếu báo set 30 ngày mà quét được 0 case).
+  const maxPages = Math.min(80, Math.max(10, daysBack * 3))
   const allItems: any[] = []
   let pageToken: string | undefined
-  for (let page = 0; page < 5; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const url = `/im/v1/messages?container_id=${encodeURIComponent(chatId)}&container_id_type=chat&page_size=50&sort_type=ByCreateTimeDesc${pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : ""}`
     const pageData = await larkGet(url, appToken)
     if (pageData.code !== 0) {
@@ -88,7 +94,21 @@ export async function fetchRecentThreads(
 
   const rootMessages = allItems.filter((msg: any) => !msg.root_id).slice(0, maxThreads)
 
-  const threads = await Promise.all(rootMessages.map(async (msg: any): Promise<LarkThread> => {
+  // Hydrate chi tiết từng thread (2 call Lark/thread) theo BATCH nhỏ, không bắn hết cùng lúc — với
+  // maxThreads lớn (group bận, daysBack dài) bắn hàng trăm request song song dễ bị Lark rate-limit.
+  const BATCH = 15
+  const threads: LarkThread[] = []
+  for (let i = 0; i < rootMessages.length; i += BATCH) {
+    const batch = rootMessages.slice(i, i + BATCH)
+    const hydrated = await Promise.all(batch.map((msg: any) => hydrateThread(msg, appToken, nameMap)))
+    threads.push(...hydrated)
+  }
+
+  threads.sort((a, b) => parseInt(b.create_time) - parseInt(a.create_time))
+  return threads
+}
+
+async function hydrateThread(msg: any, appToken: string, nameMap: Record<string, string>): Promise<LarkThread> {
     const msgId: string = msg.message_id
     const containerId: string = msg.thread_id || msgId
 
@@ -131,8 +151,4 @@ export async function fetchRecentThreads(
         mentions: mentionsOf(r),
       })),
     }
-  }))
-
-  threads.sort((a, b) => parseInt(b.create_time) - parseInt(a.create_time))
-  return threads
 }

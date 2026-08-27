@@ -39,6 +39,9 @@
     },
     "src/app/api/cron/my-metrics-lark-scan/route.ts": {
       "maxDuration": 90
+    },
+    "src/app/api/analytics/my-metrics/lark-config/scan-now/route.ts": {
+      "maxDuration": 90
     }
   },
   "crons": [

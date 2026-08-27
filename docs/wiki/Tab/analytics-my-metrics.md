@@ -124,6 +124,40 @@ mentions từ 1 group Lark" ra khỏi `api/creator/ca-thread/route.ts` (Cà Thre
 `fetchRecentThreads()` — Cà Thread giờ gọi hàm này rồi tự áp lọc reaction-YES/participant riêng, tránh 2 nơi
 chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 
+## § Sửa bot Lark — 2 bug khiến "set 30 ngày mà quét được 0 case" (2026-08-27)
+
+Hiếu báo set `days_back=30` cho group có "rất nhiều request" nhưng bot không phát hiện được gì. Audit ra
+**2 bug thật** trong `lib/lark-thread-scan.ts` + `api/cron/my-metrics-lark-scan`:
+
+1. **Trần cứng 5 trang fetch (250 tin)** — không scale theo `daysBack`. Group nhiều tin/ngày → 250 tin đầu tiên
+   (mới nhất) chỉ phủ được vài ngày thay vì đủ 30 ngày yêu cầu; phần còn lại của cửa sổ KHÔNG BAO GIỜ được
+   Lark API trả về. Fix: `maxPages = Math.min(80, Math.max(10, daysBack * 3))` — trần chỉ là valve an toàn,
+   điều kiện dừng THẬT vẫn là "đã ra ngoài cửa sổ ngày" (giữ nguyên logic cũ).
+2. **Không nhớ thread ĐÃ XEM nhưng KHÔNG khớp** — trước chỉ insert case AI đồng ý (`is_match=true`) vào
+   `okr_lark_events`; case bị từ chối không lưu gì → mỗi lần cron chạy lại chọn đúng N thread MỚI NHẤT (đã
+   sort newest-first) để phân loại lại, và nếu N thread đó toàn bị từ chối (chat xã giao...) thì cron
+   **KHÔNG BAO GIỜ tiến sâu hơn vào backlog cũ** dù request thật nằm ngay phía sau — giẫm chân tại chỗ vô hạn.
+   Fix: ghi cả case không khớp vào `okr_lark_events` với `status='not_matched'`, `metric='none'` (không tính
+   KPI, không hiện trong hàng chờ duyệt) — dedupe (`seen` set) giờ tự nhiên đẩy cron tiến qua backlog mỗi lần
+   chạy thay vì lặp lại y hệt.
+
+**Refactor liên quan:**
+- `lib/lark-thread-scan.ts`: hydrate chi tiết từng thread (2 call Lark) theo **batch 15** thay vì bắn hết
+  cùng lúc — cần thiết vì `maxThreads` giờ có thể lên tới 200 (trước 50), bắn 400 request song song dễ bị
+  Lark rate-limit.
+- `lib/lark-scan-runner.ts` (mới): tách logic quét thật ra khỏi cron route, dùng chung cho cron VÀ nút
+  **"Quét ngay để test"** (mới, trong modal ⚙️ Lark Bot) — Hiếu không cần đợi cron chạy 1x/ngày (17:00 ICT)
+  mới biết fix có work hay không; nút trả về ngay `scanned/classified/inserted/not_matched/backlog_remaining`.
+- `api/analytics/my-metrics/lark-config/scan-now` (mới, POST, admin/creator): endpoint cho nút trên,
+  `ignoreEnabled=true` để test được dù chưa tick "Bật quét tự động".
+- **Panel review** (`LarkReviewPanel`) thêm mục **"Xem N thread Bé Gấu ĐÃ XEM nhưng không khớp (audit AI)"**
+  — Hiếu tự soát bot có bỏ sót request thật hay không, và header giờ luôn hiện "đã quét N thread" (kể cả khi
+  0 case chờ duyệt) để biết chắc bot có hoạt động không, tránh nhầm "im lặng" với "không có gì để quét".
+
+**Chưa giải quyết được (cần Hiếu xác nhận thêm)**: chất lượng phân loại của Gemini (`okr-lark-classify.ts`)
+vẫn chưa verify với data thật — 2 bug trên là root cause CHẮC CHẮN (logic sai rõ ràng), nhưng nếu sau khi fix
+vẫn còn sót request thật, cần xem cụ thể qua mục "không khớp" ở trên để tinh chỉnh prompt.
+
 ## § Bảng chi tiết + filter (2026-08-27, feedback tiếp theo)
 
 - **Datapool Rev — chi tiết theo SKU** (mới, `GET /api/analytics/my-metrics/datapool-detail`): Hiếu yêu cầu xem
@@ -133,6 +167,8 @@ chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 - **SKU Gross Margin — quét toàn hệ thống**: thêm 3 filter cạnh ô search (trước chỉ có search): **Loại**
   (Mọi loại/Chỉ Trọng điểm/Chỉ Mới), **Category**, **Vendor** — options tự sinh từ dữ liệu trả về (không
   hardcode danh sách). Dòng "đang lọc còn N SKU" hiện khi có filter đang áp.
+- **Bỏ cột "Category" khỏi cả 2 bảng** (theo yêu cầu Hiếu) — filter Category vẫn giữ (lọc được, chỉ không
+  hiện cột). Bảng SKU scan giờ cột "Vendor" đứng riêng (trước gộp chung "Category / Vendor").
 
 ## § UI/màu (2026-08-27, sau feedback "màu chưa ổn")
 
@@ -142,8 +178,11 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
 "AI slop" (xem `references/color.md`: *"One accent. Maximum two. Everything else is neutral."*).
 
 **Hệ màu mới:**
-- **1 accent duy nhất** = navy thương hiệu GoHub `#003B95` (đã dùng sẵn toàn app — giữ nguyên, không bịa màu
-  mới) — chỉ dùng cho: nút hành động chính, link/hover, focus ring, badge "Key" (SKU trọng điểm).
+- **1 accent duy nhất** = Tailwind token `brand-*` (định nghĩa thật trong `tailwind.config.ts`, `brand-600
+  = #0f4c81`, dùng khắp app — sidebar/top-bar/login/admin...) — chỉ dùng cho: nút hành động chính, link/hover,
+  focus ring, badge "Key" (SKU trọng điểm). **Sửa lần 2 (2026-08-27)**: bản đầu dùng raw hex `#003B95` tự đoán
+  (không phải token thật của project) → không nhất quán với phần còn lại của app, đây chính là lý do "màu
+  chưa ổn". Đổi toàn bộ sang class `brand-500/600/700/50` thay vì hex tuỳ hứng.
 - **Neutral (slate)** cho MỌI tag chỉ mang tính phân loại/nguồn (Auto, Manual, Context, Lark/Web, Khoá) — không
   còn tô màu theo loại, phân biệt bằng chữ.
 - **2 màu semantic thật** (chỉ dùng khi đúng nghĩa trạng thái): emerald = verified/đạt target/SKU mới; amber =
