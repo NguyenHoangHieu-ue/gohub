@@ -4,16 +4,75 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-27, s167)
+## Trạng thái hiện tại (2026-08-28, s169)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | fix cron 1x/ngày (deploy fail) + fix 2 bug bot Lark quét thiếu + bảng chi tiết/filter + màu brand-* đúng token (xem s167 dưới) |
-| ✅ Đã lên main | ...+ s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route + s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 (đến 9c5e3b9, 2026-08-27) |
+| ⏳ Trên staging CHƯA merge main | *(không có — mọi fix s168/s168b/s169 đã merge main)* |
+| ✅ Đã lên main | ...+ s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 + s168 fix Scheduled Messages (2 bug: lỗi cột `fulfiled_date` toàn bộ report + thiếu target quý Daily) + s168b/s169 audit toàn diện B2B Performance ↔ Quarter Report (7 bug CM1/cache thật) (đến 01dad30, 2026-08-28) |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s168b/s169 — đã làm (2026-08-28): audit toàn diện B2B Performance ↔ Quarter Report — 7 bug thật (CM1 sai + cache
+không đồng bộ), theo yêu cầu Hiếu "check kỹ, tìm vấn đề, lên plan fix/test/check thật kỹ, kiểm tra cả subtab/
+sub-channel".**
+1. **B2B Performance thiếu lọc KH INACTIVE** (`b2b/kpis`, `b2b/performance`, `b2b/trend`) — Quarter Report lọc
+   KH `price_list_name` chứa "INACTIVE" từ lâu, 3 route B2B Performance thì không → Revenue/GP/CM1 cao hơn
+   Quarter Report có hệ thống bất cứ khi nào có KH INACTIVE phát sinh trong kỳ. Thêm helper dùng chung
+   `excludeInactiveCustomers()` (`analytics-helpers.ts`). Nhân tiện vá `b2b/trend` thiếu LUÔN cả 3 filter chuẩn
+   (`includeShip`/`includeInternalOps`/`includeOpsCustomers`, s132) — chart trend trước chỉ lọc theo group+date.
+2. **Sub-channel CM1 breakdown cao hơn CM1 hàng cha** (`b2b/performance`, bảng B2B Tier Performance, click
+   "View details" 1 KH) — `sub_channels.gpm2` chỉ trừ cost khớp ĐÚNG TÊN sub-channel (gần như không bao giờ
+   khớp cho KH B2B) → bỏ qua chCost Turso per-customer + group cost đã trừ ở CM1 hàng cha (case thật: Momo
+   cm1=215tr nhưng sub-channel cộng lại 437tr). Fix: tách cost đã gán đúng 1 sub-channel cụ thể, phần chung
+   (chCost + group cost) phân bổ theo tỷ trọng revenue → Σ sub_channels luôn khớp CM1 cha. Cùng bug (chưa lộ
+   vì `partner_tiers` rỗng) ở `b2b/strategic-performance` — vá luôn cùng lúc.
+3. **Root cause chính "sửa cost ở Quarter Report không cập nhật B2B Performance"**: `/api/analytics/
+   b2b-customer-costs` (nơi Quarter Report "Sửa chi tiết" ghi CH.Cost per-customer vào Turso) KHÔNG flush cache
+   nào — trong khi `channel-costs`/`channel-group-costs` (Supabase) đã `flushAnalyticsCache()` từ lâu. Không chỉ
+   B2B Performance: `channels/*`, `bod-summary`/`bod-group-margin`/`bod-channel-performance`, `monthly-kpis`
+   (Dashboard), `all-time-performance` đều cache NGUYÊN khối kết quả đã tính (gồm cost) tới 12h — chỉ 2 route
+   Quarter Report tự tươi (cố ý đặt `fetchCustomerCosts` ngoài `cachedQuery`). Fix: `flushAnalyticsCache()` sau
+   khi lưu/xoá cost (3 route ghi). Nhân tiện vá `quarterly-cache-flush` (nút "Tải lại mới") — danh sách prefix
+   cứng đã lỗi thời (`qreport_raw_v7:`...`v1:` trong khi cache key thật đã lên `v9`) → không xoá được cache hiện
+   hành cho người KHÔNG bấm nút; đổi sang `flushAnalyticsCache()` cho khỏi lệch version về sau.
+4. `b2b/performance`: mẫu số chia group cost theo tỷ trọng revenue tính từ danh sách đã cap `.slice(0,500)` →
+   nếu >500 KH/kênh trong kỳ, mẫu số hụt làm CM1 tổng lệch nhẹ so với `b2b/kpis` (SQL SUM không cap). Đổi mẫu
+   số sang tổng doanh thu không cap.
+5. Bảng B2B Tier Performance (FE `b2b/page.tsx`): 2 chỗ field `cm1` không đồng bộ với `gpm2` khi (a) lọc bớt
+   sub-channel trùng tên đối tác Strategic, (b) merge 2 dòng cùng TÊN hiển thị khác `customer_code` (case thật
+   hay gặp: nhiều mã lỗi/rỗng đều gộp chung tên "Chưa xác định") — chỉ cộng `gpm2`, không cộng `cm1`/`ch_cost`.
+6. **Squad Progress (Quarter Report) — 2 bug field-mismatch liên tiếp ở flat view** (bật filter/search): cột
+   "GP PR" đọc field `c.gp_pr` KHÔNG TỒN TẠI trong response API → luôn hiện "0"; cột "%TGT CM1" đọc nhầm
+   `c.cm1_pct` (CM1% trên doanh thu, không liên quan target) thay vì `c.cm1_tgt_pct` (% đạt target — đúng ý
+   nghĩa cột). View per-squad (không filter) dùng đúng field cả 2 chỗ → đây là lý do Hiếu thấy "không filter số
+   bình thường, có filter số khác/sai". Root cause: flat view là khối JSX viết tay riêng, không share component
+   với view per-squad dù cùng hiển thị 1 bộ field. Fix cả 2 chỗ khớp per-squad view.
+- tsc + `next build` PASS từng commit. **KHÔNG verify được số thật bằng live query** (máy dev thiếu
+  `ANALYTICS_DB_*`/`TURSO_*`) — mọi fix dựa trên đọc code đối chiếu công thức 2 bên (Quarter Report vs B2B
+  Performance) tới khi khớp tuyệt đối logic. Hiếu đã test tay xác nhận đúng cho case Momo (mục 2) và Squad
+  Progress GP PR→0 (mục 6) trên staging trước khi merge main.
+- Wiki: `docs/wiki/Tab/analytics-b2b.md` §6 Gotchas (2 mục fix mới) + `docs/wiki/Tab/analytics-quarterly.md`
+  §Subtab Squad Progress (2 mục fix mới).
+
+**s168 — đã làm (2026-08-28): fix 2 bug thật trong Scheduled Messages (Daily/Weekly/Monthly Report).**
+1. **Lỗi "column f.fulfiled_date does not exist" — toàn bộ report fail** (Hiếu báo sáng cùng ngày). Root cause:
+   `fetchBODGroupMarginData` (`lib/bod-data.ts`, dùng bởi mọi report period qua `scheduled-report-data.ts`) —
+   query `custRevRows` dựng CTE `filtered_f` KHÔNG `SELECT` cột ngày, nhưng query ngoài lại dùng
+   `TO_CHAR(f.${dateCol}::date,...)` tham chiếu tới CTE đó → Postgres báo cột không tồn tại. Fix: thêm
+   `${source.dateCol}` vào SELECT của CTE. Commit `92d4a5d`.
+2. **Daily Report mục 【3】 thiếu target quý + %tiến độ + %Pro-rata/Target**. Điều tra kỹ logic (`getDateFilter`,
+   `getQuarterTargets`, format cache key...) — KHÔNG tìm thấy bug logic (khớp 100% Quarter Report cùng nguồn
+   Turso `target_planning_quarter`). Root cause thật: `getQuarterTargets` nuốt im lặng MỌI lỗi Turso, coi giống
+   hệt "chưa nhập target" (`total=0`) → không phân biệt được lỗi thật với thiếu data khi debug. Fix: log lỗi ra
+   Vercel + tách 2 thông báo trong report ("Chưa nhập target quý" vs "Lỗi lấy target quý từ Turso"). Hiếu xác
+   nhận sau fix: **do thiếu data thật** (chưa nhập target Q3-2026), không phải lỗi code — nhập target xong là
+   hết. Commit `984b4e8`.
+- tsc PASS cả 2 commit. Wiki: chưa có trang riêng cho Scheduled Messages ngoài
+  `docs/wiki/Tab/analytics-scheduled.md` (không cần sửa — 2 fix này thuộc `lib/bod-data.ts`/
+  `lib/scheduled-report-data.ts`, không đổi hành vi mô tả trong wiki, chỉ sửa bug).
 
 **s167 — đã làm (2026-08-27): rebuild My Metrics lần 2 — theo yêu cầu Hiếu sau khi đọc offer letter thật
 (`Hieu/Offer Letter...pdf`, trang 2 bảng KPI bị PDF gốc cắt cứng ở cột Target Q3 — Target Q4 KHÔNG có trong tài
