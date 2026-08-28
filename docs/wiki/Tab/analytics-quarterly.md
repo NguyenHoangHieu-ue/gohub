@@ -209,6 +209,16 @@ UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 > dùng JSX của per-squad view (dòng ~1645-1695) dù hiển thị cùng field — 2 bug field-mismatch liên tiếp là
 > hệ quả trực tiếp của việc trùng lặp code thay vì share component. Nếu sau này còn báo "filter ra số khác"
 > ở bảng này, ưu tiên diff 2 khối JSX đó trước khi nghi ngờ cache/backend.
+>
+> **Fix s169 tiếp (cùng ngày) — thiếu hiển thị companyCode gây hiểu nhầm "acc khác nhìn khác".** Sau 2 fix
+> trên, Hiếu vẫn báo "acc tôi đúng, acc người khác sai" dù đã reload. Audit lại xác nhận `squad-progress`
+> **zero role-branching + zero cache** — không phải bug code. Nguyên nhân: thanh filter Quý/Năm/**ALL-VN-US**
+> nằm ở header CHUNG toàn trang (không thuộc riêng subtab), `companyCode` CÓ ảnh hưởng thật tới
+> `fetchSquadProgress`, nhưng tiêu đề card Squad Progress chỉ ghi `{Quý} {Năm}`, KHÔNG ghi companyCode đang
+> chọn → 2 người khác ALL/VN/US ra số khác THẬT (không phải bug) nhưng không có dấu hiệu gì khi scroll xuống
+> card để nhận ra. Đã loại trừ 2 checkbox Ship/Đơn nội bộ (cũng ở header chung) — route hardcode loại ship
+> fee + filter `group_name='B2B'` tự loại đơn nội bộ sẵn, không phụ thuộc 2 checkbox đó. Fix: thêm
+> companyCode vào tiêu đề card (`Squad Progress — {Quý} {Năm} · {ALL: "Toàn công ty" | VN | US}`).
 
 Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã về target pro-rata chưa.
 

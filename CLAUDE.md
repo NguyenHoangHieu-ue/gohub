@@ -11,7 +11,7 @@
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
 | ⏳ Trên staging CHƯA merge main | *(không có — mọi fix s168/s168b/s169 đã merge main)* |
-| ✅ Đã lên main | ...+ s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 + s168 fix Scheduled Messages (2 bug: lỗi cột `fulfiled_date` toàn bộ report + thiếu target quý Daily) + s168b/s169 audit toàn diện B2B Performance ↔ Quarter Report (7 bug CM1/cache thật) (đến 01dad30, 2026-08-28) |
+| ✅ Đã lên main | ...+ s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 + s168 fix Scheduled Messages (2 bug: lỗi cột `fulfiled_date` toàn bộ report + thiếu target quý Daily) + s168b/s169 audit toàn diện B2B Performance ↔ Quarter Report (9 bug CM1/UX/cache thật, gồm cả s169(c) tự gây rồi tự fix perf regression) (đến 0f8f9ae, 2026-08-28) |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
 
@@ -44,18 +44,36 @@ sub-channel".**
 5. Bảng B2B Tier Performance (FE `b2b/page.tsx`): 2 chỗ field `cm1` không đồng bộ với `gpm2` khi (a) lọc bớt
    sub-channel trùng tên đối tác Strategic, (b) merge 2 dòng cùng TÊN hiển thị khác `customer_code` (case thật
    hay gặp: nhiều mã lỗi/rỗng đều gộp chung tên "Chưa xác định") — chỉ cộng `gpm2`, không cộng `cm1`/`ch_cost`.
-6. **Squad Progress (Quarter Report) — 2 bug field-mismatch liên tiếp ở flat view** (bật filter/search): cột
-   "GP PR" đọc field `c.gp_pr` KHÔNG TỒN TẠI trong response API → luôn hiện "0"; cột "%TGT CM1" đọc nhầm
-   `c.cm1_pct` (CM1% trên doanh thu, không liên quan target) thay vì `c.cm1_tgt_pct` (% đạt target — đúng ý
-   nghĩa cột). View per-squad (không filter) dùng đúng field cả 2 chỗ → đây là lý do Hiếu thấy "không filter số
-   bình thường, có filter số khác/sai". Root cause: flat view là khối JSX viết tay riêng, không share component
-   với view per-squad dù cùng hiển thị 1 bộ field. Fix cả 2 chỗ khớp per-squad view.
+6. **Squad Progress (Quarter Report) — 2 bug field-mismatch liên tiếp ở flat view** (bật filter/search, phát
+   hiện + fix qua 2 vòng riêng sau khi Hiếu báo lại lần 2): cột "GP PR" đọc field `c.gp_pr` KHÔNG TỒN TẠI
+   trong response API → luôn hiện "0"; cột "%TGT CM1" đọc nhầm `c.cm1_pct` (CM1% trên doanh thu, không liên
+   quan target) thay vì `c.cm1_tgt_pct` (% đạt target — đúng ý nghĩa cột). View per-squad (không filter) dùng
+   đúng field cả 2 chỗ → đây là lý do Hiếu thấy "không filter số bình thường, có filter số khác/sai". Root
+   cause: flat view là khối JSX viết tay riêng, không share component với view per-squad dù cùng hiển thị 1
+   bộ field. Fix cả 2 chỗ khớp per-squad view.
+7. **Squad Progress không hiện companyCode (ALL/VN/US) đang chọn** — Hiếu báo tiếp "acc tôi đúng, acc người
+   khác lại sai" dù đã reload. Audit lại xác nhận route `squad-progress` **zero role-branching, zero cache**
+   (server trả y hệt mọi account cùng tham số) → không phải bug code. Tìm ra: thanh filter Quý/Năm/ALL-VN-US
+   nằm ở header CHUNG toàn trang, `companyCode` ảnh hưởng thật tới data nhưng card Squad Progress không ghi
+   companyCode đang chọn trong tiêu đề → 2 người khác companyCode ra số khác THẬT nhưng không có dấu hiệu để
+   nhận ra khi so sánh. Fix: thêm companyCode vào tiêu đề card.
+- **s169(c) — TỰ GÂY RA rồi tự fix cùng ngày: cache flush toàn app nuke SẠCH gây "web load lâu".** Fix mục 3
+  ở trên (ban đầu) dùng `flushAnalyticsCache()` (xoá sạch bảng `analytics_query_cache`) sau mỗi lần sửa/xoá
+  cost B2B + mỗi lần bấm "Tải lại mới" — đúng đồng bộ nhưng xoá LUÔN cache mọi tab KHÔNG liên quan
+  (Products/Staff/Vendors/Orders/Customers/SQL Explorer...). Session test sửa cost/bấm nút liên tục nhiều
+  lần → cache toàn app bị nuke lặp lại → mọi trang phải query gohub_dw sống → Hiếu báo "web load lâu quá".
+  Fix: `B2B_COST_CACHE_PREFIXES` (`analytics-helpers.ts`) liệt kê ĐÚNG route thật sự cache kết quả phụ thuộc
+  cost B2B + helper `flushB2BCostCaches()` — 3 route ghi cost dùng helper này thay vì nuke sạch.
+  `quarterly-cache-flush` đổi sang scoped-prefix, import `QREPORT_CACHE_PREFIX`/`QB2B_CACHE_PREFIX` TRỰC TIẾP
+  từ `lib/quarterly-settings.ts` (cùng 1 hằng số với route sinh ra key đó — không bao giờ lệch version như
+  prefix list hardcode cũ; Next.js App Router không cho export hằng số tuỳ ý trong `route.ts` nên phải đặt ở
+  lib — tsc tự bắt lỗi này).
 - tsc + `next build` PASS từng commit. **KHÔNG verify được số thật bằng live query** (máy dev thiếu
   `ANALYTICS_DB_*`/`TURSO_*`) — mọi fix dựa trên đọc code đối chiếu công thức 2 bên (Quarter Report vs B2B
-  Performance) tới khi khớp tuyệt đối logic. Hiếu đã test tay xác nhận đúng cho case Momo (mục 2) và Squad
-  Progress GP PR→0 (mục 6) trên staging trước khi merge main.
-- Wiki: `docs/wiki/Tab/analytics-b2b.md` §6 Gotchas (2 mục fix mới) + `docs/wiki/Tab/analytics-quarterly.md`
-  §Subtab Squad Progress (2 mục fix mới).
+  Performance) tới khi khớp tuyệt đối logic. Hiếu đã test tay xác nhận đúng cho case Momo (mục 2), Squad
+  Progress GP PR→0 (mục 6), và xác nhận "ok rồi" sau mục 7 trên staging trước khi merge main.
+- Wiki: `docs/wiki/Tab/analytics-b2b.md` §6 Gotchas (3 mục fix mới, gồm s169(c)) + `docs/wiki/Tab/
+  analytics-quarterly.md` §Subtab Squad Progress (2 mục fix mới).
 
 **s168 — đã làm (2026-08-28): fix 2 bug thật trong Scheduled Messages (Daily/Weekly/Monthly Report).**
 1. **Lỗi "column f.fulfiled_date does not exist" — toàn bộ report fail** (Hiếu báo sáng cùng ngày). Root cause:
