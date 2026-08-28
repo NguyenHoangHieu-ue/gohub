@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const prevFilter = getPrevDateFilter(startDate || null, endDate || null, "none", source.dateCol, "30 days", companyCode)
 
   try {
-   const key = `b2b-strategic:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}`
+   const key = `b2b-strategic2:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}`
    const result = await cachedQuery(key, async () => {
     const tiers = await getPartnerTiers()
     const partnerMap   = new Map<string, string>() // lower(name) -> tier
@@ -135,6 +135,9 @@ export async function GET(req: NextRequest) {
       const mom = r.prev_revenue > 0 ? ((revenue - r.prev_revenue) / r.prev_revenue) * 100 : 0
       let gpm2 = margin
       const cost_breakdown: Record<string, number> = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0 }
+      // Cost đã trừ TRỰC TIẾP cho đúng 1 sub-channel (mode="subchannels") — giữ riêng khỏi phần phân bổ
+      // theo tỷ trọng revenue bên dưới (tránh trừ 2 lần / trừ sai chỗ).
+      const subChannelSpecificDeduction: Record<string, number> = {}
 
       r.monthly_data.forEach(monthRow => {
         const mRev = monthRow.revenue
@@ -151,6 +154,7 @@ export async function GET(req: NextRequest) {
               if (cv) {
                 const costVal = cv.type === "amount" ? (cv.value || 0) * ratio : (subRev * (cv.value || 0)) / 100
                 gpm2 -= costVal; cost_breakdown[key] += costVal
+                subChannelSpecificDeduction[subName] = (subChannelSpecificDeduction[subName] || 0) + costVal
               }
             })
           })
@@ -172,26 +176,18 @@ export async function GET(req: NextRequest) {
         Object.entries(r.sub_channel_breakdown[month]).forEach(([subName, sm]) => {
           let sub = subChannelsArray.find(s => s.name === subName)
           if (!sub) { sub = { name: subName, revenue: 0, margin: 0, units: 0, gpm2: 0 }; subChannelsArray.push(sub) }
-          sub.revenue += sm.revenue; sub.margin += sm.margin; sub.units += sm.units; sub.gpm2 += sm.margin
+          sub.revenue += sm.revenue; sub.margin += sm.margin; sub.units += sm.units
         })
       })
-      r.monthly_data.forEach(monthRow => {
-        const mMonth = monthRow.month
-        const mode = settingsMap.get(`${r.name}_${mMonth}`) || "total"
-        const ratio = getDaysInMonth(mMonth) > 0 ? getDaysInRange(startDate, endDate, mMonth) / getDaysInMonth(mMonth) : 0
-        if (mode === "subchannels") {
-          channelCosts.filter(c => c.channel.startsWith(`${r.name} - `) && c.month === mMonth).forEach(c => {
-            const subName = c.channel.replace(`${r.name} - `, "")
-            const sub = subChannelsArray.find(s => s.name === subName)
-            if (sub) {
-              const subRev = r.sub_channel_breakdown[mMonth]?.[subName]?.revenue || 0
-              COST_KEYS.forEach(key => {
-                const cv = c[key]
-                if (cv) sub.gpm2 -= cv.type === "amount" ? (cv.value || 0) * ratio : (subRev * (cv.value || 0)) / 100
-              })
-            }
-          })
-        }
+      // Sub-channel CM1 = margin − cost đã trừ ĐÚNG cho sub đó − phần cost "total"-mode (chưa gắn sub cụ
+      // thể nào) phân bổ theo tỷ trọng revenue. Trước đây cost mode="total" (mặc định) CHỈ trừ ở gpm2 hàng
+      // cha, sub_channels.gpm2 = margin thô → tổng sub-channel cao hơn gpm2 hàng cha khi click "View
+      // details" (cùng lớp bug với b2b/performance — báo cáo 2026-08-28). Đảm bảo Σ sub.gpm2 === gpm2 cha.
+      const totalSpecificDeduction = Object.values(subChannelSpecificDeduction).reduce((s, v) => s + v, 0)
+      const sharedDeduction = (margin - gpm2) - totalSpecificDeduction
+      subChannelsArray.forEach(sub => {
+        const share = revenue !== 0 ? sub.revenue / revenue : 0
+        sub.gpm2 = sub.margin - (subChannelSpecificDeduction[sub.name] || 0) - sharedDeduction * share
       })
 
       return {
