@@ -63,7 +63,7 @@ Quyết định Hiếu chốt (không tự đoán):
 | 1 | SLA Handling Time | ≤5h, 80% requests | Manual (2 ảnh) **hoặc** Lark bot đã duyệt → TB hợp nhất 2 nguồn |
 | 1 | Vendor Selection Speed | ≤15 phút/query | Tương tự SLA |
 | 2 | SKU Gross Margin | +2.5% GM SKU trọng điểm/mới | **Auto-scan toàn hệ thống** (sku-scan) — weighted theo revenue, không cần tag tay |
-| 2 | %3HK + Datapool Vendor | 74% revenue | `SUM(rev WHERE vendor 3HKDATAPOOL)/SUM(rev)` toàn công ty — auto, không đổi |
+| 2 | %3HK + Datapool Vendor | 74% revenue | `SUM(rev WHERE vendor IN (3HKDATAPOOL, BCDATAPOOL))/SUM(rev)` toàn công ty — auto |
 | 3 (w=30%) | Tasks via Bé Gấu | 450/quý | `app_usage_events` chat có `ai_response` dài ≥15 ký tự, company-wide, breakdown theo `user_role` |
 
 **Weighted OKR Score** = Σ(đạt-%ᵢ × trọng-sốᵢ)/100, `WEIGHTS` trong `page.tsx`: SLA/VendorSpeed/SKU-GM/%3HK mỗi
@@ -97,7 +97,11 @@ sai thread sẽ làm lệch số báo cáo hiệu suất thật.
 1. **Config** (`/lark-config`, admin/creator only, nút "⚙️ Lark Bot" ở header trang): `{enabled, chat_id,
    days_back}` — Hiếu tự nhập `chat_id` group Lark (Sales/PIC hỏi sản phẩm/giá NCC) sau khi deploy, giống hệt
    cơ chế `ca_thread_config` (không hardcode group nào).
-2. **Cron** `GET /api/cron/my-metrics-lark-scan` (vercel.json `0 */3 * * *`, 4x/ngày, `maxDuration:90`):
+2. **Cron** `GET /api/cron/my-metrics-lark-scan` (vercel.json `0 10 * * *`, 1x/ngày 17:00 ICT, `maxDuration:90` —
+   **CHỈ 1x/ngày vì project trên Vercel Hobby plan, giới hạn cron tối đa 1 lần/ngày** — plan cũ `0 */3 * * *`
+   (3 giờ/lần) từng bị Vercel REJECT thẳng deployment, khiến staging/main không deploy được gì suốt 2 tiếng
+   cho tới khi phát hiện qua GitHub commit status "Vercel: Deployment failed" trỏ tới
+   `vercel.com/docs/cron-jobs/usage-and-pricing`. Nếu Hiếu nâng lên Pro plan, có thể tăng tần suất lại):
    - `fetchRecentThreads()` (helper dùng chung) lấy thread root + replies + reaction trong `days_back` ngày.
    - Bỏ qua thread đã có trong `okr_lark_events` (dedupe theo `message_id`) và thread chưa có reply.
    - Với thread mới (tối đa 20/lần chạy): gọi `classifyLarkThread()` (Gemini `gemini-3.6-flash`, JSON-mode,
@@ -120,6 +124,75 @@ mentions từ 1 group Lark" ra khỏi `api/creator/ca-thread/route.ts` (Cà Thre
 `fetchRecentThreads()` — Cà Thread giờ gọi hàm này rồi tự áp lọc reaction-YES/participant riêng, tránh 2 nơi
 chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
 
+## § Sửa bot Lark — 2 bug khiến "set 30 ngày mà quét được 0 case" (2026-08-27)
+
+Hiếu báo set `days_back=30` cho group có "rất nhiều request" nhưng bot không phát hiện được gì. Audit ra
+**2 bug thật** trong `lib/lark-thread-scan.ts` + `api/cron/my-metrics-lark-scan`:
+
+1. **Trần cứng 5 trang fetch (250 tin)** — không scale theo `daysBack`. Group nhiều tin/ngày → 250 tin đầu tiên
+   (mới nhất) chỉ phủ được vài ngày thay vì đủ 30 ngày yêu cầu; phần còn lại của cửa sổ KHÔNG BAO GIỜ được
+   Lark API trả về. Fix: `maxPages = Math.min(80, Math.max(10, daysBack * 3))` — trần chỉ là valve an toàn,
+   điều kiện dừng THẬT vẫn là "đã ra ngoài cửa sổ ngày" (giữ nguyên logic cũ).
+2. **Không nhớ thread ĐÃ XEM nhưng KHÔNG khớp** — trước chỉ insert case AI đồng ý (`is_match=true`) vào
+   `okr_lark_events`; case bị từ chối không lưu gì → mỗi lần cron chạy lại chọn đúng N thread MỚI NHẤT (đã
+   sort newest-first) để phân loại lại, và nếu N thread đó toàn bị từ chối (chat xã giao...) thì cron
+   **KHÔNG BAO GIỜ tiến sâu hơn vào backlog cũ** dù request thật nằm ngay phía sau — giẫm chân tại chỗ vô hạn.
+   Fix: ghi cả case không khớp vào `okr_lark_events` với `status='not_matched'`, `metric='none'` (không tính
+   KPI, không hiện trong hàng chờ duyệt) — dedupe (`seen` set) giờ tự nhiên đẩy cron tiến qua backlog mỗi lần
+   chạy thay vì lặp lại y hệt.
+
+**Refactor liên quan:**
+- `lib/lark-thread-scan.ts`: hydrate chi tiết từng thread (2 call Lark) theo **batch 15** thay vì bắn hết
+  cùng lúc — cần thiết vì `maxThreads` giờ có thể lên tới 200 (trước 50), bắn 400 request song song dễ bị
+  Lark rate-limit.
+- `lib/lark-scan-runner.ts` (mới): tách logic quét thật ra khỏi cron route, dùng chung cho cron VÀ nút
+  **"Quét ngay để test"** (mới, trong modal ⚙️ Lark Bot) — Hiếu không cần đợi cron chạy 1x/ngày (17:00 ICT)
+  mới biết fix có work hay không; nút trả về ngay `scanned/classified/inserted/not_matched/backlog_remaining`.
+- `api/analytics/my-metrics/lark-config/scan-now` (mới, POST, admin/creator): endpoint cho nút trên,
+  `ignoreEnabled=true` để test được dù chưa tick "Bật quét tự động".
+- **Panel review** (`LarkReviewPanel`) thêm mục **"Xem N thread Bé Gấu ĐÃ XEM nhưng không khớp (audit AI)"**
+  — Hiếu tự soát bot có bỏ sót request thật hay không, và header giờ luôn hiện "đã quét N thread" (kể cả khi
+  0 case chờ duyệt) để biết chắc bot có hoạt động không, tránh nhầm "im lặng" với "không có gì để quét".
+
+**Chưa giải quyết được (cần Hiếu xác nhận thêm)**: chất lượng phân loại của Gemini (`okr-lark-classify.ts`)
+vẫn chưa verify với data thật — 2 bug trên là root cause CHẮC CHẮN (logic sai rõ ràng), nhưng nếu sau khi fix
+vẫn còn sót request thật, cần xem cụ thể qua mục "không khớp" ở trên để tinh chỉnh prompt.
+
+## § Bảng chi tiết + filter (2026-08-27, feedback tiếp theo)
+
+- **Datapool Rev — chi tiết theo SKU** (mới, `GET /api/analytics/my-metrics/datapool-detail`): Hiếu yêu cầu xem
+  đơn/rev/SKU thay vì chỉ số tổng theo tháng — bảng mới ngay dưới card %Datapool Rev, group theo `(sku, vendor,
+  category)` trong quý, cột SKU/Vendor/Category/Đơn/Units/Revenue, có filter vendor (3HK/BC/Mọi) + search SKU.
+  Cache 12h như các route khác.
+- **SKU Gross Margin — quét toàn hệ thống**: thêm 3 filter cạnh ô search (trước chỉ có search): **Loại**
+  (Mọi loại/Chỉ Trọng điểm/Chỉ Mới), **Category**, **Vendor** — options tự sinh từ dữ liệu trả về (không
+  hardcode danh sách). Dòng "đang lọc còn N SKU" hiện khi có filter đang áp.
+- **Bỏ cột "Category" khỏi cả 2 bảng** (theo yêu cầu Hiếu) — filter Category vẫn giữ (lọc được, chỉ không
+  hiện cột). Bảng SKU scan giờ cột "Vendor" đứng riêng (trước gộp chung "Category / Vendor").
+
+## § UI/màu (2026-08-27, sau feedback "màu chưa ổn")
+
+Dùng skill thiết kế [Hallmark](https://github.com/Nutlope/hallmark) (cài `~/.claude/skills/hallmark/`) để audit +
+sửa — bug thật: trước có **5 màu badge cạnh tranh nhau** (blue=Auto, purple=Manual, amber=pending,
+emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, chỉ là color-code tuỳ hứng — đúng kiểu
+"AI slop" (xem `references/color.md`: *"One accent. Maximum two. Everything else is neutral."*).
+
+**Hệ màu mới:**
+- **1 accent duy nhất** = Tailwind token `brand-*` (định nghĩa thật trong `tailwind.config.ts`, `brand-600
+  = #0f4c81`, dùng khắp app — sidebar/top-bar/login/admin...) — chỉ dùng cho: nút hành động chính, link/hover,
+  focus ring, badge "Key" (SKU trọng điểm). **Sửa lần 2 (2026-08-27)**: bản đầu dùng raw hex `#003B95` tự đoán
+  (không phải token thật của project) → không nhất quán với phần còn lại của app, đây chính là lý do "màu
+  chưa ổn". Đổi toàn bộ sang class `brand-500/600/700/50` thay vì hex tuỳ hứng.
+- **Neutral (slate)** cho MỌI tag chỉ mang tính phân loại/nguồn (Auto, Manual, Context, Lark/Web, Khoá) — không
+  còn tô màu theo loại, phân biệt bằng chữ.
+- **2 màu semantic thật** (chỉ dùng khi đúng nghĩa trạng thái): emerald = verified/đạt target/SKU mới; amber =
+  chờ duyệt/thiếu ảnh/dưới target. Không dùng amber cho khối thông tin không phải cảnh báo (trước đây banner
+  "Baseline" tô nền amber dù không phải warning — đã đổi neutral).
+- `SourceBox`: bỏ nested box-trong-box (card-in-card), chuyển sang hairline rule bên trái.
+- Thanh "Weighted OKR Score": 5 ô trọng số trước đều nhau (`grid-cols-5`) — đổi sang `flex` tỉ lệ theo trọng số
+  (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
+- Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
+
 ## Gotchas
 
 - **Quarter lock**: `isQuarterLocked(label)` = `true` khi hôm nay > ngày cuối quý → evidence + SKU note + duyệt
@@ -135,9 +208,24 @@ chép cùng ~100 dòng logic Lark API dễ lệch nhau theo thời gian.
   `enabled=false` hoặc thiếu `chat_id`, không lỗi, chỉ trả `{skipped: "..."}`.
 - **Chất lượng AI phân loại chưa verify với dữ liệu thật** — đây chính là lý do có hàng chờ duyệt thay vì tự
   động tính luôn; Hiếu nên soát kỹ đợt case đầu tiên trước khi tin tưởng số.
+- **Cách kiểm tra nhanh "bot đã chạy lần nào chưa" khi debug** (2026-08-27, verify qua query Supabase thật):
+  đọc `app_settings` key `my_metrics_lark_scan_config` (config đúng chưa: `enabled`/`chat_id`/`days_back`) +
+  đếm `okr_lark_events` theo mọi `status` (kể cả `not_matched`) cho quarter hiện tại — 0 dòng nghĩa là cron/
+  "Quét ngay" chưa từng chạy thành công lần nào, KHÔNG phải bot chạy rồi mà không tìm thấy gì. Trường hợp
+  thật gặp: config đúng (`enabled=true`, có `chat_id`) nhưng `okr_lark_events` = 0 dòng → do vừa mới cấu hình
+  xong, cron 1x/ngày (17h ICT) chưa tới lượt chạy — bấm "Quét ngay để test" để có dữ liệu ngay thay vì đợi.
 - **Bé Gấu task ≠ "thành công" theo nghĩa nghiêm ngặt** — chỉ lọc được độ dài response (không có structured
   success flag từ `be-gau.ts`). Nếu muốn phân loại chuẩn hơn cần thêm cột đánh giá thủ công hoặc structured
   output ở `be-gau.ts` (chưa làm, out of scope).
 - Máy dev không có `ANALYTICS_DB_*` → chưa chạy được SQL sku-scan live để verify số thật; cũng không test được
   cron/Gemini call với dữ liệu Lark thật. Hiếu cần: (1) chạy migration v45, (2) nhập `chat_id` thật, (3) theo
   dõi vài ngày đầu xem bot phân loại đúng không trước khi tin số báo cáo.
+- **%3HK + Other Datapool Vendor (2026-08-27)**: đúng tên KPI offer letter, gộp CẢ 3HK Datapool VÀ **BC Datapool**
+  (`dim_sku.vendor = 'BC Datapool'`, Hiếu xác nhận qua SQL Explorer) — % KPI vẫn tính trên TỔNG 2 vendor:
+  `REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')`. **UI tách rõ 2 subtotal** (Hiếu yêu
+  cầu) — card hiện "Datapool Rev" (tổng) làm số chính, kèm 2 dòng phụ "↳ 3HK Rev" / "↳ BC Rev" riêng biệt;
+  bảng theo tháng có cột riêng "3HK Rev" và "BC Rev". API `hk3` object trả thêm `hk3_only_rev`/`bc_only_rev`
+  (aggregate) và mỗi dòng `monthly[]` có `hk3_rev`(=3HK riêng)/`bc_rev`(=BC riêng)/`total_rev`. **Chỉ áp trong
+  My Metrics** — KPI "3HK Contribution %" ở BOD/Dashboard/Quarterly/Channels là chỉ số RIÊNG (chỉ 3HK, không
+  có BC), cố ý KHÔNG đổi theo vì đó là số đã báo cáo lâu dài cho leadership, đổi định nghĩa ở đó cần Hiếu
+  chốt riêng.

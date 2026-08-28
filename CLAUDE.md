@@ -10,8 +10,10 @@
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s167 rebuild My Metrics (auto-scan toàn hệ thống + bot Lark tự động SLA/Vendor Speed + UI/UX) · s166 fix %TGT CM1 Squad Progress lệch Tổng quan |
-| ✅ Đã lên main | s159 security hardening + s160 Squad Progress risk-fix/UI + s161 scheduled-messages/Inventory tab + s162 B2B CM1 audit + Squad Progress fix + %MoM Quarter Report fix + s163 gộp Note/KB vào Tổ Gấu + fix identity-collision + s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route (đến 3d3a841, 2026-08-27) |
+| ⏳ Trên staging CHƯA merge main | fix cron 1x/ngày (deploy fail) + fix 2 bug bot Lark quét thiếu + bảng chi tiết/filter + màu brand-* đúng token (xem s167 dưới) |
+| ✅ Đã lên main | ...+ s164 rebuild My Metrics + s165 fix quyền ghi admin 34 route + s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 (đến 9c5e3b9, 2026-08-27) |
+| ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
+| 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
 
 **s167 — đã làm (2026-08-27): rebuild My Metrics lần 2 — theo yêu cầu Hiếu sau khi đọc offer letter thật
 (`Hieu/Offer Letter...pdf`, trang 2 bảng KPI bị PDF gốc cắt cứng ở cột Target Q3 — Target Q4 KHÔNG có trong tài
@@ -24,7 +26,8 @@ doanh thu + SKU mới (không giữ cách tag tay cũ).
   mới trong quý, weighted theo revenue → **số KPI chính thức**. `okr_sku_tags` (bảng cũ) hạ cấp thành ghi chú
   tuỳ chọn gắn vào 1 dòng trong bảng scan (bỏ yêu cầu `effective_date`, migration v45 nới NOT NULL).
 - **Bot Lark tự động phát hiện SLA/Vendor Speed** (theo đúng yêu cầu "setup bot tự động lấy thông tin, đánh
-  giá, nhận diện"): cron `api/cron/my-metrics-lark-scan` (4x/ngày) quét 1 group Lark (config qua modal "⚙️ Lark
+  giá, nhận diện"): cron `api/cron/my-metrics-lark-scan` (1x/ngày 17:00 ICT — ban đầu đặt 4x/ngày nhưng bị
+  Vercel Hobby plan reject, xem mục "Deploy bị FAIL" ở bảng trên) quét 1 group Lark (config qua modal "⚙️ Lark
   Bot", admin/creator, Hiếu tự nhập chat_id — CHƯA hoạt động tới khi nhập) → Gemini (`okr-lark-classify.ts`,
   cùng convention `agents/classifier.ts`) phân loại thread là Product Request (SLA) hay Vendor Rate Query, tìm
   tin hoàn thành → ghi `okr_lark_events` (status=pending_review) + DM Lark báo Hiếu có case mới. Hiếu duyệt
@@ -45,6 +48,25 @@ doanh thu + SKU mới (không giữ cách tag tay cũ).
   Bot", (2) QA tay UI My Metrics trên staging (bảng SKU scan/evidence không lỗi), (3) theo dõi vài ngày đầu xem
   AI phân loại đúng không trước khi tin số báo cáo hiệu suất.
 - Wiki: viết lại `docs/wiki/Tab/analytics-my-metrics.md` toàn bộ theo kiến trúc mới.
+
+**s167 (tiếp, cùng ngày) — Hiếu báo bot Lark set 30 ngày mà quét được 0 case + màu vẫn chưa ổn + thêm
+filter/bảng.** Tìm ra **2 bug thật** trong bot Lark (không phải chỉ AI đoán sai):
+1. Trần cứng 5 trang fetch (250 tin), không scale theo `days_back` → group nhiều tin, 250 tin mới nhất chỉ
+   phủ vài ngày, phần còn lại cửa sổ 30 ngày KHÔNG BAO GIỜ được fetch. Fix: scale theo `daysBack`.
+2. Không lưu case bị AI từ chối → cron luôn chọn lại đúng N thread mới nhất mỗi lần chạy, giẫm chân tại chỗ
+   vô hạn nếu N thread đó toàn bị từ chối. Fix: ghi cả `status='not_matched'` để dedupe tự đẩy cron tiến
+   qua backlog. Thêm `lib/lark-scan-runner.ts` (logic dùng chung) + nút **"Quét ngay để test"** trong modal
+   Lark Bot (không cần đợi cron 1x/ngày) + panel review hiện "đã quét N thread" + mục audit "không khớp".
+- **Màu — sửa lần 2**: phát hiện lần 1 dùng hex `#003B95` TỰ ĐOÁN, không phải token thật của project — check
+  `tailwind.config.ts` mới ra brand color THẬT là `brand-600 = #0f4c81` (dùng khắp app: sidebar/top-bar/
+  login...). Đổi toàn bộ sang class `brand-*` đúng token thay vì hex tuỳ hứng.
+- Bỏ cột "Category" khỏi 2 bảng (giữ filter). Thêm filter Loại/Category/Vendor cho bảng SKU scan. Thêm bảng
+  mới "Datapool Rev — chi tiết theo SKU" (route `datapool-detail`) cho card %Datapool.
+- tsc + `next build` PASS. Route mới: `api/analytics/my-metrics/datapool-detail`,
+  `api/analytics/my-metrics/lark-config/scan-now`. File mới: `lib/lark-scan-runner.ts`.
+- **Vẫn CHƯA verify chất lượng phân loại Gemini với data thật** (2 bug trên là lỗi logic rõ ràng, chắc chắn
+  đúng; nhưng nếu sau fix vẫn còn sót request thật, cần Hiếu bấm "Quét ngay" rồi xem mục "không khớp" để tinh
+  chỉnh prompt `okr-lark-classify.ts`).
 
 **s166 — đã làm (2026-08-27): fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan.**
 Hiếu yêu cầu audit lại logic %TGT CM1/%TGT 3HK per-customer, đảm bảo Squad Progress khớp y hệt Tổng quan

@@ -14,14 +14,14 @@ import { formatCompactNumber } from "@/lib/analytics-formatters"
 interface AutoMetrics {
   quarter: string; year: number; start: string; end: string
   data_cutoff: string; generated_at: string
-  hk3: { pct: number; hk3_rev: number; total_rev: number; monthly: MonthStat[]; baseline: number }
+  hk3: { pct: number; hk3_rev: number; hk3_only_rev: number; bc_only_rev: number; total_rev: number; monthly: MonthStat[]; baseline: number }
   gm:  { qtd_pct: number; total_gp: number; total_rev: number; monthly: GmStat[]; baseline: number }
   begau: {
     total: number; web: number; lark: number; excluded_short: number
     by_role: Record<string, number>; monthly: Record<string, MonthCount>
   }
 }
-interface MonthStat    { month: string; hk3_rev: number; total_rev: number }
+interface MonthStat    { month: string; hk3_rev: number; bc_rev: number; total_rev: number }
 interface GmStat       { month: string; gp: number; rev: number; gm_pct: number }
 interface MonthCount   { total: number; web: number; lark: number }
 interface EvidenceRecord {
@@ -65,6 +65,8 @@ interface SkuScanData {
   key_count: number; new_count: number; scored_count: number; total_rev_cur: number
 }
 interface SkuNote { id: string; sku_code: string; note: string | null; created_by: string }
+interface DatapoolDetailItem { sku: string; vendor: string; category: string | null; rev: number; units: number; orders: number }
+interface DatapoolDetailData { items: DatapoolDetailItem[]; total_rev: number; total_orders: number; total_units: number }
 
 // Fallback khi chưa lưu target vào DB
 const DEFAULT_TARGETS = {
@@ -107,13 +109,13 @@ function achLowerBetter(actual: number | null, target: number) {
 
 function ProgressBar({ actual, target }: { actual: number; target: number }) {
   const p = target > 0 ? Math.min((actual / target) * 100, 100) : 0
-  const color = p >= 100 ? "bg-emerald-500" : p >= 75 ? "bg-[#003B95]" : "bg-amber-400"
+  const color = p >= 100 ? "bg-emerald-500" : p >= 75 ? "bg-brand-600" : "bg-amber-400"
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${p}%` }} />
       </div>
-      <span className={cn("text-xs font-black w-12 text-right", p >= 100 ? "text-emerald-600" : p >= 75 ? "text-[#003B95]" : "text-amber-600")}>
+      <span className={cn("text-xs font-black w-12 text-right", p >= 100 ? "text-emerald-600" : p >= 75 ? "text-brand-600" : "text-amber-600")}>
         {p.toFixed(1)}%
       </span>
     </div>
@@ -122,22 +124,21 @@ function ProgressBar({ actual, target }: { actual: number; target: number }) {
 
 function SourceBox({ type, table, filter }: { type: "auto"|"manual"|"context"; table: string; filter?: string }) {
   const [open, setOpen] = useState(false)
-  const badge = type === "auto" ? "bg-blue-100 text-blue-700" : type === "manual" ? "bg-purple-100 text-purple-700" : "bg-slate-200 text-slate-600"
   return (
     <div className="mt-2">
       <button onClick={() => setOpen(v => !v)}
         className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 transition-colors">
         <Info className="w-3 h-3" />
-        📊 Data source
+        Nguồn dữ liệu
         {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
       {open && (
-        <div className="mt-1 bg-slate-50 rounded-lg px-3 py-2 text-[11px] font-mono text-slate-500 space-y-0.5">
+        <div className="mt-1.5 pl-2.5 border-l-2 border-slate-200 text-[11px] font-mono text-slate-500 space-y-0.5">
           <div className="flex items-center gap-1.5">
-            <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-black uppercase", badge)}>{type}</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wide">{type}</span>
             <span className="font-bold text-slate-600">{table}</span>
           </div>
-          {filter && <div className="text-slate-400 pl-1 break-all">{filter}</div>}
+          {filter && <div className="text-slate-400 break-all">{filter}</div>}
         </div>
       )}
     </div>
@@ -216,21 +217,25 @@ async function uploadImage(file: File): Promise<string> {
 function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
   metric: "sla" | "vendor_speed"; quarter: string; unit: "giờ" | "phút"; onReviewed?: () => void
 }) {
-  const [pending,  setPending]  = useState<LarkEvent[]>([])
-  const [rejected, setRejected] = useState<LarkEvent[]>([])
+  const [pending,    setPending]    = useState<LarkEvent[]>([])
+  const [rejected,   setRejected]   = useState<LarkEvent[]>([])
+  const [notMatched, setNotMatched] = useState<LarkEvent[]>([])
   const [loaded, setLoaded] = useState(false)
   const [open, setOpen] = useState(true)
   const [rejOpen, setRejOpen] = useState(false)
+  const [nmOpen, setNmOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, { request_time: string; completion_time: string }>>({})
   const [busy, setBusy] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    const [p, r] = await Promise.all([
+    const [p, r, nm] = await Promise.all([
       fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=pending_review`),
       fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=rejected`),
+      fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=not_matched`),
     ])
     if (p.ok) { const j = await p.json(); setPending(j.items ?? []) }
     if (r.ok) { const j = await r.json(); setRejected(j.items ?? []) }
+    if (nm.ok) { const j = await nm.json(); setNotMatched(j.items ?? []) }
     setLoaded(true)
   }, [quarter, metric])
 
@@ -254,13 +259,16 @@ function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
   }
 
   if (!loaded) return null
-  if (pending.length === 0 && rejected.length === 0) return null
+  const totalSeen = pending.length + rejected.length + notMatched.length
+  if (totalSeen === 0) return null
 
   return (
     <div className="border border-amber-200 rounded-xl bg-amber-50/50 overflow-hidden">
       <button onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-3 py-2 text-left">
         <span className="flex items-center gap-1.5 text-xs font-black text-amber-700">
-          <Sparkles className="w-3.5 h-3.5" /> Bé Gấu phát hiện {pending.length} case mới — chờ duyệt
+          <Sparkles className="w-3.5 h-3.5" />
+          {pending.length > 0 ? `Bé Gấu phát hiện ${pending.length} case mới — chờ duyệt` : "Chưa có case mới chờ duyệt"}
+          <span className="font-normal text-amber-600/70">· đã quét {totalSeen} thread</span>
         </span>
         {open ? <ChevronUp className="w-3.5 h-3.5 text-amber-600" /> : <ChevronDown className="w-3.5 h-3.5 text-amber-600" />}
       </button>
@@ -322,13 +330,29 @@ function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
           {rejected.length > 0 && (
             <div className="pt-1">
               <button onClick={() => setRejOpen(v => !v)} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">
-                {rejOpen ? "Ẩn" : "Xem"} {rejected.length} case đã từ chối (audit AI)
+                {rejOpen ? "Ẩn" : "Xem"} {rejected.length} case đã từ chối (Hiếu từ chối tay)
               </button>
               {rejOpen && (
                 <div className="mt-1.5 space-y-1">
                   {rejected.map(ev => (
                     <div key={ev.id} className="text-[10px] text-slate-400 bg-white/60 rounded px-2 py-1">
                       {hhmm(ev.request_time)} · {(ev.request_snippet ?? "").slice(0, 60)} — <em>{ev.ai_reason}</em>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {notMatched.length > 0 && (
+            <div className="pt-1">
+              <button onClick={() => setNmOpen(v => !v)} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">
+                {nmOpen ? "Ẩn" : "Xem"} {notMatched.length} thread Bé Gấu ĐÃ XEM nhưng không khớp (audit AI — kiểm tra bot có bỏ sót không)
+              </button>
+              {nmOpen && (
+                <div className="mt-1.5 space-y-1 max-h-48 overflow-y-auto">
+                  {notMatched.map(ev => (
+                    <div key={ev.id} className="text-[10px] text-slate-400 bg-white/60 rounded px-2 py-1">
+                      {hhmm(ev.request_time)} · {(ev.request_snippet ?? "").slice(0, 80)} — <em>{ev.ai_reason || "(không có lý do)"}</em>
                     </div>
                   ))}
                 </div>
@@ -426,18 +450,18 @@ function EvidenceCard({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-black text-slate-800">{cardTitle}</span>
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">Manual + Lark auto · verified</span>
-            {locked && <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase"><Lock className="w-2.5 h-2.5" />Khoá</span>}
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Manual + Lark auto</span>
+            {locked && <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide"><Lock className="w-2.5 h-2.5" />Khoá</span>}
           </div>
           {!locked && (
             <button onClick={() => { setEditRec(null); setForm(emptyForm); setShowForm(v => !v) }}
-              className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+              className="flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 transition-colors">
               <Plus className="w-3.5 h-3.5" /> Thêm case tay
             </button>
           )}
         </div>
         <div className="flex items-baseline gap-2">
-          <span className={cn("text-3xl font-black", avg === null ? "text-slate-300" : avg <= targetValue ? "text-emerald-600" : avg <= targetValue*2 ? "text-[#003B95]" : "text-amber-600")}>
+          <span className={cn("text-3xl font-black tabular-nums", avg === null ? "text-slate-300" : avg <= targetValue ? "text-emerald-600" : avg <= targetValue*2 ? "text-brand-600" : "text-amber-600")}>
             {loading ? "…" : avg !== null ? avg.toFixed(1) : "—"}
           </span>
           <span className="text-slate-400 font-bold">{unit} TB</span>
@@ -458,19 +482,19 @@ function EvidenceCard({
         )}
 
         {showForm && !locked && (
-          <div className="border border-blue-200 rounded-xl p-4 bg-blue-50/40 space-y-3">
-            <p className="text-xs font-black text-blue-700 uppercase tracking-wider">
+          <div className="border border-brand-200 rounded-xl p-4 bg-brand-50 space-y-3">
+            <p className="text-xs font-black text-brand-600 uppercase tracking-wider">
               {editRec ? "Sửa case" : "Thêm case tay (case Lark không bắt được)"}
             </p>
             {err && <p className="text-[11px] text-red-600 font-bold">{err}</p>}
             <input value={form.title} onChange={e => setF("title", e.target.value)}
               placeholder="Mô tả yêu cầu (tuỳ chọn)"
-              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <p className="text-[11px] font-black text-slate-600 uppercase tracking-wider">📩 Request</p>
                 <input type="datetime-local" value={form.request_time} onChange={e => setF("request_time", e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 <textarea value={form.request_note} onChange={e => setF("request_note", e.target.value)}
                   placeholder="Ghi chú request…" rows={2}
                   className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs resize-none focus:outline-none" />
@@ -482,7 +506,7 @@ function EvidenceCard({
                   )}
                   <button onClick={() => reqImgRef.current?.click()}
                     disabled={!!uploading}
-                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2 py-1">
+                    className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-700 border border-brand-200 rounded-lg px-2 py-1">
                     {uploading === "request_image_url" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                     Ảnh <span className="text-red-500">*</span>
                   </button>
@@ -493,7 +517,7 @@ function EvidenceCard({
               <div className="space-y-1.5">
                 <p className="text-[11px] font-black text-slate-600 uppercase tracking-wider">✅ Hoàn thành</p>
                 <input type="datetime-local" value={form.completion_time} onChange={e => setF("completion_time", e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 <textarea value={form.completion_note} onChange={e => setF("completion_note", e.target.value)}
                   placeholder="Ghi chú hoàn thành…" rows={2}
                   className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs resize-none focus:outline-none" />
@@ -505,7 +529,7 @@ function EvidenceCard({
                   )}
                   <button onClick={() => compImgRef.current?.click()}
                     disabled={!!uploading}
-                    className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2 py-1">
+                    className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-700 border border-brand-200 rounded-lg px-2 py-1">
                     {uploading === "completion_image_url" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
                     Ảnh <span className="text-red-500">*</span>
                   </button>
@@ -524,7 +548,7 @@ function EvidenceCard({
               <button onClick={() => { setShowForm(false); setEditRec(null); setForm(emptyForm); setErr(null) }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
               <button onClick={submit} disabled={saving || !!uploading}
-                className="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                className="px-3 py-1.5 rounded-lg text-xs font-black bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50">
                 {saving ? "Đang lưu…" : editRec ? "Cập nhật" : "Thêm"}
               </button>
             </div>
@@ -536,9 +560,11 @@ function EvidenceCard({
           rowKey={r => r.id}
           emptyLabel={loading ? "Đang tải…" : "Chưa có case nào — thêm tay hoặc chờ Bé Gấu phát hiện từ Lark."}
           columns={[
-            { key: "src", label: "Nguồn", render: r => r.source === "lark_auto"
-                ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">🤖 Lark</span>
-                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 uppercase">🤳 Ảnh</span> },
+            { key: "src", label: "Nguồn", render: r => (
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
+                {r.source === "lark_auto" ? "Lark" : "Ảnh"}
+              </span>
+            ) },
             { key: "req", label: "Request", render: r => (
               <div>
                 <span className="font-bold">{hhmm(r.request_time)}</span>
@@ -552,12 +578,12 @@ function EvidenceCard({
             { key: "verified", label: "Trạng thái", align: "center", render: r => {
               const isVerified = r.source === "lark_auto" || !!(r.request_image_url && r.completion_image_url && r.duration_value != null)
               return isVerified
-                ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
-                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">Thiếu ảnh</span>
+                ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
+                : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">Thiếu ảnh</span>
             } },
             { key: "act", label: "", align: "right", render: r => r.source === "manual" && !locked ? (
               <div className="flex gap-1 justify-end">
-                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-blue-500 hover:bg-blue-50"><Pencil className="w-3 h-3" /></button>
+                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-brand-600 hover:bg-brand-50"><Pencil className="w-3 h-3" /></button>
                 <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
               </div>
             ) : null },
@@ -571,6 +597,77 @@ function EvidenceCard({
   )
 }
 
+// ─── Datapool Rev — chi tiết theo SKU (đơn/rev/units) ─────────────────────────
+function DatapoolDetailTable({ quarter }: { quarter: string }) {
+  const [data, setData] = useState<DatapoolDetailData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("")
+  const [vendorFilter, setVendorFilter] = useState<"all" | "3HK Datapool" | "BC Datapool">("all")
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch(`/api/analytics/my-metrics/datapool-detail?quarter=${quarter}`)
+    if (r.ok) setData(await r.json())
+    setLoading(false)
+  }, [quarter])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const items = data?.items ?? []
+  const filtered = items.filter(it => {
+    if (vendorFilter !== "all" && it.vendor !== vendorFilter) return false
+    if (search.trim() && ![it.sku, it.category, it.vendor].some(v => (v ?? "").toLowerCase().includes(search.trim().toLowerCase()))) return false
+    return true
+  })
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-black text-slate-800">Datapool Rev — chi tiết theo SKU</span>
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={vendorFilter} onChange={e => setVendorFilter(e.target.value as any)}
+              className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="all">Mọi vendor</option>
+              <option value="3HK Datapool">3HK Datapool</option>
+              <option value="BC Datapool">BC Datapool</option>
+            </select>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm SKU / category…"
+                className="pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 w-44" />
+            </div>
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-400 mt-1.5">
+          {data ? `${items.length} SKU · ${fck(data.total_rev)} rev · ${data.total_orders.toLocaleString()} đơn · ${data.total_units.toLocaleString()} units` : "…"}
+          {filtered.length !== items.length && ` — đang lọc còn ${filtered.length} SKU`}
+        </div>
+      </div>
+      <div className="px-5 py-3">
+        <DataTable<DatapoolDetailItem>
+          rows={filtered}
+          rowKey={it => it.sku}
+          emptyLabel={loading ? "Đang tải…" : "Không có SKU nào khớp."}
+          columns={[
+            { key: "sku", label: "SKU", render: it => <span className="font-black text-slate-800">{it.sku}</span> },
+            { key: "vendor", label: "Vendor", render: it => <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">{it.vendor}</span> },
+            { key: "orders", label: "Đơn", align: "right", render: it => it.orders.toLocaleString() },
+            { key: "units", label: "Units", align: "right", render: it => it.units.toLocaleString() },
+            { key: "rev", label: "Revenue", align: "right", render: it => <span className="font-black">{fck(it.rev)}</span> },
+          ]}
+        />
+        <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue (GROUP BY sku, vendor)"
+          filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
+      </div>
+    </div>
+  )
+}
+
 // ─── SKU Gross Margin — quét toàn hệ thống (thay tag tay) ─────────────────────
 function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; targetDelta: number; onSummary?: (delta: number | null) => void }) {
   const [data, setData] = useState<SkuScanData | null>(null)
@@ -578,6 +675,9 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
   const [notes, setNotes] = useState<Record<string, SkuNote>>({})
   const [locked, setLocked] = useState(false)
   const [search, setSearch] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [vendorFilter, setVendorFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState<"all" | "key" | "new">("all")
   const [editingSku, setEditingSku] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState("")
   const [savingNote, setSavingNote] = useState(false)
@@ -603,9 +703,16 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
   useEffect(() => { fetchScan(); fetchNotes() }, [fetchScan, fetchNotes])
 
   const items = data?.items ?? []
-  const filtered = search.trim()
-    ? items.filter(it => [it.sku, it.category, it.vendor].some(v => (v ?? "").toLowerCase().includes(search.trim().toLowerCase())))
-    : items
+  const categories = Array.from(new Set(items.map(it => it.category).filter(Boolean))) as string[]
+  const vendors    = Array.from(new Set(items.map(it => it.vendor).filter(Boolean))) as string[]
+  const filtered = items.filter(it => {
+    if (categoryFilter !== "all" && it.category !== categoryFilter) return false
+    if (vendorFilter !== "all" && it.vendor !== vendorFilter) return false
+    if (typeFilter === "key" && !it.is_key) return false
+    if (typeFilter === "new" && !it.is_new) return false
+    if (search.trim() && ![it.sku, it.category, it.vendor].some(v => (v ?? "").toLowerCase().includes(search.trim().toLowerCase()))) return false
+    return true
+  })
 
   const saveNote = async (sku: string) => {
     setSavingNote(true)
@@ -635,22 +742,41 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-black text-slate-800">SKU Gross Margin — quét toàn hệ thống</span>
-            <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase"><ShieldCheck className="w-2.5 h-2.5" />Auto · mọi SKU</span>
+            <span className="flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide"><ShieldCheck className="w-2.5 h-2.5" />Auto · mọi SKU</span>
           </div>
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm SKU / category / vendor…"
-              className="pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 w-52" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as any)}
+              className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="all">Mọi loại</option>
+              <option value="key">Chỉ Trọng điểm</option>
+              <option value="new">Chỉ Mới</option>
+            </select>
+            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+              className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 max-w-[140px]">
+              <option value="all">Mọi category</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}
+              className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-500 max-w-[140px]">
+              <option value="all">Mọi vendor</option>
+              {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-300 absolute left-2 top-1/2 -translate-y-1/2" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm SKU…"
+                className="pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 w-36" />
+            </div>
           </div>
         </div>
         <div className="flex items-baseline gap-2">
-          <span className={cn("text-3xl font-black", loading ? "text-slate-300" : wd === null ? "text-slate-300" : wd >= targetDelta ? "text-emerald-600" : wd >= 0 ? "text-[#003B95]" : "text-amber-600")}>
+          <span className={cn("text-3xl font-black tabular-nums", loading ? "text-slate-300" : wd === null ? "text-slate-300" : wd >= targetDelta ? "text-emerald-600" : wd >= 0 ? "text-brand-600" : "text-amber-600")}>
             {loading ? "…" : wd !== null ? `${wd >= 0 ? "+" : ""}${wd.toFixed(2)}%` : "—"}
           </span>
           <span className="text-slate-400 text-sm font-bold">weighted, {data ? `${data.scored_count} SKU trọng điểm/mới tính KPI` : "…"}</span>
         </div>
         <div className="text-[11px] text-slate-400 mt-0.5">
           Target: +{targetDelta}% · {data ? `${data.key_count} SKU top ${data.key_threshold_pct}% doanh thu · ${data.new_count} SKU mới quý này · ${items.length} SKU có phát sinh` : "…"}
+          {filtered.length !== items.length && ` — đang lọc còn ${filtered.length} SKU`}
         </div>
         <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
           Tự quét TOÀN BỘ SKU có đơn trong quý (không cần gắn tay) — so GM% quý này vs quý trước cho từng SKU.
@@ -670,11 +796,11 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
             { key: "sku", label: "SKU", render: it => (
               <div className="flex items-center gap-1 flex-wrap">
                 <span className="font-black text-slate-800">{it.sku}</span>
-                {it.is_key && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Key</span>}
-                {it.is_new && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 uppercase">Mới</span>}
+                {it.is_key && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-brand-50 text-brand-600 uppercase">Key</span>}
+                {it.is_new && <span className="text-[8px] font-black px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase">Mới</span>}
               </div>
             ) },
-            { key: "cat", label: "Category / Vendor", render: it => <span className="text-slate-500">{it.category ?? "—"} · {it.vendor ?? "—"}</span> },
+            { key: "vendor", label: "Vendor", render: it => <span className="text-slate-500">{it.vendor ?? "—"}</span> },
             { key: "rev_cur", label: "Rev quý này", align: "right", render: it => fck(it.rev_cur) },
             { key: "gm_cur", label: "GM% quý này", align: "right", render: it => it.rev_cur > 0 ? pct(it.gm_pct_cur) : "—" },
             { key: "rev_prev", label: "Rev quý trước", align: "right", render: it => fck(it.rev_prev) },
@@ -696,7 +822,7 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
               return (
                 <div className="flex items-center gap-1">
                   <button disabled={locked} onClick={() => { setEditingSku(it.sku); setNoteDraft(n?.note ?? "") }}
-                    className={cn("text-left hover:text-blue-600 disabled:hover:text-slate-400 truncate max-w-[140px]", n?.note ? "text-slate-600" : "text-slate-300 italic")}>
+                    className={cn("text-left hover:text-brand-600 disabled:hover:text-slate-400 truncate max-w-[140px]", n?.note ? "text-slate-600" : "text-slate-300 italic")}>
                     {n?.note || (locked ? "—" : "+ thêm ghi chú")}
                   </button>
                   {n?.note && !locked && (
@@ -720,6 +846,9 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<{ scanned: number; classified: number; inserted: number; not_matched: number; backlog_remaining: number; skipped?: string } | null>(null)
+  const [scanErr, setScanErr] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/analytics/my-metrics/lark-config").then(r => r.ok ? r.json() : null).then(d => {
@@ -736,6 +865,15 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
     setSaving(false)
     if (!r.ok) { const j = await r.json(); setErr(j.error ?? "Lỗi lưu"); return }
     onClose()
+  }
+
+  const scanNow = async () => {
+    setScanning(true); setScanErr(null); setScanResult(null)
+    const r = await fetch("/api/analytics/my-metrics/lark-config/scan-now", { method: "POST" })
+    const j = await r.json()
+    setScanning(false)
+    if (!r.ok) { setScanErr(j.error ?? "Lỗi quét"); return }
+    setScanResult(j)
   }
 
   return (
@@ -756,15 +894,37 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
               <label className="text-[11px] font-bold text-slate-500 uppercase">Chat ID group Lark</label>
               <input value={cfg.chat_id} onChange={e => setCfg(p => ({ ...p, chat_id: e.target.value }))}
                 placeholder="oc_xxxxxxxxxxxxx"
-                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-brand-500" />
               <p className="text-[10px] text-slate-400 mt-1">Group Sales/PIC nhắn yêu cầu sản phẩm / hỏi giá NCC. Bot quét thread trong group này mỗi vài giờ.</p>
             </div>
             <div>
               <label className="text-[11px] font-bold text-slate-500 uppercase">Quét ngược N ngày</label>
               <input type="number" min={1} value={cfg.days_back} onChange={e => setCfg(p => ({ ...p, days_back: parseInt(e.target.value) || 3 }))}
-                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="border-t border-slate-100 pt-3">
+              <button onClick={scanNow} disabled={scanning || !cfg.chat_id}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50">
+                <Sparkles className="w-3.5 h-3.5" /> {scanning ? "Đang quét (có thể mất 30-60s)…" : "Quét ngay để test"}
+              </button>
+              {!cfg.chat_id && <p className="text-[10px] text-slate-400 mt-1 text-center">Nhập Chat ID trước đã.</p>}
+              {scanErr && <p className="text-[11px] text-red-600 font-bold mt-2">{scanErr}</p>}
+              {scanResult && (
+                scanResult.skipped
+                  ? <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {scanResult.skipped}</p>
+                  : (
+                    <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
+                      <div>Đã quét <strong className="tabular-nums">{scanResult.scanned}</strong> thread có reply trong cửa sổ {cfg.days_back} ngày.</div>
+                      <div>Phân loại lần này: <strong className="tabular-nums">{scanResult.classified}</strong> thread mới.</div>
+                      <div>→ <strong className="text-emerald-600 tabular-nums">{scanResult.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{scanResult.not_matched}</strong> không khớp.</div>
+                      {scanResult.backlog_remaining > 0 && (
+                        <div className="text-amber-600">Còn <strong className="tabular-nums">{scanResult.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa hoặc đợi cron ngày mai.</div>
+                      )}
+                    </div>
+                  )
+              )}
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
               <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
               <button onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">
                 {saving ? "Đang lưu…" : "Lưu"}
@@ -934,23 +1094,29 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             <Gauge className="w-8 h-8 text-white/70" />
             <div>
               <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Weighted OKR Score — {qLabel}</p>
-              <p className="text-4xl font-black">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
+              <p className="text-4xl font-black tabular-nums">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
             </div>
           </div>
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-3 text-center">
+          <div className="flex flex-wrap gap-2.5 text-center flex-1">
             {[
               ["SLA", achSla, WEIGHTS.sla],
               ["Vendor Speed", achVendor, WEIGHTS.vendor_speed],
               ["SKU GM", achSku, WEIGHTS.sku_gm],
               ["%3HK", achHk3, WEIGHTS.hk3],
               ["Bé Gấu", achBegau, WEIGHTS.begau],
-            ].map(([label, ach, w]) => (
-              <div key={label as string} className="bg-white/10 rounded-xl px-2 py-2 min-w-[64px]">
-                <p className="text-[9px] font-bold text-white/50 uppercase">{label}</p>
-                <p className="text-sm font-black">{(ach as number).toFixed(0)}%</p>
-                <p className="text-[9px] text-white/40">w={w}%</p>
-              </div>
-            ))}
+            ].map(([label, ach, w]) => {
+              const achNum = ach as number
+              const tier = achNum >= 100 ? "bg-emerald-400" : achNum >= 75 ? "bg-white/60" : "bg-amber-400"
+              return (
+                <div key={label as string} className="bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative"
+                  style={{ flexGrow: w as number, flexBasis: `${(w as number) * 2}px` }}>
+                  <p className="text-[9px] font-bold text-white/50 uppercase truncate">{label}</p>
+                  <p className="text-lg font-black tabular-nums">{achNum.toFixed(0)}%</p>
+                  <p className="text-[9px] text-white/40">w={w}%</p>
+                  <div className={cn("absolute bottom-0 left-0 h-[3px]", tier)} style={{ width: `${Math.min(achNum, 100)}%` }} />
+                </div>
+              )
+            })}
           </div>
         </div>
         <p className="text-[10px] text-white/40 mt-3 leading-relaxed">
@@ -962,20 +1128,19 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
       </div>
 
       {/* Data freshness / trust bar */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-[11px] text-amber-700 font-medium space-y-1">
-        <div>📌 <strong>Baseline T8/2026:</strong> SLA = {BASELINE_NOTE.sla} · Vendor Speed = {BASELINE_NOTE.vendor_speed} · SKU GM = {OKR_GM_BASELINE_DISPLAY}% · Datapool = {auto?.hk3.baseline ?? "…"}% · Tasks = {BASELINE_NOTE.begau_weekly}</div>
-        {auto && <div className="text-amber-500">🕐 {auto.data_cutoff} · Trang tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</div>}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] text-slate-500 font-medium space-y-1">
+        <div>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA = {BASELINE_NOTE.sla} · Vendor Speed = {BASELINE_NOTE.vendor_speed} · SKU GM = {OKR_GM_BASELINE_DISPLAY}% · Datapool = {auto?.hk3.baseline ?? "…"}% · Tasks = {BASELINE_NOTE.begau_weekly}</div>
+        {auto && <div className="text-slate-400">🕐 {auto.data_cutoff} · Trang tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</div>}
         <div className="flex flex-wrap gap-3 pt-1">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Auto = tính thẳng từ DB, không sửa được</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />AI-detected · chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" />Manual/AI đã duyệt = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt)</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" />Context = số tham khảo, KHÔNG phải KPI chính thức</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Verified = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt)</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />Auto/Context = tính thẳng từ DB hoặc chỉ tham khảo — không phải case cần duyệt</span>
         </div>
       </div>
 
       {/* Target edit modal */}
       {editTarget && (
-        <div className="bg-white border border-blue-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-brand-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <p className="text-sm font-black text-slate-900">Sửa Target — {qLabel}</p>
@@ -1011,7 +1176,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                     value={(draftT[field] as number) ?? ""}
                     onChange={e => setDraftT(p => ({ ...p, [field]: parseFloat(e.target.value) || 0 }))}
                     placeholder="0"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                   <span className="text-xs text-slate-400 shrink-0">{unit}</span>
                 </div>
@@ -1050,16 +1215,16 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         <div className="space-y-4">
           <SkuScanSection quarter={qLabel} targetDelta={targets.gm_delta} onSummary={setSkuDelta} />
 
-          {/* 3HK % — auto */}
+          {/* Datapool Rev (3HK + BC) % — auto */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-black text-slate-800">%3HK + Other Datapool Vendor</span>
-                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Auto</span>
+                <span className="text-sm font-black text-slate-800">%Datapool Rev (3HK + BC Datapool)</span>
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className={cn("text-3xl font-black", loading ? "text-slate-300" : hk3Pct >= targets.hk3_pct ? "text-emerald-600" : hk3Pct >= targets.hk3_pct*0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                <span className={cn("text-3xl font-black tabular-nums", loading ? "text-slate-300" : hk3Pct >= targets.hk3_pct ? "text-emerald-600" : hk3Pct >= targets.hk3_pct*0.75 ? "text-brand-600" : "text-amber-600")}>
                   {loading ? "…" : pct(hk3Pct)}
                 </span>
                 <span className="text-slate-400 text-sm font-bold">of revenue</span>
@@ -1070,9 +1235,11 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             </div>
             <div className="px-5 py-3 space-y-2">
               <ProgressBar actual={hk3Pct} target={targets.hk3_pct} />
-              <div className="flex gap-3 text-[11px] text-slate-500">
-                <span>3HK: <strong className="text-slate-700">{fck(auto?.hk3.hk3_rev ?? 0)}</strong></span>
-                <span>Total: <strong className="text-slate-700">{fck(auto?.hk3.total_rev ?? 0)}</strong></span>
+              <div className="flex gap-4 text-[11px] text-slate-500">
+                <span>Datapool Rev (tổng): <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.hk3_rev ?? 0)}</strong></span>
+                <span className="pl-3 border-l border-slate-200">↳ 3HK Rev: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.hk3_only_rev ?? 0)}</strong></span>
+                <span>↳ BC Rev: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.bc_only_rev ?? 0)}</strong></span>
+                <span>Total Rev công ty: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.total_rev ?? 0)}</strong></span>
               </div>
               <DataTable<MonthStat>
                 rows={hk3TableRows}
@@ -1080,24 +1247,27 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 emptyLabel="Chưa có dữ liệu tháng nào."
                 columns={[
                   { key: "m", label: "Tháng", render: m => m.month },
-                  { key: "pct", label: "%3HK", align: "right", render: m => {
-                    const mp = m.total_rev > 0 ? (m.hk3_rev / m.total_rev) * 100 : 0
+                  { key: "pct", label: "%Datapool", align: "right", render: m => {
+                    const mp = m.total_rev > 0 ? ((m.hk3_rev + m.bc_rev) / m.total_rev) * 100 : 0
                     return <span className="font-black text-slate-700">{pct(mp)}</span>
                   } },
                   { key: "hk3", label: "3HK Rev", align: "right", render: m => fck(m.hk3_rev) },
+                  { key: "bc", label: "BC Rev", align: "right", render: m => fck(m.bc_rev) },
                   { key: "total", label: "Total Rev", align: "right", render: m => fck(m.total_rev) },
                 ]}
               />
               <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue"
-                filter="REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'" />
+                filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
             </div>
           </div>
+
+          <DatapoolDetailTable quarter={qLabel} />
 
           {/* SKU GM — company blended, context only (KHÔNG phải KPI chính) */}
           <div className="bg-slate-50 rounded-2xl border border-slate-200 px-5 py-4">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-black text-slate-600">SKU Gross Margin — blended toàn công ty</span>
-              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">Context, không phải KPI chính</span>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Context, không phải KPI chính</span>
             </div>
             <div className="flex items-baseline gap-2">
               <span className={cn("text-xl font-black", gmDelta >= 0 ? "text-slate-700" : "text-amber-600")}>
@@ -1121,12 +1291,12 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 <div className="flex items-center gap-2 mb-2">
                   <Bot className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-black text-slate-800">Tasks Completed via Bé Gấu</span>
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">Auto</span>
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className={cn("text-4xl font-black", loading ? "text-slate-300" :
+                  <span className={cn("text-4xl font-black tabular-nums", loading ? "text-slate-300" :
                     (auto?.begau.total ?? 0) >= targets.begau ? "text-emerald-600" :
-                    (auto?.begau.total ?? 0) >= targets.begau*0.75 ? "text-[#003B95]" : "text-slate-900")}>
+                    (auto?.begau.total ?? 0) >= targets.begau*0.75 ? "text-brand-600" : "text-slate-900")}>
                     {loading ? "…" : (auto?.begau.total ?? 0).toLocaleString()}
                   </span>
                   <span className="text-xl text-slate-400 font-bold">/ {targets.begau.toLocaleString()}</span>
@@ -1176,7 +1346,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
 
             <div className="mt-4 border-t border-slate-100 pt-4">
               <button onClick={() => setShowConvs(v => !v)}
-                className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-blue-700 transition-colors">
+                className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-brand-600 transition-colors">
                 <MessageSquare className="w-4 h-4" />
                 {showConvs ? "Ẩn" : "Xem"} danh sách cuộc hội thoại được tính ({convTotal > 0 ? convTotal : "…"})
                 {showConvs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1193,8 +1363,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase",
-                              c.channel === "Lark" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600")}>
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-500 tracking-wide">
                               {c.channel}
                             </span>
                             <span className="text-[10px] text-slate-400">{c.user}</span>
@@ -1210,8 +1379,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">User</p>
                             <p className="text-xs text-slate-700">{c.user_message}</p>
                           </div>
-                          <div className="bg-blue-50 rounded-lg p-2.5">
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-1">Bé Gấu</p>
+                          <div className="bg-brand-50 rounded-lg p-2.5">
+                            <p className="text-[10px] font-black text-brand-600 uppercase tracking-wider mb-1">Bé Gấu</p>
                             <p className="text-xs text-slate-700 whitespace-pre-wrap">{c.ai_response}{c.ai_response?.length >= 400 ? "…" : ""}</p>
                           </div>
                         </div>
