@@ -121,7 +121,7 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
   // phân loại Strategic/Non-Strategic (groupCaseSQL) để cộng đúng nhóm.
   const custRevRows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
-       SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
+       SELECT sku, order_source_code, customer_code, order_code, ${source.dateCol}, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
        FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
      )
      SELECT ${groupCaseSQL} as "group", TRIM(f.customer_code) as customer_code,
