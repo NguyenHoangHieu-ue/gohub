@@ -5,6 +5,7 @@ import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 const WRITE_ROLES_DELETE = ["admin", "creator"]
 const WRITE_ROLES_POST   = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
@@ -70,6 +71,11 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [id])
+    // Nhiều route (b2b/kpis|performance|trend, channels/kpis|performance, bod-summary|group-margin|
+    // channel-performance, monthly-kpis, all-time-performance) cache KẾT QUẢ ĐÃ TÍNH SẴN với cost này
+    // bên trong — xoá thẳng ID không tự làm số cũ trên các tab đó tươi lại (chỉ Quarter Report luôn fresh
+    // vì fetchCustomerCosts nằm NGOÀI cachedQuery ở 2 route đó). Flush toàn bộ để mọi tab đồng bộ ngay.
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true, deleted: id })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -191,6 +197,12 @@ export async function POST(req: NextRequest) {
       saved++
     }
 
+    // Root cause s169 (2026-08-28): route này TRƯỚC KHÔNG flush cache nào — trong khi channel-costs/
+    // channel-group-costs (Supabase) đã flushAnalyticsCache() từ lâu. Kết quả: sửa CH.Cost per-customer
+    // (Turso, qua modal "Sửa chi tiết" ở Quarter Report) không phản ánh ngay ở B2B Performance/Channels/
+    // BOD/Dashboard/All-Time — các tab đó cache CẢ khối kết quả đã tính (gồm cost) tới 12h, chỉ Quarter
+    // Report tự tươi vì code ở đó cố ý đặt fetchCustomerCosts NGOÀI cachedQuery. Flush đồng bộ mọi nơi.
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
     console.error("[b2b-customer-costs POST]", e.message)

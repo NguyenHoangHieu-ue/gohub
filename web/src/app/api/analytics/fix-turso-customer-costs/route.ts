@@ -6,6 +6,7 @@ import { tursoQuery } from "@/lib/turso"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { canWrite } from "@/lib/writable-tabs"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -28,6 +29,7 @@ export async function DELETE(req: NextRequest) {
     await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [r.id])
     deleted.push(r.id)
   }
+  await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({ deleted: deleted.length, ids: deleted })
 }
 
@@ -141,6 +143,7 @@ export async function GET(req: NextRequest) {
       }
       if (created.length > 0) autofixed.push({ from: s.customer_code, to: realCode, created })
     }
+    if (autofixed.length > 0) await flushAnalyticsCache().catch(() => {})
   }
 
   return NextResponse.json({
@@ -212,6 +215,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (created.length > 0) await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({
     created, skipped,
     note: "Virtual records giữ nguyên. Records mới với real_code đã được tạo.",

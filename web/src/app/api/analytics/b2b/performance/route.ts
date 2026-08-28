@@ -132,6 +132,11 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // Tổng revenue TOÀN BỘ (không cap) — dùng làm mẫu số chia group cost theo tỷ trọng. Nếu tính từ
+    // finalRows (đã cap 500 dòng) thì khi >500 KH/kênh trong kỳ, group cost bị chia sai tỷ lệ (mẫu số
+    // hụt) → tổng CM1 lệch nhẹ so với b2b/kpis (không cap, SQL SUM trực tiếp).
+    const totalRevenueAllRows = Array.from(aggregated.values()).reduce((s, r) => s + r.revenue, 0)
+
     let finalRows = Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 500)
 
     if (groupBy === "destination") {
@@ -153,7 +158,7 @@ export async function GET(req: NextRequest) {
     // Group-level B2B costs — phân bổ theo tỷ lệ revenue từng channel
     const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
     const b2bGroupCosts = groupCosts.filter(c => c.group_name === "B2B")
-    const totalB2BRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
+    const totalB2BRevenue = totalRevenueAllRows
     // Mỗi channel nhận phần group cost tỷ lệ với revenue (revenue share * total group cost)
     const groupCostPerChannel: Record<string, number> = {}
     for (const r of finalRows) {
