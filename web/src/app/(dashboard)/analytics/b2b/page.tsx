@@ -148,7 +148,7 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${includeShip ? "&includeShip=1" : ""}${includeInternalOps ? "&includeInternalOps=1" : ""}${includeOpsCustomers ? "&includeOpsCustomers=1" : ""}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),

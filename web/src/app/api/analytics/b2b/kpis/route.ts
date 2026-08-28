@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
   getMonthsInRange, getDaysInRange, getDaysInMonth,
-  shipFilter, internalOpsFilter, excludeOpsByCode,
+  shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     // excludeOpsByCode: dùng subquery (không cần JOIN dim_customer) — nhất quán với b2b/performance
-    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2b-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
+    const key = `b2b-kpis2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [main, custRevRows] = await Promise.all([
       queryAnalytics<Record<string, string>>(

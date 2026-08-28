@@ -7,7 +7,7 @@ import {
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
   getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
-  shipFilter, internalOpsFilter, excludeOpsByCode,
+  shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
-    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     // v4: thêm excludedCustomers hash (v3 thiếu → đổi config không invalidate cache)
     const exclHash = excludedCustomers.length ? excludedCustomers.slice().sort().join(",") : ""
-    const key = `b2b-perf4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
+    const key = `b2b-perf5:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
