@@ -192,6 +192,15 @@ UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
 ## § Subtab Squad Progress (s155 — 2026-08-19)
 
+> **Fix s169 (2026-08-28) — flat view (khi bật filter/search) hiện cột "GP PR" luôn = 0.** KHÔNG phải bug
+> cache — route `squad-progress` không hề cache (`no cachedQuery`, luôn query gohub_dw live). Bảng có 2
+> chế độ hiển thị CÙNG data: per-squad (mặc định) và flat view (khi có filter). Cột thứ 4 flat view label
+> "GP PR" đọc field `c.gp_pr` — field KHÔNG TỒN TẠI trong response API (chỉ có
+> `revenue_pr`/`cm1_pr`/`hk3_pr`) → luôn `undefined` → `formatCompactNumber` hiện "0" cho mọi KH mỗi khi
+> có filter. View per-squad (không filter) cùng vị trí cột label "CM1 PR" đọc đúng `c.cm1_pr` (có giá trị
+> thật) — đây là lý do "không filter thì số bình thường, có filter thì số khác/sai". Fix: đổi flat view
+> dùng đúng field `c.cm1_pr` + label "CM1 PR", khớp 100% view per-squad.
+
 Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã về target pro-rata chưa.
 
 **Squad = 1 nhóm sale PIC.** Map customer vào squad qua `dim_customer.sales_pic_code`.
