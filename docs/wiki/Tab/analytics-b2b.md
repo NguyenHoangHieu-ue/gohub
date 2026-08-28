@@ -74,6 +74,15 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s168b (2026-08-28) — sub-channel CM1 breakdown cao hơn CM1 hàng cha**: click "View details" (expand
+  1 KH trong B2B Tier Performance) trước hiện `sub_channels.gpm2` = margin thô, không trừ chCost Turso
+  (per-customer) lẫn group cost share vốn đã trừ ở CM1 hàng cha (chỉ trừ cost khớp ĐÚNG TÊN sub-channel trong
+  cost settings — gần như không bao giờ khớp cho B2B customer row) → tổng sub-channel CAO HƠN CM1 hàng cha (báo
+  cáo thật: Momo cm1=215tr nhưng sub-channel cộng lại 437tr). Fix: track riêng cost đã trừ ĐÚNG cho 1 sub-channel
+  cụ thể, phần còn lại (group cost + chCost Turso + cost "total"-mode) phân bổ theo tỷ trọng revenue giữa các
+  sub-channel → Σ sub_channels.gpm2 luôn khớp CM1 hàng cha. Cùng bug (chưa lộ, do `partner_tiers` rỗng) cũng có
+  ở `b2b/strategic-performance` (Strategic Partners Performance) — vá luôn cùng lúc. Cache key: `b2b-perf6`,
+  `b2b-strategic2`.
 - **Fix s168 (2026-08-28) — thiếu lọc KH INACTIVE**: `b2b/kpis`, `b2b/performance`, `b2b/trend` KHÔNG lọc khách
   hàng có `price_list_name` chứa "INACTIVE" (vd "[INACTIVE] Sponsor") — trong khi `quarterly-report`/
   `quarterly-b2b-customers`/`squad-progress` đã lọc từ lâu. Bất cứ KH INACTIVE nào phát sinh trong kỳ → Revenue/
