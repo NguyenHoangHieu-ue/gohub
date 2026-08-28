@@ -1350,7 +1350,7 @@ function QuarterlyContent() {
             {/* Header */}
             <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Squad Progress — {selQ} {selYear}</h2>
+                <h2 className="text-base font-bold text-slate-900">Squad Progress — {selQ} {selYear} <span className="text-slate-400 font-semibold">· {companyCode === "ALL" ? "Toàn công ty" : companyCode}</span></h2>
                 {squadData && <p className="text-xs text-slate-400 mt-0.5">{squadData.elapsed_days}/{squadData.quarter_days} ngày · Pro-rata ×{squadData.pr_factor?.toFixed(2)}</p>}
               </div>
               <div className="flex items-center gap-2">
