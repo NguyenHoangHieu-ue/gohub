@@ -200,6 +200,15 @@ UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 > có filter. View per-squad (không filter) cùng vị trí cột label "CM1 PR" đọc đúng `c.cm1_pr` (có giá trị
 > thật) — đây là lý do "không filter thì số bình thường, có filter thì số khác/sai". Fix: đổi flat view
 > dùng đúng field `c.cm1_pr` + label "CM1 PR", khớp 100% view per-squad.
+> **Bug thứ 2 cùng họ, phát hiện ngay sau đó**: cột "%TGT CM1" ở flat view sort-key VÀ data đều bind
+> `c.cm1_pct` (CM1% trên doanh thu — số thực tế, KHÔNG liên quan target) thay vì `c.cm1_tgt_pct` (% đạt so
+> target — đúng ý nghĩa "%TGT", per-squad view đã dùng đúng field này). 2 field giá trị khác hẳn nhau (vd
+> cm1_pct luôn dưới 100% với biên lợi nhuận thường thấy, cm1_tgt_pct có thể vượt 100% khi đã đạt target) →
+> bật/tắt filter thấy cột này nhảy số khác hẳn cho CÙNG 1 khách hàng. Fix: đổi sang `c.cm1_tgt_pct`.
+> **Bài học chung**: flat view (`quarterly/page.tsx`, khoảng dòng 1540-1590) được viết tay riêng, KHÔNG tái
+> dùng JSX của per-squad view (dòng ~1645-1695) dù hiển thị cùng field — 2 bug field-mismatch liên tiếp là
+> hệ quả trực tiếp của việc trùng lặp code thay vì share component. Nếu sau này còn báo "filter ra số khác"
+> ở bảng này, ưu tiên diff 2 khối JSX đó trước khi nghi ngờ cache/backend.
 
 Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã về target pro-rata chưa.
 
