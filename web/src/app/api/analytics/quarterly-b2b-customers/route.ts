@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
-import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash, QB2B_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
 
 // Route nặng (per-customer B2B + Turso costs) → cho 60s (khớp vercel.json) tránh 504 treo FE.
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   // v8: cộng ước tính T9 CH.Cost (dùng T8 record làm fallback)
-  const rawCacheKey = `qb2b_raw_v8:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
