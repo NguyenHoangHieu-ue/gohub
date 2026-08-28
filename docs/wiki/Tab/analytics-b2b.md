@@ -74,6 +74,27 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s169 (2026-08-28) — sửa cost Quarter Report không cập nhật sang B2B Performance (+2 bug CM1
+  còn sót sau audit toàn tab)**:
+  - **Root cause chính**: `/api/analytics/b2b-customer-costs` (POST+DELETE, nơi Quarter Report "Sửa chi
+    tiết" ghi CH.Cost per-customer vào Turso) KHÔNG flush cache — trong khi `channel-costs`/
+    `channel-group-costs` (Supabase) đã `flushAnalyticsCache()` từ lâu. `b2b/kpis`, `b2b/performance`,
+    `b2b/trend`, `channels/kpis`, `channels/performance`, `bod-summary`/`bod-group-margin`/
+    `bod-channel-performance`, `monthly-kpis`, `all-time-performance` đều cache NGUYÊN khối kết quả đã
+    tính (gồm cost) tới 12h — chỉ `quarterly-report`/`quarterly-b2b-customers` tự tươi (cố ý đặt
+    `fetchCustomerCosts` NGOÀI `cachedQuery`). Sửa cost xong, mọi tab kể trên giữ số CŨ tới hết TTL. Fix:
+    `flushAnalyticsCache()` sau khi lưu/xoá (3 route ghi: `b2b-customer-costs`, admin repair
+    `fix-turso-customer-costs`). Nhân tiện sửa `quarterly-cache-flush` (nút "Tải lại mới") — prefix list
+    cứng `qreport_raw_v7:`...`v1:`/`qb2b_raw_v5:`...`v2:` đã lỗi thời so với cache key thật (v9/v8) →
+    đổi sang `flushAnalyticsCache()` cho khỏi lệch version về sau.
+  - **Bug 1**: `b2b/performance` — mẫu số chia group cost theo tỷ trọng revenue tính từ `finalRows` đã
+    cap `.slice(0,500)` → >500 KH/kênh trong kỳ thì mẫu số hụt, CM1 tổng lệch nhẹ so với `b2b/kpis` (SQL
+    SUM không cap). Đổi mẫu số sang tổng doanh thu KHÔNG cap.
+  - **Bug 2**: `b2b/page.tsx` bảng "B2B Tier Performance" — (a) `getFilteredOtherTiers()`: lọc bớt
+    sub-channel trùng tên đối tác Strategic thì tính lại `revenue/margin/gpm2` nhưng field `cm1` không
+    theo → lệch nhau trên cùng row (chưa lộ vì `partner_tiers` rỗng); (b) merge 2 backend row cùng TÊN
+    hiển thị khác `customer_code` (vd nhiều mã lỗi/rỗng gộp "Chưa xác định" — tình huống THẬT hay gặp)
+    chỉ cộng `gpm2`, không cộng `cm1`/`ch_cost` → CM1 hiển thị chỉ tính row đầu bị merge.
 - **Fix s168b (2026-08-28) — sub-channel CM1 breakdown cao hơn CM1 hàng cha**: click "View details" (expand
   1 KH trong B2B Tier Performance) trước hiện `sub_channels.gpm2` = margin thô, không trừ chCost Turso
   (per-customer) lẫn group cost share vốn đã trừ ở CM1 hàng cha (chỉ trừ cost khớp ĐÚNG TÊN sub-channel trong
