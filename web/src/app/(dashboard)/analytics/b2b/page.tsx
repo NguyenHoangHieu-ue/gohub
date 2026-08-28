@@ -148,7 +148,7 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${includeShip ? "&includeShip=1" : ""}${includeInternalOps ? "&includeInternalOps=1" : ""}${includeOpsCustomers ? "&includeOpsCustomers=1" : ""}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
@@ -248,8 +248,12 @@ export default function B2BPerformance() {
         const rev = filteredSubs.reduce((a, b) => a + b.revenue, 0)
         const mar = filteredSubs.reduce((a, b) => a + b.margin, 0)
         const uni = filteredSubs.reduce((a, b) => a + (b.units || 0), 0)
+        // sub.gpm2 (từ backend, sau fix s168b) đã là CM1 đúng của từng sub-channel (đã trừ chCost/group
+        // cost phân bổ theo tỷ trọng) → cộng lại ra CM1 đúng cho phần sub-channel còn giữ.
         const gp2 = filteredSubs.reduce((a, b) => a + (b.gpm2 || 0), 0)
-        return { ...p, revenue: rev, margin: mar, units: uni, gpm2: gp2, sub_channels: filteredSubs }
+        // Đồng bộ field `cm1` (bảng B2B Tier Performance đọc `row.cm1 ?? row.gpm2`) — trước đây chỉ đổi
+        // gpm2, cm1 vẫn giữ giá trị CŨ (chưa lọc sub-channel) → 2 field lệch nhau trên cùng 1 row.
+        return { ...p, revenue: rev, margin: mar, units: uni, gpm2: gp2, cm1: gp2, sub_channels: filteredSubs }
       }
       return p
     }).filter(p => {
@@ -270,6 +274,13 @@ export default function B2BPerformance() {
       const existing = nonStrategicMap.get(key)
       if (existing) {
         existing.revenue += (p.revenue || 0); existing.margin += (p.margin || 0); existing.units += (p.units || 0); existing.gpm2 += (p.gpm2 || 0)
+        // 2 backend row cùng TÊN hiển thị nhưng customer_code khác nhau (vd nhiều mã trống/hỏng đều gộp
+        // hiện "Chưa xác định") bị merge ở đây theo `name` — trước chỉ cộng gpm2, KHÔNG cộng cm1/ch_cost
+        // → cm1 chỉ giữ giá trị của row ĐẦU TIÊN, thiếu phần đóng góp của các row bị merge sau, trong khi
+        // bảng đọc ưu tiên `row.cm1 ?? row.gpm2` (cm1 tồn tại nên gpm2 đã-cộng-đủ bị bỏ qua) → CM1 hiển
+        // thị thấp hơn thực tế cho đúng những dòng bị merge (dòng "Chưa xác định" hay gặp nhất).
+        existing.cm1 = (existing.cm1 || 0) + (p.cm1 ?? p.gpm2 ?? 0)
+        existing.ch_cost = (existing.ch_cost || 0) + (p.ch_cost || 0)
         if (p.sub_channels && p.sub_channels.length > 0) {
           if (!existing.sub_channels) existing.sub_channels = []
           p.sub_channels.forEach(sub => {

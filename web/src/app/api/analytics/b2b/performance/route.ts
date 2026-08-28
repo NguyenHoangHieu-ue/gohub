@@ -7,7 +7,7 @@ import {
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
   getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
-  shipFilter, internalOpsFilter, excludeOpsByCode,
+  shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
-    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     // v4: thêm excludedCustomers hash (v3 thiếu → đổi config không invalidate cache)
     const exclHash = excludedCustomers.length ? excludedCustomers.slice().sort().join(",") : ""
-    const key = `b2b-perf4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
+    const key = `b2b-perf6:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
@@ -132,6 +132,11 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // Tổng revenue TOÀN BỘ (không cap) — dùng làm mẫu số chia group cost theo tỷ trọng. Nếu tính từ
+    // finalRows (đã cap 500 dòng) thì khi >500 KH/kênh trong kỳ, group cost bị chia sai tỷ lệ (mẫu số
+    // hụt) → tổng CM1 lệch nhẹ so với b2b/kpis (không cap, SQL SUM trực tiếp).
+    const totalRevenueAllRows = Array.from(aggregated.values()).reduce((s, r) => s + r.revenue, 0)
+
     let finalRows = Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 500)
 
     if (groupBy === "destination") {
@@ -153,7 +158,7 @@ export async function GET(req: NextRequest) {
     // Group-level B2B costs — phân bổ theo tỷ lệ revenue từng channel
     const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
     const b2bGroupCosts = groupCosts.filter(c => c.group_name === "B2B")
-    const totalB2BRevenue = finalRows.reduce((s, r) => s + r.revenue, 0)
+    const totalB2BRevenue = totalRevenueAllRows
     // Mỗi channel nhận phần group cost tỷ lệ với revenue (revenue share * total group cost)
     const groupCostPerChannel: Record<string, number> = {}
     for (const r of finalRows) {
@@ -185,6 +190,9 @@ export async function GET(req: NextRequest) {
       const margin = r.margin
       let gpm2 = margin
       const subChannelPerformance: Record<string, { revenue: number; margin: number; units: number; gpm2: number }> = {}
+      // Cost đã trừ TRỰC TIẾP cho đúng 1 sub-channel (mode="subchannels") — giữ riêng, KHÔNG gộp vào phần
+      // phân bổ theo tỷ trọng revenue bên dưới (tránh trừ 2 lần / trừ sai chỗ).
+      const subChannelSpecificDeduction: Record<string, number> = {}
 
       Object.values(r.sub_channel_breakdown).forEach(breakdown => {
         Object.entries(breakdown).forEach(([subName, metrics]) => {
@@ -213,6 +221,7 @@ export async function GET(req: NextRequest) {
                 const amount = cv.type === "amount" ? (cv.value || 0) * subRatio : (subRev * (cv.value || 0)) / 100
                 gpm2 -= amount
                 if (subChannelPerformance[subName]) subChannelPerformance[subName].gpm2 -= amount
+                subChannelSpecificDeduction[subName] = (subChannelSpecificDeduction[subName] || 0) + amount
               }
             })
           })
@@ -230,12 +239,6 @@ export async function GET(req: NextRequest) {
 
       // Cộng thêm phần group cost theo revenue share
       gpm2 -= (groupCostPerChannel[r.name] || 0)
-
-      const sub_channels = Object.entries(subChannelPerformance).map(([name, m]) => ({
-        name, revenue: m.revenue, margin: m.margin, units: m.units, gpm2: m.gpm2,
-        margin_percent: m.revenue > 0 ? (m.margin / m.revenue) * 100 : 0,
-        gpm2_percent: m.revenue > 0 ? (m.gpm2 / m.revenue) * 100 : 0,
-      })).sort((a, b) => b.revenue - a.revenue)
 
       // ── Customer-level CH.Cost từ Turso (chỉ cho groupBy=customer) ─────────────
       // Pro-rata đúng: sum qua từng tháng × dayRatio (amount) hoặc × revenue thực (percent).
@@ -260,6 +263,25 @@ export async function GET(req: NextRequest) {
         }
       }
       const cm1 = gpm2 - chCost
+
+      // Sub-channel "CM1" (field gpm2, giữ tên cũ FE đang đọc) — trước đây chỉ trừ cost khớp TÊN kênh con
+      // (gần như không bao giờ khớp cho B2B customer rows) → sub_channels.gpm2 ≈ margin thô, KHÔNG trừ
+      // chCost Turso lẫn group cost share → click "View details" thấy tổng sub-channel CAO HƠN cm1 của
+      // hàng cha (report 2026-08-28: Momo cm1=215tr nhưng sub-channel cộng lại ra 437tr). Turso chCost +
+      // group cost là chi phí CHUNG của cả khách hàng (không tách theo sub-channel) → phần "chung" này
+      // phân bổ theo tỷ trọng revenue; phần đã trừ ĐÚNG cho 1 sub-channel cụ thể (mode="subchannels")
+      // giữ nguyên chỗ đó, không phân bổ lại. Đảm bảo Σ sub_channels.gpm2 === cm1 của hàng cha.
+      const totalSpecificDeduction = Object.values(subChannelSpecificDeduction).reduce((s, v) => s + v, 0)
+      const sharedDeduction = (margin - cm1) - totalSpecificDeduction  // group cost share + Turso chCost + "total"-mode channel cost
+      const sub_channels = Object.entries(subChannelPerformance).map(([name, m]) => {
+        const share = revenue !== 0 ? m.revenue / revenue : 0
+        const subCm1 = m.margin - (subChannelSpecificDeduction[name] || 0) - sharedDeduction * share
+        return {
+          name, revenue: m.revenue, margin: m.margin, units: m.units, gpm2: subCm1,
+          margin_percent: m.revenue > 0 ? (m.margin / m.revenue) * 100 : 0,
+          gpm2_percent: m.revenue > 0 ? (subCm1 / m.revenue) * 100 : 0,
+        }
+      }).sort((a, b) => b.revenue - a.revenue)
 
       return {
         name: r.name, channel: r.channel,

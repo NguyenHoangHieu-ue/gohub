@@ -74,6 +74,48 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s169 (2026-08-28) — sửa cost Quarter Report không cập nhật sang B2B Performance (+2 bug CM1
+  còn sót sau audit toàn tab)**:
+  - **Root cause chính**: `/api/analytics/b2b-customer-costs` (POST+DELETE, nơi Quarter Report "Sửa chi
+    tiết" ghi CH.Cost per-customer vào Turso) KHÔNG flush cache — trong khi `channel-costs`/
+    `channel-group-costs` (Supabase) đã `flushAnalyticsCache()` từ lâu. `b2b/kpis`, `b2b/performance`,
+    `b2b/trend`, `channels/kpis`, `channels/performance`, `bod-summary`/`bod-group-margin`/
+    `bod-channel-performance`, `monthly-kpis`, `all-time-performance` đều cache NGUYÊN khối kết quả đã
+    tính (gồm cost) tới 12h — chỉ `quarterly-report`/`quarterly-b2b-customers` tự tươi (cố ý đặt
+    `fetchCustomerCosts` NGOÀI `cachedQuery`). Sửa cost xong, mọi tab kể trên giữ số CŨ tới hết TTL. Fix:
+    `flushAnalyticsCache()` sau khi lưu/xoá (3 route ghi: `b2b-customer-costs`, admin repair
+    `fix-turso-customer-costs`). Nhân tiện sửa `quarterly-cache-flush` (nút "Tải lại mới") — prefix list
+    cứng `qreport_raw_v7:`...`v1:`/`qb2b_raw_v5:`...`v2:` đã lỗi thời so với cache key thật (v9/v8) →
+    đổi sang `flushAnalyticsCache()` cho khỏi lệch version về sau.
+  - **Bug 1**: `b2b/performance` — mẫu số chia group cost theo tỷ trọng revenue tính từ `finalRows` đã
+    cap `.slice(0,500)` → >500 KH/kênh trong kỳ thì mẫu số hụt, CM1 tổng lệch nhẹ so với `b2b/kpis` (SQL
+    SUM không cap). Đổi mẫu số sang tổng doanh thu KHÔNG cap.
+  - **Bug 2**: `b2b/page.tsx` bảng "B2B Tier Performance" — (a) `getFilteredOtherTiers()`: lọc bớt
+    sub-channel trùng tên đối tác Strategic thì tính lại `revenue/margin/gpm2` nhưng field `cm1` không
+    theo → lệch nhau trên cùng row (chưa lộ vì `partner_tiers` rỗng); (b) merge 2 backend row cùng TÊN
+    hiển thị khác `customer_code` (vd nhiều mã lỗi/rỗng gộp "Chưa xác định" — tình huống THẬT hay gặp)
+    chỉ cộng `gpm2`, không cộng `cm1`/`ch_cost` → CM1 hiển thị chỉ tính row đầu bị merge.
+- **Fix s168b (2026-08-28) — sub-channel CM1 breakdown cao hơn CM1 hàng cha**: click "View details" (expand
+  1 KH trong B2B Tier Performance) trước hiện `sub_channels.gpm2` = margin thô, không trừ chCost Turso
+  (per-customer) lẫn group cost share vốn đã trừ ở CM1 hàng cha (chỉ trừ cost khớp ĐÚNG TÊN sub-channel trong
+  cost settings — gần như không bao giờ khớp cho B2B customer row) → tổng sub-channel CAO HƠN CM1 hàng cha (báo
+  cáo thật: Momo cm1=215tr nhưng sub-channel cộng lại 437tr). Fix: track riêng cost đã trừ ĐÚNG cho 1 sub-channel
+  cụ thể, phần còn lại (group cost + chCost Turso + cost "total"-mode) phân bổ theo tỷ trọng revenue giữa các
+  sub-channel → Σ sub_channels.gpm2 luôn khớp CM1 hàng cha. Cùng bug (chưa lộ, do `partner_tiers` rỗng) cũng có
+  ở `b2b/strategic-performance` (Strategic Partners Performance) — vá luôn cùng lúc. Cache key: `b2b-perf6`,
+  `b2b-strategic2`.
+- **Fix s168 (2026-08-28) — thiếu lọc KH INACTIVE**: `b2b/kpis`, `b2b/performance`, `b2b/trend` KHÔNG lọc khách
+  hàng có `price_list_name` chứa "INACTIVE" (vd "[INACTIVE] Sponsor") — trong khi `quarterly-report`/
+  `quarterly-b2b-customers`/`squad-progress` đã lọc từ lâu. Bất cứ KH INACTIVE nào phát sinh trong kỳ → Revenue/
+  GP/CM1 B2B Performance cao hơn Quarter Report có hệ thống. Fix: helper dùng chung `excludeInactiveCustomers()`
+  (`analytics-helpers.ts`), áp cho cả 3 route. Nhân tiện `b2b/trend` trước còn thiếu luôn cả 3 filter chuẩn
+  (`includeShip`/`includeInternalOps`/`includeOpsCustomers`, s132) — chart trend trước không lọc gì ngoài
+  group_name+date; đã thêm đủ + FE truyền param. Cache key bump: `b2b-kpis2`, `b2b-perf5`, `b2b-trend2`.
+  ⚠️ **Vẫn khác theo thiết kế (không phải bug)**: Quarter Report chiếu PR (pro-rata `dim/elapsed`) cho tháng hiện
+  tại ở headline; B2B Performance luôn hiển thị actual thô cho khoảng ngày chọn. So 2 tab cùng kỳ ĐÃ QUA sẽ khớp
+  tuyệt đối; tháng đang chạy phải so cột "Actual" bên Quarter Report (không phải cột PR chính) mới khớp B2B
+  Performance. Quarter Report cũng luôn dùng Fulfillment (không có toggle Created) — nếu B2B Performance đang
+  toggle "Ngày tạo đơn" thì 2 tab không thể khớp.
 - **Fix s162 (2026-08-26)**: KPI card (`b2b/kpis`) và Revenue&CM1 Trend chart (`b2b/trend`) trước dùng
   `analytics_channel_costs` (Supabase channel-level, gần như luôn rỗng cho B2B) → CM1 ở đó khác với bảng chi tiết
   bên dưới (vốn đã dùng Turso per-customer). Nay cả 2 đổi sang Turso `b2b_customer_cost_monthly`, khớp bảng chi

@@ -1547,7 +1547,7 @@ function QuarterlyContent() {
                               <th className="px-3 py-2.5 text-left font-semibold">Squad · PIC</th>
                               <th className="px-3 py-2.5 text-left font-semibold">Tier</th>
                               <th className="px-3 py-2.5 text-right">{sortBtn("revenue_pr","Rev PR")}</th>
-                              <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">GP PR</th>
+                              <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">CM1 PR</th>
                               <th className="px-3 py-2.5 text-right font-semibold">CM1 Tgt</th>
                               <th className="px-3 py-2.5 text-right">{sortBtn("cm1_pct","%TGT CM1")}</th>
                               <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">3HK% / Tgt%</th>
@@ -1573,7 +1573,7 @@ function QuarterlyContent() {
                                   </td>
                                   <td className="px-3 py-2.5 text-slate-500">{c.tier}</td>
                                   <td className="px-3 py-2.5 text-right tabular-nums text-blue-600 font-medium">{formatCompactNumber(c.revenue_pr)}</td>
-                                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.gp_pr)}</td>
+                                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.cm1_pr)}</td>
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                   <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.cm1_pct))}>{pctV(c.cm1_pct)}</td>
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">

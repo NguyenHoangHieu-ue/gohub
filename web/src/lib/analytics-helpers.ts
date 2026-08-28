@@ -470,6 +470,16 @@ export function excludeOpsByCode(excludedCustomers: string[]): string {
   return `AND COALESCE(TRIM(f.customer_code), '') NOT IN (SELECT TRIM(code) FROM dim_customer WHERE name IN (${esc}))`
 }
 
+/**
+ * Loại KH có price_list_name chứa "INACTIVE" (vd "[INACTIVE] Sponsor") — CÙNG định nghĩa với
+ * Quarter Report (`quarterly-report`/`quarterly-b2b-customers`). Trước đây b2b/kpis, b2b/performance,
+ * b2b/trend KHÔNG lọc điều này → revenue/CM1 B2B Performance cao hơn Quarter Report có hệ thống
+ * bất cứ khi nào 1 KH INACTIVE có phát sinh trong kỳ. Self-contained subquery, không cần JOIN dim_customer.
+ */
+export function excludeInactiveCustomers(): string {
+  return `AND NOT EXISTS (SELECT 1 FROM dim_customer ic WHERE TRIM(ic.code::text) = TRIM(f.customer_code) AND UPPER(COALESCE(ic.price_list_name,'')) LIKE '%INACTIVE%')`
+}
+
 // ── SKU destination (for region chart) ───────────────────────────────────────
 
 type DestRule = { prefix: string; codeLength: number; offset: number }
