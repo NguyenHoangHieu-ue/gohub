@@ -3,6 +3,14 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 
+// Prefix cache hiện hành của quarterly-report/quarterly-b2b-customers — đặt ở lib dùng chung (KHÔNG đặt
+// trong route.ts vì Next.js App Router chỉ cho export tên hàm đã biết như GET/POST/dynamic/maxDuration...,
+// export thêm named const khác sẽ fail type-check route). quarterly-cache-flush import trực tiếp 2 hằng
+// này thay vì hardcode string — nhớ đổi CẢ 2 chỗ (đây + rawCacheKey trong route.ts tương ứng) khi bump
+// version (bài học s169: prefix list hardcode ở nơi khác quên bump theo → nút "Tải lại mới" thành no-op).
+export const QREPORT_CACHE_PREFIX = "qreport_raw_v9:"
+export const QB2B_CACHE_PREFIX    = "qb2b_raw_v8:"
+
 export const DEFAULT_EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
 
 export const DEFAULT_TIER_KEYWORDS: Record<string, string[]> = {

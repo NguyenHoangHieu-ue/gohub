@@ -84,6 +84,33 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   return { deleted: count ?? 0 }
 }
 
+// Danh sách prefix cache của MỌI route đọc Turso b2b_customer_cost_monthly (fetchCustomerCosts) BÊN TRONG
+// cachedQuery (nên bị stale tới 12h sau khi sửa cost) — nguồn thật duy nhất, cập nhật khi bump version key
+// ở route tương ứng (đừng lặp lại lỗi quarterly-cache-flush cũ: prefix list quên bump theo → thành no-op).
+// quarterly-report/quarterly-b2b-customers KHÔNG cần trong list này — 2 route đó cố ý đặt fetchCustomerCosts
+// NGOÀI cachedQuery nên luôn tươi sẵn, không bao giờ stale vì cost.
+export const B2B_COST_CACHE_PREFIXES = [
+  "b2b-kpis2:", "b2b-perf6:", "b2b-trend2:", "b2b-strategic2:",
+  "ch-kpis:", "ch-perf:",
+  "bod-summary2:", "bod-group-margin2:", "bod-channel-perf:",
+  "monthly-kpis:", "all-time2:",
+]
+
+/**
+ * Xoá cache của các route phụ thuộc Turso b2b_customer_cost_monthly (b2b/kpis|performance|trend|
+ * strategic-performance, channels/kpis|performance, bod-summary|group-margin|channel-performance,
+ * monthly-kpis, all-time-performance) — gọi sau khi sửa/xoá cost per-customer B2B.
+ *
+ * CHỦ ĐÍCH dùng scoped-prefix thay vì flushAnalyticsCache() (xoá sạch): sửa cost 1 khách hàng không cần
+ * (và không nên) nuke cache của Products/SKU/Vendors/Orders/Staff/Customers/SQL Explorer... — những tab đó
+ * không phụ thuộc cost B2B, nuke sạch mỗi lần sửa cost làm CẢ APP chậm hẳn (mọi tab phải query gohub_dw sống
+ * lại) trong khi chỉ vài route thật sự cần tươi (s169 dùng flushAnalyticsCache() toàn bộ ban đầu, gây đúng
+ * sự cố này khi Hiếu sửa cost/bấm "Tải lại mới" nhiều lần liên tục lúc test).
+ */
+export async function flushB2BCostCaches(): Promise<{ deleted: number }> {
+  return flushAnalyticsCacheByPrefixes(B2B_COST_CACHE_PREFIXES)
+}
+
 export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise<{ deleted: number }> {
   const clean = prefixes.filter(Boolean)
   if (clean.length === 0) return { deleted: 0 }
