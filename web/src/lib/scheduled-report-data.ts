@@ -208,9 +208,8 @@ async function b2cChannelsByDay(start: string, end: string) {
 
 // Target quý từ Turso target_planning_quarter (cùng nguồn với tab Quarter Report).
 // qKey format: "Q3-2026". Trả B2B + B2C tách riêng (Quarter Report không tách VN/US).
-interface QuarterTargets { b2bRev: number; b2cRev: number; total: number }
+interface QuarterTargets { b2bRev: number; b2cRev: number; total: number; error?: boolean }
 async function getQuarterTargets(qKey: string): Promise<QuarterTargets> {
-  const empty: QuarterTargets = { b2bRev: 0, b2cRev: 0, total: 0 }
   try {
     const rows = await tursoQuery<{ channel: string; target_revenue: string | number }>(
       `SELECT channel, target_revenue FROM target_planning_quarter WHERE quarter = ?`,
@@ -221,8 +220,12 @@ async function getQuarterTargets(qKey: string): Promise<QuarterTargets> {
     const b2c = rows.find(r => r.channel === "B2C")
     const b2bRev = n(b2b?.target_revenue), b2cRev = n(b2c?.target_revenue)
     return { b2bRev, b2cRev, total: b2bRev + b2cRev }
-  } catch {
-    return empty
+  } catch (err: any) {
+    // Không nuốt im lặng — lỗi Turso ở đây trước đây bị coi giống hệt "chưa nhập target" (total=0),
+    // không phân biệt được lỗi thật với thiếu data → khó debug. Log ra Vercel + đánh dấu error:true
+    // để report hiển thị đúng nguyên nhân thay vì luôn nói "chưa nhập".
+    console.error(`[scheduled-report] getQuarterTargets("${qKey}") lỗi:`, err?.message || err)
+    return { b2bRev: 0, b2cRev: 0, total: 0, error: true }
   }
 }
 
@@ -396,7 +399,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   } else if (isDaily && qStartStr) {
     // Daily → tiến độ QUÝ theo B2B/B2C (không tách VN/US — khớp cách nhập trong Quarter Report)
     const hasQTgt = qtTargets.total > 0
-    const NO_QTGT = "Chưa nhập target quý"
+    const NO_QTGT = qtTargets.error ? "Lỗi lấy target quý từ Turso (xem log Vercel)" : "Chưa nhập target quý"
     L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
     L.push(`  - Doanh thu QTD (${qStartStr}→${qEndStr}): B2B ${vnd(qtdB2b.total)} | B2C ${vnd(qtdB2c.total)} | Tổng ${vnd(qtdRev.total)}`)
     L.push(`  - Pro-rata dự phóng cả quý: B2B ${vnd(projQb2b)} | B2C ${vnd(projQb2c)} | Tổng ${vnd(projQb2b + projQb2c)}`)
