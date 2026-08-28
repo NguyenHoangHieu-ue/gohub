@@ -74,6 +74,16 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s169(c) (2026-08-28) — cache flush toàn app nuke SẠCH gây chậm hẳn.** Fix s169 (mục dưới) ban đầu
+  dùng `flushAnalyticsCache()` (xoá sạch bảng `analytics_query_cache`) sau mỗi lần sửa/xoá cost B2B — đúng
+  đồng bộ nhưng xoá LUÔN cache của mọi tab KHÔNG liên quan (Products, Staff, Vendors, Orders, Customers, SQL
+  Explorer registry...). Sửa cost/bấm "Tải lại mới" nhiều lần liên tục (lúc test) → cache toàn app bị nuke
+  lặp lại → mọi trang phải query gohub_dw sống, web chậm hẳn. Fix: `B2B_COST_CACHE_PREFIXES`
+  (`analytics-helpers.ts`) liệt kê ĐÚNG các route thật sự cache kết quả phụ thuộc cost B2B + helper
+  `flushB2BCostCaches()` — 3 route ghi cost (`b2b-customer-costs` POST/DELETE, `fix-turso-customer-costs`)
+  dùng helper này thay vì nuke sạch. `quarterly-cache-flush` cũng đổi sang scoped-prefix, import
+  `QREPORT_CACHE_PREFIX`/`QB2B_CACHE_PREFIX` TRỰC TIẾP từ `lib/quarterly-settings.ts` (cùng 1 hằng số với
+  chính route sinh ra cache key đó — không bao giờ lệch version như prefix list hardcode cũ).
 - **Fix s169 (2026-08-28) — sửa cost Quarter Report không cập nhật sang B2B Performance (+2 bug CM1
   còn sót sau audit toàn tab)**:
   - **Root cause chính**: `/api/analytics/b2b-customer-costs` (POST+DELETE, nơi Quarter Report "Sửa chi
@@ -82,11 +92,8 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
     `b2b/trend`, `channels/kpis`, `channels/performance`, `bod-summary`/`bod-group-margin`/
     `bod-channel-performance`, `monthly-kpis`, `all-time-performance` đều cache NGUYÊN khối kết quả đã
     tính (gồm cost) tới 12h — chỉ `quarterly-report`/`quarterly-b2b-customers` tự tươi (cố ý đặt
-    `fetchCustomerCosts` NGOÀI `cachedQuery`). Sửa cost xong, mọi tab kể trên giữ số CŨ tới hết TTL. Fix:
-    `flushAnalyticsCache()` sau khi lưu/xoá (3 route ghi: `b2b-customer-costs`, admin repair
-    `fix-turso-customer-costs`). Nhân tiện sửa `quarterly-cache-flush` (nút "Tải lại mới") — prefix list
-    cứng `qreport_raw_v7:`...`v1:`/`qb2b_raw_v5:`...`v2:` đã lỗi thời so với cache key thật (v9/v8) →
-    đổi sang `flushAnalyticsCache()` cho khỏi lệch version về sau.
+    `fetchCustomerCosts` NGOÀI `cachedQuery`). Sửa cost xong, mọi tab kể trên giữ số CŨ tới hết TTL. Fix
+    ban đầu: `flushAnalyticsCache()` sau khi lưu/xoá — **đã đổi sang scoped, xem mục s169(c) ở trên.**
   - **Bug 1**: `b2b/performance` — mẫu số chia group cost theo tỷ trọng revenue tính từ `finalRows` đã
     cap `.slice(0,500)` → >500 KH/kênh trong kỳ thì mẫu số hụt, CM1 tổng lệch nhẹ so với `b2b/kpis` (SQL
     SUM không cap). Đổi mẫu số sang tổng doanh thu KHÔNG cap.
