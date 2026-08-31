@@ -4,16 +4,83 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-28, s169)
+## Trạng thái hiện tại (2026-08-31, s170)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | *(không có — mọi fix s168/s168b/s169 đã merge main)* |
-| ✅ Đã lên main | ...+ s166 fix %TGT CM1 Squad Progress + s167 rebuild My Metrics lần 2 + s168 fix Scheduled Messages (2 bug: lỗi cột `fulfiled_date` toàn bộ report + thiếu target quý Daily) + s168b/s169 audit toàn diện B2B Performance ↔ Quarter Report (9 bug CM1/UX/cache thật, gồm cả s169(c) tự gây rồi tự fix perf regression) (đến 0f8f9ae, 2026-08-28) |
+| ⏳ Trên staging CHƯA merge main | s170(a) bỏ filter SG/HK Orders **ĐÃ merge main**. s170(b) audit+vá bảo mật Tổ Gấu (`4c7ed75`) + s170(c) Weekly Report feature (commit tiếp theo) — **CHƯA merge main**, chờ Hiếu QA staging (đặc biệt: PNG card ảnh CHƯA verify được trên máy dev Windows, xem gotcha trong mục s170(c) dưới). |
+| ✅ Đã lên main | ...+ s169 audit toàn diện B2B Performance ↔ Quarter Report + s170(a) bỏ filter SG/HK Orders (đến `476eb20`, 2026-08-31) |
+| 🆕 **s170(c) — Weekly Report: ĐÃ CODE XONG, CHƯA VERIFY ẢNH TRÊN LINUX** | Nút "Create Weekly Report" (tab Scheduled Messages) hoạt động end-to-end (data/docx/pdf tested), nhưng bước vẽ card ảnh (`next/og` `ImageResponse`) lỗi TRÊN MÁY DEV WINDOWS do bug path Windows trong `@vercel/og` bundled — production (Vercel Linux) tin là KHÔNG dính (đã chứng minh bằng phân tích lỗi, xem chi tiết dưới). **Hiếu BẮT BUỘC bấm thử nút này trên staging trước khi tin dùng** — nếu ảnh card lỗi/trống trên staging thật, báo lại ngay. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s170(c) — Weekly Report (2026-08-31): ĐÃ CODE XONG theo spec Hiếu chốt (đọc file mẫu `Company Weekly
+Performance.pdf` + 4 quyết định kỹ thuật Hiếu trả lời trực tiếp trong chat).**
+
+Nút **"Create Weekly Report"** trong tab **Scheduled Messages** (`/analytics/scheduled`, cạnh nút "Lịch mới",
+cùng quyền `canWriteScheduled`) → gọi `POST /api/admin/scheduled-messages/weekly-report` → BE tính số liệu +
+render 2 file → trả JSON `{docx, docxFilename, pdf, pdfFilename}` (base64) → FE tự tải cả 2 file cùng lúc.
+
+**Quyết định Hiếu chốt → cách làm:**
+1. Ảnh minh chứng = **tự vẽ lại bằng code** (không Puppeteer) — dùng `next/og` `ImageResponse` (built-in
+   Next.js 14, KHÔNG cần thêm dependency nào, KHÔNG cần canvas/browser). Mỗi card LUÔN in tên tab nguồn số liệu
+   (theo đúng yêu cầu, vd "B2C Performance", "Vendor Performance") ở header card.
+2. PDF hoá ra **dễ** (đã verify `jsPDF` — vốn đã có sẵn trong deps — chạy được thuần Node kể cả `addImage()`,
+   KHÔNG cần DOM/canvas như tưởng) → làm CẢ 2 định dạng, không chỉ Docx.
+3. Đã bổ sung chèn ảnh cho converter markdown→docx hiện có — tách `markdownToDocx` từ
+   `api/creator-ai/export/route.ts` ra `web/src/lib/docx-markdown.ts` (dùng chung, KHÔNG đổi hành vi cũ) + thêm
+   cú pháp marker `![[IMG:key]]` → `ImageRun` (co theo tỉ lệ, tối đa 600px ngang). `creator-ai/export` route giờ
+   import từ lib này thay vì định nghĩa riêng.
+4. Viết route/logic mới tính **pro-rata tháng này vs actual tháng trước, theo TỪNG channel** (B2B: Klook/
+   ShopeePay/MoMo/VN-Wholesales/...; B2C: VN-Web SIM/VN-Web eSIM/Mobile App/...) — `fetchChannelMoM()` trong
+   `lib/weekly-report/data.ts`, filter khớp B2B Performance tab (`shipFilter`/`internalOpsFilterByCode`/
+   `excludeInactiveCustomers`/`excludeOpsByCode` từ `quarterly-settings`).
+
+**File mới** (toàn bộ ở `web/src/lib/weekly-report/`):
+`period.ts` (tính tuần trước Mon-Sun + MTD/tháng trước, ICT) · `data.ts` (`buildWeeklyReportData()` — TÁI DÙNG
+`fetchBODGroupMarginData` (bod-data.ts) cho GP/CM1 B2B/B2C khớp BOD/Quarter Report, không viết công thức cost
+riêng) · `narrative.ts` (Gemini `gemini-3.6-flash` JSON-mode viết 1 câu nhận định/channel — CHỈ diễn giải số đã
+tính sẵn, cấm bịa nguyên nhân ngoài data, đúng pattern precompute→format của `scheduled-report-data.ts`; lỗi
+Gemini → fallback câu template) · `card-images.ts` (vẽ 6 card qua `ImageResponse`, viết `.ts` KHÔNG JSX —
+`React.createElement` thuần — để không phụ thuộc cấu hình jsx của bộ build đang chạy) · `report-content.ts` (build
+markdown + ảnh — 1 NGUỒN NỘI DUNG DUY NHẤT cho cả docx lẫn pdf) · `docx-export.ts` (wrap `markdownToDocx` +
+header/footer, port từ `creator-ai/export`) · `pdf-export.ts` (`markdownToPdf` viết riêng bằng `jsPDF` — heading/
+bullet/table/ảnh/bold, layout tay vì jsPDF không tự parse markdown).
+
+**Route**: `web/src/app/api/admin/scheduled-messages/weekly-report/route.ts` — `maxDuration=180` (nhiều query
+gohub_dw + Gemini + render ảnh + docx/pdf, giống cron scheduled-messages).
+
+**⚠️ Đã verify được (vitest, mock `card-images` để cô lập) — CHẮC CHẮN đúng:** markdown→docx (bảng, heading, ảnh
+`ImageRun` — 7/7 ảnh embed đúng qua `word/media/`), markdown→PDF (`%PDF-1.3` hợp lệ, `jsPDF.addImage` hoạt động),
+toàn bộ pipeline data→content→file với data giả lập khớp cấu trúc `WeeklyReportData`. `npx.cmd tsc --noEmit` +
+`next build` PASS.
+
+**⚠️ CHƯA verify được trên máy dev — cần Hiếu QA trên staging TRƯỚC KHI TIN DÙNG:** bước vẽ card ảnh
+(`ImageResponse`/`next/og`, dựa trên `@vercel/og` bundled sẵn trong Next.js) lỗi `TypeError: Invalid URL` khi
+chạy `next dev` THẬT trên máy Windows này — root cause xác định rõ qua log lỗi (`input:
+".\file:\D:\...\noto-sans-v27-latin-regular.ttf"`): code nội bộ `@vercel/og` gọi
+`path.join(import.meta.url, "../noto-sans...ttf")` rồi `fileURLToPath()` — trên Windows, `path.join` (win32,
+dùng `\`) phá cú pháp chuỗi `file://` URL (vốn dùng `/` và `:`). Đây là bug Windows-path THUẦN TUÝ của thư viện
+(không phải lỗi trong code card-images.ts của mình) — trên Vercel (Linux, `path.posix.join`) không dính lỗi này
+(đã đối chiếu: input lỗi thấy đúng dạng "path.join làm hỏng URL windows-style", trên POSIX join 2 chuỗi `/`-
+separated ra URL hợp lệ). Tin production hoạt động đúng (next/og là tính năng chính thức, phổ biến rộng rãi trên
+Vercel) nhưng **CHƯA có bằng chứng thực tế trên môi trường thật** → **Hiếu PHẢI bấm thử nút "Create Weekly Report"
+trên staging, kiểm tra card ảnh trong 2 file xuất ra không rỗng/lỗi, báo lại ngay nếu có vấn đề.**
+
+**Số liệu — CHƯA verify với DB thật** (máy dev thiếu `ANALYTICS_DB_*`, như mọi tính năng khác gần đây) — mọi
+công thức dựa trên tái dùng helper/hàm ĐÃ CÓ (`fetchBODGroupMarginData`, `getAnalyticsSource`, `getDateFilter`,
+`getProjectionFactor`, các filter chuẩn `excludeInactiveCustomers`/`shipFilter`/`internalOpsFilterByCode`) nên
+tin khớp logic các tab đã verify trước đó, nhưng Hiếu cần tự đối chiếu 1-2 số trên staging với Dashboard/BOD/B2B/
+B2C/Vendor Performance thật trước khi gửi báo cáo cho sếp.
+
+**Không như file mẫu 100%** (cố ý, đã giải thích lý do): file mẫu gốc do Hiếu tự làm tay có nhiều mâu thuẫn nội
+bộ (bảng Weekly WoW ghi "17-23/8" trong khi mô tả đầu bài nói "24-30/8" — chính là lý do CẦN tự động hoá).
+Report tự động LUÔN nội bộ nhất quán (1 lần fetch data, mọi section dùng chung tham số ngày). Nhận định
+"Điểm sáng/Hạn chế" do Gemini viết dựa CHỈ trên %MoM đã tính — sẽ khách quan/chung chung hơn bản Hiếu viết tay
+(không có breakdown theo quốc gia như "Philippines +64%" trong file mẫu — ngoài scope v1, cần thêm dimension
+nếu muốn sâu hơn).
 
 **s168b/s169 — đã làm (2026-08-28): audit toàn diện B2B Performance ↔ Quarter Report — 7 bug thật (CM1 sai + cache
 không đồng bộ), theo yêu cầu Hiếu "check kỹ, tìm vấn đề, lên plan fix/test/check thật kỹ, kiểm tra cả subtab/
