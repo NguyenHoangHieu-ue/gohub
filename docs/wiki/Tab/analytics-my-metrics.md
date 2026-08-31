@@ -195,6 +195,29 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s179 (2026-08-31) — quét lịch sử 1 lần cho group cũ
+
+Sau s178, Hiếu báo: 1 group hầu như thread nào cũng được mention (rất nhiều), nhưng quét real-time chỉ ra
+đúng 1 case. Điều tra Vercel log production 3 tiếng gần nhất: chỉ **1** request `/api/lark/events` thật
+(tin test "."). Kết luận: mọi mention "rất nhiều" Hiếu thấy là tin **CŨ**, từ trước lúc webhook thật sự
+sống (bug chữ ký chặn tới tận s176 mới fix) — capture real-time (s173) CHỈ thấy tin từ lúc deploy, không
+tự backfill lịch sử (đúng hạn chế đã ghi từ s173, không phải bug mới). Hỏi Hiếu qua AskUserQuestion có
+muốn thêm quét lịch sử 1 lần không — lúc đầu chọn "không cần", sau đổi ý muốn có.
+
+**Thêm — "Quét lịch sử 1 lần"** (modal ⚙️ Lark Bot):
+- `runLarkHistoryScan(chatId, daysBack)` (`lark-scan-runner.ts`) — dùng lại `fetchRecentThreads()` (REST
+  scan toàn group, logic Cà Thread) thay vì capture log, áp CÙNG tiêu chí "chỉ tin liên quan Hiếu"
+  (`threadInvolvesUser()` — isSelf/mentioned, cả tin gốc lẫn mọi reply) và CÙNG pipeline classify+insert
+  với quét real-time — extract `classifyAndInsertThreads()` dùng chung 1 chỗ, không chép logic.
+- `quarterLabelForDate()` (`okr-helpers.ts`, mới) — quét ngược nhiều tháng có thể rơi vào quý TRƯỚC quý
+  hiện tại. Áp fix này cho CẢ quét real-time (đúng hơn, dù hiếm lộ ra vì real-time luôn "vừa xảy ra").
+- `listBotChats()` (`lark-thread-scan.ts`) + route `lark-config/groups` — liệt kê group bot đang là
+  thành viên, Hiếu CHỌN group qua dropdown thay vì tự tra `chat_id` tay (trước đây Cà Thread bắt nhập tay).
+- Route `lark-config/scan-history` — POST `{chat_id, days_back}` (tối đa 120 ngày, valve an toàn).
+- FE: `ScanResultBox` tách riêng (dùng chung cho cả "Quét ngay" và "Quét lịch sử", tránh trùng JSX).
+
+tsc PASS. **Cần Hiếu**: mở modal ⚙️ Lark Bot, chọn group busy đó trong dropdown "Quét lịch sử", quét thử.
+
 ## s178 (2026-08-31) — hiện tên/link group + nội dung đầy đủ trong panel duyệt case
 
 Sau khi s177 fix xong (case đã ra hàng chờ duyệt), Hiếu báo panel không đủ để duyệt: (1) snippet
