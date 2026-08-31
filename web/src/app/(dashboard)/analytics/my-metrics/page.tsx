@@ -908,7 +908,7 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
 
 // ─── Lark scan config modal (admin/creator) ───────────────────────────────────
 function LarkConfigModal({ onClose }: { onClose: () => void }) {
-  const [cfg, setCfg] = useState({ enabled: false, chat_id: "", days_back: 3 })
+  const [cfg, setCfg] = useState({ enabled: false, days_back: 3 })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -918,7 +918,7 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     fetch("/api/analytics/my-metrics/lark-config").then(r => r.ok ? r.json() : null).then(d => {
-      if (d) setCfg({ enabled: d.enabled ?? false, chat_id: d.chat_id ?? "", days_back: d.days_back ?? 3 })
+      if (d) setCfg({ enabled: d.enabled ?? false, days_back: d.days_back ?? 3 })
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -956,12 +956,12 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
               <input type="checkbox" checked={cfg.enabled} onChange={e => setCfg(p => ({ ...p, enabled: e.target.checked }))} />
               Bật quét tự động
             </label>
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase">Chat ID group Lark</label>
-              <input value={cfg.chat_id} onChange={e => setCfg(p => ({ ...p, chat_id: e.target.value }))}
-                placeholder="oc_xxxxxxxxxxxxx"
-                className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-brand-500" />
-              <p className="text-[10px] text-slate-400 mt-1">Group Sales/PIC nhắn yêu cầu sản phẩm / hỏi giá NCC. Bot quét thread trong group này mỗi vài giờ.</p>
+            <div className="text-[11px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2.5 leading-relaxed">
+              Bot bắt real-time mọi tin nhắn <strong>bạn tự gửi HOẶC được @mention</strong>, ở <strong>bất kỳ
+              group nào bot có mặt</strong> — không cần chọn 1 group cố định nữa. 2 điều kiện cần có sẵn:
+              (1) đã <strong>Kết nối Lark cá nhân</strong> ở Creator Settings, (2) bot đã được <strong>add vào
+              các group</strong> liên quan (Sales/PIC hỏi sản phẩm, hỏi giá NCC…) — Lark chỉ gửi được tin của
+              group mà bot là thành viên.
             </div>
             <div>
               <label className="text-[11px] font-bold text-slate-500 uppercase">Quét ngược N ngày</label>
@@ -969,11 +969,10 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
                 className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div className="border-t border-slate-100 pt-3">
-              <button onClick={scanNow} disabled={scanning || !cfg.chat_id}
+              <button onClick={scanNow} disabled={scanning}
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50">
                 <Sparkles className="w-3.5 h-3.5" /> {scanning ? "Đang quét (có thể mất 30-60s)…" : "Quét ngay để test"}
               </button>
-              {!cfg.chat_id && <p className="text-[10px] text-slate-400 mt-1 text-center">Nhập Chat ID trước đã.</p>}
               {scanErr && <p className="text-[11px] text-red-600 font-bold mt-2">{scanErr}</p>}
               {scanResult && (
                 scanResult.skipped

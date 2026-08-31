@@ -2,7 +2,7 @@
 // "Quét ngay" thủ công (api/analytics/my-metrics/lark-config/scan-now) để Hiếu test được ngay
 // thay vì phải đợi cron chạy 1 lần/ngày mới biết fix có work không.
 import { supabaseAdmin } from "@/lib/supabase"
-import { fetchRecentThreads } from "@/lib/lark-thread-scan"
+import { fetchThreadsFromCapturedLog } from "@/lib/lark-thread-scan"
 import { classifyLarkThread } from "@/lib/okr-lark-classify"
 import { sendLarkDM, getLarkUserOpenId } from "@/lib/lark"
 import { currentQuarterLabel } from "@/lib/okr-helpers"
@@ -10,12 +10,14 @@ import { currentQuarterLabel } from "@/lib/okr-helpers"
 const CONFIG_KEY = "my_metrics_lark_scan_config"
 const MAX_NEW_THREADS_PER_RUN = 40
 
-interface ScanConfig { enabled: boolean; chat_id: string; days_back: number }
+// s173: bỏ chat_id — nguồn phát hiện thread nay là capture log real-time (api/lark/events, MỌI
+// group bot có mặt), không còn giới hạn đúng 1 group cấu hình tay. Field chat_id giữ optional trong
+// type/parse để đọc được config cũ (không migration xoá cột Supabase) nhưng không dùng để lọc nữa.
+interface ScanConfig { enabled: boolean; days_back: number }
 
 function normalizeConfig(raw: any): ScanConfig {
   return {
     enabled: raw?.enabled === true,
-    chat_id: typeof raw?.chat_id === "string" ? raw.chat_id : "",
     days_back: Number(raw?.days_back) > 0 ? Number(raw.days_back) : 3,
   }
 }
@@ -32,8 +34,8 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
     .from("app_settings").select("value").eq("key", CONFIG_KEY).maybeSingle()
   const config = normalizeConfig(data?.value ? JSON.parse(data.value) : null)
 
-  if ((!config.enabled && !ignoreEnabled) || !config.chat_id) {
-    return { skipped: "chưa bật hoặc chưa cấu hình chat_id", scanned: 0, classified: 0, inserted: 0, not_matched: 0, backlog_remaining: 0 }
+  if (!config.enabled && !ignoreEnabled) {
+    return { skipped: "chưa bật quét tự động", scanned: 0, classified: 0, inserted: 0, not_matched: 0, backlog_remaining: 0 }
   }
 
   // Bounded — mỗi thread tốn 2 call Lark để hydrate chi tiết (batch 15 tại 1 thời điểm, xem
@@ -41,7 +43,7 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
   // Không cần thấy HẾT backlog trong 1 lần — not_matched dedupe (xem dưới) đảm bảo lần chạy sau
   // tự tiến tới phần backlog cũ hơn, không giẫm chân tại chỗ.
   const maxThreads = Math.min(200, config.days_back * 10)
-  const threads = await fetchRecentThreads(config.chat_id, config.days_back, maxThreads)
+  const threads = await fetchThreadsFromCapturedLog(config.days_back, maxThreads)
     .then(list => list.filter(t => t.replies.length > 0))
 
   if (threads.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, backlog_remaining: 0 }
@@ -62,7 +64,7 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
 
     if (!result.is_match || !result.metric) {
       await supabaseAdmin.from("okr_lark_events").upsert({
-        quarter, metric: "none", chat_id: config.chat_id,
+        quarter, metric: "none", chat_id: t.chat_id,
         thread_id: t.thread_id, message_id: t.message_id,
         request_time: new Date(parseInt(t.create_time)).toISOString(),
         request_snippet: t.content.slice(0, 300), request_sender: t.sender_name,
@@ -75,7 +77,7 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
     const completion = result.completion_reply_index !== null ? t.replies[result.completion_reply_index] : null
 
     const { error } = await supabaseAdmin.from("okr_lark_events").upsert({
-      quarter, metric: result.metric, chat_id: config.chat_id,
+      quarter, metric: result.metric, chat_id: t.chat_id,
       thread_id: t.thread_id, message_id: t.message_id,
       request_time: new Date(parseInt(t.create_time)).toISOString(),
       request_snippet: t.content.slice(0, 300), request_sender: t.sender_name,

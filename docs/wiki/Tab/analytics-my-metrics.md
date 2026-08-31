@@ -46,12 +46,13 @@ Quyết định Hiếu chốt (không tự đoán):
 | **Auto — SKU GM quét toàn hệ thống (KPI chính)** | `GET /api/analytics/my-metrics/sku-scan` | Quét MỌI SKU có đơn trong quý (không cần tag tay) — CTE quý này vs quý trước trên `fact_fulfillment_revenue`, join `dim_sku`. Xem §"SKU auto-scan" |
 | SKU annotation (tuỳ chọn, không quyết KPI) | `GET/POST/DELETE /api/analytics/my-metrics/sku-tags` | Supabase `okr_sku_tags` — chỉ còn là ghi chú gắn vào 1 dòng trong bảng scan (vd "renegotiate rate"), KHÔNG bắt buộc effective_date nữa (v45) |
 | Manual — SLA/Vendor Speed evidence (ảnh) | `GET/POST/DELETE /api/analytics/my-metrics/evidence` | Supabase `okr_evidence_records`, bắt buộc đủ 2 ảnh (request+completion) mới tính vào TB, khoá sau khi quý đóng (`isQuarterLocked`). GET nay MERGE thêm case Lark đã duyệt (xem dưới) |
-| **Auto — Lark bot đề xuất SLA/Vendor Speed** | Cron `GET /api/cron/my-metrics-lark-scan` | Quét 1 group Lark, Gemini phân loại request/completion → ghi `okr_lark_events` (status=pending_review) |
+| **Auto — Lark bot đề xuất SLA/Vendor Speed** | Cron `GET /api/cron/my-metrics-lark-scan` | (s173) Đọc thread từ capture log real-time (MỌI group bot có mặt, không giới hạn 1 group) → hydrate đầy đủ + Gemini phân loại → ghi `okr_lark_events` (status=pending_review) |
+| **Auto — capture real-time** | `api/lark/events` (tap, xem `lib/okr-lark-capture.ts`) | (s173, MỚI) Ghi mọi tin Hiếu tự gửi/được @mention vào `okr_lark_message_log` ngay khi Lark bắn event — nguồn phát hiện thread cho dòng trên |
 | Review queue Lark | `GET /api/analytics/my-metrics/lark-events` · `POST /api/analytics/my-metrics/lark-events/[id]/review` | Hiếu duyệt Xác nhận/Từ chối/Sửa giờ — chỉ case `confirmed` mới gộp vào TB evidence |
-| Config bot Lark | `GET/PUT /api/analytics/my-metrics/lark-config` | admin/creator only — `app_settings` key `my_metrics_lark_scan_config` (`{enabled, chat_id, days_back}`) |
+| Config bot Lark | `GET/PUT /api/analytics/my-metrics/lark-config` | admin/creator only — `app_settings` key `my_metrics_lark_scan_config` (`{enabled, days_back}` — bỏ `chat_id` từ s173) |
 | Target theo quý | `GET/PATCH /api/analytics/my-metrics/manual` | `app_settings` key `okr.<Q>-<year>` |
 | Conversation drill-down | `GET /api/analytics/my-metrics/conversations` | Xem lại từng cuộc hội thoại được tính vào task count |
-| Migration | `web/db/migrations/v44_okr_tracking.sql` + `v45_okr_lark_events.sql` | v44: schema gốc. v45: bảng `okr_lark_events` (review queue) + `okr_sku_tags.effective_date` nullable |
+| Migration | `v44_okr_tracking.sql` + `v45_okr_lark_events.sql` + `v46_okr_lark_message_log.sql` | v44: schema gốc. v45: `okr_lark_events` (review queue). v46 (s173, CHƯA CHẠY): `okr_lark_message_log` (capture real-time) |
 | Shared helpers | `web/src/lib/okr-helpers.ts` | `quarterRange`, `parseQuarterLabel`, `prevQuarterLabel`, `currentQuarterLabel`, `isQuarterLocked`, `OKR_GM_BASELINE=36.7`, `OKR_HK3_BASELINE=67.5` |
 | Lark thread fetch (dùng chung) | `web/src/lib/lark-thread-scan.ts` | `fetchRecentThreads(chatId, daysBack, maxThreads)` — tách ra từ Cà Thread (`api/creator/ca-thread`) để My Metrics dùng lại, không chép logic |
 | Gemini classifier | `web/src/lib/okr-lark-classify.ts` | `classifyLarkThread(thread)` — JSON-mode, cùng convention `lib/agents/classifier.ts` (temperature 0, fallback an toàn) |
@@ -193,6 +194,60 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s173 (2026-08-31) — Lark bot chuyển sang real-time capture, bỏ giới hạn 1 group
+
+Hiếu đưa mẫu `Hieu/lark-sla-bot` (bot riêng ghi tin nhắn Lark real-time vào Bitable để tính SLA) yêu cầu
+"đọc và áp dụng vào My Metrics". Ý tưởng cốt lõi học được: bot chỉ cần biết **"tin này có liên quan
+mình không"** (sender = mình HOẶC mình bị @mention) — **không quan tâm group nào**, thay vì quét REST 1
+group cấu hình cứng như trước (s167, kết quả: 0 case cả Q3-2026 vì y giới hạn đúng 1 group trong khi
+request/vendor-query thật xảy ra rải rác nhiều group khác nhau).
+
+**KHÔNG deploy bot riêng** (mẫu Hiếu đưa là 1 project Express/Vercel độc lập) — tích hợp thẳng vào
+webhook Lark **đã có sẵn** của GoHub Intel (`api/lark/events`, vốn phục vụ Bé Gấu) vì nó ĐÃ nhận được
+mọi tin nhắn ở mọi group bot có mặt, chỉ thiếu bước "ghi lại tin liên quan Hiếu" — tránh vận hành 2 app
+Lark riêng biệt (2 App ID, 2 webhook, dễ lệch/khó nhớ cái nào làm gì).
+
+**Kiến trúc mới:**
+1. **Capture real-time** (`lib/okr-lark-capture.ts`, gọi từ `api/lark/events/route.ts` ngay sau khi
+   parse xong nội dung tin — TRƯỚC filter "group phải @mention BOT" vì đây là quan tâm khác nhau):
+   fire-and-forget, kiểm `senderOpenId === myOpenId` (Hiếu tự gửi) HOẶC `myOpenId` nằm trong mentions
+   (Hiếu được @mention) — `myOpenId` lấy qua `getLarkUserOpenId()` (open_id Lark cá nhân Hiếu đã kết
+   nối ở Creator Settings, infra có sẵn từ s132, KHÔNG cần OAuth mới). Nếu đúng → upsert 1 dòng vào
+   bảng mới `okr_lark_message_log` (migration `v46_okr_lark_message_log.sql`, **CHƯA CHẠY — cần
+   Hiếu**): message_id, thread_id (=root_id hoặc chính nó), chat_id, sender, is_self_post,
+   mentioned_open_ids, content preview, create_time_ms. Bảng này CHỈ để "biết thread nào đáng xem" —
+   KHÔNG lưu toàn bộ nội dung thread (không thay thế REST hydrate).
+2. **Phát hiện thread từ log** (`fetchThreadsFromCapturedLog()`, `lib/lark-thread-scan.ts`, hàm mới
+   cạnh `fetchRecentThreads()` cũ — KHÔNG xoá hàm cũ, Cà Thread vẫn dùng): đọc `thread_id` distinct
+   trong `daysBack` từ `okr_lark_message_log` (không giới hạn group), rồi **hydrate ĐẦY ĐỦ** từng
+   thread (root + mọi reply + reaction) qua Lark REST — tái dùng đúng `hydrateThread()` đã có, chỉ khác
+   NGUỒN phát hiện "thread nào cần xem" (log real-time thay vì list-toàn-group). `LarkThread` type thêm
+   field `chat_id` (trước không có, giờ cần vì mỗi thread có thể ở group khác nhau — trước đây
+   `okr_lark_events.chat_id` lấy thẳng từ `config.chat_id` 1 giá trị cố định).
+3. **`lark-scan-runner.ts`**: đổi nguồn từ `fetchRecentThreads(config.chat_id, ...)` sang
+   `fetchThreadsFromCapturedLog(config.days_back, ...)`; bỏ điều kiện chặn "chưa cấu hình chat_id".
+   `chat_id` khi ghi `okr_lark_events` giờ lấy từ `t.chat_id` (per-thread) thay vì `config.chat_id` (1
+   giá trị cố định) — đúng bản chất nhiều group.
+4. **Config đơn giản hơn**: `lark-config` API (GET/PUT) bỏ field `chat_id` — chỉ còn `{enabled,
+   days_back}`. Modal "⚙️ Lark Bot" (My Metrics) bỏ input Chat ID, thay bằng đoạn giải thích 2 điều
+   kiện cần có: (1) đã Kết nối Lark cá nhân (Creator Settings), (2) bot đã được add vào các group liên
+   quan — **Lark chỉ gửi event cho group mà bot LÀ THÀNH VIÊN, không có cách nào bỏ qua giới hạn này**
+   (đúng README mẫu Hiếu đưa) → đây là việc Hiếu cần tự làm (Lark Admin Console hoặc add tay từng
+   group), KHÔNG tự động hoá được từ code.
+
+**Chưa làm / hạn chế biết trước:**
+- Chỉ bắt được `message_type` = text/post (khớp giới hạn sẵn có của toàn bộ `api/lark/events` — Bé Gấu
+  cũng chỉ xử lý 2 loại này). Ảnh/file Hiếu gửi làm bằng chứng KHÔNG được capture qua đường này (vẫn
+  dùng evidence 2-ảnh nhập tay như cũ cho trường hợp đó).
+- **Không có dữ liệu lịch sử** — capture chỉ có từ lúc migration chạy + code deploy trở đi, không hồi
+  cứu được tin nhắn cũ trước đó (khác hẳn REST-scan cũ vốn CÓ THỂ nhìn lại quá khứ, dù bị giới hạn 1
+  group). Đánh đổi chấp nhận được: đổi lấy độ phủ toàn diện + real-time cho TỪ NAY VỀ SAU.
+- Nếu Hiếu CHƯA kết nối Lark cá nhân → `getLarkUserOpenId()` trả `null` → capture bỏ qua an toàn (không
+  lỗi), nhưng cũng không bắt được gì — cần xác nhận đã kết nối trước khi kỳ vọng có dữ liệu.
+- tsc + `next build` PASS. **CHƯA verify được với dữ liệu Lark thật** (máy dev không nhận webhook thật)
+  — Hiếu cần: (1) chạy migration v46, (2) xác nhận đã Kết nối Lark cá nhân, (3) add bot vào các group
+  Sales/PIC liên quan nếu chưa, (4) gửi thử 1 tin có liên quan rồi bấm "Quét ngay" xem có bắt được không.
+
 ## s172 (2026-08-31) — rebuild UI: trẻ trung/hiện đại hơn, thêm chart, gom ghi chú vào 1 nút
 
 Theo yêu cầu Hiếu "nhìn thật trẻ trung, hiện đại, rõ ràng, thêm chart, note gom vào 1 button, bảng 50
@@ -267,22 +322,23 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
   hằng số trong `okr-helpers.ts`, đừng hardcode lại chỗ khác.
 - **`KEY_SKU_CUM_PCT` (Pareto 80%)** nằm trong `sku-scan/route.ts` — công khai để dễ chỉnh nếu Bảo muốn ngưỡng
   "trọng điểm" khác.
-- **Lark bot chưa hoạt động cho tới khi Hiếu nhập `chat_id`** qua modal "⚙️ Lark Bot" — cron tự skip nếu
-  `enabled=false` hoặc thiếu `chat_id`, không lỗi, chỉ trả `{skipped: "..."}`.
+- **(s173) Lark bot chưa hoạt động cho tới khi: (1) migration v46 đã chạy, (2) Hiếu đã Kết nối Lark cá nhân
+  (Creator Settings), (3) bot đã được add vào group liên quan** — không còn cần nhập `chat_id` (bỏ từ s173,
+  xem §"s173" phía trên). Cron/`runLarkScan` tự skip nếu `enabled=false`, không lỗi, chỉ trả `{skipped:
+  "..."}`.
 - **Chất lượng AI phân loại chưa verify với dữ liệu thật** — đây chính là lý do có hàng chờ duyệt thay vì tự
   động tính luôn; Hiếu nên soát kỹ đợt case đầu tiên trước khi tin tưởng số.
-- **Cách kiểm tra nhanh "bot đã chạy lần nào chưa" khi debug** (2026-08-27, verify qua query Supabase thật):
-  đọc `app_settings` key `my_metrics_lark_scan_config` (config đúng chưa: `enabled`/`chat_id`/`days_back`) +
-  đếm `okr_lark_events` theo mọi `status` (kể cả `not_matched`) cho quarter hiện tại — 0 dòng nghĩa là cron/
-  "Quét ngay" chưa từng chạy thành công lần nào, KHÔNG phải bot chạy rồi mà không tìm thấy gì. Trường hợp
-  thật gặp: config đúng (`enabled=true`, có `chat_id`) nhưng `okr_lark_events` = 0 dòng → do vừa mới cấu hình
-  xong, cron 1x/ngày (17h ICT) chưa tới lượt chạy — bấm "Quét ngay để test" để có dữ liệu ngay thay vì đợi.
+- **Cách kiểm tra nhanh "bot đã chạy lần nào chưa" khi debug** (2026-08-27, cập nhật s173): đọc `app_settings`
+  key `my_metrics_lark_scan_config` (`enabled`/`days_back`) + đếm dòng `okr_lark_message_log` (capture có chạy
+  không — 0 dòng nghĩa là chưa có tin nào được ghi, kiểm tra lại 3 điều kiện ở gotcha trên) + đếm
+  `okr_lark_events` theo mọi `status` (kể cả `not_matched`) cho quarter hiện tại (classify có chạy không).
 - **Bé Gấu task ≠ "thành công" theo nghĩa nghiêm ngặt** — chỉ lọc được độ dài response (không có structured
   success flag từ `be-gau.ts`). Nếu muốn phân loại chuẩn hơn cần thêm cột đánh giá thủ công hoặc structured
   output ở `be-gau.ts` (chưa làm, out of scope).
 - Máy dev không có `ANALYTICS_DB_*` → chưa chạy được SQL sku-scan live để verify số thật; cũng không test được
-  cron/Gemini call với dữ liệu Lark thật. Hiếu cần: (1) chạy migration v45, (2) nhập `chat_id` thật, (3) theo
-  dõi vài ngày đầu xem bot phân loại đúng không trước khi tin số báo cáo.
+  webhook capture/cron/Gemini với dữ liệu Lark thật. Hiếu cần: (1) chạy migration v46, (2) xác nhận đã Kết nối
+  Lark cá nhân + bot đã ở đúng group, (3) theo dõi vài ngày đầu xem bot phân loại đúng không trước khi tin số
+  báo cáo.
 - **%3HK + Other Datapool Vendor (2026-08-27)**: đúng tên KPI offer letter, gộp CẢ 3HK Datapool VÀ **BC Datapool**
   (`dim_sku.vendor = 'BC Datapool'`, Hiếu xác nhận qua SQL Explorer) — % KPI vẫn tính trên TỔNG 2 vendor:
   `REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')`. **UI tách rõ 2 subtotal** (Hiếu yêu

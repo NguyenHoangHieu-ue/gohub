@@ -90,6 +90,12 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
 - **searchSkus fix (s87)**: đã sửa bug lớn ở tra cứu SKU của agent (đảm bảo khớp đúng gói).
 - **FX/COGS**: giá vốn quy đổi qua `app_settings` key `fx.*` (usd_vnd, hkd_usd, twd_usd); COGS 3HK tính từ `ncc_datapool` giá HKD/GB.
 - **Dùng chung Web + Lark**: router/context/bi-analyst dùng chung; Lark bot "Bé Gấu Thông Thái" (p2p + group + thread mention).
+- **Tap phụ cho My Metrics (s173)**: ngay sau khi parse xong nội dung tin nhắn trong `api/lark/events/route.ts`
+  (TRƯỚC filter "group phải @mention BOT mới trả lời" — 2 mối quan tâm khác nhau), có 1 lời gọi fire-and-forget
+  `captureForOkrLog()` (`lib/okr-lark-capture.ts`) ghi lại MỌI tin nhắn Hiếu tự gửi hoặc được @mention (ở BẤT KỲ
+  group nào bot có mặt) vào `okr_lark_message_log` — phục vụ real-time phát hiện case SLA/Vendor Speed cho tab
+  My Metrics, KHÔNG liên quan luồng trả lời của Bé Gấu. Lỗi ở nhánh này không được (và không thể, vì
+  fire-and-forget) làm hỏng luồng chính. Chi tiết đầy đủ: `docs/wiki/Tab/analytics-my-metrics.md` mục "s173".
 
 ## 5. Phân Quyền Truy Cập
 - **Standard**: Chỉ được dùng các agent `tu-van`, `tra-cuu`, `giai-dap`, `gap-analysis` theo phòng ban. Không được xem giá vốn (COGS), không được dùng BI Analyst.

@@ -10,6 +10,7 @@ import {
   getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
+import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -246,6 +247,18 @@ export async function POST(req: NextRequest) {
   }
 
   console.log("[Lark] parsed | userText:", JSON.stringify(userText), "| postMentions:", postMentions.length, "| topMentions:", (msg?.mentions ?? []).length)
+
+  // My Metrics SLA/Vendor Speed — capture real-time (không liên quan việc Bé Gấu có trả lời hay
+  // không, nên đặt TRƯỚC mọi filter "phải @mention BOT"). Fire-and-forget, lỗi ở đây không được
+  // làm hỏng luồng trả lời chính. Xem lib/okr-lark-capture.ts.
+  void captureForOkrLog({
+    messageId, rootId, parentId: msg?.parent_id, chatId, chatType, msgType,
+    senderOpenId: openId, content: userText, createTime: msg.create_time,
+    mentionOpenIds: [
+      ...((msg?.mentions ?? []) as any[]).map(m => m?.id?.open_id).filter(Boolean),
+      ...postMentions.map((m: any) => m?.id?.open_id).filter(Boolean),
+    ],
+  })
 
   // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
   // Với p2p: bỏ qua (blank message)

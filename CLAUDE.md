@@ -4,17 +4,36 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s172)
+## Trạng thái hiện tại (2026-08-31, s173)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s171 audit+fix 3 bug My Metrics + s172 rebuild UI My Metrics (trẻ trung/hiện đại + 4 chart + notes drawer) — chờ Hiếu QA trên staging (đặc biệt s172 — chưa test qua browser thật, xem mục s172). |
+| ⏳ Trên staging CHƯA merge main | s171 audit+fix 3 bug + s172 rebuild UI + s173 Lark bot real-time capture (tab My Metrics) — chờ Hiếu QA trên staging + **chạy migration v46** trước khi tin dùng s173. |
 | ✅ Đã lên main | ...+ s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
+| 🆕 **s173 — Lark bot My Metrics: bỏ giới hạn 1 group, chuyển real-time capture** | Theo mẫu `Hieu/lark-sla-bot` Hiếu đưa. Tích hợp vào webhook Lark có sẵn (`api/lark/events`) thay vì deploy bot riêng. **CẦN Hiếu chạy migration `v46_okr_lark_message_log.sql`** + xác nhận đã Kết nối Lark cá nhân + bot đã add vào group liên quan — chưa đủ 3 điều kiện thì bot vẫn 0 case như trước. Xem mục s173 dưới + `docs/wiki/Tab/analytics-my-metrics.md`. |
 | 🚧 **Report_Aug.docx (báo cáo tháng 8 cho Bảo) — VẪN THIẾU 2 SỐ** | Cần Hiếu tự điền: SKU Gross Margin % (card "SKU Gross Margin" trong My Metrics) và %3HK+Datapool Rev (card "%Datapool Rev"). Máy Claude không có `ANALYTICS_DB_*` (gohub_dw) VÀ Chrome extension (`claude-in-chrome`) chưa kết nối lúc s171 nên không tự đọc số qua browser được — nếu Hiếu kết nối lại extension, lần sau Claude có thể tự mở My Metrics đọc số giúp. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s173 — đã làm (2026-08-31): Lark bot My Metrics chuyển real-time capture, bỏ giới hạn 1 group.**
+Hiếu đưa mẫu `Hieu/lark-sla-bot` (bot riêng ghi tin nhắn Lark real-time vào Bitable) yêu cầu áp dụng vào
+My Metrics. Chi tiết đầy đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s173". Tóm tắt: KHÔNG deploy
+bot riêng — tích hợp thẳng vào webhook Lark có sẵn (`api/lark/events`, vốn phục vụ Bé Gấu). Thêm 1 tap
+fire-and-forget (`lib/okr-lark-capture.ts`, gọi ngay sau khi parse nội dung tin, TRƯỚC filter "phải
+@mention BOT") ghi mọi tin Hiếu tự gửi HOẶC được @mention (BẤT KỲ group nào bot có mặt) vào bảng mới
+`okr_lark_message_log` (migration `v46_okr_lark_message_log.sql`, **CHƯA CHẠY**). `lark-thread-scan.ts`
+thêm `fetchThreadsFromCapturedLog()` (đọc thread_id từ log thay vì list-toàn-group, rồi hydrate đầy đủ
+qua REST như cũ — tái dùng `hydrateThread()`, KHÔNG xoá `fetchRecentThreads()` cũ vì Cà Thread vẫn dùng).
+`lark-scan-runner.ts` đổi nguồn sang hàm mới, bỏ điều kiện chặn "chưa cấu hình chat_id". Config
+`lark-config` API + modal "⚙️ Lark Bot" bỏ hẳn field/input `chat_id`. `LarkThread` type thêm `chat_id`
+(mỗi thread giờ có thể ở group khác nhau, không còn 1 giá trị cố định). tsc + `next build` PASS.
+**Hạn chế biết trước**: không có dữ liệu lịch sử (chỉ capture từ lúc deploy), chỉ bắt text/post (khớp
+giới hạn sẵn có toàn `api/lark/events`), cần Hiếu đã Kết nối Lark cá nhân + bot đã add vào group liên
+quan (Lark chỉ gửi event cho group bot LÀ THÀNH VIÊN — không tự động hoá được). **CHƯA verify với dữ
+liệu Lark thật** — Hiếu cần: (1) chạy migration v46, (2) xác nhận 2 điều kiện trên, (3) gửi thử 1 tin
+liên quan rồi bấm "Quét ngay" xem có bắt được không.
 
 **s172 — đã làm (2026-08-31): rebuild UI tab My Metrics** (Hiếu: "trẻ trung, hiện đại, rõ ràng, thêm
 chart, note gom vào 1 button, bảng 50 dòng/trang"). Chi tiết đầy đủ ở `docs/wiki/Tab/
@@ -436,6 +455,7 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [ ] ⏳ **v43 `kb_wiki_pages.visibility_mode` + `kb_wiki_page_groups`** (gộp Note/KB vào Tổ Gấu, s163 — CẦN Hiếu chạy trước khi QA)
 - [x] ✅ **v44 `okr_evidence_records`/`okr_sku_tags`** (My Metrics, s164 — Hiếu đã chạy 2026-08-27)
 - [x] ✅ **v45 `okr_lark_events` + nới `okr_sku_tags.effective_date`** (My Metrics rebuild bot Lark, s167 — Hiếu đã chạy 2026-08-27)
+- [ ] ⏳ **v46 `okr_lark_message_log`** (Lark bot real-time capture, s173 — CẦN Hiếu chạy trước khi bot hoạt động)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
@@ -443,7 +463,9 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
 - [ ] **s163 — chạy migration `v43_kb_wiki_group_scope.sql`** trên Supabase trước khi QA gộp Note/KB vào Tổ Gấu.
 - [x] ✅ **s164/s167 — chạy migration `v44_okr_tracking.sql` rồi `v45_okr_lark_events.sql`** — Hiếu đã chạy 2026-08-27.
-- [ ] **s167 — nhập `chat_id` group Lark thật** vào modal "⚙️ Lark Bot" (`/analytics/my-metrics`, admin/creator) — bot không chạy tới khi có chat_id.
+- [x] ~~s167 — nhập `chat_id` group Lark thật~~ **ĐÃ BỎ ở s173** — không còn cần chat_id, xem mục s173.
+- [ ] **s173 — chạy migration `v46_okr_lark_message_log.sql`** + xác nhận đã Kết nối Lark cá nhân (Creator
+  Settings) + bot đã add vào group Sales/PIC liên quan — 3 điều kiện để capture real-time hoạt động.
 - [ ] **s167 — QA UI My Metrics trên staging**: mở tab, kiểm bảng SKU scan/evidence không lỗi 500 (bảng mới cần cột `okr_sku_tags.effective_date` nullable từ v45), thử gắn/xoá ghi chú SKU, thử thêm case evidence tay.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 
