@@ -195,6 +195,17 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s180 (2026-08-31) — xoá được case Lark đã lỡ xác nhận
+
+Hiếu: vài case bấm nhầm "Xác nhận" muốn xoá. Bảng case (`EvidenceCard` → cột hành động) trước chỉ có
+sửa/xoá cho nguồn `manual` (`okr_evidence_records`) — case nguồn `lark_auto` (đã `confirm` trong
+`okr_lark_events`) không có nút nào.
+
+Thêm route `DELETE /api/analytics/my-metrics/lark-events/[id]` + nút xoá riêng cho hàng nguồn Lark. Xoá
+HẲN (không chỉ đổi status về pending) — lý do: `message_id` hết bị coi "đã thấy" ở dedupe lần scan sau
+(`lark-scan-runner.ts`), nên nếu thread vẫn còn thật sẽ tự trôi lại vào hàng chờ duyệt để Hiếu xử lý lại
+từ đầu (không cần thao tác gì thêm). tsc PASS.
+
 ## s179 (2026-08-31) — quét lịch sử 1 lần cho group cũ
 
 Sau s178, Hiếu báo: 1 group hầu như thread nào cũng được mention (rất nhiều), nhưng quét real-time chỉ ra
