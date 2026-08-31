@@ -6,7 +6,7 @@ import {
   Target, Pencil, Save, XCircle, RefreshCw, Plus, Trash2,
   Clock, ChevronDown, ChevronUp, Lock, ShieldCheck, Tag, Gauge,
   Zap, BarChart3, Bot, Info, Settings, Check, X, Search, Sparkles,
-  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen, Users, Award,
+  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen, Users, Award, ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -47,6 +47,7 @@ interface EvidenceData {
 }
 interface LarkEvent {
   id: string; quarter: string; metric: string; message_id: string
+  chat_id: string; chat_name: string
   request_time: string; request_snippet: string | null; request_sender: string | null
   completion_time: string | null; completion_snippet: string | null; completion_sender: string | null
   duration_value: number | null; ai_reason: string | null
@@ -345,11 +346,18 @@ function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
             const isEditing = !!editing[ev.id]
             return (
               <div key={ev.id} className="bg-white border border-amber-200 rounded-lg p-2.5 text-[11px]">
-                <p className="text-slate-500 italic mb-1 truncate">"{ev.ai_reason || "(không có lý do)"}"</p>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <a href={`https://applink.larksuite.com/client/chat/open?openChatId=${encodeURIComponent(ev.chat_id)}`}
+                    target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-black hover:bg-brand-100">
+                    💬 {ev.chat_name} <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <p className="text-slate-500 italic mb-1">"{ev.ai_reason || "(không có lý do)"}"</p>
                 {!isEditing ? (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                    <div><span className="text-slate-400">📩 </span><span className="font-bold">{hhmm(ev.request_time)}</span><p className="text-slate-400 truncate">{ev.request_snippet}</p></div>
-                    <div><span className="text-slate-400">✅ </span><span className="font-bold">{ev.completion_time ? hhmm(ev.completion_time) : "chưa xong"}</span><p className="text-slate-400 truncate">{ev.completion_snippet}</p></div>
+                    <div><span className="text-slate-400">📩 </span><span className="font-bold">{hhmm(ev.request_time)}</span> <span className="text-slate-400">({ev.request_sender ?? "?"})</span><p className="text-slate-600 whitespace-pre-wrap break-words">{ev.request_snippet}</p></div>
+                    <div><span className="text-slate-400">✅ </span><span className="font-bold">{ev.completion_time ? hhmm(ev.completion_time) : "chưa xong"}</span> {ev.completion_sender && <span className="text-slate-400">({ev.completion_sender})</span>}<p className="text-slate-600 whitespace-pre-wrap break-words">{ev.completion_snippet}</p></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
