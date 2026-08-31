@@ -227,9 +227,15 @@ raw text log mới cho thấy JSON ĐÚNG cấu trúc nhưng đứt ngang giữa
 (`{"is_match": true, "metric": "sla", "completion_reply` — thiếu hẳn phần còn lại) — không phải Gemini
 trả sai định dạng, mà bị **cắt cụt do hết token**. `gemini-3.6-flash` mặc định bật "thinking" (chuỗi suy
 luận ẩn) — token đó TÍNH CHUNG vào `maxOutputTokens` cùng ngân sách với phần JSON thấy được, ăn hết trước
-khi tới JSON thật dù đã tăng 300→500. Fix: thêm `thinkingConfig: { thinkingBudget: 0 }` tắt hẳn thinking
-— đúng pattern đã dùng ở `api/config/schema/ai-suggest/route.ts` (repo đã có tiền lệ bug này). JSON schema
-chỉ 4 field nhỏ, không cần budget lớn nữa sau khi tắt thinking. tsc PASS.
+khi tới JSON thật dù đã tăng 300→500.
+- **Thử lần 1**: `thinkingConfig: { thinkingBudget: 0 }` tắt hẳn thinking (đúng pattern
+  `api/config/schema/ai-suggest/route.ts`) → **model trả thẳng 400 "invalid argument"** — model này KHÔNG
+  chấp nhận field đó (không phải model Gemini nào cũng cho tắt thinking bằng budget=0, dù cùng tên model
+  vẫn có route khác dùng field này — chưa rõ route kia có thật sự chạy qua chưa hay cũng sẽ lỗi tương tự
+  nếu gọi thật, KHÔNG sửa route đó vì ngoài phạm vi request). Đã revert.
+- **Fix thật (lần 2)**: bump `maxOutputTokens` thẳng lên **4000** — khớp đúng con số
+  `lib/weekly-report/narrative.ts` đã dùng ổn định với CÙNG model + CÙNG `responseMimeType` (Hiếu xác nhận
+  chạy thật ở s170(c)), không tự đoán số mới. Đủ chứa cả phần thinking ẩn lẫn JSON thật. tsc PASS.
 
 ## s176 (2026-08-31) — fix KHẨN: Lark webhook production reject 100% request thật (root cause thật lần 2)
 
