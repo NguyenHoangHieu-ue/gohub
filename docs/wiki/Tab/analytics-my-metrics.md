@@ -193,6 +193,36 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s171 (2026-08-31) — audit + fix 3 bug thật (theo yêu cầu Hiếu "quét tab My Metrics")
+
+1. **HIGH — `lark-config/route.ts` + `lark-config/scan-now/route.ts` check quyền bằng JWT role
+   (`session.user.role`), không phải role tươi DB** — cùng lỗi s165 đã quét+fix hàng loạt route khác
+   (34 route), nhưng 2 route này thêm SAU s165 (s167) nên bị bỏ sót. Hậu quả: user vừa được cấp
+   admin/creator nhưng chưa re-login trong JWT maxAge 1 ngày → FE thấy nút "⚙️ Lark Bot" (role tươi
+   qua `/api/user/me`) nhưng bấm vào bị 401 oan. Fix: đổi sang `canWriteTab(username, "my-metrics",
+   ["admin","creator"])` (role tươi), khớp `evidence`/`sku-tags`/`lark-events/review`/`manual`.
+2. **MEDIUM — `%3HK + BC Datapool` (`my-metrics/route.ts`) có thể đếm trùng doanh thu nếu `dim_sku`
+   có dòng trùng SKU khác vendor** — công thức cũ dùng 2 `IN (SELECT DISTINCT ... WHERE vendor=X)`
+   ĐỘC LẬP không loại trừ lẫn nhau, khác với `sku-scan`/`datapool-detail` (2 route cùng tab) vốn đã
+   phải `DISTINCT ON (TRIM(sku))` để né đúng vấn đề này. Fix: đổi sang 1 JOIN với subquery đã dedupe
+   (`DISTINCT ON`), 1 CASE duy nhất trên `vendor_norm` → loại trừ lẫn nhau by construction, nhất
+   quán cách làm với 2 route kia.
+3. **LOW — `conversations/route.ts` tự tính lại quarter range** thay vì dùng chung
+   `parseQuarterLabel()` (`lib/okr-helpers.ts`, 4 route khác trong tab đều dùng). Cách cũ dựng
+   `new Date(year, startMonth, 1).toISOString()` — nếu server chạy timezone khác UTC sẽ lệch ngày
+   biên (Vercel chạy UTC nên chưa lộ, nhưng là bug tiềm ẩn). Fix: dùng `parseQuarterLabel` +
+   `T00:00:00.000Z`/`T23:59:59.999Z` tường minh, tránh phụ thuộc timezone server.
+
+**Đã kiểm, không thấy bug**: quarter lock áp đúng mọi route ghi; công thức `weighted_delta` SKU
+Gross Margin không double-count SKU vừa `is_key` vừa `is_new`; check đủ 2 ảnh mới tính KPI đúng vị
+trí; bot Lark dedupe qua `message_id` đúng; không có pattern filter-injection kiểu Supabase `.or()`
+nội suy chuỗi (khác bug đã tìm ở Tổ Gấu cùng đợt audit) — mọi route My Metrics dùng `.eq()`/`.in()`
+tham số hoá.
+
+tsc PASS. **CHƯA verify được số `%3HK+Datapool` thật sau fix** (máy dev thiếu `ANALYTICS_DB_*`) — Hiếu
+tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` thật sự có SKU trùng dòng khác vendor
+(nếu dữ liệu sạch, số giữ nguyên — fix chỉ để phòng ngừa/nhất quán code, không chắc có bug số thật).
+
 ## Gotchas
 
 - **Quarter lock**: `isQuarterLocked(label)` = `true` khi hôm nay > ngày cuối quý → evidence + SKU note + duyệt

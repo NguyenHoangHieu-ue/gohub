@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { parseQuarterLabel } from "@/lib/okr-helpers"
 
 const READ_ROLES = ["admin", "creator", "bod"]
 
@@ -17,13 +18,11 @@ export async function GET(req: NextRequest) {
   const page    = parseInt(req.nextUrl.searchParams.get("page")  ?? "0")
   const limit   = Math.min(parseInt(req.nextUrl.searchParams.get("limit") ?? "20"), 50)
 
-  // Parse quarter range
-  const [q, y]   = quarter.split("-")
-  const qNum      = parseInt(q.replace("Q","")) || 3
-  const year      = parseInt(y) || 2026
-  const startM    = (qNum-1)*3
-  const startDate = new Date(year, startM, 1).toISOString()
-  const endDate   = new Date(year, startM+3, 0, 23, 59, 59).toISOString()
+  // Dùng chung parseQuarterLabel (lib/okr-helpers.ts) thay vì tự tính lại — tránh lệch nếu sau này
+  // sửa cách xác định range quý mà quên sửa route này (4 route khác trong My Metrics đều dùng chung).
+  const { start, end } = parseQuarterLabel(quarter)
+  const startDate = `${start}T00:00:00.000Z`
+  const endDate   = `${end}T23:59:59.999Z`
 
   const { data, error, count } = await supabaseAdmin
     .from("app_usage_events")

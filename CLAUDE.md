@@ -4,17 +4,37 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s170)
+## Trạng thái hiện tại (2026-08-31, s171)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | *(không có — s170(a)/s170(b)/s170(c) đã merge main)* |
-| ✅ Đã lên main | ...+ s169 audit toàn diện B2B Performance ↔ Quarter Report + s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
-| ✅ **s170(c) — Weekly Report: Hiếu đã test — Docx OK.** | Nút "Create Weekly Report" (tab Scheduled Messages) — Hiếu xác nhận file .docx xuất ra ổn (kể cả card ảnh — nghĩa là lo ngại "next/og lỗi path Windows" KHÔNG xảy ra trên staging/Vercel, đúng như dự đoán). Theo yêu cầu Hiếu, **đã BỎ nút/route xuất PDF** — giờ CHỈ xuất .docx. Xem chi tiết mục s170(c) dưới. |
+| ⏳ Trên staging CHƯA merge main | s171 audit + fix 3 bug tab My Metrics (xem mục s171 dưới) — chờ Hiếu QA. |
+| ✅ Đã lên main | ...+ s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
+| 🚧 **Report_Aug.docx (báo cáo tháng 8 cho Bảo) — VẪN THIẾU 2 SỐ** | Cần Hiếu tự điền: SKU Gross Margin % (card "SKU Gross Margin" trong My Metrics) và %3HK+Datapool Rev (card "%Datapool Rev"). Máy Claude không có `ANALYTICS_DB_*` (gohub_dw) VÀ Chrome extension (`claude-in-chrome`) chưa kết nối lúc s171 nên không tự đọc số qua browser được — nếu Hiếu kết nối lại extension, lần sau Claude có thể tự mở My Metrics đọc số giúp. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s171 — đã làm (2026-08-31): audit tab My Metrics theo yêu cầu Hiếu "quét ra tab My Metrics" (chuẩn bị
+giúp hoàn thành `Report_Aug.docx`) — 3 bug thật, đã fix.** Chi tiết đầy đủ ở `docs/wiki/Tab/
+analytics-my-metrics.md` mục "s171". Tóm tắt: (1) HIGH — 2 route `lark-config`/`lark-config/scan-now`
+check quyền bằng JWT role thay role tươi DB, cùng họ bug s165 nhưng route thêm SAU s165 nên sót — đổi
+sang `canWriteTab()`; (2) MEDIUM — `%3HK+BC Datapool` (`my-metrics/route.ts`) có thể đếm trùng doanh thu
+nếu `dim_sku` có SKU trùng dòng khác vendor (2 `IN` subquery cũ không loại trừ lẫn nhau) — đổi sang 1
+JOIN dedupe `DISTINCT ON` + 1 CASE, khớp cách `sku-scan`/`datapool-detail` đã làm; (3) LOW —
+`conversations/route.ts` tự tính lại quarter range thay vì dùng chung `parseQuarterLabel()` — đổi sang
+dùng chung, nhân tiện hết phụ thuộc timezone server. tsc PASS. **CHƯA verify số thật sau fix** (máy dev
+thiếu `ANALYTICS_DB_*`) — Hiếu tự so số `%3HK+Datapool` trước/sau trên staging.
+
+**Report_Aug.docx (báo cáo tháng 8) — vẫn CHƯA hoàn thành**: đã đọc nội dung file (`Report_Aug.docx`)
+qua unzip+strip-XML (Read tool không đọc được .docx binary trực tiếp) — 3/5 KPI đã điền (SLA=0 case,
+Vendor Speed=0 case, Bé Gấu=64.7%), còn thiếu **SKU Gross Margin %** và **%3HK+Datapool Rev %** (cả 2
+nằm trong `gohub_dw`, máy dev không có credential). Đã thử dùng `claude-in-chrome` để tự mở My Metrics
+trên staging đọc số trực tiếp — **Chrome extension chưa kết nối** lúc đó ("Browser extension is not
+connected"), không đọc được. Hiếu tự điền 2 số này (+ vài dòng chi tiết SKU trọng điểm/mới,
+breakdown Datapool Rev 3HK/BC/Tổng, Weighted OKR Score tổng, mục kế hoạch tháng 9 #4) — hoặc kết nối
+lại Chrome extension để Claude tự đọc lần sau.
 
 **s170(c) — Weekly Report (2026-08-31): ĐÃ CODE XONG theo spec Hiếu chốt (đọc file mẫu `Company Weekly
 Performance.pdf` + 4 quyết định kỹ thuật Hiếu trả lời trực tiếp trong chat).**
