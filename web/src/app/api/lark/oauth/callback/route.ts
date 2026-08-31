@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { exchangeLarkCode, saveLarkUserToken } from "@/lib/lark"
+import { exchangeLarkCode, saveLarkUserToken, getLarkSelfOpenId } from "@/lib/lark"
 
 // Lark redirect về đây kèm ?code&state. Đổi code → user token, lưu, quay về Gấu Pro.
 export async function GET(req: NextRequest) {
@@ -23,7 +23,10 @@ export async function GET(req: NextRequest) {
       console.error("[Lark OAuth] exchange failed:", tok.code, tok.msg)
       return done("error")
     }
-    await saveLarkUserToken(tok, tok.open_id)
+    // Bug đã fix: tok.open_id KHÔNG tồn tại trong response đổi code→token của Lark OAuth v2 — phải
+    // gọi riêng /authen/v1/user_info bằng access_token vừa nhận để tự tra open_id thật.
+    const openId = await getLarkSelfOpenId(tok.access_token)
+    await saveLarkUserToken(tok, openId ?? undefined)
     const res = done("connected")
     res.cookies.delete("lark_oauth_state")
     return res

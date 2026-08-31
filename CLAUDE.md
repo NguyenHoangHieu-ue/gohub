@@ -4,19 +4,43 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s174)
+## Trạng thái hiện tại (2026-08-31, s175)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s171 audit+fix 3 bug + s172 rebuild UI + s173 Lark bot real-time capture + s174 mở rộng phân loại SLA + bảng 20 dòng/trang (tab My Metrics) — chờ Hiếu QA. |
+| ⏳ Trên staging CHƯA merge main | s171-s175 (tab My Metrics: audit+fix, rebuild UI, Lark real-time capture, mở rộng phân loại SLA, **fix root-cause "0 case"** + Bé Gấu Insights) — chờ Hiếu QA. |
 | ✅ Đã lên main | ...+ s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
-| ✅ **v46 đã chạy (Hiếu xác nhận)** | Lark bot real-time capture (s173) sẵn sàng nhận dữ liệu — vẫn cần Hiếu xác nhận đã Kết nối Lark cá nhân + bot đã add vào group liên quan (2 điều kiện còn lại). |
-| 🆕 **s174 — mở rộng phân loại "sla" + bảng 20 dòng/trang** | Prompt phân loại (`okr-lark-classify.ts`) trước hẹp (chỉ "tạo sản phẩm mới"/"hỏi gói nước nào") — nay rõ 3 nhóm: tạo/thêm sản phẩm · cung cấp/kiểm tra thông tin · báo lỗi sản phẩm (+ nhiều dạng khác theo tinh thần, không cứng từ khoá). Nhân tiện fix: thread CHƯA hoàn thành trước bị `is_match=false` (biến mất khỏi hàng chờ duyệt) → nay `is_match=true` với completion=null → HIỆN trong hàng chờ, Hiếu tự "Sửa giờ & xác nhận". `DataTable` pageSize 50→20 (mọi bảng trong tab). Xem mục s174 dưới. |
+| 🆕 **s175 — TÌM RA + FIX root cause "0 case" thật (không phải giả thuyết)** | `okr_lark_message_log` = 0 dòng (query Supabase thật, có credential lần này) → truy ra `getLarkUserOpenId()` luôn trả `null` vì `oauth/callback` lưu nhầm `tok.open_id` (field KHÔNG tồn tại trong response OAuth v2 của Lark) — bug CÓ TỪ TRƯỚC s173, chỉ lộ ra vì My Metrics giờ phụ thuộc hàm này. Đã fix code + **backfill NGAY open_id thật vào DB** (dùng access_token còn hạn gọi `user_info`, không cần Hiếu re-OAuth) — mọi tính năng dùng `getLarkUserOpenId()` (My Metrics capture, DM cảnh báo, Gấu Pro task assignee) hoạt động đúng từ NGAY BÂY GIỜ. Cần Hiếu gửi thử 1 tin + "Quét ngay" để xác nhận. Xem mục s175 dưới + wiki. |
 | 🚧 **Report_Aug.docx (báo cáo tháng 8 cho Bảo) — VẪN THIẾU 2 SỐ** | Cần Hiếu tự điền: SKU Gross Margin % (card "SKU Gross Margin" trong My Metrics) và %3HK+Datapool Rev (card "%Datapool Rev"). Máy Claude không có `ANALYTICS_DB_*` (gohub_dw) VÀ Chrome extension (`claude-in-chrome`) chưa kết nối lúc s171 nên không tự đọc số qua browser được — nếu Hiếu kết nối lại extension, lần sau Claude có thể tự mở My Metrics đọc số giúp. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s175 — đã làm (2026-08-31): fix ROOT CAUSE "0 case" thật + auto-size chart + Bé Gấu Insights.** Chi
+tiết đầy đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s175". Tóm tắt:
+
+- **Bug thật tìm được** (không phải đoán): máy dev LẦN NÀY có credential Supabase → query trực tiếp
+  `okr_lark_message_log` = 0 dòng → truy ngược `getLarkUserOpenId()` (`lib/lark.ts`) đọc field `open_id`
+  từ `app_settings.lark_oauth_creator`, nhưng record thật KHÔNG CÓ field này. Root cause: `oauth/
+  callback/route.ts` gọi `saveLarkUserToken(tok, tok.open_id)` — **Lark OAuth v2 token-exchange response
+  KHÔNG có field `open_id`** (phải gọi riêng `GET /authen/v1/user_info`, đúng như README mẫu
+  `Hieu/lark-sla-bot`) → `tok.open_id` luôn `undefined` từ lúc code viết, KHÔNG phải bug mới của s173.
+- **Fix + backfill NGAY**: thêm `getLarkSelfOpenId()` (lib/lark.ts) gọi đúng endpoint; sửa callback dùng
+  hàm này. Đồng thời BACKFILL trực tiếp vào Supabase bằng access_token còn hạn của kết nối hiện tại (gọi
+  `user_info` → `open_id = ou_e5af3c7f447984052c1c5a5c2f594127`, khớp `LARK_CREATOR_USER_ID` đã biết) —
+  **không cần Hiếu re-OAuth**, `getLarkUserOpenId()` đúng ngay lập tức (hàm chỉ đọc field tĩnh).
+- **Side-fix**: mọi tính năng khác âm thầm bị cùng bug (chưa ai báo) cũng hết lỗi luôn — DM cảnh báo case
+  mới My Metrics, gán task assignee Gấu Pro.
+- **Chart tự lấn chữ SKU/tên → auto-size**: `SkuMoversChart` YAxis trước cố định `width={110}`, SKU dài
+  tràn chữ. Đổi tính tự động theo độ dài chuỗi dài nhất trong data. Cùng cách áp cho `TopUsersChart`.
+- **Bé Gấu Insights (mới)**: route `begau-insights` + `lib/begau-insights.ts` — top người dùng (chart
+  bar), chủ đề hay hỏi (đếm tần suất từ khoá, KHÔNG AI), chấm điểm câu trả lời (**heuristic rõ ràng**,
+  ghi trong NotesDrawer không phải AI chấm/không đo đúng-sai thật). Đã **verify chạy thật trên Supabase
+  Q3-2026** (328 task, không chỉ tsc pass suông): top user Hồ Công Minh 74 task; chủ đề ra đúng nghiệp vụ
+  (doanh thu/target/cm1/pro-rata/b2c); chất lượng TB 93.0 điểm, 315 tốt/12 trung bình/1 cần soát.
+- tsc + `next build` PASS. **Cần Hiếu**: gửi thử 1 tin trong group đã add bot + bấm "Quét ngay" xác nhận
+  capture hoạt động (nếu vẫn 0, xem gợi ý kiểm tra Lark App event subscription scope trong wiki).
 
 **s174 — đã làm (2026-08-31): mở rộng phân loại "sla" + bảng 20 dòng/trang (My Metrics).** Chi tiết đầy
 đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s174". Tóm tắt: Hiếu yêu cầu xem lại logic phân loại

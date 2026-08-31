@@ -79,15 +79,39 @@ export const BegauTrendChart = React.memo(function BegauTrendChart({ data }: { d
   )
 })
 
-// ── 4. SKU GM movers — top tăng/giảm delta (diverging, chỉ SKU key/new) ──────
-export interface SkuMoverPoint { sku: string; delta: number }
-export const SkuMoversChart = React.memo(function SkuMoversChart({ data }: { data: SkuMoverPoint[] }) {
+// ── 4. Top người dùng Bé Gấu — bar ngang, 1 màu (chỉ xếp hạng, không phân cực như SKU movers) ──
+export interface UserCountPoint { user: string; count: number }
+export const TopUsersChart = React.memo(function TopUsersChart({ data }: { data: UserCountPoint[] }) {
+  const longest = data.reduce((max, d) => Math.max(max, d.user.length), 0)
+  const yAxisWidth = Math.min(170, Math.max(70, longest * 6.5 + 16))
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 28, left: 4, bottom: 4 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+        <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+        <YAxis type="category" dataKey="user" width={yAxisWidth} axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 700 }} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(val: number) => [val, "Task"]} />
+        <Bar dataKey="count" fill={BRAND} radius={[0, 4, 4, 0]} maxBarSize={16}>
+          <LabelList dataKey="count" position="right" style={{ fontSize: 10, fontWeight: 700, fill: "#475569" }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+})
+
+// ── 5. SKU GM movers — top tăng/giảm delta (diverging, chỉ SKU key/new) ──────
+export interface SkuMoverPoint { sku: string; delta: number }
+export const SkuMoversChart = React.memo(function SkuMoversChart({ data }: { data: SkuMoverPoint[] }) {
+  // Auto-size cột tên SKU theo độ dài chuỗi dài nhất — cố định 110px trước đây quá hẹp cho SKU dài
+  // (13-18 ký tự) → chữ lấn vào vùng vẽ bar. ~6.5px/ký tự ở font 11px in đậm + đệm 2 đầu.
+  const longestSku = data.reduce((max, d) => Math.max(max, d.sku.length), 0)
+  const yAxisWidth = Math.min(170, Math.max(70, longestSku * 6.5 + 16))
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 44, left: 4, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
         <XAxis type="number" tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-        <YAxis type="category" dataKey="sku" width={110} axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 700 }} />
+        <YAxis type="category" dataKey="sku" width={yAxisWidth} axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 700 }} />
         <Tooltip contentStyle={tooltipStyle} formatter={(val: number) => [`${val >= 0 ? "+" : ""}${val.toFixed(2)}%`, "Δ GM%"]} />
         <ReferenceLine x={0} stroke="#cbd5e1" />
         <Bar dataKey="delta" radius={[0, 4, 4, 0]} maxBarSize={16}>

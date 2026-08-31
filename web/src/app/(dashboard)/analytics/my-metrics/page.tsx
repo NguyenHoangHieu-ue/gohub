@@ -6,7 +6,7 @@ import {
   Target, Pencil, Save, XCircle, RefreshCw, Plus, Trash2,
   Clock, ChevronDown, ChevronUp, Lock, ShieldCheck, Tag, Gauge,
   Zap, BarChart3, Bot, Info, Settings, Check, X, Search, Sparkles,
-  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen,
+  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen, Users, Award,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -17,6 +17,7 @@ const ScoreRadarChart    = dynamic(() => import("./my-metrics-charts").then(m =>
 const DatapoolTrendChart = dynamic(() => import("./my-metrics-charts").then(m => m.DatapoolTrendChart), { ssr: false, loading: chartLoading })
 const BegauTrendChart    = dynamic(() => import("./my-metrics-charts").then(m => m.BegauTrendChart),    { ssr: false, loading: chartLoading })
 const SkuMoversChart     = dynamic(() => import("./my-metrics-charts").then(m => m.SkuMoversChart),     { ssr: false, loading: chartLoading })
+const TopUsersChart      = dynamic(() => import("./my-metrics-charts").then(m => m.TopUsersChart),      { ssr: false, loading: chartLoading })
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AutoMetrics {
@@ -75,6 +76,19 @@ interface SkuScanData {
 interface SkuNote { id: string; sku_code: string; note: string | null; created_by: string }
 interface DatapoolDetailItem { sku: string; vendor: string; category: string | null; rev: number; units: number; orders: number }
 interface DatapoolDetailData { items: DatapoolDetailItem[]; total_rev: number; total_orders: number; total_units: number }
+interface TopUserRow  { user: string; count: number }
+interface TopicRow    { phrase: string; count: number }
+interface QualityItem {
+  id: number; user: string; created_at: string
+  user_message: string; ai_response_preview: string
+  score: number; bucket: "high" | "medium" | "low"; flags: string[]
+}
+interface BegauInsightsData {
+  total_tasks: number
+  topUsers: TopUserRow[]
+  topKeywords: TopicRow[]
+  quality: { avgScore: number; high: number; medium: number; low: number; items: QualityItem[] }
+}
 
 // Fallback khi chưa lưu target vào DB
 const DEFAULT_TARGETS = {
@@ -848,7 +862,7 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
         {movers.length > 0 && (
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Biến động GM% lớn nhất (SKU trọng điểm/mới)</p>
-            <div style={{ height: Math.max(140, movers.length * 26) }}>
+            <div style={{ height: Math.max(160, movers.length * 34) }}>
               <SkuMoversChart data={movers} />
             </div>
           </div>
@@ -902,6 +916,106 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
         <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue (toàn bộ SKU, quý này vs quý trước)"
           filter={`GM% = SUM(gross_profit_vnd)/SUM(fulfilled_revenue_amount_vnd) · trọng điểm = top ${data?.key_threshold_pct ?? 80}% doanh thu tích luỹ · mới = so baseline ${OKR_GM_BASELINE_DISPLAY}%`} />
       </div>
+    </div>
+  )
+}
+
+// ─── Bé Gấu Insights — ai dùng nhiều, chủ đề hay hỏi, chấm điểm heuristic câu trả lời ─────────
+function BegauInsightsSection({ quarter }: { quarter: string }) {
+  const [data, setData] = useState<BegauInsightsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [bucketFilter, setBucketFilter] = useState<"all" | "high" | "medium" | "low">("all")
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch(`/api/analytics/my-metrics/begau-insights?quarter=${quarter}`)
+    if (r.ok) setData(await r.json())
+    setLoading(false)
+  }, [quarter])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const items = data?.quality.items ?? []
+  const filteredItems = bucketFilter === "all" ? items : items.filter(i => i.bucket === bucketFilter)
+  const maxKwCount = Math.max(1, ...(data?.topKeywords.map(k => k.count) ?? [1]))
+
+  const bucketBadge = (b: "high" | "medium" | "low") => {
+    const cls = b === "high" ? "bg-emerald-50 text-emerald-700" : b === "medium" ? "bg-slate-100 text-slate-600" : "bg-amber-50 text-amber-700"
+    const label = b === "high" ? "Tốt" : b === "medium" ? "Trung bình" : "Cần soát"
+    return <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide", cls)}>{label}</span>
+  }
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <Award className="w-4 h-4 text-slate-400" />
+        <span className="text-sm font-black text-slate-800">Bé Gấu Insights</span>
+        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">Auto · heuristic</span>
+      </div>
+
+      {loading && <p className="text-xs text-slate-400 text-center py-4">Đang tải…</p>}
+
+      {!loading && data && (
+        <>
+          {/* Top users + topics side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Users className="w-3 h-3" /> Người dùng nhiều nhất</p>
+              {data.topUsers.length > 0 ? (
+                <div style={{ height: Math.max(120, data.topUsers.length * 30) }}>
+                  <TopUsersChart data={data.topUsers} />
+                </div>
+              ) : <p className="text-[11px] text-slate-300 text-center py-4">Chưa có dữ liệu.</p>}
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Tag className="w-3 h-3" /> Chủ đề hay được hỏi</p>
+              {data.topKeywords.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 content-start">
+                  {data.topKeywords.map(k => {
+                    const intensity = k.count / maxKwCount
+                    return (
+                      <span key={k.phrase}
+                        className="text-[11px] font-bold px-2 py-1 rounded-lg border border-brand-100"
+                        style={{ background: `rgba(15,76,129,${0.05 + intensity * 0.15})`, color: "#0a3560" }}>
+                        {k.phrase} <span className="opacity-50">· {k.count}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : <p className="text-[11px] text-slate-300 text-center py-4">Chưa có dữ liệu.</p>}
+            </div>
+          </div>
+
+          {/* Quality summary */}
+          <div>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Award className="w-3 h-3" /> Chất lượng câu trả lời (heuristic, điểm TB {data.quality.avgScore})</p>
+              <div className="flex gap-1.5">
+                {([["all", "Tất cả", items.length], ["high", "Tốt", data.quality.high], ["medium", "Trung bình", data.quality.medium], ["low", "Cần soát", data.quality.low]] as const).map(([key, label, n]) => (
+                  <button key={key} onClick={() => setBucketFilter(key)}
+                    className={cn("text-[10px] font-black px-2 py-1 rounded-lg transition-colors",
+                      bucketFilter === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200")}>
+                    {label} ({n})
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DataTable<QualityItem>
+              rows={filteredItems}
+              rowKey={r => String(r.id)}
+              emptyLabel="Không có mục nào."
+              columns={[
+                { key: "user", label: "Người hỏi", render: r => <span className="font-bold">{r.user}</span> },
+                { key: "time", label: "Thời gian", render: r => hhmm(r.created_at) },
+                { key: "q", label: "Câu hỏi", render: r => <p className="text-slate-500 truncate max-w-[220px]">{r.user_message}</p> },
+                { key: "a", label: "Trích trả lời", render: r => <p className="text-slate-500 truncate max-w-[220px]">{r.ai_response_preview}</p> },
+                { key: "score", label: "Điểm", align: "right", render: r => <span className="font-black tabular-nums">{r.score}</span> },
+                { key: "bucket", label: "Đánh giá", align: "center", render: r => bucketBadge(r.bucket) },
+              ]}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -1165,6 +1279,22 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
           <p>Đếm hội thoại chat có phản hồi AI dài ≥15 ký tự (loại chào hỏi/lỗi cụt), company-wide, trong quý.</p>
           {auto && auto.begau.excluded_short > 0 && <p>Đã loại {auto.begau.excluded_short} tin nhắn quá ngắn khỏi kỳ này.</p>}
           <p>Không có structured "success flag" — độ dài phản hồi là proxy, không phải thước đo chuẩn xác tuyệt đối.</p>
+        </>
+      ),
+    },
+    {
+      id: "begau-insights", title: "Bé Gấu Insights — Top người dùng/chủ đề/chấm điểm",
+      body: (
+        <>
+          <p><strong>Top người dùng</strong>: đếm số task theo tên/email trong quý, top 10.</p>
+          <p><strong>Chủ đề hay hỏi</strong>: đếm tần suất từ khoá/cụm 2 từ trong câu hỏi (sau khi bỏ từ
+          dừng tiếng Việt phổ biến), KHÔNG dùng AI — thuần đếm tần suất, nhanh và miễn phí nhưng chỉ bắt
+          được từ khoá xuất hiện nhiều lần theo mặt chữ, không hiểu ngữ nghĩa/gộp từ đồng nghĩa.</p>
+          <p><strong>Chấm điểm câu trả lời là HEURISTIC</strong> (không phải AI chấm, không phải đo
+          lường đúng/sai thật): cộng điểm nếu có số liệu/có cấu trúc bảng-bullet/đủ dài, trừ điểm nếu
+          quá ngắn hoặc chứa cụm "xin lỗi/chưa có thông tin/không rõ...". Dùng để LỌC NHANH các câu trả
+          lời khả nghi cần soát tay, không phải kết luận cuối cùng — điểm thấp không chắc chắn là sai,
+          chỉ là "đáng xem lại".</p>
         </>
       ),
     },
@@ -1479,6 +1609,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             )}
             <SourceBox type="auto" table="Supabase · app_usage_events"
               filter="event_type='chat' AND ai_response IS NOT NULL AND length(trim(ai_response)) >= 15 · Lark: user_email LIKE 'lark:%'" />
+
+            <BegauInsightsSection quarter={qLabel} />
 
             <div className="mt-4 border-t border-slate-100 pt-4">
               <button onClick={() => setShowConvs(v => !v)}

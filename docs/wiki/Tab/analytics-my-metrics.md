@@ -52,8 +52,9 @@ Quyết định Hiếu chốt (không tự đoán):
 | Config bot Lark | `GET/PUT /api/analytics/my-metrics/lark-config` | admin/creator only — `app_settings` key `my_metrics_lark_scan_config` (`{enabled, days_back}` — bỏ `chat_id` từ s173) |
 | Target theo quý | `GET/PATCH /api/analytics/my-metrics/manual` | `app_settings` key `okr.<Q>-<year>` |
 | Conversation drill-down | `GET /api/analytics/my-metrics/conversations` | Xem lại từng cuộc hội thoại được tính vào task count |
-| Migration | `v44_okr_tracking.sql` + `v45_okr_lark_events.sql` + `v46_okr_lark_message_log.sql` | v44: schema gốc. v45: `okr_lark_events` (review queue). v46 (s173, CHƯA CHẠY): `okr_lark_message_log` (capture real-time) |
+| Migration | `v44_okr_tracking.sql` + `v45_okr_lark_events.sql` + `v46_okr_lark_message_log.sql` | v44: schema gốc. v45: `okr_lark_events` (review queue). v46 (s173, Hiếu đã chạy): `okr_lark_message_log` (capture real-time) |
 | Shared helpers | `web/src/lib/okr-helpers.ts` | `quarterRange`, `parseQuarterLabel`, `prevQuarterLabel`, `currentQuarterLabel`, `isQuarterLocked`, `OKR_GM_BASELINE=36.7`, `OKR_HK3_BASELINE=67.5` |
+| **Auto — Bé Gấu Insights (s175, MỚI)** | `GET /api/analytics/my-metrics/begau-insights` | Top người dùng, chủ đề hay hỏi (tần suất từ khoá, không AI), chấm điểm heuristic câu trả lời. Logic: `lib/begau-insights.ts` |
 | Lark thread fetch (dùng chung) | `web/src/lib/lark-thread-scan.ts` | `fetchRecentThreads(chatId, daysBack, maxThreads)` — tách ra từ Cà Thread (`api/creator/ca-thread`) để My Metrics dùng lại, không chép logic |
 | Gemini classifier | `web/src/lib/okr-lark-classify.ts` | `classifyLarkThread(thread)` — JSON-mode, cùng convention `lib/agents/classifier.ts` (temperature 0, fallback an toàn) |
 
@@ -193,6 +194,64 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
 - Thanh "Weighted OKR Score": 5 ô trọng số trước đều nhau (`grid-cols-5`) — đổi sang `flex` tỉ lệ theo trọng số
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
+
+## s175 (2026-08-31) — fix ROOT CAUSE "0 case" thật + auto-size chart + Bé Gấu Insights
+
+Hiếu báo: đã add bot vào 1 group hoạt động rất nhiều nhưng quét vẫn 0. Query trực tiếp Supabase (có
+credential trên máy dev lần này) xác nhận `okr_lark_message_log` = **0 dòng** → xác nhận bug nằm ở
+CAPTURE (webhook không ghi được gì), không phải ở bước phát hiện/hydrate thread.
+
+**Root cause tìm được (bug thật, không phải giả thuyết):** `getLarkUserOpenId()` (dùng để biết "Hiếu là
+ai" khi so `sender_open_id`/mentions) đọc field `open_id` từ `app_settings.lark_oauth_creator` — nhưng
+record thật trong DB **KHÔNG CÓ field `open_id`** (`JSON.stringify` tự bỏ field `undefined`). Truy ngược:
+`api/lark/oauth/callback/route.ts` gọi `saveLarkUserToken(tok, tok.open_id)` — giả định response đổi
+`authorization_code → token` (Lark OAuth v2) có sẵn field `open_id`, nhưng **Lark KHÔNG trả `open_id`
+trong response đó** (đúng như README mẫu `Hieu/lark-sla-bot` đã ghi: phải gọi RIÊNG
+`GET /authen/v1/user_info` bằng access_token mới có open_id). `tok.open_id` luôn `undefined` từ lúc code
+này viết (không phải bug s173 mới gây ra — pre-existing, chỉ không ai để ý vì trước đây
+`getLarkUserOpenId()` chỉ dùng cho 1 tính năng phụ "gán task assignee", không critical).
+
+**Fix:**
+1. `lib/lark.ts` thêm `getLarkSelfOpenId(userAccessToken)` — gọi đúng
+   `GET /authen/v1/user_info` với access_token vừa nhận để tự tra open_id thật.
+2. `oauth/callback/route.ts` gọi hàm mới này thay vì đọc thẳng `tok.open_id`.
+3. **Backfill NGAY cho kết nối hiện tại của Hiếu** (không cần re-OAuth): dùng access_token còn hạn trong
+   record cũ gọi thẳng `user_info` → nhận đúng `open_id = ou_e5af3c7f447984052c1c5a5c2f594127` (khớp
+   `LARK_CREATOR_USER_ID` đã biết) → UPDATE thẳng vào Supabase. `getLarkUserOpenId()` hoạt động đúng
+   NGAY LẬP TỨC kể cả trước khi deploy code fix (vì hàm này chỉ đọc field tĩnh, không gọi Lark API).
+4. Fix này sửa LUÔN mọi tính năng khác âm thầm bị ảnh hưởng bởi cùng bug (chưa ai báo): DM cảnh báo case
+   mới của My Metrics (`sendLarkDM` trong `lark-scan-runner.ts`), gán task assignee Gấu Pro.
+
+**Chưa xác nhận (cần Hiếu test lại):** sau fix + backfill, gửi 1 tin thật trong group đã add bot rồi bấm
+"Quét ngay" — nếu VẪN 0, khả năng còn lại là Lark App event subscription scope quá hẹp (chỉ nhận tin
+@mention bot, không nhận toàn bộ tin group — xem cảnh báo trong README mẫu Hiếu đưa, mục "Quan trọng").
+Chưa xác nhận cần thiết vì code hiện tại (đoạn "auto-capture group chat_id") vốn đã giả định nhận được
+MỌI tin group từ trước s173, nên nhiều khả năng scope đã đúng sẵn.
+
+**Chart tự lấn chữ (SKU/tên) — fix auto-size:** `SkuMoversChart` (YAxis SKU) trước `width={110}` cố định
+— SKU dài (13-18 ký tự) tràn ra ngoài, lấn vào vùng vẽ bar. Đổi sang tính `yAxisWidth` tự động theo độ
+dài chuỗi dài nhất trong data (`Math.min(170, Math.max(70, longest*6.5+16))`), tăng margin phải (28→44)
+cho label số. Áp dụng cùng cách cho `TopUsersChart` (mới, xem dưới). Container height cũng tăng
+26px/dòng → 34px/dòng cho thoáng hơn.
+
+**Bé Gấu Insights (mới, theo yêu cầu "lọc ai dùng nhiều/chủ đề hay hỏi/chấm điểm câu trả lời"):**
+- Route mới `GET /api/analytics/my-metrics/begau-insights?quarter=Q3&year=2026` — cùng định nghĩa
+  "task" với route chính (`event_type='chat'`, response ≥15 ký tự, trong quý).
+- **Top người dùng**: group theo `user_name||user_email`, top 10 — chart `TopUsersChart` (bar ngang).
+- **Chủ đề hay hỏi**: đếm tần suất từ khoá/cụm 2 từ trong `user_message` (bỏ stopword tiếng Việt phổ
+  biến) — **heuristic thuần đếm tần suất, KHÔNG dùng AI** (rẻ, tức thời, không cache/async). Verify với
+  data thật Q3-2026 (328 task): ra đúng các chủ đề nghiệp vụ thật ("doanh thu", "target", "cm1",
+  "pro rata", "b2c") — có lẫn vài tên riêng (không phân biệt được danh từ riêng/chủ đề, hạn chế đã biết
+  của phương pháp tần suất đơn giản). Hiển thị dạng "chip cloud" (badge màu brand, độ đậm theo tần suất).
+- **Chấm điểm câu trả lời — HEURISTIC rõ ràng** (`lib/begau-insights.ts` `scoreResponseQuality()`):
+  +điểm nếu có số liệu/có cấu trúc bảng-bullet/đủ dài, -điểm nếu quá ngắn hoặc chứa cụm "xin lỗi/chưa có
+  thông tin/không rõ...". Verify data thật Q3-2026: điểm TB 93.0, 315 high / 12 medium / 1 low (328
+  task) — hợp lý cho 1 agent BI đã qua nhiều vòng audit chất lượng (s106-s111). Bảng kết quả (DataTable
+  20/dòng, điểm thấp lên đầu) để Hiếu soát nhanh case khả nghi — filter theo bucket (Tất cả/Tốt/Trung
+  bình/Cần soát). **Ghi rõ trong NotesDrawer: đây KHÔNG phải AI chấm, không đo đúng/sai thật** — chỉ lọc
+  nhanh case đáng xem lại, khớp tinh thần minh bạch đã có của cả tab.
+- tsc + `next build` PASS. Đã **verify logic (keyword+scoring) chạy thật trên Supabase Q3-2026** (328
+  task) qua script test độc lập trước khi tin — không chỉ tsc pass suông.
 
 ## s174 (2026-08-31) — mở rộng phân loại "sla" + bảng 20 dòng/trang
 
