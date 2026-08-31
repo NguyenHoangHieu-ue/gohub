@@ -101,18 +101,23 @@ export const TopUsersChart = React.memo(function TopUsersChart({ data }: { data:
 
 // ── 5. SKU GM movers — top tăng/giảm delta (diverging, chỉ SKU key/new) ──────
 export interface SkuMoverPoint { sku: string; delta: number }
+// SKU dài quá cột tên (VD hàng chục ký tự) vẫn tràn vào vùng bar nếu ước lượng width theo px/ký tự —
+// SVG text không tự wrap/clip theo width layout của YAxis, chỉ là gợi ý bố cục. Cắt cứng chuỗi hiển thị
+// (ellipsis) theo width CỐ ĐỊNH thay vì đoán px/ký tự → không bao giờ lấn, dù font/SKU dài cỡ nào. Tên
+// đầy đủ vẫn xem được qua Tooltip khi hover.
+const SKU_AXIS_WIDTH = 92
+const SKU_TICK_MAXLEN = 11
+function truncateSku(v: string): string {
+  return v.length > SKU_TICK_MAXLEN ? `${v.slice(0, SKU_TICK_MAXLEN - 1)}…` : v
+}
 export const SkuMoversChart = React.memo(function SkuMoversChart({ data }: { data: SkuMoverPoint[] }) {
-  // Auto-size cột tên SKU theo độ dài chuỗi dài nhất — cố định 110px trước đây quá hẹp cho SKU dài
-  // (13-18 ký tự) → chữ lấn vào vùng vẽ bar. ~6.5px/ký tự ở font 11px in đậm + đệm 2 đầu.
-  const longestSku = data.reduce((max, d) => Math.max(max, d.sku.length), 0)
-  const yAxisWidth = Math.min(170, Math.max(70, longestSku * 6.5 + 16))
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 44, left: 4, bottom: 4 }}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 52, left: 4, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
         <XAxis type="number" tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-        <YAxis type="category" dataKey="sku" width={yAxisWidth} axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 700 }} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(val: number) => [`${val >= 0 ? "+" : ""}${val.toFixed(2)}%`, "Δ GM%"]} />
+        <YAxis type="category" dataKey="sku" width={SKU_AXIS_WIDTH} tickFormatter={truncateSku} axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 700 }} />
+        <Tooltip contentStyle={tooltipStyle} labelFormatter={(l: string) => l} formatter={(val: number) => [`${val >= 0 ? "+" : ""}${val.toFixed(2)}%`, "Δ GM%"]} />
         <ReferenceLine x={0} stroke="#cbd5e1" />
         <Bar dataKey="delta" radius={[0, 4, 4, 0]} maxBarSize={16}>
           {data.map((d, i) => <Cell key={i} fill={d.delta >= 0 ? EMERALD : AMBER} />)}

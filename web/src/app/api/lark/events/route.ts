@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse }  from "next/server"
-import { createDecipheriv, createHash, createHmac } from "crypto"
+import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
@@ -90,16 +90,18 @@ export async function GET() {
   return NextResponse.json({ ok: true, service: "lark-bot" })
 }
 
-// Verify X-Lark-Signature nếu LARK_VERIFICATION_TOKEN đã set.
-// Signature = SHA256(timestamp + nonce + token + rawBody) — Lark Events API spec.
-// Nếu token chưa set thì bỏ qua (vẫn được bảo vệ bởi AES-256-CBC encryption).
+// Verify X-Lark-Signature khi app có Encrypt Key.
+// Signature = SHA256(timestamp + nonce + encrypt_key + rawBody) — đúng spec Lark Event Subscription
+// (KHÔNG phải Verification Token — bug cũ dùng nhầm Verification Token làm key ký → mismatch 100%,
+// mọi request thật bị reject, phát hiện qua Vercel runtime log s176: "signature mismatch" mọi request).
+// Không có Encrypt Key thì bỏ qua (payload lúc đó cũng không mã hoá, không có gì để đối chiếu).
 function verifyLarkSignature(req: NextRequest, rawBody: string): boolean {
-  const token = process.env.LARK_VERIFICATION_TOKEN
-  if (!token) return true
+  const key = process.env.LARK_ENCRYPT_KEY
+  if (!key) return true
   const timestamp = req.headers.get("x-lark-request-timestamp") ?? ""
   const nonce     = req.headers.get("x-lark-request-nonce")     ?? ""
-  const expected  = createHmac("sha256", token)
-    .update(timestamp + nonce + token + rawBody)
+  const expected  = createHash("sha256")
+    .update(timestamp + nonce + key + rawBody)
     .digest("hex")
   return req.headers.get("x-lark-signature") === expected
 }
