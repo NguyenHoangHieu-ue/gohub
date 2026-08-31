@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play, User } from "lucide-react"
+import { Clock, Plus, Edit2, Trash2, Power, Save, X, Calendar, MessageSquare, Globe2, Play, User, FileText } from "lucide-react"
 import { useToast } from "@/components/toast"
 
 // Port intel ScheduledMessages — tab riêng (admin-only). Backend web /api/admin/scheduled-messages (+/[id]).
@@ -69,6 +69,7 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
   const [messages, setMessages] = useState<ScheduledMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [testingId, setTestingId] = useState<string | null>(null)
+  const [generatingReport, setGeneratingReport] = useState(false)
   const [isEditing, setIsEditing] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [formData, setFormData] = useState<Partial<ScheduledMessage>>({})
@@ -142,6 +143,34 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
       toast.error("Test lỗi.")
     } finally {
       setTestingId(null)
+    }
+  }
+
+  const downloadBase64 = (base64: string, filename: string, mime: string) => {
+    const bytes = atob(base64)
+    const arr = new Uint8Array(bytes.length)
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+    const blob = new Blob([arr], { type: mime })
+    const url  = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCreateWeeklyReport = async () => {
+    setGeneratingReport(true)
+    try {
+      const res = await fetch(`${BASE}/weekly-report`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) { toast.error("Tạo Weekly Report thất bại: " + (data.error || "Unknown error")); return }
+      downloadBase64(data.docx, data.docxFilename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+      toast.success("Đã tạo Weekly Report (.docx).")
+    } catch (err) {
+      console.error(err)
+      toast.error("Tạo Weekly Report lỗi.")
+    } finally {
+      setGeneratingReport(false)
     }
   }
 
@@ -265,9 +294,18 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
           <p className="text-slate-500 mt-1">Cấu hình báo cáo AI tự động gửi lên Lark.</p>
         </div>
         {canEdit && !isAdding && !isEditing && (
-          <button onClick={startAdding} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">
-            <Plus className="w-4 h-4" />Lịch mới
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCreateWeeklyReport} disabled={generatingReport}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white text-blue-600 border border-blue-200 rounded-xl font-bold text-sm hover:bg-blue-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              {generatingReport
+                ? <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                : <FileText className="w-4 h-4" />}
+              {generatingReport ? "Đang tạo báo cáo..." : "Create Weekly Report"}
+            </button>
+            <button onClick={startAdding} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">
+              <Plus className="w-4 h-4" />Lịch mới
+            </button>
+          </div>
         )}
       </div>
 

@@ -158,6 +158,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
+  const { data: group } = await supabaseAdmin
+    .from("chat_groups")
+    .select("is_archived")
+    .eq("id", id)
+    .maybeSingle()
+  if (group?.is_archived) {
+    return NextResponse.json({ error: "Nhóm đã lưu trữ, không thể gửi tin nhắn mới" }, { status: 403 })
+  }
+
   const body    = await req.json()
   const content = body.content?.trim() ?? ""
   const attachments: { url: string; name: string; size: number; type: string }[] =

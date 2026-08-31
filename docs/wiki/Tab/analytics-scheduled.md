@@ -5,13 +5,66 @@ is_hidden: true
 department: tech
 tags: [tab, admin, scheduled]
 created: 2026-06-28
-updated: 2026-08-03
+updated: 2026-08-31
 status: active
 ---
 
 # Scheduled Messages (Lịch Gửi Báo Cáo Tự Động)
 
 Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, tiến độ chạy mục tiêu tự động đến các kênh hoặc nhóm thảo luận của bộ phận CS, Sales trên ứng dụng Lark.
+
+---
+
+## 0. Create Weekly Report (s170, 2026-08-31) — xuất báo cáo tuần .docx
+
+Nút riêng (không phải lịch tự động) cạnh nút "Lịch mới", cùng quyền ghi (`admin`/`creator` hoặc
+`writable_tabs` chứa `"scheduled"`). Bấm → gọi `POST /api/admin/scheduled-messages/weekly-report` → BE tính
+số liệu + render file .docx → FE tự tải. Theo format mẫu Hiếu cung cấp (báo cáo tay tuần: Revenue/WoW/Pro-rata
+tháng vs Actual tháng trước, breakdown từng channel B2B/B2C, GP&CM1, 3HK Contribution — kèm "ảnh" card style
+Dashboard/B2B/B2C/Vendor Performance). *(Ban đầu làm cả PDF, đã BỎ theo yêu cầu Hiếu sau khi test staging —
+xem cuối mục.)*
+
+**Kỳ báo cáo**: LUÔN "tuần trước" (Thứ 2→CN gần nhất đã hoàn thành, tính bất kể ngày bấm nút) + MTD tháng hiện
+tại so Actual tháng trước liền kề — `lib/weekly-report/period.ts`.
+
+**Nguồn số liệu — tái dùng, KHÔNG viết công thức riêng:**
+| Phần | Nguồn |
+|---|---|
+| KPI tuần/tháng (Revenue/Orders/AOV/Units) | Query trực tiếp, CÙNG công thức `/api/analytics/kpis` (raw, không lọc ship/internal) |
+| Weekly WoW theo B2B/B2C/Internal-Misc | Group theo `dim_order_source.group_name`, raw (khớp KPI card ở trên) |
+| GP & CM1 B2B/B2C (MTD + pro-rata) | `fetchBODGroupMarginData()` (`lib/bod-data.ts`) — CÙNG hàm BOD tab dùng, gồm Turso B2B per-customer cost + group cost |
+| Per-channel MoM (Klook/ShopeePay/MoMo...) | Route mới `fetchChannelMoM()` — filter khớp B2B/B2C Performance (`excludeInactiveCustomers`, `shipFilter(false)`, `internalOpsFilterByCode(false)`, exclude list từ `quarterly-settings`) |
+| 3HK Contribution | Vendor filter `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`, cùng chuẩn BOD |
+| Nhận định "Điểm sáng/Hạn chế" từng channel | Gemini (`gemini-3.6-flash`, JSON-mode) — CHỈ diễn giải %MoM đã tính sẵn, cấm bịa lý do ngoài số liệu (đúng pattern precompute→format của mục 3 dưới) |
+
+**Ảnh minh chứng = tự vẽ bằng code** (Hiếu chốt, không dùng Puppeteer): `next/og` `ImageResponse` (built-in
+Next.js 14, zero dependency mới) vẽ lại 6 card (Dashboard KPI tuần/tháng, Month-End Projection, B2B/B2C
+Performance Summary, Vendor Performance 3HK) — **mỗi card LUÔN in tên tab nguồn số liệu** ở header (yêu cầu
+Hiếu, vd "B2C Performance"). File `lib/weekly-report/card-images.ts` — viết bằng `React.createElement` thuần
+(KHÔNG JSX, đuôi `.ts` không phải `.tsx`) để không phụ thuộc cấu hình jsx của bộ build đang chạy.
+
+**Xuất file:**
+- **Docx**: `markdownToDocx` (tách từ `api/creator-ai/export/route.ts` ra `lib/docx-markdown.ts`, dùng chung —
+  route Gấu Pro export cũ KHÔNG đổi hành vi) + thêm marker `![[IMG:key]]` → `ImageRun` (co tỉ lệ, max 600px).
+- `report-content.ts` build markdown + ảnh 1 lần → `docx-export.ts` wrap thành `Document` (header/footer, port
+  từ `creator-ai/export`).
+
+**✅ Đã verify trên staging (Hiếu test 2026-08-31): file .docx xuất ra ổn, kể cả 6 card ảnh** — xác nhận
+`next/og`/`ImageResponse` chạy đúng trên Vercel (Linux). Lúc code trên máy dev Windows, `ImageResponse` từng lỗi
+`TypeError: Invalid URL` cục bộ do `@vercel/og` bundled gọi `path.join(import.meta.url, "../noto-sans...ttf")`
+rồi `fileURLToPath()` — `path.join` kiểu Windows (`\`) phá cú pháp `file://` URL. Bug đó CHỈ xảy ra trên
+Windows dev (POSIX `path.join` trên Linux không dính) — kết quả test staging đã xác nhận đúng dự đoán.
+
+**Bỏ PDF (2026-08-31, theo yêu cầu Hiếu)**: ban đầu làm cả `.pdf` qua `jsPDF` (đã có sẵn trong deps, chạy được
+server-side thuần Node kể cả `addImage()`, đã verify qua vitest với ảnh giả lập trước khi bỏ) — sau khi Hiếu
+xác nhận .docx đủ dùng, đã xoá `pdf-export.ts` + nhánh PDF khỏi route/FE, route giờ chỉ trả `{docx,
+docxFilename}`.
+
+**Số liệu CHƯA verify với DB thật** (máy dev thiếu `ANALYTICS_DB_*`) — công thức dựa trên tái dùng hàm/helper đã
+verify ở tab khác nên tin đúng logic, nhưng Hiếu nên đối chiếu 1-2 số với Dashboard/BOD/B2B/B2C/Vendor
+Performance thật trên staging trước khi gửi báo cáo cho sếp.
+
+---
 
 > **Mục đích & vai trò**: tự động đẩy báo cáo định kỳ vào nhóm Lark (không cần ai mở web) → team luôn nắm số liệu mới. **Tại sao tách quyền XEM vs SỬA (S81)**: ai được cấp tab cũng cần thấy lịch đang chạy (minh bạch, tránh trùng lịch), nhưng chỉ admin/creator được sửa để tránh phá lịch của người khác.
 

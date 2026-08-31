@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/toast"
 import { DEPT_LABELS, type Department } from "@/lib/kb-constants"
+import { useDbRole } from "@/lib/use-role-guard"
 
 // Supabase realtime client (anon key đủ để subscribe)
 const supabaseRealtime = createClient(
@@ -1204,9 +1205,18 @@ const WIKI_PAGE_TYPES: Record<string, string> = {
   note:           "Ghi chú",
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 function renderMarkdown(md: string): string {
-  // Bỏ YAML frontmatter
-  const body = md.replace(/^---[\s\S]*?---\n?/, "")
+  // Bỏ YAML frontmatter, escape HTML trước khi build markup (chống XSS)
+  const body = escapeHtml(md.replace(/^---[\s\S]*?---\n?/, ""))
   return body
     .replace(/^### (.+)$/gm, '<h3 class="text-[14px] font-semibold text-slate-700 mt-4 mb-1">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="text-[15px] font-semibold text-slate-800 mt-5 mb-2 border-b border-slate-100 pb-1">$1</h2>')
@@ -1718,7 +1728,10 @@ export default function ToGauRoomPage() {
   // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/Tab/analytics-to-gau.md.
   const myEmail      = session?.user?.username || ""
   const myName       = session?.user?.name  || ""
-  const myRole       = session?.user?.role  || ""
+  // Role TƯƠI từ DB (không phải JWT) — backend (kb/wiki routes) đã dùng getDbRole(), FE phải khớp
+  // để tránh admin mới cấp quyền không thấy nút Wiki cho tới khi re-login (JWT maxAge 1 ngày).
+  const dbRole       = useDbRole()
+  const myRole       = dbRole ?? session?.user?.role ?? ""
   const isPrivileged = myRole === "creator" || myRole === "admin"
   // isManager: creator/admin toàn hệ thống, hoặc manager của group này
   const isManager    = isPrivileged || (group?.my_member_role === "manager")
