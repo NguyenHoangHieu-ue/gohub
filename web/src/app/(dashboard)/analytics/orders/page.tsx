@@ -340,8 +340,6 @@ export default function OrdersPage() {
                 { code: "",   label: "All" },
                 { code: "VN", label: "🇻🇳 VN" },
                 { code: "US", label: "🇺🇸 US" },
-                { code: "SG", label: "🇸🇬 SG" },
-                { code: "HK", label: "🇭🇰 HK" },
               ].map(({ code, label }) => (
                 <button key={code} onClick={() => setCompanyCode(code)}
                   className={cn(
