@@ -195,6 +195,17 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s178 (2026-08-31) — hiện tên/link group + nội dung đầy đủ trong panel duyệt case
+
+Sau khi s177 fix xong (case đã ra hàng chờ duyệt), Hiếu báo panel không đủ để duyệt: (1) snippet
+request/completion bị CSS `truncate` cắt còn 1 dòng dù DB lưu tới 300 ký tự — không đọc được nội dung thật
+để quyết định duyệt/từ chối; (2) không biết case đang ở group nào giữa 4 group đã add bot.
+
+Fix: `lark-events` GET route resolve `chat_name` qua Lark API (`getChatName()`, cache theo request — nhiều
+event thường trùng chat_id) trả kèm mỗi case. FE: badge group (tên + link
+`applink.larksuite.com/client/chat/open?openChatId=...` mở thẳng group đó trong Lark app), bỏ `truncate`
+cho 2 đoạn snippet (wrap đầy đủ, không giới hạn 1 dòng nữa), thêm tên người gửi từng tin. tsc PASS.
+
 ## s177 (2026-08-31) — fix lỗi phân loại Lark bị nuốt im lặng + hiện danh sách group đã quét
 
 Sau s176 (fix chữ ký webhook), Hiếu test lại "Quét ngay" — capture log đã ghi đúng thread test (root_id
