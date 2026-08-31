@@ -59,11 +59,29 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
 
     const result = await model.generateContent(buildThreadText(thread))
     const text   = result.response.text().trim()
-    const parsed = JSON.parse(text) as {
+    let parsed: {
       is_match?: boolean
       metric?: string | null
       completion_reply_index?: number | null
       reason?: string
+    }
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      // responseMimeType "application/json" không luôn đảm bảo text() là JSON THUẦN (từng thấy có tiền
+      // tố lạ dù request đúng mime type) — cứu 1 lần bằng cách cắt substring { ... } đầu-cuối trước khi
+      // bỏ cuộc. Log FULL text (không phải message lỗi JSON.parse bị cắt cụt) để lần sau còn tra được.
+      const m = text.match(/\{[\s\S]*\}/)
+      if (!m) {
+        console.error("[Lark classify] Gemini không trả JSON, thread", thread.message_id, "— raw text:", text.slice(0, 500))
+        return null
+      }
+      try {
+        parsed = JSON.parse(m[0])
+      } catch {
+        console.error("[Lark classify] Gemini trả JSON hỏng, thread", thread.message_id, "— raw text:", text.slice(0, 500))
+        return null
+      }
     }
 
     if (!parsed.is_match) return { is_match: false, metric: null, completion_reply_index: null, reason: parsed.reason ?? "" }
