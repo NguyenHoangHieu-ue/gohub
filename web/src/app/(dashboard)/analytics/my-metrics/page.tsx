@@ -1,14 +1,22 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react"
+import dynamic from "next/dynamic"
 import {
   Target, Pencil, Save, XCircle, RefreshCw, Plus, Trash2,
   Clock, ChevronDown, ChevronUp, Lock, ShieldCheck, Tag, Gauge,
   Zap, BarChart3, Bot, Info, Settings, Check, X, Search, Sparkles,
-  Upload, MessageSquare, ChevronLeft, ChevronRight,
+  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (khớp pattern bod-charts.tsx).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-white/10 rounded-xl" />
+const ScoreRadarChart    = dynamic(() => import("./my-metrics-charts").then(m => m.ScoreRadarChart),    { ssr: false, loading: chartLoading })
+const DatapoolTrendChart = dynamic(() => import("./my-metrics-charts").then(m => m.DatapoolTrendChart), { ssr: false, loading: chartLoading })
+const BegauTrendChart    = dynamic(() => import("./my-metrics-charts").then(m => m.BegauTrendChart),    { ssr: false, loading: chartLoading })
+const SkuMoversChart     = dynamic(() => import("./my-metrics-charts").then(m => m.SkuMoversChart),     { ssr: false, loading: chartLoading })
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AutoMetrics {
@@ -141,6 +149,51 @@ function SourceBox({ type, table, filter }: { type: "auto"|"manual"|"context"; t
           {filter && <div className="text-slate-400 break-all">{filter}</div>}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Notes Drawer — mọi ghi chú/công thức/giải thích gộp vào 1 nơi, ẩn mặc định ──
+// Trước đây các đoạn text này nằm rải rác luôn-hiện trong từng card → rối mắt. Nay dồn hết vào đây,
+// mở bằng 1 nút duy nhất trên header trang. Số liệu chính vẫn hiện ngay trên card; chỉ "vì sao/tính
+// thế nào" mới cần bấm xem.
+interface NoteSection { id: string; title: string; body: React.ReactNode }
+
+function NotesDrawer({ sections, onClose }: { sections: NoteSection[]; onClose: () => void }) {
+  const [openId, setOpenId] = useState<string | null>(sections[0]?.id ?? null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/30 animate-overlay-in" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white h-full shadow-2xl overflow-y-auto animate-slide-in-right">
+        <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-5 py-4 flex items-center justify-between z-10">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-brand-600" />
+            <h3 className="text-sm font-black text-slate-900">Cách tính &amp; ghi chú</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-3 space-y-2">
+          {sections.map(s => (
+            <div key={s.id} className="border border-slate-100 rounded-xl overflow-hidden">
+              <button onClick={() => setOpenId(openId === s.id ? null : s.id)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 text-left hover:bg-slate-50 transition-colors">
+                <span className="text-xs font-black text-slate-700">{s.title}</span>
+                {openId === s.id ? <ChevronUp className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+              </button>
+              {openId === s.id && (
+                <div className="px-3.5 pb-3.5 text-[11px] text-slate-500 leading-relaxed space-y-1.5">{s.body}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -735,6 +788,15 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
 
   const wd = data?.weighted_delta ?? null
 
+  // Top 5 tăng + top 5 giảm delta GM% trong nhóm tính KPI (key/new) — cho biểu đồ movers.
+  const movers = useMemo(() => {
+    const scored = items.filter(it => (it.is_key || it.is_new) && it.delta !== null)
+    const gainers = [...scored].sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0)).slice(0, 5)
+    const losers  = [...scored].sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0)).slice(0, 5).reverse()
+    const merged = [...gainers, ...losers.filter(l => !gainers.some(g => g.sku === l.sku))]
+    return merged.sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0)).map(it => ({ sku: it.sku, delta: it.delta ?? 0 }))
+  }, [items])
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
@@ -778,15 +840,19 @@ function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: string; 
           Target: +{targetDelta}% · {data ? `${data.key_count} SKU top ${data.key_threshold_pct}% doanh thu · ${data.new_count} SKU mới quý này · ${items.length} SKU có phát sinh` : "…"}
           {filtered.length !== items.length && ` — đang lọc còn ${filtered.length} SKU`}
         </div>
-        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
-          Tự quét TOÀN BỘ SKU có đơn trong quý (không cần gắn tay) — so GM% quý này vs quý trước cho từng SKU.
-          "Trọng điểm" = SKU nằm trong nhóm đóng góp {data?.key_threshold_pct ?? 80}% doanh thu tích luỹ (Pareto);
-          "mới" = SKU chưa bán quý trước, so với baseline công ty {OKR_GM_BASELINE_DISPLAY}%.
-        </p>
       </div>
 
       <div className="px-5 py-3 space-y-3">
         {targetDelta > 0 && <ProgressBar actual={Math.max(0, wd ?? 0)} target={targetDelta} />}
+
+        {movers.length > 0 && (
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Biến động GM% lớn nhất (SKU trọng điểm/mới)</p>
+            <div style={{ height: Math.max(140, movers.length * 26) }}>
+              <SkuMoversChart data={movers} />
+            </div>
+          </div>
+        )}
 
         <DataTable<SkuScanItem>
           rows={filtered}
@@ -945,6 +1011,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const [auto,    setAuto]    = useState<AutoMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [showLarkConfig, setShowLarkConfig] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
 
   const [convs,      setConvs]      = useState<Conversation[]>([])
   const [convTotal,  setConvTotal]  = useState(0)
@@ -1043,13 +1110,74 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
     achHk3 * WEIGHTS.hk3 + achBegau * WEIGHTS.begau
   ) / 100
 
+  // ── Dữ liệu cho chart (đều suy từ state đã fetch, không gọi API riêng) ──
+  const radarData = [
+    { metric: "SLA", value: Math.min(120, achSla), weight: WEIGHTS.sla, target: 100 as const },
+    { metric: "Vendor Speed", value: Math.min(120, achVendor), weight: WEIGHTS.vendor_speed, target: 100 as const },
+    { metric: "SKU GM", value: Math.min(120, achSku), weight: WEIGHTS.sku_gm, target: 100 as const },
+    { metric: "%3HK", value: Math.min(120, achHk3), weight: WEIGHTS.hk3, target: 100 as const },
+    { metric: "Bé Gấu", value: Math.min(120, achBegau), weight: WEIGHTS.begau, target: 100 as const },
+  ]
+  const datapoolTrend = hk3TableRows.map(m => ({
+    month: m.month, pct: m.total_rev > 0 ? ((m.hk3_rev + m.bc_rev) / m.total_rev) * 100 : 0,
+  }))
+  const begauTrendData = begauMonthEntries.map(([month, d]) => ({ month, web: d.web, lark: d.lark }))
+
+  // ── Nội dung Notes Drawer — mọi công thức/giải thích trước đây nằm rải rác luôn-hiện trong card ──
+  const noteSections: NoteSection[] = [
+    {
+      id: "score", title: "Weighted OKR Score — công thức",
+      body: (
+        <>
+          <p>Σ(đạt-%<sub>i</sub> × trọng-số<sub>i</sub>) / 100. Mỗi đạt-% cap 0–100% trước khi nhân trọng số.</p>
+          <p>Trọng số 70/30 lấy đúng theo offer letter (Operational Excellence + Product Performance = 70% time-allocation, BI &amp; AI Automation = 30%); 4 chỉ số trong nhóm 70% chia đều 17.5% (offer letter không ghi trọng số riêng từng chỉ số) — sửa hằng số <code>WEIGHTS</code> trong code nếu sếp chốt trọng số khác.</p>
+          <p>Radar hiển thị đạt-% từng trục tới 120% (vượt target vẫn thấy rõ) — vòng nét đứt = mốc 100%.</p>
+        </>
+      ),
+    },
+    {
+      id: "status", title: "Trạng thái &amp; màu badge",
+      body: (
+        <>
+          <p className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />Chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI.</p>
+          <p className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />Verified = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt).</p>
+          <p className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />Auto/Context = tính thẳng từ DB hoặc chỉ tham khảo — không phải case cần duyệt.</p>
+        </>
+      ),
+    },
+    {
+      id: "sku-gm", title: "SKU Gross Margin — cách tính",
+      body: (
+        <>
+          <p>Tự quét TOÀN BỘ SKU có đơn trong quý (không cần gắn tay) — so GM% quý này vs quý trước cho từng SKU.</p>
+          <p>"Trọng điểm" = SKU nằm trong nhóm đóng góp 80% doanh thu tích luỹ (Pareto). "Mới" = SKU chưa bán quý trước, so với baseline công ty {OKR_GM_BASELINE_DISPLAY}%.</p>
+          <p>KPI chính thức = weighted theo SKU trọng điểm/mới. Số "blended toàn công ty" (thẻ xám bên dưới bảng) chỉ để tham khảo bối cảnh — gộp mọi SKU nên bị nhiễu bởi channel-mix/khuyến mãi ngoài kiểm soát cá nhân.</p>
+        </>
+      ),
+    },
+    {
+      id: "datapool", title: "%3HK + Datapool — cách tính",
+      body: <p>Doanh thu SKU vendor 3HK Datapool hoặc BC Datapool / tổng doanh thu công ty trong quý — tính trên gohub_dw, cutoff hôm qua.</p>,
+    },
+    {
+      id: "begau", title: "Tasks via Bé Gấu — cách tính",
+      body: (
+        <>
+          <p>Đếm hội thoại chat có phản hồi AI dài ≥15 ký tự (loại chào hỏi/lỗi cụt), company-wide, trong quý.</p>
+          {auto && auto.begau.excluded_short > 0 && <p>Đã loại {auto.begau.excluded_short} tin nhắn quá ngắn khỏi kỳ này.</p>}
+          <p>Không có structured "success flag" — độ dài phản hồi là proxy, không phải thước đo chuẩn xác tuyệt đối.</p>
+        </>
+      ),
+    },
+  ]
+
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-[1400px] mx-auto pb-24 lg:pb-8">
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
+          <div className="w-12 h-12 bg-gradient-to-br from-brand-500 to-brand-700 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-600/20">
             <Target className="w-6 h-6" />
           </div>
           <div>
@@ -1082,60 +1210,59 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
             <Pencil className="w-3.5 h-3.5" /> Sửa Target
           </button>
+          <button onClick={() => setShowNotes(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-brand-50 text-brand-700 hover:bg-brand-100 transition-colors">
+            <BookOpen className="w-3.5 h-3.5" /> Cách tính
+          </button>
         </div>
       </div>
 
       {showLarkConfig && <LarkConfigModal onClose={() => setShowLarkConfig(false)} />}
+      {showNotes && <NotesDrawer sections={noteSections} onClose={() => setShowNotes(false)} />}
 
-      {/* Weighted Score card */}
-      <div className="bg-slate-900 rounded-2xl px-6 py-5 text-white">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Gauge className="w-8 h-8 text-white/70" />
-            <div>
-              <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Weighted OKR Score — {qLabel}</p>
-              <p className="text-4xl font-black tabular-nums">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
+      {/* Weighted Score hero — radar 5 trục + tier tiles */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-brand-800 rounded-3xl px-6 py-6 text-white">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6 items-center">
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <Gauge className="w-7 h-7 text-white/60" />
+              <div>
+                <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Weighted OKR Score — {qLabel}</p>
+                <p className="text-5xl font-black tabular-nums leading-none mt-0.5">{loading ? "…" : `${overallScore.toFixed(1)}%`}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {[
+                ["SLA", achSla, WEIGHTS.sla],
+                ["Vendor Speed", achVendor, WEIGHTS.vendor_speed],
+                ["SKU GM", achSku, WEIGHTS.sku_gm],
+                ["%3HK", achHk3, WEIGHTS.hk3],
+                ["Bé Gấu", achBegau, WEIGHTS.begau],
+              ].map(([label, ach, w]) => {
+                const achNum = ach as number
+                const tier = achNum >= 100 ? "bg-emerald-400" : achNum >= 75 ? "bg-white/60" : "bg-amber-400"
+                return (
+                  <div key={label as string} className="bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative"
+                    style={{ flexGrow: w as number, flexBasis: `${(w as number) * 2}px` }}>
+                    <p className="text-[9px] font-bold text-white/50 uppercase truncate">{label}</p>
+                    <p className="text-lg font-black tabular-nums">{achNum.toFixed(0)}%</p>
+                    <p className="text-[9px] text-white/40">w={w}%</p>
+                    <div className={cn("absolute bottom-0 left-0 h-[3px]", tier)} style={{ width: `${Math.min(achNum, 100)}%` }} />
+                  </div>
+                )
+              })}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2.5 text-center flex-1">
-            {[
-              ["SLA", achSla, WEIGHTS.sla],
-              ["Vendor Speed", achVendor, WEIGHTS.vendor_speed],
-              ["SKU GM", achSku, WEIGHTS.sku_gm],
-              ["%3HK", achHk3, WEIGHTS.hk3],
-              ["Bé Gấu", achBegau, WEIGHTS.begau],
-            ].map(([label, ach, w]) => {
-              const achNum = ach as number
-              const tier = achNum >= 100 ? "bg-emerald-400" : achNum >= 75 ? "bg-white/60" : "bg-amber-400"
-              return (
-                <div key={label as string} className="bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative"
-                  style={{ flexGrow: w as number, flexBasis: `${(w as number) * 2}px` }}>
-                  <p className="text-[9px] font-bold text-white/50 uppercase truncate">{label}</p>
-                  <p className="text-lg font-black tabular-nums">{achNum.toFixed(0)}%</p>
-                  <p className="text-[9px] text-white/40">w={w}%</p>
-                  <div className={cn("absolute bottom-0 left-0 h-[3px]", tier)} style={{ width: `${Math.min(achNum, 100)}%` }} />
-                </div>
-              )
-            })}
+          <div className="h-56 hidden lg:block">
+            <ScoreRadarChart data={radarData} />
           </div>
         </div>
-        <p className="text-[10px] text-white/40 mt-3 leading-relaxed">
-          Công thức: Σ(đạt-%<sub>i</sub> × trọng-số<sub>i</sub>) / 100. Trọng số 70/30 lấy đúng theo offer letter
-          (Operational Excellence + Product Performance = 70% time-allocation, BI &amp; AI Automation = 30%); 4 chỉ số
-          trong nhóm 70% chia đều 17.5% (offer letter không ghi trọng số riêng từng chỉ số) — sửa hằng số <code>WEIGHTS</code> trong
-          code nếu sếp chốt trọng số khác. Mỗi đạt-% cap 0–100%.
-        </p>
       </div>
 
-      {/* Data freshness / trust bar */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[11px] text-slate-500 font-medium space-y-1">
-        <div>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA = {BASELINE_NOTE.sla} · Vendor Speed = {BASELINE_NOTE.vendor_speed} · SKU GM = {OKR_GM_BASELINE_DISPLAY}% · Datapool = {auto?.hk3.baseline ?? "…"}% · Tasks = {BASELINE_NOTE.begau_weekly}</div>
-        {auto && <div className="text-slate-400">🕐 {auto.data_cutoff} · Trang tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</div>}
-        <div className="flex flex-wrap gap-3 pt-1">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Chờ duyệt = Bé Gấu đề xuất, chưa tính vào KPI</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Verified = có bằng chứng kiểm tra được (ảnh hoặc log chat + người duyệt)</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" />Auto/Context = tính thẳng từ DB hoặc chỉ tham khảo — không phải case cần duyệt</span>
-        </div>
+      {/* Data freshness — chỉ số cần biết ngay, còn phần "vì sao/công thức" đã dồn vào nút Cách tính */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[11px] text-slate-500 font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA {BASELINE_NOTE.sla} · Vendor Speed {BASELINE_NOTE.vendor_speed} · SKU GM {OKR_GM_BASELINE_DISPLAY}% · Datapool {auto?.hk3.baseline ?? "…"}%</span>
+        {auto && <span className="text-slate-400">🕐 {auto.data_cutoff} · tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</span>}
       </div>
 
       {/* Target edit modal */}
@@ -1241,6 +1368,11 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 <span>↳ BC Rev: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.bc_only_rev ?? 0)}</strong></span>
                 <span>Total Rev công ty: <strong className="text-slate-700 tabular-nums">{fck(auto?.hk3.total_rev ?? 0)}</strong></span>
               </div>
+              {datapoolTrend.length > 1 && (
+                <div className="h-40">
+                  <DatapoolTrendChart data={datapoolTrend} target={targets.hk3_pct} />
+                </div>
+              )}
               <DataTable<MonthStat>
                 rows={hk3TableRows}
                 rowKey={m => m.month}
@@ -1275,7 +1407,6 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
               </span>
               <span className="text-slate-400 text-xs">vs baseline {auto?.gm.baseline ?? "…"}% · QTD actual {auto ? pct(auto.gm.qtd_pct) : "…"} · GP {fck(auto?.gm.total_gp ?? 0)} / Rev {fck(auto?.gm.total_rev ?? 0)}</span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">Số này gộp TOÀN BỘ SKU công ty (bị nhiễu bởi channel-mix/khuyến mãi ngoài kiểm soát cá nhân) — chỉ để tham khảo bối cảnh. KPI chính thức = "SKU Gross Margin — quét toàn hệ thống" bên trên.</p>
             <SourceBox type="context" table="gohub_dw · fact_fulfillment_revenue (mọi SKU)" filter="SUM(gross_profit_vnd)/SUM(fulfilled_revenue_amount_vnd), cutoff CURRENT_DATE-1" />
           </div>
         </div>
@@ -1323,6 +1454,12 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                     <span key={role} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-100 text-slate-600">{role}: {n}</span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {begauTrendData.length > 1 && (
+              <div className="mt-4 h-40">
+                <BegauTrendChart data={begauTrendData} />
               </div>
             )}
 

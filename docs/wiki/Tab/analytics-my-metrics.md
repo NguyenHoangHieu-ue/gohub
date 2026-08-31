@@ -193,6 +193,39 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s172 (2026-08-31) — rebuild UI: trẻ trung/hiện đại hơn, thêm chart, gom ghi chú vào 1 nút
+
+Theo yêu cầu Hiếu "nhìn thật trẻ trung, hiện đại, rõ ràng, thêm chart, note gom vào 1 button, bảng 50
+dòng/trang". Chỉ đổi presentation (FE) — KHÔNG đổi bất kỳ logic tính số/API nào.
+
+- **Bảng 50 dòng/trang**: đã đúng sẵn từ trước — `DataTable` (component dùng chung toàn trang) có
+  `pageSize = 50` mặc định, không route nào override. Không cần sửa gì, chỉ xác nhận lại.
+- **4 chart mới** (`my-metrics-charts.tsx`, file mới — cùng pattern `bod-charts.tsx`: recharts +
+  `React.memo`, nạp qua `next/dynamic({ssr:false})` để code-split khỏi bundle đầu):
+  1. `ScoreRadarChart` — radar 5 trục (SLA/Vendor Speed/SKU GM/%3HK/Bé Gấu) cho Weighted OKR Score,
+     thay/đi kèm dãy ô số cũ — vòng nét đứt = mốc 100%, domain co giãn tới 120% để thấy rõ vượt target.
+  2. `DatapoolTrendChart` — area chart %Datapool theo tháng, có đường target nét đứt.
+  3. `BegauTrendChart` — stacked bar Web/Lark theo tháng (thay dòng chữ liệt kê).
+  4. `SkuMoversChart` — bar chart ngang top 5 SKU tăng/giảm GM% mạnh nhất (trong nhóm trọng điểm/mới),
+     màu diverging emerald/amber (đúng nghĩa đã dùng sẵn toàn trang — không thêm hue mới).
+  Không gọi API mới — mọi chart dùng lại data đã fetch sẵn (`auto`, `data.items`), tính bằng
+  `useMemo`/derive trực tiếp trong `page.tsx`.
+- **Ghi chú/công thức gom vào `NotesDrawer`** (component mới, slide-over phải, dùng animation có sẵn
+  `.animate-slide-in-right`/`.animate-overlay-in` trong `globals.css` — không thêm CSS/lib mới): nút
+  "📖 Cách tính" ở header mở drawer chứa 5 mục accordion (Weighted Score formula, chú thích màu badge,
+  SKU GM cách tính, %3HK+Datapool cách tính, Bé Gấu cách tính) — nội dung y hệt các đoạn text TRƯỚC ĐÂY
+  luôn hiển thị inline (SkuScanSection description, box "blended toàn công ty", đoạn công thức dưới
+  Weighted Score, legend màu ở thanh freshness) — chỉ dời chỗ, không đổi 1 chữ nội dung. `SourceBox`
+  (nút "Nguồn dữ liệu" per-table, đã collapse sẵn từ trước) giữ nguyên riêng — phục vụ mục đích khác
+  (audit SQL kỹ thuật per-bảng), không gộp vào NotesDrawer.
+- **Polish hero**: nền gradient `slate-900→brand-800` (thay flat `slate-900`) + icon header đổi gradient
+  `brand-500→brand-700` — dùng đúng scale `brand-*` có sẵn trong `tailwind.config.ts` (50-800), không tự
+  đoán hex mới (đúng bài học đã rút ra ở mục "UI/màu" phía trên).
+- tsc + `next build` PASS. **CHƯA test qua browser thật** (Chrome extension `claude-in-chrome` không kết
+  nối lúc làm + máy dev thiếu `ANALYTICS_DB_*` nên trang chỉ redirect `/login` khi curl không session) —
+  Hiếu QA trên staging: xem hero/radar/3 chart mới render đúng, nút "Cách tính" mở/đóng được, số liệu
+  không đổi so với trước rebuild (chỉ UI đổi).
+
 ## s171 (2026-08-31) — audit + fix 3 bug thật (theo yêu cầu Hiếu "quét tab My Metrics")
 
 1. **HIGH — `lark-config/route.ts` + `lark-config/scan-now/route.ts` check quyền bằng JWT role

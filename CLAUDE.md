@@ -4,17 +4,29 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s171)
+## Trạng thái hiện tại (2026-08-31, s172)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | s171 audit + fix 3 bug tab My Metrics (xem mục s171 dưới) — chờ Hiếu QA. |
+| ⏳ Trên staging CHƯA merge main | s171 audit+fix 3 bug My Metrics + s172 rebuild UI My Metrics (trẻ trung/hiện đại + 4 chart + notes drawer) — chờ Hiếu QA trên staging (đặc biệt s172 — chưa test qua browser thật, xem mục s172). |
 | ✅ Đã lên main | ...+ s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
 | 🚧 **Report_Aug.docx (báo cáo tháng 8 cho Bảo) — VẪN THIẾU 2 SỐ** | Cần Hiếu tự điền: SKU Gross Margin % (card "SKU Gross Margin" trong My Metrics) và %3HK+Datapool Rev (card "%Datapool Rev"). Máy Claude không có `ANALYTICS_DB_*` (gohub_dw) VÀ Chrome extension (`claude-in-chrome`) chưa kết nối lúc s171 nên không tự đọc số qua browser được — nếu Hiếu kết nối lại extension, lần sau Claude có thể tự mở My Metrics đọc số giúp. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s172 — đã làm (2026-08-31): rebuild UI tab My Metrics** (Hiếu: "trẻ trung, hiện đại, rõ ràng, thêm
+chart, note gom vào 1 button, bảng 50 dòng/trang"). Chi tiết đầy đủ ở `docs/wiki/Tab/
+analytics-my-metrics.md` mục "s172". Tóm tắt: 50/trang đã đúng sẵn (không cần sửa) · thêm 4 chart mới
+(`my-metrics-charts.tsx`, cùng pattern `bod-charts.tsx` — radar Weighted Score, area %Datapool theo
+tháng, stacked bar Bé Gấu theo tháng, bar ngang SKU GM movers) dùng lại data đã fetch, không gọi API
+mới · gom mọi đoạn ghi chú/công thức trước đây luôn-hiện-inline vào `NotesDrawer` (slide-over mới, mở
+bằng 1 nút "📖 Cách tính" ở header) · polish hero sang gradient dùng đúng scale `brand-*` có sẵn (không
+tự đoán hex mới). CHỈ đổi presentation, KHÔNG đổi bất kỳ công thức/API nào. tsc + `next build` PASS.
+**CHƯA test qua browser thật** — Chrome extension `claude-in-chrome` không kết nối lúc làm (đã thử,
+báo "Browser extension is not connected") nên không tự QA UI được; đã bù bằng cách đọc kỹ code + tự
+review từng đoạn JSX. Hiếu QA trên staging trước khi yên tâm.
 
 **s171 — đã làm (2026-08-31): audit tab My Metrics theo yêu cầu Hiếu "quét ra tab My Metrics" (chuẩn bị
 giúp hoàn thành `Report_Aug.docx`) — 3 bug thật, đã fix.** Chi tiết đầy đủ ở `docs/wiki/Tab/
