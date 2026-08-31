@@ -513,6 +513,16 @@ function EvidenceCard({
     fetchData()
   }
 
+  // Case Lark đã confirm (source lark_auto) lỡ bấm nhầm — xoá khỏi okr_lark_events (khác bảng với
+  // evidence tay). Xoá thay vì un-confirm: hết bị dedupe ở lần scan sau, tự vào lại hàng chờ duyệt
+  // nếu vẫn còn là thread thật.
+  const removeLark = async (id: string) => {
+    if (!confirm("Xoá case Lark này? (thread vẫn còn thì sẽ tự vào lại hàng chờ duyệt lần quét sau)")) return
+    const r = await fetch(`/api/analytics/my-metrics/lark-events/${id}`, { method: "DELETE" })
+    if (!r.ok) { const j = await r.json(); alert(j.error ?? "Lỗi xoá"); return }
+    fetchData()
+  }
+
   const avg     = data?.avg ?? null
   const actual  = avg ?? 0
   const progress = targetValue > 0 && avg !== null ? Math.max(0, 100 - ((actual - targetValue) / targetValue * 100)) : 0
@@ -656,12 +666,21 @@ function EvidenceCard({
                 ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
                 : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">Thiếu ảnh</span>
             } },
-            { key: "act", label: "", align: "right", render: r => r.source === "manual" && !locked ? (
-              <div className="flex gap-1 justify-end">
-                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-brand-600 hover:bg-brand-50"><Pencil className="w-3 h-3" /></button>
-                <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
-              </div>
-            ) : null },
+            { key: "act", label: "", align: "right", render: r => {
+              if (locked) return null
+              if (r.source === "manual") return (
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-brand-600 hover:bg-brand-50"><Pencil className="w-3 h-3" /></button>
+                  <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              )
+              return (
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => removeLark(r.id)} title="Xoá case Lark đã xác nhận nhầm"
+                    className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              )
+            } },
           ]}
         />
 
