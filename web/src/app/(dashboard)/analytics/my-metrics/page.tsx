@@ -1028,6 +1028,41 @@ function BegauInsightsSection({ quarter }: { quarter: string }) {
   )
 }
 
+interface LarkScanResult {
+  scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
+  backlog_remaining: number; skipped?: string
+  groups: { chat_id: string; chat_name: string; thread_count: number }[]
+}
+
+function ScanResultBox({ result }: { result: LarkScanResult }) {
+  if (result.skipped) return <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {result.skipped}</p>
+  return (
+    <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
+      {result.groups.length > 0 ? (
+        <div>
+          <span className="text-slate-400">Đã quét {result.groups.length} group: </span>
+          {result.groups.map((g, i) => (
+            <span key={g.chat_id}>
+              {i > 0 && ", "}<strong>{g.chat_name}</strong> ({g.thread_count})
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-amber-600">Không tìm thấy group/thread nào phù hợp.</div>
+      )}
+      <div>Đã quét <strong className="tabular-nums">{result.scanned}</strong> thread có reply, liên quan Hiếu.</div>
+      <div>Phân loại lần này: <strong className="tabular-nums">{result.classified}</strong> thread mới.</div>
+      <div>→ <strong className="text-emerald-600 tabular-nums">{result.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{result.not_matched}</strong> không khớp.</div>
+      {result.classify_errors > 0 && (
+        <div className="text-red-600">⚠ <strong className="tabular-nums">{result.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
+      )}
+      {result.backlog_remaining > 0 && (
+        <div className="text-amber-600">Còn <strong className="tabular-nums">{result.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa.</div>
+      )}
+    </div>
+  )
+}
+
 // ─── Lark scan config modal (admin/creator) ───────────────────────────────────
 function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [cfg, setCfg] = useState({ enabled: false, days_back: 3 })
@@ -1035,18 +1070,24 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
-  const [scanResult, setScanResult] = useState<{
-    scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
-    backlog_remaining: number; skipped?: string
-    groups: { chat_id: string; chat_name: string; thread_count: number }[]
-  } | null>(null)
+  const [scanResult, setScanResult] = useState<LarkScanResult | null>(null)
   const [scanErr, setScanErr] = useState<string | null>(null)
+
+  const [historyChatId, setHistoryChatId] = useState("")
+  const [historyDays, setHistoryDays] = useState(30)
+  const [historyScanning, setHistoryScanning] = useState(false)
+  const [historyResult, setHistoryResult] = useState<LarkScanResult | null>(null)
+  const [historyErr, setHistoryErr] = useState<string | null>(null)
+  const [botGroups, setBotGroups] = useState<{ chat_id: string; name: string }[] | null>(null)
 
   useEffect(() => {
     fetch("/api/analytics/my-metrics/lark-config").then(r => r.ok ? r.json() : null).then(d => {
       if (d) setCfg({ enabled: d.enabled ?? false, days_back: d.days_back ?? 3 })
       setLoading(false)
     }).catch(() => setLoading(false))
+    fetch("/api/analytics/my-metrics/lark-config/groups").then(r => r.ok ? r.json() : null).then(d => {
+      setBotGroups(d?.groups ?? [])
+    }).catch(() => setBotGroups([]))
   }, [])
 
   const save = async () => {
@@ -1066,6 +1107,19 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
     setScanning(false)
     if (!r.ok) { setScanErr(j.error ?? "Lỗi quét"); return }
     setScanResult(j)
+  }
+
+  const scanHistory = async () => {
+    if (!historyChatId.trim()) { setHistoryErr("Nhập chat_id trước"); return }
+    setHistoryScanning(true); setHistoryErr(null); setHistoryResult(null)
+    const r = await fetch("/api/analytics/my-metrics/lark-config/scan-history", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: historyChatId.trim(), days_back: historyDays }),
+    })
+    const j = await r.json()
+    setHistoryScanning(false)
+    if (!r.ok) { setHistoryErr(j.error ?? "Lỗi quét"); return }
+    setHistoryResult(j)
   }
 
   return (
@@ -1100,36 +1154,38 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
                 <Sparkles className="w-3.5 h-3.5" /> {scanning ? "Đang quét (có thể mất 30-60s)…" : "Quét ngay để test"}
               </button>
               {scanErr && <p className="text-[11px] text-red-600 font-bold mt-2">{scanErr}</p>}
-              {scanResult && (
-                scanResult.skipped
-                  ? <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {scanResult.skipped}</p>
-                  : (
-                    <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
-                      {scanResult.groups.length > 0 ? (
-                        <div>
-                          <span className="text-slate-400">Đã quét {scanResult.groups.length} group: </span>
-                          {scanResult.groups.map((g, i) => (
-                            <span key={g.chat_id}>
-                              {i > 0 && ", "}<strong>{g.chat_name}</strong> ({g.thread_count})
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-amber-600">Không tìm thấy group nào trong capture log — kiểm tra bot đã add vào group + đã có tin nhắn Hiếu tự gửi/được @mention gần đây chưa.</div>
-                      )}
-                      <div>Đã quét <strong className="tabular-nums">{scanResult.scanned}</strong> thread có reply trong cửa sổ {cfg.days_back} ngày.</div>
-                      <div>Phân loại lần này: <strong className="tabular-nums">{scanResult.classified}</strong> thread mới.</div>
-                      <div>→ <strong className="text-emerald-600 tabular-nums">{scanResult.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{scanResult.not_matched}</strong> không khớp.</div>
-                      {scanResult.classify_errors > 0 && (
-                        <div className="text-red-600">⚠ <strong className="tabular-nums">{scanResult.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
-                      )}
-                      {scanResult.backlog_remaining > 0 && (
-                        <div className="text-amber-600">Còn <strong className="tabular-nums">{scanResult.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa hoặc đợi cron ngày mai.</div>
-                      )}
-                    </div>
-                  )
-              )}
+              {scanResult && <ScanResultBox result={scanResult} />}
             </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-bold text-slate-500 uppercase mb-1.5">Quét lịch sử 1 lần (group cũ)</p>
+              <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                Real-time chỉ thấy tin TỪ LÚC bot bắt đầu sống — thread/mention cũ trước đó không tự vào được.
+                Chọn 1 group để quét ngược 1 lần, cùng tiêu chí "chỉ tin liên quan Hiếu" như real-time.
+              </p>
+              <div className="flex gap-1.5">
+                {botGroups && botGroups.length > 0 ? (
+                  <select value={historyChatId} onChange={e => setHistoryChatId(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-brand-500">
+                    <option value="">— chọn group —</option>
+                    {botGroups.map(g => <option key={g.chat_id} value={g.chat_id}>{g.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" placeholder={botGroups === null ? "Đang tải danh sách group…" : "Không tải được — nhập chat_id (oc_...)"}
+                    value={historyChatId} onChange={e => setHistoryChatId(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                )}
+                <input type="number" min={1} max={120} value={historyDays} onChange={e => setHistoryDays(parseInt(e.target.value) || 30)}
+                  className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" title="Số ngày ngược" />
+              </div>
+              <button onClick={scanHistory} disabled={historyScanning}
+                className="w-full mt-1.5 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50">
+                <Clock className="w-3.5 h-3.5" /> {historyScanning ? "Đang quét lịch sử (có thể mất 1-2 phút)…" : "Quét lịch sử"}
+              </button>
+              {historyErr && <p className="text-[11px] text-red-600 font-bold mt-2">{historyErr}</p>}
+              {historyResult && <ScanResultBox result={historyResult} />}
+            </div>
+
             <div className="flex gap-2 justify-end pt-1">
               <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
               <button onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">

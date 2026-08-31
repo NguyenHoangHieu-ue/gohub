@@ -2,10 +2,10 @@
 // "Quét ngay" thủ công (api/analytics/my-metrics/lark-config/scan-now) để Hiếu test được ngay
 // thay vì phải đợi cron chạy 1 lần/ngày mới biết fix có work không.
 import { supabaseAdmin } from "@/lib/supabase"
-import { fetchThreadsFromCapturedLog, getChatName } from "@/lib/lark-thread-scan"
+import { fetchThreadsFromCapturedLog, fetchRecentThreads, getChatName, type LarkThread } from "@/lib/lark-thread-scan"
 import { classifyLarkThread } from "@/lib/okr-lark-classify"
 import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
-import { currentQuarterLabel } from "@/lib/okr-helpers"
+import { quarterLabelForDate } from "@/lib/okr-helpers"
 
 const CONFIG_KEY = "my_metrics_lark_scan_config"
 const MAX_NEW_THREADS_PER_RUN = 40
@@ -71,14 +71,36 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
   const seen = new Set((existing ?? []).map((r: any) => r.message_id))
 
   const toClassify = threads.filter(t => !seen.has(t.message_id)).slice(0, MAX_NEW_THREADS_PER_RUN)
-  const quarter = currentQuarterLabel()
+  const { inserted, notMatched, classifyErrors } = await classifyAndInsertThreads(toClassify)
+
+  if (inserted > 0) {
+    const openId = await getLarkUserOpenId()
+    if (openId) {
+      await sendLarkDM(openId, `🤖 Bé Gấu vừa phát hiện ${inserted} case SLA/Vendor Speed mới từ Lark — vào My Metrics duyệt nhé.`)
+    }
+  }
+
+  return {
+    scanned: threads.length, classified: toClassify.length, inserted, not_matched: notMatched,
+    classify_errors: classifyErrors,
+    backlog_remaining: threads.length - seen.size - toClassify.length,
+    groups,
+  }
+}
+
+// Dùng chung giữa quét real-time (quarter luôn = hôm nay) và quét lịch sử (thread có thể rơi vào
+// quý TRƯỚC nếu quét ngược nhiều tháng) — quarter gắn theo NGÀY THẬT của từng thread, không phải
+// ngày chạy scan.
+async function classifyAndInsertThreads(threads: LarkThread[]): Promise<{ inserted: number; notMatched: number; classifyErrors: number }> {
   let inserted = 0
   let notMatched = 0
   let classifyErrors = 0
 
-  for (const t of toClassify) {
+  for (const t of threads) {
     const result = await classifyLarkThread(t)
     if (!result) { classifyErrors++; continue }
+
+    const quarter = quarterLabelForDate(new Date(parseInt(t.create_time)))
 
     if (!result.is_match || !result.metric) {
       await supabaseAdmin.from("okr_lark_events").upsert({
@@ -110,17 +132,55 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
     if (!error) inserted++
   }
 
+  return { inserted, notMatched, classifyErrors }
+}
+
+// Thread có "liên quan" 1 open_id không — chính mình gửi HOẶC được @mention, ở tin gốc HOẶC bất kỳ
+// reply nào. Cùng tiêu chí "chỉ tin liên quan tôi" đang áp cho capture real-time (quyết định giữ
+// nguyên s177/178) — quét lịch sử áp lại y hệt, không mở rộng phạm vi hơn.
+function threadInvolvesUser(t: LarkThread, myOpenId: string): boolean {
+  if (t.sender_open_id === myOpenId || t.mentions.some(m => m.id === myOpenId)) return true
+  return t.replies.some(r => r.open_id === myOpenId || r.mentions.some(m => m.id === myOpenId))
+}
+
+const MAX_HISTORY_DAYS = 120
+
+// Quét lịch sử 1 LẦN cho 1 group cụ thể — bù cho hạn chế "real-time capture không thấy được thread
+// trước khi bot bắt đầu sống" (chỉ capture từ lúc deploy s173, KHÔNG backfill tự động). Dùng lại
+// fetchRecentThreads (REST list toàn group, giống Cà Thread) thay vì capture log — chỉ nguồn phát
+// hiện thread khác nhau, pipeline phân loại/lưu dùng chung 100% với quét real-time.
+export async function runLarkHistoryScan(chatId: string, daysBack: number): Promise<ScanRunResult> {
+  const bounded = Math.min(MAX_HISTORY_DAYS, Math.max(1, Math.floor(daysBack) || 30))
+  const myOpenId = await getLarkUserOpenId()
+  if (!myOpenId) {
+    return { skipped: "Chưa Kết nối Lark cá nhân (Creator Settings) — cần để biết thread nào liên quan Hiếu", scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups: [] }
+  }
+
+  const maxThreads = Math.min(150, bounded * 5)
+  const allThreads = await fetchRecentThreads(chatId, bounded, maxThreads)
+  const appToken = await getLarkToken()
+  const chatName = await getChatName(chatId, appToken)
+  const groups = [{ chat_id: chatId, chat_name: chatName, thread_count: allThreads.length }]
+
+  const relevant = allThreads.filter(t => t.replies.length > 0 && threadInvolvesUser(t, myOpenId))
+  if (relevant.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups }
+
+  const { data: existing } = await supabaseAdmin
+    .from("okr_lark_events").select("message_id")
+    .in("message_id", relevant.map(t => t.message_id))
+  const seen = new Set((existing ?? []).map((r: any) => r.message_id))
+
+  const toClassify = relevant.filter(t => !seen.has(t.message_id)).slice(0, MAX_NEW_THREADS_PER_RUN)
+  const { inserted, notMatched, classifyErrors } = await classifyAndInsertThreads(toClassify)
+
   if (inserted > 0) {
-    const openId = await getLarkUserOpenId()
-    if (openId) {
-      await sendLarkDM(openId, `🤖 Bé Gấu vừa phát hiện ${inserted} case SLA/Vendor Speed mới từ Lark — vào My Metrics duyệt nhé.`)
-    }
+    await sendLarkDM(myOpenId, `🤖 Quét lịch sử "${chatName}" xong — phát hiện ${inserted} case SLA/Vendor Speed mới, vào My Metrics duyệt nhé.`)
   }
 
   return {
-    scanned: threads.length, classified: toClassify.length, inserted, not_matched: notMatched,
+    scanned: relevant.length, classified: toClassify.length, inserted, not_matched: notMatched,
     classify_errors: classifyErrors,
-    backlog_remaining: threads.length - seen.size - toClassify.length,
+    backlog_remaining: relevant.length - seen.size - toClassify.length,
     groups,
   }
 }

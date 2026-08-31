@@ -33,12 +33,18 @@ export function prevQuarterLabel(label: string): string {
   return qNum === 1 ? `Q4-${year - 1}` : `Q${qNum - 1}-${year}`
 }
 
-// Quý hiện tại theo lịch thật (server-side) — dùng gắn nhãn quarter cho record cron tự tạo.
-export function currentQuarterLabel(): string {
-  const m = new Date().getMonth() + 1
-  const y = new Date().getFullYear()
+// Quý chứa 1 ngày bất kỳ — dùng gắn nhãn quarter ĐÚNG cho thread lịch sử (quét ngược nhiều tháng có
+// thể rơi vào quý trước, không phải lúc nào cũng là quý hiện tại).
+export function quarterLabelForDate(d: Date): string {
+  const m = d.getMonth() + 1
+  const y = d.getFullYear()
   const qNum = Math.floor((m - 1) / 3) + 1
   return `Q${qNum}-${y}`
+}
+
+// Quý hiện tại theo lịch thật (server-side) — dùng gắn nhãn quarter cho record cron tự tạo.
+export function currentQuarterLabel(): string {
+  return quarterLabelForDate(new Date())
 }
 
 // Baseline GM% công ty T8/2026 (chốt từ offer letter/ảnh baseline) — dùng làm mốc so sánh cho
