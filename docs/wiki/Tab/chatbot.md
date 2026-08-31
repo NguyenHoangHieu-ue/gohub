@@ -96,6 +96,14 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
   group nào bot có mặt) vào `okr_lark_message_log` — phục vụ real-time phát hiện case SLA/Vendor Speed cho tab
   My Metrics, KHÔNG liên quan luồng trả lời của Bé Gấu. Lỗi ở nhánh này không được (và không thể, vì
   fire-and-forget) làm hỏng luồng chính. Chi tiết đầy đủ: `docs/wiki/Tab/analytics-my-metrics.md` mục "s173".
+- **⚠️ Gotcha nghiêm trọng (s159→s176, đã fix): `verifyLarkSignature` sai key ký → reject 100% webhook
+  thật.** Từ s159 (2026-08-24) code ký HMAC-SHA256 bằng `LARK_VERIFICATION_TOKEN`; spec Lark khi app bật
+  Encrypt Key yêu cầu `sha256(timestamp+nonce+LARK_ENCRYPT_KEY+rawBody)` (SHA256 thường, dùng Encrypt Key
+  chứ không phải Verification Token) → suốt khoảng thời gian đó **Bé Gấu Lark không nhận được request thật
+  nào** (mọi POST bị `console.warn("[Lark] signature mismatch")` rồi trả 200 im lặng). Nếu sau này lại thấy
+  Bé Gấu "không trả lời trên Lark", kiểm tra ngay dòng log này trước khi nghi ngờ chỗ khác — xem
+  `docs/wiki/Tab/analytics-my-metrics.md` mục "s176" (nơi bug này được phát hiện, dù không liên quan trực
+  tiếp My Metrics) để biết cách tra bằng Vercel runtime log.
 
 ## 5. Phân Quyền Truy Cập
 - **Standard**: Chỉ được dùng các agent `tu-van`, `tra-cuu`, `giai-dap`, `gap-analysis` theo phòng ban. Không được xem giá vốn (COGS), không được dùng BI Analyst.
