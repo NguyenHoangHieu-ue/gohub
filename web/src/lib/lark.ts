@@ -258,6 +258,22 @@ export function splitTextAndTable(text: string): { preText: string; tableText: s
   return { preText: match[1].trim(), tableText: match[2].trim() }
 }
 
+// Tự tra open_id của CHÍNH người vừa OAuth (dùng user_access_token, KHÔNG phải app token).
+// Lark OAuth v2 token exchange KHÔNG trả open_id trong response (khác giả định cũ) — phải gọi riêng
+// endpoint này mới có. Bug thật: oauth/callback trước đọc thẳng `tok.open_id` (luôn undefined) →
+// open_id KHÔNG BAO GIỜ được lưu vào lark_oauth_creator → mọi tính năng dựa vào getLarkUserOpenId()
+// (My Metrics real-time capture, gán task assignee...) coi như chưa kết nối dù đã OAuth xong.
+export async function getLarkSelfOpenId(userAccessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${LARK_API}/authen/v1/user_info`, {
+      headers: { "Authorization": `Bearer ${userAccessToken}` },
+    })
+    const data = await res.json()
+    if (data.code !== 0) return null
+    return data.data?.open_id ?? null
+  } catch { return null }
+}
+
 // Get user info by open_id (to get name)
 export async function getLarkUserInfo(openId: string): Promise<{ name: string } | null> {
   try {

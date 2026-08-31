@@ -1,6 +1,7 @@
 // Quét thread gần đây trong 1 group Lark — logic dùng chung, tách ra từ Cà Thread
 // (api/creator/ca-thread/route.ts) để My Metrics Lark auto-scan (cron) dùng lại thay vì chép logic.
 import { getLarkToken } from "@/lib/lark"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const LARK = "https://open.larksuite.com/open-apis"
 
@@ -35,6 +36,7 @@ export interface LarkThreadReply {
 export interface LarkThread {
   message_id:  string
   thread_id:   string
+  chat_id:     string
   create_time: string       // ms epoch string, gốc từ Lark
   content:     string
   sender_open_id: string
@@ -135,6 +137,7 @@ async function hydrateThread(msg: any, appToken: string, nameMap: Record<string,
     return {
       message_id: msgId,
       thread_id:  containerId,
+      chat_id:    msg.chat_id ?? "",
       create_time: msg.create_time,
       content:    parseLarkContent(msg),
       sender_open_id: msg.sender?.id ?? "",
@@ -151,4 +154,57 @@ async function hydrateThread(msg: any, appToken: string, nameMap: Record<string,
         mentions: mentionsOf(r),
       })),
     }
+}
+
+// Lấy 1 message theo message_id (dùng để hydrate root message của thread phát hiện qua capture log —
+// khác fetchRecentThreads vốn lấy root từ list toàn group). Lark trả `items` mảng 1 phần tử.
+async function fetchMessageById(messageId: string, appToken: string): Promise<any | null> {
+  const data = await larkGet(`/im/v1/messages/${encodeURIComponent(messageId)}`, appToken)
+  if (data.code !== 0) return null
+  return data.data?.items?.[0] ?? null
+}
+
+/**
+ * Lấy thread liên quan tới Hiếu từ real-time capture log (okr_lark_message_log, ghi bởi
+ * api/lark/events qua lib/okr-lark-capture.ts) thay vì quét REST toàn bộ 1 group — KHÔNG giới hạn
+ * group (miễn bot có mặt), KHÔNG bỏ sót do lịch quét (mỗi tin ghi ngay khi Lark bắn event).
+ * "thread_id" trong log = message_id gốc của thread → hydrate lại ĐẦY ĐỦ (root + mọi reply + reaction)
+ * qua REST giống fetchRecentThreads, chỉ khác NGUỒN phát hiện "thread nào đáng xem".
+ */
+export async function fetchThreadsFromCapturedLog(daysBack = 7, maxThreads = 40): Promise<LarkThread[]> {
+  const since = Date.now() - daysBack * 86400 * 1000
+  const { data, error } = await supabaseAdmin
+    .from("okr_lark_message_log")
+    .select("thread_id")
+    .gte("create_time_ms", since)
+    .order("create_time_ms", { ascending: false })
+    .limit(2000)   // valve an toàn — dedupe theo thread_id bên dưới thường rút gọn nhiều so với số dòng thô
+  if (error) throw new Error(`okr_lark_message_log query failed: ${error.message}`)
+
+  const threadIds: string[] = []
+  const seen = new Set<string>()
+  for (const row of (data ?? []) as { thread_id: string }[]) {
+    if (seen.has(row.thread_id)) continue
+    seen.add(row.thread_id)
+    threadIds.push(row.thread_id)
+    if (threadIds.length >= maxThreads) break
+  }
+  if (threadIds.length === 0) return []
+
+  const appToken = await getLarkToken()
+  const nameMap: Record<string, string> = {}
+  const BATCH = 15
+  const threads: LarkThread[] = []
+  for (let i = 0; i < threadIds.length; i += BATCH) {
+    const batch = threadIds.slice(i, i + BATCH)
+    const hydrated = await Promise.all(batch.map(async id => {
+      const rootMsg = await fetchMessageById(id, appToken)
+      if (!rootMsg) return null
+      return hydrateThread(rootMsg, appToken, nameMap)
+    }))
+    threads.push(...hydrated.filter((t): t is LarkThread => t !== null))
+  }
+
+  threads.sort((a, b) => parseInt(b.create_time) - parseInt(a.create_time))
+  return threads
 }

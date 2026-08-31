@@ -31,17 +31,22 @@ export async function GET(req: NextRequest) {
   // Contribution %" ở BOD/Dashboard/Quarterly là chỉ số khác (chỉ 3HK), KHÔNG đổi theo đây.
   let hk3Data: { month: string; hk3_rev: number; bc_rev: number; total_rev: number }[] = []
   try {
+    // Dùng 1 CASE duy nhất trên vendor ĐÃ DEDUPE (DISTINCT ON) thay vì 2 IN-subquery độc lập: nếu
+    // dim_sku có dòng trùng SKU với vendor khác nhau (dữ liệu lỗi — cùng lý do sku-scan/datapool-detail
+    // phải DISTINCT ON), 2 IN-subquery riêng biệt sẽ đếm cùng 1 đồng doanh thu vào CẢ hk3_rev lẫn
+    // bc_rev (không loại trừ lẫn nhau) → thổi phồng %3HK+Datapool. 1 CASE trên vendor đã chọn ĐÚNG 1
+    // dòng/SKU loại trừ khả năng này by construction.
     const rows = await queryAnalytics<{ month: string; hk3_rev: string; bc_rev: string; total_rev: string }>(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', f.fulfiled_date::date), 'YYYY-MM') AS month,
-         SUM(CASE WHEN TRIM(f.sku) IN (
-           SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
-         ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
-         SUM(CASE WHEN TRIM(f.sku) IN (
-           SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = 'BCDATAPOOL'
-         ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS bc_rev,
-         SUM(f.fulfilled_revenue_amount_vnd)::bigint                AS total_rev
+         SUM(CASE WHEN v.vendor_norm = '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
+         SUM(CASE WHEN v.vendor_norm = 'BCDATAPOOL'  THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS bc_rev,
+         SUM(f.fulfilled_revenue_amount_vnd)::bigint AS total_rev
        FROM fact_fulfillment_revenue f
+       LEFT JOIN (
+         SELECT DISTINCT ON (TRIM(sku)) TRIM(sku) AS sku, REPLACE(UPPER(TRIM(vendor)),' ','') AS vendor_norm
+         FROM dim_sku ORDER BY TRIM(sku)
+       ) v ON TRIM(f.sku) = v.sku
        WHERE f.fulfiled_date IS NOT NULL
          AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
          AND f.fulfiled_date::date <= CURRENT_DATE - 1

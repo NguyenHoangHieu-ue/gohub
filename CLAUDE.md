@@ -4,17 +4,142 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s170)
+## Trạng thái hiện tại (2026-08-31, s176)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
-| ⏳ Trên staging CHƯA merge main | *(không có — s170(a)/s170(b)/s170(c) đã merge main)* |
-| ✅ Đã lên main | ...+ s169 audit toàn diện B2B Performance ↔ Quarter Report + s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
-| ✅ **s170(c) — Weekly Report: Hiếu đã test — Docx OK.** | Nút "Create Weekly Report" (tab Scheduled Messages) — Hiếu xác nhận file .docx xuất ra ổn (kể cả card ảnh — nghĩa là lo ngại "next/og lỗi path Windows" KHÔNG xảy ra trên staging/Vercel, đúng như dự đoán). Theo yêu cầu Hiếu, **đã BỎ nút/route xuất PDF** — giờ CHỈ xuất .docx. Xem chi tiết mục s170(c) dưới. |
+| 🔴 **KHẨN — production Lark webhook đang câm HOÀN TOÀN (chưa merge main để fix)** | `verifyLarkSignature` (`api/lark/events/route.ts`) ký HMAC bằng `LARK_VERIFICATION_TOKEN` — SAI so với spec Lark (app có Encrypt Key phải dùng `sha256(timestamp+nonce+ENCRYPT_KEY+body)`, không phải HMAC + Verification Token) → **100% request Lark thật gửi tới production bị reject** (`console.warn("[Lark] signature mismatch")`, xác nhận qua Vercel runtime log production 12/12 request trong 1h đều reject). Nghĩa là **Bé Gấu (chatbot) trên Lark hiện KHÔNG trả lời ai** kể từ khi chữ ký này bật (s159, 2026-08-24) — không chỉ riêng My Metrics. Đã fix trên staging (đổi đúng key + đúng hàm hash), tsc PASS, **CẦN Hiếu merge main GẤP** để khôi phục Bé Gấu Lark. Xem mục s176. |
+| ⏳ Trên staging CHƯA merge main | s171-s176 (tab My Metrics: audit+fix, rebuild UI, Lark real-time capture, mở rộng phân loại SLA, fix root-cause "0 case" + Bé Gấu Insights, **và fix chữ ký Lark webhook ở trên — ưu tiên merge sớm**) — chờ Hiếu QA/merge. |
+| ✅ Đã lên main | ...+ s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (Docx, tab Scheduled Messages) (2026-08-31) |
+| 🆕 **s175 — TÌM RA + FIX root cause "0 case" thật (không phải giả thuyết)** | `okr_lark_message_log` = 0 dòng (query Supabase thật, có credential lần này) → truy ra `getLarkUserOpenId()` luôn trả `null` vì `oauth/callback` lưu nhầm `tok.open_id` (field KHÔNG tồn tại trong response OAuth v2 của Lark) — bug CÓ TỪ TRƯỚC s173, chỉ lộ ra vì My Metrics giờ phụ thuộc hàm này. Đã fix code + **backfill NGAY open_id thật vào DB** (dùng access_token còn hạn gọi `user_info`, không cần Hiếu re-OAuth) — mọi tính năng dùng `getLarkUserOpenId()` (My Metrics capture, DM cảnh báo, Gấu Pro task assignee) hoạt động đúng từ NGAY BÂY GIỜ. Cần Hiếu gửi thử 1 tin + "Quét ngay" để xác nhận. Xem mục s175 dưới + wiki. |
+| 🚧 **Report_Aug.docx (báo cáo tháng 8 cho Bảo) — VẪN THIẾU 2 SỐ** | Cần Hiếu tự điền: SKU Gross Margin % (card "SKU Gross Margin" trong My Metrics) và %3HK+Datapool Rev (card "%Datapool Rev"). Máy Claude không có `ANALYTICS_DB_*` (gohub_dw) VÀ Chrome extension (`claude-in-chrome`) chưa kết nối lúc s171 nên không tự đọc số qua browser được — nếu Hiếu kết nối lại extension, lần sau Claude có thể tự mở My Metrics đọc số giúp. |
 | ⚠️ **Deploy Vercel bị FAIL ~2 tiếng (2026-08-27 05:54-07:xx UTC)** | Cron `my-metrics-lark-scan` trong s167 đặt `0 */3 * * *` (3 giờ/lần) — **project trên Vercel Hobby plan chỉ cho cron chạy tối đa 1 lần/ngày** → Vercel REJECT thẳng deployment (GitHub commit status "Vercel: Deployment failed" trỏ `vercel.com/docs/cron-jobs/usage-and-pricing`), khiến MỌI deploy sau đó (cả staging lẫn main) không lên được, không chỉ riêng My Metrics. Đã fix: đổi `0 10 * * *` (1x/ngày, 17:00 ICT). **Nhớ khi thêm cron mới sau này: Hobby plan = tối đa 1 lần/ngày/cron job.** |
 | 📊 **Số thật My Metrics Q3-2026 — query trực tiếp Supabase 2026-08-27 17:xx ICT** | SLA + Vendor Speed: **0 case cả 2** (0 manual, 0 Lark) suốt quý — bot Lark ĐÃ cấu hình đúng (`app_settings.my_metrics_lark_scan_config`: `chat_id=oc_95d72ac79dd09df585e974c0b71221b3`, `enabled=true`, `days_back=30`) nhưng **CHƯA CHẠY LẦN NÀO** tính tới lúc query (`okr_lark_events` 0 dòng mọi status). Bé Gấu tasks: **291/450 (64.7%)**, Web 291 · Lark 0 — đúng tiến độ (63.0% thời gian quý đã qua). SKU GM + %Datapool Rev: không query được (cần `gohub_dw`, máy dev không có `ANALYTICS_DB_*`). Đã tạo `D:\gohub\Report_Aug.docx` (báo cáo tháng 8 cho Bảo, file cá nhân KHÔNG commit git) điền sẵn 3/5 số thật, còn 2 số Hiếu tự điền từ My Metrics. |
+
+**s176 — đã làm (2026-08-31): tìm ra + fix bug KHẨN — Lark webhook production reject 100% request thật
+(root cause thật của "0 case" lần 2, sau khi fix open_id ở s175 vẫn còn 0).** Hiếu báo lại đúng 2 việc
+sau khi test tay: (1) chart SKU movers vẫn lấn chữ dù đã "auto-size" ở s175, (2) tạo group Lark mới +
+đăng thread test + Quét ngay → vẫn ra 0 case dù s175 đã fix open_id.
+- **Điều tra bằng Vercel runtime log thật** (MCP `plugin_vercel_vercel`, không đoán) — check log `preview`
+  (staging) trong đúng khung giờ Hiếu test (06:57-07:03 UTC, khớp timestamp các API call `scan-now`/
+  `lark-config` của Hiếu): **ZERO** request `/api/lark/events` — nghĩa là webhook Lark đăng ký trỏ về
+  **production** (`main`), KHÔNG PHẢI staging (đúng thiết kế — Bé Gấu phải phục vụ traffic Lark thật liên
+  tục, không thể trỏ webhook về staging). Check tiếp log `production` cùng khung giờ → **CÓ** 12 request
+  `/api/lark/events` thật nhưng **TOÀN BỘ đều bị reject**: `[Lark] signature mismatch — request rejected`.
+- **Root cause thật**: `verifyLarkSignature()` (`api/lark/events/route.ts`) ký HMAC-SHA256 bằng
+  `LARK_VERIFICATION_TOKEN` làm key — nhưng spec Lark Event Subscription khi app có bật **Encrypt Key**
+  (app này CÓ bật — AES decrypt payload dùng `LARK_ENCRYPT_KEY` ngay trong cùng file) yêu cầu chữ ký =
+  `sha256(timestamp + nonce + ENCRYPT_KEY + rawBody)` — SHA256 THƯỜNG, không phải HMAC, và dùng
+  **Encrypt Key** chứ không phải Verification Token. Sai cả 2 chỗ (sai key + sai thuật toán) → `expected`
+  không bao giờ khớp `X-Lark-Signature` thật, reject 100% request bất kể `LARK_VERIFICATION_TOKEN` set gì.
+  Bug này có từ s159 (2026-08-24, lúc thêm chữ ký làm security hardening) — **không liên quan gì s171-175**,
+  chỉ tình cờ lộ ra vì My Metrics giờ phụ thuộc `/api/lark/events` nhận được request thật.
+- 🔴 **Hệ quả nghiêm trọng hơn phạm vi My Metrics**: bug này chặn **MỌI** request Lark thật tới production
+  kể từ 2026-08-24 — nghĩa là **Bé Gấu (chatbot chính) trên Lark không trả lời ai suốt từ đó tới giờ**,
+  không chỉ ảnh hưởng tính năng My Metrics capture. Đây là lý do thật sự "0 case" (không phải open_id, dù
+  fix open_id ở s175 vẫn đúng và cần thiết — cả 2 bug cùng chặn, phải fix cả 2 mới thông).
+- **Fix**: đổi `verifyLarkSignature` dùng `LARK_ENCRYPT_KEY` + `createHash("sha256")` (bỏ `createHmac`,
+  import không dùng nữa). tsc PASS.
+- **Chart SKU movers lấn chữ (lần 2)**: fix trước (auto-width theo px/ký tự ước lượng, `~6.5px/ký tự`) vẫn
+  sai vì SVG text KHÔNG tự wrap/clip theo width layout của Recharts YAxis — chỉ là gợi ý bố cục, chữ dài
+  hơn ước lượng vẫn vẽ tràn thật sự vào vùng bar. Đổi cách tiếp cận: width CỐ ĐỊNH (92px) + cắt chuỗi hiển
+  thị bằng `tickFormatter` (ellipsis sau 11 ký tự) → không bao giờ tràn dù SKU dài cỡ nào; tên đầy đủ vẫn
+  xem được qua Tooltip khi hover. Chỉ sửa `SkuMoversChart` (chart Hiếu báo lỗi) — `TopUsersChart` dùng
+  cùng pattern px/ký tự cũ, CHƯA sửa (chưa ai báo lỗi, để nguyên theo rule "chỉ sửa cái cần").
+- **CẦN Hiếu**: merge main GẤP (Bé Gấu Lark đang câm ở production) — sau merge gửi thử 1 tin Lark bất kỳ,
+  xác nhận bot trả lời lại bình thường. Sau đó mới test tiếp My Metrics "Quét ngay" cho case SLA thật.
+- Wiki: `docs/wiki/Tab/analytics-my-metrics.md` mục "s176" + `docs/wiki/Tab/chatbot.md` gotcha chữ ký Lark.
+
+**s175 — đã làm (2026-08-31): fix ROOT CAUSE "0 case" thật + auto-size chart + Bé Gấu Insights.** Chi
+tiết đầy đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s175". Tóm tắt:
+
+- **Bug thật tìm được** (không phải đoán): máy dev LẦN NÀY có credential Supabase → query trực tiếp
+  `okr_lark_message_log` = 0 dòng → truy ngược `getLarkUserOpenId()` (`lib/lark.ts`) đọc field `open_id`
+  từ `app_settings.lark_oauth_creator`, nhưng record thật KHÔNG CÓ field này. Root cause: `oauth/
+  callback/route.ts` gọi `saveLarkUserToken(tok, tok.open_id)` — **Lark OAuth v2 token-exchange response
+  KHÔNG có field `open_id`** (phải gọi riêng `GET /authen/v1/user_info`, đúng như README mẫu
+  `Hieu/lark-sla-bot`) → `tok.open_id` luôn `undefined` từ lúc code viết, KHÔNG phải bug mới của s173.
+- **Fix + backfill NGAY**: thêm `getLarkSelfOpenId()` (lib/lark.ts) gọi đúng endpoint; sửa callback dùng
+  hàm này. Đồng thời BACKFILL trực tiếp vào Supabase bằng access_token còn hạn của kết nối hiện tại (gọi
+  `user_info` → `open_id = ou_e5af3c7f447984052c1c5a5c2f594127`, khớp `LARK_CREATOR_USER_ID` đã biết) —
+  **không cần Hiếu re-OAuth**, `getLarkUserOpenId()` đúng ngay lập tức (hàm chỉ đọc field tĩnh).
+- **Side-fix**: mọi tính năng khác âm thầm bị cùng bug (chưa ai báo) cũng hết lỗi luôn — DM cảnh báo case
+  mới My Metrics, gán task assignee Gấu Pro.
+- **Chart tự lấn chữ SKU/tên → auto-size**: `SkuMoversChart` YAxis trước cố định `width={110}`, SKU dài
+  tràn chữ. Đổi tính tự động theo độ dài chuỗi dài nhất trong data. Cùng cách áp cho `TopUsersChart`.
+- **Bé Gấu Insights (mới)**: route `begau-insights` + `lib/begau-insights.ts` — top người dùng (chart
+  bar), chủ đề hay hỏi (đếm tần suất từ khoá, KHÔNG AI), chấm điểm câu trả lời (**heuristic rõ ràng**,
+  ghi trong NotesDrawer không phải AI chấm/không đo đúng-sai thật). Đã **verify chạy thật trên Supabase
+  Q3-2026** (328 task, không chỉ tsc pass suông): top user Hồ Công Minh 74 task; chủ đề ra đúng nghiệp vụ
+  (doanh thu/target/cm1/pro-rata/b2c); chất lượng TB 93.0 điểm, 315 tốt/12 trung bình/1 cần soát.
+- tsc + `next build` PASS. **Cần Hiếu**: gửi thử 1 tin trong group đã add bot + bấm "Quét ngay" xác nhận
+  capture hoạt động (nếu vẫn 0, xem gợi ý kiểm tra Lark App event subscription scope trong wiki).
+
+**s174 — đã làm (2026-08-31): mở rộng phân loại "sla" + bảng 20 dòng/trang (My Metrics).** Chi tiết đầy
+đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s174". Tóm tắt: Hiếu yêu cầu xem lại logic phân loại
+thread — trước hẹp (chỉ "tạo/onboard sản phẩm mới" + "hỏi gói nước nào") — nay `SYSTEM_PROMPT`
+(`lib/okr-lark-classify.ts`) nêu rõ 3 nhóm ví dụ SLA: tạo/thêm/add sản phẩm · cung cấp/kiểm tra/xác nhận
+thông tin · báo lỗi sản phẩm, cộng "các dạng khác cùng bản chất" — Gemini vẫn tự suy luận theo tinh
+thần, KHÔNG so khớp từ khoá cứng (đúng ý Hiếu "nhiều trường hợp khác nữa"). Nhân tiện đọc lại phát hiện
++ fix 1 bug: prompt CŨ dặn trả `is_match=false` cho thread CHƯA hoàn thành → thread biến mất khỏi hàng
+chờ duyệt (rơi vào `not_matched`, Hiếu không thấy để tự điền completion tay). Đổi: request thật nhưng
+chưa xong → `is_match=true`, `completion_reply_index=null` → HIỆN trong hàng chờ duyệt (FE
+`LarkReviewPanel` vốn đã handle `completion_time=null` hiện "chưa xong" từ trước, không cần sửa FE) —
+Hiếu dùng nút "Sửa giờ & xác nhận" có sẵn để tự hoàn thành. `DataTable` (component dùng chung toàn
+trang) đổi `pageSize` mặc định 50→20, áp cho MỌI bảng trong tab cùng lúc (1 chỗ sửa). tsc PASS. Chưa
+verify chất lượng phân loại với dữ liệu Lark thật.
+
+**s173 — đã làm (2026-08-31): Lark bot My Metrics chuyển real-time capture, bỏ giới hạn 1 group.**
+Hiếu đưa mẫu `Hieu/lark-sla-bot` (bot riêng ghi tin nhắn Lark real-time vào Bitable) yêu cầu áp dụng vào
+My Metrics. Chi tiết đầy đủ ở `docs/wiki/Tab/analytics-my-metrics.md` mục "s173". Tóm tắt: KHÔNG deploy
+bot riêng — tích hợp thẳng vào webhook Lark có sẵn (`api/lark/events`, vốn phục vụ Bé Gấu). Thêm 1 tap
+fire-and-forget (`lib/okr-lark-capture.ts`, gọi ngay sau khi parse nội dung tin, TRƯỚC filter "phải
+@mention BOT") ghi mọi tin Hiếu tự gửi HOẶC được @mention (BẤT KỲ group nào bot có mặt) vào bảng mới
+`okr_lark_message_log` (migration `v46_okr_lark_message_log.sql`, **CHƯA CHẠY**). `lark-thread-scan.ts`
+thêm `fetchThreadsFromCapturedLog()` (đọc thread_id từ log thay vì list-toàn-group, rồi hydrate đầy đủ
+qua REST như cũ — tái dùng `hydrateThread()`, KHÔNG xoá `fetchRecentThreads()` cũ vì Cà Thread vẫn dùng).
+`lark-scan-runner.ts` đổi nguồn sang hàm mới, bỏ điều kiện chặn "chưa cấu hình chat_id". Config
+`lark-config` API + modal "⚙️ Lark Bot" bỏ hẳn field/input `chat_id`. `LarkThread` type thêm `chat_id`
+(mỗi thread giờ có thể ở group khác nhau, không còn 1 giá trị cố định). tsc + `next build` PASS.
+**Hạn chế biết trước**: không có dữ liệu lịch sử (chỉ capture từ lúc deploy), chỉ bắt text/post (khớp
+giới hạn sẵn có toàn `api/lark/events`), cần Hiếu đã Kết nối Lark cá nhân + bot đã add vào group liên
+quan (Lark chỉ gửi event cho group bot LÀ THÀNH VIÊN — không tự động hoá được). **CHƯA verify với dữ
+liệu Lark thật** — Hiếu cần: (1) chạy migration v46, (2) xác nhận 2 điều kiện trên, (3) gửi thử 1 tin
+liên quan rồi bấm "Quét ngay" xem có bắt được không.
+
+**s172 — đã làm (2026-08-31): rebuild UI tab My Metrics** (Hiếu: "trẻ trung, hiện đại, rõ ràng, thêm
+chart, note gom vào 1 button, bảng 50 dòng/trang"). Chi tiết đầy đủ ở `docs/wiki/Tab/
+analytics-my-metrics.md` mục "s172". Tóm tắt: 50/trang đã đúng sẵn (không cần sửa) · thêm 4 chart mới
+(`my-metrics-charts.tsx`, cùng pattern `bod-charts.tsx` — radar Weighted Score, area %Datapool theo
+tháng, stacked bar Bé Gấu theo tháng, bar ngang SKU GM movers) dùng lại data đã fetch, không gọi API
+mới · gom mọi đoạn ghi chú/công thức trước đây luôn-hiện-inline vào `NotesDrawer` (slide-over mới, mở
+bằng 1 nút "📖 Cách tính" ở header) · polish hero sang gradient dùng đúng scale `brand-*` có sẵn (không
+tự đoán hex mới). CHỈ đổi presentation, KHÔNG đổi bất kỳ công thức/API nào. tsc + `next build` PASS.
+**CHƯA test qua browser thật** — Chrome extension `claude-in-chrome` không kết nối lúc làm (đã thử,
+báo "Browser extension is not connected") nên không tự QA UI được; đã bù bằng cách đọc kỹ code + tự
+review từng đoạn JSX. Hiếu QA trên staging trước khi yên tâm.
+
+**s171 — đã làm (2026-08-31): audit tab My Metrics theo yêu cầu Hiếu "quét ra tab My Metrics" (chuẩn bị
+giúp hoàn thành `Report_Aug.docx`) — 3 bug thật, đã fix.** Chi tiết đầy đủ ở `docs/wiki/Tab/
+analytics-my-metrics.md` mục "s171". Tóm tắt: (1) HIGH — 2 route `lark-config`/`lark-config/scan-now`
+check quyền bằng JWT role thay role tươi DB, cùng họ bug s165 nhưng route thêm SAU s165 nên sót — đổi
+sang `canWriteTab()`; (2) MEDIUM — `%3HK+BC Datapool` (`my-metrics/route.ts`) có thể đếm trùng doanh thu
+nếu `dim_sku` có SKU trùng dòng khác vendor (2 `IN` subquery cũ không loại trừ lẫn nhau) — đổi sang 1
+JOIN dedupe `DISTINCT ON` + 1 CASE, khớp cách `sku-scan`/`datapool-detail` đã làm; (3) LOW —
+`conversations/route.ts` tự tính lại quarter range thay vì dùng chung `parseQuarterLabel()` — đổi sang
+dùng chung, nhân tiện hết phụ thuộc timezone server. tsc PASS. **CHƯA verify số thật sau fix** (máy dev
+thiếu `ANALYTICS_DB_*`) — Hiếu tự so số `%3HK+Datapool` trước/sau trên staging.
+
+**Report_Aug.docx (báo cáo tháng 8) — vẫn CHƯA hoàn thành**: đã đọc nội dung file (`Report_Aug.docx`)
+qua unzip+strip-XML (Read tool không đọc được .docx binary trực tiếp) — 3/5 KPI đã điền (SLA=0 case,
+Vendor Speed=0 case, Bé Gấu=64.7%), còn thiếu **SKU Gross Margin %** và **%3HK+Datapool Rev %** (cả 2
+nằm trong `gohub_dw`, máy dev không có credential). Đã thử dùng `claude-in-chrome` để tự mở My Metrics
+trên staging đọc số trực tiếp — **Chrome extension chưa kết nối** lúc đó ("Browser extension is not
+connected"), không đọc được. Hiếu tự điền 2 số này (+ vài dòng chi tiết SKU trọng điểm/mới,
+breakdown Datapool Rev 3HK/BC/Tổng, Weighted OKR Score tổng, mục kế hoạch tháng 9 #4) — hoặc kết nối
+lại Chrome extension để Claude tự đọc lần sau.
 
 **s170(c) — Weekly Report (2026-08-31): ĐÃ CODE XONG theo spec Hiếu chốt (đọc file mẫu `Company Weekly
 Performance.pdf` + 4 quyết định kỹ thuật Hiếu trả lời trực tiếp trong chat).**
@@ -404,6 +529,7 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [ ] ⏳ **v43 `kb_wiki_pages.visibility_mode` + `kb_wiki_page_groups`** (gộp Note/KB vào Tổ Gấu, s163 — CẦN Hiếu chạy trước khi QA)
 - [x] ✅ **v44 `okr_evidence_records`/`okr_sku_tags`** (My Metrics, s164 — Hiếu đã chạy 2026-08-27)
 - [x] ✅ **v45 `okr_lark_events` + nới `okr_sku_tags.effective_date`** (My Metrics rebuild bot Lark, s167 — Hiếu đã chạy 2026-08-27)
+- [x] ✅ **v46 `okr_lark_message_log`** (Lark bot real-time capture, s173 — Hiếu đã chạy 2026-08-31)
 - [x] ✅ ENV Vercel: `BC_DATAPOOL_*` · `LARK_CREATOR_USER_ID`
 
 **Hiếu cần làm (còn lại, s159+):**
@@ -411,7 +537,11 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 - [x] ✅ **Vercel env**: `ANALYTICS_DB_HOST` / `ANALYTICS_DB_NAME` / `ANALYTICS_DB_USER` đã xác nhận
 - [ ] **s163 — chạy migration `v43_kb_wiki_group_scope.sql`** trên Supabase trước khi QA gộp Note/KB vào Tổ Gấu.
 - [x] ✅ **s164/s167 — chạy migration `v44_okr_tracking.sql` rồi `v45_okr_lark_events.sql`** — Hiếu đã chạy 2026-08-27.
-- [ ] **s167 — nhập `chat_id` group Lark thật** vào modal "⚙️ Lark Bot" (`/analytics/my-metrics`, admin/creator) — bot không chạy tới khi có chat_id.
+- [x] ~~s167 — nhập `chat_id` group Lark thật~~ **ĐÃ BỎ ở s173** — không còn cần chat_id, xem mục s173.
+- [x] ✅ **s173 — chạy migration `v46_okr_lark_message_log.sql`** — Hiếu đã chạy 2026-08-31.
+- [ ] **s173 — xác nhận đã Kết nối Lark cá nhân** (Creator Settings) + **bot đã add vào group Sales/PIC
+  liên quan** — 2 điều kiện còn lại để capture real-time hoạt động (Lark chỉ gửi event cho group bot LÀ
+  THÀNH VIÊN, không tự động hoá được).
 - [ ] **s167 — QA UI My Metrics trên staging**: mở tab, kiểm bảng SKU scan/evidence không lỗi 500 (bảng mới cần cột `okr_sku_tags.effective_date` nullable từ v45), thử gắn/xoá ghi chú SKU, thử thêm case evidence tay.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
 

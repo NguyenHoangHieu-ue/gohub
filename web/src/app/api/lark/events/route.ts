@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse }  from "next/server"
-import { createDecipheriv, createHash, createHmac } from "crypto"
+import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
@@ -10,6 +10,7 @@ import {
   getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
+import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -89,16 +90,18 @@ export async function GET() {
   return NextResponse.json({ ok: true, service: "lark-bot" })
 }
 
-// Verify X-Lark-Signature nếu LARK_VERIFICATION_TOKEN đã set.
-// Signature = SHA256(timestamp + nonce + token + rawBody) — Lark Events API spec.
-// Nếu token chưa set thì bỏ qua (vẫn được bảo vệ bởi AES-256-CBC encryption).
+// Verify X-Lark-Signature khi app có Encrypt Key.
+// Signature = SHA256(timestamp + nonce + encrypt_key + rawBody) — đúng spec Lark Event Subscription
+// (KHÔNG phải Verification Token — bug cũ dùng nhầm Verification Token làm key ký → mismatch 100%,
+// mọi request thật bị reject, phát hiện qua Vercel runtime log s176: "signature mismatch" mọi request).
+// Không có Encrypt Key thì bỏ qua (payload lúc đó cũng không mã hoá, không có gì để đối chiếu).
 function verifyLarkSignature(req: NextRequest, rawBody: string): boolean {
-  const token = process.env.LARK_VERIFICATION_TOKEN
-  if (!token) return true
+  const key = process.env.LARK_ENCRYPT_KEY
+  if (!key) return true
   const timestamp = req.headers.get("x-lark-request-timestamp") ?? ""
   const nonce     = req.headers.get("x-lark-request-nonce")     ?? ""
-  const expected  = createHmac("sha256", token)
-    .update(timestamp + nonce + token + rawBody)
+  const expected  = createHash("sha256")
+    .update(timestamp + nonce + key + rawBody)
     .digest("hex")
   return req.headers.get("x-lark-signature") === expected
 }
@@ -246,6 +249,18 @@ export async function POST(req: NextRequest) {
   }
 
   console.log("[Lark] parsed | userText:", JSON.stringify(userText), "| postMentions:", postMentions.length, "| topMentions:", (msg?.mentions ?? []).length)
+
+  // My Metrics SLA/Vendor Speed — capture real-time (không liên quan việc Bé Gấu có trả lời hay
+  // không, nên đặt TRƯỚC mọi filter "phải @mention BOT"). Fire-and-forget, lỗi ở đây không được
+  // làm hỏng luồng trả lời chính. Xem lib/okr-lark-capture.ts.
+  void captureForOkrLog({
+    messageId, rootId, parentId: msg?.parent_id, chatId, chatType, msgType,
+    senderOpenId: openId, content: userText, createTime: msg.create_time,
+    mentionOpenIds: [
+      ...((msg?.mentions ?? []) as any[]).map(m => m?.id?.open_id).filter(Boolean),
+      ...postMentions.map((m: any) => m?.id?.open_id).filter(Boolean),
+    ],
+  })
 
   // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
   // Với p2p: bỏ qua (blank message)
