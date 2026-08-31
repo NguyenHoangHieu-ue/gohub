@@ -194,6 +194,39 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s174 (2026-08-31) — mở rộng phân loại "sla" + bảng 20 dòng/trang
+
+Hiếu (sau khi chạy migration v46) yêu cầu xem lại logic phân loại thread + đổi pageSize bảng.
+
+- **Bảng: `pageSize` mặc định của `DataTable` (component dùng chung toàn trang) đổi 50 → 20** — 1 dòng
+  sửa, áp cho MỌI bảng trong tab (SKU scan, evidence, Datapool detail, %Datapool theo tháng, Bé Gấu
+  theo tháng) vì tất cả đều dùng chung component, không hardcode `pageSize` riêng lẻ.
+- **Mở rộng định nghĩa "sla" trong prompt phân loại** (`lib/okr-lark-classify.ts`): trước chỉ nêu "yêu
+  cầu tạo/onboard sản phẩm mới" + "hỏi có gói cho nước nào" — hẹp hơn thực tế công việc Product Ops.
+  Nay liệt kê rõ 3 nhóm ví dụ (Gemini vẫn tự suy luận theo TINH THẦN, không so khớp từ khoá cứng —
+  "nhiều trường hợp khác nữa" theo đúng ý Hiếu):
+  1. **Tạo/thêm/add sản phẩm** — yêu cầu tạo/thêm/add/onboard SKU/gói mới.
+  2. **Cung cấp/kiểm tra/xác nhận thông tin** — SKU đã có chưa, giá/COGS/APN/chính sách, khuyến mãi...
+     bất kỳ câu hỏi nào cần Product Ops tra cứu rồi trả lời.
+  3. **Báo lỗi/sự cố sản phẩm** — sai giá/thiếu SKU/sai APN cần Product Ops sửa.
+  4. Các dạng khác cùng bản chất "nhờ Product Ops xử lý".
+  `vendor_speed` (Vendor Rate Query) giữ nguyên định nghĩa, không đổi.
+- **Fix nhân tiện phát hiện khi đọc lại logic**: prompt CŨ dặn Gemini trả `is_match=false` cho thread
+  CHƯA có completion (còn đang hỏi qua lại) → thread đó bị ghi `status='not_matched'` vào
+  `okr_lark_events`, biến mất vào mục "đã xem nhưng không khớp (audit AI)" — Hiếu KHÔNG thấy nó trong
+  hàng chờ duyệt để tự điền completion time tay dù request là THẬT. Nay đổi: request thật nhưng chưa
+  xong → `is_match=true`, `completion_reply_index=null` → ghi `status='pending_review'` với
+  `completion_time=null` → HIỆN trong hàng chờ duyệt, Hiếu dùng nút "Sửa giờ & xác nhận" (đã có sẵn
+  trong `LarkReviewPanel`, FE vốn đã handle `completion_time=null` hiện "chưa xong" từ trước — không
+  cần sửa FE) để tự điền hoàn thành thay vì request bị bỏ sót hoàn toàn.
+- **Hạn chế còn lại (chưa fix, ngoài scope lần này)**: dedupe theo `message_id` trong
+  `lark-scan-runner.ts` khiến 1 thread ĐÃ ghi vào `okr_lark_events` (dù `pending_review` hay
+  `not_matched`) KHÔNG bao giờ được quét lại — nếu Gemini lần đầu bỏ sót completion (vd completion nằm
+  ở reply thứ N+1 xuất hiện SAU lần scan đó), Hiếu vẫn phải tự sửa tay qua "Sửa giờ", bot không tự cập
+  nhật lại. Chấp nhận được vì Hiếu giờ ÍT NHẤT thấy được request trong hàng chờ (khác trước — biến mất
+  hẳn); muốn tự động re-scan cần thêm logic riêng, chưa làm.
+- tsc PASS. Chưa verify chất lượng phân loại với dữ liệu Lark thật.
+
 ## s173 (2026-08-31) — Lark bot chuyển sang real-time capture, bỏ giới hạn 1 group
 
 Hiếu đưa mẫu `Hieu/lark-sla-bot` (bot riêng ghi tin nhắn Lark real-time vào Bitable để tính SLA) yêu cầu

@@ -199,7 +199,7 @@ function NotesDrawer({ sections, onClose }: { sections: NoteSection[]; onClose: 
 }
 
 // ─── Generic data table — dùng cho mọi widget lấy số từ DB, theo yêu cầu "hiển thị dữ liệu bảng" ──
-function DataTable<T>({ columns, rows, rowKey, pageSize = 50, emptyLabel = "Chưa có dữ liệu." }: {
+function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel = "Chưa có dữ liệu." }: {
   columns: { key: string; label: string; align?: "left" | "right" | "center"; render: (row: T) => React.ReactNode }[]
   rows: T[]
   rowKey: (row: T) => string
