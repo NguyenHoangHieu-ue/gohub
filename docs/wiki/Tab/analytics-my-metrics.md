@@ -195,6 +195,51 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s180 (2026-08-31) — xoá được case Lark đã lỡ xác nhận
+
+Hiếu: vài case bấm nhầm "Xác nhận" muốn xoá. Bảng case (`EvidenceCard` → cột hành động) trước chỉ có
+sửa/xoá cho nguồn `manual` (`okr_evidence_records`) — case nguồn `lark_auto` (đã `confirm` trong
+`okr_lark_events`) không có nút nào.
+
+Thêm route `DELETE /api/analytics/my-metrics/lark-events/[id]` + nút xoá riêng cho hàng nguồn Lark. Xoá
+HẲN (không chỉ đổi status về pending) — lý do: `message_id` hết bị coi "đã thấy" ở dedupe lần scan sau
+(`lark-scan-runner.ts`), nên nếu thread vẫn còn thật sẽ tự trôi lại vào hàng chờ duyệt để Hiếu xử lý lại
+từ đầu (không cần thao tác gì thêm). tsc PASS.
+
+## s179 (2026-08-31) — quét lịch sử 1 lần cho group cũ
+
+Sau s178, Hiếu báo: 1 group hầu như thread nào cũng được mention (rất nhiều), nhưng quét real-time chỉ ra
+đúng 1 case. Điều tra Vercel log production 3 tiếng gần nhất: chỉ **1** request `/api/lark/events` thật
+(tin test "."). Kết luận: mọi mention "rất nhiều" Hiếu thấy là tin **CŨ**, từ trước lúc webhook thật sự
+sống (bug chữ ký chặn tới tận s176 mới fix) — capture real-time (s173) CHỈ thấy tin từ lúc deploy, không
+tự backfill lịch sử (đúng hạn chế đã ghi từ s173, không phải bug mới). Hỏi Hiếu qua AskUserQuestion có
+muốn thêm quét lịch sử 1 lần không — lúc đầu chọn "không cần", sau đổi ý muốn có.
+
+**Thêm — "Quét lịch sử 1 lần"** (modal ⚙️ Lark Bot):
+- `runLarkHistoryScan(chatId, daysBack)` (`lark-scan-runner.ts`) — dùng lại `fetchRecentThreads()` (REST
+  scan toàn group, logic Cà Thread) thay vì capture log, áp CÙNG tiêu chí "chỉ tin liên quan Hiếu"
+  (`threadInvolvesUser()` — isSelf/mentioned, cả tin gốc lẫn mọi reply) và CÙNG pipeline classify+insert
+  với quét real-time — extract `classifyAndInsertThreads()` dùng chung 1 chỗ, không chép logic.
+- `quarterLabelForDate()` (`okr-helpers.ts`, mới) — quét ngược nhiều tháng có thể rơi vào quý TRƯỚC quý
+  hiện tại. Áp fix này cho CẢ quét real-time (đúng hơn, dù hiếm lộ ra vì real-time luôn "vừa xảy ra").
+- `listBotChats()` (`lark-thread-scan.ts`) + route `lark-config/groups` — liệt kê group bot đang là
+  thành viên, Hiếu CHỌN group qua dropdown thay vì tự tra `chat_id` tay (trước đây Cà Thread bắt nhập tay).
+- Route `lark-config/scan-history` — POST `{chat_id, days_back}` (tối đa 120 ngày, valve an toàn).
+- FE: `ScanResultBox` tách riêng (dùng chung cho cả "Quét ngay" và "Quét lịch sử", tránh trùng JSX).
+
+tsc PASS. **Cần Hiếu**: mở modal ⚙️ Lark Bot, chọn group busy đó trong dropdown "Quét lịch sử", quét thử.
+
+## s178 (2026-08-31) — hiện tên/link group + nội dung đầy đủ trong panel duyệt case
+
+Sau khi s177 fix xong (case đã ra hàng chờ duyệt), Hiếu báo panel không đủ để duyệt: (1) snippet
+request/completion bị CSS `truncate` cắt còn 1 dòng dù DB lưu tới 300 ký tự — không đọc được nội dung thật
+để quyết định duyệt/từ chối; (2) không biết case đang ở group nào giữa 4 group đã add bot.
+
+Fix: `lark-events` GET route resolve `chat_name` qua Lark API (`getChatName()`, cache theo request — nhiều
+event thường trùng chat_id) trả kèm mỗi case. FE: badge group (tên + link
+`applink.larksuite.com/client/chat/open?openChatId=...` mở thẳng group đó trong Lark app), bỏ `truncate`
+cho 2 đoạn snippet (wrap đầy đủ, không giới hạn 1 dòng nữa), thêm tên người gửi từng tin. tsc PASS.
+
 ## s177 (2026-08-31) — fix lỗi phân loại Lark bị nuốt im lặng + hiện danh sách group đã quét
 
 Sau s176 (fix chữ ký webhook), Hiếu test lại "Quét ngay" — capture log đã ghi đúng thread test (root_id
@@ -221,6 +266,21 @@ cùng pattern Cà Thread `debug` mode đã dùng trước đó).
 
 tsc PASS. **Cần Hiếu**: bấm "Quét ngay" lại — nếu vẫn 0 case, mở phần "N thread lỗi phân loại" mới hiện
 trong modal + báo Claude tra `[Lark classify]` trong Vercel log để biết lỗi Gemini cụ thể.
+
+**s177(b) — root cause thật của "Gemini không trả JSON" (cùng ngày, ngay sau khi log full text lộ ra):**
+raw text log mới cho thấy JSON ĐÚNG cấu trúc nhưng đứt ngang giữa chừng field
+(`{"is_match": true, "metric": "sla", "completion_reply` — thiếu hẳn phần còn lại) — không phải Gemini
+trả sai định dạng, mà bị **cắt cụt do hết token**. `gemini-3.6-flash` mặc định bật "thinking" (chuỗi suy
+luận ẩn) — token đó TÍNH CHUNG vào `maxOutputTokens` cùng ngân sách với phần JSON thấy được, ăn hết trước
+khi tới JSON thật dù đã tăng 300→500.
+- **Thử lần 1**: `thinkingConfig: { thinkingBudget: 0 }` tắt hẳn thinking (đúng pattern
+  `api/config/schema/ai-suggest/route.ts`) → **model trả thẳng 400 "invalid argument"** — model này KHÔNG
+  chấp nhận field đó (không phải model Gemini nào cũng cho tắt thinking bằng budget=0, dù cùng tên model
+  vẫn có route khác dùng field này — chưa rõ route kia có thật sự chạy qua chưa hay cũng sẽ lỗi tương tự
+  nếu gọi thật, KHÔNG sửa route đó vì ngoài phạm vi request). Đã revert.
+- **Fix thật (lần 2)**: bump `maxOutputTokens` thẳng lên **4000** — khớp đúng con số
+  `lib/weekly-report/narrative.ts` đã dùng ổn định với CÙNG model + CÙNG `responseMimeType` (Hiếu xác nhận
+  chạy thật ở s170(c)), không tự đoán số mới. Đủ chứa cả phần thinking ẩn lẫn JSON thật. tsc PASS.
 
 ## s176 (2026-08-31) — fix KHẨN: Lark webhook production reject 100% request thật (root cause thật lần 2)
 

@@ -6,7 +6,7 @@ import {
   Target, Pencil, Save, XCircle, RefreshCw, Plus, Trash2,
   Clock, ChevronDown, ChevronUp, Lock, ShieldCheck, Tag, Gauge,
   Zap, BarChart3, Bot, Info, Settings, Check, X, Search, Sparkles,
-  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen, Users, Award,
+  Upload, MessageSquare, ChevronLeft, ChevronRight, BookOpen, Users, Award, ExternalLink,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
@@ -47,6 +47,7 @@ interface EvidenceData {
 }
 interface LarkEvent {
   id: string; quarter: string; metric: string; message_id: string
+  chat_id: string; chat_name: string
   request_time: string; request_snippet: string | null; request_sender: string | null
   completion_time: string | null; completion_snippet: string | null; completion_sender: string | null
   duration_value: number | null; ai_reason: string | null
@@ -345,11 +346,18 @@ function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
             const isEditing = !!editing[ev.id]
             return (
               <div key={ev.id} className="bg-white border border-amber-200 rounded-lg p-2.5 text-[11px]">
-                <p className="text-slate-500 italic mb-1 truncate">"{ev.ai_reason || "(không có lý do)"}"</p>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <a href={`https://applink.larksuite.com/client/chat/open?openChatId=${encodeURIComponent(ev.chat_id)}`}
+                    target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-black hover:bg-brand-100">
+                    💬 {ev.chat_name} <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <p className="text-slate-500 italic mb-1">"{ev.ai_reason || "(không có lý do)"}"</p>
                 {!isEditing ? (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                    <div><span className="text-slate-400">📩 </span><span className="font-bold">{hhmm(ev.request_time)}</span><p className="text-slate-400 truncate">{ev.request_snippet}</p></div>
-                    <div><span className="text-slate-400">✅ </span><span className="font-bold">{ev.completion_time ? hhmm(ev.completion_time) : "chưa xong"}</span><p className="text-slate-400 truncate">{ev.completion_snippet}</p></div>
+                    <div><span className="text-slate-400">📩 </span><span className="font-bold">{hhmm(ev.request_time)}</span> <span className="text-slate-400">({ev.request_sender ?? "?"})</span><p className="text-slate-600 whitespace-pre-wrap break-words">{ev.request_snippet}</p></div>
+                    <div><span className="text-slate-400">✅ </span><span className="font-bold">{ev.completion_time ? hhmm(ev.completion_time) : "chưa xong"}</span> {ev.completion_sender && <span className="text-slate-400">({ev.completion_sender})</span>}<p className="text-slate-600 whitespace-pre-wrap break-words">{ev.completion_snippet}</p></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
@@ -505,6 +513,16 @@ function EvidenceCard({
     fetchData()
   }
 
+  // Case Lark đã confirm (source lark_auto) lỡ bấm nhầm — xoá khỏi okr_lark_events (khác bảng với
+  // evidence tay). Xoá thay vì un-confirm: hết bị dedupe ở lần scan sau, tự vào lại hàng chờ duyệt
+  // nếu vẫn còn là thread thật.
+  const removeLark = async (id: string) => {
+    if (!confirm("Xoá case Lark này? (thread vẫn còn thì sẽ tự vào lại hàng chờ duyệt lần quét sau)")) return
+    const r = await fetch(`/api/analytics/my-metrics/lark-events/${id}`, { method: "DELETE" })
+    if (!r.ok) { const j = await r.json(); alert(j.error ?? "Lỗi xoá"); return }
+    fetchData()
+  }
+
   const avg     = data?.avg ?? null
   const actual  = avg ?? 0
   const progress = targetValue > 0 && avg !== null ? Math.max(0, 100 - ((actual - targetValue) / targetValue * 100)) : 0
@@ -648,12 +666,21 @@ function EvidenceCard({
                 ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
                 : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">Thiếu ảnh</span>
             } },
-            { key: "act", label: "", align: "right", render: r => r.source === "manual" && !locked ? (
-              <div className="flex gap-1 justify-end">
-                <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-brand-600 hover:bg-brand-50"><Pencil className="w-3 h-3" /></button>
-                <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
-              </div>
-            ) : null },
+            { key: "act", label: "", align: "right", render: r => {
+              if (locked) return null
+              if (r.source === "manual") return (
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => openEdit(r)} className="p-1 rounded text-slate-300 hover:text-brand-600 hover:bg-brand-50"><Pencil className="w-3 h-3" /></button>
+                  <button onClick={() => remove(r.id)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              )
+              return (
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => removeLark(r.id)} title="Xoá case Lark đã xác nhận nhầm"
+                    className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              )
+            } },
           ]}
         />
 
@@ -1020,6 +1047,41 @@ function BegauInsightsSection({ quarter }: { quarter: string }) {
   )
 }
 
+interface LarkScanResult {
+  scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
+  backlog_remaining: number; skipped?: string
+  groups: { chat_id: string; chat_name: string; thread_count: number }[]
+}
+
+function ScanResultBox({ result }: { result: LarkScanResult }) {
+  if (result.skipped) return <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {result.skipped}</p>
+  return (
+    <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
+      {result.groups.length > 0 ? (
+        <div>
+          <span className="text-slate-400">Đã quét {result.groups.length} group: </span>
+          {result.groups.map((g, i) => (
+            <span key={g.chat_id}>
+              {i > 0 && ", "}<strong>{g.chat_name}</strong> ({g.thread_count})
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-amber-600">Không tìm thấy group/thread nào phù hợp.</div>
+      )}
+      <div>Đã quét <strong className="tabular-nums">{result.scanned}</strong> thread có reply, liên quan Hiếu.</div>
+      <div>Phân loại lần này: <strong className="tabular-nums">{result.classified}</strong> thread mới.</div>
+      <div>→ <strong className="text-emerald-600 tabular-nums">{result.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{result.not_matched}</strong> không khớp.</div>
+      {result.classify_errors > 0 && (
+        <div className="text-red-600">⚠ <strong className="tabular-nums">{result.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
+      )}
+      {result.backlog_remaining > 0 && (
+        <div className="text-amber-600">Còn <strong className="tabular-nums">{result.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa.</div>
+      )}
+    </div>
+  )
+}
+
 // ─── Lark scan config modal (admin/creator) ───────────────────────────────────
 function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [cfg, setCfg] = useState({ enabled: false, days_back: 3 })
@@ -1027,18 +1089,24 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
-  const [scanResult, setScanResult] = useState<{
-    scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
-    backlog_remaining: number; skipped?: string
-    groups: { chat_id: string; chat_name: string; thread_count: number }[]
-  } | null>(null)
+  const [scanResult, setScanResult] = useState<LarkScanResult | null>(null)
   const [scanErr, setScanErr] = useState<string | null>(null)
+
+  const [historyChatId, setHistoryChatId] = useState("")
+  const [historyDays, setHistoryDays] = useState(30)
+  const [historyScanning, setHistoryScanning] = useState(false)
+  const [historyResult, setHistoryResult] = useState<LarkScanResult | null>(null)
+  const [historyErr, setHistoryErr] = useState<string | null>(null)
+  const [botGroups, setBotGroups] = useState<{ chat_id: string; name: string }[] | null>(null)
 
   useEffect(() => {
     fetch("/api/analytics/my-metrics/lark-config").then(r => r.ok ? r.json() : null).then(d => {
       if (d) setCfg({ enabled: d.enabled ?? false, days_back: d.days_back ?? 3 })
       setLoading(false)
     }).catch(() => setLoading(false))
+    fetch("/api/analytics/my-metrics/lark-config/groups").then(r => r.ok ? r.json() : null).then(d => {
+      setBotGroups(d?.groups ?? [])
+    }).catch(() => setBotGroups([]))
   }, [])
 
   const save = async () => {
@@ -1058,6 +1126,19 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
     setScanning(false)
     if (!r.ok) { setScanErr(j.error ?? "Lỗi quét"); return }
     setScanResult(j)
+  }
+
+  const scanHistory = async () => {
+    if (!historyChatId.trim()) { setHistoryErr("Nhập chat_id trước"); return }
+    setHistoryScanning(true); setHistoryErr(null); setHistoryResult(null)
+    const r = await fetch("/api/analytics/my-metrics/lark-config/scan-history", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: historyChatId.trim(), days_back: historyDays }),
+    })
+    const j = await r.json()
+    setHistoryScanning(false)
+    if (!r.ok) { setHistoryErr(j.error ?? "Lỗi quét"); return }
+    setHistoryResult(j)
   }
 
   return (
@@ -1092,36 +1173,38 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
                 <Sparkles className="w-3.5 h-3.5" /> {scanning ? "Đang quét (có thể mất 30-60s)…" : "Quét ngay để test"}
               </button>
               {scanErr && <p className="text-[11px] text-red-600 font-bold mt-2">{scanErr}</p>}
-              {scanResult && (
-                scanResult.skipped
-                  ? <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {scanResult.skipped}</p>
-                  : (
-                    <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
-                      {scanResult.groups.length > 0 ? (
-                        <div>
-                          <span className="text-slate-400">Đã quét {scanResult.groups.length} group: </span>
-                          {scanResult.groups.map((g, i) => (
-                            <span key={g.chat_id}>
-                              {i > 0 && ", "}<strong>{g.chat_name}</strong> ({g.thread_count})
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-amber-600">Không tìm thấy group nào trong capture log — kiểm tra bot đã add vào group + đã có tin nhắn Hiếu tự gửi/được @mention gần đây chưa.</div>
-                      )}
-                      <div>Đã quét <strong className="tabular-nums">{scanResult.scanned}</strong> thread có reply trong cửa sổ {cfg.days_back} ngày.</div>
-                      <div>Phân loại lần này: <strong className="tabular-nums">{scanResult.classified}</strong> thread mới.</div>
-                      <div>→ <strong className="text-emerald-600 tabular-nums">{scanResult.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{scanResult.not_matched}</strong> không khớp.</div>
-                      {scanResult.classify_errors > 0 && (
-                        <div className="text-red-600">⚠ <strong className="tabular-nums">{scanResult.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
-                      )}
-                      {scanResult.backlog_remaining > 0 && (
-                        <div className="text-amber-600">Còn <strong className="tabular-nums">{scanResult.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa hoặc đợi cron ngày mai.</div>
-                      )}
-                    </div>
-                  )
-              )}
+              {scanResult && <ScanResultBox result={scanResult} />}
             </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-bold text-slate-500 uppercase mb-1.5">Quét lịch sử 1 lần (group cũ)</p>
+              <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
+                Real-time chỉ thấy tin TỪ LÚC bot bắt đầu sống — thread/mention cũ trước đó không tự vào được.
+                Chọn 1 group để quét ngược 1 lần, cùng tiêu chí "chỉ tin liên quan Hiếu" như real-time.
+              </p>
+              <div className="flex gap-1.5">
+                {botGroups && botGroups.length > 0 ? (
+                  <select value={historyChatId} onChange={e => setHistoryChatId(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-brand-500">
+                    <option value="">— chọn group —</option>
+                    {botGroups.map(g => <option key={g.chat_id} value={g.chat_id}>{g.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" placeholder={botGroups === null ? "Đang tải danh sách group…" : "Không tải được — nhập chat_id (oc_...)"}
+                    value={historyChatId} onChange={e => setHistoryChatId(e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                )}
+                <input type="number" min={1} max={120} value={historyDays} onChange={e => setHistoryDays(parseInt(e.target.value) || 30)}
+                  className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-brand-500" title="Số ngày ngược" />
+              </div>
+              <button onClick={scanHistory} disabled={historyScanning}
+                className="w-full mt-1.5 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50">
+                <Clock className="w-3.5 h-3.5" /> {historyScanning ? "Đang quét lịch sử (có thể mất 1-2 phút)…" : "Quét lịch sử"}
+              </button>
+              {historyErr && <p className="text-[11px] text-red-600 font-bold mt-2">{historyErr}</p>}
+              {historyResult && <ScanResultBox result={historyResult} />}
+            </div>
+
             <div className="flex gap-2 justify-end pt-1">
               <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
               <button onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg text-xs font-black bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">

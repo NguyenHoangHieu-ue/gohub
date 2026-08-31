@@ -173,6 +173,21 @@ export async function getChatName(chatId: string, appToken: string): Promise<str
   } catch { return chatId }
 }
 
+// Danh sách group bot đang là thành viên — cho Hiếu CHỌN group thay vì phải tự tra chat_id tay khi
+// dùng "Quét lịch sử 1 lần" (my-metrics/lark-config/scan-history).
+export async function listBotChats(appToken: string): Promise<{ chat_id: string; name: string }[]> {
+  const out: { chat_id: string; name: string }[] = []
+  let pageToken: string | undefined
+  for (let page = 0; page < 10; page++) {
+    const data = await larkGet(`/im/v1/chats?page_size=100${pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : ""}`, appToken)
+    if (data.code !== 0) break
+    for (const c of (data.data?.items ?? [])) out.push({ chat_id: c.chat_id, name: c.name || c.chat_id })
+    if (!data.data?.has_more || !data.data?.page_token) break
+    pageToken = data.data.page_token
+  }
+  return out
+}
+
 /**
  * Lấy thread liên quan tới Hiếu từ real-time capture log (okr_lark_message_log, ghi bởi
  * api/lark/events qua lib/okr-lark-capture.ts) thay vì quét REST toàn bộ 1 group — KHÔNG giới hạn

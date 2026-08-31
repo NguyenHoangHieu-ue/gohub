@@ -52,7 +52,15 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0,
-        maxOutputTokens: 500,
+        // gemini-3.6-flash mặc định "thinking" — token ẩn đó TÍNH VÀO maxOutputTokens, ăn hết ngân sách
+        // trước khi tới JSON thật → response.text() bị cắt cụt giữa chừng (root cause thật của
+        // "Gemini không trả JSON", xác nhận qua raw text log s177: JSON đúng cấu trúc nhưng đứt giữa
+        // field). Từng thử thinkingConfig:{thinkingBudget:0} (đúng pattern api/config/schema/
+        // ai-suggest/route.ts) nhưng model NÀY trả 400 "invalid argument" với field đó — không phải
+        // model nào cũng nhận thinkingBudget=0. Đổi hướng: bump maxOutputTokens đủ lớn để chứa được cả
+        // thinking lẫn JSON thật, khớp đúng con số `lib/weekly-report/narrative.ts` đã dùng ổn với cùng
+        // model (Hiếu xác nhận chạy thật s170(c)), không tự đoán số mới.
+        maxOutputTokens: 4000,
         responseMimeType: "application/json",
       },
     })
