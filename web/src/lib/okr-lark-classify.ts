@@ -54,7 +54,12 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
         temperature: 0,
         maxOutputTokens: 500,
         responseMimeType: "application/json",
-      },
+        // gemini-3.6-flash mặc định "thinking" — token ẩn đó TÍNH VÀO maxOutputTokens, ăn hết ngân sách
+        // trước khi tới JSON thật → response.text() bị cắt cụt giữa chừng (root cause thật của
+        // "Gemini không trả JSON", xác nhận qua raw text log s177: JSON đúng cấu trúc nhưng đứt giữa
+        // field). Tắt thinking — đúng pattern đã dùng ở api/config/schema/ai-suggest/route.ts.
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
     })
 
     const result = await model.generateContent(buildThreadText(thread))
