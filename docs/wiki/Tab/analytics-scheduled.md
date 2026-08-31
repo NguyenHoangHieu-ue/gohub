@@ -15,13 +15,14 @@ Hệ thống đặt lịch hẹn giờ gửi tóm tắt báo cáo doanh số, ti
 
 ---
 
-## 0. Create Weekly Report (s170, 2026-08-31) — xuất báo cáo tuần .docx + .pdf
+## 0. Create Weekly Report (s170, 2026-08-31) — xuất báo cáo tuần .docx
 
 Nút riêng (không phải lịch tự động) cạnh nút "Lịch mới", cùng quyền ghi (`admin`/`creator` hoặc
 `writable_tabs` chứa `"scheduled"`). Bấm → gọi `POST /api/admin/scheduled-messages/weekly-report` → BE tính
-số liệu + render 2 file (docx + pdf, cùng nội dung) → FE tự tải cả 2. Theo format mẫu Hiếu cung cấp (báo cáo
-tay tuần: Revenue/WoW/Pro-rata tháng vs Actual tháng trước, breakdown từng channel B2B/B2C, GP&CM1, 3HK
-Contribution — kèm "ảnh" card style Dashboard/B2B/B2C/Vendor Performance).
+số liệu + render file .docx → FE tự tải. Theo format mẫu Hiếu cung cấp (báo cáo tay tuần: Revenue/WoW/Pro-rata
+tháng vs Actual tháng trước, breakdown từng channel B2B/B2C, GP&CM1, 3HK Contribution — kèm "ảnh" card style
+Dashboard/B2B/B2C/Vendor Performance). *(Ban đầu làm cả PDF, đã BỎ theo yêu cầu Hiếu sau khi test staging —
+xem cuối mục.)*
 
 **Kỳ báo cáo**: LUÔN "tuần trước" (Thứ 2→CN gần nhất đã hoàn thành, tính bất kể ngày bấm nút) + MTD tháng hiện
 tại so Actual tháng trước liền kề — `lib/weekly-report/period.ts`.
@@ -45,19 +46,19 @@ Hiếu, vd "B2C Performance"). File `lib/weekly-report/card-images.ts` — viế
 **Xuất file:**
 - **Docx**: `markdownToDocx` (tách từ `api/creator-ai/export/route.ts` ra `lib/docx-markdown.ts`, dùng chung —
   route Gấu Pro export cũ KHÔNG đổi hành vi) + thêm marker `![[IMG:key]]` → `ImageRun` (co tỉ lệ, max 600px).
-- **Pdf**: `jsPDF` (đã có sẵn trong deps, KHÔNG cần thêm) — verify chạy được server-side THUẦN NODE kể cả
-  `addImage()` (không cần canvas/DOM như tưởng ban đầu — đây là lý do làm được CẢ 2 định dạng thay vì chỉ Docx
-  như phương án dự phòng ban đầu).
-- Cả 2 dùng CHUNG 1 nguồn nội dung (`report-content.ts` build markdown + ảnh 1 lần) — sửa nội dung báo cáo chỉ
-  cần sửa 1 chỗ.
+- `report-content.ts` build markdown + ảnh 1 lần → `docx-export.ts` wrap thành `Document` (header/footer, port
+  từ `creator-ai/export`).
 
-**⚠️ Gotcha CHƯA verify trên máy dev Windows — next/og lỗi local, tin production OK nhưng CẦN Hiếu xác nhận
-trên staging:** `ImageResponse` gọi `path.join(import.meta.url, "../noto-sans...ttf")` rồi `fileURLToPath()`
-trong code bundled sẵn của `@vercel/og` — trên Windows, `path.join` (win32, dùng `\`) phá cú pháp `file://` URL
-→ `TypeError: Invalid URL`. Đây là bug Windows-path THUẦN TUÝ của thư viện (không phải lỗi trong
-`card-images.ts`), Vercel chạy Linux (`path.posix.join`) không dính. Đã verify TÁCH RIÊNG phần còn lại (docx/pdf
-với ảnh giả lập qua `vi.mock`) chạy đúng 100%. **Trước khi tin dùng: bấm thử nút này trên staging, mở cả 2 file
-xuất ra, xác nhận 6 card ảnh hiện đúng (không rỗng/vỡ).**
+**✅ Đã verify trên staging (Hiếu test 2026-08-31): file .docx xuất ra ổn, kể cả 6 card ảnh** — xác nhận
+`next/og`/`ImageResponse` chạy đúng trên Vercel (Linux). Lúc code trên máy dev Windows, `ImageResponse` từng lỗi
+`TypeError: Invalid URL` cục bộ do `@vercel/og` bundled gọi `path.join(import.meta.url, "../noto-sans...ttf")`
+rồi `fileURLToPath()` — `path.join` kiểu Windows (`\`) phá cú pháp `file://` URL. Bug đó CHỈ xảy ra trên
+Windows dev (POSIX `path.join` trên Linux không dính) — kết quả test staging đã xác nhận đúng dự đoán.
+
+**Bỏ PDF (2026-08-31, theo yêu cầu Hiếu)**: ban đầu làm cả `.pdf` qua `jsPDF` (đã có sẵn trong deps, chạy được
+server-side thuần Node kể cả `addImage()`, đã verify qua vitest với ảnh giả lập trước khi bỏ) — sau khi Hiếu
+xác nhận .docx đủ dùng, đã xoá `pdf-export.ts` + nhánh PDF khỏi route/FE, route giờ chỉ trả `{docx,
+docxFilename}`.
 
 **Số liệu CHƯA verify với DB thật** (máy dev thiếu `ANALYTICS_DB_*`) — công thức dựa trên tái dùng hàm/helper đã
 verify ở tab khác nên tin đúng logic, nhưng Hiếu nên đối chiếu 1-2 số với Dashboard/BOD/B2B/B2C/Vendor

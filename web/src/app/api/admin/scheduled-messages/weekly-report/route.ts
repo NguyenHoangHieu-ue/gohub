@@ -7,11 +7,11 @@ import { buildWeeklyReportData } from "@/lib/weekly-report/data"
 import { generateChannelNarratives } from "@/lib/weekly-report/narrative"
 import { buildReportContent } from "@/lib/weekly-report/report-content"
 import { buildWeeklyReportDocx } from "@/lib/weekly-report/docx-export"
-import { buildWeeklyReportPdf } from "@/lib/weekly-report/pdf-export"
 
 // Nút "Create Weekly Report" (tab Scheduled Messages) — cùng quyền ghi với scheduled messages
-// (admin/creator hoặc user được cấp writable_tabs["scheduled"]). Tính toán nặng (nhiều query gohub_dw +
-// Gemini + render ảnh + docx/pdf) → nới maxDuration giống cron scheduled-messages (180s).
+// (admin/creator hoặc user được cấp writable_tabs["scheduled"]). Chỉ xuất .docx (Hiếu chốt bỏ PDF sau khi
+// test — xem CLAUDE.md s170). Tính toán nặng (nhiều query gohub_dw + Gemini + render ảnh + docx) → nới
+// maxDuration giống cron scheduled-messages (180s).
 export const maxDuration = 180
 
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
@@ -40,17 +40,12 @@ export async function POST(_req: NextRequest) {
     const narratives = await generateChannelNarratives(allChannels)
     const content = await buildReportContent(data, narratives)
 
-    const [docxBuf, pdfBuf] = await Promise.all([
-      buildWeeklyReportDocx(content),
-      buildWeeklyReportPdf(content),
-    ])
+    const docxBuf = await buildWeeklyReportDocx(content)
 
     const tag = `${data.periods.lastWeekStart}_to_${data.periods.lastWeekEnd}`
     return NextResponse.json({
       docx: docxBuf.toString("base64"),
       docxFilename: `Company_Weekly_Performance_${tag}.docx`,
-      pdf: pdfBuf.toString("base64"),
-      pdfFilename: `Company_Weekly_Performance_${tag}.pdf`,
     })
   } catch (e: any) {
     console.error("[weekly-report]", e)

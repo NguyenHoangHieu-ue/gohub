@@ -165,8 +165,7 @@ function ScheduledMessages({ canEdit }: { canEdit: boolean }) {
       const data = await res.json()
       if (!res.ok) { toast.error("Tạo Weekly Report thất bại: " + (data.error || "Unknown error")); return }
       downloadBase64(data.docx, data.docxFilename, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-      downloadBase64(data.pdf, data.pdfFilename, "application/pdf")
-      toast.success("Đã tạo Weekly Report (.docx + .pdf).")
+      toast.success("Đã tạo Weekly Report (.docx).")
     } catch (err) {
       console.error(err)
       toast.error("Tạo Weekly Report lỗi.")
