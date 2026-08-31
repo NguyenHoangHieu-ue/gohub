@@ -7,6 +7,31 @@
 
 ---
 
+## ⚠️ s170 (2026-08-31) — audit bảo mật, fix 4 bug thật
+
+Theo yêu cầu Hiếu "quét tab Tổ Gấu". 4 bug xác nhận qua đọc code trực tiếp:
+
+1. **XSS trong Wiki**: `renderMarkdown()` (`to-gau/[id]/page.tsx`) build HTML bằng regex thay thế trực tiếp,
+   KHÔNG escape trước khi bơm vào `dangerouslySetInnerHTML` (view + preview lúc soạn). Fix: thêm `escapeHtml()`
+   chạy TRƯỚC mọi regex markdown.
+2. **Pin tin nhắn xuyên nhóm**: `messages/[msgId]/pin/route.ts` check quyền theo `group_id` trong URL nhưng
+   fetch/update tin nhắn chỉ lọc theo `msgId` → manager nhóm A pin/unpin được tin nhắn nhóm B. Fix: thêm
+   `.eq("group_id", id)` vào cả 2 query (giống PATCH route cạnh đó vốn đã đúng).
+3. **Filter injection `.or()`**: `user-search/route.ts` nội suy thẳng query `q` vào `.or()` PostgREST không
+   escape — `,`/`.`/`(`/`)` phá cú pháp filter. Fix: escape `\`/`"` rồi bọc value trong dấu ngoặc kép
+   (cú pháp PostgREST cho phép literal chứa ký tự reserved). *(route `ai/route.ts` cùng pattern nhưng AN TOÀN
+   sẵn — `keywords` đã strip chỉ còn `[a-zA-Z0-9À-ỹ ]` trước khi build `.or()`, không cần sửa.)*
+4. **Nhóm "Lưu trữ" chỉ khoá ở FE**: `messages/route.ts` POST không check `chat_groups.is_archived` — gọi
+   thẳng API vẫn gửi được tin nhắn vào nhóm đã archive. Fix: thêm check, trả 403 nếu archived.
+5. (LOW, không phải lỗ hổng) Nút Wiki (soạn/gán nhóm) FE gate bằng `session.user.role` (JWT cũ) trong khi
+   backend `kb/wiki/*` dùng `getDbRole()` (tươi) — không nhất quán, gây admin mới cấp quyền không thấy nút
+   tới khi re-login. Fix: đổi sang `useDbRole()` (hook có sẵn, cùng pattern `b2c-performance.tsx`).
+
+tsc PASS. Chưa test tay qua browser (máy dev thiếu môi trường auth thật) — Hiếu QA lại pin/archived/wiki-XSS
+trên staging trước merge.
+
+---
+
 ## ⚠️ s163 — Gộp Note (`/info`) + Knowledge Base (`/kb`) vào Tổ Gấu
 
 Tab **Note** (sidebar, mọi role thấy) và trang **`/kb`** (nhúng bên trong Note, không có entry riêng) đã

@@ -37,11 +37,12 @@ export async function POST(
 
   const { msgId } = params
 
-  // Lấy trạng thái hiện tại
+  // Lấy trạng thái hiện tại — PHẢI lọc theo group_id, tránh pin/unpin tin nhắn nhóm khác
   const { data: msg, error: fetchErr } = await supabaseAdmin
     .from("chat_messages")
     .select("id, is_pinned")
     .eq("id", msgId)
+    .eq("group_id", id)
     .maybeSingle()
   if (fetchErr || !msg) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
@@ -51,6 +52,7 @@ export async function POST(
     .from("chat_messages")
     .update({ is_pinned: newPinned })
     .eq("id", msgId)
+    .eq("group_id", id)
     .select("id, is_pinned")
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
