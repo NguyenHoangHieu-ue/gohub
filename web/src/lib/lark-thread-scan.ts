@@ -164,6 +164,15 @@ async function fetchMessageById(messageId: string, appToken: string): Promise<an
   return data.data?.items?.[0] ?? null
 }
 
+// Tên hiển thị 1 group Lark theo chat_id — dùng để hiện "đã quét group nào" cho Hiếu đối chiếu, KHÔNG
+// dùng để lọc/quyết định gì (source of truth phát hiện thread vẫn là capture log, xem hàm trên).
+export async function getChatName(chatId: string, appToken: string): Promise<string> {
+  try {
+    const data = await larkGet(`/im/v1/chats/${encodeURIComponent(chatId)}`, appToken)
+    return data.code === 0 ? (data.data?.name ?? chatId) : chatId
+  } catch { return chatId }
+}
+
 /**
  * Lấy thread liên quan tới Hiếu từ real-time capture log (okr_lark_message_log, ghi bởi
  * api/lark/events qua lib/okr-lark-capture.ts) thay vì quét REST toàn bộ 1 group — KHÔNG giới hạn

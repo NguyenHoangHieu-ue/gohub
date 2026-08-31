@@ -42,14 +42,17 @@ function buildThreadText(thread: LarkThread): string {
 }
 
 export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassifyResult | null> {
-  if (!process.env.GEMINI_KEY) return null
+  if (!process.env.GEMINI_KEY) {
+    console.error("[Lark classify] GEMINI_KEY chưa set — bỏ qua thread", thread.message_id)
+    return null
+  }
   try {
     const model = getAI().getGenerativeModel({
       model: "gemini-3.6-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0,
-        maxOutputTokens: 300,
+        maxOutputTokens: 500,
         responseMimeType: "application/json",
       },
     })
@@ -72,7 +75,10 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
     const validIdx = idx !== null && idx >= 0 && idx < thread.replies.length ? idx : null
 
     return { is_match: true, metric, completion_reply_index: validIdx, reason: parsed.reason ?? "" }
-  } catch {
-    return null   // lỗi Gemini/parse → coi như không phân loại được, cron bỏ qua thread này lần này
+  } catch (e: any) {
+    // Lỗi Gemini/parse trước đây bị nuốt im lặng (catch rỗng) → thread biến mất không dấu vết, không
+    // cách nào biết vì sao "quét thấy N mà không case nào vào hàng chờ duyệt". Log rõ để tra Vercel log.
+    console.error("[Lark classify] lỗi phân loại thread", thread.message_id, "chat", thread.chat_id, ":", e?.message ?? e)
+    return null
   }
 }

@@ -195,6 +195,33 @@ emerald=confirmed, slate=context) không mang ý nghĩa trạng thái thật, ch
   (`flexGrow: w`) để Bé Gấu (30%) rộng hơn 4 ô còn lại (17.5% mỗi ô), phá vỡ đơn điệu có chủ đích.
 - Thêm `tabular-nums` cho mọi số headline lớn (căn cột đẹp khi số đổi).
 
+## s177 (2026-08-31) — fix lỗi phân loại Lark bị nuốt im lặng + hiện danh sách group đã quét
+
+Sau s176 (fix chữ ký webhook), Hiếu test lại "Quét ngay" — capture log đã ghi đúng thread test (root_id
+thật, đủ reply, xác nhận qua query Supabase trực tiếp), nhưng `okr_lark_events` vẫn không có row mới nào
+dù bấm scan nhiều lần (log Vercel xác nhận route chạy 200 OK, không lỗi).
+
+**Root cause**: `classifyLarkThread()` (`okr-lark-classify.ts`) có `catch { return null }` — MỌI lỗi
+Gemini (quota/JSON parse/timeout...) bị nuốt hoàn toàn im lặng, không log, không insert `not_matched`,
+thread biến mất không dấu vết. Không có cách nào từ UI/DB biết được lý do "quét ra N mà 0 case" — phải
+sửa code trước mới chẩn đoán tiếp được run kế tiếp mới thấy log thật.
+
+**Fix**:
+- Thêm `console.error("[Lark classify] lỗi phân loại thread ...")` trong catch — lần quét kế tiếp sẽ lộ
+  lý do thật qua Vercel runtime log.
+- Tăng `maxOutputTokens` 300→500 (giảm rủi ro JSON response bị cắt cụt giữa chừng — 1 nguyên nhân khả dĩ).
+- `ScanRunResult` thêm field `classify_errors` — hiện ngay trong modal "⚙️ Lark Bot" (không cần vào Vercel
+  log để biết CÓ lỗi, chỉ cần vào log khi cần biết lỗi CỤ THỂ gì).
+
+**Thêm theo yêu cầu Hiếu — hiện danh sách group đã quét**: modal "Quét ngay" giờ hiện `Đã quét N group:
+<tên group> (n thread), ...` — tính trên TOÀN BỘ thread capture log phát hiện được (kể cả bị loại bởi
+filter "phải có reply" bên dưới, để Hiếu thấy đúng bot có chạm group nào, không chỉ nhóm lọt qua được).
+Tên group lấy qua Lark API `/im/v1/chats/{chat_id}` (hàm mới `getChatName()`, `lib/lark-thread-scan.ts`,
+cùng pattern Cà Thread `debug` mode đã dùng trước đó).
+
+tsc PASS. **Cần Hiếu**: bấm "Quét ngay" lại — nếu vẫn 0 case, mở phần "N thread lỗi phân loại" mới hiện
+trong modal + báo Claude tra `[Lark classify]` trong Vercel log để biết lỗi Gemini cụ thể.
+
 ## s176 (2026-08-31) — fix KHẨN: Lark webhook production reject 100% request thật (root cause thật lần 2)
 
 Hiếu báo lại sau khi test tay s175: (1) chart SKU movers vẫn lấn chữ dù đã "auto-size", (2) tạo group

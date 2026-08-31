@@ -1027,7 +1027,11 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
-  const [scanResult, setScanResult] = useState<{ scanned: number; classified: number; inserted: number; not_matched: number; backlog_remaining: number; skipped?: string } | null>(null)
+  const [scanResult, setScanResult] = useState<{
+    scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
+    backlog_remaining: number; skipped?: string
+    groups: { chat_id: string; chat_name: string; thread_count: number }[]
+  } | null>(null)
   const [scanErr, setScanErr] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1093,9 +1097,24 @@ function LarkConfigModal({ onClose }: { onClose: () => void }) {
                   ? <p className="text-[11px] text-slate-500 mt-2">Bỏ qua: {scanResult.skipped}</p>
                   : (
                     <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 rounded-lg p-2.5 space-y-0.5">
+                      {scanResult.groups.length > 0 ? (
+                        <div>
+                          <span className="text-slate-400">Đã quét {scanResult.groups.length} group: </span>
+                          {scanResult.groups.map((g, i) => (
+                            <span key={g.chat_id}>
+                              {i > 0 && ", "}<strong>{g.chat_name}</strong> ({g.thread_count})
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-amber-600">Không tìm thấy group nào trong capture log — kiểm tra bot đã add vào group + đã có tin nhắn Hiếu tự gửi/được @mention gần đây chưa.</div>
+                      )}
                       <div>Đã quét <strong className="tabular-nums">{scanResult.scanned}</strong> thread có reply trong cửa sổ {cfg.days_back} ngày.</div>
                       <div>Phân loại lần này: <strong className="tabular-nums">{scanResult.classified}</strong> thread mới.</div>
                       <div>→ <strong className="text-emerald-600 tabular-nums">{scanResult.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{scanResult.not_matched}</strong> không khớp.</div>
+                      {scanResult.classify_errors > 0 && (
+                        <div className="text-red-600">⚠ <strong className="tabular-nums">{scanResult.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
+                      )}
                       {scanResult.backlog_remaining > 0 && (
                         <div className="text-amber-600">Còn <strong className="tabular-nums">{scanResult.backlog_remaining}</strong> thread cũ hơn chưa kịp phân loại — chạy thêm lần nữa hoặc đợi cron ngày mai.</div>
                       )}
