@@ -2,9 +2,9 @@
 // "Quét ngay" thủ công (api/analytics/my-metrics/lark-config/scan-now) để Hiếu test được ngay
 // thay vì phải đợi cron chạy 1 lần/ngày mới biết fix có work không.
 import { supabaseAdmin } from "@/lib/supabase"
-import { fetchThreadsFromCapturedLog } from "@/lib/lark-thread-scan"
+import { fetchThreadsFromCapturedLog, getChatName } from "@/lib/lark-thread-scan"
 import { classifyLarkThread } from "@/lib/okr-lark-classify"
-import { sendLarkDM, getLarkUserOpenId } from "@/lib/lark"
+import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
 import { currentQuarterLabel } from "@/lib/okr-helpers"
 
 const CONFIG_KEY = "my_metrics_lark_scan_config"
@@ -25,7 +25,9 @@ function normalizeConfig(raw: any): ScanConfig {
 export interface ScanRunResult {
   skipped?: string
   scanned: number; classified: number; inserted: number; not_matched: number
+  classify_errors: number
   backlog_remaining: number
+  groups: { chat_id: string; chat_name: string; thread_count: number }[]
 }
 
 // ignoreEnabled=true cho nút "Quét ngay" (Hiếu bấm test dù chưa tick "Bật quét tự động").
@@ -35,7 +37,7 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
   const config = normalizeConfig(data?.value ? JSON.parse(data.value) : null)
 
   if (!config.enabled && !ignoreEnabled) {
-    return { skipped: "chưa bật quét tự động", scanned: 0, classified: 0, inserted: 0, not_matched: 0, backlog_remaining: 0 }
+    return { skipped: "chưa bật quét tự động", scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups: [] }
   }
 
   // Bounded — mỗi thread tốn 2 call Lark để hydrate chi tiết (batch 15 tại 1 thời điểm, xem
@@ -43,10 +45,25 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
   // Không cần thấy HẾT backlog trong 1 lần — not_matched dedupe (xem dưới) đảm bảo lần chạy sau
   // tự tiến tới phần backlog cũ hơn, không giẫm chân tại chỗ.
   const maxThreads = Math.min(200, config.days_back * 10)
-  const threads = await fetchThreadsFromCapturedLog(config.days_back, maxThreads)
-    .then(list => list.filter(t => t.replies.length > 0))
+  const allThreads = await fetchThreadsFromCapturedLog(config.days_back, maxThreads)
+  // "Đã quét" = mọi thread capture log phát hiện, KỂ CẢ bị loại bởi filter replies bên dưới — Hiếu
+  // cần thấy group nào bot có chạm tới để đối chiếu, không chỉ nhóm lọt qua được tới bước phân loại.
+  const groupCount = new Map<string, number>()
+  for (const t of allThreads) groupCount.set(t.chat_id, (groupCount.get(t.chat_id) ?? 0) + 1)
+  const groups: { chat_id: string; chat_name: string; thread_count: number }[] = []
+  if (groupCount.size > 0) {
+    const appToken = await getLarkToken()
+    for (const [chatId, count] of groupCount) {
+      groups.push({ chat_id: chatId, chat_name: await getChatName(chatId, appToken), thread_count: count })
+    }
+  }
 
-  if (threads.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, backlog_remaining: 0 }
+  // Thread không có reply nào — thường vì tin gửi KHÔNG dùng "Reply in Thread" của Lark (root_id
+  // không được set) nên Lark coi mỗi tin là 1 "thread" độc lập rỗng — bị loại TRƯỚC khi tới bước phân
+  // loại, không bao giờ ra case dù nội dung đúng ý. Đây là gotcha thật, không phải bug — xem wiki.
+  const threads = allThreads.filter(t => t.replies.length > 0)
+
+  if (threads.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups }
 
   const { data: existing } = await supabaseAdmin
     .from("okr_lark_events").select("message_id")
@@ -57,10 +74,11 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
   const quarter = currentQuarterLabel()
   let inserted = 0
   let notMatched = 0
+  let classifyErrors = 0
 
   for (const t of toClassify) {
     const result = await classifyLarkThread(t)
-    if (!result) continue
+    if (!result) { classifyErrors++; continue }
 
     if (!result.is_match || !result.metric) {
       await supabaseAdmin.from("okr_lark_events").upsert({
@@ -101,6 +119,8 @@ export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult>
 
   return {
     scanned: threads.length, classified: toClassify.length, inserted, not_matched: notMatched,
+    classify_errors: classifyErrors,
     backlog_remaining: threads.length - seen.size - toClassify.length,
+    groups,
   }
 }
