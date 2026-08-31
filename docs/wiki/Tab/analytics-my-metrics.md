@@ -222,6 +222,15 @@ cùng pattern Cà Thread `debug` mode đã dùng trước đó).
 tsc PASS. **Cần Hiếu**: bấm "Quét ngay" lại — nếu vẫn 0 case, mở phần "N thread lỗi phân loại" mới hiện
 trong modal + báo Claude tra `[Lark classify]` trong Vercel log để biết lỗi Gemini cụ thể.
 
+**s177(b) — root cause thật của "Gemini không trả JSON" (cùng ngày, ngay sau khi log full text lộ ra):**
+raw text log mới cho thấy JSON ĐÚNG cấu trúc nhưng đứt ngang giữa chừng field
+(`{"is_match": true, "metric": "sla", "completion_reply` — thiếu hẳn phần còn lại) — không phải Gemini
+trả sai định dạng, mà bị **cắt cụt do hết token**. `gemini-3.6-flash` mặc định bật "thinking" (chuỗi suy
+luận ẩn) — token đó TÍNH CHUNG vào `maxOutputTokens` cùng ngân sách với phần JSON thấy được, ăn hết trước
+khi tới JSON thật dù đã tăng 300→500. Fix: thêm `thinkingConfig: { thinkingBudget: 0 }` tắt hẳn thinking
+— đúng pattern đã dùng ở `api/config/schema/ai-suggest/route.ts` (repo đã có tiền lệ bug này). JSON schema
+chỉ 4 field nhỏ, không cần budget lớn nữa sau khi tắt thinking. tsc PASS.
+
 ## s176 (2026-08-31) — fix KHẨN: Lark webhook production reject 100% request thật (root cause thật lần 2)
 
 Hiếu báo lại sau khi test tay s175: (1) chart SKU movers vẫn lấn chữ dù đã "auto-size", (2) tạo group
