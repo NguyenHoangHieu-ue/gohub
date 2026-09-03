@@ -331,3 +331,10 @@ bằng cách đọc code đối chiếu công thức `custPr()`/`kpiPrFactor` (`
 deploy — PR giờ sẽ KHÁC Actual ngay cả khi tháng cuối quý mới vài ngày (như Tổng quan đang hiện), số có thể
 "nhảy" mạnh đầu tháng (factor có thể rất lớn, vd ×15 khi mới 2 ngày) — đây LÀ hành vi Tổng quan đang có sẵn,
 không phải bug mới, chỉ đồng bộ Squad Progress theo đúng yêu cầu.
+
+**s182(b) — StatTile border 3 mốc màu.** Sau fix trên, số PR thấp hơn Actual trước đây (do %TGT giờ tính
+đúng chuẩn Tổng quan) → card luôn rơi vào diện `pct < 85` → viền đỏ liên tục, Hiếu yêu cầu chia 3 mốc rõ ràng
+thay vì chỉ đỏ/xám. Đổi viền StatTile: **≥80% xanh lá** (`emerald`) · **50-80% cam** (`amber`) · **<50% đỏ**
+(`red`, giữ nguyên) · null (chưa target) giữ xám trung tính. Lưu ý mốc 80/50 này CHỈ áp cho viền card
+`StatTile`, khác mốc 100/85 sẵn có ở `pctColor`/`pctCol` (dùng cho màu chữ % + `MetricBar` progress bar,
+KHÔNG đổi theo yêu cầu này — 2 hệ mốc tồn tại song song, cố ý theo đúng lời Hiếu chỉ định riêng cho khung).

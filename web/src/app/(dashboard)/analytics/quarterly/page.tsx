@@ -1444,7 +1444,11 @@ function QuarterlyContent() {
               // (chỉ đổi cách trình bày — số liệu/pct truyền vào nguyên như API trả về)
               const StatTile = ({ label, actual, pr, target, pct, actualNote }:
                 { label: string; actual: number; pr?: number; target?: number; pct: number | null; actualNote?: string }) => (
-                <div className={cn("rounded-lg border p-3", pct != null && pct < 85 ? "border-red-200 bg-red-50/40" : "border-slate-200 bg-slate-50/70")}>
+                <div className={cn("rounded-lg border p-3",
+                  pct == null ? "border-slate-200 bg-slate-50/70"
+                    : pct >= 80 ? "border-emerald-200 bg-emerald-50/40"
+                    : pct >= 50 ? "border-amber-200 bg-amber-50/40"
+                    : "border-red-200 bg-red-50/40")}>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
                     {pct != null
