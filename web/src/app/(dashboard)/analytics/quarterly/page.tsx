@@ -1456,7 +1456,7 @@ function QuarterlyContent() {
                     {pr != null && <span className="text-[10px] text-blue-500 font-semibold">PR</span>}
                   </div>
                   <div className="text-[10px] text-slate-400 tabular-nums mt-1">
-                    {pr != null ? `Thực tế ${formatCompactNumber(actual)}` : actualNote}
+                    {pr != null ? `Thực tế ${formatCompactNumber(actual)}${actualNote ? ` · ${actualNote}` : ""}` : actualNote}
                     {target ? ` · Target ${formatCompactNumber(target)}` : ""}
                   </div>
                   <MetricBar pct={pct} />
@@ -1550,7 +1550,7 @@ function QuarterlyContent() {
                               <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">CM1 PR</th>
                               <th className="px-3 py-2.5 text-right font-semibold">CM1 Tgt</th>
                               <th className="px-3 py-2.5 text-right">{sortBtn("cm1_tgt_pct","%TGT CM1")}</th>
-                              <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">3HK% / Tgt%</th>
+                              <th className="px-3 py-2.5 text-right border-l border-slate-200 font-semibold">3HK PR / Tgt%</th>
                               <th className="px-3 py-2.5 text-right">{sortBtn("hk3_tgt_pct","%TGT 3HK")}</th>
                               <th className="px-3 py-2.5 text-center border-l border-slate-200">{sortBtn("risk_level","Đánh giá")}</th>
                             </tr>
@@ -1577,8 +1577,8 @@ function QuarterlyContent() {
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                   <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                    <span className="text-[10px] text-slate-500">{formatCompactNumber(c.hk3)}</span>
-                                    <span className="text-slate-400 ml-0.5 text-[10px]">({c.hk3_pct}%)</span>
+                                    <span className="text-[10px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
+                                    <span className="text-slate-400 ml-0.5 text-[10px]">(TT {formatCompactNumber(c.hk3)})</span>
                                     {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
                                   </td>
                                   <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
@@ -1636,7 +1636,7 @@ function QuarterlyContent() {
                                     target={sq.target_rev > 0 ? sq.target_rev : undefined} pct={sq.rev_pct} />
                                   <StatTile label="CM1" actual={sq.cm1} pr={sq.cm1_pr}
                                     target={sq.target_cm1 > 0 ? sq.target_cm1 : undefined} pct={sq.cm1_tgt_pct} />
-                                  <StatTile label="3HK Revenue" actual={sq.hk3}
+                                  <StatTile label="3HK Revenue" actual={sq.hk3} pr={sq.hk3_pr}
                                     target={sq.target_hk3 > 0 ? sq.target_hk3 : undefined} pct={sq.hk3_tgt_pct}
                                     actualNote={`${sq.hk3_pct}% doanh thu`} />
                                 </div>
@@ -1681,8 +1681,8 @@ function QuarterlyContent() {
                                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                             <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                              <span className="font-medium text-[10px] text-slate-500">{formatCompactNumber(c.hk3)}</span>
-                                              <span className="text-slate-400 ml-0.5 text-[10px]">({c.hk3_pct}%)</span>
+                                              <span className="font-medium text-[10px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
+                                              <span className="text-slate-400 ml-0.5 text-[10px]">(TT {formatCompactNumber(c.hk3)})</span>
                                               {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
                                             </td>
                                             <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>

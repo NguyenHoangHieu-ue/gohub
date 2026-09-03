@@ -269,3 +269,29 @@ Tab bar: **Tổng quan** | **Squad Progress**. Theo dõi từng squad sale đã 
 - Nhập Target Revenue / CM1 / 3HK Rev cho từng squad. Ưu tiên hơn tổng target per-customer khi > 0; để trống = fallback tổng per-customer.
 
 **API**: `analytics/squad-progress` (GET) · `config/squad-config` (GET/POST) · `analytics/squad-targets` (GET/POST). Auth = `session.user.role` (admin/creator). Write dùng POST (không PUT).
+
+**Fix s181 (2026-09-03) — StatTile "3HK Revenue" thiếu prop `pr`, không nhất quán với Doanh thu/CM1.**
+Hiếu báo "chỉ số của 2 squad có chỗ ghi PR nhưng lấy số Actual". Đọc code: `StatTile` (component dùng chung
+3 ô Doanh thu/CM1/3HK trong card squad) chỉ hiện badge "PR" + headline số PR khi prop `pr` được truyền — 2 ô
+Doanh thu/CM1 truyền đúng (`pr={sq.revenue_pr}`/`pr={sq.cm1_pr}`), riêng ô **3HK Revenue thiếu hẳn `pr={sq.hk3_pr}`**
+dù backend (`squad-progress/route.ts` dòng 339) đã tính sẵn `hk3_pr` — ô này luôn hiện số Actual (`sq.hk3`) làm
+headline trong khi % badge bên cạnh (`hk3_tgt_pct`) lại tính từ `hk3_pr`, gây lệch/hiểu nhầm. Cùng bug ở 2 bảng
+chi tiết KH (expanded squad + flat view): cột 3HK hiện `c.hk3` (actual) thay vì `c.hk3_pr`. Fix: truyền
+`pr={sq.hk3_pr}` cho StatTile; đổi headline 2 bảng KH sang `c.hk3_pr` (giữ actual phụ dạng "(TT ...)"); đổi
+header cột "3HK% / Tgt%" → "3HK PR / Tgt%" khớp tên cột "Rev PR"/"CM1 PR". `StatTile` note line sửa để không mất
+`actualNote` (% doanh thu) khi có `pr` — nối thêm bằng dấu `·`. tsc PASS. Không đổi Excel export (đã dùng đúng
+actual riêng, không gắn nhãn "PR").
+
+**Verify s181 — connectivity target Tổng quan → Squad Progress: ĐÚNG, không phải bug code, là thiếu data nhập.**
+Hiếu nghi ngờ Squad Progress chưa connect target từ Tổng quan ("thấy đang thiếu nhiều"). Query trực tiếp Supabase
+`b2b_customer_targets` (Q3-2026, 35 KH có row) xác nhận Squad Progress đọc **ĐÚNG CÙNG bảng + CÙNG công thức
+fallback** `tgt.hk3rev > 0 ? tgt.hk3rev : (tgt.rev>0 && tgt.thk>0 ? tgt.rev×thk/100 : 0)` như Tổng quan
+(`custPr()`/dòng ~2574 `quarterly/page.tsx`) — 2 nơi 100% khớp logic, không lệch. Gap thật là **data chưa nhập**:
+chỉ 12/35 KH (34%) có `target_rev` > 0, còn lại 23/35 để trống — khiến tổng target Revenue theo squad (khi
+KHÔNG có squad target thủ công override) bị hụt nặng. 5/35 KH có `target_3hk_pct` nhưng thiếu cả `target_rev`
+lẫn `target_3hk_rev` → fallback không tính ra được, badge %TGT 3HK hiện "—" ở CẢ Tổng quan lẫn Squad Progress
+(hành vi nhất quán, không phải bug riêng Squad Progress). `target_cm1` đầy đủ 35/35. Hiện tại 2 squad đã có
+`squad_targets` (target thủ công cấp squad) che lấp gap Revenue này ở mức tổng — nhưng risk vẫn còn nếu thêm
+squad mới không có override, hoặc muốn dùng số per-customer tổng hợp làm nguồn chính. **Khuyến nghị Hiếu**: vào
+Tổng quan → mục Target & Progress từng KH, bổ sung `target_rev` cho 23 KH còn thiếu (và `target_3hk_rev` hoặc
+`target_rev`+`target_3hk_pct` cho 5 KH đang "—" 3HK).
