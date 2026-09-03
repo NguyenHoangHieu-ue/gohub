@@ -295,3 +295,39 @@ lẫn `target_3hk_rev` → fallback không tính ra được, badge %TGT 3HK hi�
 squad mới không có override, hoặc muốn dùng số per-customer tổng hợp làm nguồn chính. **Khuyến nghị Hiếu**: vào
 Tổng quan → mục Target & Progress từng KH, bổ sung `target_rev` cho 23 KH còn thiếu (và `target_3hk_rev` hoặc
 `target_rev`+`target_3hk_pct` cho 5 KH đang "—" 3HK).
+
+**Fix s182 (2026-09-03) — PR = Actual do dùng SAI loại factor (gated) so với Tổng quan (ungated), không phải
+lỗi hiển thị.** Sau fix s181, Hiếu vẫn thấy PR = Actual y hệt ở CẢ 3 chỉ số (Doanh thu/CM1/3HK) của CẢ 2 squad,
+chỉ ra Tổng quan đang hiện PR khác Actual cho cùng thời điểm — yêu cầu đối chiếu lại cách tính.
+
+Audit kỹ phát hiện: `squad-progress/route.ts` dùng `monthMeta[i].factor` từ `buildQuarterMonthMeta`
+(`quarter-projection.ts`) — factor này **GATE theo `MIN_PROJECT_DAYS=7`**: tháng hiện tại elapsed <7 ngày →
+`factor=1` (không chiếu, giữ actual). Đây ĐÚNG là factor dùng cho bảng "Tổng hợp theo tháng" (Tổng quan), NHƯNG
+Tổng quan có **2 loại factor khác nhau cho 2 mục đích khác nhau** (đã ghi rõ trong comment code gốc,
+`quarterly/page.tsx` dòng 598-599): bảng tháng dùng factor gate 7 ngày (tránh số nhảy), còn **KPI card + PR
+per-customer** (`kpiPrFactor`/`monthKpiFactor`, dùng bởi `custPr()` — hàm tính PR cho từng KH hiện trong bảng
+B2B tier, đúng nguồn Squad Progress phải khớp theo rule "chỉ cộng risk, không đổi số") **KHÔNG gate** — chiếu
+NGAY từ ngày 1 của tháng, bất kể elapsed bao nhiêu. Squad Progress trước giờ vô tình dùng loại factor SAI (gated,
+dành cho bảng tháng) cho phép tính vốn phải khớp `custPr()` (ungated) → đúng lúc đầu tháng cuối quý (elapsed <7,
+tình huống hôm nay 2026-09-03, tháng 9 mới 2 ngày) thì PR luôn = Actual, trong khi Tổng quan đã chiếu ×15
+(30 ngày / 2 ngày) từ lâu.
+
+Fix: thêm `kpiFactorOf(i)` (route.ts, cạnh `elapsedRatioOf`) = bản KHÔNG gate của factor, công thức giống hệt
+`kpiPrFactor` bên Tổng quan (`elapsed>0 && elapsed<dim ? dim/elapsed : 1`). Thay `monthMeta[i].factor` →
+`kpiFactorOf(i)` ở 4 chỗ nhân PR (`calcCustCm1AndPr`, `calcPrByMonth`, squad-level `revPr`/`cm1Pr` loop) + đổi
+`pr_factor` trả về FE (badge "Pro-rata ×..." đầu bảng) dùng cùng hàm để hiện đúng số đang áp dụng thật.
+`elapsedRatioOf` (dùng pro-rate cost dạng amount, fix s166) **giữ nguyên, không đổi** — không liên quan gate này,
+đã verify khớp Tổng quan từ trước.
+
+**Group Cost B2B PR đơn giản hoá theo cùng logic**: trước branch `mr.isProjected ? budget : budget*gcRatio`
+(dùng full budget khi gated-projected, dùng partial khi chưa). Về mặt đại số, `gcRatio × kpiFactorOf(i)` (2 tỉ lệ
+`elapsed/dim` và `dim/elapsed`) LUÔN triệt tiêu = 1 cho MỌI tháng đã bắt đầu (kể cả elapsed nhỏ) một khi bỏ gate
+— nên đổi thẳng `totalB2BGCPr += budget × gcRatio × kpiFactorOf(i)`, tương đương full budget cho mọi tháng đã
+chạy, khớp cách Tổng quan luôn charge đủ group cost 1 tháng ngay khi tháng đó bắt đầu chiếu (không đợi 7 ngày).
+
+tsc PASS. **CHƯA verify số thật bằng live gohub_dw** (máy dev vẫn thiếu `ANALYTICS_DB_*`) — đã verify được
+bằng cách đọc code đối chiếu công thức `custPr()`/`kpiPrFactor` (`quarterly/page.tsx`) từng bước tới khi khớp
+đại số hoàn toàn (kể cả simplification group cost). Hiếu tự so số Squad Progress vs Tổng quan trên staging sau
+deploy — PR giờ sẽ KHÁC Actual ngay cả khi tháng cuối quý mới vài ngày (như Tổng quan đang hiện), số có thể
+"nhảy" mạnh đầu tháng (factor có thể rất lớn, vd ×15 khi mới 2 ngày) — đây LÀ hành vi Tổng quan đang có sẵn,
+không phải bug mới, chỉ đồng bộ Squad Progress theo đúng yêu cầu.
