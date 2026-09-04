@@ -16,6 +16,7 @@ import {
   safeDate, safeCompanyCode, getDateFilter, getPrevDateFilter,
   getDaysInMonth, getDaysInRange, getMonthsInRange,
   cachedQuery, isCronReq, analyticsGuard,
+  excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
 } from "@/lib/analytics-helpers"
 
 describe("SQL input sanitization (chống injection)", () => {
@@ -110,6 +111,39 @@ describe("isCronReq — xác thực cron bằng CRON_SECRET", () => {
     expect(isCronReq(mkReq("Bearer wrong"))).toBe(false)
     expect(isCronReq(mkReq(null))).toBe(false)
     delete process.env.CRON_SECRET
+  })
+})
+
+describe("excludeInactiveCustomers (regression s168 — B2B Performance thiếu lọc KH INACTIVE)", () => {
+  test("SQL trả về loại KH có price_list_name chứa INACTIVE, self-contained (không cần JOIN sẵn)", () => {
+    const sql = excludeInactiveCustomers()
+    expect(sql).toContain("INACTIVE")
+    expect(sql).toContain("NOT EXISTS")
+    expect(sql).toContain("f.customer_code") // dùng đúng alias fact table chuẩn
+  })
+})
+
+describe("buildIsStrategicSql — phân loại B2B-Strategic theo price_list_name", () => {
+  test("không có tier Non-Strategic nào cấu hình → mọi KH B2B mặc định Strategic", () => {
+    expect(buildIsStrategicSql({})).toBe("(TRUE)")
+  })
+
+  test("có keyword VIP/Gold/Silver → Strategic = NULL hoặc KHÔNG khớp bất kỳ keyword nào", () => {
+    const sql = buildIsStrategicSql({ VIP: ["vip"], Gold: ["gold"] })
+    expect(sql).toContain("c.price_list_name IS NULL")
+    expect(sql).toContain("NOT LIKE '%VIP%'")
+    expect(sql).toContain("NOT LIKE '%GOLD%'")
+  })
+})
+
+describe("shipFilter / internalOpsFilter — filter chuẩn s132 (default OFF = loại)", () => {
+  test("include=false (default) → thêm điều kiện loại", () => {
+    expect(shipFilter(false)).toContain("!= 'SHIPPINGFEE0'")
+    expect(internalOpsFilter(false)).toContain("!= 'INTERNAL-TRANSACTION'")
+  })
+  test("include=true → không thêm filter (rỗng, giữ nguyên toàn bộ dòng)", () => {
+    expect(shipFilter(true)).toBe("")
+    expect(internalOpsFilter(true)).toBe("")
   })
 })
 
