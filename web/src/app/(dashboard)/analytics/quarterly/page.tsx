@@ -1,152 +1,26 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { createPortal } from "react-dom"
 import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
+import type { MonthStats, MonthSummary, ChannelMonth, Channel, QReport, Targets } from "@/lib/quarterly-types"
+import { EMPTY_TARGETS } from "@/lib/quarterly-types"
+import { fc, pct, parseFmt, fmtInput, cm1Color, momColor, prColor, fck } from "@/lib/quarterly-format"
+import { KpiCard } from "@/components/quarterly/kpi-card"
+import { TableHead } from "@/components/quarterly/table-head"
+import { ColInfo } from "@/components/quarterly/col-info"
+import { MomBadge } from "@/components/quarterly/mom-badge"
+import { MonthSubRow } from "@/components/quarterly/month-sub-row"
+import { QtSummaryRow } from "@/components/quarterly/qt-summary-row"
+import { QtTargetRow } from "@/components/quarterly/qt-target-row"
+import { PivotTable } from "@/components/quarterly/pivot-table"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface MonthStats {
-  revenue: number; gp: number; gpPct: number
-  channelCost: number; groupCost: number; cm1: number; cm1Pct: number
-  hk3Pct?: number; hk3Rev?: number
-  actualRevenue?: number; actualGp?: number; actualCc?: number; actualGc?: number; actualCm1?: number; actualHk3?: number
-}
-interface MonthSummary {
-  month: string; isProjected: boolean; factor: number; elapsed: number; dim: number
-  hk3Pct: number; hk3Rev: number; actualHk3: number
-  total: MonthStats; b2b: MonthStats; b2c: MonthStats
-}
-interface ChannelMonth {
-  month: string; revenue: number; gp: number
-  channelCost: number; cm1: number; cm1Pct: number; momPct: number | null
-  three_hk_rev?: number; three_hk_pct?: number
-  isProjected?: boolean
-  actualRevenue?: number; actualGp?: number; actualCc?: number; actualCm1?: number
-}
-interface Channel { name: string; totalRevenue: number; months: ChannelMonth[] }
-interface QReport {
-  quarter: string; year: number; months: string[]
-  summary: MonthSummary[]
-  quarterTotal: MonthStats & { hk3Pct: number; b2b: MonthStats; b2c: MonthStats }
-  prevQuarterTotals?: { b2bRevenue: number; b2bGp: number; b2bCm1: number; b2cRevenue: number; b2cGp: number; b2cCm1: number }
-  b2bChannels: Channel[]; b2cChannels: Channel[]
-  elapsed_days: number; quarter_days: number
-}
-interface Targets { b2bRev: number; b2bCm1: number; b2bThk: number; b2cRev: number; b2cCm1: number; b2cThk: number }
-
-const EMPTY_TARGETS: Targets = { b2bRev: 0, b2bCm1: 0, b2bThk: 0, b2cRev: 0, b2cCm1: 0, b2cThk: 0 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Hiển thị số đầy đủ với dấu phân cách hàng nghìn (vi-VN: dấu chấm)
-const fc  = (n: number) => Math.round(n).toLocaleString("vi-VN")
-const pct = (v: number) => `${v.toFixed(1)}%`
-
-function parseFmt(s: string): number { return parseFloat(s.replace(/[^\d.-]/g, "")) || 0 }
-function fmtInput(n: number): string { return n > 0 ? Math.round(n).toLocaleString("vi-VN") : "" }
-
-const cm1Color  = (v: number) => v >= 0 ? "text-blue-700" : "text-red-600"
-const momColor  = (v: number | null) => v == null ? "text-slate-400" : v >= 0 ? "text-green-600" : "text-red-500"
-const prColor   = "text-slate-500"
-
-// ─── KPI Progress Card — big % = PR CM1/Target, 3-row table (Rev/CM1/3HK) ────
-// Dùng số compact ("18.7 Tỷ") thay số đầy đủ để tránh chồng lấn trong grid.
-
-const fck = (n: number) => formatCompactNumber(n)  // compact cho card (tránh overflow)
-
-function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, expectedPct = 0, accent = "#003B95" }:
-  { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Rev?: number; hk3Target: number; expectedPct?: number; accent?: string }) {
-
-  const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
-  const revPrPct = target    > 0 ? (prRev / target)    * 100 : 0
-
-  const colorFor = (p: number) =>
-    p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-[#003B95]" : "text-amber-600"
-
-  const badge = (p: number) => (
-    <span className={cn("px-1 py-0.5 rounded text-[10px] font-bold tabular-nums whitespace-nowrap",
-      p >= 100 ? "bg-green-100 text-green-700"
-               : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-blue-100 text-[#003B95]"
-               : "bg-amber-50 text-amber-600")}>
-      {pct(p)}
-    </span>
-  )
-
-  return (
-    <div className="relative bg-white border border-slate-200 rounded-xl p-5 overflow-hidden shadow-sm">
-      <div className="absolute top-0 left-0 right-0 h-1" style={{ background: accent }} />
-
-      {/* Header: icon + label + big CM1% */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: `${accent}1a` }}>
-            <Icon className="w-4 h-4" style={{ color: accent }} />
-          </div>
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-tight">
-            {label}<br /><span className="text-slate-400 font-semibold">CM1 Progress</span>
-          </span>
-        </div>
-        <span className={cn("text-3xl font-extrabold tabular-nums", colorFor(cm1PrPct))}>
-          {cm1Target > 0 ? pct(cm1PrPct) : "—"}
-        </span>
-      </div>
-
-      {/* Progress bar: PR CM1 / Target CM1 */}
-      <div className="relative h-2 bg-slate-100 rounded-full mb-3">
-        <div className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${Math.min(Math.max(cm1PrPct, 0), 100)}%`, background: accent }} />
-        {expectedPct > 0 && (
-          <div className="absolute -top-1 -bottom-1 w-[2px] bg-slate-700 rounded"
-            style={{ left: `${Math.min(expectedPct, 100)}%` }}
-            title={`Kỳ vọng pro-rata: ${pct(expectedPct)}`} />
-        )}
-      </div>
-
-      {/* Table: 2 hàng header + 3 hàng data — mỗi hàng: label | Actual | Pro-rata | Target | % */}
-      <div className="text-[10px]">
-        {/* Header */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 mb-1 pb-1 border-b border-slate-100">
-          <span />
-          <span className="text-right font-bold text-slate-400 uppercase tracking-wide">Actual</span>
-          <span className="text-right font-bold text-slate-400 uppercase tracking-wide">Pro-rata</span>
-          <span className="text-right font-bold text-slate-400 uppercase tracking-wide">Target</span>
-          <span className="text-right font-bold text-slate-400 uppercase tracking-wide">%</span>
-        </div>
-        {/* Revenue */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">Rev</span>
-          <span className="text-right text-slate-700 font-semibold tabular-nums">{fck(actual)}</span>
-          <span className="text-right text-slate-600 tabular-nums">{fck(prRev)}</span>
-          <span className="text-right text-slate-500 tabular-nums">{target > 0 ? fck(target) : "—"}</span>
-          <span className="text-right">{target > 0 ? badge(revPrPct) : <span className="text-slate-300">—</span>}</span>
-        </div>
-        {/* CM1 */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">CM1</span>
-          <span className={cn("text-right font-semibold tabular-nums", cm1Color(cm1Actual))}>{fck(cm1Actual)}</span>
-          <span className={cn("text-right tabular-nums", cm1Color(prCm1))}>{fck(prCm1)}</span>
-          <span className="text-right text-slate-500 tabular-nums">{cm1Target > 0 ? fck(cm1Target) : "—"}</span>
-          <span className="text-right">{cm1Target > 0 ? badge(cm1PrPct) : <span className="text-slate-300">—</span>}</span>
-        </div>
-        {/* 3HK% + 3HK Rev */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">3HK</span>
-          <span className="text-right text-slate-700 font-semibold tabular-nums">
-            {hk3Rev > 0 && <span className="block text-[10px]">{fck(hk3Rev)}</span>}
-            <span className="text-slate-500 font-normal">{pct(hk3Pct)}</span>
-          </span>
-          <span className="text-right text-slate-300">—</span>
-          <span className="text-right text-slate-500 tabular-nums">{hk3Target > 0 ? pct(hk3Target) : "—"}</span>
-          <span className="text-right text-slate-300">—</span>
-        </div>
-      </div>
-    </div>
-  )
-}
+// s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
+// QtSummaryRow, QtTargetRow, PivotTable) đã tách sang lib/quarterly-types.ts, lib/quarterly-format.ts,
+// components/quarterly/* — tách CƠ HỌC (move nguyên khung, KHÔNG đổi JSX/logic). B2BTierSection (~1080
+// dòng) CHƯA tách — để dành 1 pass riêng do quá lớn để verify an toàn trong 1 lần.
 
 // ─── Table header row ─────────────────────────────────────────────────────────
 
@@ -179,64 +53,6 @@ const QT_COLS: { label: string; tip: string }[] = [
   { label: "3HK%",       tip: "3HK Revenue / Total Revenue × 100% (actual)" },
   { label: "QoQ",        tip: "QoQ(CM1) = (CM1_PR_quý_này - CM1_TT_quý_trước) / |CM1_TT_quý_trước|\nDùng Proj.CM1 quý này vs CM1 actual quý trước" },
 ]
-
-function TableHead({ cols, compact = false }: { cols: { label: string; tip?: string }[]; compact?: boolean }) {
-  return (
-    <tr className="bg-[#003B95]">
-      {cols.map((col, i) => {
-        const h = col.label
-        const tip = col.tip
-        return (
-          <th key={h} className={cn(
-            compact ? "px-2 py-2" : "px-4 py-2.5",
-            "text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
-            i === 0 ? "text-left" : "text-right"
-          )}>
-            {h}{tip && <ColInfo tip={tip} />}
-          </th>
-        )
-      })}
-    </tr>
-  )
-}
-
-// ─── ColInfo — tooltip công thức cột ──────────────────────────────────────────
-// Dùng createPortal + position:fixed để thoát overflow-hidden của parent container.
-function ColInfo({ tip }: { tip: string }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
-  const btnRef = useRef<HTMLButtonElement>(null)
-
-  const show = () => {
-    if (btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect()
-      setPos({ top: r.top - 6, left: r.left + r.width / 2 })
-    }
-    setOpen(true)
-  }
-
-  return (
-    <span className="inline-flex items-center align-middle ml-1">
-      <button
-        ref={btnRef}
-        onMouseEnter={show}
-        onMouseLeave={() => setOpen(false)}
-        onClick={e => { e.stopPropagation(); if (!open) show(); else setOpen(false) }}
-        className="w-3 h-3 rounded-full bg-blue-400/25 text-[7px] font-black text-blue-200 hover:bg-blue-400/60 transition-colors inline-flex items-center justify-center leading-none select-none"
-      >i</button>
-      {open && typeof window !== "undefined" && createPortal(
-        <div
-          style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translate(-50%, -100%)", zIndex: 9999 }}
-          className="w-56 bg-slate-900 text-white text-[10px] rounded-lg shadow-2xl p-2.5 leading-relaxed whitespace-pre-line pointer-events-none"
-        >
-          {tip}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-        </div>,
-        document.body,
-      )}
-    </span>
-  )
-}
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -1746,133 +1562,6 @@ function QuarterlyContent() {
 }
 
 // ─── MoM badge helper ────────────────────────────────────────────────────────
-function MomBadge({ v }: { v: number | null }) {
-  if (v === null) return <span className="text-[8px] text-slate-300">N/A</span>
-  const pos = v >= 0
-  return (
-    <span className={`text-[8px] font-bold leading-none ${pos ? "text-[#10B981]" : "text-[#EF4444]"}`}>
-      {pos ? "▲" : "▼"} {Math.abs(v).toFixed(1)}%
-    </span>
-  )
-}
-
-// ─── Sub-row (B2B / B2C within a month) ──────────────────────────────────────
-function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRev, momCm1, qoqCm1 }: {
-  label: string; stats: MonthStats; showPr?: boolean; kpiFactor?: number
-  momRev?: number | null; momCm1?: number | null; qoqCm1?: number | null
-}) {
-  const actRev = stats.actualRevenue ?? stats.revenue
-  const actGp  = stats.actualGp     ?? stats.gp
-  const actCc  = stats.actualCc     ?? stats.channelCost
-  const actGc  = stats.actualGc     ?? stats.groupCost
-  const actCm1 = stats.actualCm1    ?? stats.cm1
-  const prRev  = Math.round(actRev  * kpiFactor)
-  const prCm1  = Math.round(actCm1  * kpiFactor)
-  return (
-    <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
-      <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
-      <td className="px-4 py-2 text-right tabular-nums text-slate-400">
-        {showPr ? (
-          <div className="flex flex-col items-end gap-0.5">
-            {fc(prRev)}
-            {momRev !== undefined && <MomBadge v={momRev ?? null} />}
-          </div>
-        ) : <span className="text-slate-300">—</span>}
-      </td>
-      <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actGp)}</td>
-      <td className="px-4 py-2 text-right text-slate-400">{pct(stats.gpPct)}</td>
-      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actCc > 0 ? fc(actCc) : <span className="text-slate-300">—</span>}</td>
-      <td className="px-4 py-2 text-right text-slate-500 tabular-nums">{actGc > 0 ? fc(actGc) : <span className="text-slate-300">—</span>}</td>
-      <td className={cn("px-4 py-2 text-right font-semibold tabular-nums", cm1Color(actCm1))}>{fc(actCm1)}</td>
-      <td className={cn("px-4 py-2 text-right tabular-nums", cm1Color(prCm1))}>
-        {showPr ? (
-          <div className="flex flex-col items-end gap-0.5">
-            {fc(prCm1)}
-            {momCm1 !== undefined && <MomBadge v={momCm1 ?? null} />}
-          </div>
-        ) : <span className="text-slate-300">—</span>}
-      </td>
-      <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
-      <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
-        qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
-        {qoqCm1 != null ? `${qoqCm1 >= 0 ? "+" : ""}${qoqCm1.toFixed(1)}%` : "—"}
-      </td>
-      <td className="px-4 py-2 text-right text-slate-400 whitespace-nowrap">{fc((stats.hk3Rev as number | undefined) ?? 0)} <span className="text-[10px]">({pct((stats.hk3Pct as number | undefined) ?? 0)})</span></td>
-    </tr>
-  )
-}
-
-// ─── Quarter summary row — actual (raw) values ────────────────────────────────
-
-function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw, prCm1, hk3Pct, hk3Rev = 0, qoqPct }:
-  { label: string; actRev: number; prRev: number; gmRaw: number; ccRaw: number; gcRaw: number; cm1Raw: number; prCm1: number; hk3Pct: number; hk3Rev?: number; qoqPct?: number | null }) {
-  const gmPct  = actRev > 0 ? gmRaw  / actRev * 100 : 0
-  const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
-  const qoqCls = qoqPct == null ? "text-slate-300" : qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
-  return (
-    <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[11px]">
-      <td className="px-2 py-2 font-semibold text-slate-800">{label}</td>
-      <td className="px-2 py-2 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
-      <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prRev)}</td>
-      <td className="px-2 py-2 text-right text-slate-700 tabular-nums">{fc(gmRaw)}</td>
-      <td className="px-2 py-2 text-right text-slate-500">{pct(gmPct)}</td>
-      <td className="px-2 py-2 text-right text-slate-600 tabular-nums">{ccRaw > 0 ? fc(ccRaw) : "—"}</td>
-      <td className="px-2 py-2 text-right text-slate-600 tabular-nums">{gcRaw > 0 ? fc(gcRaw) : "—"}</td>
-      <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
-      <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
-      <td className={cn("px-2 py-2 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
-      <td className="px-2 py-2 text-right text-slate-500 whitespace-nowrap">{hk3Rev > 0 ? <>{fc(hk3Rev)} <span className="text-[10px] text-slate-400">({pct(hk3Pct)})</span></> : pct(hk3Pct)}</td>
-      <td className={cn("px-2 py-2 text-right tabular-nums", qoqCls)}>
-        {qoqPct != null ? `${qoqPct >= 0 ? "+" : ""}${qoqPct.toFixed(1)}%` : "—"}
-      </td>
-    </tr>
-  )
-}
-
-// ─── Quarter target row ───────────────────────────────────────────────────────
-// Layout: label | target_rev | Đạt PR (rev_pr/tgt) | Đạt TT (rev_act/tgt) | — | — | — | target_cm1 | Đạt PR (cm1_pr/tgt) | Đạt TT (cm1_act/tgt) | —
-
-function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr, cm1Act }:
-  { label: string; targetRev: number; revPr: number; revAct: number; targetCm1: number; cm1Pr: number; cm1Act: number }) {
-  const revPrPct  = targetRev > 0 ? revPr  / targetRev * 100 : 0
-  const revActPct = targetRev > 0 ? revAct / targetRev * 100 : 0
-  const cm1PrPct  = targetCm1 > 0 ? cm1Pr  / targetCm1 * 100 : 0
-  const cm1ActPct = targetCm1 > 0 ? cm1Act / targetCm1 * 100 : 0
-  const badge = (p: number) => (
-    <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
-      p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-red-50 text-red-500")}>
-      {pct(p)}
-    </span>
-  )
-  return (
-    <tr className="border-b border-dashed border-blue-100 bg-blue-50/20 text-[10px] text-slate-600">
-      <td className="px-2 py-1.5 pl-6 italic text-slate-500">{label}</td>
-      <td colSpan={3} className="px-2 py-1.5">
-        <div className="flex items-center gap-1.5 justify-end flex-wrap">
-          <span className="text-slate-500 tabular-nums">Rev: <b className="text-slate-700">{fc(targetRev)}</b></span>
-          <span className="text-slate-400">PR {badge(revPrPct)}</span>
-          <span className="text-slate-400">TT {badge(revActPct)}</span>
-        </div>
-      </td>
-      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
-      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
-      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
-      <td colSpan={3} className="px-2 py-1.5">
-        {targetCm1 > 0 ? (
-          <div className="flex items-center gap-1.5 justify-end flex-wrap">
-            <span className="text-slate-500 tabular-nums">CM1: <b className="text-slate-700">{fc(targetCm1)}</b></span>
-            <span className="text-slate-400">PR {badge(cm1PrPct)}</span>
-            <span className="text-slate-400">TT {badge(cm1ActPct)}</span>
-          </div>
-        ) : <span className="text-slate-300 float-right">—</span>}
-      </td>
-      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
-      <td className="px-2 py-1.5 text-right text-slate-300">—</td>
-    </tr>
-  )
-}
-
 // ─── B2B Tier Section ─────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
@@ -2996,82 +2685,4 @@ function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegion
 
 // ─── Pivot table ──────────────────────────────────────────────────────────────
 
-function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
-  { title: string; icon: React.ElementType; channels: Channel[]; months: string[]; expanded: boolean; onToggle: () => void }) {
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev (%)"]
-  const colCount = SUB.length
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-      <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
-        <div className="flex items-center gap-2">
-          <Icon className="w-5 h-5 text-slate-400" />
-          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-        </div>
-        <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform", expanded && "rotate-90")} />
-      </button>
-      {expanded && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
-            <thead>
-              <tr className="bg-[#003B95]">
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Kênh</th>
-                {months.map(m => {
-                  const [y, mo] = m.split("-")
-                  const isPr = channels[0]?.months.find((x: any) => x.month === m)?.isProjected ?? false
-                  return (
-                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
-                      T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
-                    </th>
-                  )
-                })}
-              </tr>
-              <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
-                <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
-                {months.flatMap(m => SUB.map((h, i) => (
-                  <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
-                    {h}
-                  </th>
-                )))}
-              </tr>
-            </thead>
-            <tbody>
-              {channels.map((ch, ri) => (
-                <tr key={ch.name} className={cn("border-b border-slate-100", ri % 2 === 0 ? "bg-white" : "bg-slate-50/60", "hover:bg-blue-50/30 transition-colors")}>
-                  <td className="px-4 py-2.5 font-medium text-slate-700 sticky left-0 border-r border-slate-100" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>{ch.name}</td>
-                  {months.flatMap(m => {
-                    const d = ch.months.find((x: any) => x.month === m)
-                    if (!d || d.revenue === 0) {
-                      return SUB.map((_, i) => (
-                        <td key={`${m}-${i}`} className={cn("px-2 py-2.5 text-right text-slate-300", i === 0 && "border-l border-slate-100")}>—</td>
-                      ))
-                    }
-                    const pr = (d as any).isProjected
-                    const dualC = (prVal: number, actVal: number | undefined, cls = "text-slate-700") => actVal != null ? (
-                      <div className="flex flex-col items-end leading-snug">
-                        <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(prVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                        <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(actVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
-                      </div>
-                    ) : <span className={cn("tabular-nums", cls)}>{fc(prVal)}</span>
-                    return [
-                      <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dualC(d.revenue, pr ? (d as any).actualRevenue : undefined, "text-slate-700")}</td>,
-                      <td key="gm"  className="px-2 py-2.5 text-right">{dualC(d.gp, pr ? (d as any).actualGp : undefined, "text-slate-600")}</td>,
-                      <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.channelCost > 0 ? (pr && (d as any).actualCc != null ? dualC(d.channelCost, (d as any).actualCc, "text-slate-500") : fc(d.channelCost)) : "—"}</td>,
-                      <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dualC(d.cm1, pr ? (d as any).actualCm1 : undefined, cm1Color(d.cm1))}</td>,
-                      <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
-                      <td key="mom" className={cn("px-2 py-2.5 text-right font-medium", momColor(d.momPct))}>
-                        {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
-                      </td>,
-                      <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">
-                        {d.three_hk_pct != null ? pct(d.three_hk_pct) : "—"}
-                      </td>,
-                    ]
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
+// PivotTable — tách sang components/quarterly/pivot-table.tsx (s183 Phase 5, import ở đầu file).
