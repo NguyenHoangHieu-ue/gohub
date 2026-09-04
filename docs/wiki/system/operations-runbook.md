@@ -183,7 +183,7 @@ POST /api/lark/events
 
 | # | Vấn đề | Mức độ | Trạng thái |
 |---|---|---|---|
-| S1 | Rate limiting chat/creator-ai | CRITICAL | ✅ **Fixed** — 20/10 req/min |
+| S1 | Rate limiting chat/creator-ai | CRITICAL | ✅ **Fixed** — 20/10 req/min, nay Upstash Redis cross-instance (s183, §7) |
 | S2 | `refresh-trends` dùng `?secret=` query param | HIGH | ✅ **Fixed** — đổi sang header |
 | S3 | CRON_SECRET rỗng → skip auth | HIGH | ✅ **Fixed** — return false |
 | S4 | `refresh-b2c-report` không auth | HIGH | ✅ **Fixed** |
@@ -200,22 +200,27 @@ POST /api/lark/events
 
 ## 7. Rate Limiting — Trạng thái & Khuyến nghị
 
-**Hiện tại:** KHÔNG có rate limiting.
+**✅ Fix s183 Phase 4 (2026-09-04) — chuyển sang Upstash Redis, mở rộng 4 route.** `lib/rate-limit.ts`
+(`checkRateLimit()`, nay **async**) dùng Upstash Redis (`@upstash/ratelimit` sliding-window) khi có env
+`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` — đếm dùng chung mọi Vercel instance (fix đúng lỗ
+hổng bản in-memory cũ: mỗi instance đếm riêng nên không chặn đúng tổng request thật). Chưa có 2 env đó
+(vd máy dev, hoặc trước khi Hiếu tạo tài khoản Upstash) → tự rơi về in-memory cũ, không throw, không vỡ
+tính năng — nâng cấp là **opt-in qua env**, không bắt buộc để app chạy được.
 
-**Điểm nóng cần protect:**
+Áp dụng hiện tại (4 route, tăng từ 2):
 
-| Endpoint | Risk | Limit gợi ý |
-|---|---|---|
-| `POST /api/chat` | Gemini API cost | 20 req/min/user |
-| `POST /api/creator-ai/chat` | Gemini API cost (cao hơn) | 10 req/min/user |
-| `POST /api/analytics/query` | DB pool exhaustion | 60 req/min/user |
-| `POST /login` | Brute force password | 5 req/min/IP |
-| `POST /api/lark/events` | Bot spam | 100 req/min (global) |
+| Endpoint | Risk | Limit đang áp | Trạng thái |
+|---|---|---|---|
+| `POST /api/chat` | Gemini API cost | 20 req/min/user | ✅ (từ s159, nay async) |
+| `POST /api/creator-ai/chat` | Gemini API cost (cao hơn) | 10 req/min/user | ✅ (từ s159, nay async) |
+| `POST /api/analytics/query` | DB pool exhaustion (endpoint dùng chung mọi tab BI) | 60 req/min/user | ✅ mới s183 |
+| `POST /api/admin/sql-query` | DB pool exhaustion (SQL Explorer, KHÔNG cache, admin/creator only) | 30 req/min/user | ✅ mới s183 |
+| `POST /login` | Brute force password | 5 req/min/IP | ⏳ chưa làm |
+| `POST /api/lark/events` | Bot spam | 100 req/min (global) | ⏳ chưa làm |
 
-**Options:**
-1. **Vercel Rate Limiting** (built-in, cần Vercel Pro): config trong vercel.json, zero-code
-2. **Upstash Redis** + `@upstash/ratelimit`: sliding window, per-user, ~$0/tháng (10K req free)
-3. **Edge middleware** tự viết: dùng `NextResponse` + in-memory Map (không persistent across instances)
+**Cần Hiếu**: tạo tài khoản Upstash (free tier, ~$0/tháng cho 10K req) → set 2 env
+`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` trên Vercel (Production + Preview) để limiter thật
+sự chặn cross-instance — thiếu 2 env này thì code vẫn chạy đúng nhưng chỉ có bảo vệ per-instance như cũ.
 
 ---
 

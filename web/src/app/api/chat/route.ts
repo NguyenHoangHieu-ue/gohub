@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   // Rate limit: 20 req/min/user (ngăn spam Gemini API)
   const rlKey = `chat:${(session.user as any).username || session.user.email || "anon"}`
-  const rl = checkRateLimit(rlKey, 20, 60_000)
+  const rl = await checkRateLimit(rlKey, 20, 60_000)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Bạn gửi quá nhiều tin nhắn. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s rồi thử lại.` },

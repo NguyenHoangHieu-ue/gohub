@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
 
   // Rate limit: 10 req/min/user cho Gấu Pro (model nặng hơn Bé Gấu)
   const rlKey = `gau-pro:${session.user.username || session.user.email || "anon"}`
-  const rl = checkRateLimit(rlKey, 10, 60_000)
+  const rl = await checkRateLimit(rlKey, 10, 60_000)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Quá nhiều yêu cầu. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s.` },
