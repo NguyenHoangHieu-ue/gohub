@@ -52,6 +52,15 @@ KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) +
 | Lib settings | `web/src/lib/quarterly-settings.ts` |
 | Nav | Sidebar Overview → **Quarter Report**; id phân quyền = `quarterly` |
 
+**s183 Phase 5 (2026-09-04, ⏳ đang chờ Hiếu QA staging)** — `quarterly/page.tsx` tách cơ học (move nguyên
+khung, KHÔNG đổi JSX/logic) từ 3077 → 2688 dòng: `KpiCard`/`TableHead`/`ColInfo`/`MomBadge`/`MonthSubRow`/
+`QtSummaryRow`/`QtTargetRow`/`PivotTable` → `web/src/components/quarterly/*`; types
+(`MonthStats`/`MonthSummary`/`ChannelMonth`/`Channel`/`QReport`/`Targets`) → `web/src/lib/quarterly-types.ts`;
+format helpers (`fc`/`pct`/`cm1Color`/`momColor`/`prColor`/`fck`/`parseFmt`/`fmtInput`) →
+`web/src/lib/quarterly-format.ts`. `B2BTierSection` (~1080 dòng, phần lớn nhất còn lại) **CHƯA tách** — để
+dành 1 pass riêng. Máy dev không có `.env.local` nên không verify UI bằng mắt được, chỉ tsc + vitest —
+**Hiếu cần QA tay trên staging** trước khi coi phần đã tách là an toàn tuyệt đối.
+
 ## 2. Luồng dữ liệu
 - **Báo cáo** (`quarterly-report`): gohub_dw fulfillment (Revenue/GP) + `dim_sku` 3HKDATAPOOL (3HK%) + `fetchCosts` Supabase (ngoài cache) + `prevGroupRows` cho QoQ. Cache key `qreport_raw_v2:...`.
 - **B2B tier data** (`quarterly-b2b-customers`):

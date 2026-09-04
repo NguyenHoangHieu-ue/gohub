@@ -578,6 +578,15 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
   THÀNH VIÊN, không tự động hoá được).
 - [ ] **s167 — QA UI My Metrics trên staging**: mở tab, kiểm bảng SKU scan/evidence không lỗi 500 (bảng mới cần cột `okr_sku_tags.effective_date` nullable từ v45), thử gắn/xoá ghi chú SKU, thử thêm case evidence tay.
 - [ ] **Inventory tab**: chạy `node scripts/import_inventory_plan.mjs "D:\gohub\Plan nhập hàng theo tháng.xlsx"` (trong `web/`, máy có `.env.local`) để seed dữ liệu Excel, gửi output kiểm tra khớp.
+- [ ] **s183 Phase 5 — QA UI Quarter Report + Channels trên staging** (đang dừng để chờ, chưa làm tiếp
+  to-gau/my-metrics): tách cơ học component (`KpiCard`/`TableHead`/`ColInfo`/`MomBadge`/`MonthSubRow`/
+  `QtSummaryRow`/`QtTargetRow`/`PivotTable` khỏi `quarterly/page.tsx`; `B2BCustomerDetail` khỏi
+  `channels/page.tsx`) — máy dev không có `.env.local` nên không tự verify UI bằng mắt được, tsc/vitest
+  sạch nhưng chưa chắc chắn 100% giống hệt UI cũ. Xem lại 2 tab này kỹ, báo nếu có gì lệch trước khi làm
+  tiếp `to-gau/[id]/page.tsx` + `my-metrics/page.tsx` (đã lên kế hoạch, chưa làm).
+- [ ] **Phase 4 — tạo tài khoản Upstash Redis** (free tier) + set `UPSTASH_REDIS_REST_URL`/
+  `UPSTASH_REDIS_REST_TOKEN` trên Vercel (Production + Preview) để rate-limit chặn thật cross-instance —
+  chưa set vẫn chạy đúng như in-memory cũ, chỉ chưa có lợi ích cross-instance.
 
 **Hiếu cần làm (còn lại, cũ):**
 - [ ] Liên hệ DB owner gohub_dw cho Looker Studio / Power BI

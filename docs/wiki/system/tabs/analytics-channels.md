@@ -23,6 +23,11 @@ Tab 2 mode: **All Channels Overview** (tổng hợp tất cả kênh) và **Sing
 | API deep-dive | `/api/analytics/query` (POST SELECT) — query trực tiếp gohub_dw |
 | Chi phí kênh | Supabase `analytics_channel_costs` + `analytics_channel_group_costs` |
 
+**s183 Phase 5 (2026-09-04, ⏳ đang chờ Hiếu QA staging)** — tách cơ học `B2BCustomerDetail` (bảng chi
+tiết kênh + top sản phẩm khi mở rộng 1 khách B2B) sang `web/src/components/channels/b2b-customer-detail.tsx`.
+`page.tsx` 1944 → 1843 dòng, JSX/logic giữ nguyên y hệt. Máy dev không có `.env.local` nên không verify UI
+bằng mắt — Hiếu cần QA tay trên staging.
+
 ## 2. Hai chế độ xem
 
 ### 2a. All Channels Overview (mới từ 2026-07-28)
