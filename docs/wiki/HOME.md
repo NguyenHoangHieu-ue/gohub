@@ -49,7 +49,7 @@ Kho tri thức nội bộ, chia làm hai khu vực theo đối tượng đọc.
 - [[system/tabs/analytics-dashboard|BI Dashboard]] · [[system/tabs/analytics-bod|BOD Report]] · [[system/tabs/analytics-quarterly|Quarter Report]] · [[system/tabs/analytics-all-time|All-Time Report]]
 - [[system/tabs/analytics-channels|Channel Performance]] · [[system/tabs/analytics-b2b|B2B]] · [[system/tabs/analytics-b2c|B2C]] · [[system/tabs/analytics-website|Website Analytics]]
 - [[system/tabs/analytics-staff|Staff Performance]] · [[system/tabs/analytics-customers|Customer Performance]] · [[system/tabs/analytics-vendors|Vendor Performance]]
-- [[system/tabs/analytics-orders|Orders Management]] · [[system/tabs/analytics-order-report|Order Report]] · [[system/tabs/analytics-fulfillment|Inventory]]
+- [[system/tabs/analytics-orders|Orders]] · [[system/tabs/analytics-fulfillment|Inventory]]
 - [[system/tabs/analytics-products|Products BI]] · [[system/tabs/analytics-3hk-usage|3HK Data Usage]]
 - [[system/tabs/analytics-cs-troubleshoot|CS Troubleshoot Hub]] · [[system/tabs/analytics-feedback|User Feedback]] · [[system/tabs/analytics-targets|KPI Target Planning]]
 - [[system/tabs/analytics-my-metrics|My Metrics (OKR Hiếu)]]
