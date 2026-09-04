@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // ── Two-level query cache ──────────────────────────────────────────────────────
 // L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
@@ -556,23 +557,9 @@ export async function getCountryMappings(): Promise<Record<string, string>> {
 }
 
 // ── Day-range helpers (for target/cost pro-rata) ──────────────────────────────
-
-export function getDaysInMonth(monthStr: string): number {
-  const [year, month] = monthStr.split("-").map(Number)
-  return new Date(year, month, 0).getDate()
-}
-
-export function getDaysInRange(startDate: string, endDate: string, monthStr: string): number {
-  const [y, m] = monthStr.split("-").map(Number)
-  const monthStart = new Date(y, m - 1, 1)
-  const monthEnd   = new Date(y, m, 0)
-  const start      = new Date(startDate)
-  const end        = new Date(endDate)
-  const rangeStart = start > monthStart ? start : monthStart
-  const rangeEnd   = end   < monthEnd   ? end   : monthEnd
-  if (rangeEnd < rangeStart) return 0
-  return Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
-}
+// Nguồn thật: analytics-engine/date-math.ts (pure, client-safe, không lệch theo timezone máy chạy).
+// Re-export giữ tên cũ để ~10 file đang import getDaysInMonth/getDaysInRange từ đây không phải sửa (s183 Phase 2).
+export { getDaysInMonth, getDaysInRange }
 
 // ── Channel costs (from Supabase, replaces Turso channel_costs) ───────────────
 

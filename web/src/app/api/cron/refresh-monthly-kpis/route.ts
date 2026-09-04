@@ -6,6 +6,7 @@ import { alertCronFailure } from "@/lib/cron-alert"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { getDaysInMonth } from "@/lib/analytics-engine/date-math"
 
 // Cron: refresh analytics_monthly_kpis (snapshot CM1/GP/3HK theo tháng cho chatbot query).
 // Vercel cron hoặc gọi thủ công từ Settings: POST /api/cron/refresh-monthly-kpis
@@ -13,17 +14,16 @@ import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 function getMonthStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
 }
-function daysInMonth(m: string) {
-  const d = new Date(`${m}-01`)
-  return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()
-}
+// s183 Phase 2: `daysInMonth` cục bộ (đã xoá) parse `new Date(`${m}-01`)` (UTC) rồi đọc lại
+// `.getFullYear()/.getMonth()` (LOCAL) — cùng lớp bug đã fix ở bod-data.ts, giờ dùng
+// `getDaysInMonth` từ date-math.ts (thuần, không phụ thuộc timezone máy chạy).
 
 async function computeMonthlyKpis(month: string, companyCode: string) {
   const startDate = `${month}-01`
   const today = new Date()
   const mDate = new Date(`${month}-01`)
   const isCurrent = mDate.getFullYear() === today.getFullYear() && mDate.getMonth() === today.getMonth()
-  const dim = daysInMonth(month)
+  const dim = getDaysInMonth(month)
   const endDate = isCurrent
     ? today.toISOString().split("T")[0]
     : `${month}-${String(dim).padStart(2,"0")}`

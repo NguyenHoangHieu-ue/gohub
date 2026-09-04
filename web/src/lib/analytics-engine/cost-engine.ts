@@ -11,7 +11,10 @@
  *   - Các route analytics khác khi migrate về BE
  */
 
-import { getDaysInRange, getDaysInMonth, type ChannelCostRow } from "@/lib/analytics-helpers"
+// date-math.ts thuần (zero-dep, client-safe) — không qua analytics-helpers.ts (module đó kéo theo
+// supabaseAdmin, không an toàn bundle vào client component nếu sau này FE cần tính preview cost).
+import { getDaysInRange, getDaysInMonth } from "@/lib/analytics-engine/date-math"
+import type { ChannelCostRow } from "@/lib/analytics-helpers"
 import type { CostRecord, CostLine } from "@/lib/b2b-customer-cost"
 
 export type { CostRecord, CostLine }

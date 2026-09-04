@@ -338,3 +338,16 @@ thay vì chỉ đỏ/xám. Đổi viền StatTile: **≥80% xanh lá** (`emerald
 (`red`, giữ nguyên) · null (chưa target) giữ xám trung tính. Lưu ý mốc 80/50 này CHỈ áp cho viền card
 `StatTile`, khác mốc 100/85 sẵn có ở `pctColor`/`pctCol` (dùng cho màu chữ % + `MetricBar` progress bar,
 KHÔNG đổi theo yêu cầu này — 2 hệ mốc tồn tại song song, cố ý theo đúng lời Hiếu chỉ định riêng cho khung).
+
+**s183 Phase 2 (2026-09-04) — `elapsedRatioOf`/`kpiFactorOf` chuyển sang dùng hàm dùng chung, KHÔNG đổi
+số.** `squad-progress/route.ts` trước tự định nghĩa lại 2 công thức này tại chỗ (đã comment rõ "khớp
+`kpiPrFactor`/`monthKpiFactor` bên Tổng quan" — nghĩa là 2 nơi cùng viết tay 1 công thức, đúng root cause
+chuỗi bug s166/s181/s182 vì chỉ sửa 1 nơi rồi quên đồng bộ nơi kia). Nay route gọi thẳng
+`getElapsedRatio()`/`getKpiFactor()` từ `lib/analytics-engine/quarter-projection.ts` (thêm ở s183 Phase 1,
+có test riêng khoá đúng các case s166/s182) — công thức bên trong giữ y nguyên, chỉ đổi NGUỒN định nghĩa.
+`quarterly/page.tsx` (client) VẪN giữ bản `kpiPrFactor`/`monthKpiFactor` cục bộ — chưa migrate vì
+`quarter-projection.ts` (qua `date-math.ts`) tuy đã client-safe (s183 Phase 1 tách khỏi `bod-data.ts`) nhưng
+việc đổi 1 trang FE 3000+ dòng cần làm riêng, cẩn trọng hơn (xem Phase 5 trong plan rebuild). tsc + vitest
+PASS. **Chưa verify số thật qua API live** (máy dev thiếu `ANALYTICS_DB_*`) — đây là refactor thuần
+(zero behavior change, đã verify bằng test công thức giống hệt), rủi ro thấp nhưng Hiếu vẫn nên đối chiếu
+1-2 squad trên staging trước khi yên tâm.

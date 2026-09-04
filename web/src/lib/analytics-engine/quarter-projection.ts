@@ -8,7 +8,9 @@
  *   - Tháng hiện tại: chỉ CHIẾU khi elapsed ≥ MIN_PROJECT_DAYS (tránh factor quá lớn đầu tháng → nhảy số).
  *     factor = dim / elapsed.
  */
-import { getDaysInMonth, getDaysInRange } from "@/lib/bod-data"
+// date-math.ts thuần (zero-dep) — KHÔNG import từ bod-data.ts/analytics-helpers.ts (2 module đó kéo theo
+// supabaseAdmin/pg, không an toàn bundle vào client component). Import trực tiếp giữ file này client-safe.
+import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // Ngưỡng ngày tối thiểu để chiếu tháng hiện tại. < 7 ngày → factor quá lớn (vd 31/3=10.3) → số nhảy dữ dội
 // + mẫu quá nhỏ không tin cậy → giữ actual (factor=1) cho tới khi đủ 7 ngày.

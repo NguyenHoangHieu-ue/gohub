@@ -3,22 +3,17 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
 // CM1 = margin − op-cost (channel_costs prorate ngày + group_costs theo nhóm). Cost lấy từ Supabase
 // analytics_channel_costs / analytics_channel_group_costs (intel dùng Turso channel_costs; group_name web = 'B2B'/'B2C').
 
-export function getDaysInMonth(month: string) {
-  const d = new Date(`${month}-01`)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-}
-export function getDaysInRange(startDate: string, endDate: string, month: string) {
-  const rangeStart = new Date(startDate); const rangeEnd = new Date(endDate)
-  const mStart = new Date(`${month}-01`); const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0)
-  const iStart = rangeStart > mStart ? rangeStart : mStart
-  const iEnd = rangeEnd < mEnd ? rangeEnd : mEnd
-  return iStart <= iEnd ? Math.ceil((iEnd.getTime() - iStart.getTime()) / 86400000) + 1 : 0
-}
+// Nguồn thật: analytics-engine/date-math.ts. Bản cũ ở đây (đã xoá) tự parse `new Date(`${month}-01`)`
+// (UTC) rồi đọc lại `.getFullYear()/.getMonth()` (LOCAL) — lệch tháng trên máy có timezone offset âm
+// (vd US); date-math.ts parse Y/M/D thuần số, không còn phụ thuộc timezone máy chạy (s183 Phase 2).
+export { getDaysInMonth, getDaysInRange }
+
 export function monthsBetween(startDate: string, endDate: string) {
   const start = new Date(startDate); const end = new Date(endDate)
   const m: string[] = []

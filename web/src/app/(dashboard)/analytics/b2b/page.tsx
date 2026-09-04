@@ -14,6 +14,7 @@ import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
 import { exportToExcel } from "@/lib/export-excel"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -88,21 +89,9 @@ export default function B2BPerformance() {
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
-  const getProjectionFactor = () => {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const start = new Date(startDate); const end = new Date(endDate)
-    // Chỉ project khi range trong CÙNG 1 THÁNG HIỆN TẠI.
-    // Cross-month range (vd 27/7–2/8) = snapshot lịch sử → factor=1, không chiếu.
-    // TODO (OOP refactor): đưa logic này vào class AnalyticsProjection.getProjectionFactor()
-    //   dùng chung mọi tab (B2B, B2C, BOD, Staff, Channels).
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return 1
-    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return 1
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const targetDays  = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-    return Math.max(1, targetDays / daysElapsed)
-  }
-
-  const projectionFactor = getProjectionFactor()
+  // s183 Phase 2: dùng hàm dùng chung (lib/analytics-engine/projection.ts) thay bản viết tay tại đây —
+  // công thức y hệt (đã verify), đóng đúng cái TODO "OOP refactor" người trước để lại.
+  const projectionFactor = getProjectionFactor(startDate, endDate)
   const isProjectable = projectionFactor > 1
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {

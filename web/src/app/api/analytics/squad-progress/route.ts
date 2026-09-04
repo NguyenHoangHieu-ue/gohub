@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchCosts } from "@/lib/bod-data"
-import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
+import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
 
 export const dynamic = "force-dynamic"
@@ -183,20 +183,13 @@ export async function GET(req: NextRequest) {
       fetchCustomerCosts(months).then(m => { costMap = m }).catch(() => {}),
     ])
 
-    // elapsedRatio theo tháng (1 = tháng đã xong, <1 = tháng đang chạy) — dùng để pro-rate phần cost
-    // dạng "amount" (tiền cố định) đúng số ngày đã qua. Khớp elapsedRatio trong quarterly-b2b-customers
-    // (`meta.dim > 0 ? meta.elapsed / meta.dim : 1`) — thiếu bước này thì cost amount cố định bị nhân
-    // ĐÚP theo factor chiếu tháng (×dim/elapsed) khi cộng cm1Pr, làm CM1 Squad Progress thấp hơn Tổng quan.
-    const elapsedRatioOf = (i: number) => monthMeta[i].dim > 0 ? monthMeta[i].elapsed / monthMeta[i].dim : 1
-
-    // kpiFactorOf — factor chiếu KHÔNG gate theo MIN_PROJECT_DAYS(=7), khớp `kpiPrFactor`/`monthKpiFactor`
-    // bên Tổng quan (`quarterly/page.tsx`, dùng cho KPI cards + custPr() per-customer). `monthMeta[i].factor`
-    // (từ buildQuarterMonthMeta, dùng cho bảng "Tổng hợp theo tháng") CHỜ đủ 7 ngày mới chiếu — Squad Progress
-    // trước dùng nhầm factor này nên đầu tháng cuối quý (elapsed < 7) PR luôn = Actual, trong khi Tổng quan
-    // (KPI card/customer PR) đã chiếu ngay từ ngày 1. Đổi Squad Progress dùng kpiFactorOf cho MỌI phép nhân
-    // *_pr để khớp đúng số Tổng quan — elapsedRatioOf (cost) giữ nguyên, không liên quan gate này.
-    const kpiFactorOf = (i: number) =>
-      monthMeta[i].elapsed > 0 && monthMeta[i].elapsed < monthMeta[i].dim ? monthMeta[i].dim / monthMeta[i].elapsed : 1
+    // elapsedRatioOf/kpiFactorOf — s183 Phase 2: dùng thẳng `getElapsedRatio`/`getKpiFactor` dùng chung
+    // (analytics-engine/quarter-projection.ts) thay vì tự định nghĩa lại công thức tại đây. Trước s183,
+    // route này VÀ `quarterly/page.tsx` (`kpiPrFactor`/`monthKpiFactor`) mỗi nơi viết tay 1 bản y hệt nhau
+    // — chỉ đổi 1 nơi (bug s182: quên đồng bộ) từng làm Squad Progress lệch hẳn Quarter Report đầu tháng
+    // cuối quý. Công thức không đổi (đã verify bằng test `analytics-engine.test.ts`), chỉ đổi NGUỒN.
+    const elapsedRatioOf = (i: number) => getElapsedRatio(monthMeta[i])
+    const kpiFactorOf = (i: number) => getKpiFactor(monthMeta[i])
 
     // Helper: CM1 thực + PR dùng per-month data để áp đúng factor (khớp quarterly-report)
     const calcCustCm1AndPr = (r: Record<string, string>, code: string) => {

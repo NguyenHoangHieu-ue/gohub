@@ -32,10 +32,17 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
   `analytics_channel_costs` (Supabase channel-level, gần như rỗng cho B2B) + group cost → CM1 B2B cao hơn thực
   tế, khác Quarter Report cùng kỳ. Nay B2B-Strategic/B2B-Non-Strategic đổi sang Turso `b2b_customer_cost_monthly`
   (query customer×tháng riêng, CÙNG phân loại Strategic/Non), B2C/Other giữ nguyên channel cost cũ.
-- **⚠️ Bug tồn tại (chưa fix, phát hiện cùng lúc s162)**: query chính (`rows`) dùng `isStrategicSql`/`excludeList`
-  tham chiếu alias `c` (`dim_customer`) trong CASE nhưng KHÔNG có `LEFT JOIN dim_customer c` trong `FROM` — chỉ
-  không lỗi khi `tierKeywords`/`excludedCustomers` rỗng (biểu thức rút gọn còn `(TRUE)`/không tham chiếu `c`).
-  Cần Hiếu xác nhận có đang lỗi thật không trước khi sửa (đổi query gốc, ngoài phạm vi fix cost model lần này).
+- **✅ Fix s183 Phase 2 (2026-09-04) — query chính thiếu `LEFT JOIN dim_customer c`, lỗi SQL thật với config
+  mặc định.** Phát hiện từ s162 nhưng chưa xác nhận; audit lại xác nhận: `DEFAULT_TIER_KEYWORDS`
+  (`quarterly-settings.ts`) có sẵn entry VIP/Gold/Silver (không rỗng) → `buildIsStrategicSql` LUÔN trả về
+  biểu thức tham chiếu `c.price_list_name` (không rút gọn về `(TRUE)`), và CASE trong SELECT còn tham chiếu
+  cả `c.name` (dòng loại `excludeList`) — nghĩa là với config mặc định, câu SQL chính của
+  `/api/analytics/all-time-performance` **CHẮC CHẮN throw lỗi Postgres thật** ("missing FROM-clause entry
+  for table c"), không phải chỉ "có thể sai số" như ghi trước đây. Fix: thêm
+  `LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)` vào `FROM` (khớp đúng pattern
+  join đã có sẵn ở câu `custRevRows` cùng file). tsc + vitest PASS. **Chưa verify bằng gọi API thật với DB**
+  (máy dev không có `.env.local`/`ANALYTICS_DB_*`) — Hiếu tự mở tab All-Time trên staging xác nhận hết lỗi
+  500 và số ra đúng.
 - **Group cost B2B (BOD-1, 2026-08-02)**: chi phí group-level `B2B` chia theo **revenue-share** giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng đầy đủ vào cả 2 → tránh đếm 2 lần). Hiện Supabase chưa có B2B group cost → 0 tác động; fix để đúng khi nhập. (Giống `bod-data.ts`.)
 - **Amount-type channel op-cost (s131)**: khi 1 channel có cả KH Strategic lẫn Non → chia theo revenue-share per (tháng, channel) để KHÔNG cộng 2 lần (percent-type theo revenue nên đúng sẵn).
 - Không giới hạn kỳ ngắn → dữ liệu lớn, dựa vào cache 12h.
