@@ -4,12 +4,13 @@
 
 ---
 
-## Trạng thái hiện tại (2026-08-31, s180)
+## Trạng thái hiện tại (2026-09-04, s183)
 
 | | |
 |---|---|
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
 | tsc + `next build` | PASS |
+| ✅ **s183 (2026-09-04) — tái cấu trúc `docs/wiki/` thành `business/` + `system/`** | Theo yêu cầu Hiếu "hệ thống hoá lại tài liệu". 13 file nghiệp vụ (company/vendors/products/pricing/processes cũ) dọn sang `docs/wiki/business/*.md`, viết lại **hẳn văn bản, bỏ mọi bảng** (kể cả bảng tra mã SKU/Data Policy/FX). 34 file kỹ thuật (system/*.md + Tab/*.md + workflow-pipeline.md) dọn nguyên khối sang `docs/wiki/system/` + `system/tabs/`, KHÔNG đổi nội dung. Đã cập nhật `HOME.md` + link nội bộ + path trong CLAUDE.md + comment code tham chiếu path cũ. Đây là **Phase 0** của plan rebuild toàn diện (xem `C:\Users\nhhie\.claude\plans\effervescent-zooming-wilkinson.md` — Hiếu đã duyệt): Phase 1+ (Analytics Reporting Engine dùng chung, migrate route theo tab, gộp tab trùng, Upstash rate-limit, dọn FE khổng lồ, vá quy trình lint/test) làm theo từng phase, mỗi phase xin xác nhận riêng trước khi merge main. |
 | ✅ **s177-s180 đã merge main (2026-08-31)** | Sau s176 (fix chữ ký webhook), Hiếu test tay phát hiện tiếp 3 lớp bug/thiếu sót chồng nhau ở pipeline Lark bot My Metrics, fix tuần tự: (1) `classifyLarkThread` catch rỗng nuốt lỗi im lặng → log rõ + đếm `classify_errors`; (2) root cause thật "Gemini không trả JSON" — model tốn token cho "thinking" ẩn ăn hết `maxOutputTokens`, JSON bị cắt cụt giữa chừng → `thinkingConfig:{thinkingBudget:0}` bị model reject 400, fix thật là bump `maxOutputTokens` 500→4000; (3) panel duyệt case thiếu tên/link group + nội dung đầy đủ; (4) real-time capture không thấy thread CŨ trước lúc bot sống → thêm "Quét lịch sử 1 lần" + dropdown chọn group; (5) case Lark confirm nhầm không xoá được → thêm route xoá. Chi tiết: `docs/wiki/Tab/analytics-my-metrics.md` mục s177-s180. |
 | ⏳ Trên staging CHƯA merge main | Không còn mục nào — s171-s180 đã lên main hết (2026-08-31). |
 | ✅ Đã lên main | ...+ s171-s180 (My Metrics: audit+fix, rebuild UI, Lark real-time capture + quét lịch sử, fix root-cause "0 case" (open_id + signature + Gemini token), Bé Gấu Insights, panel duyệt case đầy đủ, xoá case nhầm) + s170(a) bỏ filter SG/HK Orders + s170(b) audit+vá 4 lỗ hổng bảo mật Tổ Gấu + s170(c) nút Create Weekly Report (2026-08-31) |
@@ -686,13 +687,19 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 
 1. **CLAUDE.md** (file này) — trạng thái + rules
 2. **`docs/session_summary.txt`** — log chi tiết từng session (nếu có trên máy) — context lịch sử, thay `docs/CHANGELOG.md`. Đọc từ cuối file lên (session mới nhất trước).
-3. **`docs/wiki/`** (45 file, **git-tracked, LUÔN có** trên mọi máy) — nguồn tham chiếu đầy đủ nhất, đọc hết 1 lần đầu session (hoặc khi được yêu cầu "đọc hệ thống"):
-   - `docs/wiki/system/*.md` — kiến trúc hệ thống, chatbot 7-agent + Guardian, Operations Runbook (thay `docs/SYSTEM.md`)
-   - `docs/wiki/Tab/_analytics-data-model.md` — đọc TRƯỚC mọi tab analytics khác (bảng fact/dim, `getAnalyticsSource`, filter chuẩn dùng chung)
-   - `docs/wiki/Tab/*.md` — 1 file/tab web: mục đích · luồng data · API · công thức · **Gotchas** (mỗi tab có mục riêng — dùng thay `docs/ERRORS.md` khi file đó vắng mặt)
-   - `docs/wiki/company|pricing|products|vendors|processes/*.md` — nghiệp vụ (mã SKU/Item, COGS 3HK, vendor priority, combo chuẩn, import NCC...)
+3. **`docs/wiki/`** (**git-tracked, LUÔN có** trên mọi máy, tái cấu trúc s183 2026-09-04 thành 2 khu
+   `business/` + `system/`) — nguồn tham chiếu đầy đủ nhất, đọc hết 1 lần đầu session (hoặc khi được yêu
+   cầu "đọc hệ thống"):
+   - `docs/wiki/system/*.md` — kiến trúc hệ thống, chatbot 7-agent + Guardian, Operations Runbook, quy
+     trình vận hành (thay `docs/SYSTEM.md`)
+   - `docs/wiki/system/analytics-data-model.md` — đọc TRƯỚC mọi tab analytics khác (bảng fact/dim,
+     `getAnalyticsSource`, filter chuẩn dùng chung)
+   - `docs/wiki/system/tabs/*.md` — 1 file/tab web: mục đích · luồng data · API · công thức · **Gotchas**
+     (mỗi tab có mục riêng — dùng thay `docs/ERRORS.md` khi file đó vắng mặt)
+   - `docs/wiki/business/*.md` — nghiệp vụ dạng văn bản đọc (mã SKU/Item, COGS 3HK, vendor priority, combo
+     chuẩn, import NCC...) — viết cho CS/Sale/Product, KHÔNG dùng bảng
 4. **`new_info.txt`** (nếu có) — tick ✅ items chưa xong
-5. **`docs/ERRORS.md`** (nếu có) — lỗi hay gặp; nếu KHÔNG có trên máy → tra mục "Gotchas"/"Vấn đề đã gặp" trong `docs/wiki/Tab/*.md` hoặc log lỗi trong `docs/session_summary.txt`
+5. **`docs/ERRORS.md`** (nếu có) — lỗi hay gặp; nếu KHÔNG có trên máy → tra mục "Gotchas"/"Vấn đề đã gặp" trong `docs/wiki/system/tabs/*.md` hoặc log lỗi trong `docs/session_summary.txt`
 6. **`Bug.txt`** (nếu có) — khi user báo có bug
 
 ---
@@ -702,7 +709,7 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 1. **Staging-first** — mọi thay đổi lên `staging`. KHÔNG push thẳng `main`.
 2. **KHÔNG tự merge** staging → main dù staging PASS, chờ Hiếu yêu cầu rõ ràng.
 3. **UI Strict Lock** — không đổi màu/bố cục/font/chart analytics mà không có chỉ thị từ Hiếu/Bảo.
-4. **Wiki sync** — sửa tab nào → cập nhật `docs/wiki/Tab/<tên-tab>.md` ngay cùng lần.
+4. **Wiki sync** — sửa tab nào → cập nhật `docs/wiki/system/tabs/<tên-tab>.md` ngay cùng lần.
 5. **Commit + push sau mỗi task** — không batch nhiều task thành 1 commit lớn.
 6. **tsc trước khi push** — `npx.cmd tsc --noEmit` (PowerShell, không phải `npx tsc`).
 
@@ -727,7 +734,8 @@ hệ thống thật để tự động hoá — product onboarding vẫn thủ c
 | Bug tracker (danh sách thô) | `Bug.txt` |
 | Session log chi tiết | `docs/session_summary.txt` (append) |
 | Kiến trúc hệ thống | `docs/SYSTEM.md` |
-| Wiki từng tab | `docs/wiki/Tab/<tên-tab>.md` |
+| Wiki từng tab (kỹ thuật) | `docs/wiki/system/tabs/<tên-tab>.md` |
+| Wiki nghiệp vụ (sản phẩm/vendor/giá) | `docs/wiki/business/<tên-bài>.md` — văn bản, không bảng |
 | Audit số analytics | `docs/AUDIT_ANALYTICS.md` (local, gitignored) |
 | Agent/prompt changes | `.ai/agents/AGENTS.md` |
 

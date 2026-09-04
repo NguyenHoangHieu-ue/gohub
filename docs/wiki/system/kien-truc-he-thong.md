@@ -311,7 +311,7 @@ flowchart LR
 > (product_catalog · revenue_bi · margin_cogs · staff_hr · customer_pii · internal_kb_other_dept ·
 > system_internal · general) → policy theo role × department (`app_settings.access_policy`).
 > admin/manager bo qua; FAIL-OPEN khi khong chac. Lark group: chi chan `system_internal`.
-> Xem [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]].
+> Xem [[chatbot-agents-guardian|Chatbot Agents & Guardian]].
 
 ---
 

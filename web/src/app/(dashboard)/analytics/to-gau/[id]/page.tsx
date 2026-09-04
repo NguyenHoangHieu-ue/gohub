@@ -1725,7 +1725,7 @@ export default function ToGauRoomPage() {
 
   // myEmail giữ tên biến cũ nhưng thực chất chứa USERNAME (không phải email thật) — fix bug identity-collision:
   // nhiều user Lark chưa gắn email → session.user.email rỗng cho MỌI user như vậy → cùng chung "" → lộ chéo
-  // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/Tab/analytics-to-gau.md.
+  // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/system/tabs/analytics-to-gau.md.
   const myEmail      = session?.user?.username || ""
   const myName       = session?.user?.name  || ""
   // Role TƯƠI từ DB (không phải JWT) — backend (kb/wiki routes) đã dùng getDbRole(), FE phải khớp

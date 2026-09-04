@@ -14,7 +14,7 @@ import { exportRawRows } from "@/lib/export-excel"
 // Dựa theo "Plan nhập hàng theo tháng.xlsx" (Ops): mỗi SKU dự phóng Tồn thực tế / Bán dự kiến /
 // Số nhập / Tồn cuối tuần theo từng tuần. Web tự gợi ý Bán dự kiến (tốc độ bán 30 ngày, gohub_dw)
 // + Số nhập (reorder-to-target khi tồn dự phóng dưới ngưỡng an toàn); OPS chỉnh tay khi cần —
-// xem docs/wiki/Tab/analytics-fulfillment.md.
+// xem docs/wiki/system/tabs/analytics-fulfillment.md.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type AlertLevel = "critical" | "warning" | "ok" | "none"

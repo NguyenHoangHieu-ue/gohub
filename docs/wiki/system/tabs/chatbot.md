@@ -114,7 +114,7 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
 
 ## 6. Cải tiến s106 (2026-07-18) — audit + tối ưu 7 agent
 
-Bộ E2E `web/src/__e2e__/agent-audit|agent-grade` (LLM-judge) audit từng agent vs DB thật rồi chấm chất lượng câu trả lời. Chi tiết: [[system/Chatbot-Agents-Guardian]] §"Test harness". Các fix chính:
+Bộ E2E `web/src/__e2e__/agent-audit|agent-grade` (LLM-judge) audit từng agent vs DB thật rồi chấm chất lượng câu trả lời. Chi tiết: [[chatbot-agents-guardian|Chatbot Agents & Guardian]] §"Test harness". Các fix chính:
 
 - **bi-analyst**: 🔒 PII — chỉ trả `customer_code`, KHÔNG lộ tên/SĐT/email khách. Glossary chỉ số: **CM1 = Gross Profit − Operation Cost**; Operation Cost KHÔNG có trong gohub_dw → không đánh đồng CM1 = Gross Profit. Cảnh báo bảng mirror `fact_fulfilment_revenue_power_bi` (1 chữ "l" — đếm trùng, không dùng). `dim_location` = **kho/chi nhánh** (không phải nước); eSIM/3HK fulfill `location_id=0` ('Unknown') → giải thích thay vì "không có dữ liệu". Fallback chống câu trả lời rỗng (function-calling ≤10 vòng).
 - **Định tuyến (router)**: "báo cáo 3HK **trong/theo kho** Hà Nội" → `bi-analyst` (không nhầm gap-analysis); "3HK **Contribution** %" không bị `3hk co` nuốt (word-boundary); "khách **mua nhiều nhất**" → bi-analyst; "liệt kê wiki" / "đếm item theo kênh" → data-explorer; câu **gap NCC** ("WM có bao nhiêu gói **chưa tạo** SKU") không bị BI override cướp → gap-analysis.

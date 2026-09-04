@@ -96,7 +96,7 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 - **Guardian không còn gọi Gemini** (s108) — phân loại nhạy cảm bằng regex. Routing classifier (`classifier.ts`) vẫn dùng Gemini nhưng chỉ là **phiếu tier-1** trong graph (không quyết một mình).
 - Model `gemini-3.5-flash` là **thinking model**: khi còn dùng cho classifier, phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
 - **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`. Câu hỏi BI dài (>10s) có thể bị Vercel Free timeout.
-- Liên quan: [[system/Second-Brain-Architecture]] · [[vendors/WM-WorldMove]] · [[vendors/3HK]]
+- Liên quan: [[kien-truc-he-thong|Second Brain Architecture]] · [[../business/vendor-worldmove|WorldMove]] · [[../business/vendor-3hk|3HK]]
 
 ---
 

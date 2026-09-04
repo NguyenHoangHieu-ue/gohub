@@ -1,6 +1,6 @@
 import { cachedAnalyticsQuery } from "@/lib/analytics-helpers"
 
-// Logic dùng chung cho tab Inventory (kế hoạch nhập hàng theo tuần) — xem docs/wiki/Tab/analytics-fulfillment.md.
+// Logic dùng chung cho tab Inventory (kế hoạch nhập hàng theo tuần) — xem docs/wiki/system/tabs/analytics-fulfillment.md.
 // Gợi ý "Số bán dự kiến"/"Số nhập" tính từ tốc độ bán 30 ngày gần nhất (gohub_dw) + rule reorder-to-target
 // đơn giản: khi tồn dự phóng rớt dưới safety_weeks×velocity → gợi ý nhập đủ lên target_weeks_coverage×velocity.
 // OPS ghi đè (sales_forecast/import_qty có giá trị trong inventory_plan_weekly) thì giữ nguyên, không bị

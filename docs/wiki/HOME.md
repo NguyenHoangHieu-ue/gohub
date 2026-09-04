@@ -5,118 +5,69 @@ department: all
 tags: [index, moc, home]
 aliases: ["Wiki Home", "Index"]
 created: 2026-06-13
-updated: 2026-07-14
+updated: 2026-09-04
 status: active
 ---
 
 # GoHub Wiki
 
-Kho tri thức nội bộ — tài liệu về sản phẩm, vendor, quy trình và hệ thống GoHub.
+Kho tri thức nội bộ, chia làm hai khu vực theo đối tượng đọc.
 
 > Tìm kiếm nhanh: dùng tab **Tìm kiếm** trên web hoặc `Ctrl+O` trong Obsidian.
 
 ---
 
-## Công Ty
+## 📖 business/ — Kiến thức sản phẩm & vendor (đọc như bài viết, cho CS/Sale/Product)
 
-- [[company/GoHub-Overview|GoHub Overview]] — Pháp nhân, mô hình kinh doanh, kênh bán hàng
-- [[company/Business-Metrics-Glossary|Thuật Ngữ Chỉ Số Kinh Doanh]] — Revenue/GP/GPM%/CM1/CM1%/3HK Contribution % (CM1 thay GP2/GPM2)
-
----
-
-## Nhà Cung Cấp (Vendors)
-
-- [[vendors/WM-WorldMove|WorldMove (WM)]] — Vendor chính, 8921 sản phẩm, APN data
-- [[vendors/3HK|3HK]] — Zone-based pricing, 45 zones, dùng cho đa số nước
-
----
-
-## Sản Phẩm & Mã Hóa
-
-- [[products/SKU-Code-Structure|Cấu Trúc Mã SKU (13 ký tự)]] — Giải mã từng vị trí
-- [[products/Item-Code-Structure|Cấu Trúc Mã Item & Alias (18 ký tự)]] — Channel, partner, pricelist
-- [[products/Data-Policy-Codes|Data Policy Codes]] — Các mã A/B/C/D.../Z
-- [[products/Combo-Chuan-GoHub|Combo Chuẩn GoHub]] — 42 combo/country (Daily/Fix/Unlimited)
+- [[business/gioi-thieu-gohub|GoHub Overview]] — Pháp nhân, mô hình kinh doanh, kênh bán hàng
+- [[business/thuat-ngu-kinh-doanh|Thuật Ngữ Chỉ Số Kinh Doanh]] — Revenue/GP/GPM%/CM1/CM1%/3HK Contribution %
+- [[business/vendor-worldmove|WorldMove (WM)]] — Vendor chính, 8921 sản phẩm, APN data
+- [[business/vendor-3hk|3HK]] — Zone-based pricing, 45 zones, dùng cho đa số nước
+- [[business/ma-sku|Cấu Trúc Mã SKU (13 ký tự)]] — Giải mã từng vị trí
+- [[business/ma-item-alias|Cấu Trúc Mã Item & Alias (18 ký tự)]] — Channel, partner, pricelist
+- [[business/loai-data-policy|Data Policy Codes]] — Các mã A/B/C/D.../Z
+- [[business/combo-chuan|Combo Chuẩn GoHub]] — 42 combo/country (Daily/Fix/Unlimited)
+- [[business/ty-gia|Tỷ Giá Nội Bộ]] — USD/VND, HKD/USD, TWD/USD
+- [[business/cong-thuc-gia-3hk|Công Thức Giá Nhập 3HK]] — Fixed×55%, Daily×40%, Unlimited
+- [[business/goi-fup-tuy-chinh-3hk|Gói FUP Tùy Chỉnh 3HK]] — Tính giá khi cap và throttle khác 500MB/10-5Mbps
+- [[business/chon-vendor|Chọn Vendor Nào?]] — WM vs 3HK vs KDDI theo nước
+- [[business/quy-trinh-import-ncc|Quy Trình Import NCC]] — Upload → Diff → Confirm
 
 ---
 
-## Giá & Tỷ Giá
+## 🛠 system/ — Kiến trúc & vận hành kỹ thuật (dành cho dev, admin-only)
 
-- [[pricing/FX-Rates|Tỷ Giá Nội Bộ]] — USD/VND, HKD/USD, TWD/USD (T06/2026)
-- [[pricing/3HK-COGS-Formula|Công Thức Giá Nhập 3HK]] — Fixed×55%, Daily×40%, Unlimited
-- [[pricing/3HK-Custom-Package-Pricing|Gói Tùy Chỉnh 3HK]] — Tính giá khi cap và throttle khác 500MB/10-5Mbps
-- [[pricing/Vendor-Priority|Quy Tắc Chọn Vendor]] — WM vs 3HK vs KDDI theo nước
+- [[system/kien-truc-he-thong|Kiến Trúc Hệ Thống]] — 6 Mermaid diagram: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 6 Agents + Guardian · 7 Phases Roadmap
+- [[system/chatbot-agents-guardian|Chatbot Agents & Guardian]] — 7 agent + cổng kiểm soát quyền hạn câu hỏi
+- [[system/operations-runbook|Operations Runbook]] — Auth, cron, DB, security, incident response
+- [[system/quy-trinh-van-hanh|Quy Trình Vận Hành Chuẩn]] — Branching, CI/CD, DB migration, staging-first
+- [[system/analytics-data-model|Analytics — Mô Hình Dữ Liệu Chung]] — Đọc TRƯỚC mọi tab analytics khác
 
----
+### system/tabs/ — Hướng dẫn từng tab web (mục đích · luồng dữ liệu · API · công thức · gotchas)
 
-## Quy Trình
+**Phân tích & báo cáo (BI)**
+- [[system/tabs/analytics-dashboard|BI Dashboard]] · [[system/tabs/analytics-bod|BOD Report]] · [[system/tabs/analytics-quarterly|Quarter Report]] · [[system/tabs/analytics-all-time|All-Time Report]]
+- [[system/tabs/analytics-channels|Channel Performance]] · [[system/tabs/analytics-b2b|B2B]] · [[system/tabs/analytics-b2c|B2C]] · [[system/tabs/analytics-website|Website Analytics]]
+- [[system/tabs/analytics-staff|Staff Performance]] · [[system/tabs/analytics-customers|Customer Performance]] · [[system/tabs/analytics-vendors|Vendor Performance]]
+- [[system/tabs/analytics-orders|Orders Management]] · [[system/tabs/analytics-order-report|Order Report]] · [[system/tabs/analytics-fulfillment|Inventory]]
+- [[system/tabs/analytics-products|Products BI]] · [[system/tabs/analytics-3hk-usage|3HK Data Usage]]
+- [[system/tabs/analytics-cs-troubleshoot|CS Troubleshoot Hub]] · [[system/tabs/analytics-feedback|User Feedback]] · [[system/tabs/analytics-targets|KPI Target Planning]]
+- [[system/tabs/analytics-my-metrics|My Metrics (OKR Hiếu)]]
 
-- [[processes/Import-NCC|Import NCC — Upload → Diff → Confirm]] — Quy trình cập nhật giá vendor
+**Công cụ hệ thống & admin**
+- [[system/tabs/analytics-management|Management BI]] · [[system/tabs/analytics-scheduled|Scheduled Messages]] · [[system/tabs/analytics-sql|SQL Explorer]]
+- [[system/tabs/admin-product|Admin Product]] · [[system/tabs/analytics-to-gau|Tổ Gấu]] · [[system/tabs/analytics-creator|Creator Settings]] · [[system/tabs/analytics-creator-ai|Gấu Pro]]
 
----
-
-## Kiến Trúc & Diagram
-
-- [[system/Second-Brain-Architecture|Second Brain — Flow Diagrams]] — 6 Mermaid diagrams: Big Picture · AI Pipeline · NCC Import · KB/Wiki · 6 Agents + Guardian · 7 Phases Roadmap
-- [[system/Chatbot-Agents-Guardian|Chatbot Agents & Guardian]] — 7 agent (tư vấn/tra cứu/giải đáp/NCC&gap/template/BI/kho dữ liệu) + cổng kiểm soát quyền hạn câu hỏi
-- [[workflow-pipeline|Quy Trình Vận Hành Chuẩn]] — Workflow pipeline end-to-end
-
----
-
-## Hướng Dẫn Theo Tab (App Guides)
-
-> Mỗi tab trên web có 1 trang giải thích: mục đích · luồng dữ liệu · nguồn dữ liệu · công thức · vấn đề đã gặp · phân quyền.
-
-### Phân Tích & Báo Cáo (BI)
-
-- [[Tab/analytics-dashboard|BI Dashboard]] — KPI tổng, dự phóng cuối tháng, top điểm đến
-- [[Tab/analytics-bod|BOD Report]] — Báo cáo quản trị, CM1, 3HK Contribution %
-- [[Tab/analytics-all-time|All-Time Report]] — Hiệu suất lịch sử (B2B-Strat/Non-Strat/B2C)
-- [[Tab/analytics-channels|Channel Performance]] — Hiệu suất kênh bán + chi phí kênh
-- [[Tab/analytics-b2b|B2B Performance]] — Bán sỉ B2B
-- [[Tab/analytics-b2c|B2C Performance]] — Bán lẻ B2C
-- [[Tab/analytics-website|Website Analytics]] — GA4 + GSC
-- [[Tab/analytics-staff|Staff Performance]] — Hiệu suất nhân viên
-- [[Tab/analytics-customers|Customer Performance]] — Khách hàng B2B
-- [[Tab/analytics-vendors|Vendor Performance]] — Hiệu suất nhà cung cấp
-- [[Tab/analytics-orders|Orders Management]] — Quản lý đơn hàng
-- [[Tab/analytics-fulfillment|Fulfillment Report]] — Hoàn thành đơn
-- [[Tab/analytics-products|Products BI]] — Hiệu suất sản phẩm (SKU)
-- [[Tab/analytics-3hk-usage|3HK Data Usage]] — Tiêu hao data 3HK
-- [[Tab/analytics-cs-troubleshoot|CS Troubleshoot Hub]] — Khắc phục sự cố CS
-- [[Tab/analytics-feedback|User Feedback]] — Ý kiến đóng góp
-- [[Tab/analytics-targets|KPI Target Planning]] — Lập kế hoạch chỉ tiêu
-
-### Công Cụ Hệ Thống & Admin
-
-- [[Tab/analytics-management|Management BI]] — Quản trị người dùng & hệ thống BI
-- [[Tab/analytics-scheduled|Scheduled Messages]] — Lịch gửi báo cáo tự động (Lark)
-- [[Tab/analytics-sql|SQL Explorer]] — Truy vấn SQL nội bộ (admin, SELECT-only)
-- [[Tab/admin-product|Admin Product]] — Quản trị sản phẩm & hệ thống
-
-### Sản Phẩm, Danh Mục & Tri Thức
-
-- [[Tab/skus|System SKUs]] — Danh mục sản phẩm hệ thống
-- [[Tab/ncc|NCC Catalog]] — Danh mục nhà cung cấp
-- [[Tab/countries|Reference Countries]] — Danh mục quốc gia
-- [[Tab/promotions|Promotions]] — Quản lý khuyến mãi
-- [[Tab/kb|Knowledge Base]] — Cơ sở tri thức & Wiki
-- [[Tab/info|Note]] — Cổng thông tin hệ thống
-- [[Tab/chatbot|GoHub AI Chatbot]] — Bé Gấu Thông Thái (7 agent)
+**Sản phẩm, danh mục & tri thức**
+- [[system/tabs/skus|System SKUs]] · [[system/tabs/ncc|NCC Catalog]] · [[system/tabs/countries|Reference Countries]] · [[system/tabs/promotions|Promotions]]
+- [[system/tabs/chatbot|GoHub AI Chatbot]]
 
 ---
 
-## Ghi Chú Sử Dụng
+## Ghi chú sử dụng
 
-- Tất cả file dùng YAML frontmatter — query bằng **Dataview** trong Obsidian
-- Wikilinks `[[tên file]]` — click để navigate
-- Tags `#vendor`, `#sku`, `#pricing` để filter nhanh
-
-### Dataview — Xem toàn bộ tài liệu
-
-```dataview
-TABLE page_type, department, updated
-FROM "docs/wiki"
-WHERE status = "active"
-SORT page_type ASC
-```
+- Tất cả file dùng YAML frontmatter — query bằng **Dataview** trong Obsidian.
+- Wikilinks `[[tên file]]` — click để navigate. Link giữa `business/` và `system/` dùng đường dẫn tương đối
+  (`../business/...` từ trong `system/`, hoặc ngược lại).
+- File trong `business/` viết dạng bài đọc liền mạch, không dùng bảng — phục vụ CS/Sale/Product tra cứu
+  nhanh. File trong `system/` giữ bảng/SQL/code nguyên trạng — phục vụ dev/admin.
