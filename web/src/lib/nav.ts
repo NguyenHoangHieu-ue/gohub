@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  MessageSquare, Database, Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle,
+  Database, Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -48,12 +48,10 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
     { href: "/analytics/fulfillment",     label: "Inventory",       icon: Zap           },
     { href: "/analytics/3hk-usage",       label: "3HK Data Usage",  icon: Activity      },
     { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse    },
-    { href: "/analytics/feedback",        label: "Feedback",        icon: MessageSquare },
   ]},
   { label: "Analytics & Planning", items: [
     { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
     { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
-    { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
     { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
   ]},
 ]

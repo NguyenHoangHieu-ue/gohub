@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, MessageSquare, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Link2 } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -68,7 +68,6 @@ const ANALYTICS_GROUPS = [
       { href: "/analytics/fulfillment",     label: "Inventory",       icon: Zap           },
       { href: "/analytics/3hk-usage",       label: "3HK Data Usage",  icon: Activity      },
       { href: "/analytics/cs-troubleshoot", label: "CS Troubleshoot", icon: HeartPulse    },
-      { href: "/analytics/feedback",        label: "Feedback",        icon: MessageSquare },
     ],
   },
   {
@@ -76,7 +75,6 @@ const ANALYTICS_GROUPS = [
     items: [
       { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
       { href: "/analytics/targets",    label: "Manage Costs",       icon: Target    },
-      { href: "/analytics/sql",        label: "SQL Explorer",       icon: Terminal  },
       { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     ],
   },
@@ -90,14 +88,6 @@ const MANAGEMENT_GROUP = {
     { href: "/analytics/schema",     label: "Schema Config",      icon: Database  },
     { href: "/analytics/settings",   label: "Settings",           icon: Settings  },
     { href: "/admin",                label: "Admin (Product)",    icon: Package   },
-  ],
-}
-
-// Portal — creator + whitelisted users (portal_access_users)
-const PORTAL_GROUP = {
-  label: "Portal",
-  items: [
-    { href: "/analytics/portal", label: "Portal Access", icon: Link2 },
   ],
 }
 
@@ -137,9 +127,8 @@ function useSidebarData(username: string, sessionRole: string) {
     rolePerms:       Record<string, string[]> | null
     hiddenTabs:        Set<string>
     gpEnabled:         boolean
-    portalEnabled:     boolean
     myMetricsEnabled:  boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, portalEnabled: false, myMetricsEnabled: false })
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, myMetricsEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -158,7 +147,6 @@ function useSidebarData(username: string, sessionRole: string) {
         rolePerms:        perms ?? null,
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
         gpEnabled:        me?.gp_enabled         === true,
-        portalEnabled:    me?.portal_enabled      === true,
         myMetricsEnabled: me?.my_metrics_enabled  === true,
       })
     })
@@ -301,7 +289,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, portalEnabled, myMetricsEnabled: myMetricsEnabledFlag } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, myMetricsEnabled: myMetricsEnabledFlag } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -432,9 +420,6 @@ export function Sidebar() {
             {gpEnabled && (
               <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
             )}
-            {portalEnabled && PORTAL_GROUP.items.map(it => (
-              <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
-            ))}
             {myMetricsEnabled && (
               <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed accent="violet" />
             )}
@@ -498,14 +483,6 @@ export function Sidebar() {
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
-                  </div>
-                )}
-                {analystOpen && portalEnabled && (
-                  <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-brand-400/80 uppercase tracking-wider">{PORTAL_GROUP.label}</p>
-                    {PORTAL_GROUP.items.map(it => (
-                      <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
-                    ))}
                   </div>
                 )}
                 {analystOpen && myMetricsEnabled && (

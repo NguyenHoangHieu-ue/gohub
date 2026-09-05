@@ -3,9 +3,14 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight, GitBranch, Bookmark, BookmarkCheck, Clock, X } from "lucide-react"
+import {
+  Crown, Terminal, Database, Send, RefreshCw, Search, ChevronLeft, ChevronRight, GitBranch,
+  Bookmark, BookmarkCheck, Clock, X, Play, Download, Copy, Check, AlertCircle, Loader2,
+  Table as TableIcon, ChevronDown,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DataLineageMap } from "@/components/data-lineage-map"
+import { exportRawRows } from "@/lib/export-excel"
 
 // Creator-only: bộ công cụ kiểm thử API nội bộ + duyệt toàn bộ database Supabase.
 export default function CreatorDevToolsPage() {
@@ -44,7 +49,8 @@ export default function CreatorDevToolsPage() {
 }
 
 function DevTools() {
-  const [tab, setTab] = useState<"api" | "db" | "lineage">("api")
+  // s190: gộp SQL Explorer (tab "/analytics/sql" cũ, đã bỏ) vào đây — thêm tab "sql", giữ nguyên hành vi.
+  const [tab, setTab] = useState<"api" | "db" | "sql" | "lineage">("api")
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1400px] mx-auto">
@@ -54,7 +60,7 @@ function DevTools() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Creator Dev Tools</h1>
-          <p className="text-slate-500 text-sm">Kiểm thử API nội bộ và duyệt database Supabase. Chỉ Creator truy cập được.</p>
+          <p className="text-slate-500 text-sm">Kiểm thử API nội bộ, chạy SQL, và duyệt database Supabase/Turso. Chỉ Creator/Admin truy cập được.</p>
         </div>
       </div>
 
@@ -65,12 +71,15 @@ function DevTools() {
         <button onClick={() => setTab("db")} className={cn("flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-md transition-all", tab === "db" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
           <Database className="w-4 h-4" />Database
         </button>
+        <button onClick={() => setTab("sql")} className={cn("flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-md transition-all", tab === "sql" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+          <Play className="w-4 h-4" />SQL Query
+        </button>
         <button onClick={() => setTab("lineage")} className={cn("flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-md transition-all", tab === "lineage" ? "bg-amber-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
           <GitBranch className="w-4 h-4" />Data Map
         </button>
       </div>
 
-      {tab === "api" ? <ApiTester /> : tab === "db" ? <DbBrowser /> : <DataLineageMap />}
+      {tab === "api" ? <ApiTester /> : tab === "db" ? <DbBrowser /> : tab === "sql" ? <SqlExplorerTab /> : <DataLineageMap />}
     </div>
   )
 }
@@ -423,6 +432,232 @@ function TableView({ name, source }: { name: string; source: "supabase" | "turso
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── SQL Query — port nguyên khối từ /analytics/sql (s190, tách bỏ tab riêng, gộp vào đây) ──────
+// Hành vi giữ NGUYÊN 100% so với SqlExplorerPage cũ, chỉ đổi tên component + bỏ layout full-height
+// riêng (giờ nằm trong khung Creator Dev Tools chung).
+interface SqlTableInfo { tableName: string; columns: { columnName: string; dataType: string }[] }
+
+function SqlExplorerTab() {
+  const [query, setQuery]   = useState("SELECT * FROM fact_fulfillment_revenue LIMIT 10;")
+  const [results, setResults] = useState<any[]>([])
+  const [columns, setColumns] = useState<string[]>([])
+  const [loading, setLoading]  = useState(false)
+  const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [schema, setSchema]    = useState<SqlTableInfo[]>([])
+  const [expanded, setExpanded] = useState(new Set<string>())
+  const [copied, setCopied]    = useState(false)
+  const [schemaSearch, setSchemaSearch] = useState("")
+
+  useEffect(() => {
+    fetch("/api/admin/sql-schema")
+      .then(r => r.ok ? r.json() : [])
+      .then(setSchema)
+      .catch(() => {})
+  }, [])
+
+  const runQuery = async (sql: string) => {
+    if (!sql.trim()) return
+    setLoading(true); setFeedback(null)
+    try {
+      const res = await fetch("/api/admin/sql-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: sql }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setFeedback({ ok: false, msg: d.error }); setResults([]); setColumns([]) }
+      else if (d.rows?.length > 0) { setResults(d.rows); setColumns(Object.keys(d.rows[0])) }
+      else { setResults([]); setColumns([]); setFeedback({ ok: true, msg: `${d.rowCount ?? 0} rows returned` }) }
+    } catch (err: any) {
+      setFeedback({ ok: false, msg: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const run = () => runQuery(query)
+
+  const exportCsv = () => {
+    // Xuất TẤT CẢ dòng kết quả query ra Excel (theo đúng thứ tự cột).
+    const rows = results.map(r => {
+      const obj: Record<string, unknown> = {}
+      for (const c of columns) obj[c] = r[c] ?? ""
+      return obj
+    })
+    exportRawRows(rows, `sql_export_${new Date().toISOString().split("T")[0]}`, "Query")
+  }
+
+  const copy = () => { navigator.clipboard.writeText(query); setCopied(true); setTimeout(() => setCopied(false), 2000) }
+  const toggleTable = (t: string) => setExpanded(s => { const n = new Set(s); n.has(t) ? n.delete(t) : n.add(t); return n })
+
+  const filteredSchema = schema.filter(t =>
+    t.tableName.toLowerCase().includes(schemaSearch.toLowerCase()) ||
+    t.columns.some(c => c.columnName.toLowerCase().includes(schemaSearch.toLowerCase()))
+  )
+
+  return (
+    <div className="flex h-[75vh] bg-slate-50 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+      {/* Schema Sidebar */}
+      <div className="w-72 border-r border-slate-200 bg-white flex flex-col shrink-0">
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex items-center gap-2 font-bold text-slate-800 mb-3 text-sm">
+            <Database className="w-4 h-4 text-blue-600" />
+            Schema Browser
+            <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">PostgreSQL</span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input type="text" placeholder="Search tables / columns..."
+              value={schemaSearch} onChange={e => setSchemaSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {filteredSchema.map(t => (
+            <div key={t.tableName} className="rounded-lg overflow-hidden">
+              <div className="flex items-center gap-1 hover:bg-slate-50 transition-colors">
+                {/* Arrow: toggle expand only */}
+                <button onClick={() => toggleTable(t.tableName)}
+                  className="p-2 flex-shrink-0 text-slate-400 hover:text-slate-600">
+                  {expanded.has(t.tableName)
+                    ? <ChevronDown className="w-3.5 h-3.5" />
+                    : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+                {/* Table name: click → SELECT * LIMIT 50 + run */}
+                <button
+                  onClick={() => {
+                    const q = `SELECT * FROM ${t.tableName} LIMIT 50;`
+                    setQuery(q)
+                    runQuery(q)
+                  }}
+                  title={`Preview: SELECT * FROM ${t.tableName} LIMIT 50`}
+                  className="flex items-center gap-1.5 flex-1 py-2 pr-3 text-left">
+                  <TableIcon className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-slate-700 truncate">{t.tableName}</span>
+                </button>
+              </div>
+              {expanded.has(t.tableName) && (
+                <div className="ml-8 border-l border-slate-100 mb-1">
+                  {t.columns.map(c => (
+                    <div key={c.columnName}
+                      className="flex items-center justify-between px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-50 cursor-default group"
+                      onDoubleClick={() => setQuery(q => q + (q.endsWith("\n") || q === "" ? "" : "\n") + c.columnName)}>
+                      <span className="truncate">{c.columnName}</span>
+                      <span className="text-[9px] text-slate-300 font-mono italic ml-2 shrink-0">{c.dataType}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {filteredSchema.length === 0 && (
+            <div className="p-4 text-center text-xs text-slate-400">Không tìm thấy bảng</div>
+          )}
+        </div>
+      </div>
+
+      {/* Editor + Results */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Editor */}
+        <div className="h-1/2 flex flex-col bg-white border-b border-slate-200">
+          <div className="h-11 flex items-center justify-between px-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+            <span className="text-sm font-bold text-slate-600">SQL Query Editor</span>
+            <div className="flex items-center gap-2">
+              <button onClick={copy} title="Copy query"
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all">
+                {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+              </button>
+              <button onClick={run} disabled={loading}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all disabled:opacity-50 shadow-lg shadow-blue-600/20">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                Run
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 relative">
+            <textarea value={query} onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); run() } }}
+              spellCheck={false}
+              className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-slate-900 text-slate-200 selection:bg-blue-500/30"
+              placeholder="-- Ctrl+Enter để chạy query..." />
+          </div>
+        </div>
+
+        {/* Results */}
+        <div className="flex-1 flex flex-col bg-white min-h-0">
+          <div className="h-11 flex items-center justify-between px-4 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-bold text-slate-600">Query Results</span>
+              {results.length > 0 && (
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{results.length} rows</span>
+              )}
+            </div>
+            {results.length > 0 && (
+              <button onClick={exportCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50">
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-auto relative">
+            {loading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-10">
+                <Loader2 className="w-7 h-7 text-blue-600 animate-spin mb-2" />
+                <p className="text-sm text-slate-500">Executing query...</p>
+              </div>
+            )}
+            {feedback && !loading && (
+              <div className="p-8 flex flex-col items-center justify-center text-center">
+                <div className={cn("w-11 h-11 rounded-2xl flex items-center justify-center mb-3",
+                  feedback.ok ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600")}>
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <pre className="text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100 max-w-2xl overflow-auto whitespace-pre-wrap text-left">
+                  {feedback.msg}
+                </pre>
+              </div>
+            )}
+            {!loading && !feedback && results.length > 0 && (
+              <table className="w-full border-separate border-spacing-0">
+                <thead className="sticky top-0 bg-slate-50 z-10">
+                  <tr>
+                    {columns.map(col => (
+                      <th key={col} className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {results.map((row, i) => (
+                    <tr key={i} className="hover:bg-slate-50 transition-colors">
+                      {columns.map(col => (
+                        <td key={col} className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap font-mono">
+                          {row[col] === null
+                            ? <span className="text-slate-300 italic">null</span>
+                            : String(row[col])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {!loading && !feedback && results.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
+                <Database className="w-10 h-10 mb-3 opacity-20" />
+                <p className="text-sm font-medium">Chưa có kết quả</p>
+                <p className="text-xs mt-1 text-slate-300">Ctrl+Enter để chạy query</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

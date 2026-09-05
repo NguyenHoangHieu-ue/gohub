@@ -51,11 +51,11 @@ Kho tri thức nội bộ, chia làm hai khu vực theo đối tượng đọc.
 - [[system/tabs/analytics-staff|Staff Performance]] · [[system/tabs/analytics-customers|Customer Performance]] · [[system/tabs/analytics-vendors|Vendor Performance]]
 - [[system/tabs/analytics-orders|Orders]] · [[system/tabs/analytics-fulfillment|Inventory]]
 - [[system/tabs/analytics-products|Products BI]] · [[system/tabs/analytics-3hk-usage|3HK Data Usage]]
-- [[system/tabs/analytics-cs-troubleshoot|CS Troubleshoot Hub]] · [[system/tabs/analytics-feedback|User Feedback]] · [[system/tabs/analytics-targets|KPI Target Planning]]
+- [[system/tabs/analytics-cs-troubleshoot|CS Troubleshoot Hub]] · [[system/tabs/analytics-targets|KPI Target Planning]]
 - [[system/tabs/analytics-my-metrics|My Metrics (OKR Hiếu)]]
 
 **Công cụ hệ thống & admin**
-- [[system/tabs/analytics-management|Management BI]] · [[system/tabs/analytics-scheduled|Scheduled Messages]] · [[system/tabs/analytics-sql|SQL Explorer]]
+- [[system/tabs/analytics-management|Management BI]] · [[system/tabs/analytics-scheduled|Scheduled Messages]] · [[system/tabs/analytics-devtools|API & Database (SQL Query gộp vào đây, s190)]]
 - [[system/tabs/admin-product|Admin Product]] · [[system/tabs/analytics-to-gau|Tổ Gấu]] · [[system/tabs/analytics-creator|Creator Settings]] · [[system/tabs/analytics-creator-ai|Gấu Pro]]
 
 **Sản phẩm, danh mục & tri thức**

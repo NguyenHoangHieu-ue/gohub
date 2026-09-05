@@ -19,8 +19,8 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "channels", label: "Channels" }, { id: "b2b", label: "B2B" }, { id: "b2c", label: "B2C" },
   { id: "website", label: "Website" }, { id: "staff", label: "Staff" }, { id: "customers", label: "Customers" },
   { id: "vendors", label: "Vendors" }, { id: "orders", label: "Orders" }, { id: "fulfillment", label: "Inventory" },
-  { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" }, { id: "feedback", label: "Feedback" },
-  { id: "products", label: "Products" }, { id: "targets", label: "Targets" }, { id: "sql", label: "SQL Explorer" },
+  { id: "3hk-usage", label: "3HK Usage" }, { id: "cs-troubleshoot", label: "CS Troubleshoot" },
+  { id: "products", label: "Products" }, { id: "targets", label: "Targets" },
   { id: "scheduled",  label: "Scheduled Messages" },
   { id: "my-metrics", label: "My Metrics" },
 ]
