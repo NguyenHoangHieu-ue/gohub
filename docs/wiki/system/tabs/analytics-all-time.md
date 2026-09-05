@@ -77,3 +77,9 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+## UI (s193, 2026-09-05)
+Chart area + legend + bảng đổi màu hex tuỳ hứng (`#2563eb`/`#93c5fd`/`#312e81`) sang bảng màu nhất quán:
+B2B-Strategic = `brand-600`, B2B-Non-Strategic = `brand-300`, B2C = `emerald-600` (cùng họ brand cho 2 nhóm
+B2B, tách hue cho B2C). Dùng `CHART_GRID_COLOR`/`chartTooltipStyle` từ `dashboard-kit.tsx`. Mọi nút/focus
+ring `blue-*` khác đổi sang `brand-*`. Không đổi logic tính toán/query.
+

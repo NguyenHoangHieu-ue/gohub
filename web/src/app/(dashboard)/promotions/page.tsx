@@ -5,6 +5,7 @@ import { Gift, Search } from "lucide-react"
 import { SkeletonTable } from "@/components/skeleton"
 import { EmptyState } from "@/components/empty-state"
 import { useUrlStates } from "@/hooks/use-url-state"
+import { DataTable } from "@/components/dashboard-kit"
 
 interface Promotion {
   product_code:        string
@@ -140,52 +141,24 @@ export default function PromotionsPage() {
           description={search || vendor || simType ? "Thử bỏ bộ lọc hoặc đổi từ khoá" : undefined}
         />
       ) : (
-        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700">
-                <th className="px-4 py-3 font-medium">Mã SP</th>
-                <th className="px-4 py-3 font-medium">Vendor</th>
-                <th className="px-4 py-3 font-medium">Loại</th>
-                <th className="px-4 py-3 font-medium">Thời gian KM</th>
-                <th className="px-4 py-3 font-medium">Nội dung</th>
-                <th className="px-4 py-3 font-medium">Tên gói (VN)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {filtered.map(p => (
-                <tr key={p.product_code} className="hover:bg-gray-50 dark:hover:bg-slate-700/40 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-brand-700 dark:text-brand-300 whitespace-nowrap">{p.product_code}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {vendorBadge(p.vendor_code)}
-                      {simBadge(p.type_of_sim)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-slate-400">
-                    {p.tenant && <span className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-300">{p.tenant}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap space-y-1">
-                    {(p.telco_perks_start || p.telco_perks_end) ? (
-                      <>
-                        <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
-                        {dateBadge(p.telco_perks_start, p.telco_perks_end)}
-                      </>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-800 dark:text-slate-200 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-slate-400 max-w-[160px]">
-                    {p.listing_name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        <DataTable
+          rowKey={p => p.product_code}
+          rows={filtered}
+          pageSize={20}
+          columns={[
+            { key: "code", label: "Mã SP", render: p => <span className="font-mono text-brand-700 dark:text-brand-300 whitespace-nowrap">{p.product_code}</span> },
+            { key: "vendor", label: "Vendor", render: p => <div className="flex flex-wrap gap-1">{vendorBadge(p.vendor_code)}{simBadge(p.type_of_sim)}</div> },
+            { key: "tenant", label: "Loại", render: p => p.tenant ? <span className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-300">{p.tenant}</span> : null },
+            { key: "period", label: "Thời gian KM", render: p => (p.telco_perks_start || p.telco_perks_end) ? (
+                <div className="space-y-1 whitespace-nowrap">
+                  <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
+                  {dateBadge(p.telco_perks_start, p.telco_perks_end)}
+                </div>
+              ) : <span className="text-gray-400">-</span> },
+            { key: "perks", label: "Nội dung", render: p => <span className="text-gray-800 dark:text-slate-200 max-w-[280px] block whitespace-pre-wrap leading-relaxed">{p.telco_perks}</span> },
+            { key: "listing", label: "Tên gói (VN)", render: p => p.listing_name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span> },
+          ]}
+        />
       )}
     </div>
   )

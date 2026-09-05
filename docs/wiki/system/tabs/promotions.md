@@ -45,6 +45,11 @@ Bảng `promotions`:
 
 ---
 
+## UI (s193, 2026-09-05)
+Bảng danh sách đổi từ `<table>` tay sang `DataTable` (`dashboard-kit.tsx`) — có phân trang sẵn (trước hiện
+hết toàn bộ danh sách, không phân trang). Giữ nguyên toàn bộ badge màu theo vendor/loại SIM/trạng thái KM
+(đã dùng đúng màu ngữ nghĩa từ trước, không cần đổi). Không đổi logic search/filter.
+
 ## 4. Phân Quyền
 - **Standard / Staff / BOD**: Chỉ xem danh sách khuyến mãi đang chạy.
 - **Manager / Admin / Creator**: Có quyền quản lý hoàn toàn (thêm, sửa, xóa, liên kết SKU). Giao diện hiển thị thêm cột đếm số lượng SKU liên kết đối với tài khoản quản trị.\n

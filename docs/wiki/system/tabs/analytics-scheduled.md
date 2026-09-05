@@ -153,6 +153,12 @@ Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/
 - **SỬA/XÓA/BẬT-TẮT/TEST (POST/PUT/DELETE)**: chỉ **Admin & Creator**. Người chỉ-xem không thấy nút thao tác (read-only).
 - `created_by` lưu khi tạo (POST). Trang `/analytics/scheduled` (cột Người tạo) + admin ScheduledTab (badge người tạo) đều hiển thị.
 
+## UI (s193, 2026-09-05)
+Bảng danh sách lịch đổi từ `<table>` tay sang `DataTable` (`dashboard-kit.tsx`) — có phân trang sẵn (trước
+không phân trang). Bỏ pattern "nút thao tác chỉ hiện khi hover" (`opacity-0 group-hover`) vì `DataTable`
+chưa hỗ trợ `group` per-row — nút Test/Sửa/Xoá nay luôn hiển thị (đơn giản hơn, ít lịch nên không ảnh hưởng
+mật độ). Toàn bộ `blue-*` (nút, focus ring, spinner) đổi sang `brand-*`. Không đổi logic lưu/test/cron.
+
 ---
 
 ## Data Sources

@@ -8584,3 +8584,41 @@ Gấu Pro: xuất file.
 Bé Gấu vs Gấu Pro coi như đóng hết 2 gap chính từ audit s192 (upload ảnh/file + xuất file). Gap nhỏ còn lại
 chưa làm (auto date context, chart nâng cao stacked/waterfall/scatter, voice input, followup chips) — để
 dành làm khi Hiếu yêu cầu tiếp.
+
+## Session s193 (2026-09-05, tiếp) — UI Đợt "quick-win": All-Time, Scheduled, Schema, Promotions, Countries
+
+Hiếu chọn tiếp tục redesign UI theo hướng "quick-win nhỏ trước" (thay vì Lô 2 chính thức B2B/B2C, hoặc chỉ
+sửa hex sai) từ audit UI/UX s192. Đọc lại 5 file trước khi sửa (audit s192 chỉ ghi số dòng, chưa xem chi
+tiết bên trong) — phát hiện các trang này không hẳn "trắng đen" như All-Time (đã có card/gradient màu riêng
+nhưng dùng hex Tailwind blue/indigo tuỳ hứng, không phải token brand), nhưng Promotions/Countries đúng là
+bảng `<table>` tay không phân trang — khớp đúng mô tả gốc của Hiếu.
+
+- **All-Time**: gradient area chart + legend + text màu bảng breakdown đổi từ `#2563eb`/`#93c5fd`/`#312e81`
+  (tuỳ hứng) sang bảng nhất quán: B2B-Strategic = `brand-600` (#0f4c81), B2B-Non-Strategic = `brand-300`
+  (cùng họ brand, nhạt hơn — thể hiện "cùng nhóm B2B"), B2C = `emerald-600` (tách hue rõ khỏi B2B). Dùng
+  `CHART_GRID_COLOR`/`chartTooltipStyle` từ `dashboard-kit.tsx` thay style viết tay. Mọi nút khác (Filter
+  toggle, Apply Filters, focus ring input, metric-selector "Revenue") đổi `blue-*`→`brand-*`. KHÔNG động
+  vào 3 nút chọn metric (Revenue/GPM/CM1) — chúng vừa là KPI card vừa là toggle nên không thay bằng
+  `StatTile` được (StatTile không có khái niệm active/onClick).
+- **Scheduled**: bảng danh sách lịch (`<table>` tay, 5 cột + cột thao tác) đổi sang `DataTable` — thêm
+  phân trang 20 dòng/trang (trước hiện hết không phân trang). Bỏ pattern `opacity-0 group-hover:opacity-100`
+  cho nút Test/Sửa/Xoá (DataTable chưa hỗ trợ class `group` per-row) → nút luôn hiện thay vì chỉ hiện khi
+  hover — đơn giản hơn, chấp nhận được vì danh sách lịch thường ít dòng. Toàn bộ `blue-*` (16 chỗ: nút
+  Lưu/Sync, spinner, input, button primary) đổi `brand-*` qua `sed`.
+- **Schema**: CHỈ đổi `blue-*`→`brand-*` (13 chỗ) — đây là trang form editor (thêm/sửa bảng-cột tay cho AI
+  hiểu schema), không phải bảng liệt kê nên KHÔNG áp `DataTable`.
+- **Promotions**: bảng khuyến mãi (1 bảng, 6 cột) đổi sang `DataTable` — thêm phân trang (trước không có).
+  Giữ nguyên toàn bộ badge màu vendor/SIM/trạng thái KM (đã đúng màu ngữ nghĩa phân loại từ trước, không
+  phải "hex sai" cần sửa).
+- **Countries**: cả 4 sub-tab (Mã Nước/Nhóm Nước Hỗ Trợ/Category/Mã Vendor) đổi 4 bảng `<table>` tay sang
+  `DataTable` — quan trọng nhất là **"Mã Nước" trước hiện hết 271 dòng không phân trang**, nay có phân
+  trang 20/trang. Badge "Đa quốc gia" đổi hex lạc `blue-100/blue-700` sang `brand-100/brand-700` (trang
+  này đã dùng `brand-700` cho mọi mã code khác, chỉ badge này lạc màu).
+- Cách làm: đọc kỹ từng file trước khi sửa (không đoán), dùng `sed 's/blue-/brand-/g'` cho các file chỉ cần
+  đổi token màu thuần tuý (an toàn, verify bằng tsc+lint sau đó), sửa tay từng đoạn `<table>`→`DataTable`
+  cho các file cần đổi cấu trúc (giữ nguyên mọi cell render/badge/logic, chỉ đổi khung bảng).
+- tsc + `next lint` (0 lỗi mới; 2 warning trong scheduled/page.tsx là pre-existing — `useRef` unused +
+  1 useEffect missing dep, không phải do đợt sửa này) + vitest (185/185) PASS.
+  **CHƯA verify Chrome/staging thật** (máy dev không chạy được dev server) — Hiếu cần tự xem 5 trang này
+  trên staging trước khi chọn lô UI tiếp theo (Lô 2: B2B, hoặc lô sửa-hex-sai riêng 7 file `#003B95` còn
+  sót từ audit s192).

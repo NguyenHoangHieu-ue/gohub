@@ -61,6 +61,11 @@ Hệ thống GoHub Intel áp dụng quy chế phân quyền chặt chẽ thông 
 - **Creator Settings**: Chỉ tài khoản có vai trò duy nhất là **`creator`** mới có quyền truy cập và thao tác.
 - **Creator Dev Tools**: CHỈ role **`creator`** (page + cả 2 API đều chặn admin).
 
+## UI (s193, 2026-09-05)
+Trang Schema Config đổi toàn bộ `blue-*` (icon, focus ring, nút Lưu/Sync, badge AI Suggest) sang `brand-*`
+— khớp token thương hiệu thật (`brand-600 = #0f4c81`). Đây là trang editor dạng form (thêm/sửa bảng-cột
+tay), không phải bảng liệt kê nên KHÔNG áp `DataTable`. Không đổi logic sync/save/AI-suggest.
+
 ---
 
 ## Data Sources

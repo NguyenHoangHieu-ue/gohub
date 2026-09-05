@@ -39,6 +39,12 @@ API `/api/countries` đọc các bảng ref: **`ref_countries`, `ref_support_cou
 
 ---
 
+## UI (s193, 2026-09-05)
+Cả 4 sub-tab (Mã Nước/Nhóm Nước Hỗ Trợ/Category/Mã Vendor) đổi bảng `<table>` tay sang `DataTable`
+(`dashboard-kit.tsx`) — có phân trang sẵn (trước hiện hết toàn bộ danh sách, "Mã Nước" 271 dòng không phân
+trang). Badge "Đa quốc gia" đổi hex lạc `blue-100/blue-700` sang `brand-100/brand-700` khớp token đã dùng
+mọi nơi khác trong trang. Không đổi logic search/filter.
+
 ## 4. Phân Quyền
 - **Standard / Staff / BOD**: Được truy cập để xem và tra cứu danh mục phục vụ công tác bán hàng hoặc đối chiếu vận hành.
 - **Manager / Admin / Creator**: Có quyền cập nhật thông tin quốc gia, chỉnh sửa tên hiển thị hoặc thêm nhóm địa lý mới khi có điều chỉnh.\n
