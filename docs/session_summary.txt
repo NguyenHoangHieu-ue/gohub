@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-21 (Session 157 — fix Daily Report + Squad Progress CM1 + 3HK Rev display).
+Cập nhật lần cuối: 2026-09-05 (Session 189 — Phase 6: lint script thật + trim CLAUDE.md).
 
 ## ══════ SESSION 157 (2026-08-21) — DAILY REPORT FIX + SQUAD PROGRESS CM1 + 3HK REV ══════
 
@@ -8210,3 +8210,281 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
 - tsc PASS toàn bộ 2 lần (giữa chừng + cuối).
 - Wiki: docs/wiki/Tab/analytics-to-gau.md thêm §"Fix identity-collision" ngay dưới bảng chat_group_members,
   đánh dấu cột user_email/added_by giờ lưu username không phải email thật.
+
+## Session s164 (2026-08-27)
+### Rebuild tab My Metrics (OKR cá nhân Hiếu) cho minh bạch/đáng tin hơn
+- Lý do: Hiếu chưa ưng ý số liệu, sếp (Bảo) chưa tin số chính xác. Đọc offer letter thật lấy đúng 5 KPI +
+  trọng số 70/30 time-allocation. Hỏi Hiếu chốt 3 quyết định trước khi code: SKU GM giữ cả verified+blended;
+  Bé Gấu đếm company-wide có lọc "trả lời được"; SLA/Vendor Speed giữ manual nhưng siết trust.
+- Migration v44_okr_tracking.sql (Hiếu đã chạy): ghi lại schema okr_evidence_records + cột audit
+  updated_by/updated_at + bảng mới okr_sku_tags.
+- SKU GM verified (mới): api/analytics/my-metrics/sku-tags — Hiếu tag SKU + ngày áp dụng giá/rate mới → API
+  tự so margin THẬT (gohub_dw) trước/sau ngày đó. SKU mới so baseline công ty 36.7%. Weighted theo revenue.
+- Evidence SLA/Vendor Speed siết trust: bắt buộc đủ 2 ảnh mới tính vào TB KPI; audit trail; khoá quý đã đóng
+  (isQuarterLocked).
+- Weighted OKR Score (card mới): Σ(đạt-%ᵢ × trọng-sốᵢ)/100, trọng số 70/30 theo offer letter, 4 chỉ số nhóm
+  70% chia đều 17.5% — hằng số WEIGHTS sửa được nếu sếp chốt khác.
+- File mới: lib/okr-helpers.ts. Wiki mới: analytics-my-metrics.md (tab trước đây chưa có wiki).
+
+## Session s165 (2026-08-27)
+### Fix quyền ghi (write) admin bị 403 oan trên nhiều tab analytics
+- Hiếu báo: admin không sửa được Target Squad trong Squad Progress. Root cause: JWT stale — squad-targets/
+  route.ts (và 33 route ghi khác) check role bằng session.user.role (JWT) trực tiếp, không fallback đọc role
+  tươi từ DB. JWT maxAge = 1 ngày (giảm từ 7 ở s159) → role DB đổi mà chưa re-login → JWT role cũ → 403 dù
+  FE đã cho hiện nút (FE dùng role tươi qua /api/user/me).
+- Thêm canWrite(session, tabKey, baseRoles) trong lib/writable-tabs.ts: fast-path JWT trước → fallback
+  canWriteTab (role tươi qua getDbRole) khi fast-path fail. Áp cho 34 route ghi dính cùng họ bug (Quarter
+  Report, Channels, Settings/Users/Products/B2C/Targets/SQL/Schema...) — chỉ nới, không siết quyền nào.
+- Không đụng: config/tab-visibility, usage-stats/*, to-gau/*, kb/documents, ncc/import-*, feedbacks, chat,
+  creator-ai/*, analytics/query (permission model khác, không phải bug).
+
+## Session s166 (2026-08-27)
+### Fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan
+- Đối chiếu custPr() (quarterly/page.tsx) với calcCustCm1AndPr (squad-progress/route.ts) — cost dạng
+  "amount" (tiền cố định/tháng) bị Squad Progress hardcode elapsedRatio=1 rồi VẪN nhân CM1 với
+  factor=dim/elapsed → cost amount bị nhân đúp theo factor, CM1 thấp hơn Tổng quan có hệ thống GIỮA THÁNG
+  (đầu/cuối tháng elapsed≈dim nên không lộ, dễ sót khi QA).
+- Fix: thêm elapsedRatioOf(i) khớp công thức Tổng quan, áp cho cả 2 chỗ gọi calcRecordCostProjected
+  (per-customer + squad-level recompute).
+
+## Session s167 (2026-08-27)
+### Rebuild My Metrics lần 2 — theo offer letter thật + bot Lark tự động phát hiện SLA/Vendor Speed
+- Đọc offer letter thật xác nhận số Q4 trước đó là ước lượng (PDF gốc cắt cột Target Q4). Hỏi Hiếu chốt 3
+  quyết định: nguồn Lark = 1 group có sẵn; nhận diện = AI đề xuất + Hiếu duyệt 1-click; SKU scope = quét
+  toàn hệ thống theo Pareto doanh thu + SKU mới.
+- SKU Gross Margin: bỏ hẳn tag tay, quét TOÀN BỘ SKU công ty (api/analytics/my-metrics/sku-scan) — so GM%
+  quý này vs trước, Pareto 80% doanh thu = "trọng điểm" + SKU mới trong quý, weighted theo revenue = KPI
+  chính thức. okr_sku_tags hạ cấp thành ghi chú tuỳ chọn.
+- Bot Lark tự động: cron my-metrics-lark-scan (1x/ngày 17:00 ICT — 4x/ngày ban đầu bị Vercel Hobby reject)
+  quét 1 group Lark → Gemini (okr-lark-classify.ts) phân loại Product Request (SLA)/Vendor Rate Query → ghi
+  okr_lark_events (pending_review) + DM Lark báo case mới. Hiếu duyệt Xác nhận/Sửa giờ/Từ chối trong panel.
+- Tách lib/lark-thread-scan.ts (fetchRecentThreads) từ Cà Thread ra dùng chung.
+- Migration v45_okr_lark_events.sql (Hiếu đã chạy).
+- **Cùng ngày, follow-up**: Hiếu báo set 30 ngày quét ra 0 case + màu chưa ổn. 2 bug thật: (1) trần cứng 5
+  trang fetch (250 tin) không scale theo days_back → cửa sổ 30 ngày không bao giờ được fetch hết, fix scale
+  theo daysBack; (2) không lưu case bị AI từ chối → cron giẫm chân vô hạn, fix ghi status='not_matched' để
+  dedupe đẩy cron tiến qua backlog. Thêm lib/lark-scan-runner.ts + nút "Quét ngay để test".
+- Màu sửa lần 2: hex #003B95 tự đoán lúc đầu SAI — brand color thật là brand-600=#0f4c81 (tailwind.config.ts)
+  — đổi toàn bộ sang class brand-*.
+
+## Session s168 (2026-08-28)
+### Fix 2 bug thật trong Scheduled Messages (Daily/Weekly/Monthly Report)
+- Lỗi "column f.fulfiled_date does not exist" toàn bộ report fail: fetchBODGroupMarginData (lib/bod-data.ts)
+  — CTE filtered_f không SELECT cột ngày nhưng query ngoài dùng TO_CHAR(f.${dateCol}::date,...) tham chiếu
+  CTE đó. Fix: thêm ${source.dateCol} vào SELECT của CTE. Commit 92d4a5d.
+- Daily Report mục 【3】 thiếu target quý: root cause getQuarterTargets nuốt im lặng MỌI lỗi Turso, không
+  phân biệt lỗi thật với thiếu data. Fix log lỗi + tách 2 thông báo. Hiếu xác nhận: do thiếu data thật (chưa
+  nhập target Q3), không phải lỗi code. Commit 984b4e8.
+
+## Session s168b/s169 (2026-08-28)
+### Audit toàn diện B2B Performance ↔ Quarter Report — 7 bug thật (CM1 sai + cache không đồng bộ)
+1. B2B Performance thiếu lọc KH INACTIVE (b2b/kpis, b2b/performance, b2b/trend) — Quarter Report lọc từ lâu,
+   3 route B2B Performance thì không → Revenue/GP/CM1 cao hơn có hệ thống. Thêm excludeInactiveCustomers()
+   dùng chung. Vá luôn b2b/trend thiếu cả 3 filter chuẩn (includeShip/includeInternalOps/includeOpsCustomers).
+2. Sub-channel CM1 breakdown cao hơn CM1 hàng cha (b2b/performance) — sub_channels.gpm2 chỉ trừ cost khớp
+   ĐÚNG TÊN sub-channel (gần như không khớp cho B2B) → bỏ qua chCost Turso + group cost (case thật: Momo
+   cm1=215tr nhưng sub-channel cộng lại 437tr). Fix: phần cost chung phân bổ theo tỷ trọng revenue.
+3. Root cause chính "sửa cost ở Quarter Report không cập nhật B2B Performance": /api/analytics/
+   b2b-customer-costs KHÔNG flush cache nào — channel-costs/channel-group-costs (Supabase) đã flush từ lâu.
+   Ảnh hưởng: channels/*, bod-*, monthly-kpis, all-time-performance đều cache tới 12h. Fix: flushAnalyticsCache()
+   sau khi lưu/xoá cost (3 route ghi). Vá luôn quarterly-cache-flush (prefix list cứng lỗi thời v7 trong khi
+   key thật đã lên v9).
+4. b2b/performance: mẫu số chia group cost theo tỷ trọng revenue tính từ danh sách cap .slice(0,500) → CM1
+   tổng lệch nhẹ khi >500 KH/kênh. Đổi mẫu số sang tổng doanh thu không cap.
+5. Bảng B2B Tier Performance (FE): 2 chỗ field cm1 không đồng bộ gpm2 khi lọc trùng Strategic / merge 2 dòng
+   cùng tên khác customer_code — chỉ cộng gpm2 không cộng cm1/ch_cost.
+6. Squad Progress — 2 bug field-mismatch flat view: cột "GP PR" đọc field c.gp_pr KHÔNG TỒN TẠI → luôn "0";
+   cột "%TGT CM1" đọc nhầm c.cm1_pct thay vì c.cm1_tgt_pct. Root cause: flat view là JSX viết tay riêng,
+   không share component với per-squad view.
+7. Squad Progress không hiện companyCode (ALL/VN/US) đang chọn trong tiêu đề card — 2 người khác companyCode
+   ra số khác THẬT nhưng không có dấu hiệu nhận ra (route zero role-branching/cache, không phải bug code).
+- s169(c) — TỰ GÂY RA rồi tự fix cùng ngày: fix mục 3 dùng flushAnalyticsCache() (xoá sạch bảng) sau mỗi lần
+  sửa cost → nuke cache MỌI tab không liên quan lặp lại nhiều lần trong session test → "web load lâu quá".
+  Fix: B2B_COST_CACHE_PREFIXES + flushB2BCostCaches() (analytics-helpers.ts) — chỉ flush đúng route phụ
+  thuộc cost B2B. quarterly-cache-flush đổi sang import hằng số trực tiếp từ lib/quarterly-settings.ts.
+
+## Session s170(a)-(c) (2026-08-31)
+- (a) bỏ filter SG/HK Orders. (b) audit + vá 4 lỗ hổng bảo mật Tổ Gấu.
+- (c) Weekly Report: nút "Create Weekly Report" (Scheduled Messages) → POST
+  api/admin/scheduled-messages/weekly-report → tính số liệu + render .docx. Ảnh minh chứng vẽ bằng
+  next/og ImageResponse (không Puppeteer). markdownToDocx tách ra lib/docx-markdown.ts dùng chung với
+  creator-ai/export, thêm marker ![[IMG:key]]. fetchChannelMoM() (lib/weekly-report/data.ts) tính pro-rata
+  theo từng channel, filter khớp B2B Performance. PDF làm rồi BỎ theo yêu cầu Hiếu sau khi test .docx ổn.
+  File: web/src/lib/weekly-report/{period,data,narrative,card-images,report-content,docx-export}.ts.
+  Hiếu đã test trên staging: file .docx xuất ra ổn kể cả card ảnh.
+
+## Session s171 (2026-08-31)
+### Audit tab My Metrics ("quét ra tab My Metrics") — 3 bug thật, đã fix
+- HIGH: 2 route lark-config/lark-config/scan-now check quyền bằng JWT role thay role tươi DB (cùng họ bug
+  s165, route thêm sau s165 nên sót) — đổi sang canWriteTab().
+- MEDIUM: %3HK+BC Datapool (my-metrics/route.ts) có thể đếm trùng doanh thu nếu dim_sku có SKU trùng dòng
+  khác vendor — đổi sang 1 JOIN dedupe DISTINCT ON + 1 CASE.
+- LOW: conversations/route.ts tự tính lại quarter range thay vì dùng chung parseQuarterLabel() — đổi sang
+  dùng chung, hết phụ thuộc timezone server.
+
+## Session s172 (2026-08-31)
+### Rebuild UI tab My Metrics (trẻ trung/hiện đại/rõ ràng, theo yêu cầu Hiếu)
+- Thêm 4 chart mới (my-metrics-charts.tsx, cùng pattern bod-charts.tsx): radar Weighted Score, area
+  %Datapool theo tháng, stacked bar Bé Gấu theo tháng, bar ngang SKU GM movers — dùng lại data đã fetch.
+- Gom mọi ghi chú/công thức luôn-hiện-inline vào NotesDrawer (slide-over, nút "📖 Cách tính"). Polish hero
+  sang gradient dùng đúng scale brand-* có sẵn. CHỈ đổi presentation, không đổi công thức/API nào.
+
+## Session s173 (2026-08-31)
+### Lark bot My Metrics chuyển real-time capture, bỏ giới hạn 1 group
+- Hiếu đưa mẫu Hieu/lark-sla-bot yêu cầu áp dụng — KHÔNG deploy bot riêng, tích hợp thẳng vào webhook Lark
+  có sẵn (api/lark/events). Thêm tap fire-and-forget (lib/okr-lark-capture.ts) ghi mọi tin Hiếu tự gửi HOẶC
+  được @mention (bất kỳ group nào bot có mặt) vào bảng mới okr_lark_message_log (migration v46).
+- lark-thread-scan.ts thêm fetchThreadsFromCapturedLog() (đọc thread_id từ log rồi hydrate qua REST).
+- Config lark-config bỏ hẳn field chat_id. LarkThread type thêm chat_id (mỗi thread có thể ở group khác).
+- Hạn chế biết trước: không có dữ liệu lịch sử (chỉ capture từ lúc deploy), cần Hiếu đã Kết nối Lark cá
+  nhân + bot đã add vào group liên quan.
+
+## Session s174 (2026-08-31)
+### Mở rộng phân loại "sla" + bảng 20 dòng/trang (My Metrics)
+- SYSTEM_PROMPT (lib/okr-lark-classify.ts) nêu rõ 3 nhóm ví dụ SLA (tạo/thêm SP · cung cấp/xác nhận thông
+  tin · báo lỗi SP) + "các dạng khác cùng bản chất" — Gemini tự suy luận theo tinh thần, không so khớp từ
+  khoá cứng.
+- Fix bug: prompt cũ dặn trả is_match=false cho thread CHƯA hoàn thành → thread biến mất khỏi hàng chờ
+  duyệt. Đổi: request thật chưa xong → is_match=true, completion_reply_index=null → HIỆN trong hàng chờ.
+- DataTable (component dùng chung) đổi pageSize mặc định 50→20, áp cho mọi bảng trong tab.
+
+## Session s175 (2026-08-31)
+### Fix ROOT CAUSE "0 case" thật + auto-size chart + Bé Gấu Insights
+- Bug thật: máy dev LẦN NÀY có credential Supabase → query trực tiếp okr_lark_message_log = 0 dòng → truy
+  ngược getLarkUserOpenId() đọc field open_id từ app_settings.lark_oauth_creator, record thật KHÔNG CÓ field
+  này. Root cause: oauth/callback/route.ts gọi saveLarkUserToken(tok, tok.open_id) — Lark OAuth v2
+  token-exchange response KHÔNG có field open_id (phải gọi riêng GET /authen/v1/user_info) — bug có từ lúc
+  code viết, không phải bug mới s173.
+- Fix + backfill NGAY: thêm getLarkSelfOpenId() gọi đúng endpoint; BACKFILL trực tiếp Supabase bằng
+  access_token còn hạn — không cần Hiếu re-OAuth.
+- Side-fix: mọi tính năng khác âm thầm bị cùng bug (DM cảnh báo case mới, gán task assignee Gấu Pro) cũng
+  hết lỗi luôn.
+- Chart SKU/tên tự lấn chữ → auto-size YAxis theo độ dài chuỗi dài nhất trong data (SkuMoversChart +
+  TopUsersChart).
+- Bé Gấu Insights (mới): route begau-insights + lib/begau-insights.ts — top người dùng, chủ đề hay hỏi (đếm
+  tần suất từ khoá, KHÔNG AI), chấm điểm câu trả lời (heuristic rõ ràng, không phải AI chấm). Verify chạy
+  thật trên Supabase Q3-2026 (328 task): top user Hồ Công Minh 74 task, chất lượng TB 93.0 điểm.
+
+## Session s176 (2026-08-31)
+### Bug KHẨN — Lark webhook production reject 100% request thật
+- Hiếu báo tạo group Lark mới + test → vẫn 0 case dù s175 đã fix open_id. Điều tra bằng Vercel runtime log
+  thật (không đoán): log preview (staging) ZERO request /api/lark/events trong khung giờ Hiếu test — webhook
+  Lark trỏ về production. Log production cùng khung giờ → CÓ 12 request nhưng TOÀN BỘ bị reject:
+  "[Lark] signature mismatch".
+- Root cause thật: verifyLarkSignature() ký HMAC-SHA256 bằng LARK_VERIFICATION_TOKEN — nhưng spec Lark khi
+  app bật Encrypt Key (app này CÓ bật) yêu cầu chữ ký = sha256(timestamp+nonce+ENCRYPT_KEY+rawBody) — SHA256
+  THƯỜNG không phải HMAC, dùng Encrypt Key chứ không phải Verification Token. Sai cả 2 chỗ → reject 100% bất
+  kể LARK_VERIFICATION_TOKEN set gì. Bug có từ s159 (lúc thêm chữ ký hardening) — không liên quan s171-175.
+- 🔴 Hệ quả nghiêm trọng hơn phạm vi My Metrics: bug này chặn MỌI request Lark thật tới production từ
+  2026-08-24 — Bé Gấu (chatbot chính) trên Lark không trả lời ai suốt từ đó tới giờ.
+- Fix: đổi verifyLarkSignature dùng LARK_ENCRYPT_KEY + createHash("sha256").
+- Chart SKU movers lấn chữ (lần 2): fix trước (auto-width ước lượng px/ký tự) vẫn sai vì SVG text không tự
+  wrap theo layout Recharts YAxis. Đổi: width CỐ ĐỊNH 92px + cắt chuỗi bằng tickFormatter (ellipsis sau 11
+  ký tự), tên đầy đủ xem qua Tooltip khi hover.
+
+## Session s177-s180 (2026-08-31)
+### Chuỗi fix Lark bot My Metrics sau khi Hiếu bắt đầu test tay thật (sau s176 fix chữ ký)
+- s177: classifyLarkThread có catch{return null} nuốt im lặng mọi lỗi Gemini → thêm console.error +
+  classify_errors trả về FE, hiển thị "Đã quét N group: tên (n thread)".
+- s177(b): root cause thật "Gemini không trả JSON" — gemini-3.6-flash tốn token cho "thinking" ẩn ăn hết
+  maxOutputTokens, JSON bị cắt cụt giữa chừng. thinkingConfig:{thinkingBudget:0} bị model reject 400. Fix
+  thật: bump maxOutputTokens 500→4000.
+- s178: case chờ duyệt không đủ thông tin — snippet bị CSS truncate 1 dòng. Fix: resolve chat_name qua Lark
+  API, thêm badge group + link mở thẳng Lark, bỏ truncate.
+- s179: Hiếu báo 1 group mention nhiều nhưng chỉ quét ra 1 case — tra Vercel log xác nhận 3 tiếng production
+  chỉ nhận đúng 1 request /api/lark/events thật (mention "rất nhiều" là tin CŨ trước lúc webhook sống — bug
+  s176 chặn tới tận hôm nay), không phải bug mới. Thêm "Quét lịch sử 1 lần" (runLarkHistoryScan, dùng lại
+  fetchRecentThreads) + listBotChats() route liệt kê group cho Hiếu chọn.
+- s180: case Lark confirm nhầm không xoá được (chỉ có action cho nguồn manual). Thêm route DELETE
+  lark-events/[id] — xoá hẳn để message_id hết bị dedupe, thread thật tự trôi lại hàng chờ duyệt.
+- Đã merge main (2026-08-31).
+
+## Session s183 (2026-09-04)
+### Tái cấu trúc docs/wiki/ thành business/ + system/ — Phase 0 plan rebuild toàn diện
+- Bối cảnh: Hiếu báo hệ thống "đang không ok" — sửa xong 1 chỗ, lỗi tương tự lộ ra chỗ khác. Audit xác nhận
+  root cause kỹ thuật cụ thể: không có 1 nơi tính CM1/cost duy nhất (20 file tự cài lại logic), 37 file tự
+  quản cache key riêng (từng nuke nhầm cache toàn app ở s169(c)), trang FE khổng lồ JSX chép tay 2 lần
+  (quarterly 3077 dòng, to-gau 2843, channels 1944, my-metrics 1809), 85 route gần trùng mục đích, rate
+  limit chỉ 2 route dùng in-memory Map, không có lint script thật dù docs mô tả có, chỉ 15 file test cho
+  85+ route/33 trang.
+- Plan rebuild 7 phase (lưu C:\Users\nhhie\.claude\plans\effervescent-zooming-wilkinson.md, Hiếu đã duyệt):
+  Phase 0 tài liệu, Phase 1 Analytics Reporting Engine, Phase 2 migrate route theo tab, Phase 3 gộp tab
+  trùng, Phase 4 Upstash+cache, Phase 5 dọn FE khổng lồ, Phase 6 vá quy trình lint/test.
+- Phase 0: 13 file nghiệp vụ → docs/wiki/business/*.md (viết lại HẲN văn bản, bỏ mọi bảng kể cả bảng tra
+  mã). 34 file kỹ thuật → docs/wiki/system/ + system/tabs/ (dọn nguyên khối, không đổi nội dung). Cập nhật
+  HOME.md + link nội bộ + path CLAUDE.md.
+
+## Session s184 (2026-09-04)
+### Phase 1 — engine getKpiFactor/getElapsedRatio + 30 test mới
+- analytics-engine/quarter-projection.ts thêm 2 hàm dùng chung thay kpiPrFactor/monthKpiFactor
+  (quarterly/page.tsx) và kpiFactorOf/elapsedRatioOf (squad-progress/route.ts) tự định nghĩa lại y hệt nhau
+  — root cause bug s166/s181/s182. CHƯA migrate route/page nào dùng hàm mới (đúng scope Phase 1).
+- Thêm 30 test case (cost-engine/projection/quarter-projection/b2b-customer-cost + excludeInactiveCustomers/
+  buildIsStrategicSql) — trước đây 0 test cho module tính CM1/chi phí.
+- Điều chỉnh so plan gốc: claim "20 file tự chép calcChCost" hơi quá, đa số route đã import đúng hàm chung —
+  chỉ Quarter Report (squad-progress + quarterly/page.tsx) thật sự có 3 bản trùng. Không tạo filters.ts/
+  cache.ts mới như plan gốc — analytics-helpers.ts đã gộp tốt, tạo thêm chỉ phân mảnh.
+- Phát hiện phụ (chưa sửa): buildQuarterMonthMeta trộn new Date(isoString) UTC với new Date(y,m,d) local —
+  đúng trên Vercel (UTC), lệch ±1 ngày nếu chạy máy dev timezone khác.
+
+## Session s185 (2026-09-04)
+### Phase 2 — fix bug thật All-Time + timezone date-math + migrate BOD/Quarter/B2B sang engine
+- Bug thật fix: (1) all-time-performance/route.ts — query chính CASE tham chiếu c.name/c.price_list_name
+  nhưng THIẾU LEFT JOIN dim_customer c, với DEFAULT_TIER_KEYWORDS mặc định không rỗng → CHẮC CHẮN lỗi SQL
+  thật; (2) bod-data.ts + cron/refresh-monthly-kpis — getDaysInMonth parse new Date() UTC rồi đọc lại
+  .getFullYear()/.getMonth() LOCAL, lệch ngày trên máy timezone âm (đúng trên Vercel/UTC nên chưa lộ prod).
+- Thêm lib/analytics-engine/date-math.ts (thuần, zero-dep, client-safe) làm nguồn duy nhất, thay 2 bản
+  trùng. Migrate squad-progress/quarterly-report/quarterly-b2b-customers (BE) + b2b/page.tsx (FE) sang gọi
+  hàm chung.
+- 8 test mới (date-math.test.ts, gồm timezone-invariance). tsc + vitest 173/173 PASS.
+
+## Session s186 (2026-09-04)
+### Phase 3 — dọn tàn dư Orders/Order Report đã gộp trước đó
+- Audit phát hiện: Orders + Order Report ĐÃ được gộp từ 1 session trước nhưng chưa dọn sạch — 2 route API
+  chết (GET /api/orders cũ, GET /api/staff-list) + 2 file wiki mô tả sai kiến trúc. Verify kỹ bằng grep
+  trước khi xoá — suýt xoá nhầm /api/orders/export (Products BI dùng) và /api/order-sources (vẫn sống).
+  Gộp 2 wiki thành analytics-orders.md, xoá analytics-order-report.md.
+- Candidate gộp khác (CS Troubleshoot/Feedback/3HK Usage/Website/All-Time) cần số usage thật
+  app_usage_events trước khi quyết — Hiếu chọn bỏ qua, chưa đụng.
+
+## Session s187 (2026-09-04)
+### Phase 4 — rate-limit chuyển Upstash Redis + mở rộng 4 route
+- lib/rate-limit.ts đổi từ in-memory Map (chỉ đúng 1 Vercel instance) sang Upstash Redis khi có env
+  UPSTASH_REDIS_REST_URL/_TOKEN — thiếu env tự rơi về in-memory cũ (opt-in). checkRateLimit() đổi async.
+- Mở rộng: POST /api/analytics/query (60/min/user) + POST /api/admin/sql-query (30/min/user) đúng khuyến
+  nghị operations-runbook.md §7. Thêm rate-limit.test.ts (4 test, trước đây 0 test).
+- Cần Hiếu: tạo tài khoản Upstash + set 2 env Vercel để limiter chặn thật cross-instance.
+
+## Session s188-s189 (2026-09-04/05)
+### Phase 5 — tách cơ học 4 trang FE khổng lồ (quarterly/channels/to-gau/my-metrics)
+- Nguyên tắc chốt với Hiếu: CHỈ tách cơ học (move nguyên khung JSX/logic, KHÔNG gộp khối JSX khác nhau) vì
+  máy dev không có .env.local → không chạy dev server verify UI bằng mắt, tsc là lưới an toàn duy nhất.
+- quarterly/page.tsx: 3077→2688 dòng (s188, tách KpiCard/TableHead/ColInfo/MomBadge/MonthSubRow/
+  QtSummaryRow/QtTargetRow/PivotTable) →1564 dòng (s189, tách nốt B2BTierSection ~1080 dòng — tổng -49%).
+- channels/page.tsx: 1944→1843 dòng (tách B2BCustomerDetail).
+- to-gau/[id]/page.tsx: 2843→1224 dòng (-57%, tách Avatar/SettingsModal/DocsPanel/NotesPanel/WikiPanel/
+  FilePreviewItem/AttachmentDisplay/ConfirmModal+useConfirm).
+- my-metrics/page.tsx: 1809→629 dòng (-65%, tách LarkReviewPanel/EvidenceCard/DatapoolDetailTable/
+  SkuScanSection/BegauInsightsSection/ScanResultBox/LarkConfigModal + UI dùng chung).
+- QA Chrome thật trên staging (Creator, data thật) xác nhận quarterly Tổng quan + channels PASS, không bug
+  do refactor. to-gau/My Metrics/B2BTierSection còn nợ Hiếu QA.
+- tsc + vitest 177/177 PASS + next build "Compiled successfully" sau mỗi file (lỗi collect-page-data do
+  thiếu .env.local, pre-existing).
+
+## Session s189 (2026-09-05, tiếp) — Phase 6 vá lỗ hổng quy trình
+- Hỏi Hiếu quyết định GitHub Actions CI — chọn giữ quy trình tsc-tay hiện tại, KHÔNG setup CI.
+- Thêm script lint thật: eslint + eslint-config-next + .eslintrc.json + "lint": "next lint" trong
+  package.json (trước đây package.json chỉ có dev/build/start/test/prepare dù docs mô tả có "Lint Stage").
+  Rule override pragmatic cho codebase 285+ file chưa từng chạy lint: no-explicit-any off (any dùng phổ
+  biến cho shape dữ liệu ngoài), no-unused-expressions off (pattern `cond ? a() : b()` toggle Set/Map là
+  code đúng, không phải bug), no-unused-vars/prefer-const/ban-ts-comment/no-unsafe-function-type hạ warn
+  (222 warning thật nhưng không chặn exit code). Fix 2 bug thật: cs-troubleshoot/page.tsx + analytics/
+  page.tsx dùng dấu gạch dài "—" thay "--" trong `// eslint-disable-line rule -- reason` → ESLint hiểu
+  nhầm cả chuỗi là tên rule → disable không có tác dụng thật (chưa từng chạy lint để lộ ra).
+  `next lint` nay chạy sạch: 0 error, 222 warning.
+- Mở rộng smoke test cho route đã migrate (Phase 2): KHÔNG làm được — máy dev không có credential DB thật
+  (ANALYTICS_DB_*/Supabase) nên không gọi API thật được, và các route import trực tiếp sẽ crash ngay ở
+  module load (giống lỗi "supabaseUrl is required" thấy khi next build) vì client Supabase/DB khởi tạo ở
+  top-level dùng env. Bỏ qua, không tự chế test giả tạo không giá trị thật.
+- Trim CLAUDE.md: dồn toàn bộ narrative s164-s189 (nội dung khối này) sang đây, CLAUDE.md chỉ giữ trạng
+  thái hiện tại + rule + checklist việc Hiếu cần làm.
