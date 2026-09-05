@@ -17,6 +17,7 @@ import { CostManagementModal } from "@/components/cost-management-modal"
 import { exportRawRows } from "@/lib/export-excel"
 import { useDbRole } from "@/lib/use-role-guard"
 import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
+import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -58,32 +59,32 @@ const Skeleton = ({ className }: { className?: string }) => (
   <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
 )
 
-const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-    <div className="flex items-center justify-between mb-4">
-      <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-        <Icon className="w-6 h-6" />
+// Màu icon theo Ý NGHĨA số liệu (đợt UI redesign s190+2, đồng bộ BOD/Dashboard) — trước đây cả 6 card
+// dùng chung 1 màu xanh dương, không phân biệt doanh thu/margin/số lượng.
+const METRIC_ACCENT: Record<string, MetricAccent> = {
+  "Total Revenue": "revenue", "Gross Profit": "margin", "Contribution Margin 1": "margin",
+  "Total Orders": "neutral", "Units Sold": "neutral", "Average Order Value": "positive",
+}
+
+const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => {
+  if (loading) {
+    return (
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <Skeleton className="h-9 w-9 rounded-xl" />
+        <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
       </div>
-      {loading ? (
-        <Skeleton className="h-5 w-12 rounded-full" />
-      ) : comparisonActive && (
-        <div className={cn(
-          "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full",
-          change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-        )}>
-          {change >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-          {Math.abs(change)}%
-        </div>
-      )}
-    </div>
-    <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-    {loading ? (
-      <Skeleton className="h-8 w-32" />
-    ) : (
-      <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-    )}
-  </div>
-)
+    )
+  }
+  return (
+    <StatTile
+      icon={<Icon className="w-5 h-5" />}
+      label={title}
+      value={value}
+      accent={METRIC_ACCENT[title] ?? "neutral"}
+      deltas={comparisonActive ? [{ label: "So sánh", value: `${change >= 0 ? "+" : ""}${change}%`, kind: change >= 0 ? "up" : "down" }] : undefined}
+    />
+  )
+}
 
 export default function ChannelPerformancePage() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -846,7 +847,7 @@ export default function ChannelPerformancePage() {
               {(["ALL","Strategic","VIP","Gold","Silver"] as const).map(t => (
                 <button key={t} onClick={() => { setB2bTierFilter(t); setSelectedCustomer(null) }}
                   className={cn("px-2.5 py-1 text-xs font-bold rounded-lg transition-all",
-                    b2bTierFilter === t ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                    b2bTierFilter === t ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                   {t === "ALL" ? "Tất cả" : t}
                 </button>
               ))}
@@ -1129,7 +1130,7 @@ export default function ChannelPerformancePage() {
             <div>
               {selectedCustomer ? (
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-[#003B95] hover:underline">
+                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-[#0f4c81] hover:underline">
                     ← Quay lại
                   </button>
                   <span className="text-slate-300">/</span>
@@ -1191,7 +1192,7 @@ export default function ChannelPerformancePage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#003B95]">
+                    <tr className="bg-[#0f4c81]">
                       <th className="px-5 py-3 text-xs font-bold text-slate-300 uppercase">Khách hàng</th>
                       <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Tier</th>
                       <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Bảng giá</th>
@@ -1221,7 +1222,7 @@ export default function ChannelPerformancePage() {
                             <tr key={i} className="hover:bg-blue-50/20 transition-colors cursor-pointer"
                               onClick={() => setSelectedCustomer(c)}>
                               <td className="px-5 py-3">
-                                <span className="text-sm font-bold text-slate-900 hover:text-[#003B95]">{c.customer_name}</span>
+                                <span className="text-sm font-bold text-slate-900 hover:text-[#0f4c81]">{c.customer_name}</span>
                               </td>
                               <td className="px-4 py-3">
                                 <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", tierBadge[c.tier] || "bg-slate-100 text-slate-500")}>{c.tier}</span>
