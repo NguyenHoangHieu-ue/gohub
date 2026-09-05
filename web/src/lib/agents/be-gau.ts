@@ -6,7 +6,7 @@ import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { SUPABASE_TABLES, SENSITIVE_TABLES, runQuerySupabase } from "./data-explorer"
 import { getRoleDataFilter }             from "./bi-analyst"
 import { getCustomRules }                from "./guardian"
-import { runWebSearch, runReadKnowledgeBase, type WebSource } from "./creator-ai"
+import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { sendLarkDM }                    from "@/lib/lark"
 import { compressHistory }              from "./creator/compress"
 
@@ -244,7 +244,14 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 
 ## Đa lượt hội thoại
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
-- Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"`
+- Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"
+
+## Phân tích file/ảnh người dùng gửi kèm
+- Đọc kỹ nội dung file/ảnh rồi trả lời đúng câu hỏi về nó.
+- Bảng tính/CSV: mô tả cấu trúc, đếm dòng, liệt kê cột, nêu số liệu chính nếu được hỏi.
+- Ảnh/PDF: mô tả nội dung, trích thông tin cần thiết (vd bảng giá NCC, ảnh chụp màn hình lỗi, hoá đơn).
+- File code: đọc và giải thích/trả lời theo đúng câu hỏi.
+- Không rõ người dùng muốn gì với file → hỏi lại ngắn gọn thay vì đoán.`
 
 // ─── Executor: gohub_dw SQL ─────────────────────────────────────────────────────
 async function execSQL(sql: string): Promise<any> {
@@ -415,8 +422,9 @@ export async function runBeGau(opts: {
   sessionId?: string
   isCost?: boolean          // canViewCogs
   extraDirective?: string   // vd quy tắc tạm thời
+  fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
 }): Promise<{ text: string; sources: WebSource[] }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "" } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
@@ -476,8 +484,33 @@ export async function runBeGau(opts: {
     generationConfig: { temperature: 0 },
   })
 
+  // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
+  const files    = fileContexts || []
+  const texts    = files.filter(f => f.type === "text")
+  const binaries = files.filter(f => f.type !== "text")
+  const msgText  = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
+
+  let userParts: any[]
+  if (files.length > 0) {
+    const textContent = texts.map(f => {
+      const raw = f.content.length > 50000
+        ? f.content.slice(0, 50000) + `\n... [cắt bớt — ${f.content.length} ký tự]`
+        : f.content
+      return `=== FILE: ${f.name} ===\n${raw}`
+    }).join("\n\n---\n\n")
+
+    userParts = binaries.length > 0
+      ? [
+          { text: msgText + (textContent ? `\n\n=== FILE VĂN BẢN KÈM THEO ===\n${textContent.slice(0, 20000)}` : "") },
+          ...binaries.map(b => ({ inlineData: { mimeType: b.mimeType || "application/octet-stream", data: b.content } })),
+        ]
+      : [{ text: `${msgText}\n\n${textContent}` }]
+  } else {
+    userParts = [{ text: msgText }]
+  }
+
   // Fix #8: dùng history đã nén
-  const contents: any[] = [...compressedHistory, { role: "user", parts: [{ text: lastMsg }] }]
+  const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
   // Fix #4: genWithRetry thay vì generateContent trực tiếp
   let genResult = await genWithRetry(model, { contents })
   const sources: WebSource[] = []

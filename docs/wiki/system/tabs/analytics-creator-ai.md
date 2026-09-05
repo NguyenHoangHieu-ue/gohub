@@ -123,6 +123,13 @@ AND c.name NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')
 
 - `genWithRetry` (creator-ai.ts): bọc mọi `model.generateContent` (initial + 20 vòng loop + fallback) → retry 3× backoff 0.8s/1.6s cho lỗi TẠM THỜI (429/quota/5xx/overload/timeout/network). Lỗi thật (prompt/schema) ném ngay. Trước đây 1 lỗi transient là hỏng cả request.
 
+## File upload dùng chung với Bé Gấu (s192, 2026-09-05)
+
+`FileContext` + `parseUploadedFile()` (đọc Excel/PPTX/DOCX/CSV/JSON/PDF/ảnh) đã tách ra
+`web/src/lib/agents/file-parser.ts` — `creator-ai.ts` giờ `import/export type { FileContext }` từ đó thay
+vì tự định nghĩa (không đổi hành vi Gấu Pro). Bé Gấu (`be-gau.ts`) nay dùng chung file này để có upload
+ảnh/file — xem [[chatbot]] mục 4a. Route `/api/creator-ai/chat` không đổi gì khác ngoài import.
+
 ## Xuất dữ liệu & báo cáo (2026-08-02)
 
 - **Excel FULL data từ SQL (fix "data cut >200 dòng")**: model chỉ THẤY 200 dòng đầu của executeSQL → nếu tự gõ lại vào \`\`\`csv thì cắt + sai. Nay model đặt \`sql:\` (câu SELECT gốc, đặt CUỐI marker \`\`\`export) → nút Excel gọi `POST /api/creator-ai/export {format:"xlsx", sql}` chạy lại query server-side → xuất TOÀN BỘ dòng. Guard: chỉ SELECT/WITH, 1 statement, creator/admin. Verify: query 146 KH → xlsx đủ 146 dòng.

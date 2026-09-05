@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
@@ -24,6 +24,24 @@ interface Conversation {
 
 interface StoredMessage extends Message {
   agent?: { id: string; name: string }
+  fileName?: string  // tên file đính kèm (hiển thị chip trên bong bóng user), không lưu DB
+}
+
+// ─── Đính kèm ảnh/file (s190+3) ────────────────────────────────────────────────
+const ATTACH_ACCEPT = ".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql,.yaml,.yml,.toml,.xml,.html,.sh"
+const ATTACH_MAX_MB    = 20
+const ATTACH_MAX_FILES = 5
+
+function isImageFile(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  return ["png","jpg","jpeg","webp","gif","bmp"].includes(ext)
+}
+
+function attachFileIcon(name: string) {
+  if (isImageFile(name)) return <ImageIcon size={13} />
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  if (["xlsx","xls","csv"].includes(ext)) return <FileSpreadsheet size={13} />
+  return <FileText size={13} />
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -219,9 +237,57 @@ export default function ChatbotPage() {
   const [mobileDrawer,   setMobileDrawer]  = useState(false)
   const [chatSidebar,    setChatSidebar]   = useState(true)   // desktop: show/hide conv list
 
+  // Đính kèm ảnh/file (s190+3)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [fileError,     setFileError]     = useState("")
+  const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
+  const [dragging,      setDragging]      = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const bottomRef   = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
   const msgCountRef = useRef(0)  // track message count for isFirst detection
+
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const newFiles  = Array.from(incoming)
+    const oversized = newFiles.filter(f => f.size > ATTACH_MAX_MB * 1024 * 1024)
+    const valid     = newFiles.filter(f => f.size <= ATTACH_MAX_MB * 1024 * 1024)
+
+    setFileError(oversized.length ? `File quá lớn (>${ATTACH_MAX_MB}MB): ${oversized.map(f => f.name).join(", ")}` : "")
+    if (!valid.length) return
+
+    setAttachedFiles(prev => [...prev, ...valid].slice(-ATTACH_MAX_FILES))
+    valid.filter(f => isImageFile(f.name)).forEach(f => {
+      const url = URL.createObjectURL(f)
+      setImgPreviews(prev => new Map(prev).set(f.name, url))
+    })
+  }, [])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) addFiles(e.target.files)
+    e.target.value = ""
+  }, [addFiles])
+
+  const removeAttachedFile = useCallback((name: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.name !== name))
+    setImgPreviews(prev => { const m = new Map(prev); m.delete(name); return m })
+  }, [])
+
+  // Paste ảnh từ clipboard (Ctrl+V)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
+
+  // Giải phóng object URL khi rời trang
+  useEffect(() => () => {
+    imgPreviews.forEach(url => URL.revokeObjectURL(url))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const busy = loading || streaming
 
@@ -369,7 +435,8 @@ export default function ChatbotPage() {
   // ─── Send ─────────────────────────────────────────────────────────────────
 
   const send = async (content: string) => {
-    if (!content.trim() || busy) return
+    const text = content.trim()
+    if ((!text && attachedFiles.length === 0) || busy) return
 
     // Ensure conversation exists
     let convId = activeConvId
@@ -380,11 +447,20 @@ export default function ChatbotPage() {
     }
 
     const isFirstMsg = msgCountRef.current === 0
+    const fileNames  = attachedFiles.map(f => f.name).join(", ")
 
-    const userMsg: StoredMessage = { role: "user", content }
+    const userMsg: StoredMessage = {
+      role:     "user",
+      content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
+      fileName: fileNames || undefined,
+    }
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
+    const filesToSend = [...attachedFiles]
+    setAttachedFiles([])
+    setImgPreviews(new Map())
+    setFileError("")
     setLoading(true)
     setAgentName(null)
     msgCountRef.current = next.length
@@ -396,11 +472,21 @@ export default function ChatbotPage() {
     let currentAgent: { id: string; name: string } | undefined
 
     try {
-      const res = await fetch("/api/chat", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages: next.map(m => ({ role: m.role, content: m.content })), userName }),
-      })
+      const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
+      let res: Response
+      if (filesToSend.length > 0) {
+        const form = new FormData()
+        form.append("messages", JSON.stringify(serializedMsgs))
+        form.append("userName", userName)
+        filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
+        res = await fetch("/api/chat", { method: "POST", body: form })
+      } else {
+        res = await fetch("/api/chat", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ messages: serializedMsgs, userName }),
+        })
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Lỗi không xác định" }))
@@ -459,7 +545,7 @@ export default function ChatbotPage() {
 
       // Update conversation title in list if first message
       if (isFirstMsg) {
-        const title = content.slice(0, 50) + (content.length > 50 ? "…" : "")
+        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? "…" : "")
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, title, updated_at: new Date().toISOString() } : c
         ))
@@ -614,7 +700,24 @@ export default function ChatbotPage() {
         </div>
 
         {/* Chat container */}
-        <div className="flex-1 bg-gray-50/80 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm">
+        <div
+          className="relative flex-1 bg-gray-50/80 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm"
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
+          onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+        >
+          {/* Drag overlay */}
+          {dragging && (
+            <div className="absolute inset-0 z-20 bg-brand-600/10 dark:bg-brand-400/10 border-4 border-dashed border-brand-400 rounded-2xl flex items-center justify-center pointer-events-none">
+              <div className="text-brand-600 dark:text-brand-300 text-lg font-bold flex flex-col items-center gap-2">
+                <Paperclip size={32} />
+                Thả file vào đây
+              </div>
+            </div>
+          )}
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" accept={ATTACH_ACCEPT} multiple className="hidden" onChange={handleFileSelect} />
+
           <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-4">
 
             {/* Empty state */}
@@ -657,6 +760,12 @@ export default function ChatbotPage() {
                   {msg.role === "assistant" && msg.agent && (
                     <span className={`text-[11px] px-2 py-0.5 rounded-md self-start font-medium tracking-wide ${AGENT_COLORS[msg.agent.id] ?? "bg-gray-100 text-gray-600"}`}>
                       {msg.agent.name}
+                    </span>
+                  )}
+                  {msg.role === "user" && msg.fileName && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-brand-100 bg-brand-700/60 rounded-lg self-end">
+                      {attachFileIcon(msg.fileName)}
+                      {msg.fileName}
                     </span>
                   )}
                   <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
@@ -769,14 +878,53 @@ export default function ChatbotPage() {
 
           {/* Input */}
           <div className="border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex-shrink-0 rounded-b-2xl">
+            {/* Chip file đã đính kèm */}
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {attachedFiles.map(f => {
+                  const preview = imgPreviews.get(f.name)
+                  return (
+                    <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-xl max-w-[220px]">
+                      {preview
+                        ? <img src={preview} alt={f.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                        : <span className="text-brand-600 dark:text-brand-400 shrink-0">{attachFileIcon(f.name)}</span>
+                      }
+                      <span className="text-xs text-brand-700 dark:text-brand-300 truncate flex-1">{f.name}</span>
+                      <button type="button" onClick={() => removeAttachedFile(f.name)} className="text-brand-300 hover:text-red-500 transition-colors shrink-0">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )
+                })}
+                {attachedFiles.length >= ATTACH_MAX_FILES && (
+                  <span className="text-[10px] text-amber-500 self-center ml-1">Tối đa {ATTACH_MAX_FILES} file</span>
+                )}
+              </div>
+            )}
+            {fileError && <p className="text-xs text-red-500 mb-2 px-1">{fileError}</p>}
+
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy || attachedFiles.length >= ATTACH_MAX_FILES}
+                title={`Đính kèm ảnh/file (tối đa ${ATTACH_MAX_FILES}) · Hoặc kéo thả / paste ảnh`}
+                className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
+              >
+                <Paperclip size={16} />
+                {attachedFiles.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {attachedFiles.length}
+                  </span>
+                )}
+              </button>
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
-                placeholder="Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."
+                placeholder={attachedFiles.length > 0 ? `Hỏi gì về ${attachedFiles.length} file này?` : "Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."}
                 disabled={busy}
                 className="flex-1 px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60 transition"
               />
-              <button type="submit" disabled={!input.trim() || busy}
+              <button type="submit" disabled={(!input.trim() && attachedFiles.length === 0) || busy}
                 className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
                 <Send size={15} />
               </button>

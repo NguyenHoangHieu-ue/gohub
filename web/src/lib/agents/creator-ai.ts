@@ -4,6 +4,8 @@ import { ga4Sites }           from "@/lib/ga4"
 import { getPartnerTiers }    from "@/lib/analytics-helpers"
 import type { WebSource }     from "@/lib/web-search"
 export { runWebSearch, type WebSource } from "@/lib/web-search"
+import type { FileContext }  from "./file-parser"
+export type { FileContext }  from "./file-parser"
 
 // ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
@@ -14,14 +16,7 @@ import { dispatchTool }          from "./creator/tools/dispatch"
 // Full access: gohub_dw + Supabase + GA4 + GSC + Web Search.
 // No guardian, no role filter, no restrictions.
 // Quality > Speed — max 20 function-calling iterations.
-
-export interface FileContext {
-  name:      string
-  type:      "text" | "image" | "pdf"
-  content:   string    // text content (for "text") or base64 (for "image"/"pdf")
-  mimeType?: string    // e.g. "image/png", "application/pdf"
-  extraText?: string   // additional text from sibling files when binary + text combined
-}
+// FileContext nay dùng chung với Bé Gấu qua ./file-parser (s190+3) — không chép lại logic.
 
 export type GPEvent =
   | { type: "status"; text: string }

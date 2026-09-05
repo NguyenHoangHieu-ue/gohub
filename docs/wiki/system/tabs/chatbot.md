@@ -84,6 +84,16 @@ Hệ thống sử dụng luồng xử lý hybrid kết hợp Deterministic Rules
 
 ---
 
+## 4a. Đính kèm ảnh/file (s192, 2026-09-05)
+
+`/api/chat` nay nhận thêm `multipart/form-data` (song song JSON cũ, tin nhắn thường không đổi hành vi) —
+FE `chatbot/page.tsx` có nút paperclip + kéo-thả + paste ảnh (Ctrl+V), tối đa **5 file/lượt, 20MB/file**.
+Dùng chung `parseUploadedFile()`/`FileContext` (`web/src/lib/agents/file-parser.ts`, tách ra từ Gấu Pro để
+2 agent không chép lại logic) — hỗ trợ PDF/ảnh (gửi thẳng Gemini multimodal qua `inlineData`), Excel→CSV,
+PPTX→text, DOCX→text, CSV/JSON/TXT/code→text thẳng. `runBeGau()` nhận thêm `fileContexts?: FileContext[]`,
+build parts y hệt cách `runCreatorAI` (Gấu Pro) làm. **Chưa có: xuất file** (Excel/Word/PDF) — Gấu Pro có,
+Bé Gấu chưa; đây là gap riêng, để làm khi Hiếu yêu cầu (không thuộc phạm vi s192).
+
 ## 4b. Lưu hội thoại & Ghi chú kỹ thuật
 - **Lịch sử chat** lưu Supabase: `conversations` + `chat_messages` (API `/api/chat/conversations` + `/[id]`).
 - **Đọc listings** trong tool: qua `pickListing()` (core cột + field `_vn`/network_operator từ JSONB `metadata`) — xem [[skus]].

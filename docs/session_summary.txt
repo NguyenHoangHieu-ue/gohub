@@ -8488,3 +8488,62 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
   top-level dùng env. Bỏ qua, không tự chế test giả tạo không giá trị thật.
 - Trim CLAUDE.md: dồn toàn bộ narrative s164-s189 (nội dung khối này) sang đây, CLAUDE.md chỉ giữ trạng
   thái hiện tại + rule + checklist việc Hiếu cần làm.
+
+## Session s192 (2026-09-05) — audit UI/UX 32 trang + Bé Gấu: thêm upload ảnh/file
+
+Theo yêu cầu Hiếu: "quét UI/UX mọi tab analytics, đưa hướng cải tiến" + "check Bé Gấu đã có tất cả chức
+năng Gấu Pro chưa (gồm gửi ảnh, gửi file, xuất file...)". Chạy 2 audit song song (đọc code thật, không chỉ
+tin wiki cũ), tổng hợp thành 1 Artifact gửi Hiếu (không lưu file trong repo, theo đúng convention s190).
+
+### Audit 1 — UI/UX 32 trang dashboard
+- Nền tảng đã có (`dashboard-kit.tsx`): `StatTile` (KPI card, màu theo `MetricAccent`), `DataTable`,
+  `Panel`/`SnapshotMetric`/`DeltaPill`/`SourceBadge`, chart theme dùng chung — nhưng mới 4/32 trang dùng
+  (BOD/Dashboard/Quarter Report/Channels, làm ở s191).
+- Phát hiện thêm ngoài phạm vi 3 tab s191: **7 file còn hex sai** `#003B95`/`#002B70`/`#002d73` (đáng chú
+  ý nhất: `analytics/page.tsx` — Dashboard — vẫn còn sót 1 chỗ dù phần KPI đầu đã redesign đúng
+  `brand-600`) — cs-troubleshoot, orders, staff, to-gau, users, settings cũng dính. Staff Performance nặng
+  nhất: 16 hex khác nhau, màu theo cảm hứng không theo ngữ nghĩa. Nhiều tab (3hk-usage, all-time, b2b,
+  products, vendors, website) tự chọn hex Recharts rời rạc thay vì `CHART_PALETTE` chung.
+- Đã xếp chi tiết theo lô ưu tiên bên trong "Đợt 4+" của plan `eager-popping-aho.md` (không đổi lô gốc,
+  chỉ tinh chỉnh thứ tự trong lô — file nhỏ/rủi ro thấp trước). Toàn bộ là khuyến nghị, CHƯA code (UI
+  Strict Lock — chờ Hiếu/Bảo duyệt phạm vi từng lô).
+
+### Audit 2 — Bé Gấu vs Gấu Pro (đối chiếu 40 tính năng)
+- Phát hiện quan trọng nhất: s190 đã âm thầm gộp gần hết TOOL của Gấu Pro vào Bé Gấu (`GP_TOOLS_OPEN` +
+  `GP_TOOLS_ADMIN_ONLY` trong `be-gau.ts`, dùng chung `creator/declarations.ts`/`creator/tools/dispatch.ts`)
+  — wiki `docs/wiki/system/tabs/chatbot.md` (mô tả "7 agent" cũ) CHƯA phản ánh thay đổi này.
+- Khác biệt CÓ CHỦ ĐÍCH (giữ nguyên, không phải gap): tool admin/creator-only (browsePortal, writeKB+duyệt,
+  sendLarkMessage, Lark Task tools, generateImageStability/generateVideo trả phí) — lý do bảo mật/chi
+  phí/dữ liệu cá nhân Hiếu, đã ghi rõ trong comment `be-gau.ts`. Guardian chặt hơn + lọc COGS theo role ở
+  Bé Gấu, rate limit khác nhau (20 vs 10/phút) — đúng thiết kế.
+- GAP THẬT: **upload ảnh/file** (route `/api/chat` chưa nhận multipart, FE không có input/paste/drop),
+  **xuất file** (Excel full-SQL/Word/PDF — thiếu marker prompt + route export chưa mở non-creator), auto
+  date context (`buildDateContext` chưa gọi trong `runBeGau`), chart nâng cao (stacked/waterfall/scatter —
+  FE đã hỗ trợ, prompt chưa hướng dẫn), voice input, followup chips.
+
+### Fix ngay trong phiên — gap upload ảnh/file (gap lớn nhất, đúng trọng tâm câu hỏi Hiếu)
+Xuất file để dành làm riêng (ngoài scope, Hiếu chưa yêu cầu lần này).
+- **`lib/agents/file-parser.ts`** (mới) — tách `FileContext` + `parseUploadedFile()` (Excel→CSV, PPTX→text
+  qua jszip, DOCX→text qua mammoth, CSV/JSON/TXT/code→text thẳng, PDF/ảnh→base64 inlineData) từ
+  `creator-ai/chat/route.ts` ra dùng chung 2 agent — tránh chép lại ~90 dòng logic parse file.
+  `creator-ai.ts` đổi sang `import/export type { FileContext } from "./file-parser"` (không đổi hành vi
+  Gấu Pro, chỉ đổi nguồn định nghĩa type). `creator-ai/chat/route.ts` import `parseUploadedFile` từ file
+  mới thay vì định nghĩa cục bộ.
+- **`be-gau.ts`**: `runBeGau()` thêm param `fileContexts?: FileContext[]`; build Gemini `contents` cho
+  lượt cuối bằng text + `inlineData` (ảnh/PDF) + text file nối vào — y hệt cách `runCreatorAI` làm (đọc
+  code Gấu Pro rồi mirror, không tự đoán). Thêm 5 dòng hướng dẫn "Phân tích file/ảnh người dùng gửi kèm"
+  vào `BE_GAU_PROMPT` (bản rút gọn của mục tương ứng bên Gấu Pro).
+- **`api/chat/route.ts`**: thêm nhánh đọc `multipart/form-data` (giữ nguyên nhánh JSON cũ y hệt trước —
+  tin nhắn thường KHÔNG đổi hành vi/request shape) — tối đa 5 file/lượt, dùng `parseUploadedFile` chung,
+  lỗi đọc file từng cái ghi vào 1 `FileContext` lỗi để model tự báo cho user thay vì vỡ cả request.
+  Truyền `fileContexts` vào `runBeGau()`.
+- **`chatbot/page.tsx`** (FE Bé Gấu): thêm nút paperclip (mở file picker), kéo-thả file vào khung chat
+  (overlay + `onDrop`), paste ảnh Ctrl+V, chip hiển thị file đã đính kèm (preview ảnh nếu là ảnh) + nút xoá,
+  giới hạn 5 file/20MB (khớp server + khớp Gấu Pro). Khi gửi có file → build `FormData` thay vì JSON
+  (mirror đúng luồng Gấu Pro `analytics/creator/ai/page.tsx`); khi không có file → JSON như cũ, không đổi.
+  `send()` sinh nội dung fallback `"[Gửi N file: ...]"` khi user không gõ chữ, giữ nguyên UI stream plain-
+  text (`__AGENT__:` prefix) đã có, không đổi giao thức stream.
+- tsc + `next lint` (0 error) + vitest (185/185, gồm `be-gau-runner.test.ts` 45 test cũ vẫn pass nguyên) —
+  PASS. **CHƯA verify bằng Chrome/staging thật** (máy dev không gọi được Gemini API/DB thật) — Hiếu cần tự
+  gửi thử ảnh/PDF/Excel cho Bé Gấu trên staging, xác nhận model đọc đúng nội dung, và xác nhận tin nhắn
+  thường (không đính kèm gì) vẫn hoạt động bình thường như trước khi đổi route.
