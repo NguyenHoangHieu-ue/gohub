@@ -309,8 +309,9 @@ flowchart LR
 
 > **Guardian** (`web/src/lib/agents/guardian.ts`): cong pre-flight phan loai 8 category
 > (product_catalog · revenue_bi · margin_cogs · staff_hr · customer_pii · internal_kb_other_dept ·
-> system_internal · general) → policy theo role × department (`app_settings.access_policy`).
-> admin/manager bo qua; FAIL-OPEN khi khong chac. Lark group: chi chan `system_internal`.
+> system_internal · general) → CHI 1 ranh gioi cung trong code (s190): `system_internal` = chi
+> admin/creator, con lai ai cung nhu nhau (khong con qua bang cau hinh DB `access_policy` — da xoa).
+> FAIL-OPEN khi khong chac. Lark group: chi chan `system_internal` + `customer_pii`.
 > Xem [[chatbot-agents-guardian|Chatbot Agents & Guardian]].
 
 ---

@@ -59,27 +59,24 @@ Chạy **song song** với router (zero thêm độ trễ). Nếu chặn → str
 
 > **XÁC ĐỊNH (s108):** phân loại nhạy cảm nay bằng **regex** (`web/src/lib/agents/guardian-classify.ts` · `classifySensitivity()`), **KHÔNG gọi Gemini** nữa → cùng câu luôn ra cùng category (hết flip allow/deny) + bớt 1 vòng LLM mỗi tin nhắn. Thứ tự ưu tiên (mức nhạy cảm cao nhất thắng): `injection/jailbreak → system_internal → margin_cogs → staff_hr → customer_pii → revenue_bi → product_catalog → general`. Có `RE_BIZ_PROC` để quy trình **nghiệp vụ** (KYC / tạo SKU / đọc mã / chính sách giá) KHÔNG bị nhầm thành system_internal. Đánh đổi: injection ngụy trang rất tinh vi có thể lọt so với LLM (bù lại: admin/creator bypass, policy nới, quyết định ổn định).
 
-### 8 category + policy mặc định (role) — **NỚI TỐI ĐA (cập nhật s107)**
+### 8 category — CHỈ 1 ranh giới thật (cập nhật s190)
 
-> Triết lý: hầu hết mọi người hỏi được **mọi thứ** (sản phẩm, doanh thu/đơn/kênh, khách hàng, tài liệu). CHỈ chặn 3 nhóm thật sự nhạy cảm.
+> Triết lý (chốt lại s190 lúc gộp Bé Gấu + Gấu Pro): mọi câu hỏi DỮ LIỆU — sản phẩm, doanh thu/đơn/kênh,
+> khách hàng, giá vốn/CM1, lương/nhân sự, tài liệu phòng ban — **ai cũng như nhau, không phân biệt role**.
+> CHỈ 1 nhóm bị chặn cứng: hỏi về chính con bot/code/hệ thống được build ra sao.
 
-| Category | admin/creator | bod | manager | staff & phòng ban |
-|---|---|---|---|---|
-| product_catalog / general | ✅ | ✅ | ✅ | ✅ |
-| revenue_bi (doanh thu/đơn/kênh) | ✅ | ✅ | ✅ | ✅ |
-| customer_pii (list/SĐT khách) | ✅ | ✅ | ✅ | ✅ *(PII tên/SĐT/email luôn che ở tầng prompt — chỉ trả mã KH)* |
-| internal_kb_other_dept (tài liệu/quy trình nghiệp vụ) | ✅ | ✅ | ✅ | ✅ |
-| **margin_cogs** (giá vốn/GP/CM1) | ✅ | ✅ | ✅ | ❌ |
-| **staff_hr** (lương/hiệu suất NV) | ✅ | ✅ | ✅ | ❌ *(+hr: ✅)* |
-| **system_internal** (code / cách hệ thống-chatbot **build** / stack-deploy-kiến trúc / quy trình **kỹ thuật** / credential / schema) | ✅ | ❌ | ❌ | ❌ |
+| Category | admin/creator | mọi role khác (bod/manager/staff/b2b/b2c/…) |
+|---|---|---|
+| product_catalog / general / revenue_bi / customer_pii / internal_kb_other_dept / margin_cogs / staff_hr | ✅ | ✅ — **luôn**, không có ngoại lệ |
+| **system_internal** (code / cách hệ thống-chatbot **build** / stack-deploy-kiến trúc / quy trình **kỹ thuật** / credential / schema) | ✅ (role xác thực qua session — web/Lark-DM) | ❌ |
 
-> **GIỚI HẠN CHÍNH = system_internal.** Bắt cả "hệ thống/chatbot được build như nào", "dùng công nghệ/stack gì", "deploy ra sao", "kiến trúc/CI-CD".
+> **GIỚI HẠN DUY NHẤT = system_internal.** Bắt cả "hệ thống/chatbot được build như nào", "dùng công nghệ/stack gì", "deploy ra sao", "kiến trúc/CI-CD".
 > ⚠️ **Phân biệt:** quy trình **NGHIỆP VỤ** (KYC, quy trình tạo SP/SKU, xử lý đơn, chính sách giá) **KHÔNG** phải system_internal → ĐƯỢC PHÉP trả lời. Chỉ "quy trình" mang tính code/kỹ thuật/build hệ thống mới chặn.
 >
 > **Giá B2B vs B2C:** không xử lý ở guardian — scope qua `getChannelFromRole(role)` và CHỈ ảnh hưởng **giá bán sản phẩm** (agent tra-cuu/tu-van): role `b2c`/`saleb2c`→B2C, `b2b`→B2B, role khác→thấy tất cả. Số liệu doanh thu BI không giới hạn theo kênh.
 
-- Policy lưu ở `app_settings.access_policy` (admin chỉnh qua **Admin → Cài đặt → Quyền hạn câu hỏi Chatbot**). Thiếu cấu hình → dùng default trên. ⚠️ Nếu đã lưu policy cũ, `loadPolicy` MERGE parsed đè DEFAULT theo TỪNG Ô → muốn áp bản NỚI mới hoàn toàn thì reset access_policy.
-- **admin/creator**: bỏ qua hẳn (không tốn call phân loại).
+- Quyết định giờ **cứng trong code** (`guardian.ts`), không còn qua bảng cấu hình DB nào. ⚠️ **Lịch sử (đã xoá, s190+1)**: trước đây có `app_settings.access_policy` + route `/api/config/access-policy` cho phép admin tự đặt allow/deny/dept theo từng category × role qua 1 UI ở trang Cài đặt. UI đó bị xoá lúc gộp Bé Gấu/Gấu Pro (s190) nhưng route + cơ chế đọc override còn sót lại — dữ liệu CŨ trong bảng đó vẫn đang deny margin_cogs/staff_hr/customer_pii/system_internal cho staff/b2b/b2c/saleb2c/ops-&-cs/product, **âm thầm mâu thuẫn** với chủ trương "ai cũng như nhau" suốt từ lúc UI bị xoá tới khi Hiếu tự query lại thấy (không còn UI nào hiển thị nó để phát hiện sớm hơn). Đã xoá hẳn route + cơ chế đọc DB — sửa quyền thì sửa thẳng `DENY_REASONS`/logic trong `guardian.ts` (git-tracked, review được), không còn "cấu hình ẩn" nào lệch khỏi ý định đã chốt.
+- **admin/creator**: bỏ qua hẳn phân loại category dữ liệu (chỉ còn check system_internal).
 - **FAIL-OPEN**: classifier deterministic luôn trả confidence ≥ 0.8 nên hầu như không rơi vào fail-open; nhưng nhánh (< 0.6 → cho qua) vẫn giữ để an toàn.
 
 ### Lark group
@@ -124,7 +121,7 @@ Bộ E2E kiểm chất lượng **câu trả lời** (không chỉ routing), ch�
 
 ### Guardian: chỉ CHẶN CỨNG code/hệ thống (mọi role)
 - `guardCheck` đảo cấu trúc: phân loại TRƯỚC → nếu `system_internal` (code / build / prompt / schema / credential / kỹ thuật) → **deny cho MỌI vai trò, KỂ CẢ admin·creator** (muốn xem thì đọc repo, bot không tiết lộ nội bộ). Đây là giới hạn DUY NHẤT không phân quyền được.
-- Mọi category DỮ LIỆU khác (margin_cogs / staff_hr / customer_pii / revenue_bi / product…): admin·creator full quyền; role khác theo `app_settings.access_policy` → Hiếu tự phân quyền. `DEFAULT_POLICY.system_internal` set toàn `deny` (chỉ để hiển thị — bị chặn cứng trước khi đọc policy).
+- Mọi category DỮ LIỆU khác (margin_cogs / staff_hr / customer_pii / revenue_bi / product…): admin·creator full quyền; role khác theo `app_settings.access_policy` → Hiếu tự phân quyền. `DEFAULT_POLICY.system_internal` set toàn `deny` (chỉ để hiển thị — bị chặn cứng trước khi đọc policy). *(⚠️ Đã thay đổi ở s190+1 — xem mục "8 category" phía trên: `access_policy` bị xoá hẳn, mọi category dữ liệu giờ LUÔN allow cho mọi role, không còn phân quyền theo cấu hình DB nữa. Đoạn này giữ nguyên làm lịch sử.)*
 - **Fix collision bỏ dấu**: "lương" (salary) ≡ "lượng" (quantity) = `luong` → bỏ bare `\bluong\b` trong `RE_HR`, chỉ nhận lương trong ngữ cảnh lương bổng. Trước đây "số **lượng** sản phẩm bán ra" bị chặn nhầm là nhân sự. Thêm "bán ra / số lượng bán" → `revenue_bi`; siết `ha tang` để không chặn nhầm "hạ tầng mạng".
 
 ### giai-dap biết ĐỐI TÁC CHIẾN LƯỢC (partner tiers)

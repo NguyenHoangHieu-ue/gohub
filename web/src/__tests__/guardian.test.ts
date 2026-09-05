@@ -1,8 +1,8 @@
 import { describe, test, expect, vi } from "vitest"
 import { classifySensitivity } from "@/lib/agents/guardian-classify"
 
-// guardCheck() đọc access_policy qua supabaseAdmin — mock trả về rỗng → loadPolicy() fallback
-// DEFAULT_POLICY (đúng hành vi "chưa ai cấu hình gì" trên môi trường test).
+// guardCheck() không còn đọc DB — quyết định cứng trong code (s190+1, xem Gotcha guardian.ts).
+// getCustomRules() vẫn đọc supabaseAdmin nên vẫn cần mock để import module không lỗi.
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) }),
