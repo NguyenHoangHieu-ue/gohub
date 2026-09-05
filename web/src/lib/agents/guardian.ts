@@ -11,14 +11,13 @@ import { classifySensitivity } from "./guardian-classify"
 //   2. Policy deterministic (app_settings.access_policy, fallback DEFAULT_POLICY)
 //      quyết định allow / deny / dept theo role.
 //
-// Nguyên tắc (cập nhật): NỚI TỐI ĐA — hầu hết mọi người hỏi được MỌI THỨ về sản phẩm,
-// doanh thu, đơn hàng, kênh bán, khách hàng… Guardian chỉ có 1 GIỚI HẠN CỨNG + phần còn lại
-// để Hiếu tự phân quyền:
+// Nguyên tắc (cập nhật s190 — gộp Bé Gấu/Gấu Pro theo yêu cầu Hiếu): CHỈ 1 ranh giới thật —
 //   1) system_internal — code / cách hệ thống-chatbot được BUILD / quy trình kỹ thuật / credential / schema
-//      → CHẶN CỨNG MỌI VAI TRÒ, KỂ CẢ admin·creator (muốn xem thì tự đọc repo, bot không tiết lộ nội bộ).
-//        Đây là giới hạn DUY NHẤT không phân quyền được.
+//      → CHỈ admin·creator được hỏi (role phải XÁC THỰC qua session — web/Lark-DM). Vai trò khác → từ chối
+//        lịch sự, noti "bạn không được biết vấn đề này". Lark group (ignoreRole=true, không tin được role
+//        ai đang gõ) → CHẶN CỨNG kể cả admin/creator, giữ nguyên hành vi cũ (kênh kém tin cậy hơn web).
 //   2) Mọi category DỮ LIỆU khác (margin_cogs / staff_hr / customer_pii / revenue_bi / product…):
-//      admin·creator full quyền; các role khác theo policy (app_settings.access_policy) → Hiếu phân quyền.
+//      "ai cũng như nhau" — mọi role coi ngang nhau (DEFAULT_POLICY vốn đã "allow" hết từ trước, giữ nguyên).
 // Giá bán B2B vs B2C KHÔNG xử lý ở đây — scope qua getChannelFromRole (chỉ ảnh hưởng GIÁ BÁN sản phẩm).
 // PII khách hàng (tên/SĐT/email) đã che ở tầng prompt agent (chỉ trả mã KH) → category customer_pii để MỞ.
 // FAIL-OPEN: nếu phân loại lỗi / không chắc → cho qua (tránh chặn nhầm câu hợp lệ).
@@ -177,10 +176,13 @@ export async function guardCheck(
     return { allowed: true, reason: "", category }
   }
 
-  // ── CHẶN CỨNG: system_internal (code / cách build / prompt / schema / credential / kỹ thuật) ──
-  // Áp dụng cho MỌI vai trò — KỂ CẢ admin·creator. Đây là GIỚI HẠN DUY NHẤT không thể phân quyền:
-  // ai muốn xem code/hệ thống thì đọc trực tiếp repo, bot tuyệt đối không tiết lộ chuyện nội bộ.
+  // ── system_internal: CHỈ admin/creator được hỏi (s190) ──
+  // ignoreRole (Lark, role không xác thực được) → luôn chặn kể cả claim là admin/creator — kênh kém tin
+  // cậy hơn web (ai cũng gõ được vào group, không có session xác thực đằng sau).
   if (category === "system_internal") {
+    if (!ignoreRole && (r === "admin" || r === "creator")) {
+      return { allowed: true, reason: "", category }
+    }
     return { allowed: false, reason: DENY_REASONS.system_internal, category }
   }
 
@@ -189,8 +191,9 @@ export async function guardCheck(
     return { allowed: false, reason: DENY_REASONS[category], category }
   }
 
-  // ── DỮ LIỆU (mọi category KHÔNG phải system_internal) — Hiếu tự phân quyền qua policy ──
-  // admin / creator: toàn quyền với dữ liệu (cấp cao nhất).
+  // ── DỮ LIỆU (mọi category KHÔNG phải system_internal) — "ai cũng như nhau" ──
+  // admin / creator: toàn quyền với dữ liệu (giữ tương thích ngược — policy mặc định cũng đã "allow" hết
+  // cho mọi role từ trước, nhánh này chỉ tránh 1 vòng đọc policy không cần thiết cho admin/creator).
   if (r === "admin" || r === "creator") {
     return { allowed: true, reason: "", category }
   }

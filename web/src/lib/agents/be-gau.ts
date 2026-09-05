@@ -10,6 +10,54 @@ import { runWebSearch, runReadKnowledgeBase, type WebSource } from "./creator-ai
 import { sendLarkDM }                    from "@/lib/lark"
 import { compressHistory }              from "./creator/compress"
 
+// ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
+// Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
+// creator/declarations.ts + creator/tools/dispatch.ts — không chép lại logic, tránh đúng kiểu "code
+// thừa/trùng lặp" mà audit s190 tìm thấy ở chỗ khác). Gấu Pro (route/trang riêng, creator-only) GIỮ
+// NGUYÊN không đổi — Hiếu sẽ quyết hướng xử lý sau.
+// Phân quyền theo đúng yêu cầu: "code/hệ thống/quy trình" → guardian.ts chặn ở tầng CÂU HỎI (category
+// system_internal, chỉ admin/creator). Ở tầng CÔNG CỤ, một số tool Gấu Pro không phải "hỏi thông tin" mà
+// là HÀNH ĐỘNG có rủi ro/chi phí riêng — những tool đó bị giữ admin/creator-only bằng cách không đăng ký
+// declaration cho role khác (Gemini không thể gọi hàm nó không thấy), độc lập với Guardian:
+//   - browsePortal/managePortalCredentials: đăng nhập + đọc credential portal NCC bên thứ 3.
+//   - writeKnowledgeBase/reviewPendingLearning/approveLearning/rejectLearning: ghi đè KB dùng chung cho
+//     MỌI người hỏi Bé Gấu sau này — 1 người ghi sai/ghi bậy sẽ lan ra toàn bộ câu trả lời sau đó.
+//   - sendLarkMessage: gửi tin nhắn Lark tới bất kỳ group nào (rủi ro spam/mạo danh).
+//   - listLarkTasks/listLarkTasklists/getLarkTask/createLarkTask/updateLarkTask: các API Lark Task này
+//     LUÔN thao tác trên tài khoản Lark CÁ NHÂN của Hiếu (gán task cho creatorOpenId, đọc task của chính
+//     Hiếu) — mở cho role khác sẽ lộ task cá nhân của Hiếu cho bất kỳ ai hỏi, không phải lỗi phân quyền
+//     thường mà là rò rỉ dữ liệu cá nhân, nên giữ creator/admin dù bản chất là "đọc", không phải "ghi".
+//   - generateImageStability/generateVideo/checkVideoStatus: gọi API trả phí (Stability AI/Kling) —
+//     generateImage (Pollinations, miễn phí) thì mở cho mọi người, 2 cái trả phí giữ admin/creator để
+//     tránh bị lạm dụng tốn tiền khi mở cho toàn công ty.
+// Còn lại (generateImage, getTrendSnapshots, queryLarkBase, compareVendorQuotes, trackSKUWinRate,
+// searchKnowledgeBase) mở cho MỌI role đã đăng nhập — đúng tinh thần "ai cũng như nhau".
+import {
+  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
+  trackSKUWinRateDecl, searchKBDecl,
+  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
+  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
+  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
+  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
+} from "./creator/declarations"
+import { dispatchTool } from "./creator/tools/dispatch"
+
+// Tool mở cho MỌI role (business/productivity, không phải hành động nhạy cảm/trả phí).
+const GP_TOOLS_OPEN = [
+  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
+  trackSKUWinRateDecl, searchKBDecl,
+]
+// Tool CHỈ admin/creator — hành động/credential/chi phí/dữ liệu cá nhân Hiếu (xem giải thích ở trên).
+const GP_TOOLS_ADMIN_ONLY = [
+  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
+  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
+  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
+  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
+]
+const GP_DISPATCH_NAMES = new Set(
+  [...GP_TOOLS_OPEN, ...GP_TOOLS_ADMIN_ONLY].map(d => d.name),
+)
+
 // ─── Helpers dùng chung ─────────────────────────────────────────────────────────
 
 // Fix #2: pg driver trả numeric/bigint dưới dạng string → convert sang number
@@ -48,13 +96,15 @@ const _learningRL = new Map<string, number>()
 const LEARNING_COOLDOWN = 5 * 60_000
 
 // ─── Bé Gấu ─────────────────────────────────────────────────────────────────────
-// Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). MÔ PHỎNG cơ chế Gấu Pro
-// (1 agent function-calling lặp, tự chọn công cụ) NHƯNG:
-//   · Guardian pre-flight (guardCheck ở tầng route) chặn hỏi code/hệ thống/nội bộ.
+// Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). Từ s190: gộp TOÀN BỘ công cụ Gấu Pro vào đây
+// (xem khối import creator/declarations ở trên) — 1 agent function-calling lặp, tự chọn công cụ, NHƯNG:
+//   · Guardian pre-flight (guardCheck ở tầng route) chặn hỏi code/hệ thống/nội bộ — CHỈ admin/creator
+//     được hỏi nhóm này (system_internal), còn lại "ai cũng như nhau" cho mọi dữ liệu kinh doanh.
 //   · Lọc dữ liệu theo role (getRoleDataFilter) + bảng nhạy cảm chỉ admin/creator +
 //     che cột COGS nếu role không có quyền (runQuerySupabase của data-explorer đã xử lý).
+//   · Công cụ Gấu Pro có rủi ro hành động/credential/chi phí/dữ liệu cá nhân Hiếu (portal, ghi KB, Lark
+//     task cá nhân, gen ảnh/video trả phí) → CHỈ đăng ký declaration cho admin/creator (GP_TOOLS_ADMIN_ONLY).
 //   · TUYỆT ĐỐI KHÔNG lộ cách hoạt động / code / SQL / schema / tên bảng-công cụ cho user.
-// Khác Gấu Pro: KHÔNG có ghi KB / portal / export marker / onboarding (creator-only).
 
 const priv = (role?: string) => {
   const r = (role || "").toLowerCase()
@@ -368,6 +418,7 @@ export async function runBeGau(opts: {
 }): Promise<{ text: string; sources: WebSource[] }> {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "" } = opts
   const isPriv = priv(role)
+  const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
   const isFreshConv = geminiHistory.length <= 1
 
@@ -409,11 +460,19 @@ export async function runBeGau(opts: {
     extraDirective,
   ].join("")
 
+  // s190: + toàn bộ công cụ Gấu Pro — mở cho mọi role (GP_TOOLS_OPEN), phần nhạy cảm/trả phí/cá nhân
+  // Hiếu chỉ đăng ký cho admin/creator (GP_TOOLS_ADMIN_ONLY) — Gemini không thấy thì không gọi được.
+  const functionDeclarations = [
+    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl,
+    ...GP_TOOLS_OPEN,
+    ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
+  ]
+
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction,
-    tools: [{ functionDeclarations: [readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl] }],
+    tools: [{ functionDeclarations }],
     generationConfig: { temperature: 0 },
   })
 
@@ -474,6 +533,19 @@ export async function runBeGau(opts: {
           const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
           return wrap({ rows: rows.slice(0, 100) })
         } catch (e: any) { return wrap({ error: e.message }) }
+      }
+
+      // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
+      // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
+      if (GP_DISPATCH_NAMES.has(call.name)) {
+        const res = await dispatchTool({ name: call.name, args: a }, undefined, sources)
+        // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
+        // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
+        if (call.name === "searchKnowledgeBase" && !isPriv) {
+          const resp = res.functionResponse.response
+          if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
+        }
+        return res
       }
 
       return wrap({ error: "Unknown tool" })

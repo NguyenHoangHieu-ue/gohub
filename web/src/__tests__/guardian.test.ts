@@ -1,5 +1,14 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect, vi } from "vitest"
 import { classifySensitivity } from "@/lib/agents/guardian-classify"
+
+// guardCheck() đọc access_policy qua supabaseAdmin — mock trả về rỗng → loadPolicy() fallback
+// DEFAULT_POLICY (đúng hành vi "chưa ai cấu hình gì" trên môi trường test).
+vi.mock("@/lib/supabase", () => ({
+  supabaseAdmin: {
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) }),
+  },
+}))
+import { guardCheck } from "@/lib/agents/guardian"
 
 // Guardian classifier XÁC ĐỊNH — cùng câu luôn ra cùng category (hết flip allow/deny).
 const C = (m: string) => classifySensitivity(m).category
@@ -88,6 +97,48 @@ describe("guardian classifier — determinism", () => {
     for (const q of CASES) {
       const set = new Set(Array.from({ length: 20 }, () => C(q)))
       expect(set.size, `"${q}" ra nhiều category`).toBe(1)
+    }
+  })
+})
+
+// ─── guardCheck() — s190: system_internal chỉ admin/creator, còn lại "ai cũng như nhau" ──
+describe("guardCheck — s190 phân quyền mới", () => {
+  const SYS_Q = "hệ thống này được build như thế nào?"
+
+  test("admin/creator (web, role xác thực) → được hỏi system_internal", async () => {
+    for (const role of ["admin", "creator"]) {
+      const r = await guardCheck(SYS_Q, role)
+      expect(r.allowed).toBe(true)
+      expect(r.category).toBe("system_internal")
+    }
+  })
+
+  test("staff/manager/bod (web) → bị chặn system_internal", async () => {
+    for (const role of ["staff", "manager", "bod", "b2b"]) {
+      const r = await guardCheck(SYS_Q, role)
+      expect(r.allowed).toBe(false)
+      expect(r.category).toBe("system_internal")
+    }
+  })
+
+  test("Lark group (ignoreRole=true) → chặn system_internal kể cả claim admin/creator", async () => {
+    for (const role of ["admin", "creator", "staff"]) {
+      const r = await guardCheck(SYS_Q, role, undefined, { onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true })
+      expect(r.allowed).toBe(false)
+    }
+  })
+
+  test("category dữ liệu khác (margin_cogs/staff_hr/revenue_bi) → mọi role như nhau, đều allow", async () => {
+    const cases: [string, string][] = [
+      ["COGS gói Nhật bao nhiêu?", "margin_cogs"],
+      ["lương nhân viên sales", "staff_hr"],
+      ["doanh thu tháng này bao nhiêu?", "revenue_bi"],
+    ]
+    for (const [q] of cases) {
+      for (const role of ["staff", "manager", "bod", "admin", "creator"]) {
+        const r = await guardCheck(q, role)
+        expect(r.allowed, `role=${role} q="${q}"`).toBe(true)
+      }
     }
   })
 })

@@ -146,7 +146,7 @@ describe("be-gau: tool declarations & role filter", () => {
     runBeGau = mod.runBeGau
   })
 
-  test("Gemini được cấu hình với đúng 8 function declarations", async () => {
+  test("staff: 8 tool gốc + 6 tool Gấu Pro mở-cho-all (s190), KHÔNG có tool admin-only", async () => {
     let capturedArgs: any
     _mockGetModel.mockImplementationOnce((args: any) => {
       capturedArgs = args
@@ -156,16 +156,36 @@ describe("be-gau: tool declarations & role filter", () => {
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "staff" })
 
     const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
-    expect(decls).toHaveLength(8)
     const names = decls.map((d: any) => d.name)
-    expect(names).toContain("executeSQL")
-    expect(names).toContain("querySupabase")
-    expect(names).toContain("listSupabaseTables")
-    expect(names).toContain("queryProduct")
-    expect(names).toContain("queryGA4")
-    expect(names).toContain("queryGSC")
-    expect(names).toContain("webSearch")
-    expect(names).toContain("readKnowledgeBase")
+    expect(decls).toHaveLength(14)
+    for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase"]) {
+      expect(names).toContain(n)
+    }
+    // Mở cho mọi role (s190 gộp Gấu Pro — business/productivity, không nhạy cảm/trả phí).
+    for (const n of ["generateImage", "getTrendSnapshots", "queryLarkBase", "compareVendorQuotes", "trackSKUWinRate", "searchKnowledgeBase"]) {
+      expect(names).toContain(n)
+    }
+    // Admin/creator-only — staff KHÔNG được thấy (hành động/credential/chi phí/dữ liệu cá nhân Hiếu).
+    for (const n of ["writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning", "browsePortal", "managePortalCredentials", "sendLarkMessage", "listLarkTasks", "listLarkTasklists", "getLarkTask", "createLarkTask", "updateLarkTask", "generateImageStability", "generateVideo", "checkVideoStatus"]) {
+      expect(names).not.toContain(n)
+    }
+  })
+
+  test("admin/creator: có đủ tool admin-only (s190 gộp Gấu Pro)", async () => {
+    for (const role of ["admin", "creator"]) {
+      let capturedArgs: any
+      _mockGetModel.mockImplementationOnce((args: any) => {
+        capturedArgs = args
+        return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+      })
+      await runBeGau({ geminiHistory: [], lastMsg: "test", role })
+      const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
+      const names = decls.map((d: any) => d.name)
+      expect(decls).toHaveLength(29)
+      for (const n of ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability", "generateVideo"]) {
+        expect(names).toContain(n)
+      }
+    }
   })
 
   test("role staff + isCost=false → systemInstruction chứa giới hạn COGS", async () => {

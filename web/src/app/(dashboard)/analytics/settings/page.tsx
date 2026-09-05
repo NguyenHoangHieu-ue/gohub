@@ -9,36 +9,10 @@ import { useRoleGuard } from "@/lib/use-role-guard"
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
 // 3 mục: Partner Tiers (đối tác chiến lược) · Access Policy (Guardian) · Role Filters (lọc dòng BI theo role).
 
-const CATEGORIES: { id: string; label: string }[] = [
-  { id: "product_catalog", label: "Sản phẩm / Catalog" },
-  { id: "revenue_bi", label: "Doanh thu / BI" },
-  { id: "margin_cogs", label: "Giá vốn / Margin" },
-  { id: "staff_hr", label: "Nhân sự (HR)" },
-  { id: "customer_pii", label: "Thông tin khách hàng" },
-  { id: "internal_kb_other_dept", label: "Tài liệu phòng ban" },
-  { id: "system_internal", label: "Nội bộ hệ thống" },
-  { id: "general", label: "Chung / Chào hỏi" },
-]
-const POLICY_ROLES = CONFIGURABLE_ROLES
-type Decision = "allow" | "deny" | "dept"
-const NEXT_DECISION: Record<Decision, Decision> = { allow: "deny", deny: "dept", dept: "allow" }
-const DECISION_STYLE: Record<Decision, string> = {
-  allow: "bg-emerald-100 text-emerald-700", deny: "bg-rose-100 text-rose-700", dept: "bg-amber-100 text-amber-700",
-}
-const DECISION_LABEL: Record<Decision, string> = { allow: "Cho phép", deny: "Từ chối", dept: "Theo phòng ban" }
-const DEFAULT_POLICY: Record<string, Record<string, Decision>> = {
-  product_catalog: { bod: "allow", staff: "allow" }, revenue_bi: { bod: "allow", staff: "allow" },
-  margin_cogs: { bod: "allow", staff: "deny" }, staff_hr: { bod: "allow", staff: "deny" },
-  customer_pii: { bod: "allow", staff: "deny" }, internal_kb_other_dept: { bod: "allow", staff: "dept" },
-  system_internal: { bod: "deny", staff: "deny" }, general: { bod: "allow", staff: "allow" },
-}
-// Điền mặc định cho các role phòng/nhân viên = giống "staff" (hr ngoại lệ: staff_hr = allow). Khớp guardian.ts.
-const DEPT_ROLES = ["b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"]
-for (const cat of Object.keys(DEFAULT_POLICY)) {
-  const base = DEFAULT_POLICY[cat].staff
-  for (const r of DEPT_ROLES) DEFAULT_POLICY[cat][r] = base
-  if (cat === "staff_hr") DEFAULT_POLICY[cat].hr = "allow"
-}
+// s190: bỏ hẳn subsystem "policy grid" (CATEGORIES/DEFAULT_POLICY/Decision/cyclePolicy/fullPolicy) —
+// code thừa, chưa từng render (UI thật đã đơn giản hoá thành 2 info-box tĩnh bên dưới từ trước, khớp
+// guardian.ts hiện tại: chỉ 1 ranh giới thật system_internal, còn lại "ai cũng như nhau"). Xem
+// docs/session_summary.txt s190 phần audit dead-code.
 const FILTER_ROLES = CONFIGURABLE_ROLES
 
 export default function SettingsPage() {
@@ -49,18 +23,15 @@ export default function SettingsPage() {
 
 function AnalyticsSettings() {
   const [tiers, setTiers] = useState<Record<string, string[]>>({ Strategic: [] })
-  const [policy, setPolicy] = useState<Record<string, Record<string, Decision>>>({})
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [savedTiers,   setSavedTiers]   = useState<string>("{}")
-  const [savedPolicy,  setSavedPolicy]  = useState<string>("{}")
   const [savedFilters, setSavedFilters] = useState<string>("{}")
   const [customRules, setCustomRules]   = useState<string>("")
   const [savedCustomRules, setSavedCustomRules] = useState<string>("")
   const dirtyTiers       = JSON.stringify(tiers)   !== savedTiers
-  const dirtyPolicy      = JSON.stringify(policy)  !== savedPolicy
   const dirtyFilters     = JSON.stringify(filters) !== savedFilters
   const dirtyCustomRules = customRules !== savedCustomRules
   const [availablePartners, setAvailablePartners] = useState<string[]>([])
@@ -134,9 +105,8 @@ function AnalyticsSettings() {
     setLoading(true)
     fetchB2BCacheInfo()  // parallel, non-blocking
     try {
-      const [t, p, f, ch, skuRule, cc, ict, crRes] = await Promise.all([
+      const [t, f, ch, skuRule, cc, ict, crRes] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
-        fetch("/api/config/access-policy").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
         fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
         fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
@@ -153,13 +123,10 @@ function AnalyticsSettings() {
       setSavedItemChannelTypes(JSON.stringify(parsedIct))
       setAllItemTypes(Array.isArray(ict?.allTypes) ? ict.allTypes : [])
       const parsedTiers = t && Object.keys(t).length ? t : { Strategic: [] }
-      const parsedPolicy = p || {}
       const parsedFilters = f || {}
       setTiers(parsedTiers)
-      setPolicy(parsedPolicy)
       setFilters(parsedFilters)
       setSavedTiers(JSON.stringify(parsedTiers))
-      setSavedPolicy(JSON.stringify(parsedPolicy))
       setSavedFilters(JSON.stringify(parsedFilters))
       setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
       const cr = crRes?.rules ?? ""
@@ -170,8 +137,6 @@ function AnalyticsSettings() {
   }
   useEffect(() => { fetchAll() }, [])
 
-  const getDecision = (cat: string, role: string): Decision => (policy[cat]?.[role] ?? DEFAULT_POLICY[cat]?.[role] ?? "allow") as Decision
-
   const savePost = async (key: string, url: string, body: any) => {
     setSaving(key)
     try {
@@ -179,7 +144,6 @@ function AnalyticsSettings() {
       if (res.ok) {
         // Reset dirty state sau khi lưu
         if (key === "tiers")         setSavedTiers(JSON.stringify(body))
-        if (key === "policy")        setSavedPolicy(JSON.stringify(body))
         if (key === "filters")       setSavedFilters(JSON.stringify(body))
         if (key === "sku-dest")      setSavedSkuRules(JSON.stringify(body.rules ?? body))
         if (key === "item-channel")  setSavedItemChannelTypes(JSON.stringify(body))
@@ -205,16 +169,6 @@ function AnalyticsSettings() {
     setNewTier("")
   }
   const deleteTier = (tier: string) => setTiers(prev => { const n = { ...prev }; delete n[tier]; return n })
-
-  const cyclePolicy = (cat: string, role: string) => {
-    const cur = getDecision(cat, role)
-    setPolicy(prev => ({ ...prev, [cat]: { ...(prev[cat] || {}), [role]: NEXT_DECISION[cur] } }))
-  }
-  const fullPolicy = () => {
-    const out: Record<string, Record<string, Decision>> = {}
-    CATEGORIES.forEach(c => { out[c.id] = {}; POLICY_ROLES.forEach(r => { out[c.id][r] = getDecision(c.id, r) }) })
-    return out
-  }
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1200px] mx-auto">
@@ -421,16 +375,16 @@ function AnalyticsSettings() {
           <div className="flex items-start gap-3 bg-rose-50 border border-rose-100 rounded-xl p-4">
             <Shield className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-rose-700">Chặn cứng mọi role (không phân quyền được)</p>
-              <p className="text-[11px] text-rose-600 mt-0.5">Câu hỏi về code / cách build hệ thống / credential / quy trình kỹ thuật nội bộ → chatbot từ chối, không tiết lộ.</p>
+              <p className="text-xs font-bold text-rose-700">Nội bộ hệ thống — chỉ admin/creator (s190)</p>
+              <p className="text-[11px] text-rose-600 mt-0.5">Câu hỏi về code / cách build hệ thống / credential / quy trình kỹ thuật nội bộ → CHỈ admin/creator được hỏi (qua web/Lark cá nhân đã xác thực); vai trò khác → chatbot từ chối lịch sự, không tiết lộ. Riêng nhắn qua Lark group luôn từ chối, kể cả admin/creator (không xác thực được ai đang gõ). Ranh giới này CỐ ĐỊNH trong code, không cấu hình được qua trang này.</p>
             </div>
           </div>
           {/* Open policy info */}
           <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 rounded-xl p-4">
             <Shield className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-emerald-700">Mọi dữ liệu kinh doanh đều mở (mặc định)</p>
-              <p className="text-[11px] text-emerald-600 mt-0.5">Revenue, CM1, COGS, HR, KH, KB… — tất cả vai trò đều được hỏi. Dùng Role Filters bên dưới nếu muốn giới hạn SQL theo role cụ thể.</p>
+              <p className="text-xs font-bold text-emerald-700">Mọi dữ liệu kinh doanh đều mở, ai cũng như nhau (mặc định)</p>
+              <p className="text-[11px] text-emerald-600 mt-0.5">Revenue, CM1, COGS, HR, KH, KB… — tất cả vai trò đều được hỏi ngang nhau, không phân biệt. Dùng Role Filters bên dưới nếu muốn giới hạn SQL theo role cụ thể.</p>
             </div>
           </div>
           {/* Custom rules */}
