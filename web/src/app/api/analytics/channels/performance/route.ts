@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
         mom:            prv === 0 ? 0 : ((rev - prv) / prv) * 100,
       }
     })
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

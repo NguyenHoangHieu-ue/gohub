@@ -206,7 +206,7 @@ export async function GET(req: NextRequest) {
       }
 
       return { monthly: processRows(false), quarterly: processRows(true) }
-    }, undefined, noCache(req))
+    }, undefined, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err: any) {

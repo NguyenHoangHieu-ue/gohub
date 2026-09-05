@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
       margin_change:  pct(cMar, pMar),
       orders_change:  pct(cOrd, pOrd),
     }
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

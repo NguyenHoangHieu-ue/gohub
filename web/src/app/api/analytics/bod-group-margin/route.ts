@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         const prev = previous.find(p => p.group === curr.group)
         return { ...curr, prev_revenue: prev?.revenue || 0, prev_margin: prev?.margin || 0 }
       })
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

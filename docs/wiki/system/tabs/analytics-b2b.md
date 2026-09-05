@@ -74,16 +74,26 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **Fix s190+2 (2026-09-05) — thay `B2B_COST_CACHE_PREFIXES` (prefix-list viết tay) bằng `deps` khai tại
+  chỗ cache.** Danh sách prefix cứng (mục s169(c) dưới) vẫn có nguy cơ lệch mỗi khi thêm route cache mới
+  hoặc đổi version cache-key — 2 nơi (route cache thật vs danh sách prefix) tách rời nhau. Nay mỗi
+  `cachedQuery(key, fn, ttl, bypass, deps)` tự khai `deps: ["b2b-cost"]` NGAY tại chỗ gọi (11 route:
+  b2b/kpis|performance|trend|strategic-performance, channels/kpis|performance, bod-summary|group-margin|
+  channel-performance, monthly-kpis, all-time-performance) — route ghi cost gọi `flushByDeps(["b2b-cost"])`
+  thay `flushB2BCostCaches()`, không cần biết/nhớ route nào khác đang cache nó. Migration `v47_cache_deps.sql`
+  thêm cột `deps text[]` + GIN index vào `analytics_query_cache`. `B2B_COST_CACHE_PREFIXES`/
+  `flushB2BCostCaches()` đã xoá khỏi code — `flushAnalyticsCacheByPrefixes()` (prefix literal) vẫn giữ cho
+  các trường hợp khác chưa migrate (vd `b2c-monthly:`/`b2c-leads:`, `QREPORT_CACHE_PREFIX`/`QB2B_CACHE_PREFIX`).
 - **Fix s169(c) (2026-08-28) — cache flush toàn app nuke SẠCH gây chậm hẳn.** Fix s169 (mục dưới) ban đầu
   dùng `flushAnalyticsCache()` (xoá sạch bảng `analytics_query_cache`) sau mỗi lần sửa/xoá cost B2B — đúng
   đồng bộ nhưng xoá LUÔN cache của mọi tab KHÔNG liên quan (Products, Staff, Vendors, Orders, Customers, SQL
   Explorer registry...). Sửa cost/bấm "Tải lại mới" nhiều lần liên tục (lúc test) → cache toàn app bị nuke
-  lặp lại → mọi trang phải query gohub_dw sống, web chậm hẳn. Fix: `B2B_COST_CACHE_PREFIXES`
+  lặp lại → mọi trang phải query gohub_dw sống, web chậm hẳn. Fix ban đầu: `B2B_COST_CACHE_PREFIXES`
   (`analytics-helpers.ts`) liệt kê ĐÚNG các route thật sự cache kết quả phụ thuộc cost B2B + helper
-  `flushB2BCostCaches()` — 3 route ghi cost (`b2b-customer-costs` POST/DELETE, `fix-turso-customer-costs`)
-  dùng helper này thay vì nuke sạch. `quarterly-cache-flush` cũng đổi sang scoped-prefix, import
-  `QREPORT_CACHE_PREFIX`/`QB2B_CACHE_PREFIX` TRỰC TIẾP từ `lib/quarterly-settings.ts` (cùng 1 hằng số với
-  chính route sinh ra cache key đó — không bao giờ lệch version như prefix list hardcode cũ).
+  `flushB2BCostCaches()` — **đã thay bằng cơ chế `deps`, xem mục s190+2 ở trên**, giữ đoạn này làm lịch sử.
+  `quarterly-cache-flush` cũng đổi sang scoped-prefix, import `QREPORT_CACHE_PREFIX`/`QB2B_CACHE_PREFIX`
+  TRỰC TIẾP từ `lib/quarterly-settings.ts` (cùng 1 hằng số với chính route sinh ra cache key đó — không bao
+  giờ lệch version như prefix list hardcode cũ; nay gọi thêm `flushByDeps(["b2b-cost"])` song song).
 - **Fix s169 (2026-08-28) — sửa cost Quarter Report không cập nhật sang B2B Performance (+2 bug CM1
   còn sót sau audit toàn tab)**:
   - **Root cause chính**: `/api/analytics/b2b-customer-costs` (POST+DELETE, nơi Quarter Report "Sửa chi

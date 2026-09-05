@@ -1,11 +1,19 @@
 import { vi, describe, test, expect } from "vitest"
 
 // L2 cache (Supabase) mock: không hit sẵn (maybeSingle → null), upsert no-op → cô lập L1 in-memory.
+// overlaps() ghi lại arg cuối cùng gọi để flushByDeps test kiểm tra đúng filter được gửi đi.
+let mockLastOverlapsArgs: [string, string[]] | null = null
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
+      delete: () => ({
+        overlaps: (col: string, val: string[]) => {
+          mockLastOverlapsArgs = [col, val]
+          return Promise.resolve({ count: 0, error: null })
+        },
+      }),
     }),
   },
 }))
@@ -15,7 +23,7 @@ vi.mock("@/lib/turso", () => ({ tursoQuery: vi.fn() }))
 import {
   safeDate, safeCompanyCode, getDateFilter, getPrevDateFilter,
   getDaysInMonth, getDaysInRange, getMonthsInRange,
-  cachedQuery, isCronReq, analyticsGuard,
+  cachedQuery, flushByDeps, isCronReq, analyticsGuard,
   excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
 } from "@/lib/analytics-helpers"
 
@@ -93,6 +101,48 @@ describe("cachedQuery — L1 in-memory cache", () => {
     await cachedQuery("k-a:" + Math.random(), fn)
     await cachedQuery("k-b:" + Math.random(), fn)
     expect(fn).toHaveBeenCalledTimes(2)
+  })
+})
+
+// s190+2: thay B2B_COST_CACHE_PREFIXES (danh sách prefix viết tay, đã lệch version thành no-op ở s169)
+// bằng deps khai NGAY tại chỗ cachedQuery() — flushByDeps xoá theo "chủ đề", không cần biết cache-key thật.
+describe("flushByDeps — flush theo deps khai tại cachedQuery (thay prefix-list viết tay)", () => {
+  test("entry có deps khớp → bị xoá khỏi L1, entry deps khác/không khai → giữ nguyên", async () => {
+    const key1 = "b2b-kpis2:test:" + Math.random()
+    const key2 = "b2c-kpis:test:" + Math.random()
+    const key3 = "no-deps:test:" + Math.random()
+
+    const fn1 = vi.fn(async () => "b2b-data")
+    const fn2 = vi.fn(async () => "b2c-data")
+    const fn3 = vi.fn(async () => "plain-data")
+
+    await cachedQuery(key1, fn1, 10, false, ["b2b-cost"])
+    await cachedQuery(key2, fn2, 10, false, ["b2c-budget"])
+    await cachedQuery(key3, fn3)
+
+    await flushByDeps(["b2b-cost"])
+
+    // key1 (deps=["b2b-cost"]) đã bị xoá khỏi L1 → gọi lại chạy fn1 lần 2
+    await cachedQuery(key1, fn1, 10, false, ["b2b-cost"])
+    expect(fn1).toHaveBeenCalledTimes(2)
+
+    // key2/key3 (deps khác hoặc không khai) không bị đụng tới → vẫn dùng cache, fn không chạy lại
+    await cachedQuery(key2, fn2, 10, false, ["b2c-budget"])
+    await cachedQuery(key3, fn3)
+    expect(fn2).toHaveBeenCalledTimes(1)
+    expect(fn3).toHaveBeenCalledTimes(1)
+  })
+
+  test("gọi đúng Supabase .overlaps('deps', [...]) — không phải .like() (đã ghi nhận không hoạt động đúng runtime)", async () => {
+    await flushByDeps(["b2b-cost", "b2c-budget"])
+    expect(mockLastOverlapsArgs).toEqual(["deps", ["b2b-cost", "b2c-budget"]])
+  })
+
+  test("deps rỗng → no-op, không gọi Supabase", async () => {
+    mockLastOverlapsArgs = null
+    const res = await flushByDeps([])
+    expect(res).toEqual({ deleted: 0 })
+    expect(mockLastOverlapsArgs).toBeNull()
   })
 })
 

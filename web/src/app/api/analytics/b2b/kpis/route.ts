@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       { label: "CM1",           value: cGpm2, lastPeriod: pGpm2, change: pct(cGpm2, pGpm2), isPositive: cGpm2 >= pGpm2, isCurrency: true  },
       { label: "CM1 %",         value: cRev > 0 ? (cGpm2/cRev)*100 : 0, lastPeriod: pRev > 0 ? (pGpm2/pRev)*100 : 0, change: (cRev > 0 ? (cGpm2/cRev)*100 : 0) - (pRev > 0 ? (pGpm2/pRev)*100 : 0), isPositive: (cRev > 0 ? (cGpm2/cRev)*100 : 0) >= (pRev > 0 ? (pGpm2/pRev)*100 : 0), isCurrency: false },
     ]
-    }, QUERY_TTL_MIN, noCache(req))
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
