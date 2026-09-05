@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession }          from "next-auth"
 import { authOptions }               from "@/lib/auth"
-import { getDbRole }                  from "@/lib/db-role"
+import { checkRateLimit }            from "@/lib/rate-limit"
 import { buildXlsxFromSql, buildDocxFromMarkdown } from "@/lib/export-docs"
 
-// Creator AI export endpoint — Word (.docx) + Excel (từ SQL) generation
-// PDF is generated client-side (html2canvas + jsPDF); Word/Excel cần server.
-// Sinh file dùng chung với Bé Gấu (/api/chat/export) — xem web/src/lib/export-docs.ts.
-
-async function requireAccess() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.username) throw new Error("Unauthorized")
-  const role = await getDbRole(session.user.username)
-  if (role === "creator") return session
-  // Also allow gp_allowed_users (checked in chat route, but for export we check role only)
-  if (!["creator", "admin"].includes(role)) throw new Error("Forbidden")
-  return session
-}
+// Xuất file cho Bé Gấu (Excel full từ SQL / Word từ markdown) — mở cho MỌI role đã đăng nhập
+// (khác /api/creator-ai/export chỉ admin/creator), vì Bé Gấu phục vụ cả công ty. Cùng mức tin cậy đã có
+// sẵn ở tool executeSQL của Bé Gấu (mọi role đã gọi được SELECT tuỳ ý qua chat — export không mở thêm
+// quyền mới, chỉ thêm cách tải kết quả đầy đủ). PDF vẫn sinh client-side (html2canvas + jsPDF), không
+// qua route này.
 
 export async function POST(req: NextRequest) {
-  try {
-    await requireAccess()
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const rlKey = `chat-export:${(session.user as any).username || session.user.email || "anon"}`
+  const rl = await checkRateLimit(rlKey, 20, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Quá nhiều yêu cầu xuất file. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
   }
 
   const { markdown, title, format = "docx", sql } = await req.json()

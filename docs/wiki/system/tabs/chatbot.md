@@ -91,8 +91,16 @@ FE `chatbot/page.tsx` có nút paperclip + kéo-thả + paste ảnh (Ctrl+V), t�
 Dùng chung `parseUploadedFile()`/`FileContext` (`web/src/lib/agents/file-parser.ts`, tách ra từ Gấu Pro để
 2 agent không chép lại logic) — hỗ trợ PDF/ảnh (gửi thẳng Gemini multimodal qua `inlineData`), Excel→CSV,
 PPTX→text, DOCX→text, CSV/JSON/TXT/code→text thẳng. `runBeGau()` nhận thêm `fileContexts?: FileContext[]`,
-build parts y hệt cách `runCreatorAI` (Gấu Pro) làm. **Chưa có: xuất file** (Excel/Word/PDF) — Gấu Pro có,
-Bé Gấu chưa; đây là gap riêng, để làm khi Hiếu yêu cầu (không thuộc phạm vi s192).
+build parts y hệt cách `runCreatorAI` (Gấu Pro) làm. ## 4a-2. Xuất file (s192+1, 2026-09-05)
+
+Bé Gấu nay xuất được **Excel (full từ SQL, không giới hạn 200 dòng)**, **Word**, **PDF**, **CSV** — y hệt
+Gấu Pro, qua nút hiện dưới câu trả lời khi model tự sinh khối \`\`\`export (chỉ khi user xin xuất/tải, hoặc
+tự động khi bảng >15 dòng). Route riêng `POST /api/chat/export` (mở cho **mọi role đã đăng nhập**, rate-limit
+20/phút — khác `/api/creator-ai/export` chỉ admin/creator) dùng chung hàm sinh file
+`web/src/lib/export-docs.ts` (`buildXlsxFromSql`/`buildDocxFromMarkdown`) và component nút bấm
+`web/src/components/chat-export.tsx` (`ExportBar`, dùng chung cả 2 agent). PDF vẫn sinh client-side
+(html2canvas+jsPDF), không qua route. Nút xuất tự ẩn khi CHÍNH message đó đang stream dở (tránh flicker vì
+marker `\`\`\`export` có thể chưa đóng xong).
 
 ## 4b. Lưu hội thoại & Ghi chú kỹ thuật
 - **Lịch sử chat** lưu Supabase: `conversations` + `chat_messages` (API `/api/chat/conversations` + `/[id]`).

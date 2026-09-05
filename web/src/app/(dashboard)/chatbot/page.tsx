@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import ChatChart from "@/components/chat-chart"
 import { useToast } from "@/components/toast"
+import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
 // sessionStorage keys
 const SS_CONV_ID      = "gohub_conv_id"
@@ -175,6 +176,82 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       <FileSpreadsheet size={15} />
       {loading ? "Đang tạo file..." : done ? "Đã tải xuống" : "Tải file template Excel"}
     </button>
+  )
+}
+
+// ─── Markdown renderer (dùng chung, hoisted để BeGauMsgContent dùng được) ───────────────────────────
+function renderMarkdown(text: string) {
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+        p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
+        em:     ({ children }) => <em className="italic">{children}</em>,
+        ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+        ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+        li:     ({ children }) => <li className="text-gray-700">{children}</li>,
+        h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+        h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+        h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+        hr:     () => <hr className="my-2 border-gray-300 dark:border-slate-600" />,
+        code:   ({ children }) => <code className="bg-gray-200 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+        table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
+        thead:  ({ children }) => <thead className="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{children}</thead>,
+        tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
+        tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
+        th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700 dark:text-slate-200">{children}</th>,
+        td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
+      }}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+// ─── Nội dung 1 message assistant — tách component để có contentRef riêng (cần cho xuất PDF) ────────
+function BeGauMsgContent({ msg, streaming, isLast }: { msg: StoredMessage; streaming: boolean; isLast: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Chưa có nội dung (agent bi-analyst/data-explorer đang chạy function-calling 10-30s)
+  // → hiện hiệu ứng "đang trả lời" thay vì bong bóng rỗng (tránh cảm giác đơ).
+  if (!msg.content) {
+    if (streaming && isLast) {
+      return (
+        <div className="flex items-center gap-2 py-0.5">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(k => (
+              <span key={k} className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce"
+                style={{ animationDelay: `${k * 0.15}s`, animationDuration: "0.8s" }} />
+            ))}
+          </div>
+          <span className="text-xs text-gray-400">{(msg.agent?.name || "Bé Gấu")} đang trả lời…</span>
+        </div>
+      )
+    }
+    return <span className="text-xs text-gray-400 italic">Không có nội dung trả lời.</span>
+  }
+
+  const display = stripExportHelperBlocks(msg.content)
+  const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
+    ? extractChartData(display) : null
+
+  return (
+    <div>
+      <div ref={contentRef}>
+        {chartResult ? (
+          <>
+            {chartResult.before && renderMarkdown(chartResult.before)}
+            <ChatChart data={chartResult.chart} />
+            {chartResult.after && renderMarkdown(chartResult.after)}
+          </>
+        ) : renderMarkdown(display)}
+        {streaming && isLast && (
+          <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+        )}
+      </div>
+      {/* Ẩn nút xuất khi CHÍNH message này đang stream dở (marker có thể chưa đóng \`\`\` xong) */}
+      {!(streaming && isLast) && <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/chat/export" />}
+    </div>
   )
 }
 
@@ -775,73 +852,9 @@ export default function ChatbotPage() {
                   }`}>
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
-                    ) : (() => {
-                      // Chưa có nội dung (agent bi-analyst/data-explorer đang chạy function-calling 10-30s)
-                      // → hiện hiệu ứng "đang trả lời" thay vì bong bóng rỗng (tránh cảm giác đơ).
-                      if (!msg.content) {
-                        if (streaming && i === messages.length - 1) {
-                          return (
-                            <div className="flex items-center gap-2 py-0.5">
-                              <div className="flex gap-1">
-                                {[0, 1, 2].map(k => (
-                                  <span key={k} className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce"
-                                    style={{ animationDelay: `${k * 0.15}s`, animationDuration: "0.8s" }} />
-                                ))}
-                              </div>
-                              <span className="text-xs text-gray-400">
-                                {(msg.agent?.name || "Bé Gấu")} đang trả lời…
-                              </span>
-                            </div>
-                          )
-                        }
-                        return <span className="text-xs text-gray-400 italic">Không có nội dung trả lời.</span>
-                      }
-
-                      // Extract chart block from bi-analyst / data-explorer messages
-                      const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
-                        ? extractChartData(msg.content) : null
-
-                      const renderMarkdown = (text: string) => (
-                        <div className="markdown-body">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                            p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
-                            em:     ({ children }) => <em className="italic">{children}</em>,
-                            ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
-                            ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
-                            li:     ({ children }) => <li className="text-gray-700">{children}</li>,
-                            h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
-                            h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                            h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                            hr:     () => <hr className="my-2 border-gray-300 dark:border-slate-600" />,
-                            code:   ({ children }) => <code className="bg-gray-200 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                            table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                            thead:  ({ children }) => <thead className="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{children}</thead>,
-                            tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
-                            tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
-                            th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700 dark:text-slate-200">{children}</th>,
-                            td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
-                          }}>
-                            {text}
-                          </ReactMarkdown>
-                        </div>
-                      )
-
-                      return (
-                        <div>
-                          {chartResult ? (
-                            <>
-                              {chartResult.before && renderMarkdown(chartResult.before)}
-                              <ChatChart data={chartResult.chart} />
-                              {chartResult.after && renderMarkdown(chartResult.after)}
-                            </>
-                          ) : renderMarkdown(msg.content)}
-                          {streaming && i === messages.length - 1 && (
-                            <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
-                          )}
-                        </div>
-                      )
-                    })()}
+                    ) : (
+                      <BeGauMsgContent msg={msg} streaming={streaming} isLast={i === messages.length - 1} />
+                    )}
                     {/* Template download button for tao-template agent */}
                     {msg.role === "assistant" && msg.agent?.id === "tao-template" && !streaming && (() => {
                       const action = extractTemplateAction(msg.content)

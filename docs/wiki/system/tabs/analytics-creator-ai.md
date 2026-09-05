@@ -130,6 +130,15 @@ AND c.name NOT IN ('B2C Customer US','B2C Customer VN','B2B Ops')
 vì tự định nghĩa (không đổi hành vi Gấu Pro). Bé Gấu (`be-gau.ts`) nay dùng chung file này để có upload
 ảnh/file — xem [[chatbot]] mục 4a. Route `/api/creator-ai/chat` không đổi gì khác ngoài import.
 
+## Xuất file dùng chung với Bé Gấu (s192+1, 2026-09-05)
+
+`/api/creator-ai/export` nay gọi `buildXlsxFromSql`/`buildDocxFromMarkdown`
+(`web/src/lib/export-docs.ts`, tách từ chính route này) — cùng hàm với route mới của Bé Gấu
+`/api/chat/export`. Chỉ khác quyền truy cập: route Gấu Pro vẫn `requireAccess()` admin/creator, route Bé
+Gấu mở cho mọi role đã login (rate-limit riêng). FE `ExportBar` (nút CSV/Excel/JSON/PDF/Word) tách sang
+`web/src/components/chat-export.tsx`, nhận `apiEndpoint` để trỏ đúng route — trang này giờ import thay vì
+tự định nghĩa. Không đổi hành vi hiển thị/logic xuất của Gấu Pro.
+
 ## Xuất dữ liệu & báo cáo (2026-08-02)
 
 - **Excel FULL data từ SQL (fix "data cut >200 dòng")**: model chỉ THẤY 200 dòng đầu của executeSQL → nếu tự gõ lại vào \`\`\`csv thì cắt + sai. Nay model đặt \`sql:\` (câu SELECT gốc, đặt CUỐI marker \`\`\`export) → nút Excel gọi `POST /api/creator-ai/export {format:"xlsx", sql}` chạy lại query server-side → xuất TOÀN BỘ dòng. Guard: chỉ SELECT/WITH, 1 statement, creator/admin. Verify: query 146 KH → xlsx đủ 146 dòng.

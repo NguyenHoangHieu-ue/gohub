@@ -8546,3 +8546,38 @@ Xuất file để dành làm riêng (ngoài scope, Hiếu chưa yêu cầu lần
 - tsc + `next lint` (0 error) + vitest (185/185, gồm `be-gau-runner.test.ts` 45 test cũ vẫn pass nguyên) —
   PASS. ✅ **Hiếu đã QA tay trên staging — xác nhận OK**: Bé Gấu đọc đúng ảnh/file đính kèm, tin nhắn
   thường (không đính kèm) không bị ảnh hưởng bởi thay đổi route.
+
+## Session s192+1 (2026-09-05, tiếp) — Bé Gấu: thêm xuất file (Excel/Word/PDF/CSV)
+
+Sau khi upload ảnh/file (trên) được QA OK, Hiếu chọn làm nốt gap còn lại trong báo cáo đối chiếu Bé Gấu vs
+Gấu Pro: xuất file.
+
+- **`lib/export-docs.ts`** (mới) — tách `buildXlsxFromSql(sql, title)` (chạy lại SELECT/WITH server-side,
+  xuất Excel full — không giới hạn 200 dòng như bảng model tự gõ) và `buildDocxFromMarkdown(markdown,
+  title)` (style Times New Roman, header/footer "GoHub Intel") từ `api/creator-ai/export/route.ts` ra dùng
+  chung. Route Gấu Pro đổi sang gọi 2 hàm này, giữ nguyên `requireAccess()` (admin/creator) — không đổi
+  hành vi.
+- **`api/chat/export/route.ts`** (mới) — cùng logic xlsx/docx trên, nhưng auth = **mọi role đã đăng nhập**
+  (không giới hạn admin/creator như Gấu Pro) vì Bé Gấu phục vụ cả công ty; cùng mức tin cậy đã có sẵn ở
+  tool `executeSQL` (mọi role đã gọi được SELECT tuỳ ý qua chat từ trước — export không mở quyền mới, chỉ
+  thêm cách tải kết quả đầy đủ). Rate-limit riêng 20 req/phút/user. PDF vẫn client-side, không qua route
+  nào (giống Gấu Pro).
+- **`components/chat-export.tsx`** (mới) — tách `ExportBar` (nút CSV/Excel/JSON/PDF/Word) +
+  `parseExportMarker`/`extractCSVBlock`/`extractJSONArray`/`extractMarkdownTable`/`stripExportHelperBlocks`
+  từ `analytics/creator/ai/page.tsx` (~250 dòng) ra dùng chung 2 agent. `ExportBar` nhận prop
+  `apiEndpoint` để trỏ đúng route (`/api/creator-ai/export` hay `/api/chat/export`). Gấu Pro đổi sang
+  import từ đây — đã dọn luôn 1 chỗ trùng lặp nhỏ khác nhân tiện phát hiện (`MsgContent` tự viết lại đúng
+  3 dòng regex strip export/csv/json giống hệt `stripExportHelperBlocks`).
+- **`be-gau.ts`**: thêm mục "Xuất file" vào `BE_GAU_PROMPT` — mirror quy tắc Gấu Pro (marker \`\`\`export
+  cuối câu trả lời, chỉ khi user xin, tự-động-xuất bảng >15 dòng, kèm \`sql:\` cho dữ liệu gohub_dw để
+  Excel xuất FULL). Marker luôn bị ẩn khỏi nội dung hiển thị cho user (FE strip trước khi render) — không
+  vi phạm rule "tuyệt đối không lộ SQL" đã có, vì user không bao giờ thấy khối marker, chỉ thấy nút bấm.
+- **`chatbot/page.tsx`**: tách message assistant ra component riêng `BeGauMsgContent` (hoist luôn
+  `renderMarkdown` lên module-level cho dùng chung) — cần thiết vì `ExportBar` xuất PDF phải chụp DOM qua
+  1 `contentRef` riêng cho mỗi message, mà `useRef` không gọi được trong `.map()` inline IIFE (vi phạm
+  rule hook). Nút xuất tự ẩn khi CHÍNH message đó đang stream dở (`streaming && isLast`) — tránh flicker vì
+  Bé Gấu stream tăng dần từng chunk (khác Gấu Pro chỉ set nội dung 1 lần lúc xong), marker \`\`\`export có
+  thể chưa đóng kịp giữa chừng.
+- tsc + `next lint` (0 error mới, vài warning pre-existing không liên quan) + vitest (185/185) PASS.
+  **CHƯA verify Chrome/staging thật** — Hiếu cần tự xin Bé Gấu "xuất Excel doanh thu tháng này" (hoặc bảng
+  >15 dòng để test auto-export), xác nhận file tải đúng đủ dữ liệu; test thêm PDF/Word 1 lần.
