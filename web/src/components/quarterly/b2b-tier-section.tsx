@@ -7,7 +7,7 @@ import { ColInfo } from "@/components/quarterly/col-info"
 import type { MonthSummary } from "@/lib/quarterly-types"
 
 const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
-  Strategic: { bg: "bg-blue-50", text: "text-[#003B95]", badge: "bg-blue-100 text-[#003B95]" },
+  Strategic: { bg: "bg-blue-50", text: "text-[#0f4c81]", badge: "bg-blue-100 text-[#0f4c81]" },
   VIP:       { bg: "bg-purple-50", text: "text-purple-800", badge: "bg-purple-100 text-purple-700" },
   Gold:      { bg: "bg-yellow-50", text: "text-yellow-800", badge: "bg-yellow-100 text-yellow-700" },
   Silver:    { bg: "bg-slate-50", text: "text-slate-700", badge: "bg-slate-200 text-slate-600" },
@@ -418,7 +418,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
             {(["ALL", "VN", "US"] as const).map(r => (
               <button key={r} onClick={() => onRegionChange(r)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
-                  region === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                  region === r ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {r === "ALL" ? "ALL" : `${REGION_META[r].flag} ${r}`}
               </button>
             ))}
@@ -443,7 +443,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               <>
                 <button onClick={saveCost} disabled={savingCost || !costDirty}
                   className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all",
-                    costDirty && !savingCost ? "bg-[#003B95] text-white border-[#003B95] hover:bg-[#00337f]" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed")}>
+                    costDirty && !savingCost ? "bg-[#0f4c81] text-white border-[#0f4c81] hover:bg-[#0a3560]" : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed")}>
                   {savingCost ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
                 </button>
                 <button onClick={cancelCostEdit} disabled={savingCost}
@@ -453,7 +453,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               </>
             ) : (
               <button onClick={() => { if (!expanded) onToggle(); startCostEdit() }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#003B95]/30 bg-white text-[#003B95] hover:bg-blue-50 transition-all">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-[#0f4c81]/30 bg-white text-[#0f4c81] hover:bg-blue-50 transition-all">
                 <Pencil className="w-3.5 h-3.5" />Sửa chi tiết
               </button>
             )
@@ -469,31 +469,31 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (quarterMonths.length + 1) * colCount * 72)}px` }}>
               <thead>
-                <tr className="bg-[#003B95]">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Nhóm</th>
+                <tr className="bg-[#0f4c81]">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
                   {quarterMonths.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
                     return (
-                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
+                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a3560] whitespace-nowrap">
                         T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
                       </th>
                     )
                   })}
-                  <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a4a9e] whitespace-nowrap bg-[#1e3a8a]">
+                  <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
                     Tổng Quý<ColInfo tip={"Tổng Quý (PR)\nRevenue: Σ(PR monthly)\nGM: Σ(GP × factor)\nCh.Cost: Σ(custCost) + GroupCost × (tier_rev/total_B2B_rev)\nCM1: Σ(custCM1) - GroupCost × revenue-share"} />
                   </th>
                 </tr>
-                <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
-                  <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
+                <tr className="bg-[#1565c0] text-[9px] text-blue-100 uppercase">
+                  <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
                   {quarterMonths.flatMap(m => SUB_COLS.map((col, i) => (
-                    <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", col.label === "CM1" && "text-blue-300")}>
+                    <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   )))}
                   {SUB_COLS.map((col, i) => (
-                    <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#162d74]", i === 0 && "border-l border-[#1a56b0]", col.label === "CM1" && "text-blue-300")}>
+                    <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#072448]", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   ))}
@@ -542,11 +542,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                       onClick={() => setSelectedTier(isSel ? null : tierRaw.tier)}
                       className={cn("border-b border-slate-100 cursor-pointer transition-colors",
                         ri % 2 === 0 ? "bg-white" : "bg-slate-50/40",
-                        isSel && "ring-1 ring-inset ring-[#003B95]",
+                        isSel && "ring-1 ring-inset ring-[#0f4c81]",
                         "hover:bg-blue-50/30")}>
                       <td className="px-4 py-2.5 sticky left-0 border-r border-slate-100 font-bold" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                         <div className="flex items-center gap-2">
-                          {isSel ? <ChevronDown className="w-3.5 h-3.5 text-[#003B95]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                          {isSel ? <ChevronDown className="w-3.5 h-3.5 text-[#0f4c81]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                           <span className={cn("text-xs font-bold", colors.text)}>{tierRaw.tier}</span>
                           <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
@@ -607,12 +607,12 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                   <input
                     type="text" placeholder="Tìm tên, mã KH..."
                     value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]/40 w-56"
+                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/40 w-56"
                   />
                 </div>
               </div>
               {editMode && (
-                <p className="text-[11px] text-[#003B95] bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                <p className="text-[11px] text-[#0f4c81] bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
                   💡 Bấm vào ô <b>Ch.Cost</b> của từng khách hàng để nhập chi phí kênh theo tháng (nhiều dòng: số tiền hoặc %). CM1 = Gross Margin − Chi phí.
                 </p>
               )}
@@ -626,7 +626,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                     {/* Region sub-header */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base">{REGION_META[reg].flag}</span>
-                      <span className="text-xs font-bold text-[#003B95] uppercase tracking-wide">{reg} — {REGION_META[reg].label}</span>
+                      <span className="text-xs font-bold text-[#0f4c81] uppercase tracking-wide">{reg} — {REGION_META[reg].label}</span>
                       <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rd.customerCount} KH</span>
                       <span className="text-[10px] text-slate-400">Revenue {fc(rd.totalRevenue)} · CM1 <span className={cm1Color(rd.totalCm1)}>{fc(rd.totalCm1)}</span> ({pct(rd.totalCm1Pct)})</span>
                     </div>
@@ -683,7 +683,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   </td>
                                   {isCreator && (
                                     <td className="px-1.5 py-1 whitespace-nowrap">
-                                      {c.priceListName ? <span className="text-[9px] font-mono text-[#003B95] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
+                                      {c.priceListName ? <span className="text-[9px] font-mono text-[#0f4c81] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
                                   <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
@@ -691,14 +691,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
                                   <td className="px-1.5 py-1 text-right tabular-nums text-[10px]">
                                     {editMode && canEditCost
-                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#003B95]/30 bg-blue-50 text-[#003B95] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
+                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#0f4c81]/30 bg-blue-50 text-[#0f4c81] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
                                           <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
                                         </button>
                                       : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
                                   </td>
                                   <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
                                   <td className="px-1.5 py-1 text-right text-[10px]">
-                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
                                   </td>
                                   <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
                                   <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
@@ -715,7 +715,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                         <td className="px-1.5 py-1 text-right text-[10px]">
                                           {tgt3hk > 0 ? (() => {
                                             const p = pr.prHk3 / tgt3hk * 100
-                                            return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
+                                            return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
                                           })() : <span className="text-slate-300">—</span>}
                                         </td>
                                       </>
@@ -813,19 +813,19 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết theo Tháng</p>
                                             <table className="text-[11px] border-collapse w-full" style={{ minWidth: 360 }}>
                                               <thead>
-                                                <tr className="bg-[#003B95]">
+                                                <tr className="bg-[#0f4c81]">
                                                   <th className="px-3 py-1.5 text-left text-[10px] text-slate-300 font-semibold uppercase w-20"></th>
                                                   {qm.map(m => isCurDetail(m) ? (
                                                     <React.Fragment key={m}>
-                                                      <th className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1a4d99]">{fmtM(m)}<sup className="text-slate-400 text-[8px] ml-0.5">Act</sup></th>
+                                                      <th className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">{fmtM(m)}<sup className="text-slate-400 text-[8px] ml-0.5">Act</sup></th>
                                                       <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold whitespace-nowrap">{fmtM(m)}<sup className="text-blue-300 text-[8px] ml-0.5">PR</sup></th>
                                                     </React.Fragment>
                                                   ) : (
-                                                    <th key={m} className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1a4d99]">
+                                                    <th key={m} className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">
                                                       {fmtM(m)}{futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[8px] ml-0.5">ƯT</sup> : ""}
                                                     </th>
                                                   ))}
-                                                  <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold border-l border-[#1a4d99] bg-[#1e3a8a]">Tổng Quý</th>
+                                                  <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold border-l border-[#1565c0] bg-[#1e3a8a]">Tổng Quý</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
@@ -854,14 +854,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                               <div className="flex items-center gap-2 mb-2">
                                                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
                                                 {canEditCost && !isEditingTgt && (
-                                                  <button onClick={() => startEditTarget(c)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#003B95] border border-[#003B95]/30 bg-white hover:bg-blue-50 rounded-md">
+                                                  <button onClick={() => startEditTarget(c)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md">
                                                     <Pencil className="w-2.5 h-2.5" />Sửa target
                                                   </button>
                                                 )}
                                                 {isEditingTgt && (
                                                   <div className="flex gap-1.5 ml-auto">
                                                     <button onClick={() => saveTarget(c)} disabled={isSavingTgt}
-                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md", !isSavingTgt ? "bg-[#003B95] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md", !isSavingTgt ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
                                                       {isSavingTgt ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}Lưu
                                                     </button>
                                                     <button onClick={cancelEditTarget} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-md">
@@ -877,19 +877,19 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   {isEditingTgt ? (
                                                     <input type="text" value={targetInputs[c.code]?.rev ?? ""} placeholder="VD: 2.000.000.000"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), rev: e.target.value } }))}
-                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.rev > 0 ? (
                                                     <div className="text-right space-y-0.5">
                                                       <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target quý: {fc(tgt.rev)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", cPrRev / tgt.rev >= 1 ? "text-green-600" : cPrRev / tgt.rev >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                        <span className={cn("font-bold", cPrRev / tgt.rev >= 1 ? "text-green-600" : cPrRev / tgt.rev >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.rev > 0 ? cPrRev / tgt.rev * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", actRev / tgt.rev >= 1 ? "text-green-600" : actRev / tgt.rev >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                        <span className={cn("font-bold", actRev / tgt.rev >= 1 ? "text-green-600" : actRev / tgt.rev >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.rev > 0 ? actRev / tgt.rev * 100 : 0)}
                                                         </span>
                                                       </div>
@@ -902,19 +902,19 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   {isEditingTgt ? (
                                                     <input type="text" value={targetInputs[c.code]?.cm1 ?? ""} placeholder="VD: 500.000.000"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), cm1: e.target.value } }))}
-                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
                                                       <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target quý: {fc(tgt.cm1)}</div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
-                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                        <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
                                                       <div className="flex gap-2 justify-end text-[10px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
-                                                        <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#003B95]" : "text-amber-600")}>
+                                                        <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
@@ -927,7 +927,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   {isEditingTgt ? (
                                                     <input type="number" min="0" max="100" step="0.1" value={targetInputs[c.code]?.thk ?? ""} placeholder="VD: 70.0"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), thk: e.target.value } }))}
-                                                      className="w-24 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                      className="w-24 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.thk > 0 ? (
                                                     <div className="text-right space-y-0.5 text-[10px]">
                                                       <div className="flex gap-2 justify-end">
@@ -948,7 +948,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                     <div className="flex flex-col items-end gap-0.5">
                                                       <input type="text" value={targetInputs[c.code]?.hk3rev ?? ""} placeholder="VD: 1.500.000.000"
                                                         onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), hk3rev: e.target.value } }))}
-                                                        className="w-40 px-2 py-1 text-[11px] text-right border border-[#003B95]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                                        className="w-40 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                       {tgt.rev > 0 && tgt.thk > 0 && (
                                                         <span className="text-[9px] text-slate-300">auto: {fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
                                                       )}
@@ -1056,7 +1056,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#003B95]">{costCust.name}</span></h3>
+                <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#0f4c81]">{costCust.name}</span></h3>
                 <p className="text-[11px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}{quarterLabel ? ` · ${quarterLabel}` : ""}</p>
               </div>
               <button onClick={closeCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
@@ -1072,7 +1072,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                     <div key={m} className={cn("border rounded-lg p-3 flex flex-col", hasData ? "border-slate-200" : "border-dashed border-slate-200 bg-slate-50/50")}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-700">{mLabel(m)}</span>
-                        <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#003B95] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                        <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#0f4c81] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>
                       </div>
                       {!hasData ? (
                         <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
@@ -1087,7 +1087,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             {lines.map((l, idx) => (
                               <div key={idx} className="flex items-center gap-1">
                                 <input value={l.label} onChange={e => setLine(m, idx, { label: e.target.value })} placeholder="Ghi chú"
-                                  className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#003B95]/40" />
+                                  className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                 <select value={l.type} onChange={e => setLine(m, idx, { type: e.target.value as "amount" | "percent" })}
                                   className="px-1 py-1 text-[11px] border border-slate-200 rounded bg-white focus:outline-none">
                                   <option value="amount">đ</option>
@@ -1096,7 +1096,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                 <div className="flex flex-col items-end gap-0.5">
                                   <input type="number" min="0" value={l.value || ""} onChange={e => setLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
                                     className={cn("w-24 px-2 py-1 text-[12px] text-right tabular-nums border rounded focus:outline-none focus:ring-1",
-                                      (l.value as number) < 0 ? "border-red-400 bg-red-50 focus:ring-red-400/40" : "border-slate-200 focus:ring-[#003B95]/40")} />
+                                      (l.value as number) < 0 ? "border-red-400 bg-red-50 focus:ring-red-400/40" : "border-slate-200 focus:ring-[#0f4c81]/40")} />
                                   {(l.value as number) < 0 && <span className="text-[9px] text-red-500 font-medium">Phải nhập số dương</span>}
                                 </div>
                                 <button onClick={() => removeLine(m, idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>

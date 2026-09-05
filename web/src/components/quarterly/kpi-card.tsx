@@ -5,19 +5,19 @@ import { pct, cm1Color, fck } from "@/lib/quarterly-format"
 
 // ─── KPI Progress Card — big % = PR CM1/Target, 3-row table (Rev/CM1/3HK) ────
 // Dùng số compact ("18.7 Tỷ") thay số đầy đủ để tránh chồng lấn trong grid.
-export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, expectedPct = 0, accent = "#003B95" }:
+export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, expectedPct = 0, accent = "#0f4c81" }:
   { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Rev?: number; hk3Target: number; expectedPct?: number; accent?: string }) {
 
   const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
   const revPrPct = target    > 0 ? (prRev / target)    * 100 : 0
 
   const colorFor = (p: number) =>
-    p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-[#003B95]" : "text-amber-600"
+    p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-brand-700" : "text-amber-600"
 
   const badge = (p: number) => (
     <span className={cn("px-1 py-0.5 rounded text-[10px] font-bold tabular-nums whitespace-nowrap",
       p >= 100 ? "bg-green-100 text-green-700"
-               : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-blue-100 text-[#003B95]"
+               : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-brand-100 text-brand-700"
                : "bg-amber-50 text-amber-600")}>
       {pct(p)}
     </span>

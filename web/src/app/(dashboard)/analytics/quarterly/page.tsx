@@ -497,10 +497,10 @@ function QuarterlyContent() {
           <p className="text-sm text-slate-400 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
           {!isFutureQ && (
             <p className="text-[13px] mt-1.5 flex items-center gap-1.5 flex-wrap">
-              <CalendarDays className="w-3.5 h-3.5 text-[#003B95]" />
+              <CalendarDays className="w-3.5 h-3.5 text-[#0f4c81]" />
               <span className="text-slate-600">Dữ liệu tính:{" "}
                 <b className="text-slate-800 tabular-nums">{fmtD(periodStart)} → {fmtD(periodThrough)}</b>
-                {isCurrentQ && <span className="text-[#003B95] font-medium"> (đến hôm qua)</span>}
+                {isCurrentQ && <span className="text-[#0f4c81] font-medium"> (đến hôm qua)</span>}
               </span>
               {report && report.quarter_days > 0 && (
                 <span className="text-slate-400 tabular-nums">· {report.elapsed_days}/{report.quarter_days} ngày</span>
@@ -512,7 +512,7 @@ function QuarterlyContent() {
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {quarters.map(q => (
               <button key={q} onClick={() => setSelQ(q)}
-                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all", selQ === q ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all", selQ === q ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {q}
               </button>
             ))}
@@ -527,7 +527,7 @@ function QuarterlyContent() {
             {(["ALL", "VN", "US"] as const).map(code => (
               <button key={code} onClick={() => setTenantFilter(code)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
-                  companyCode === code ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                  companyCode === code ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {code === "VN" ? "🇻🇳 VN" : code === "US" ? "🇺🇸 US" : "ALL"}
               </button>
             ))}
@@ -540,7 +540,7 @@ function QuarterlyContent() {
             </label>
           ))}
           <button onClick={() => fetchReport()} disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] hover:bg-[#00337f] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0f4c81] hover:bg-[#0a3560] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
             {loading ? "Đang tải…" : "Xem báo cáo"}
           </button>
@@ -578,7 +578,7 @@ function QuarterlyContent() {
           <button key={id} onClick={() => setActiveSection(id as any)}
             className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
               activeSection === id
-                ? "border-[#003B95] text-[#003B95]"
+                ? "border-[#0f4c81] text-[#0f4c81]"
                 : "border-transparent text-slate-500 hover:text-slate-700")}>
             <Icon className="w-4 h-4" />{label}
           </button>
@@ -595,7 +595,7 @@ function QuarterlyContent() {
             <h2 className="text-sm font-bold text-slate-800">Cài đặt Quarter Report</h2>
             <button onClick={saveSettings} disabled={savingSettings || !settingsDirty}
               className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                settingsDirty && !savingSettings ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                settingsDirty && !savingSettings ? "bg-[#0f4c81] hover:bg-[#0a3560] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
               <Save className="w-3.5 h-3.5" />{savingSettings ? "Đang lưu…" : "Lưu cài đặt"}
             </button>
           </div>
@@ -635,7 +635,7 @@ function QuarterlyContent() {
                     if (e.key === "Escape") setCustSuggestions([])
                   }}
                   placeholder="Tìm tên hoặc mã KH…"
-                  className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400" />
+                  className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40 placeholder-slate-400" />
                 <button onClick={() => {
                   if (newExcluded.trim() && !qSettings.excludedCustomers.includes(newExcluded.trim())) {
                     updateSettings({ excludedCustomers: [...qSettings.excludedCustomers, newExcluded.trim()] })
@@ -688,7 +688,7 @@ function QuarterlyContent() {
                     ))}
                   </div>
                   <input placeholder="+ từ khóa (Enter)"
-                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#003B95]/40 placeholder-slate-400"
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40 placeholder-slate-400"
                     onKeyDown={e => {
                       if (e.key === "Enter") {
                         const val = (e.target as HTMLInputElement).value.trim().toUpperCase()
@@ -731,13 +731,13 @@ function QuarterlyContent() {
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all">Hủy</button>
                   <button onClick={saveTargets} disabled={saving || !targetDirty}
                     className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
-                      targetDirty && !saving ? "bg-[#003B95] hover:bg-[#00337f] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                      targetDirty && !saving ? "bg-[#0f4c81] hover:bg-[#0a3560] text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
                     <Save className="w-3.5 h-3.5" />{saving ? "Đang lưu…" : "Lưu"}
                   </button>
                 </div>
               ) : (
                 <button onClick={e => { e.stopPropagation(); startEditTarget() }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#003B95] border border-[#003B95]/30 hover:bg-blue-50 text-xs font-semibold rounded-lg transition-all">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#0f4c81] border border-[#0f4c81]/30 hover:bg-blue-50 text-xs font-semibold rounded-lg transition-all">
                   <Pencil className="w-3.5 h-3.5" />Sửa
                 </button>
               )
@@ -763,7 +763,7 @@ function QuarterlyContent() {
                     onChange={e => setTgtInputs(prev => ({ ...prev, [f.id]: e.target.value }))}
                     className={cn("w-full border outline-none font-semibold text-sm font-mono rounded-lg px-3 py-2 transition-colors",
                       editTarget
-                        ? "bg-white border-[#003B95]/40 focus:border-[#003B95] focus:ring-1 focus:ring-[#003B95]/30 text-slate-800"
+                        ? "bg-white border-[#0f4c81]/40 focus:border-[#0f4c81] focus:ring-1 focus:ring-[#0f4c81]/30 text-slate-800"
                         : "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed")}
                   />
                 </div>
@@ -800,7 +800,7 @@ function QuarterlyContent() {
       {/* ── KPI Progress cards ── */}
       {report && (
         <div className={cn("grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity", loading && "opacity-50 pointer-events-none")}>
-          <KpiCard label="B2B" icon={Building2} accent="#003B95" expectedPct={expectedPct}
+          <KpiCard label="B2B" icon={Building2} accent="#0f4c81" expectedPct={expectedPct}
             actual={b2bRevRaw} prRev={b2bRevPr} target={targets.b2bRev}
             cm1Actual={b2bCm1Raw} prCm1={b2bCm1Pr} cm1Target={targets.b2bCm1}
             hk3Pct={b2bThkPct} hk3Rev={b2bThkAct} hk3Target={targets.b2bThk} />
@@ -822,7 +822,7 @@ function QuarterlyContent() {
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp theo Tháng</h2>
             <button onClick={() => setShowMonthBreakdown(v => !v)}
               className={cn("flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all",
-                showMonthBreakdown ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                showMonthBreakdown ? "bg-[#0f4c81] text-white border-[#0f4c81]" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
               {showMonthBreakdown ? "Ẩn B2B/B2C" : "Xem B2B/B2C"}
             </button>
           </div>
@@ -941,7 +941,7 @@ function QuarterlyContent() {
                     )}
                   </>
                 )}
-                <tr className="bg-[#003B95] text-white text-[11px]">
+                <tr className="bg-[#0f4c81] text-white text-[11px]">
                   <td className="px-2 py-2 font-bold text-white">Tổng {selQ}-{selYear}</td>
                   <td className="px-2 py-2 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
@@ -1018,7 +1018,7 @@ function QuarterlyContent() {
                   setEditingSquad(true)
                 } else { setEditingSquad(false) }
               }} className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
-                editingSquad ? "bg-[#003B95] text-white border-[#003B95]" : "bg-white text-slate-600 border-slate-200 hover:border-[#003B95]/60 hover:text-[#003B95]")}>
+                editingSquad ? "bg-[#0f4c81] text-white border-[#0f4c81]" : "bg-white text-slate-600 border-slate-200 hover:border-[#0f4c81]/60 hover:text-[#0f4c81]")}>
                 <Shield className="w-3.5 h-3.5" />
                 Cấu hình Squad
                 {squadConfig && <span className="ml-1 opacity-60 text-[10px]">({squadConfig.squads.length})</span>}
@@ -1045,7 +1045,7 @@ function QuarterlyContent() {
                     <div className="flex items-center gap-2">
                       <input value={sq.name} onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, name: e.target.value } : s))}
                         placeholder="Tên squad (VD: Squad 1 Ngọc)"
-                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
+                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f4c81]" />
                       <button onClick={() => setDraftSquads(prev => prev.filter((_, i) => i !== si))}
                         className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -1055,7 +1055,7 @@ function QuarterlyContent() {
                       <p className="text-xs font-medium text-slate-500 mb-1">Leader</p>
                       <select value={sq.leader ?? ""}
                         onChange={e => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, leader: e.target.value } : s))}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003B95] bg-white">
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f4c81] bg-white">
                         <option value="">— Chọn leader —</option>
                         {squadUsers.map(u => <option key={u.username} value={u.username}>{u.name} (@{u.username})</option>)}
                       </select>
@@ -1069,7 +1069,7 @@ function QuarterlyContent() {
                           {sq.sales_pics.map(code => {
                             const info = (squadData?.available_pics ?? []).find((p: any) => p.code === code)
                             return (
-                              <span key={code} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#003B95] text-white text-xs rounded-full font-medium">
+                              <span key={code} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#0f4c81] text-white text-xs rounded-full font-medium">
                                 {info?.name ?? code}
                                 <button onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, sales_pics: s.sales_pics.filter(c => c !== code) } : s))}
                                   className="hover:text-red-300 ml-0.5"><X className="w-3 h-3" /></button>
@@ -1085,7 +1085,7 @@ function QuarterlyContent() {
                             {availPics.map((p: any) => (
                               <button key={p.code}
                                 onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, sales_pics: [...s.sales_pics, p.code] } : s))}
-                                className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#003B95] hover:text-white transition-colors">
+                                className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#0f4c81] hover:text-white transition-colors">
                                 <Plus className="w-2.5 h-2.5 inline-block mr-0.5" />{p.name}
                               </button>
                             ))}
@@ -1101,11 +1101,11 @@ function QuarterlyContent() {
               })}
               <div className="flex gap-2">
                 <button onClick={() => setDraftSquads(prev => [...prev, { name: "", leader: "", sales_pics: [] }])}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm border border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-[#003B95] hover:text-[#003B95] transition-colors">
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm border border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-[#0f4c81] hover:text-[#0f4c81] transition-colors">
                   <Plus className="w-3.5 h-3.5" /> Thêm squad
                 </button>
                 <button onClick={saveSquadConfig} disabled={savingSquad}
-                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#0f4c81] text-white rounded-lg hover:bg-[#0a3560] disabled:opacity-50 transition-colors">
                   {savingSquad ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   {savingSquad ? "Đang lưu…" : "Lưu cấu hình"}
                 </button>
@@ -1139,7 +1139,7 @@ function QuarterlyContent() {
                           {(["rev","cm1","hk3rev"] as const).map(f => (
                             <td key={f} className="px-3 py-2 text-right">
                               <input value={t[f]} onChange={e => upd(f, e.target.value)} placeholder="0"
-                                className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95]" />
+                                className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81]" />
                             </td>
                           ))}
                         </tr>
@@ -1150,7 +1150,7 @@ function QuarterlyContent() {
               </div>
               <div className="flex gap-2 items-center">
                 <button onClick={saveSquadTargets} disabled={savingTargets}
-                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#003B95] text-white rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#0f4c81] text-white rounded-lg hover:bg-[#0a3560] disabled:opacity-50 transition-colors">
                   {savingTargets ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   {savingTargets ? "Đang lưu…" : "Lưu target"}
                 </button>
@@ -1175,7 +1175,7 @@ function QuarterlyContent() {
                   <FileDown className="w-3.5 h-3.5" />Export Excel
                 </button>
                 <button onClick={fetchSquadProgress} disabled={squadLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] text-white text-xs font-semibold rounded-lg hover:bg-[#00337f] disabled:opacity-50 transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0f4c81] text-white text-xs font-semibold rounded-lg hover:bg-[#0a3560] disabled:opacity-50 transition-colors">
                   <RefreshCw className={cn("w-3.5 h-3.5", squadLoading && "animate-spin")} />
                   {squadLoading ? "Đang tải…" : "Làm mới"}
                 </button>
@@ -1183,7 +1183,7 @@ function QuarterlyContent() {
             </div>
 
             {squadLoading ? (
-              <div className="flex items-center justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-[#003B95]" /></div>
+              <div className="flex items-center justify-center py-16"><RefreshCw className="w-6 h-6 animate-spin text-[#0f4c81]" /></div>
             ) : !squadData ? (
               <div className="py-12 text-center text-slate-400 text-sm">Đang tải dữ liệu…</div>
             ) : !squadData.squads?.length ? (
@@ -1224,7 +1224,7 @@ function QuarterlyContent() {
                 const active = sqSortCol === col
                 return (
                   <button onClick={() => { if (active) setSqSortDir(d => d === "asc" ? "desc" : "asc"); else { setSqSortCol(col); setSqSortDir("asc") } }}
-                    className={cn("flex items-center gap-0.5 text-left whitespace-nowrap", active ? "text-[#003B95] font-bold" : "text-slate-500 hover:text-slate-800")}>
+                    className={cn("flex items-center gap-0.5 text-left whitespace-nowrap", active ? "text-[#0f4c81] font-bold" : "text-slate-500 hover:text-slate-800")}>
                     {label}{active ? (sqSortDir === "asc" ? " ▲" : " ▼") : ""}
                   </button>
                 )
@@ -1292,31 +1292,31 @@ function QuarterlyContent() {
                         <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                         <input value={sqSearch} onChange={e => setSqSearch(e.target.value)}
                           placeholder="Tìm khách hàng..."
-                          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] w-40" />
+                          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81] w-40" />
                       </div>
                       <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
                         {(["ALL","VN","US"] as const).map(v => (
                           <button key={v} onClick={() => setSqFilterRegion(v)}
-                            className={cn("px-2 py-1 text-[11px] font-bold rounded-md transition-all", sqFilterRegion === v ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-200")}>
+                            className={cn("px-2 py-1 text-[11px] font-bold rounded-md transition-all", sqFilterRegion === v ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-200")}>
                             {v === "VN" ? "🇻🇳 VN" : v === "US" ? "🇺🇸 US" : "ALL"}
                           </button>
                         ))}
                       </div>
                       <select value={sqFilterTier} onChange={e => setSqFilterTier(e.target.value)}
-                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81] bg-white">
                         <option value="ALL">Tất cả tier</option>
                         {["Strategic","VIP","Gold","Silver"].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                       {squadNames.length > 1 && (
                         <select value={sqFilterSquad} onChange={e => setSqFilterSquad(e.target.value)}
-                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81] bg-white">
                           <option value="ALL">Tất cả squad</option>
                           {squadNames.map((n: string) => <option key={n} value={n}>{n}</option>)}
                         </select>
                       )}
                       {uniquePics.length > 0 && (
                         <select value={sqFilterPic} onChange={e => setSqFilterPic(e.target.value)}
-                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81] bg-white">
                           <option value="ALL">Tất cả PIC</option>
                           {uniquePics.map(code => {
                             const info = squadData.available_pics?.find((p: any) => p.code === code)
@@ -1325,7 +1325,7 @@ function QuarterlyContent() {
                         </select>
                       )}
                       <select value={sqFilterRisk} onChange={e => setSqFilterRisk(e.target.value)}
-                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#003B95] bg-white">
+                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81] bg-white">
                         <option value="ALL">Tất cả rủi ro</option>
                         {Object.entries(RISK_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
@@ -1338,7 +1338,7 @@ function QuarterlyContent() {
                     </div>
                     {/* S5: Flat view banner */}
                     {hasFilter && (
-                      <div className="mt-2 text-[11px] text-[#003B95] bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                      <div className="mt-2 text-[11px] text-[#0f4c81] bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
                         <span className="font-semibold">Đang xem phẳng</span>
                         <span className="text-slate-300">·</span>
                         <span className="text-slate-500">{filtered.length} khách hàng phù hợp</span>
@@ -1427,7 +1427,7 @@ function QuarterlyContent() {
                                 <div className="flex items-center gap-2 mb-3">
                                   <button onClick={() => setExpandedSquads(prev => { const next = new Set(prev); next.has(si) ? next.delete(si) : next.add(si); return next })}
                                     className="flex items-center gap-2 flex-1 text-left min-w-0 group">
-                                    <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0 group-hover:text-[#003B95]", expanded && "rotate-90")} />
+                                    <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0 group-hover:text-[#0f4c81]", expanded && "rotate-90")} />
                                     <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
                                     {leaderUser && (
                                       <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">{leaderUser.name}</span>
@@ -1522,7 +1522,7 @@ function QuarterlyContent() {
 
                         {/* B4: Total row + CM1 */}
                         {squadData.totals && (
-                          <div className="px-5 py-4 bg-[#003B95] flex items-center gap-6 flex-wrap">
+                          <div className="px-5 py-4 bg-[#0f4c81] flex items-center gap-6 flex-wrap">
                             <span className="text-[11px] font-bold text-white/60 uppercase tracking-wider shrink-0">
                               Tổng · {squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH
                             </span>

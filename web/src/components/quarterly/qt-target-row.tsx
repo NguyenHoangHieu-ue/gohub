@@ -12,7 +12,7 @@ export function QtTargetRow({ label, targetRev, revPr, revAct, targetCm1, cm1Pr,
   const cm1ActPct = targetCm1 > 0 ? cm1Act / targetCm1 * 100 : 0
   const badge = (p: number) => (
     <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
-      p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#003B95]" : "bg-red-50 text-red-500")}>
+      p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-red-50 text-red-500")}>
       {pct(p)}
     </span>
   )

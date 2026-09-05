@@ -22,22 +22,22 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
         <div className="overflow-x-auto">
           <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + months.length * colCount * 72)}px` }}>
             <thead>
-              <tr className="bg-[#003B95]">
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#003B95] border-r border-[#0a4a9e] min-w-[160px]">Kênh</th>
+              <tr className="bg-[#0f4c81]">
+                <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Kênh</th>
                 {months.map(m => {
                   const [y, mo] = m.split("-")
                   const isPr = channels[0]?.months.find((x: any) => x.month === m)?.isProjected ?? false
                   return (
-                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a4a9e] whitespace-nowrap">
+                    <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a3560] whitespace-nowrap">
                       T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
                     </th>
                   )
                 })}
               </tr>
-              <tr className="bg-[#1a4d99] text-[9px] text-blue-100 uppercase">
-                <th className="px-4 py-1.5 sticky left-0 bg-[#1a4d99] border-r border-[#1a56b0]" />
+              <tr className="bg-[#1565c0] text-[9px] text-blue-100 uppercase">
+                <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
                 {months.flatMap(m => SUB.map((h, i) => (
-                  <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#1a56b0]", h === "CM1" && "text-blue-300")}>
+                  <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", h === "CM1" && "text-blue-300")}>
                     {h}
                   </th>
                 )))}

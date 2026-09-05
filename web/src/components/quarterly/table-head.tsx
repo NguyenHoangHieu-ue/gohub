@@ -4,7 +4,7 @@ import { ColInfo } from "./col-info"
 
 export function TableHead({ cols, compact = false }: { cols: { label: string; tip?: string }[]; compact?: boolean }) {
   return (
-    <tr className="bg-[#003B95]">
+    <tr className="bg-[#0f4c81]">
       {cols.map((col, i) => {
         const h = col.label
         const tip = col.tip
