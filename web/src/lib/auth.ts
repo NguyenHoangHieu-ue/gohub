@@ -4,14 +4,6 @@ import type { OAuthConfig } from "next-auth/providers/oauth"
 import bcrypt from "bcryptjs"
 import { createClient } from "@supabase/supabase-js"
 
-// Netlify: biến NEXTAUTH_URL trên UI có thể còn placeholder ("your-site-name.netlify.app")
-// hoặc chỉ áp lúc build (netlify.toml [build.environment]) mà không tới function runtime.
-// Ép NEXTAUTH_URL = URL site thật do Netlify tự inject (process.env.URL), fallback domain cố định.
-// Chỉ override khi rỗng/placeholder → không đụng local dev (localhost) hay domain custom hợp lệ.
-if (!process.env.NEXTAUTH_URL || /your-site-name/.test(process.env.NEXTAUTH_URL)) {
-  process.env.NEXTAUTH_URL = process.env.URL || "https://gohub-intel.netlify.app"
-}
-
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
