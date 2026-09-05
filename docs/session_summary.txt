@@ -8619,6 +8619,5 @@ bảng `<table>` tay không phân trang — khớp đúng mô tả gốc của H
   cho các file cần đổi cấu trúc (giữ nguyên mọi cell render/badge/logic, chỉ đổi khung bảng).
 - tsc + `next lint` (0 lỗi mới; 2 warning trong scheduled/page.tsx là pre-existing — `useRef` unused +
   1 useEffect missing dep, không phải do đợt sửa này) + vitest (185/185) PASS.
-  **CHƯA verify Chrome/staging thật** (máy dev không chạy được dev server) — Hiếu cần tự xem 5 trang này
-  trên staging trước khi chọn lô UI tiếp theo (Lô 2: B2B, hoặc lô sửa-hex-sai riêng 7 file `#003B95` còn
-  sót từ audit s192).
+  ✅ **Hiếu đã QA trên staging — xác nhận OK**: cả 5 trang hiển thị đúng, phân trang mới (Scheduled/
+  Promotions/Countries) hoạt động tốt.
