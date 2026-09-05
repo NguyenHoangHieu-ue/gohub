@@ -8544,6 +8544,5 @@ Xuất file để dành làm riêng (ngoài scope, Hiếu chưa yêu cầu lần
   `send()` sinh nội dung fallback `"[Gửi N file: ...]"` khi user không gõ chữ, giữ nguyên UI stream plain-
   text (`__AGENT__:` prefix) đã có, không đổi giao thức stream.
 - tsc + `next lint` (0 error) + vitest (185/185, gồm `be-gau-runner.test.ts` 45 test cũ vẫn pass nguyên) —
-  PASS. **CHƯA verify bằng Chrome/staging thật** (máy dev không gọi được Gemini API/DB thật) — Hiếu cần tự
-  gửi thử ảnh/PDF/Excel cho Bé Gấu trên staging, xác nhận model đọc đúng nội dung, và xác nhận tin nhắn
-  thường (không đính kèm gì) vẫn hoạt động bình thường như trước khi đổi route.
+  PASS. ✅ **Hiếu đã QA tay trên staging — xác nhận OK**: Bé Gấu đọc đúng ảnh/file đính kèm, tin nhắn
+  thường (không đính kèm) không bị ảnh hưởng bởi thay đổi route.
