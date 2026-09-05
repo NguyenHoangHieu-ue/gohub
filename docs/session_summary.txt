@@ -8579,5 +8579,8 @@ Gấu Pro: xuất file.
   Bé Gấu stream tăng dần từng chunk (khác Gấu Pro chỉ set nội dung 1 lần lúc xong), marker \`\`\`export có
   thể chưa đóng kịp giữa chừng.
 - tsc + `next lint` (0 error mới, vài warning pre-existing không liên quan) + vitest (185/185) PASS.
-  **CHƯA verify Chrome/staging thật** — Hiếu cần tự xin Bé Gấu "xuất Excel doanh thu tháng này" (hoặc bảng
-  >15 dòng để test auto-export), xác nhận file tải đúng đủ dữ liệu; test thêm PDF/Word 1 lần.
+  ✅ **Hiếu đã QA tay trên staging — xác nhận OK**: xuất Excel/Word/PDF cho Bé Gấu hoạt động đúng.
+
+Bé Gấu vs Gấu Pro coi như đóng hết 2 gap chính từ audit s192 (upload ảnh/file + xuất file). Gap nhỏ còn lại
+chưa làm (auto date context, chart nâng cao stacked/waterfall/scatter, voice input, followup chips) — để
+dành làm khi Hiếu yêu cầu tiếp.
