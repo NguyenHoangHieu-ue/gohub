@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportAOA } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, type DeltaKind } from "@/components/dashboard-kit"
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu, chỉ tải phía client.
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
@@ -302,36 +303,34 @@ export default function BODReport() {
     )
   }
 
+  // Màu icon theo Ý NGHĨA số liệu (đợt UI redesign s190+2) — trước đây mỗi metric 1 màu tự chọn không
+  // theo hệ thống nào (blue/slate/orange/purple/indigo/pink/teal). Nay dùng chung StatTile (dashboard-kit).
+  const ACCENT_MAP: Record<string, MetricAccent> = {
+    blue: "revenue", slate: "neutral", orange: "cost", emerald: "margin",
+    purple: "margin", indigo: "margin", pink: "margin", teal: "positive",
+  }
+  const pctDiff = (current: number, previous?: number): number | null =>
+    previous === undefined || previous === 0 ? null : ((current - previous) / previous) * 100
+
   const SummaryCard = ({ title, value, icon: Icon, color, prevPeriod, prevYear, target, format = "currency" }: {
     title: string, value: number, icon: any, color: string, prevPeriod?: number, prevYear?: number, target?: number, format?: "currency" | "number" | "percent"
   }) => {
     const formattedValue = format === "currency" ? formatCurrency(value) : format === "percent" ? `${value.toFixed(2)}%` : formatCompactNumber(value)
-    const colorClasses: Record<string, string> = {
-      blue: "bg-blue-50 text-blue-600", emerald: "bg-emerald-50 text-emerald-600", orange: "bg-orange-50 text-orange-600",
-      purple: "bg-purple-50 text-purple-600", indigo: "bg-indigo-50 text-indigo-600", pink: "bg-pink-50 text-pink-600", slate: "bg-slate-50 text-slate-600", teal: "bg-teal-50 text-teal-600",
-    }
+    const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
+    if (target !== undefined && target > 0) deltas.push({ label: "Goal", value: formatCurrency(target), kind: "flat" })
+    const pDiff = pctDiff(value, prevPeriod)
+    if (pDiff !== null) deltas.push({ label: "vs Prev Period", value: `${pDiff >= 0 ? "+" : ""}${pDiff.toFixed(1)}%`, kind: pDiff >= 0 ? "up" : "down" })
+    const yDiff = pctDiff(value, prevYear)
+    if (yDiff !== null) deltas.push({ label: "vs Prev Year", value: `${yDiff >= 0 ? "+" : ""}${yDiff.toFixed(1)}%`, kind: yDiff >= 0 ? "up" : "down" })
     return (
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-start mb-4">
-          <div className={cn("p-2.5 rounded-xl", colorClasses[color] || colorClasses.slate)}><Icon className="w-5 h-5" /></div>
-          {target !== undefined && target > 0 && (
-            <div className={cn("px-2 py-1 rounded-lg text-[10px] font-bold", (value / target) >= 1 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-              {((value / target) * 100).toFixed(1)}% of Target
-            </div>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1 tracking-tight">{formattedValue}</h3>
-          {target !== undefined && target > 0 && (
-            <p className="text-[10px] text-slate-400 mt-1 font-medium">Goal: <span className="text-slate-600">{formatCurrency(target)}</span></p>
-          )}
-        </div>
-        <div className="mt-4 pt-4 border-t border-slate-50 space-y-2">
-          <ComparisonBadge current={value} previous={prevPeriod} label="vs Prev Period" />
-          <ComparisonBadge current={value} previous={prevYear} label="vs Prev Year" />
-        </div>
-      </div>
+      <StatTile
+        icon={<Icon className="w-5 h-5" />}
+        label={title}
+        value={formattedValue}
+        accent={ACCENT_MAP[color] || "neutral"}
+        goalLabel={target !== undefined && target > 0 ? `${((value / target) * 100).toFixed(1)}% of Target` : undefined}
+        deltas={deltas}
+      />
     )
   }
 
