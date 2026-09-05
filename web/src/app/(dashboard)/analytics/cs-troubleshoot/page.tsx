@@ -100,7 +100,7 @@ export default function CSTroubleshootReport() {
     }
   }
 
-  useEffect(() => { fetchData() }, [channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps — ngày chỉ áp khi bấm "Lọc"
+  useEffect(() => { fetchData() }, [channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps -- ngày chỉ áp khi bấm "Lọc"
 
   // Load sync status on mount để biết có data chưa
   useEffect(() => {

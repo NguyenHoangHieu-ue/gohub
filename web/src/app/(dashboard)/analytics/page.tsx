@@ -92,7 +92,7 @@ export default function DashboardHome() {
 
   const projection = getProjectionInfo()
 
-  useEffect(() => { fetchData() }, [dateColumn, companyCode]) // eslint-disable-line react-hooks/exhaustive-deps — ngày chỉ áp khi bấm "Lọc"
+  useEffect(() => { fetchData() }, [dateColumn, companyCode]) // eslint-disable-line react-hooks/exhaustive-deps -- ngày chỉ áp khi bấm "Lọc"
 
   const fetchData = async () => {
     setIsLoading(true); setError(null)

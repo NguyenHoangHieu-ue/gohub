@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "lint": "next lint",
     "prepare": "husky"
   },
   "dependencies": {
@@ -47,6 +48,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "postcss": "^8",
