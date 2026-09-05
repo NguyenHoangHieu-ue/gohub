@@ -6,10 +6,21 @@ import {
 } from "recharts"
 import {
   ArrowUpRight, ArrowDownRight, Filter, Calendar, RefreshCw, TrendingUp, Target, ChevronDown, Shield, Building2,
+  DollarSign, ShoppingCart, Wallet, Package,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
+
+// Icon + màu theo Ý NGHĨA từng KPI (đợt UI redesign s190+2) — khớp label thật trả về từ
+// /api/analytics/kpis/route.ts. Nhãn lạ (không có trong map) vẫn render được, chỉ không có icon.
+const KPI_META: Record<string, { icon: React.ComponentType<{ className?: string }>; accent: MetricAccent }> = {
+  "Total Revenue":    { icon: DollarSign,   accent: "revenue" },
+  "Total Orders":     { icon: ShoppingCart, accent: "neutral" },
+  "Avg. Order Value": { icon: Wallet,       accent: "positive" },
+  "Unit Sold":        { icon: Package,      accent: "neutral" },
+}
 
 // Port "y hệt" gohub-intel DashboardHome. Backend: kpis/revenue-chart/region-chart/performance-source/
 // performance-channel/recent-orders/targets-summary + b2b/strategic-performance + config/partner-tiers.
@@ -308,18 +319,23 @@ export default function DashboardHome() {
             </div>
           ))
         ) : (
-          kpis.map(kpi => (
-            <div key={kpi.label} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
-              <div className="flex items-baseline gap-2"><h2 className="text-2xl font-bold text-slate-900">{kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}</h2></div>
-              <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <div className="text-[10px] text-slate-400">Last period: <span className="font-medium text-slate-600">{kpi.isCurrency ? formatCurrency(kpi.lastPeriod) : formatNumber(kpi.lastPeriod)}</span></div>
-                <div className={cn("flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full", kpi.isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                  {kpi.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{(kpi.change || 0).toFixed(1)}%
-                </div>
-              </div>
-            </div>
-          ))
+          kpis.map(kpi => {
+            const meta = KPI_META[kpi.label]
+            const fmt = (v: number) => kpi.isCurrency ? formatCurrency(v) : formatNumber(v)
+            return (
+              <StatTile
+                key={kpi.label}
+                icon={meta && <meta.icon className="w-5 h-5" />}
+                label={kpi.label}
+                value={fmt(kpi.value)}
+                accent={meta?.accent ?? "neutral"}
+                deltas={[
+                  { label: "Last period", value: fmt(kpi.lastPeriod), kind: "flat" },
+                  { label: "vs Last period", value: `${(kpi.change || 0).toFixed(1)}%`, kind: kpi.isPositive ? "up" : "down" },
+                ]}
+              />
+            )
+          })
         )}
       </div>
 
