@@ -1,22 +1,34 @@
 "use client"
 
-import React from "react"
+import React, { useState, useEffect } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
- * Dashboard Kit — codify design language từ gohub_dashboard_mockup.html (Apple-style B2C).
- * Mục tiêu: GIẢM TẢI NHẬN THỨC (cognitive load) — dùng chung cho mọi trang analytics.
+ * Dashboard Kit — bộ component dùng chung cho MỌI trang analytics (đợt UI redesign s190+2).
+ * Mục tiêu: GIẢM TẢI NHẬN THỨC (cognitive load) — 1 kiểu card/bảng/badge duy nhất thay vì mỗi trang tự
+ * viết tay `<div className="rounded-xl border...">` riêng (trước đợt này: 29/32 trang tự viết tay).
  *
  * Pattern cốt lõi:
- *  - SourceBadge  : cho biết số liệu từ nguồn nào (GA4 / Admin GoHub / Data chat) → tăng độ tin.
- *  - LogicNote    : hộp ⓘ giải thích công thức/logic của 1 bảng → user không phải đoán.
- *  - DeltaPill    : pill màu up=xanh / down=đỏ / flat=xám / warn=hổ phách → tín hiệu 1 nhìn-là-hiểu.
- *  - ValueStack   : số chính lớn + delta nhỏ bên dưới → glanceable.
+ *  - SourceBadge   : cho biết số liệu từ nguồn nào (GA4 / Admin GoHub / Data chat) → tăng độ tin.
+ *  - LogicNote     : hộp ⓘ giải thích công thức/logic của 1 bảng → user không phải đoán.
+ *  - DeltaPill     : pill màu up=xanh / down=đỏ / flat=xám / warn=hổ phách → tín hiệu 1 nhìn-là-hiểu.
+ *  - ValueStack    : số chính lớn + delta nhỏ bên dưới → glanceable.
  *  - SnapshotMetric: thẻ KPI nhỏ trong dải snapshot.
- *  - Panel        : card section chuẩn (tiêu đề + mô tả + source + logic-note).
- *  - DataReadiness: chấm trạng thái nguồn dữ liệu (xanh = sẵn sàng, vàng = đang chờ).
+ *  - StatTile      : thẻ KPI đầy đủ (icon + nhãn + số lớn + delta vs kỳ trước/năm trước + %target) —
+ *                    thay khối card BOD/Dashboard viết tay, icon tô màu theo Ý NGHĨA số liệu (accent),
+ *                    không chọn màu ngẫu nhiên như trước.
+ *  - DataTable     : bảng dữ liệu tổng quát (sort không bắt buộc, phân trang sẵn) — port từ my-metrics,
+ *                    tổng quát hoá cho mọi trang thay vì chỉ 1 trang dùng.
+ *  - Panel         : card section chuẩn (tiêu đề + mô tả + source + logic-note) — dùng luôn để bọc chart,
+ *                    không cần thêm 1 "ChartCard" riêng.
+ *  - DataReadiness : chấm trạng thái nguồn dữ liệu (xanh = sẵn sàng, vàng = đang chờ).
+ *  - CHART_PALETTE/CHART_GRID_COLOR/chartTooltipStyle: theme màu dùng chung cho Recharts (trước đây 17
+ *    trang tự chọn màu chart riêng, không nhất quán).
  *
- * Tokens (khớp mockup): blue #0071e3 · teal #00a6a6 · green #2f9d55 · red #d93025 · amber #b7791f.
+ * Tokens: xanh navy thương hiệu `brand-*` (tailwind.config.ts, #0f4c81) làm màu chủ đạo/accent chính;
+ * amber/emerald/rose/sky (Tailwind mặc định) làm màu NGỮ NGHĨA cho revenue/cost/margin/warn — tách biệt
+ * khỏi accent, chọn theo Ý NGHĨA số liệu (xem `MetricAccent`) thay vì màu ngẫu nhiên như trước đợt này.
  */
 
 // ─── DeltaPill / MoM pill ─────────────────────────────────────────────────────
@@ -53,7 +65,7 @@ export function autoDeltaKind(v: number | null | undefined, lowerIsBetter = fals
 export type SourceKind = "ga4" | "admin" | "chat" | "neutral"
 
 const SOURCE_CLS: Record<SourceKind, string> = {
-  ga4:     "text-[#0071e3] bg-[#eaf4ff]",
+  ga4:     "text-brand-600 bg-brand-50",
   admin:   "text-[#007a7a] bg-[#e8f7f6]",
   chat:    "text-[#2f9d55] bg-[#eaf6ee]",
   neutral: "text-[#6e6e73] bg-[#eef1f5]",
@@ -81,10 +93,10 @@ export function LogicNote({ children, className }: { children: React.ReactNode; 
   return (
     <div className={cn(
       "grid grid-cols-[18px_1fr] gap-2 items-start mb-3 px-3 py-2.5 rounded-lg",
-      "border border-[#0071e3]/15 bg-[#0071e3]/[0.055] text-[#6e6e73] text-xs leading-relaxed",
+      "border border-brand-600/15 bg-brand-600/[0.055] text-[#6e6e73] text-xs leading-relaxed",
       className,
     )}>
-      <span className="text-[#0071e3] font-semibold leading-none mt-0.5">ⓘ</span>
+      <span className="text-brand-600 font-semibold leading-none mt-0.5">ⓘ</span>
       <div className="[&_strong]:text-[#1d1d1f] [&_strong]:font-semibold">{children}</div>
     </div>
   )
@@ -166,4 +178,139 @@ export function DataReadiness({ items, className }: {
       ))}
     </div>
   )
+}
+
+// ─── StatTile (thẻ KPI đầy đủ — thay card BOD/Dashboard viết tay) ─────────────
+// Màu icon chọn theo Ý NGHĨA số liệu (accent), không phải màu ngẫu nhiên như trước đợt UI này.
+export type MetricAccent = "revenue" | "cost" | "margin" | "positive" | "warn" | "neutral"
+
+const ACCENT_ICON_CLS: Record<MetricAccent, string> = {
+  revenue:  "bg-brand-50 text-brand-600",
+  cost:     "bg-amber-50 text-amber-600",
+  margin:   "bg-emerald-50 text-emerald-600",
+  positive: "bg-sky-50 text-sky-600",
+  warn:     "bg-rose-50 text-rose-600",
+  neutral:  "bg-slate-100 text-slate-500",
+}
+
+export function StatTile({ icon, label, value, unit, accent = "neutral", goalLabel, deltas, className }: {
+  icon?: React.ReactNode
+  label: string
+  value: React.ReactNode
+  unit?: React.ReactNode
+  accent?: MetricAccent
+  goalLabel?: React.ReactNode                                            // vd "334.0% of Target" góc trên phải
+  deltas?: { label: string; value: React.ReactNode; kind: DeltaKind }[]  // vd "vs Prev Period" / "vs Prev Year"
+  className?: string
+}) {
+  return (
+    <div className={cn(
+      "flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4",
+      "shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+      className,
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        {icon && (
+          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", ACCENT_ICON_CLS[accent])}>
+            {icon}
+          </span>
+        )}
+        {goalLabel && (
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 whitespace-nowrap">
+            {goalLabel}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 truncate">
+          {value}
+          {unit != null && <span className="ml-1 text-sm font-medium text-slate-400">{unit}</span>}
+        </p>
+      </div>
+      {deltas && deltas.length > 0 && (
+        <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2.5">
+          {deltas.map((d, i) => (
+            <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-slate-400 truncate">{d.label}</span>
+              <DeltaPill kind={d.kind}>{d.value}</DeltaPill>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── DataTable (bảng dữ liệu tổng quát, phân trang sẵn) ───────────────────────
+// Port từ `components/my-metrics/shared-ui.tsx` (chỉ 1 trang dùng trước đây) — tổng quát hoá cho mọi
+// trang. `my-metrics/shared-ui.tsx` re-export lại từ đây, KHÔNG còn 2 bản trùng logic.
+export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel = "Chưa có dữ liệu." }: {
+  columns: { key: string; label: string; align?: "left" | "right" | "center"; render: (row: T) => React.ReactNode }[]
+  rows: T[]
+  rowKey: (row: T) => string
+  pageSize?: number
+  emptyLabel?: string
+}) {
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [rows.length])
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const pageRows = rows.slice(page * pageSize, (page + 1) * pageSize)
+  if (rows.length === 0) return <p className="text-[11px] text-slate-400 text-center py-4">{emptyLabel}</p>
+  return (
+    <div>
+      <div className="overflow-x-auto rounded-xl border border-slate-100">
+        <table className="w-full text-[11px]">
+          <thead className="bg-slate-50">
+            <tr>
+              {columns.map(c => (
+                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[9px] whitespace-nowrap",
+                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left")}>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={rowKey(row)} className={cn("border-t border-slate-50", i % 2 === 1 && "bg-slate-50/40")}>
+                {columns.map(c => (
+                  <td key={c.key} className={cn("px-2.5 py-1.5 text-slate-700 align-top",
+                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : "text-left")}>
+                    {c.render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {pages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[10px] font-bold text-slate-500">{page + 1}/{pages} · {rows.length} dòng</span>
+          <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}
+            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Theme chart dùng chung (Recharts) ─────────────────────────────────────────
+// Trước đây 17 trang tự chọn màu chart riêng, không nhất quán. Dùng CHART_PALETTE cho series màu (thứ tự
+// ưu tiên: brand navy trước, rồi các màu ngữ nghĩa), CHART_GRID_COLOR cho <CartesianGrid>, spread
+// chartTooltipStyle vào <Tooltip contentStyle={...}>.
+export const CHART_PALETTE = ["#0f4c81", "#2f9d55", "#b7791f", "#7c5cbf", "#0891b2", "#d93025"]
+export const CHART_GRID_COLOR = "#eef1f5"
+export const chartTooltipStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  fontSize: 12,
+  boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
 }

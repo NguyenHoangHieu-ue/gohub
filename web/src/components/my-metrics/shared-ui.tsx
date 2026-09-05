@@ -2,9 +2,13 @@
 
 // Tách từ my-metrics/page.tsx (s183 Phase 5 tiếp — tách cơ học, giữ nguyên y hệt bản gốc).
 import React, { useState, useEffect } from "react"
-import { Info, ChevronUp, ChevronDown, BookOpen, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Info, ChevronUp, ChevronDown, BookOpen, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { NoteSection } from "@/lib/my-metrics-types"
+
+// DataTable giờ dùng chung mọi trang (s190+2) — nguồn thật chuyển sang dashboard-kit.tsx, re-export
+// lại đây để các file trong my-metrics/ đang import từ đường dẫn này không phải sửa.
+export { DataTable } from "@/components/dashboard-kit"
 
 export function ProgressBar({ actual, target }: { actual: number; target: number }) {
   const p = target > 0 ? Math.min((actual / target) * 100, 100) : 0
@@ -87,60 +91,3 @@ export function NotesDrawer({ sections, onClose }: { sections: NoteSection[]; on
   )
 }
 
-// ─── Generic data table — dùng cho mọi widget lấy số từ DB, theo yêu cầu "hiển thị dữ liệu bảng" ──
-export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel = "Chưa có dữ liệu." }: {
-  columns: { key: string; label: string; align?: "left" | "right" | "center"; render: (row: T) => React.ReactNode }[]
-  rows: T[]
-  rowKey: (row: T) => string
-  pageSize?: number
-  emptyLabel?: string
-}) {
-  const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [rows.length])
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
-  const pageRows = rows.slice(page * pageSize, (page + 1) * pageSize)
-  if (rows.length === 0) return <p className="text-[11px] text-slate-400 text-center py-4">{emptyLabel}</p>
-  return (
-    <div>
-      <div className="overflow-x-auto rounded-xl border border-slate-100">
-        <table className="w-full text-[11px]">
-          <thead className="bg-slate-50">
-            <tr>
-              {columns.map(c => (
-                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[9px] whitespace-nowrap",
-                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left")}>
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((row, i) => (
-              <tr key={rowKey(row)} className={cn("border-t border-slate-50", i % 2 === 1 && "bg-slate-50/40")}>
-                {columns.map(c => (
-                  <td key={c.key} className={cn("px-2.5 py-1.5 text-slate-700 align-top",
-                    c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : "text-left")}>
-                    {c.render(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {pages > 1 && (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <span className="text-[10px] font-bold text-slate-500">{page + 1}/{pages} · {rows.length} dòng</span>
-          <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}
-            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
