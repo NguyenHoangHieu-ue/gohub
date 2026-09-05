@@ -59,6 +59,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const [importLoading, setImportLoading] = useState(false)
   const [importMsg,     setImportMsg]     = useState("")
   const importFileRef = useRef<HTMLInputElement>(null)
+  // Đề xuất redesign (Hiếu duyệt qua mockup) — bảng tier trước đây LUÔN hiện mọi tháng cạnh nhau + cột
+  // "Tổng Quý" ở cuối cùng, phải cuộn ngang mới thấy tổng. Nay chọn 1 khung nhìn tại 1 thời điểm — mặc định
+  // "Cả Quý" (dùng đúng số Tổng Quý đã tính sẵn bên dưới, không tính lại). Chỉ đổi RENDER của bảng tổng hợp
+  // theo Nhóm (Strategic/VIP/Gold/Silver) — modal sửa chi phí per-customer vẫn dùng đủ `quarterMonths` như cũ.
+  const [tierViewMonth, setTierViewMonth] = useState<string>("QUARTER")
 
   const downloadTemplate = async () => {
     const XLSX = await import("xlsx")
@@ -149,6 +154,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       .catch(() => setOrdersData(prev => ({ ...prev, [key]: { rows: [], groupBy: gb, loading: false } })))
   }
   const quarterMonths: string[] = (b2bTiers?.months ?? allMonths ?? months) as string[]
+  // Chỉ dùng để RENDER bảng tổng hợp theo Nhóm — cost-editing/import/template vẫn dùng quarterMonths đầy đủ.
+  const visibleMonths: string[] = tierViewMonth === "QUARTER" ? [] : quarterMonths.filter(m => m === tierViewMonth)
 
   // kpiPrFactor per tháng — project mọi tháng đang chạy kể cả elapsed < MIN_PROJECT_DAYS (giống KPI cards).
   const monthKpiFactor = useMemo(() => {
@@ -423,6 +430,22 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               </button>
             ))}
           </div>
+          {/* Khung nhìn tháng — mặc định Cả Quý (dùng cột Tổng Quý đã tính sẵn), chọn 1 tháng để bảng gọn,
+              không phải cuộn ngang qua mọi tháng mới thấy tổng (đề xuất Hiếu đã duyệt qua mockup). */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
+            {quarterMonths.map(m => (
+              <button key={m} onClick={() => setTierViewMonth(m)}
+                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                  tierViewMonth === m ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                T{parseInt(m.split("-")[1])}
+              </button>
+            ))}
+            <button onClick={() => setTierViewMonth("QUARTER")}
+              className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                tierViewMonth === "QUARTER" ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
+              Cả Quý
+            </button>
+          </div>
           <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }} />
           {canEditCost && !editMode && (
@@ -467,11 +490,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         <div>
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (quarterMonths.length + 1) * colCount * 72)}px` }}>
+            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + 1) * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#0f4c81]">
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
-                  {quarterMonths.map(m => {
+                  {visibleMonths.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
@@ -487,7 +510,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                 </tr>
                 <tr className="bg-[#1565c0] text-[9px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
-                  {quarterMonths.flatMap(m => SUB_COLS.map((col, i) => (
+                  {visibleMonths.flatMap(m => SUB_COLS.map((col, i) => (
                     <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
@@ -501,12 +524,12 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
+                  <tr><td colSpan={1 + (visibleMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
                     <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu nhóm...
                   </td></tr>
                 )}
                 {!loading && tiers.length === 0 && (
-                  <tr><td colSpan={1 + (quarterMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
+                  <tr><td colSpan={1 + (visibleMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
                 )}
                 {!loading && tiers.map((tierRaw: any, ri: number) => {
                   const tier = pickView(tierRaw)
@@ -551,7 +574,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
                       </td>
-                      {quarterMonths.flatMap((m: string) => {
+                      {visibleMonths.flatMap((m: string) => {
                         const d = tier.months.find((x: any) => x.month === m)
                         if (!d?.hasData) {
                           return SUB.map((_: string, i: number) => (

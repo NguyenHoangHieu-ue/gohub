@@ -17,6 +17,8 @@ import { QtSummaryRow } from "@/components/quarterly/qt-summary-row"
 import { QtTargetRow } from "@/components/quarterly/qt-target-row"
 import { PivotTable } from "@/components/quarterly/pivot-table"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
+import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
+import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
 
 // s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
 // QtSummaryRow, QtTargetRow, PivotTable, B2BTierSection) đã tách sang lib/quarterly-types.ts,
@@ -826,6 +828,15 @@ function QuarterlyContent() {
               {showMonthBreakdown ? "Ẩn B2B/B2C" : "Xem B2B/B2C"}
             </button>
           </div>
+          {/* Đề xuất redesign (Hiếu duyệt qua mockup) — line-chart thay bảng làm view chính, bảng gốc
+              vẫn xem được qua "Xem bảng số liệu" bên dưới. Không đổi số liệu — cùng `summary` state. */}
+          <div className="px-5 py-4">
+            <MonthlyTrendChart summary={summary} />
+          </div>
+          <details className="border-t border-slate-100">
+            <summary className="cursor-pointer select-none px-5 py-2.5 text-xs font-bold text-[#0f4c81] hover:bg-slate-50">
+              Xem bảng số liệu gốc theo tháng
+            </summary>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse">
               <thead><TableHead cols={TH_COLS} /></thead>
@@ -892,6 +903,7 @@ function QuarterlyContent() {
               </tbody>
             </table>
           </div>
+          </details>
         </div>
       )}
 
@@ -901,6 +913,24 @@ function QuarterlyContent() {
           <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp cả Quý — So sánh với Target</h2>
           </div>
+          {/* Đề xuất redesign (Hiếu duyệt qua mockup) — bullet-chart thay bảng 12 cột làm view chính,
+              bảng gốc vẫn xem được qua "Xem bảng số liệu" bên dưới. Số liệu y hệt (cùng biến state). */}
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {qt.b2b && (
+              <QtVsTargetPanel label="B2B (Thực tế)" qoqPct={b2bQoQ}
+                actRev={b2bRevRaw} prRev={b2bRevPr} targetRev={targets.b2bRev}
+                cm1Act={b2bCm1Raw} cm1Pr={b2bCm1Pr} cm1Target={targets.b2bCm1} />
+            )}
+            {qt.b2c && (
+              <QtVsTargetPanel label="B2C (Thực tế)" qoqPct={b2cQoQ}
+                actRev={b2cRevRaw} prRev={b2cRevPr} targetRev={targets.b2cRev}
+                cm1Act={b2cCm1Raw} cm1Pr={b2cCm1Pr} cm1Target={targets.b2cCm1} />
+            )}
+          </div>
+          <details className="border-t border-slate-100">
+            <summary className="cursor-pointer select-none px-5 py-2.5 text-xs font-bold text-[#0f4c81] hover:bg-slate-50">
+              Xem bảng số liệu gốc
+            </summary>
           <div className="overflow-x-auto">
             <table className="w-full text-[11px] border-collapse">
               <thead><TableHead cols={QT_COLS} compact /></thead>
@@ -960,6 +990,7 @@ function QuarterlyContent() {
               </tbody>
             </table>
           </div>
+          </details>
         </div>
       )}
 
