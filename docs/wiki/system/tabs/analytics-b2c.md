@@ -73,6 +73,16 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **UI s194+3 (2026-09-06) — thêm màu thật (Hiếu phản hồi bản đồng bộ-màu-lệch vẫn đơn điệu)**: bảng màu
+  "kênh" ở hero card (VN=`#0071e3`, US=`#6366f1`, Web=`#00a6a6`, App=`#2f9d55`, Khác=`#b7791f`) nay dùng lại
+  xuyên suốt — `KpiCard`/`Section` (`b2c-advanced-dashboard.tsx`) có `icon`/`accent` prop khai từ trước
+  nhưng CHƯA TỪNG render (dead code) → nay render thật: icon chip màu + viền trái màu (KpiCard theo ý nghĩa
+  funnel), icon chip mỗi Section 1 màu riêng (trước tất cả cùng xanh dương). Helper `marketDot(label)` thêm
+  chấm màu trước tên dòng VN/US/Web/App/New/Returning trong `RollingTable`/`SimpleRollTable`/
+  `AcquisitionTable` — match CHÍNH XÁC token đầu nhãn (không lẫn "VN-Web eSIM"/"Mobile-App" là tên sản
+  phẩm). `b2c-metric.tsx`: thêm dải 6 `StatTile` tháng hiện tại (Revenue/GP/CM1/Orders/Traffic/User), header
+  bảng đổi gradient brand, biến `isBlue` (dead code) nay tô nền+chữ brand cho dòng nhóm chỉ số, dot Web/App
+  khớp đúng màu Advanced. Không đổi số liệu/logic/API.
 - **UI s194 (2026-09-06) — đồng bộ màu, không đổi bố cục**: `b2c-advanced-dashboard.tsx` (sub-tab Advanced,
   "y chang mockup" đã duyệt — `Section` Apple-glass card + `KpiCard` + `RollingTable` giữ nguyên) có 15 chỗ
   bảng/banner lỡ dùng Tailwind `blue-*` mặc định thay vì đúng accent `#0071e3` của trang → đồng bộ lại. Đã
