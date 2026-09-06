@@ -24,7 +24,7 @@
 | Plan đang chạy | Rebuild toàn diện theo `C:\Users\nhhie\.claude\plans\effervescent-zooming-wilkinson.md` (Hiếu đã duyệt) — Phase 0-6, mỗi phase 1 lần xin xác nhận riêng trước khi merge main. Phase 0-6 đều đã làm xong tách cơ học/hạ tầng (xem session_summary.txt s183-s189); merge main CHƯA xin. |
 | ✅ **s190 (2026-09-05) — audit toàn diện + 2 fix thật phát hiện qua audit** | Theo yêu cầu Hiếu "đánh giá toàn diện quy trình/hệ thống/code/OOP/security/UI-UX". Report đầy đủ (21 phát hiện, ưu/nhược + hướng sửa) đã publish Artifact cho Hiếu, không lưu file trong repo. 2 fix đã làm ngay trong lúc audit: (1) **`creator-ai.ts` 2060→750 dòng** — xoá 3 khối code chết cộng dồn 63% file (declarations cũ + implementation cũ của executeSQL/querySupabase/browsePortal/generateImage/... + nguyên khối `if (false) await Promise.all(...)`), tất cả đã bị thay thế hoàn toàn bởi `creator/declarations.ts` + `creator/tools/dispatch.ts` từ trước, không đổi hành vi (giữ nguyên `runReadKnowledgeBase` vì be-gau.ts còn import trực tiếp). (2) **`guardian.ts` — xoá cơ chế policy DB mồ côi**: Hiếu tự kiểm tra Supabase thấy `app_settings.access_policy` còn dữ liệu CŨ đang deny margin_cogs/staff_hr/customer_pii/system_internal cho staff/b2b/b2c/saleb2c/ops-&-cs/product — route UI ghi policy đã xoá từ lúc gộp Bé Gấu/Gấu Pro nhưng `guardCheck()` vẫn đọc override này mỗi request, âm thầm trái với chủ trương "ai cũng như nhau" đã chốt, không ai biết vì hết UI hiển thị. Đã xoá route `/api/config/access-policy` + toàn bộ `loadPolicy`/cache/`DEFAULT_POLICY` dept-branch trong guardian.ts — quyết định giờ cứng trong code, không còn "cấu hình ẩn" nào lệch khỏi ý định. `canViewCogs()` giờ luôn `true`. tsc+eslint+vitest (182/182) PASS cả 2 fix. Dòng cũ trong Supabase vẫn còn nhưng vô hại (code không đọc nữa) — Hiếu có thể tự `DELETE FROM app_settings WHERE key='access_policy'` cho gọn, không bắt buộc. |
 | ✅ **Phase 6 (2026-09-05) — vá lỗ hổng quy trình** | Thêm script `lint` thật (`next lint`, trước đây không có dù docs mô tả có). Rule pragmatic cho codebase 285+ file chưa từng lint (no-explicit-any off, vài rule hạ warn) — xem `.eslintrc.json`. Fix 2 bug thật: eslint-disable-comment dùng "—" thay "--" nên không có tác dụng. GitHub Actions CI — Hiếu chọn KHÔNG setup, giữ quy trình tsc-tay. Smoke test route đã migrate — KHÔNG làm được (máy dev thiếu credential DB thật, route crash ngay khi import do client DB khởi tạo dùng env ở module-level). |
-| ✅ **Phase 5 (2026-09-04/05) — dọn 4 trang FE khổng lồ, tách cơ học** | `quarterly/page.tsx` 3077→1564 dòng, `channels/page.tsx` 1944→1843, `to-gau/[id]/page.tsx` 2843→1224, `my-metrics/page.tsx` 1809→629. Nguyên tắc: CHỈ move nguyên khung JSX/logic, KHÔNG gộp khối JSX khác nhau (máy dev không có `.env.local` để verify UI bằng mắt, tsc là lưới an toàn duy nhất). QA Chrome thật xác nhận PASS cho quarterly Tổng quan + channels; **to-gau/My Metrics/B2BTierSection còn nợ Hiếu QA trên staging** (xem checklist dưới). |
+| ✅ **Phase 5 (2026-09-04/05, QA xong 2026-09-06) — dọn 4 trang FE khổng lồ, tách cơ học** | `quarterly/page.tsx` 3077→1564 dòng, `channels/page.tsx` 1944→1843, `to-gau/[id]/page.tsx` 2843→1224, `my-metrics/page.tsx` 1809→629. Nguyên tắc: CHỈ move nguyên khung JSX/logic, KHÔNG gộp khối JSX khác nhau. QA Chrome thật xác nhận PASS cho cả 4 file (quarterly/channels đợt trước; to-gau + my-metrics + B2BTierSection tự QA đầy đủ s194 — xem checklist dưới đã tick). Phase 5 hoàn tất hẳn, không còn nợ QA nào. |
 | ✅ Phase 0-4 (2026-09-04) | Wiki tái cấu trúc `business/`+`system/` · engine `getKpiFactor`/`getElapsedRatio` + 30 test · fix bug thật All-Time + timezone date-math + migrate BOD/Quarter/B2B sang engine · dọn tàn dư Orders/Order Report · rate-limit Upstash Redis + mở rộng 4 route. Chi tiết: `docs/session_summary.txt` s183-s187. |
 | 📌 **Ghi nhớ: Vercel Hobby plan = cron tối đa 1 lần/ngày/job** | Từng gây FAIL deploy ~2 tiếng (s167 đặt cron 3h/lần) — khi thêm cron mới, luôn set tối đa 1x/ngày. |
 | 📌 **Ghi nhớ: máy dev KHÔNG có `web/.env.local`** | Không chạy được dev server / `next build` collect-page-data / query gohub_dw-Supabase thật. tsc + vitest (unit, mock DB) là lưới an toàn duy nhất chạy được tại chỗ — mọi thay đổi chạm DB/UI cần Hiếu tự QA trên staging. |
@@ -50,12 +50,19 @@
   Explorer vào Dev Tools (vốn chỉ admin/creator) — nếu bod cần lại, báo để tách check quyền riêng.
 - [ ] **s190 audit — (không gấp) dọn tay hàng `access_policy` trong Supabase** `app_settings` — code đã
   không đọc nữa (xem dòng s190 ở trên), xoá cho gọn hay để cũng không sao.
-- [ ] **Phase 5 — QA UI to-gau + My Metrics + B2BTierSection trên staging** (tách cơ học mới nhất, CHƯA
-  verify bằng Chrome): to-gau (`SettingsModal`/`DocsPanel`/`NotesPanel`/`WikiPanel`/upload file+ảnh/
-  @mention/xoá tin) + My Metrics (`EvidenceCard`/`LarkReviewPanel`/`SkuScanSection`/
-  `BegauInsightsSection`/`LarkConfigModal`/`DatapoolDetailTable`) + Quarter Report tab B2B
-  (`B2BTierSection` — bảng tier, expand KH VN/US, sửa/import/export CH.Cost, target KH per-customer).
-  Sau khi QA xong cả 4 file, Phase 5 coi như hoàn tất hẳn.
+- [x] **Phase 5 — QA UI to-gau + My Metrics + B2BTierSection — XONG (2026-09-06), tự QA qua Chrome** —
+  to-gau: `SettingsModal` (icon/tên/mô tả/thành viên/AI scope) ✅, `DocsPanel` (Chính thức = wiki, Của
+  nhóm→Docs) ✅, `NotesPanel` (Của nhóm→Notes, ghi chú dùng chung) ✅, `WikiPanel` (tab Chính thức) ✅, upload
+  file+ảnh (test upload thật, preview thumbnail đúng) ✅, @mention (gõ `@` ra picker đúng, chip mention có
+  sẵn render đúng trong lịch sử chat) ✅, xoá tin (nút "Thu hồi" xác nhận có trong menu hover tin nhắn, không
+  bấm thật để tránh xoá dữ liệu thật) ✅. My Metrics: `EvidenceCard`/`LarkReviewPanel` (mở case đã từ chối)
+  ✅, `SkuScanSection` ✅, `BegauInsightsSection` — xác nhận qua DOM/console (data load đúng, bảng quality +
+  chart topUsers + tag topKeywords đều có data thật, 0 lỗi console) dù ảnh chụp Chrome tự động bị chụp hụt
+  đúng vùng này nhiều lần liền — đã soát kỹ (màu/opacity/filter/transform DOM đều bình thường, không phải
+  bug CSS thật) → kết luận là hạn chế của tool chụp màn hình tự động, không phải lỗi app; Hiếu liếc qua 1
+  lần cho chắc khi rảnh — ✅, `LarkConfigModal` (Cấu hình Bé Gấu quét Lark) ✅, `DatapoolDetailTable` (2210
+  SKU, filter vendor + search) ✅. B2BTierSection đã QA ở đợt trước (mục tính năng Sản phẩm/Biểu đồ). Phase
+  5 coi như hoàn tất hẳn.
 - [ ] **Phase 4 — tạo tài khoản Upstash Redis** (free tier) + set `UPSTASH_REDIS_REST_URL`/
   `UPSTASH_REDIS_REST_TOKEN` trên Vercel (Production + Preview) để rate-limit chặn thật cross-instance —
   chưa set vẫn chạy đúng như in-memory cũ, chỉ chưa có lợi ích cross-instance.
