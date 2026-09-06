@@ -7,6 +7,31 @@
 
 ---
 
+## ⚠️ s194+8 (2026-09-06) — Fix bug lớn: MỌI role không phải admin/creator chưa từng vào được Tổ Gấu
+
+Hiếu báo "mở lại Tổ Gấu cho tất cả mọi người vào được — vài acc tôi bấm vào không được". Tái hiện bằng
+acc thật role `bod` (username `hieu`) đã được add làm member group thật: bấm sidebar "Tổ Gấu" → hoàn toàn
+không phản ứng (URL không đổi).
+
+**Root cause**: `app/(dashboard)/analytics/layout.tsx` là server-side gate áp dụng cho MỌI route con
+`/analytics/*`, dùng `granted.has(pathToAnalyticsId(pathname))` để chặn truy cập thẳng URL trang analytics
+chưa được cấp quyền (`role_permissions` ∪ `allowed_analytics` per-user). `/analytics/to-gau` cũng khớp
+route pattern này → bị coi như 1 "trang analytics" tên `to-gau`. Nhưng Tổ Gấu **không phải** trang
+analytics — theo đúng thiết kế (`sidebar.tsx`/`nav.ts`, xem §Access Control dưới), nó hiện cho MỌI role,
+chỉ ẩn qua `hiddenTabs` (creator config), hoàn toàn KHÔNG nằm trong `role_permissions`/`allowed_analytics`
+của bất kỳ role nào. Kết quả: `granted.has("to-gau")` LUÔN `false` cho mọi role không phải admin/creator
+(2 role này bypass gate này từ đầu layout) → `redirect("/chatbot")` ngay lập tức, bất kể user có phải
+member group thật hay không. Bug tồn tại từ khi `analytics/layout.tsx` được tách ra làm gate chung, ảnh
+hưởng **toàn bộ** user thường (staff/manager/bod/...) — không ai phát hiện vì đội test chủ yếu dùng acc
+creator (tự động bypass).
+
+**Fix**: thêm early-return `if (id === "to-gau") return <>{children}</>` ngay trước đoạn check `granted`,
+giữ nguyên gate cho mọi trang analytics thật khác. tsc + lint + vitest (185/185) PASS. QA lại bằng chính
+acc `hieu` (role bod) qua Chrome trên staging — vào được danh sách Tổ Gấu, vào được group, thấy chat/
+members/AI đầy đủ.
+
+---
+
 ## ⚠️ s194+6 (2026-09-06) — panel "Câu hỏi CS" + AI search thêm Docs/Notes nhóm + trích nguồn
 
 Theo yêu cầu Hiếu: CS hay tag người trong ticket/troubleshoot hỏi về sản phẩm/policy nhưng câu hỏi "trôi mất",
@@ -301,3 +326,8 @@ Trang tạo TỪ trong 1 group Tổ Gấu → mặc định `visibility_mode='gr
 - `creator` hoặc `admin` → toàn quyền (tạo group, CRUD, xem all, pin)
 - User thường → chỉ thấy/vào group đã được add vào; không pin được
 - 401 nếu không có session; 403 nếu không phải member/privileged
+- ⚠️ **Route `/analytics/to-gau*` KHÔNG phải trang analytics** dù nằm dưới `/analytics/` — sidebar hiện
+  cho MỌI role (chỉ ẩn qua `hiddenTabs` creator config), gate thật nằm ở API routes (member check ở trên)
+  chứ KHÔNG phải `role_permissions`/`allowed_analytics`. `app/(dashboard)/analytics/layout.tsx` phải
+  bypass sớm cho `id === "to-gau"` (xem s194+8) — nếu ai đó sau này refactor layout này, PHẢI giữ bypass
+  này, nếu không mọi role không phải admin/creator sẽ lại bị redirect ngược `/chatbot` im lặng.

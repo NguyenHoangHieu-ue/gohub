@@ -8753,3 +8753,38 @@ Gemini trong `ai/route.ts` (trả "Hiếu đang fix, vui lòng đợi" thay vì 
 tsc + lint (0 lỗi mới) + vitest (185/185) PASS cả 2 đợt commit. QA lại qua Chrome + fetch trực tiếp trên
 staging sau fix — AI trả lời đúng + trích đúng nguồn `(Nguồn: [Ghi chú nhóm] Nguyễn Hoàng Hiếu)`. Wiki
 `docs/wiki/system/tabs/analytics-to-gau.md` cập nhật đầy đủ (bảng mới, API mới, cả phần fix Gemini).
+
+### s194+8 (2026-09-06) — Fix bug lớn: MỌI role không phải admin/creator chưa từng vào được Tổ Gấu
+
+Hiếu: "mở lại Tổ Gấu cho tất cả mọi người vào được đi (vì hiện tại có vài acc tôi bấm vào không được)".
+Hỏi lại 2 vòng AskUserQuestion để làm rõ: không phải yêu cầu đổi chính sách quyền (không cần mở public),
+mà là BUG — "đã add vào group rồi mà vẫn không vào được" + "bấm nút không có phản ứng gì cả".
+
+Điều tra tĩnh qua code (sidebar.tsx/nav.ts, isMember() ở các route to-gau, auth.ts identity) không tìm ra
+nguyên nhân — mọi logic liên quan đều đúng thiết kế. Xin Hiếu tự đăng nhập trực tiếp bằng acc test thật
+(username "hieu", role `bod`, do Hiếu vừa tự add vào group "Test" để tái hiện) ngay trong tab Chrome đang
+điều khiển để bắt lỗi console/network sống thay vì đoán tiếp — tránh sa lầy đoán mò.
+
+Tái hiện: click sidebar "Tổ Gấu" → không có phản ứng gì, URL không đổi. Kiểm tra sâu hơn bằng
+`element.click()` trực tiếp trên đúng thẻ `<a href="/analytics/to-gau">` (loại trừ khả năng lệch toạ độ
+chuột) — vẫn không nhúc nhích. Navigate thẳng URL `/analytics/to-gau` qua address bar → bị BOUNCE NGƯỢC về
+`/chatbot` ngay lập tức (xác nhận qua `tabs_context_mcp` URL cuối cùng).
+
+**Root cause**: `app/(dashboard)/analytics/layout.tsx` — server-side gate áp dụng cho MỌI route con
+`/analytics/*`, dùng `granted.has(pathToAnalyticsId(pathname))` (granted = `role_permissions` ∪
+`allowed_analytics` per-user) để chặn truy cập thẳng URL trang analytics chưa cấp quyền. `/analytics/to-gau`
+khớp route pattern này nên bị coi như 1 "trang analytics" tên `to-gau`. Nhưng Tổ Gấu KHÔNG PHẢI trang
+analytics — đúng thiết kế (sidebar.tsx/nav.ts ghi rõ comment "hiển thị mọi role, chỉ ẩn qua hiddenTabs,
+KHÔNG gate theo pmAllowed"), nó hoàn toàn không nằm trong `role_permissions`/`allowed_analytics` của bất kỳ
+role nào. Kết quả: `granted.has("to-gau")` LUÔN `false` cho mọi role không phải admin/creator (2 role này
+bypass gate từ đầu layout) → redirect `/chatbot` ngay lập tức, bất kể có phải member group thật hay không.
+Bug tồn tại từ khi `analytics/layout.tsx` được tách ra làm gate chung cho mọi trang con — ảnh hưởng TOÀN BỘ
+user thường (staff/manager/bod/sale/...), không ai phát hiện vì đội test hầu như chỉ dùng acc creator/admin
+(tự động bypass đầu layout).
+
+Fix: thêm early-return `if (id === "to-gau") return <>{children}</>` ngay trước đoạn check `granted`, giữ
+nguyên gate cho mọi trang analytics thật khác — không đổi logic phân quyền gì khác. tsc + lint (0 lỗi mới) +
+vitest (185/185) PASS. QA lại bằng chính acc "hieu" (role bod) qua Chrome trên staging sau deploy — vào
+được danh sách Tổ Gấu, vào được group, thấy chat/members/AI trích nguồn đầy đủ. Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật (mục riêng + ghi chú cảnh báo trong §Access Control để
+tránh tái phát nếu ai refactor layout này sau này).
