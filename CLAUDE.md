@@ -41,10 +41,13 @@
   v48 Hiếu đã chạy, đặt câu hỏi/đổi trạng thái/trả lời PASS, AI trích nguồn đúng. Fix kèm theo: model
   `gemini-2.0-flash` bị khai tử làm Gấu Tổ AI chết 500 âm thầm 6 ngày (2026-08-31 tới nay) — đã đổi sang
   `gemini-3.6-flash` (3 route). Không cần làm gì thêm, Hiếu hỏi thử Gấu Tổ 1 câu cho yên tâm là được.
-- [ ] **s194 — QA thị giác B2B + B2C trên staging** (B2B: KPI cards StatTile + màu brand-*/chart palette;
-  B2C Advanced: icon/dot màu theo kênh (VN/US/Web/App) xuyên suốt, KPI card có màu; B2C Metric: thêm dải
-  StatTile + header gradient + dot Web/App — số liệu cả 3 KHÔNG đổi, chỉ presentation) — xong thì làm tiếp
-  Channels (lô 2, còn lại) hoặc chọn lô khác.
+- [x] **s194 — QA thị giác B2B + B2C — XONG (2026-09-06), tự QA qua Chrome trên staging** — B2B: 5 StatTile
+  Actual + 5 StatTile Projected (đổi filter sang tháng đang chạy để hiện đủ 2 khối) đều đúng icon/màu, badge
+  vs Prev Period đúng dấu +/-, chart Revenue&CM1 đúng brand palette, bảng Tier Performance render đúng. B2C
+  Advanced: hero card + 6 KPI mini-card đúng icon/viền màu, dot màu kênh (VN=xanh dương/US=tím/Web=teal/
+  App=xanh lá) hiện đúng ở mọi bảng breakdown (RollingTable/Doanh thu B2C & Breakdown), chart area màu brand
+  đúng. B2C Metric: 6 StatTile đầu trang đúng màu, dot Web/App đúng convention trong bảng. Không phát hiện
+  lỗi nào, số liệu không đổi so với trước — xong lô này, làm tiếp Channels (lô 2, còn lại) hoặc chọn lô khác.
 - [x] **GA4 App connect — XONG (2026-09-06)** — Hiếu cấp quyền Viewer + chạy SQL thêm entry `gohub-app`
   vào `app_settings.ga4_configs`. Đã tự QA qua Chrome thật trên staging: toggle Web/App tab Website ra
   đúng data mỗi lần (kể cả bấm nhanh liên tục App→Web→App). Trong lúc QA phát hiện thêm 1 race condition ở
