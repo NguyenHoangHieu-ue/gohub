@@ -27,7 +27,22 @@ không ai biết đã trả lời/update thông tin chưa. 4 phần:
    nguyên văn để kiểm chứng, không bịa nguồn nếu không có tài liệu nào khớp.
 4. Component mới `components/to-gau/questions-panel.tsx`, type `QuestionItem` (`lib/to-gau-types.ts`).
 
-tsc + lint (0 lỗi mới) + vitest (185/185) PASS. Chưa QA UI trên staging (Hiếu tự QA sau).
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS. **Đã tự QA đầy đủ qua Chrome trên staging thật
+(`stg-intel-v2.gohub.cloud`)** — panel Câu hỏi: đặt câu hỏi/đổi trạng thái chưa→đang→đã xử lý/trả lời tự
+chuyển đã xử lý đều PASS. Hỏi AI 1 câu có đáp án nằm trong Notes của group → AI trả lời đúng + trích đúng
+nguồn `(Nguồn: [Ghi chú nhóm] ...)`.
+
+### ⚠️ s194+7 — bug thật phát hiện lúc QA: `gemini-2.0-flash` bị Google khai tử, Gấu Tổ AI chết 500 âm thầm 6 ngày
+
+Lúc QA mục AI trích nguồn ở trên, hỏi AI trả về 500 rỗng body. Tra Vercel runtime error log
+(`get_runtime_errors`) thấy model `gemini-2.0-flash` trả `404 This model ... is no longer available` liên
+tục từ **2026-08-31** — Gấu Tổ AI đã chết từ 6 ngày trước, không liên quan gì đến task đang làm, không ai
+biết vì route `ai/route.ts` không có try/catch nên lỗi không hiện gì cho user (im lặng fail). Grep repo:
+toàn hệ thống đã chuyển sang `gemini-3.6-flash` từ trước, chỉ sót đúng 3 route dùng model cũ —
+`to-gau/groups/[id]/ai/route.ts`, `api/analytics/usage-stats/classify`, `api/analytics/usage-stats/evaluate`
+— cả 3 đã đổi sang `gemini-3.6-flash`. Thêm try/catch quanh lời gọi Gemini trong `ai/route.ts` (trả "Hiếu
+đang fix, vui lòng đợi" thay vì 500 rỗng) để lần sau lỗi API dễ chẩn đoán hơn. tsc + lint + vitest (185/185)
+PASS, QA lại qua Chrome + fetch trực tiếp trên staging — AI hoạt động đúng trở lại.
 
 ---
 
