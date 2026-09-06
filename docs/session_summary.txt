@@ -8789,3 +8789,38 @@ vitest (185/185) PASS. QA lại bằng chính acc "hieu" (role bod) qua Chrome t
 `docs/wiki/system/tabs/analytics-to-gau.md` cập nhật (mục riêng + ghi chú cảnh báo trong §Access Control để
 tránh tái phát nếu ai refactor layout này sau này). **Hiếu tự xác nhận trên staging bằng chính acc "hieu" —
 vào được, OK.**
+
+### s194 (tiếp) — QA thị giác B2B + B2C + UI Lô 2 phần Channels
+
+Hiếu: "tiếp tục làm lô UI B2B + B2C QA đi" rồi "làm luôn" (Channels). Tự QA qua Chrome trên staging (acc
+"hieu" role bod, đủ quyền xem full analytics):
+
+**B2B**: đổi filter sang tháng đang chạy để hiện đủ cả 2 khối StatTile (Actual + Projected, 5 card mỗi khối)
+— đúng icon/màu theo ý nghĩa, badge "vs Prev Period" đúng dấu +/-, chart Revenue&CM1 đúng brand palette,
+bảng Tier Performance render đúng số liệu.
+
+**B2C Advanced**: hero card + 6 KPI mini-card đúng icon/viền màu; dot màu kênh (VN=xanh dương/US=tím/
+Web=teal/App=xanh lá — bảng màu quy ước đã chốt từ đợt B2C trước) hiện ĐÚNG ở mọi bảng breakdown
+(RollingTable/"Doanh thu B2C & Breakdown" — khớp chính xác token đầu nhãn dòng); chart "Doanh thu B2C theo
+thị trường" area màu brand đúng.
+
+**B2C Metric**: 6 StatTile đầu trang đúng màu, dot Web/App đúng convention trong bảng pivot.
+
+Không phát hiện lỗi nào ở B2B/B2C, số liệu không đổi so với trước redesign.
+
+**UI Lô 2 phần Channels** (nốt lô 2, sau B2B/B2C): `channels/page.tsx` — KPI card đã dùng `StatTile` từ
+trước (không cần đổi lại); chart Revenue Trend đổi hex tự chọn `#3b82f6`/`#10b981`/`#f1f5f9` sang
+`CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung; toàn bộ `blue-*` Tailwind class còn sót
+(badge Group, tier pill, progress bar contribution, nút Filters...) đổi sang `brand-*`; 4 chỗ hex inline
+`#0f4c81` đổi sang class `brand-600`. Lúc soát code phát hiện `CostManagementModal`/`showCostModal`/`dbRole`
+trong file này là dead code (import/state còn sót từ lúc "Manage Costs" đã bị ngắt hẳn ở tab này từ
+2026-07-28, đúng như wiki đã ghi) — không xoá lần này (ngoài scope đổi màu), chỉ ghi chú lại trong wiki.
+`cost-management-modal.tsx` (component thật sự đang render ở tab Targets, KHÔNG phải Channels) cũng đổi
+`blue-*`→`brand-*` (25 chỗ) nhân tiện vì cùng 1 file dùng chung. KHÔNG đụng bảng B2B Tier/Channel Overview
+(giữ `<table>` viết tay, đúng tiền lệ B2B) hay bất kỳ logic/công thức/API nào.
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS cả 2 file. Tự QA qua Chrome trên staging sau deploy: All
+Channels Overview table đúng màu, chọn 1 kênh (VN-Wholesales) xem đủ 6 StatTile + Revenue Trend chart
+(line/area brand navy đúng, không còn xanh dương mặc định) + Performance Breakdown + Daily Performance +
+Top Selling Products — tất cả hiển thị đúng, số liệu không đổi, không lỗi. Lô 2 (Channels/B2B/B2C) coi như
+hoàn tất hẳn. Wiki `docs/wiki/system/tabs/analytics-channels.md` cập nhật mục Gotchas.

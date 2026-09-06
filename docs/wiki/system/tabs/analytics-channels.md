@@ -94,6 +94,10 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **s194+9 (2026-09-06)**: UI redesign — chart Revenue Trend + toàn bộ `blue-*` đổi sang `CHART_PALETTE`/
+  `brand-*` dùng chung (không đổi logic/API). Lúc làm phát hiện `CostManagementModal`/`showCostModal`/
+  `dbRole` trong `page.tsx` là dead code còn sót từ lúc ngắt Manage Costs (§4 trên) — chưa dọn, không phải
+  bug chức năng (không render gì cả nên vô hại), để dành dọn riêng nếu có đợt cleanup.
 - **Fix s162**: `channels/kpis` (KPI card) cũng đổi sang Turso per-customer cost khi scope là B2B (channelGroup=B2B
   hoặc 1 channel cụ thể thuộc nhóm B2B) — trước cùng lỗi analytics_channel_costs rỗng như bảng performance.
 - `groupFilter` = `AND UPPER(s.group_name) = 'B2B'|'B2C'` khi user lọc theo nhóm.
