@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportAOA } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel VendorPerformance. Data qua /api/analytics/query (SELECT-only) +
 // /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
@@ -92,8 +93,8 @@ export default function VendorPerformancePage() {
   const SortIcon = ({ column }: { column: string }) => {
     if (sortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
     return sortConfig.direction === "asc"
-      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-600" />
-      : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
+      ? <ChevronUp className="w-3 h-3 ml-1 text-brand-600" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-brand-600" />
   }
 
   useEffect(() => { setProductPage(1) }, [searchTerm, sortConfig])
@@ -601,7 +602,7 @@ export default function VendorPerformancePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Truck className="w-7 h-7 text-blue-600" />
+            <Truck className="w-7 h-7 text-brand-600" />
             Vendor Performance
           </h1>
           <p className="text-slate-500 text-sm mt-1">Phân tích hiệu quả kinh doanh theo nhà cung cấp (Database Data)</p>
@@ -611,12 +612,12 @@ export default function VendorPerformancePage() {
           <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm shrink-0 items-center h-[42px]">
             <button onClick={() => setDateColumn("fulfiled_date")}
               className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center",
-                dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+                dateColumn === "fulfiled_date" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
               Fulfillment
             </button>
             <button onClick={() => setDateColumn("created_date")}
               className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center",
-                dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+                dateColumn === "created_date" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
               Created
             </button>
           </div>
@@ -636,14 +637,14 @@ export default function VendorPerformancePage() {
                 <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                   <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setSelectedVendors(vendors)} className="text-[10px] text-blue-600 font-bold hover:underline">All</button>
+                    <button onClick={() => setSelectedVendors(vendors)} className="text-[10px] text-brand-600 font-bold hover:underline">All</button>
                     <button onClick={() => setSelectedVendors([])} className="text-[10px] text-rose-600 font-bold hover:underline">Clear</button>
                   </div>
                 </div>
                 {vendors.map(v => (
                   <div key={v} onClick={() => toggleVendor(v)}
                     className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                      selectedVendors.includes(v) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-700")}>
+                      selectedVendors.includes(v) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-700")}>
                     <span className="text-sm font-medium">{v}</span>
                     {selectedVendors.includes(v) && <Check className="w-4 h-4" />}
                   </div>
@@ -667,9 +668,9 @@ export default function VendorPerformancePage() {
           )}
 
           {comparisonType !== "none" && (
-            <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-xl border border-blue-100 shadow-sm">
-              <ArrowUpRight className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700 whitespace-nowrap">
+            <div className="flex items-center gap-2 bg-brand-50 px-3 py-2 rounded-xl border border-brand-100 shadow-sm">
+              <ArrowUpRight className="w-4 h-4 text-brand-600" />
+              <span className="text-sm font-medium text-brand-700 whitespace-nowrap">
                 vs {comparisonType === "previous_period" ? "Prev Period" : "Prev Year"}
               </span>
             </div>
@@ -677,7 +678,7 @@ export default function VendorPerformancePage() {
 
           <button onClick={() => setShowFilters(!showFilters)}
             className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
+              showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
             <span className="text-sm font-medium">Filters</span>
           </button>
@@ -690,19 +691,19 @@ export default function VendorPerformancePage() {
 
       {/* Projection Card */}
       {projection && (
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg shadow-blue-900/20 text-white">
+        <div className="bg-gradient-to-br from-brand-600 to-brand-700 p-6 rounded-2xl shadow-lg shadow-brand-800/25 text-white">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Month-End Projection (Pro-rata)
               </h3>
-              <p className="text-blue-100 text-xs mt-1">
+              <p className="text-brand-100 text-xs mt-1">
                 Based on performance from {startDate} to {endDate} ({projection.daysElapsed}/{projection.totalDays} days)
               </p>
             </div>
             <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10">
-              <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">Projection Factor</p>
+              <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider">Projection Factor</p>
               <p className="text-xl font-bold">x{projection.factor.toFixed(2)}</p>
             </div>
           </div>
@@ -715,7 +716,7 @@ export default function VendorPerformancePage() {
               { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-md">
-                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold">{value}</p>
                   <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
@@ -724,7 +725,7 @@ export default function VendorPerformancePage() {
                     {Math.abs(change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-blue-200 mt-1">vs Last Month Actual</p>
+                <p className="text-[9px] text-brand-200 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
@@ -736,7 +737,7 @@ export default function VendorPerformancePage() {
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
             <select value={selectedChannelGroup} onChange={(e) => setSelectedChannelGroup(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="All Groups">All Groups</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
@@ -745,25 +746,25 @@ export default function VendorPerformancePage() {
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel</label>
             <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               {channels.map(c => (<option key={c} value={c}>{c}</option>))}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end" />
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
             <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="none">No Comparison</option>
               <option value="previous_period">Previous Period</option>
               <option value="previous_year">Previous Year</option>
@@ -776,7 +777,7 @@ export default function VendorPerformancePage() {
                 Reset
               </button>
               <button onClick={() => { fetchData(); setShowFilters(false) }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 whitespace-nowrap shrink-0">
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200 whitespace-nowrap shrink-0">
                 Apply Filters
               </button>
             </div>
@@ -786,37 +787,28 @@ export default function VendorPerformancePage() {
 
       {/* Summary Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign, color: "blue" },
-          { label: "Orders", value: metrics.orders, change: metrics.ordersChange, icon: ShoppingCart, color: "indigo" },
-          { label: "Units Sold", value: metrics.units, change: metrics.unitsChange, icon: Package, color: "purple" },
-          { label: "AOV (VND)", value: metrics.aov, change: metrics.aovChange, icon: TrendingUp, color: "emerald" },
-          { label: "Gross Margin", value: metrics.margin, change: metrics.marginChange, icon: LayoutDashboard, color: "amber" },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className={cn("p-3 rounded-xl",
-                item.color === "blue" ? "bg-blue-50 text-blue-600" :
-                item.color === "indigo" ? "bg-indigo-50 text-indigo-600" :
-                item.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
-                item.color === "purple" ? "bg-purple-50 text-purple-600" : "bg-amber-50 text-amber-600")}>
-                <item.icon className="w-6 h-6" />
-              </div>
-              {loading ? <Skeleton className="h-4 w-12" /> : comparisonType !== "none" && (
-                <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full",
-                  item.change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                  {item.change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {Math.abs(item.change)}%
-                </div>
-              )}
+        {([
+          { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
+          { label: "Orders",        value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
+          { label: "Units Sold",    value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
+          { label: "AOV (VND)",     value: metrics.aov,      change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
+          { label: "Gross Margin",  value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
+        ] as { label: string; value: number; change: number; icon: React.ElementType; accent: MetricAccent }[]).map((item, idx) => (
+          loading ? (
+            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <Skeleton className="h-9 w-9 rounded-xl" />
+              <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
             </div>
-            <p className="text-slate-500 text-sm font-medium">{item.label}</p>
-            {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                {item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
-              </h3>
-            )}
-          </div>
+          ) : (
+            <StatTile
+              key={idx}
+              icon={<item.icon className="w-5 h-5" />}
+              label={item.label}
+              value={item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
+              accent={item.accent}
+              deltas={comparisonType !== "none" ? [{ label: "So sánh", value: `${item.change >= 0 ? "+" : ""}${item.change}%`, kind: item.change >= 0 ? "up" : "down" }] : undefined}
+            />
+          )
         ))}
       </div>
 
@@ -827,7 +819,7 @@ export default function VendorPerformancePage() {
             <h2 className="text-lg font-bold text-slate-900">Revenue Trend</h2>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="w-2 h-2 rounded-full" style={{ background: CHART_PALETTE[0] }}></div>
                 Current Period
               </div>
               {comparisonType !== "none" && (
@@ -844,16 +836,16 @@ export default function VendorPerformancePage() {
                 <AreaChart data={trendData}>
                   <defs>
                     <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+                  <Tooltip contentStyle={chartTooltipStyle}
                     formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current Revenue" : "Previous Revenue"]} />
-                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
+                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
                   {comparisonType !== "none" && (
                     <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
                   )}
@@ -868,7 +860,7 @@ export default function VendorPerformancePage() {
           <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-900">Channel Distribution</h2>
             <button onClick={exportChannelCSV}
-              className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 h-[38px] px-3 bg-blue-50/50 hover:bg-blue-50 rounded-lg transition-all">
+              className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700 h-[38px] px-3 bg-brand-50/50 hover:bg-brand-50 rounded-lg transition-all">
               <Download className="w-4 h-4" />
               Export
             </button>
@@ -1031,13 +1023,13 @@ export default function VendorPerformancePage() {
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50 transition-colors group text-xs">
-                                <td className="px-4 py-3 font-medium text-slate-700 border-l-2 border-transparent group-hover:border-blue-400">
+                                <td className="px-4 py-3 font-medium text-slate-700 border-l-2 border-transparent group-hover:border-brand-400">
                                   {channel.channel_name || "Unknown"}
                                 </td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.orders)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.units_sold)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600 font-medium">{formatCurrency(rev)}</td>
-                                <td className="px-4 py-3 text-right text-blue-600 font-medium">{projection ? formatCurrency(rev * projection.factor) : "-"}</td>
+                                <td className="px-4 py-3 text-right text-brand-600 font-medium">{projection ? formatCurrency(rev * projection.factor) : "-"}</td>
                                 <td className="px-4 py-3 text-right text-slate-500 italic">{formatCurrency(channel.total_channel_revenue)}</td>
                                 <td className="px-4 py-3 text-right">
                                   {contribution !== null ? (
@@ -1055,7 +1047,7 @@ export default function VendorPerformancePage() {
                             <td className="px-4 py-2 text-right">{formatNumber(groupOrders)}</td>
                             <td className="px-4 py-2 text-right">{formatNumber(groupUnits)}</td>
                             <td className="px-4 py-2 text-right">{formatCurrency(groupRevenue)}</td>
-                            <td className="px-4 py-2 text-right text-blue-600">{projection ? formatCurrency(groupRevenue * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-brand-600">{projection ? formatCurrency(groupRevenue * projection.factor) : "-"}</td>
                             <td className="px-4 py-2 text-right text-slate-500 italic">{formatCurrency(groupAllVendorsChannelRevenue)}</td>
                             <td className="px-4 py-2 text-right">
                               {groupAllVendorsChannelRevenue > 0 ? (
@@ -1068,16 +1060,16 @@ export default function VendorPerformancePage() {
                             </td>
                           </tr>
                           {groupName === "B2B-Non-Strategic" && (
-                            <tr className="bg-blue-50 font-bold text-xs border-y-2 border-blue-100">
-                              <td className="px-4 py-3 text-blue-900 bg-blue-100/50">Total B2B (Combined)</td>
+                            <tr className="bg-brand-50 font-bold text-xs border-y-2 border-brand-100">
+                              <td className="px-4 py-3 text-brand-900 bg-brand-100/50">Total B2B (Combined)</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalOrders)}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalUnits)}</td>
                               <td className="px-4 py-3 text-right">{formatCurrency(b2bTotalRevenue)}</td>
-                              <td className="px-4 py-3 text-right text-blue-600">{projection ? formatCurrency(b2bTotalRevenue * projection.factor) : "-"}</td>
-                              <td className="px-4 py-3 text-right text-slate-500 italic border-l border-blue-100">{formatCurrency(b2bTotalAllVendorsChannelRevenue)}</td>
+                              <td className="px-4 py-3 text-right text-brand-600">{projection ? formatCurrency(b2bTotalRevenue * projection.factor) : "-"}</td>
+                              <td className="px-4 py-3 text-right text-slate-500 italic border-l border-brand-100">{formatCurrency(b2bTotalAllVendorsChannelRevenue)}</td>
                               <td className="px-4 py-3 text-right">
                                 {b2bTotalAllVendorsChannelRevenue > 0 ? (
-                                  <span className="font-bold text-blue-700">{(b2bTotalRevenue / b2bTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
+                                  <span className="font-bold text-brand-700">{(b2bTotalRevenue / b2bTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
                                 ) : "-"}
                               </td>
                               <td className={cn("px-4 py-3 text-right font-black",
@@ -1100,7 +1092,7 @@ export default function VendorPerformancePage() {
                           <td className="px-4 py-4 text-right">{formatNumber(grandTotalOrders)}</td>
                           <td className="px-4 py-4 text-right">{formatNumber(grandTotalUnits)}</td>
                           <td className="px-4 py-4 text-right overflow-hidden truncate">{formatCurrency(grandTotalRevenue)}</td>
-                          <td className="px-4 py-4 text-right text-blue-700">{projection ? formatCurrency(grandTotalRevenue * projection.factor) : "-"}</td>
+                          <td className="px-4 py-4 text-right text-brand-700">{projection ? formatCurrency(grandTotalRevenue * projection.factor) : "-"}</td>
                           <td className="px-4 py-4 text-right text-slate-500 italic">{formatCurrency(finalGrandTotalAllVendorsChannelRevenue)}</td>
                           <td className="px-4 py-4 text-right text-slate-900">
                             {finalGrandTotalAllVendorsChannelRevenue > 0 ? (
@@ -1135,7 +1127,7 @@ export default function VendorPerformancePage() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64" />
+                className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full md:w-64" />
             </div>
           </div>
         </div>
@@ -1232,7 +1224,7 @@ export default function VendorPerformancePage() {
                   return (
                     <button key={pageNum} onClick={() => setProductPage(pageNum)}
                       className={cn("w-8 h-8 text-xs font-bold rounded-lg transition-all",
-                        productPage === pageNum ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "text-slate-600 hover:bg-white hover:border-slate-200 border border-transparent")}>
+                        productPage === pageNum ? "bg-brand-600 text-white shadow-md shadow-brand-200" : "text-slate-600 hover:bg-white hover:border-slate-200 border border-transparent")}>
                       {pageNum}
                     </button>
                   )
