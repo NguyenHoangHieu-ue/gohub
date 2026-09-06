@@ -162,13 +162,19 @@ Khi trả lời:
   // Call Gemini
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3.6-flash",
     systemInstruction,
   })
 
-  const chat   = model.startChat({ history: chatHistory })
-  const result = await chat.sendMessage(question)
-  const aiText = result.response.text().trim()
+  let aiText: string
+  try {
+    const chat   = model.startChat({ history: chatHistory })
+    const result = await chat.sendMessage(question)
+    aiText = result.response.text().trim()
+  } catch (e: any) {
+    console.error("[to-gau/ai] Gemini error:", e.message)
+    return NextResponse.json({ error: "Hiếu đang fix, vui lòng đợi" }, { status: 500 })
+  }
 
   // Save AI response to chat_messages
   const { data: saved, error: saveErr } = await supabaseAdmin
