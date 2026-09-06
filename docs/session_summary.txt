@@ -8919,3 +8919,61 @@ semantic), CS Troubleshoot (4 StatTile + chart + tab SKU Performance), Products 
 Targets (bảng target navy đúng). Không phát hiện lỗi, số liệu không đổi so với trước redesign. Lô 4 coi như
 hoàn tất hẳn (My Metrics vốn đã sạch, không cần làm). Wiki 6 file cập nhật mục Gotchas. Lô 5 (Management/
 Scheduled/Dev Tools/To-Gau) và Lô 6 (ngoài analytics) còn lại theo plan.
+
+### s194+12 (2026-09-06) — UI Lô 5: Management (Users/Settings/Admin), Dev Tools, To-Gau + fix bug brand-900/950
+
+Hiếu: "típ" (tiếp tục lô 5 sau lô 4).
+
+Kiểm tra nhanh Scheduled + Schema — đã sạch từ đợt s193 (0 blue-*/hex), không cần làm lại. Còn lại: Users,
+Settings, Admin (Product), Dev Tools, To-Gau (list+room+6 component con).
+
+**Bug thật phát hiện lúc soát code trước khi sửa Admin page**: `tailwind.config.ts` định nghĩa scale
+`brand` chỉ tới 800 (50-800, không có 900/950). Grep toàn `src/` phát hiện 5 file đang dùng `brand-900`/
+`brand-950` — class KHÔNG HỢP LỆ nên Tailwind không sinh CSS gì, phần tử đó mất hẳn màu (invisible, rơi về
+màu kế thừa mặc định). 2 nguồn: (1) `channels/page.tsx`, `staff/page.tsx`, `vendors/page.tsx`,
+`cost-management-modal.tsx` — do CHÍNH sed "blue-*→brand-*" của tôi ở batch s194+9/+10 vô tình convert luôn
+`blue-900` (hợp lệ, giá trị mặc định Tailwind) thành `brand-900` (không hợp lệ trong scale custom của repo)
+— tự gây bug của chính mình, phát hiện và sửa ngay trong cùng session. (2) `chatbot/page.tsx` (Bé Gấu) — bug
+CÓ SẴN từ trước session này (git blame ra commit `3fb947f9`, s192, tác giả gõ tay `brand-900` giả định scale
+đủ 900, không phải do tôi). Sửa toàn bộ `brand-900/950`→`brand-800` (giá trị đậm nhất có sẵn) ở cả 5 file.
+QA lại xác nhận trên staging: Staff Performance → click expand 1 sales → header "So sánh KH — {tên sales}"
+hiện đúng NAVY (brand-800), zoom ảnh xác nhận không phải đen mặc định — fix đúng.
+
+**Users + Admin (Product)**: fix hex `#003B95`/`#002B70` (icon chip, nút Add/Save, focus ring, quyền
+report matrix) → `brand-*`. Giữ nguyên 2 chỗ categorical: role badge `roleBadge()` — `bod`=blue (cùng dàn
+màu admin=amber/manager=purple/bod=blue/khác=teal, y hệt pattern Staff tier badge) — và badge `vendor_code`
+trong bảng sản phẩm (blue, cạnh `product_code` đã là brand từ trước — 2 field khác nhau cố ý khác màu). Admin
+còn fix thêm nút test-run cron job/drop-zone import Excel/nút Import/code-snippet tên file mẫu — các chỗ này
+KHÔNG categorical (chỉ là accent chính của khu vực) → đổi hết sang brand.
+
+**Settings**: fix hex ở 5 khu vực config (Database status icon, Partner Tiers, Custom Rules, Role Filters,
+SKU Destination) → `brand-*`. Giữ nguyên nút "Sync B2B KH" (`bg-blue-700 hover:bg-blue-800` + badge đếm
+`bg-blue-500/50`) tách biệt màu với nút "Kiểm tra" (navy) ngay kế bên — 4 nút thao tác DB trên cùng 1 hàng
+(Xoá Cache=amber, Sync Costs=emerald, Sync B2B KH=blue, Kiểm tra=navy), mỗi nút 1 màu để phân biệt 4 hành
+động khác nhau, không phải lỗi.
+
+**Dev Tools**: khu vực "SQL Query" (schema browser icon, badge "PostgreSQL", ô search focus, nút Run, icon
+bảng, spinner) → brand — đây là accent riêng của khu Query, không phải categorical. Giữ nguyên màu HTTP
+method GET=emerald/POST=blue/khác=orange (badge phân loại method trong danh sách API test) — 2 chỗ dùng
+pattern y hệt (bảng API definitions + response log).
+
+**To-Gau — fix LỚN NHẤT lô này**: hex `#003B95` được dùng làm MÀU ĐỊNH DANH xuyên suốt toàn bộ tab (không
+chỉ 1-2 chỗ như các trang khác) — bubble chat "mình" (phải, isMe), header room, input focus ring, mention
+highlight trong `renderContent()`, blockquote trong `renderMarkdown()` (cả 2 hàm dùng chung ở
+`lib/to-gau-format.tsx`), và mọi nút hành động ở 4 sub-panel Docs/Notes/Câu hỏi (mới thêm s194+6)/Wiki. Sửa
+toàn bộ 8 file (`to-gau/page.tsx`, `to-gau/[id]/page.tsx`, `docs-panel.tsx`, `notes-panel.tsx`,
+`questions-panel.tsx`, `settings-modal.tsx`, `wiki-panel.tsx`, `to-gau-format.tsx`) sang `brand-600/700`.
+Giữ nguyên role tag "Manager"=blue trong danh sách thành viên phòng chat (categorical, phân biệt
+Admin=amber/Manager=blue, khác dàn màu Docs/Notes/Câu hỏi/Wiki).
+
+Không đổi logic/công thức/API/quyền hạn nào ở bất kỳ trang nào trong lô này. tsc + lint (0 lỗi mới) + vitest
+(185/185) PASS.
+
+**QA**: acc test hiện tại chỉ có role `bod` — Users/Settings/Admin/Dev Tools đều gate admin/creator only,
+bod bị `analytics/layout.tsx` redirect thẳng về `/chatbot` (đúng thiết kế, không phải bug — xác nhận lại
+bằng cách vào thẳng URL, bị bounce về chatbot y hệt cơ chế đã tìm ra ở s194+8). Không tự QA trực quan được 4
+trang này bằng Chrome — đã ghi rõ vào checklist xin Hiếu tự xem bằng acc creator. Đã tự QA được: To-Gau
+(chat bubble "mình" navy đúng qua zoom ảnh, 4 sub-panel Docs/Notes/Câu hỏi/Wiki đúng màu) và xác nhận riêng
+fix brand-900/950 hoạt động đúng qua Staff Performance (header "So sánh KH" navy, không đen). Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật mục riêng. Users/Settings/Admin/Dev Tools không có
+wiki doc riêng (công cụ nội bộ, chưa từng được viết doc) nên không có gì để cập nhật ở đó.

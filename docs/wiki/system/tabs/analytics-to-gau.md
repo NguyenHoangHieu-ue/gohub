@@ -7,6 +7,19 @@
 
 ---
 
+## ⚠️ s194+12 (2026-09-06) — UI redesign: hex navy sai `#003B95` (màu chủ đạo toàn tab) → brand
+
+Toàn bộ To-Gau (list page + room page + 6 component con: docs-panel/notes-panel/questions-panel/
+settings-modal/wiki-panel/file-preview + `lib/to-gau-format.tsx`) dùng hex `#003B95`/`#002d73` làm màu định
+danh xuyên suốt: header, bubble chat "mình", input focus ring, mention highlight (`renderContent`),
+blockquote markdown (`renderMarkdown`), mọi nút hành động ở 4 panel Docs/Notes/Câu hỏi/Wiki. Đây chính là 1
+trong 7 file bị audit s192 flag có hex sai — sửa toàn bộ sang `brand-600`/`brand-700`. Giữ nguyên role tag
+"Manager"=blue trong danh sách thành viên (categorical, phân biệt Admin=amber/Manager=blue). Không đổi
+logic/quyền hạn nào. Tự QA qua Chrome bằng acc role `bod` trên staging — chat bubble "mình" hiện navy đúng,
+4 panel Docs/Notes/Câu hỏi/Wiki đều đúng màu.
+
+---
+
 ## ⚠️ s194+8 (2026-09-06) — Fix bug lớn: MỌI role không phải admin/creator chưa từng vào được Tổ Gấu
 
 Hiếu báo "mở lại Tổ Gấu cho tất cả mọi người vào được — vài acc tôi bấm vào không được". Tái hiện bằng
