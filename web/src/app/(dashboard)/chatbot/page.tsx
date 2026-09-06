@@ -662,7 +662,7 @@ export default function ChatbotPage() {
       <div className="p-3 border-b border-gray-200">
         <button
           onClick={() => { startNew(); onSelect?.() }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-800/30 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-800/50 transition-colors"
         >
           <Plus size={15} />
           Cuộc trò chuyện mới
@@ -683,7 +683,7 @@ export default function ChatbotPage() {
                   onClick={() => { switchConversation(conv); onSelect?.() }}
                   className={`group flex items-start gap-1 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
                     conv.id === activeConvId
-                      ? "bg-brand-100 dark:bg-brand-900/40 text-brand-800 dark:text-brand-200"
+                      ? "bg-brand-100 dark:bg-brand-800/40 text-brand-800 dark:text-brand-200"
                       : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300"
                   }`}
                 >
@@ -897,7 +897,7 @@ export default function ChatbotPage() {
                 {attachedFiles.map(f => {
                   const preview = imgPreviews.get(f.name)
                   return (
-                    <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-xl max-w-[220px]">
+                    <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 dark:bg-brand-800/20 border border-brand-200 dark:border-brand-800 rounded-xl max-w-[220px]">
                       {preview
                         ? <img src={preview} alt={f.name} className="w-6 h-6 rounded object-cover shrink-0" />
                         : <span className="text-brand-600 dark:text-brand-400 shrink-0">{attachFileIcon(f.name)}</span>
@@ -922,7 +922,7 @@ export default function ChatbotPage() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={busy || attachedFiles.length >= ATTACH_MAX_FILES}
                 title={`Đính kèm ảnh/file (tối đa ${ATTACH_MAX_FILES}) · Hoặc kéo thả / paste ảnh`}
-                className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
+                className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-800/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
               >
                 <Paperclip size={16} />
                 {attachedFiles.length > 0 && (

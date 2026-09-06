@@ -1351,7 +1351,7 @@ export default function ChannelPerformancePage() {
         <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-brand-900 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-brand-800 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Month-End Projection (Pro-rata)
               </h3>
@@ -1359,7 +1359,7 @@ export default function ChannelPerformancePage() {
                 Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.
               </p>
             </div>
-            <div className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-brand-900/20">
+            <div className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-brand-800/20">
               {((projection.factor - 1) * 100).toFixed(0)}% Growth Expected
             </div>
           </div>

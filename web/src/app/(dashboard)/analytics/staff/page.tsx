@@ -730,7 +730,7 @@ function StaffPageInner() {
       {!isMultiMonth && expandedStaff && !custLoading && customers.length > 0 && (
         <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-brand-100">
-            <h3 className="text-sm font-black text-brand-900">
+            <h3 className="text-sm font-black text-brand-800">
               So sánh KH — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
             </h3>
             <p className="text-xs text-brand-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
@@ -801,7 +801,7 @@ function StaffPageInner() {
       {isMultiMonth && expandedStaff && custMonthlyChart.length > 0 && (
         <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-brand-100">
-            <h3 className="text-sm font-black text-brand-900">
+            <h3 className="text-sm font-black text-brand-800">
               So sánh Revenue KH theo tháng — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
             </h3>
             <p className="text-xs text-brand-600 mt-0.5">

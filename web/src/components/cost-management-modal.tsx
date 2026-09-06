@@ -461,7 +461,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 className={cn(
                   "flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all",
                   isTabDirty
-                    ? "bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-900/20"
+                    ? "bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-800/20"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed",
                   savingCosts && "opacity-50",
                 )}
@@ -481,7 +481,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               <div className="space-y-6">
                 <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-brand-900">{newGroupCost.id ? "Sửa mục chi phí" : "Thêm chi phí mới"}</h3>
+                    <h3 className="font-bold text-brand-800">{newGroupCost.id ? "Sửa mục chi phí" : "Thêm chi phí mới"}</h3>
                     {newGroupCost.id && (
                       <button
                         onClick={() => { setNewGroupCost({ group_name: defaultGroup as "B2C" | "B2B", month: costMonth, item_name: "", amount: 0, note: "" }); setGroupFormError(null) }}
@@ -538,7 +538,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                     <button
                       onClick={handleSaveGroupCost}
                       disabled={savingCosts}
-                      className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white text-sm font-bold rounded-xl hover:bg-brand-700 transition-all shadow-lg shadow-brand-900/20 disabled:opacity-50"
+                      className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white text-sm font-bold rounded-xl hover:bg-brand-700 transition-all shadow-lg shadow-brand-800/20 disabled:opacity-50"
                     >
                       <Save className="w-4 h-4" />
                       {newGroupCost.id ? "Cập nhật" : "Thêm mục"}
@@ -618,7 +618,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                     <div key={channel} className="space-y-4">
                       <div className="bg-brand-50 rounded-2xl p-4 border border-brand-100 flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-brand-900">{channel} (Sub-channel Mode)</h3>
+                          <h3 className="font-bold text-brand-800">{channel} (Sub-channel Mode)</h3>
                           <p className="text-[10px] text-brand-600">Nhập chi phí cho từng sub-channel bên dưới.</p>
                         </div>
                         <button

@@ -1061,7 +1061,7 @@ export default function VendorPerformancePage() {
                           </tr>
                           {groupName === "B2B-Non-Strategic" && (
                             <tr className="bg-brand-50 font-bold text-xs border-y-2 border-brand-100">
-                              <td className="px-4 py-3 text-brand-900 bg-brand-100/50">Total B2B (Combined)</td>
+                              <td className="px-4 py-3 text-brand-800 bg-brand-100/50">Total B2B (Combined)</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalOrders)}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalUnits)}</td>
                               <td className="px-4 py-3 text-right">{formatCurrency(b2bTotalRevenue)}</td>
