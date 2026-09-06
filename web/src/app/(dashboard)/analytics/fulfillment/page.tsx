@@ -570,7 +570,7 @@ function InventoryInner() {
 function FulfillmentInner() {
   const [tab, setTab] = useState<"stock" | "plan">("stock")
   return (
-    <div className="space-y-4">
+    <div className="p-4 lg:p-8 space-y-4 max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0"><Package className="w-5 h-5 text-white" /></div>
         <div className="flex-1">
