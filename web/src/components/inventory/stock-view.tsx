@@ -157,7 +157,7 @@ export function InventoryStockView() {
             <thead className="bg-slate-50">
               <tr>
                 {["", "SKU", "Sản phẩm / Vendor", "Tồn kho", "Tốc độ bán/ngày", "Ước tính hết hàng", "Hạn dùng gần nhất", "Cảnh báo"].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-2.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -170,22 +170,22 @@ export function InventoryStockView() {
                 return (
                   <>
                     <tr key={s.sku} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setExpanded(isOpen ? null : s.sku)}>
-                      <td className="px-3 py-2.5">{isOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}</td>
-                      <td className="px-3 py-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">{s.sku}</td>
-                      <td className="px-3 py-2.5 text-slate-600 max-w-[220px] truncate">{s.productName || s.category || "—"} <span className="text-slate-400">· {s.vendor || "—"}</span></td>
-                      <td className="px-3 py-2.5 font-bold text-slate-900 text-right whitespace-nowrap">{n0(s.totalQty)}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-right whitespace-nowrap">{s.velocityPerDay > 0 ? n0(s.velocityPerDay) : "—"}</td>
-                      <td className={cn("px-3 py-2.5 text-right font-bold whitespace-nowrap", s.daysOfCover != null && s.daysOfCover < 7 ? "text-red-600" : s.daysOfCover != null && s.daysOfCover < 14 ? "text-amber-600" : "text-slate-600")}>
+                      <td className="px-3 py-2.5 text-center">{isOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 mx-auto" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 mx-auto" />}</td>
+                      <td className="px-3 py-2.5 text-center font-mono font-bold text-slate-900 whitespace-nowrap">{s.sku}</td>
+                      <td className="px-3 py-2.5 text-center text-slate-600 max-w-[220px] truncate">{s.productName || s.category || "—"} <span className="text-slate-400">· {s.vendor || "—"}</span></td>
+                      <td className="px-3 py-2.5 font-bold text-slate-900 text-center whitespace-nowrap">{n0(s.totalQty)}</td>
+                      <td className="px-3 py-2.5 text-slate-500 text-center whitespace-nowrap">{s.velocityPerDay > 0 ? n0(s.velocityPerDay) : "—"}</td>
+                      <td className={cn("px-3 py-2.5 text-center font-bold whitespace-nowrap", s.daysOfCover != null && s.daysOfCover < 7 ? "text-red-600" : s.daysOfCover != null && s.daysOfCover < 14 ? "text-amber-600" : "text-slate-600")}>
                         {s.daysOfCover != null ? `${n0(s.daysOfCover)} ngày` : "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-center whitespace-nowrap">
                         {s.nearestExpiry ? (
                           <span className={cn("font-bold", s.daysToExpiry != null && s.daysToExpiry < 14 ? "text-red-600" : s.daysToExpiry != null && s.daysToExpiry < 30 ? "text-amber-600" : "text-slate-500")}>
                             {fmtDate(s.nearestExpiry)}{s.daysToExpiry != null && <span className="block text-[10px] font-normal">còn {n0(s.daysToExpiry)} ngày</span>}
                           </span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-3 py-2.5"><AlertBadge level={s.alert} /></td>
+                      <td className="px-3 py-2.5 text-center"><AlertBadge level={s.alert} /></td>
                     </tr>
                     {isOpen && (
                       <tr>
@@ -195,19 +195,19 @@ export function InventoryStockView() {
                             <table className="text-[11px] border-collapse w-full max-w-xl">
                               <thead>
                                 <tr className="text-slate-400">
-                                  <th className="text-left font-bold uppercase px-2 py-1">Kho</th>
-                                  <th className="text-right font-bold uppercase px-2 py-1">Tồn kho</th>
-                                  <th className="text-right font-bold uppercase px-2 py-1">% tổng</th>
-                                  <th className="text-right font-bold uppercase px-2 py-1">Hạn dùng</th>
+                                  <th className="text-center font-bold uppercase px-2 py-1">Kho</th>
+                                  <th className="text-center font-bold uppercase px-2 py-1">Tồn kho</th>
+                                  <th className="text-center font-bold uppercase px-2 py-1">% tổng</th>
+                                  <th className="text-center font-bold uppercase px-2 py-1">Hạn dùng</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {s.warehouses.map(w => (
                                   <tr key={w.code} className="border-t border-slate-200 bg-white">
-                                    <td className="px-2 py-1.5 font-bold text-slate-700">{w.name}</td>
-                                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{n0(w.quantity)}</td>
-                                    <td className="px-2 py-1.5 text-right text-slate-400">{s.totalQty > 0 ? `${Math.round(w.quantity / s.totalQty * 100)}%` : "—"}</td>
-                                    <td className="px-2 py-1.5 text-right text-slate-500">{fmtDate(w.expiredDate)}</td>
+                                    <td className="px-2 py-1.5 text-center font-bold text-slate-700">{w.name}</td>
+                                    <td className="px-2 py-1.5 text-center tabular-nums text-slate-700">{n0(w.quantity)}</td>
+                                    <td className="px-2 py-1.5 text-center text-slate-400">{s.totalQty > 0 ? `${Math.round(w.quantity / s.totalQty * 100)}%` : "—"}</td>
+                                    <td className="px-2 py-1.5 text-center text-slate-500">{fmtDate(w.expiredDate)}</td>
                                   </tr>
                                 ))}
                                 {s.warehouses.length === 0 && (
