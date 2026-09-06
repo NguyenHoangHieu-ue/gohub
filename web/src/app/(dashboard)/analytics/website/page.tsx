@@ -85,15 +85,15 @@ export default function WebsiteAnalyticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Đổi tab Web/App → site đang chọn phải cùng kind, không thì property cũ (vd gohub.com) bị lọc
-  // platform=ios/android → luôn rỗng, vì App là property RIÊNG (Firebase), không chung với web.
-  useEffect(() => {
-    const current = sites.find(s => s.id === selectedSiteId)
-    if (current && (current.kind || "web") === platform) return
-    const match = sites.find(s => (s.kind || "web") === platform)
+  // Đổi tab Web/App → đổi CẢ platform lẫn site cùng lúc trong 1 handler (batch chung 1 render) — tách
+  // riêng thành useEffect sẽ tạo 2 lần fetchAnalytics chồng nhau (1 lần với platform mới+site cũ trong lúc
+  // effect chưa kịp sửa site), 2 response về không theo thứ tự → có thể hiển thị nhầm data cũ vĩnh viễn
+  // (đã bắt được bug này qua Chrome QA thật trên staging trước khi ghép PR).
+  const switchPlatform = (next: "web" | "app") => {
+    const match = sites.find(s => (s.kind || "web") === next)
     if (match) setSelectedSiteId(match.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, sites])
+    setPlatform(next)
+  }
 
   useEffect(() => {
     if (selectedSiteId) {
@@ -551,14 +551,14 @@ export default function WebsiteAnalyticsPage() {
           {/* Platform toggle */}
           <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
             <button
-              onClick={() => setPlatform("web")}
+              onClick={() => switchPlatform("web")}
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 platform === "web" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >
               <Globe className="w-3.5 h-3.5" />Web
             </button>
             <button
-              onClick={() => setPlatform("app")}
+              onClick={() => switchPlatform("app")}
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 platform === "app" ? "bg-white text-purple-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >
