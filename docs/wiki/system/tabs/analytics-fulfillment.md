@@ -98,6 +98,9 @@ Query velocity dùng đúng pattern trailing-30d đã có ở hệ thống (`ful
 `node scripts/import_inventory_plan.mjs "<đường dẫn file Plan nhập hàng theo tháng.xlsx>"` (chạy trên máy có `web/.env.local`) — đọc sheet `Plan VN`/`Plan US` (map từng SKU 5-dòng → SKU watchlist + dữ liệu tuần, `week_start_date` suy từ mốc "as of" ở hàng 0 cộng dồn 7 ngày/cột) và sheet `PO Dự kiến nhập` (map thẳng cột → `inventory_po`). Ô nào Excel đã có số ở Bán dự kiến/Số nhập → import kèm `*_auto=false` để giữ đúng số Ops đã tính.
 
 ## 6. Gotchas
+- **s194+11 (2026-09-06)**: UI — phần "Kế hoạch nhập hàng" (PO tracker + lưới tuần, giữ nguyên logic) còn
+  sót `blue-*` (16 chỗ, cả `stock-view.tsx`) → `brand-*`. Sub-tab "Tồn kho" đã StatTile từ s194+5, không đổi
+  lần này. Không đổi logic/data.
 - **[ĐÃ XONG s194]** ~~`actual_stock` chưa có nguồn tự động~~ — `gohub_dw` đã có `fact_inventory`, tuần đang
   chạy tự lấy `getLatestStock()` làm gợi ý (`actualStockAuto=true`) khi OPS chưa ghi đè tay. Chỉ áp cho
   ĐÚNG tuần chứa ngày snapshot mới nhất — tuần tương lai/quá khứ vẫn trống nếu chưa nhập (fact_inventory

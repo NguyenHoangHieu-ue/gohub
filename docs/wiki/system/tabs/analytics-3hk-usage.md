@@ -237,6 +237,9 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s194+11 (2026-09-06)**: UI — `blue-*`→`brand-*` toàn trang, 2 chart CartesianGrid→`CHART_GRID_COLOR`.
+  Giữ nguyên màu semantic thật (đỏ=vượt mức 3HK cấp/ngày, xanh lá=trong kế hoạch, xám=mức kế hoạch, dải màu
+  categorical cho nhóm tốc độ) — không phải màu ngẫu hứng cần dọn. Không đổi logic/data.
 - **Vendor có dấu cách**: trong `dim_sku` vendor = `'3HK DATAPOOL'` → luôn lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
 - **Timezone (mục 4.4)**: `first_report_date` = 00:00:00 UTC; format kỳ bằng `getUTC*`.
 - **`fact_data_usage` là 3HK-only**: gần như toàn bộ là 3HK (chỉ ~68 iccid có `sku` null bị loại) → dùng vendor-filter là đủ, không sợ lẫn vendor khác.

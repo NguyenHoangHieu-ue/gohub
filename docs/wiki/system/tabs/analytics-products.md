@@ -35,6 +35,9 @@ Doanh số bán theo **SKU**: revenue, units, orders, margin — kèm breakdown 
 - `channel` → `order_source_code IN (SELECT code FROM dim_order_source WHERE TRIM(channel_name)=...)`; hoặc `channelGroup` (B2B/B2C).
 
 ## 4. Gotchas
+- **s194+11 (2026-09-06)**: UI — 5 KPI card viết tay → `StatTile`; banner "Month-End Projection" + 2 chart
+  (Sales & Units Trend, Top Regions) → `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→
+  `brand-*` (giữ indigo=B2C, slate=B2B Non-Strategic phân biệt nhóm). Không đổi logic/data.
 - Region = nước ĐÍCH suy từ mã SKU (KHÔNG phải `dim_location`).
 - Created mode → margin = 0.
 - Chuỗi filter nội suy trực tiếp (đã escape `'`), không phải param hoá.

@@ -8870,3 +8870,52 @@ lỗi). Không phát hiện lỗi, số liệu không đổi so với trước r
 theo: Orders/Inventory/3HK Usage/CS Troubleshoot/Products/Targets/My Metrics (lô 4). Wiki 4 file
 (`analytics-website.md`/`analytics-staff.md`/`analytics-customers.md`/`analytics-vendors.md`) cập nhật mục
 Gotchas.
+
+### s194+11 (2026-09-06) — UI Lô 4: Orders, Inventory, 3HK Usage, CS Troubleshoot, Products, Targets
+
+Hiếu: "được" (tiếp tục lô 4 sau khi lô 3 xong, theo đúng thứ tự "Đợt 4+" trong plan `eager-popping-aho.md`).
+
+**Orders**: page nhỏ (640 dòng), có `dark:` classes (dark mode support, hiếm gặp ở các trang khác) — cẩn
+thận giữ nguyên hành vi dark mode khi đổi màu. Chỉ 1 vấn đề thật: hex navy SAI `#003B95`/`#002d73` (icon
+chip, nút Export, Entity pill, Apply button, spinner, pagination) → sed sang `brand-600`/`brand-700` class.
+KPI card 3 ô (Total Orders/Revenue/GP) có caption "sub" text mang thông tin filter-state thật (vd "gồm ship
++ internal ops") — KHÔNG ép vào `StatTile` (sẽ mất thông tin này, StatTile không có slot caption tự do),
+giữ nguyên hand-rolled vì màu vốn đã trung tính (trắng/xám), không phải lỗi màu.
+
+**CS Troubleshoot**: cùng nhóm hex sai (16 chỗ `#003B95`/`#002B70`, gồm cả 1 chỗ recharts `fill="#003B95"`
+và 1 chỗ box-shadow `rgba(0,59,149,0.3)` phải đổi rgb sang `rgba(15,76,129,0.3)` khớp brand-600 thật) +
+`blue-*`→`brand-*`. 4 KPI card viết tay → `StatTile` (Units Sold=neutral, TBS Tickets=warn vì càng nhiều
+càng xấu, TBS Rate=cost, Avg Handle Time=margin). Chart TBS Volume by Shift → `CHART_PALETTE`/
+`CHART_GRID_COLOR`/`chartTooltipStyle`.
+
+**Inventory (fulfillment)**: sub-tab "Tồn kho" đã StatTile từ s194+5, không đổi. Phần "Kế hoạch nhập hàng"
+cũ (PO tracker + lưới tuần, đã cam kết giữ nguyên logic từ s194+5) còn sót 16 chỗ `blue-*` (cả trong
+`stock-view.tsx` — 1 input ring sót) → `brand-*`. Không đụng WeeklyGrid logic.
+
+**3HK Data Usage**: `blue-*`→`brand-*`, 2 `CartesianGrid`→`CHART_GRID_COLOR`. Cân nhắc kỹ trước khi sửa 2
+chart "So sánh mức sử dụng" — màu đỏ/xanh lá ở đây là SEMANTIC THẬT (đỏ=vượt mức cấp/ngày của nhóm → chi phí
+datapool cao hơn dự kiến, xanh lá=trong kế hoạch, xám=mức kế hoạch, dải 4 màu categorical cho nhóm tốc độ)
+— quyết định KHÔNG đổi các màu đó, chỉ đổi lưới grid.
+
+**Products**: cấu trúc giống Vendors/Channels (cùng tác giả). 5 KPI card viết tay → `StatTile` (Revenue=
+revenue, Units/Orders=neutral, ASP=positive, Gross Margin=margin). Banner "Month-End Projection" (card nhạt
+`bg-blue-50/50`, không phải gradient) → `brand-50/50`; phát hiện `text-blue-900` không có `brand-900` tương
+đương (scale brand chỉ tới 800) → dùng `brand-800` thay thế. 2 chart (Sales & Units Trend, Top Regions) →
+`CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`. `blue-*`→`brand-*` toàn trang, giữ indigo=B2C và
+slate=B2B Non-Strategic (3 màu phân biệt 3 nhóm channel, đúng tiền lệ).
+
+**Targets**: trang form/bảng đơn giản, không có chart hay KPI card cần StatTile — chỉ `blue-*`→`brand-*`
+toàn trang (bảng target Revenue/3HK/CM1%, bảng KPI B2C theo thị trường, bảng Marketing Budget, 3 tips
+card). Dùng chung `CostManagementModal` với Channels (đã sửa màu ở s194+9), nên đồng bộ sẵn.
+
+**My Metrics**: quét toàn bộ page.tsx + 8 component con trong `components/my-metrics/` — 0 chỗ `blue-*`
+hay hex sai. Đã sạch từ trước (khớp với việc trang này đã tự có `DataTable` riêng từ sớm, không dùng pattern
+KPI-card-viết-tay như các trang khác). Không cần sửa gì.
+
+Không đổi logic/công thức/API nào ở cả 6 trang có thay đổi. tsc + lint (0 lỗi mới) + vitest (185/185) PASS.
+Tự QA qua Chrome trên staging sau deploy cho cả 6 trang: Orders (KPI + bảng đúng màu), Inventory (cả 2
+sub-tab, expand WeeklyGrid vẫn đúng), 3HK Usage (bảng Country×Month navy + chart Unlimited giữ đúng đỏ/xanh
+semantic), CS Troubleshoot (4 StatTile + chart + tab SKU Performance), Products (5 StatTile + 2 chart),
+Targets (bảng target navy đúng). Không phát hiện lỗi, số liệu không đổi so với trước redesign. Lô 4 coi như
+hoàn tất hẳn (My Metrics vốn đã sạch, không cần làm). Wiki 6 file cập nhật mục Gotchas. Lô 5 (Management/
+Scheduled/Dev Tools/To-Gau) và Lô 6 (ngoài analytics) còn lại theo plan.

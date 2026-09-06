@@ -31,6 +31,8 @@ status: active
 - **Chi phí B2C** (s131): nút "Chi phí B2C" ở header → mở `CostManagementModal` scope=b2c (Ads/Platform/Sponsor/Media theo kênh B2C + B2C group cost). Đây là "manage cost" B2C trước đây bị gỡ khỏi tab B2C, nay gộp về đây.
 
 ## 3. Gotchas
+- **s194+11 (2026-09-06)**: UI — `blue-*`→`brand-*` toàn trang (bảng target/budget B2C, tips card). Không
+  đổi logic/data.
 - Kế hoạch = Supabase (creator/admin sửa được); thực tế = gohub_dw.
 - Nút Lưu dirty-state: snapshot lúc load → so sánh → `disabled` khi chưa đổi.
 - B2B targets cũ (nếu đã nhập) VẪN lưu trong `analytics_target_planning` (không xoá), chỉ ẩn khỏi UI tab này.

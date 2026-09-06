@@ -110,6 +110,8 @@ gohub_dw hiện tại → luôn `TRIM(c.code::text)` khi so khớp.
 
 ## 5. Gotchas
 
+- **s194+11 (2026-09-06)**: fix hex navy SAI `#003B95`/`#002d73` (audit s192 từng flag) → `brand-600`/
+  `brand-700` class. Không đổi logic/data.
 - 1 `order_code` có thể gồm nhiều SKU/dòng gốc — route `GROUP BY order_code` nên mỗi đơn ra đúng 1 row;
   cột `order_name`/`sim_type` gộp bằng `STRING_AGG(DISTINCT ...)`, có thể dài nếu đơn nhiều SKU (FE nên
   truncate hiển thị nếu cần, hiện chưa giới hạn độ dài).
