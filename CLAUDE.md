@@ -140,6 +140,8 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 - Không comment giải thích "what" — chỉ comment "why" khi thật sự không rõ.
 - Tự test/fix/push, chỉ hỏi khi thao tác web hoặc chưa rõ ý tưởng.
 - Mọi lỗi UI hiện: "Hiếu đang fix, vui lòng đợi".
+- **Luôn tự chọn role chuyên gia phù hợp trước khi làm task không nhỏ** (Staff Engineer/Design Lead/Senior
+  Data Analyst/DevSecOps...) — nêu 1 dòng ngắn rồi làm, không kể lể dài. Yêu cầu cố định của Hiếu (2026-09-06).
 
 ---
 

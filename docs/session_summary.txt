@@ -8621,3 +8621,62 @@ bảng `<table>` tay không phân trang — khớp đúng mô tả gốc của H
   1 useEffect missing dep, không phải do đợt sửa này) + vitest (185/185) PASS.
   ✅ **Hiếu đã QA trên staging — xác nhận OK**: cả 5 trang hiển thị đúng, phân trang mới (Scheduled/
   Promotions/Countries) hoạt động tốt.
+
+## Session s194 (2026-09-06) — GA4 App connect, UI Lô 2 (B2B+B2C), tính năng Sản phẩm/Biểu đồ B2B Quarter
+## Report, Phase 5 QA hoàn tất
+
+Session dài, nhiều task nối tiếp nhau theo yêu cầu Hiếu từng bước.
+
+**1. GA4 App connect (đóng nốt TODO cũ)**: Hiếu cấp quyền Viewer cho service account có sẵn
+(`ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com`) trên property App `465150028`,
+chạy SQL Supabase thêm entry `gohub-app` vào `app_settings.ga4_configs`. Trong lúc code phát hiện + sửa
+luôn 1 bug thật: App là property RIÊNG (Firebase, không chung property web) — code cũ chỉ đổi FILTER
+platform khi toggle Web/App, không tự đổi SITE, dễ ra 0 kết quả nếu quên đổi tay dropdown. Thêm field
+`kind?: "web"|"app"` vào `GA4Site` (`lib/ga4.ts`), tab Website + `api/analytics/b2c/metric` tự chọn đúng
+site theo platform. QA qua Chrome phát hiện tiếp 1 race condition trong CHÍNH fix này (useEffect đổi site
+SAU platform → 2 fetch chồng nhau, response về không theo thứ tự có thể kẹt UI ở data site cũ) — sửa gộp
+2 setState vào 1 handler `switchPlatform()`. Xác nhận cuối: toggle Web/App ra đúng data kể cả bấm nhanh
+liên tục. Wiki `analytics-website.md` mục "s194" ghi đầy đủ.
+
+**2. UI Lô 2 — B2B**: KPI cards (Revenue/GP/CM1/Margin%/CM1%) đổi sang `StatTile` (dashboard-kit), chart
+Trend đổi `CHART_PALETTE`, mọi `blue-*` sót đổi `brand-*`. KHÔNG đổi bảng Strategic/Tier Performance sang
+`DataTable` — 2 bảng có group-header theo tier + expand-row + tổng TOTAL mà `DataTable` dùng chung chưa hỗ
+trợ, ép vào sẽ mất tính năng thật.
+
+**3. UI Lô 2 — B2C, 2 đợt**: Đợt 1 chỉ đồng bộ màu lệch (15 chỗ `blue-*`→`#0071e3` Apple accent ở Advanced,
+`bg-blue-50/30`→`bg-brand-50/30` ở Metric) — Hiếu phản hồi "vẫn chỉ nền trắng chữ đen", yêu cầu thêm màu
+thật + tự chọn role phù hợp. Đợt 2 (nạp skill `frontend-design`, vai Design Lead): dùng LẠI đúng bảng màu
+"kênh" đã có sẵn ở hero card (VN=`#0071e3`, US=`#6366f1`, Web=`#00a6a6`, App=`#2f9d55`, Khác=`#b7791f`)
+xuyên suốt trang thay vì phát minh màu mới — màu mang Ý NGHĨA (kênh/thị trường), không phải trang trí.
+`KpiCard`/`Section` ở `b2c-advanced-dashboard.tsx` có sẵn prop `icon`/`accent` nhưng CHƯA TỪNG render (dead
+code từ trước) → nay render thật: 6 KPI card có icon chip màu + viền trái màu theo ý nghĩa funnel, 6
+Section mỗi cái 1 màu icon riêng (trước tất cả cùng 1 màu). Helper `marketDot(label)` thêm chấm màu trước
+tên dòng VN/US/Web/App/New/Returning trong `RollingTable`/`SimpleRollTable`/`AcquisitionTable` — match
+CHÍNH XÁC token đầu nhãn (không lẫn "VN-Web eSIM"/"Mobile-App" là tên sản phẩm). `b2c-metric.tsx`: thêm dải
+6 `StatTile` tóm tắt tháng hiện tại (trước không có card nào), header bảng đổi gradient brand, biến
+`isBlue` (dead code, khai nhưng chưa dùng) nay dùng thật để tô nền+chữ brand cho dòng nhóm chỉ số, dot
+Web/App khớp đúng màu Advanced.
+
+**4. Quarter Report B2B — tính năng mới (không phải UI)**: Yêu cầu Hiếu — expand 1 KH trong bảng nhóm →
+"Chi tiết số liệu" trước chỉ Tháng/Ngày → thêm mục xem SKU/sản phẩm KH hay mua + nút biểu đồ. Thêm nút
+toggle thứ 3 **Sản phẩm** (`api/analytics/b2b-customer-orders?groupBy=sku`, join `dim_sku` lấy tên qua
+`type_of_sim`, tái dùng shape response cũ) + nút **Biểu đồ** hiện bar chart. Lúc code phát hiện + sửa luôn:
+chart Tháng/Ngày phải cộng dồn revenue theo period trước khi vẽ (data gốc nhiều dòng/kênh cùng period,
+không cộng ra cột trùng tên chồng lấn). QA qua Chrome dùng `javascript_tool` click DOM trực tiếp (bảng quá
+nhiều cột/dòng, toạ độ chuột từ screenshot hay trật) — xác nhận cả 3 toggle + chart hoạt động đúng.
+
+**5. Phase 5 QA hoàn tất** — to-gau (SettingsModal/DocsPanel/NotesPanel/WikiPanel/upload file+ảnh/@mention/
+xoá tin) + My Metrics (EvidenceCard/LarkReviewPanel/SkuScanSection/BegauInsightsSection/LarkConfigModal/
+DatapoolDetailTable) tự QA qua Chrome — tất cả hoạt động đúng. Riêng `BegauInsightsSection`: screenshot tool
+chụp hụt (blank) đúng vùng này nhiều lần liền dù reload/scroll nhiều cách khác nhau — soát kỹ qua DOM +
+console (màu/opacity/filter/transform bình thường, data load đúng, 0 lỗi JS) → kết luận là hạn chế/glitch
+của tool chụp ảnh tự động trong phiên này, không phải bug app thật. Phase 5 (tách 4 file FE khổng lồ s183)
+coi như đóng hẳn, hết nợ QA.
+
+**Ghi chú quy trình mới**: Hiếu yêu cầu (đứng, note vào CLAUDE.md + auto-memory) — từ nay LUÔN tự chọn role
+chuyên gia phù hợp (Staff Engineer/Design Lead/Senior Data Analyst/...) trước khi làm task không nhỏ, nêu
+ngắn gọn rồi làm.
+
+Tất cả tsc + `next lint` (0 lỗi mới) + vitest (185/185) PASS mỗi đợt, đã push staging từng commit riêng,
+wiki cập nhật đồng thời (`analytics-b2b.md`, `analytics-b2c.md`, `analytics-website.md`,
+`analytics-quarterly.md`).
