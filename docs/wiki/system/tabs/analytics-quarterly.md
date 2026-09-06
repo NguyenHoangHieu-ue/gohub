@@ -112,8 +112,11 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Sửa chi tiết** (B2B) | Bật edit mode; modal nhập CH.Cost per-KH/tháng |
 | **Lưu** (CH.Cost) | POST `b2b-customer-costs` → đóng modal, GIỮ edit mode, auto `Tải lại mới` → rebuild costEdits từ data mới |
 | **Hủy** (CH.Cost) | Reset toàn bộ edits, thoát edit mode |
+| **Chi tiết số liệu** (expand 1 KH) → Tháng/Ngày/**Sản phẩm** | Toggle 3 chế độ groupBy cho `b2b-customer-orders` — Sản phẩm (s194, mới) tổng theo SKU (join `dim_sku` lấy tên qua `type_of_sim`), không tách kỳ, biết KH hay mua SKU gì |
+| **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s194 — `b2b-customer-orders?groupBy=sku`**: response TÁI DÙNG shape cũ (`period`/`channel`/`orders`/`units`/`revenue`/`gp`) — `period`=SKU, `channel`=tên sản phẩm (`v.type_of_sim`) — để FE không phải viết bảng riêng cho chế độ Sản phẩm. Chart Tháng/Ngày PHẢI cộng dồn theo `period` trước khi vẽ (data gốc 1 dòng/kênh/kỳ, nhiều kênh cùng kỳ → nhiều dòng trùng tên nếu không cộng, ra nhiều cột chồng lấn cùng tên trên trục X).
 - **Cache key đổi khi thêm field**: `qreport_raw_v2`, `qb2b_raw_v8` (v8 = s151). Đổi key khi cấu trúc cached data thay đổi để tránh crash.
 - **Costs ngoài cache**: `fetchCustomerCosts` (Turso) chạy song song với `cachedQuery` (gohub_dw) → costs luôn fresh, không bao giờ stale.
 - **Supabase fallback**: Q2 costs lưu ở Supabase (code cũ trước Turso migration) → `fetchCustomerCosts` tự fallback nếu Turso empty.
