@@ -74,6 +74,14 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **UI s194 (2026-09-06) — KPI cards → `StatTile` (dashboard-kit)**: 5 card Actual + 5 card Projected đổi
+  từ `<div>` viết tay sang `StatTile` dùng chung, icon màu theo Ý NGHĨA (`revenue`/`margin`/`positive`),
+  chart Trend đổi màu sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung. Mọi `blue-*`
+  Tailwind class còn sót (nút Apply Filters, tab Fulfillment/Created, tier group header, sort icon...) đổi
+  sang `brand-*` (token thật `#0f4c81`). `indigo-*` ở bảng Strategic Partners GIỮ NGUYÊN (màu chủ đích phân
+  biệt bảng này, không phải lỗi navy sai). **KHÔNG đổi**: bảng Strategic/Tier Performance (expand row,
+  group theo tier, tổng TOTAL) — giữ nguyên `<table>` viết tay vì `DataTable` dùng chung hiện chỉ hỗ trợ
+  bảng phẳng phân trang, chưa hỗ trợ group-header/expand-row — ép vào sẽ mất tính năng, không phải quick-win.
 - **Fix s190+2 (2026-09-05) — thay `B2B_COST_CACHE_PREFIXES` (prefix-list viết tay) bằng `deps` khai tại
   chỗ cache.** Danh sách prefix cứng (mục s169(c) dưới) vẫn có nguy cơ lệch mỗi khi thêm route cache mới
   hoặc đổi version cache-key — 2 nơi (route cache thật vs danh sách prefix) tách rời nhau. Nay mỗi
