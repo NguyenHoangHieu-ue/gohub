@@ -544,7 +544,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               const l = displayLabel(m)
               return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
-            <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+            <th className="text-right font-semibold px-4 py-3 text-xs text-[#0071e3] min-w-[170px]">{displayLabel(current).top} <span className="text-[#0071e3]/50">{periodSuffix}</span></th>
             <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">{mtdCompare ? periodSuffix : "MoM"}</th>
             <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Prorata</th>
             <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">vs prev</th>
@@ -572,9 +572,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                     </td>
                   )
                 })}
-                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
+                <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                   <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
-                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                  <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                   {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
                 </td>
                 <td className="px-4 py-4 text-right min-w-[120px]"><Delta v={pct(mtd, compareVal)} /></td>
@@ -620,7 +620,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 const l = displayLabel(m)
                 return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
               })}
-              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+              <th className="text-right font-semibold px-4 py-3 text-xs text-[#0071e3] min-w-[170px]">{displayLabel(current).top} <span className="text-[#0071e3]/50">{periodSuffix}</span></th>
               <th className="text-right font-semibold px-4 py-3 text-xs min-w-[150px]">Prorata</th>
               <th className="text-right font-semibold px-4 py-3 text-xs min-w-[120px]">% đạt KPI</th>
             </tr>
@@ -644,7 +644,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                       </td>
                     )
                   })}
-                  <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
+                  <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                     <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
                     <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgtCur ? formatCompactNumber(tgtCur) : "—"}</div>
                     <div className="mt-0.5"><Attain actual={mtd} target={tgtCur} /></div>
@@ -682,7 +682,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 const l = displayLabel(m)
                 return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
               })}
-              <th className="text-right font-semibold px-4 py-3 text-xs text-blue-500 min-w-[170px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+              <th className="text-right font-semibold px-4 py-3 text-xs text-[#0071e3] min-w-[170px]">{displayLabel(current).top} <span className="text-[#0071e3]/50">{periodSuffix}</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -702,9 +702,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                     </td>
                   )
                 })}
-                <td className="px-4 py-4 text-right tabular-nums bg-blue-50/40 min-w-[170px]">
+                <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                   <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
-                  <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                  <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                   {row.mom && tablePrevFull && (
                     <div className="mt-0.5 flex items-center justify-end gap-1">
                       <Delta v={pct(proj(row.get(current), current), row.get(tablePrevFull))} />
@@ -880,10 +880,10 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 {row.label}
               </td>
               {mktReportMonths.map(month => (
-                <td key={month} className={`px-4 py-4 text-right tabular-nums min-w-[175px] ${month === data?.currentMonth ? "bg-blue-50/40" : ""}`}>
+                <td key={month} className={`px-4 py-4 text-right tabular-nums min-w-[175px] ${month === data?.currentMonth ? "bg-[#0071e3]/[0.06]" : ""}`}>
                   <div className={row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{row.fmt(mktMetric(month, row.metric))}</div>
                   <MktDelta month={month} metric={row.metric} />
-                  {month === data?.currentMonth && <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">MTD</div>}
+                  {month === data?.currentMonth && <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">MTD</div>}
                 </td>
               ))}
             </tr>
@@ -955,7 +955,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               const l = displayLabel(m)
               return <th key={m} className="text-right font-semibold px-4 py-2.5 text-xs min-w-[180px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
-            <th className="text-right font-semibold px-4 py-2.5 text-xs text-blue-500 min-w-[180px]">{displayLabel(current).top} <span className="text-blue-300">{periodSuffix}</span></th>
+            <th className="text-right font-semibold px-4 py-2.5 text-xs text-[#0071e3] min-w-[180px]">{displayLabel(current).top} <span className="text-[#0071e3]/50">{periodSuffix}</span></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
@@ -974,9 +974,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   </td>
                 )
               })}
-              <td className="px-4 py-3 text-right tabular-nums bg-blue-50/40 min-w-[180px]">
+              <td className="px-4 py-3 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[180px]">
                 <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
-                <div className="text-[10px] text-blue-500 mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                 {prevFull && (
                   <div className="mt-0.5 flex items-center justify-end gap-1">
                     <Delta v={pct(row.get(current), row.get(prevFull))} />
@@ -1282,7 +1282,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 </div>
               )}
               {data.customerBreakdown === "total-only" && !data.customerError && (
-                <div className="mx-6 mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-800">
+                <div className="mx-6 mt-4 rounded-lg border border-[#0071e3]/20 bg-[#eaf4ff] px-4 py-3 text-[13px] text-[#0071e3]">
                   Admin API summary hiện có Total Customers/Revenue; New vs Returning cần snapshot item-level hoặc API summary breakdown riêng.
                 </div>
               )}
@@ -1310,7 +1310,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               {hasSpend || hasLeads ? (
                 <>
                   {data.customerBreakdown === "total-only" && (
-                    <div className="mx-6 mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] text-blue-800">
+                    <div className="mx-6 mt-4 rounded-lg border border-[#0071e3]/20 bg-[#eaf4ff] px-4 py-3 text-[13px] text-[#0071e3]">
                       Dòng Khách mới đang dùng total customer từ Admin API vì API summary hiện chưa trả breakdown New/Returning trong snapshot này.
                     </div>
                   )}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { LogicNote } from "@/components/dashboard-kit"
 
 // B2C Metric table — YTD monthly breakdown (Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer by Web+App)
 // Data: /api/analytics/b2c/metric
@@ -143,6 +144,11 @@ export function B2CMetric() {
         </button>
       </div>
 
+      <LogicNote>
+        Revenue / GP / Orders / Customer: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App).
+        CM1 = GP tổng – OpCost (channel + group costs). Traffic / User: GA4 yearMonth.
+      </LogicNote>
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
         <table className="w-full text-left border-collapse min-w-max">
           <thead>
@@ -192,15 +198,15 @@ export function B2CMetric() {
                       return (
                         <>
                           {mi === 0 ? (
-                            <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-blue-50/30")}>
+                            <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-brand-50/30")}>
                               {fmt}
                             </td>
                           ) : (
                             <>
-                              <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-blue-50/30")}>
+                              <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-brand-50/30")}>
                                 {fmt}
                               </td>
-                              <td key={`${m}-mom`} className={cn("px-2 py-1.5 text-right whitespace-nowrap", isCurrent && "bg-blue-50/30")}>
+                              <td key={`${m}-mom`} className={cn("px-2 py-1.5 text-right whitespace-nowrap", isCurrent && "bg-brand-50/30")}>
                                 <PctBadge v={change} />
                               </td>
                             </>
@@ -220,11 +226,6 @@ export function B2CMetric() {
           </tbody>
         </table>
       </div>
-
-      <p className="text-[10px] text-slate-400 mt-3">
-        Revenue / GP / Orders / Customer: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App).
-        CM1 = GP tổng – OpCost (channel + group costs). Traffic / User: GA4 yearMonth.
-      </p>
     </div>
   )
 }
