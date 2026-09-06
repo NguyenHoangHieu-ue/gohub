@@ -6,6 +6,7 @@ import {
 } from "recharts"
 import {
   ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
+  Target, Percent, Zap,
 } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
@@ -211,15 +212,32 @@ const APPLE_CARD = "rounded-lg border border-black/[0.09] overflow-hidden"
 const APPLE_CARD_STYLE = { background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }
 const APPLE_BG_STYLE = { background: "radial-gradient(circle at 16% 8%,rgba(0,113,227,0.08),transparent 28%),radial-gradient(circle at 86% 16%,rgba(0,166,166,0.09),transparent 26%),linear-gradient(180deg,#fbfbfd 0%,#f5f5f7 50%,#eef1f5 100%)" }
 
-// Section shell — Apple glass card
-const Section = ({ icon, title, desc, children, action, source }: {
+// Bảng màu "kênh/thị trường" — y hệt màu dùng ở hero card (meter bars VN/US/Web/App/Khác) — dùng lại
+// xuyên suốt trang (icon section, dot ở bảng) để màu mang Ý NGHĨA nhất quán, không phải trang trí rời rạc.
+const MARKET_DOT: Record<string, string> = {
+  VN: "#0071e3", US: "#6366f1", WEB: "#00a6a6", APP: "#2f9d55", KHÁC: "#b7791f",
+  NEW: "#2f9d55", "MỚI": "#2f9d55", RETURNING: "#6366f1", "QUAY LẠI": "#6366f1",
+}
+// Chấm màu trước tên dòng trong RollingTable/SimpleRollTable — nhận diện qua từ khoá đầu nhãn (label
+// luôn bắt đầu bằng tên thị trường/kênh, vd "VN B2C", "US Sales B2C", "New (All)") — KHÔNG áp cho bảng
+// khác (ProfitTrendTable/AcquisitionTable) vì nhãn ở đó là tên sản phẩm/kênh MKT, dễ nhận nhầm.
+const marketDot = (label: string): string | undefined => {
+  const first = label.trim().toUpperCase().split(/[\s(]/)[0]
+  return MARKET_DOT[first]
+}
+const Dot = ({ color }: { color?: string }) =>
+  color ? <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle flex-shrink-0" style={{ background: color }} /> : null
+
+// Section shell — Apple glass card. iconColor mặc định Apple blue #0071e3; mỗi section truyền màu riêng
+// theo Ý NGHĨA nội dung (revenue/growth/customers/cost...) thay vì mọi section cùng 1 màu như trước.
+const Section = ({ icon, title, desc, children, action, source, iconColor = "#0071e3" }: {
   icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
-  accent?: string; source?: SourceKind; note?: React.ReactNode
+  iconColor?: string; source?: SourceKind; note?: React.ReactNode
 }) => (
   <section className={APPLE_CARD} style={APPLE_CARD_STYLE}>
     <div className="px-6 py-5 border-b border-black/[0.06] flex items-start justify-between gap-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center flex-shrink-0">{icon}</div>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${iconColor}1a`, color: iconColor }}>{icon}</div>
         <div>
           <h2 className="text-[15px] font-[650] text-[#1d1d1f]">{title}</h2>
           {desc && <p className="text-[12px] text-[#6e6e73] mt-0.5">{desc}</p>}
@@ -234,13 +252,21 @@ const Section = ({ icon, title, desc, children, action, source }: {
   </section>
 )
 
-// KPI metric card — Apple .metric style từ mockup
-const KpiCard = ({ label, value, sub, delta, source: src }: {
-  label: string; value: string; sub?: string; delta?: number | null; source?: string; accent?: string; icon?: React.ReactNode
+// KPI metric card — Apple .metric style từ mockup, nay thêm icon chip màu theo Ý NGHĨA chỉ số (funnel
+// stage: traffic/hiệu suất/khách hàng/chi phí) thay vì chỉ text đen trên nền trắng như trước.
+const KpiCard = ({ label, value, sub, delta, source: src, icon, color = "#0071e3" }: {
+  label: string; value: string; sub?: string; delta?: number | null; source?: string; color?: string; icon?: React.ReactNode
 }) => (
-  <div className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]" style={APPLE_CARD_STYLE}>
+  <div className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]" style={{ ...APPLE_CARD_STYLE, borderLeft: `3px solid ${color}` }}>
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight">{label}</span>
+      <div className="flex items-center gap-2 min-w-0">
+        {icon && (
+          <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: `${color}1a`, color }}>
+            {icon}
+          </span>
+        )}
+        <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight truncate">{label}</span>
+      </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         {src && <span className="text-[9px] font-[650] px-1.5 py-0.5 rounded-full bg-[#eaf4ff] text-[#0071e3] uppercase tracking-wide">{src}</span>}
         {delta !== undefined && delta !== null && (
@@ -559,7 +585,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             return (
               <tr key={row.key ?? row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
                 <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
-                  {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+                  <Dot color={marketDot(row.label)} />{row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
                 {completed.map((m, i) => {
                   const v = row.get(m)
@@ -689,7 +715,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             {rows.map(row => (
               <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
                 <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
-                  {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+                  <Dot color={marketDot(row.label)} />{row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
                 {tableCompleted.map((m, i) => {
                   const v = row.get(m)
@@ -962,7 +988,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
           {acquisitionRows.map(row => (
             <tr key={row.label} className={row.highlight ? "bg-slate-50/60" : "hover:bg-slate-50/40"}>
               <td className={`sticky left-0 z-10 bg-white/95 px-6 py-3 text-left min-w-[190px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
-                {row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
+                <Dot color={marketDot(row.label)} />{row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
               </td>
               {acquisitionCompleted.map((m, i) => {
                 const v = row.get(m)
@@ -1144,22 +1170,23 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
             {/* 6 KPI cards — y chang mockup: Users, Customers, Budget, ROAS, CAC, Leads */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"}
+              <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"} icon={<Users className="w-3.5 h-3.5" />} color="#0071e3"
                 sub={ga4 && ga4.length > 0 ? `CR ${(ga4Total / ga4.length).toFixed(1)}%` : "GA4 chưa kết nối"} source="GA4" />
-              <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"}
+              <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"} icon={<Zap className="w-3.5 h-3.5" />} color="#7c5cbf"
                 sub="Paid media blended" source="Chat" />
-              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)}
+              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)} icon={<UserPlus className="w-3.5 h-3.5" />} color="#2f9d55"
                 sub={data.customerError ? "Admin API lỗi" : data.customerBreakdown === "total-only" ? "Total từ Admin API" : `Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
-              <KpiCard label="CAC" value={cacCur > 0 ? formatCurrency(cacCur) : "—"}
+              <KpiCard label="CAC" value={cacCur > 0 ? formatCurrency(cacCur) : "—"} icon={<DollarSign className="w-3.5 h-3.5" />} color="#b7791f"
                 sub="Spend ÷ khách mới" source="Chat" />
-              <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"}
+              <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"} icon={<Target className="w-3.5 h-3.5" />} color="#6366f1"
                 sub="Chatwoot all channels" source="Chat" />
-              <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"}
+              <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"} icon={<Percent className="w-3.5 h-3.5" />} color="#b7791f"
                 sub="Spend ÷ Leads" source="Chat" />
             </div>
 
             <Section
               icon={<DollarSign className="w-5 h-5" />}
+              iconColor="#0071e3"
               title="B2C MKT Profit Report"
               desc="Total chi phí MKT = Meta + Google · Revenue/COGS/GP lấy từ fulfillment B2C"
               source="admin"
@@ -1173,6 +1200,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
             <Section
               icon={<TrendingUp className="w-5 h-5" />}
+              iconColor="#2f9d55"
               title="Revenue & Gross Profit Trend"
               action={
                 <div className="flex items-center gap-2">
@@ -1213,7 +1241,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revSeries}>
                       <defs>
-                        <linearGradient id="gvn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} /></linearGradient>
+                        <linearGradient id="gvn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0071e3" stopOpacity={0.35} /><stop offset="100%" stopColor="#0071e3" stopOpacity={0.02} /></linearGradient>
                         <linearGradient id="gus" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} /><stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} /></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -1221,7 +1249,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => formatCompactNumber(v)} />
                       <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }} formatter={(v: number) => formatCurrency(v)} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="VN B2C" stackId="1" stroke="#2563eb" strokeWidth={2} fill="url(#gvn)" />
+                      <Area type="monotone" dataKey="VN B2C" stackId="1" stroke="#0071e3" strokeWidth={2} fill="url(#gvn)" />
                       <Area type="monotone" dataKey="US B2C" stackId="1" stroke="#6366f1" strokeWidth={2} fill="url(#gus)" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -1231,7 +1259,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               {/* Customers new vs returning */}
               <div className={`${APPLE_CARD} p-5`} style={APPLE_CARD_STYLE}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center"><Users className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 rounded-lg bg-[#7c5cbf]/10 text-[#7c5cbf] flex items-center justify-center"><Users className="w-4 h-4" /></div>
                   <div>
                     <h3 className="text-[14px] font-[650] text-[#1d1d1f]">Khách mới vs quay lại</h3>
                     <p className="text-[12px] text-[#6e6e73]">Doanh thu theo nhóm khách · rolling 6 tháng</p>
@@ -1256,6 +1284,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             {/* Section 1 — Revenue + Breakdown */}
             <Section
               icon={<DollarSign className="w-5 h-5" />}
+              iconColor="#0891b2"
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               source="admin"
@@ -1273,7 +1302,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning × All/VN/US · revenue + số khách"
+            <Section icon={<Users className="w-5 h-5" />} iconColor="#7c5cbf" title="Doanh thu theo Customers" desc="New vs Returning × All/VN/US · revenue + số khách"
               source="admin"
 >
               {data.customerError && (
@@ -1303,6 +1332,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
             <Section
               icon={<UserPlus className="w-5 h-5" />}
+              iconColor="#b7791f"
               title="Acquisition Performance"
               desc="Chi phí MKT · Leads theo kênh · Khách mới · CAC/CPL · tỷ lệ chốt"
               source="admin"
@@ -1326,6 +1356,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             {/* Section 5 — Spend & ROAS (Budget · Spend MTD · Spend Pace · Spend Prorata · ROAS) */}
             <Section
               icon={<PieChartIcon className="w-5 h-5" />}
+              iconColor="#00a6a6"
               title="Budget Management"
               desc={`Budget từ Manage Costs/B2C Channels · Spend · Spend Pace · Prorata · ROAS${data.refreshTimestamp ? ` · refresh ${new Date(data.refreshTimestamp).toLocaleString("vi-VN")}` : ""}`}
               source="admin"
