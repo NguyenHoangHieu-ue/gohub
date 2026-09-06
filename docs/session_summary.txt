@@ -8680,3 +8680,36 @@ ngắn gọn rồi làm.
 Tất cả tsc + `next lint` (0 lỗi mới) + vitest (185/185) PASS mỗi đợt, đã push staging từng commit riêng,
 wiki cập nhật đồng thời (`analytics-b2b.md`, `analytics-b2c.md`, `analytics-website.md`,
 `analytics-quarterly.md`).
+
+### s194 (tiếp) — Tab Inventory: thêm sub-tab "Tồn kho" thật (fact_inventory, Sapo sync)
+
+Hiếu: gohub_dw đã có data tồn kho, yêu cầu build tab quản lý tồn kho/nhập hàng chuyên nghiệp dựa theo 2
+file Lark OPS đang dùng thật ("Plan nhập hàng theo tháng" + "INVENTORY REPORT 2026") + luôn tự chọn role
+chuyên gia phù hợp trước khi làm (đã ghi thành rule cố định trong CLAUDE.md + auto-memory).
+
+Vai Senior Data Analyst + Product/Design Lead — đọc DB schema THẬT qua SQL Query trên staging (không đoán):
+phát hiện 2 bảng mới `fact_inventory` (date/warehouse/batch/sku/quantity/expired_date, snapshot theo NGÀY,
+Sapo sync, ~1 tuần data lúc làm) + `dim_warehouse` (10 kho: 1 MAIN + 9 BRANCH). Đọc 2 file Lark OPS: "Plan
+nhập hàng theo tháng" (PO tracker + lưới tuần — khớp gần 1:1 với app hiện có) và "INVENTORY REPORT 2026"
+(Lark Base — sheet SIM có Stock/Available for sale/Expired date left/Inventory Age/Last 15-30 days Sold;
+Draft v2 là pivot SKU×kho; nhiều tab ngày-tháng riêng = OPS phải tự copy tab mới mỗi vài ngày để lưu lịch
+sử — điểm đau lớn nhất, fact_inventory (snapshot theo ngày sẵn trong DB) giải quyết được ngay).
+
+`/analytics/fulfillment` (route "Inventory") giờ 2 sub-tab:
+- **Tồn kho** (mới, mặc định) — `api/analytics/inventory-stock`: StatTile tổng quan (SKU theo dõi/nguy
+  hiểm/sắp hết hạn/số kho), trend chart tồn kho theo ngày, bảng SKU (tồn kho, tốc độ bán/ngày, ước tính hết
+  hàng, hạn dùng gần nhất, cảnh báo) — click expand xem breakdown từng kho, filter theo mức cảnh báo +
+  search. `components/inventory/stock-view.tsx`, theo đúng convention dashboard-kit (StatTile/CHART_PALETTE)
+  đã dùng cho các tab khác trong session.
+- **Kế hoạch nhập hàng** (giữ nguyên y hệt cũ — PO tracker + lưới tuần) — chỉ thêm 1 điểm nối dữ liệu:
+  `lib/inventory-plan.ts` thêm `getLatestStock()`, `computePlan()` nhận thêm tham số `liveStock` — "Tồn
+  thực tế" tuần đang chạy giờ auto-suggest từ Sapo thật (đóng đúng TODO cũ "actual_stock chưa có nguồn tự
+  động", ghi rõ trong wiki từ s160) thay vì luôn trống, hiện khung nét đứt giống các ô auto khác
+  (sales_forecast/import_qty), OPS vẫn ghi đè tay được bình thường.
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS. Tự QA qua Chrome trên staging: cả 2 sub-tab render đúng,
+alert logic đúng (SKU tốc độ bán cao dù hạn dùng còn xa vẫn lên "Nguy hiểm" đúng theo rule <7 ngày ước tính
+hết hàng), expand breakdown theo kho đúng, ô auto-suggest tồn thực tế hiện đúng khung nét đứt khớp số liệu
+thật (36.007, khớp cả 2 sub-tab). Không đổi logic/API cũ nào (PO tracker, roles, sales_forecast/import_qty
+auto-suggest) — chỉ thêm mới + 1 chỗ nối dữ liệu thật vào ô đã có sẵn khái niệm "auto". Wiki
+`docs/wiki/system/tabs/analytics-fulfillment.md` cập nhật đầy đủ (data model mới, UI 2 sub-tab, gotchas).
