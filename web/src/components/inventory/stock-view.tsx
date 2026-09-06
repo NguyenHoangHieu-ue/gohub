@@ -147,7 +147,7 @@ export function InventoryStockView() {
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm SKU, vendor..."
-            className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+            className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-brand-500/40" />
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel CSTroubleshootReport. Backend /api/reports/cs-troubleshoot ĐÃ khớp shape.
 // Adapt (user chốt): GIỮ sync của web → nút Sync gọi POST /api/admin/sync-lark-tickets (thay intel sync-lark).
@@ -116,7 +117,7 @@ export default function CSTroubleshootReport() {
         <AlertCircle className="w-12 h-12 text-rose-500 mb-4" />
         <h3 className="text-lg font-bold text-slate-800 mb-2">Error loading report</h3>
         <p className="text-slate-500 text-center max-w-md">{error}</p>
-        <button onClick={() => fetchData()} className="mt-6 px-6 py-2 bg-[#003B95] text-white rounded-full font-bold hover:bg-[#002B70] transition-all">Retry</button>
+        <button onClick={() => fetchData()} className="mt-6 px-6 py-2 bg-brand-600 text-white rounded-full font-bold hover:bg-brand-700 transition-all">Retry</button>
       </div>
     )
   }
@@ -127,11 +128,11 @@ export default function CSTroubleshootReport() {
         <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#003B95] rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 shrink-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-200 shrink-0">
                 <Activity className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight leading-tight">CS TROUBLESHOOTING <span className="text-blue-600">HUB</span></h1>
+                <h1 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight leading-tight">CS TROUBLESHOOTING <span className="text-brand-600">HUB</span></h1>
                 <p className="hidden md:block text-slate-400 text-xs font-medium">Lark Base &amp; PostgreSQL Integration</p>
               </div>
             </div>
@@ -142,9 +143,9 @@ export default function CSTroubleshootReport() {
                 <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="bg-transparent border-none text-[10px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
               </div>
               <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
-              <button onClick={() => fetchData()} className="px-4 py-2 md:py-2.5 bg-blue-600 text-white rounded-xl text-[10px] md:text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
+              <button onClick={() => fetchData()} className="px-4 py-2 md:py-2.5 bg-brand-600 text-white rounded-xl text-[10px] md:text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
               <div className="flex items-center gap-2 w-full md:w-auto">
-                <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[10px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-blue-500/20 flex-1 md:flex-none">
+                <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[10px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-brand-500/20 flex-1 md:flex-none">
                   <option value="All">All Channels</option>
                   <option value="B2B">B2B Performance</option>
                   <option value="B2C">B2C Performance</option>
@@ -152,7 +153,7 @@ export default function CSTroubleshootReport() {
                 <button onClick={fetchData} className="p-2 md:p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
                   <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
                 </button>
-                <button onClick={syncLarkData} disabled={syncing} className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold transition-all shadow-sm", syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-[#003B95] text-white hover:bg-[#002B70] shadow-blue-200")}>
+                <button onClick={syncLarkData} disabled={syncing} className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold transition-all shadow-sm", syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700 shadow-brand-200")}>
                   <Database className={cn("w-3 h-3 md:w-4 md:h-4", syncing && "animate-spin")} />
                   <span className="hidden sm:inline">{syncing ? "Syncing..." : "Sync Lark"}</span>
                   <span className="sm:hidden">{syncing ? "Syncing..." : "Sync"}</span>
@@ -168,10 +169,10 @@ export default function CSTroubleshootReport() {
               { id: "source", label: "CS_ Source Performance", icon: LayoutList },
               { id: "invalid", label: "CS_ Invalid", icon: AlertTriangle },
             ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 text-[11px] md:text-sm font-bold transition-all relative whitespace-nowrap", activeTab === tab.id ? "text-[#003B95]" : "text-slate-400 hover:text-slate-600")}>
-                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-[#003B95]" : "text-slate-400")} />
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 text-[11px] md:text-sm font-bold transition-all relative whitespace-nowrap", activeTab === tab.id ? "text-brand-600" : "text-slate-400 hover:text-slate-600")}>
+                <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-brand-600" : "text-slate-400")} />
                 {tab.label}
-                {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#003B95] rounded-t-full shadow-[0_-2px_8px_rgba(0,59,149,0.3)]" />}
+                {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-t-full shadow-[0_-2px_8px_rgba(15,76,129,0.3)]" />}
               </button>
             ))}
           </div>
@@ -243,24 +244,18 @@ function TBSOverview({ data, loading }: { data: CSTroubleshootData | null; loadi
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: "Units Sold", value: formatNumber(data?.kpis.unitsSold || 0), icon: Package, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "TBS Tickets", value: formatNumber(data?.kpis.ticketCount || 0), icon: Ticket, color: "text-rose-600", bg: "bg-rose-50" },
-          { label: "TBS Rate", value: `${(data?.kpis.tbsRate || 0).toFixed(2)}%`, icon: Activity, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Avg Handle Time", value: `${data?.kpis.avgHandleTime || 0}m`, icon: Clock, color: "text-emerald-600", bg: "bg-emerald-50" },
-        ].map((kpi, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5">
-            <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center", kpi.bg)}><kpi.icon className={cn("w-7 h-7", kpi.color)} /></div>
-            <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-0.5">{kpi.label}</p>
-              <h3 className="text-2xl font-black text-slate-900">{kpi.value}</h3>
-            </div>
-          </div>
+        {([
+          { label: "Units Sold",      value: formatNumber(data?.kpis.unitsSold || 0),          icon: Package,  accent: "neutral" },
+          { label: "TBS Tickets",     value: formatNumber(data?.kpis.ticketCount || 0),         icon: Ticket,   accent: "warn"    },
+          { label: "TBS Rate",        value: `${(data?.kpis.tbsRate || 0).toFixed(2)}%`,        icon: Activity, accent: "cost"    },
+          { label: "Avg Handle Time", value: `${data?.kpis.avgHandleTime || 0}m`,               icon: Clock,    accent: "margin"  },
+        ] as { label: string; value: string; icon: React.ElementType; accent: MetricAccent }[]).map((kpi, idx) => (
+          <StatTile key={idx} icon={<kpi.icon className="w-5 h-5" />} label={kpi.label} value={kpi.value} accent={kpi.accent} />
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm lg:col-span-1">
-          <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><RefreshCcw className="w-6 h-6 text-[#003B95]" />Replacement &amp; Refund</h3>
+          <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><RefreshCcw className="w-6 h-6 text-brand-600" />Replacement &amp; Refund</h3>
           <div className="space-y-6">
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
               <div className="flex justify-between items-start mb-4">
@@ -268,7 +263,7 @@ function TBSOverview({ data, loading }: { data: CSTroubleshootData | null; loadi
                   <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Replace Count</p>
                   <h4 className="text-3xl font-black text-slate-900">{formatNumber(data?.kpis.replacementCount || 0)} <span className="text-sm font-medium text-slate-400">Cases</span></h4>
                 </div>
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><RefreshCcw className="w-5 h-5 text-blue-600" /></div>
+                <div className="w-10 h-10 bg-brand-100 rounded-lg flex items-center justify-center"><RefreshCcw className="w-5 h-5 text-brand-600" /></div>
               </div>
               <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Counted from &quot;Product Action&quot; field (contains &apos;replace&apos;).</p>
             </div>
@@ -285,15 +280,15 @@ function TBSOverview({ data, loading }: { data: CSTroubleshootData | null; loadi
           </div>
         </div>
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm lg:col-span-2">
-          <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><Clock className="w-6 h-6 text-[#003B95]" />TBS Volume by Shift</h3>
+          <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2"><Clock className="w-6 h-6 text-brand-600" />TBS Volume by Shift</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.shifts || []}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="shift" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: "bold" }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11, fontWeight: "bold" }} />
-                <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "16px", border: "none", boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)" }} />
-                <Bar dataKey="tickets" fill="#003B95" radius={[6, 6, 0, 0]} barSize={40} />
+                <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={chartTooltipStyle} />
+                <Bar dataKey="tickets" fill={CHART_PALETTE[0]} radius={[6, 6, 0, 0]} barSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -346,7 +341,7 @@ function BreakdownDetail({ row, colSpan }: { row: any; colSpan: number }) {
 
 function SortIcon({ active, direction }: { active: boolean; direction: "asc" | "desc" }) {
   if (!active) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-20" />
-  return direction === "asc" ? <ChevronUp className="w-3 h-3 ml-1 text-blue-600" /> : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
+  return direction === "asc" ? <ChevronUp className="w-3 h-3 ml-1 text-brand-600" /> : <ChevronDown className="w-3 h-3 ml-1 text-brand-600" />
 }
 
 function useSort(defaultKey: string) {
@@ -370,7 +365,7 @@ function SKUPerformance({ data, loading }: { data: CSTroubleshootData | null; lo
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
-        <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><Database className="w-5 h-5 md:w-6 md:h-6 text-[#003B95]" />SKU &amp; Telco Performance</h3>
+        <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><Database className="w-5 h-5 md:w-6 md:h-6 text-brand-600" />SKU &amp; Telco Performance</h3>
       </div>
       <div className="overflow-x-auto no-scrollbar touch-pan-x">
         <table className="w-full text-left border-collapse min-w-[800px]">
@@ -387,14 +382,14 @@ function SKUPerformance({ data, loading }: { data: CSTroubleshootData | null; lo
           <tbody>
             {sorted.slice(0, 15).map((row, idx) => (
               <React.Fragment key={idx}>
-                <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedSku === row.sku ? "bg-blue-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedSku(expandedSku === row.sku ? null : row.sku)}>
+                <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedSku === row.sku ? "bg-brand-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedSku(expandedSku === row.sku ? null : row.sku)}>
                   <td className="px-8 py-4"><span className="text-sm font-bold text-slate-900">{row.sku}</span></td>
                   <td className="px-8 py-4"><span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{row.telco}</span></td>
                   <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-slate-700">{formatNumber(row.unitsSold)}</span></td>
                   <td className="px-8 py-4">
                     <div className="flex items-center justify-center gap-3">
-                      <span className="text-sm font-black text-[#003B95]">{row.tbs}</span>
-                      <div className="hidden lg:block flex-1 max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(row.tbs / (data?.skuPerformance[0]?.tbs || 1)) * 100}%` }} /></div>
+                      <span className="text-sm font-black text-brand-600">{row.tbs}</span>
+                      <div className="hidden lg:block flex-1 max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-brand-500 rounded-full" style={{ width: `${(row.tbs / (data?.skuPerformance[0]?.tbs || 1)) * 100}%` }} /></div>
                     </div>
                   </td>
                   <td className="px-8 py-4 text-center"><span className={cn("text-xs font-black px-2 py-1 rounded-md", row.tbsRate > 5 ? "bg-rose-50 text-rose-600" : row.tbsRate > 2 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600")}>{row.tbsRate.toFixed(2)}%</span></td>
@@ -422,7 +417,7 @@ function VendorPerformance({ data, loading }: { data: CSTroubleshootData | null;
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
-        <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><Activity className="w-5 h-5 md:w-6 md:h-6 text-[#003B95]" />Vendor Performance</h3>
+        <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><Activity className="w-5 h-5 md:w-6 md:h-6 text-brand-600" />Vendor Performance</h3>
       </div>
       <div className="overflow-x-auto no-scrollbar touch-pan-x">
         <table className="w-full text-left border-collapse min-w-[800px]">
@@ -439,13 +434,13 @@ function VendorPerformance({ data, loading }: { data: CSTroubleshootData | null;
           <tbody>
             {sorted.map((row, idx) => (
               <React.Fragment key={idx}>
-                <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expanded === row.vendor ? "bg-blue-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpanded(expanded === row.vendor ? null : row.vendor)}>
+                <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expanded === row.vendor ? "bg-brand-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpanded(expanded === row.vendor ? null : row.vendor)}>
                   <td className="px-8 py-4"><span className="text-sm font-bold text-slate-900">{row.vendor}</span></td>
                   <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-slate-700">{formatNumber(row.unitsSold)}</span></td>
                   <td className="px-8 py-4">
                     <div className="flex items-center justify-center gap-3">
-                      <span className="text-sm font-black text-[#003B95]">{row.tbs}</span>
-                      <div className="hidden lg:block flex-1 max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${(row.tbs / (data?.vendorPerformance[0]?.tbs || 1)) * 100}%` }} /></div>
+                      <span className="text-sm font-black text-brand-600">{row.tbs}</span>
+                      <div className="hidden lg:block flex-1 max-w-[80px] h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-brand-500 rounded-full" style={{ width: `${(row.tbs / (data?.vendorPerformance[0]?.tbs || 1)) * 100}%` }} /></div>
                     </div>
                   </td>
                   <td className="px-8 py-4 text-center"><span className={cn("text-xs font-black px-2 py-1 rounded-md", row.tbsRate > 5 ? "bg-rose-50 text-rose-600" : row.tbsRate > 2 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600")}>{row.tbsRate.toFixed(2)}%</span></td>
@@ -475,7 +470,7 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
     <div className="space-y-12">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
-          <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><LayoutList className="w-5 h-5 md:w-6 md:h-6 text-[#003B95]" />Channel Group Performance</h3>
+          <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><LayoutList className="w-5 h-5 md:w-6 md:h-6 text-brand-600" />Channel Group Performance</h3>
         </div>
         <div className="overflow-x-auto no-scrollbar touch-pan-x">
           <table className="w-full text-left border-collapse min-w-[800px]">
@@ -493,10 +488,10 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
             <tbody>
               {data.channelGroupPerformance.map((row, idx) => (
                 <React.Fragment key={idx}>
-                  <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedGroup === row.group ? "bg-blue-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedGroup(expandedGroup === row.group ? null : row.group)}>
+                  <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedGroup === row.group ? "bg-brand-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedGroup(expandedGroup === row.group ? null : row.group)}>
                     <td className="px-8 py-4"><span className="text-sm font-bold text-slate-900">{row.group}</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-slate-700">{formatNumber(row.unitsSold)}</span></td>
-                    <td className="px-8 py-4 text-center"><span className="text-sm font-black text-[#003B95]">{row.tbs}</span></td>
+                    <td className="px-8 py-4 text-center"><span className="text-sm font-black text-brand-600">{row.tbs}</span></td>
                     <td className="px-8 py-4 text-center"><span className={cn("text-xs font-black px-2 py-1 rounded-md", row.tbsRate > 5 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>{row.tbsRate.toFixed(2)}%</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-rose-600">{row.refunds}</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-xs font-black text-slate-500">{row.refundRate.toFixed(1)}%</span></td>
@@ -512,7 +507,7 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
-          <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><LayoutList className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />Individual Source Performance</h3>
+          <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><LayoutList className="w-5 h-5 md:w-6 md:h-6 text-brand-500" />Individual Source Performance</h3>
         </div>
         <div className="overflow-x-auto no-scrollbar touch-pan-x">
           <table className="w-full text-left border-collapse min-w-[800px]">
@@ -529,10 +524,10 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
             <tbody>
               {sort(data.sourcePerformance).map((row, idx) => (
                 <React.Fragment key={idx}>
-                  <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedRow === row.source ? "bg-blue-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedRow(expandedRow === row.source ? null : row.source)}>
+                  <tr className={cn("border-b border-slate-50 transition-colors cursor-pointer", expandedRow === row.source ? "bg-brand-50/30" : "hover:bg-slate-50/50")} onClick={() => setExpandedRow(expandedRow === row.source ? null : row.source)}>
                     <td className="px-8 py-4"><span className="text-sm font-bold text-slate-900">{row.source}</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-slate-700">{formatNumber(row.unitsSold)}</span></td>
-                    <td className="px-8 py-4 text-center"><span className="text-sm font-black text-[#003B95]">{row.tbs}</span></td>
+                    <td className="px-8 py-4 text-center"><span className="text-sm font-black text-brand-600">{row.tbs}</span></td>
                     <td className="px-8 py-4 text-center"><span className={cn("text-xs font-black px-2 py-1 rounded-md", row.tbsRate > 5 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>{row.tbsRate.toFixed(2)}%</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-sm font-bold text-rose-600">{row.refunds}</span></td>
                     <td className="px-8 py-4 text-center"><span className="text-xs font-black text-slate-500">{row.refundRate.toFixed(1)}%</span></td>

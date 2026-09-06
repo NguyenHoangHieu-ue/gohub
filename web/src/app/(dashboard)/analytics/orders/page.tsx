@@ -313,8 +313,8 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-[#003B95]/10">
-            <ClipboardList className="h-5 w-5 text-[#003B95]" />
+          <div className="p-2 rounded-lg bg-brand-600/10">
+            <ClipboardList className="h-5 w-5 text-brand-600" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Orders</h1>
@@ -322,7 +322,7 @@ export default function OrdersPage() {
           </div>
         </div>
         <button onClick={handleExport} disabled={exporting || rows.length === 0}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[#003B95] border border-[#003B95]/30 rounded-lg hover:bg-[#003B95]/5 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-600/30 rounded-lg hover:bg-brand-600/5 disabled:opacity-40 disabled:cursor-not-allowed transition">
           {exporting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           {exporting ? "Exporting..." : "Export Excel"}
         </button>
@@ -345,8 +345,8 @@ export default function OrdersPage() {
                   className={cn(
                     "px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
                     companyCode === code
-                      ? "bg-[#003B95] text-white border-[#003B95]"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#003B95] hover:text-[#003B95]"
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-brand-600 hover:text-brand-600"
                   )}>
                   {label}
                 </button>
@@ -362,7 +362,7 @@ export default function OrdersPage() {
               {(["day", "range"] as const).map(m => (
                 <button key={m} onClick={() => setDateMode(m)}
                   className={cn("px-3 py-1 text-xs font-semibold rounded-md transition",
-                    dateMode === m ? "bg-white dark:bg-slate-700 text-[#003B95] shadow-sm" : "text-slate-500 dark:text-slate-400")}>
+                    dateMode === m ? "bg-white dark:bg-slate-700 text-brand-600 shadow-sm" : "text-slate-500 dark:text-slate-400")}>
                   {m === "day" ? "Single day" : "Date range"}
                 </button>
               ))}
@@ -467,7 +467,7 @@ export default function OrdersPage() {
             </select>
           </div>
           <button onClick={() => doFetch(1)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003B95] text-white text-xs font-semibold rounded-lg hover:bg-[#002d73] transition self-end">
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition self-end">
             Apply
           </button>
         </div>
@@ -525,7 +525,7 @@ export default function OrdersPage() {
                 <tr>
                   <td colSpan={13} className="py-10 text-center text-slate-400">
                     <div className="flex justify-center">
-                      <div className="animate-spin h-5 w-5 border-2 border-[#003B95] border-t-transparent rounded-full" />
+                      <div className="animate-spin h-5 w-5 border-2 border-brand-600 border-t-transparent rounded-full" />
                     </div>
                   </td>
                 </tr>
@@ -616,7 +616,7 @@ export default function OrdersPage() {
                   <button key={pg} onClick={() => doFetch(pg)}
                     className={cn("w-7 h-7 text-xs rounded font-medium transition",
                       pg === page
-                        ? "bg-[#003B95] text-white"
+                        ? "bg-brand-600 text-white"
                         : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300")}>
                     {pg}
                   </button>

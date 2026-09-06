@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportRawRows, exportAOA } from "@/lib/export-excel"
+import { CHART_GRID_COLOR } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ThreeHKDataUsage. Data qua /api/analytics/query (SELECT-only).
 // Bỏ motion/react (không dùng), inline getDefaultDateRange/formatDate.
@@ -640,7 +641,7 @@ export default function ThreeHKDataUsagePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Activity className="w-7 h-7 text-blue-600" />
+            <Activity className="w-7 h-7 text-brand-600" />
             3HK Data Usage
           </h1>
           <p className="text-slate-500 text-sm mt-1">Phân tích hành vi &amp; hiệu suất sản phẩm theo kỳ cước</p>
@@ -651,7 +652,7 @@ export default function ThreeHKDataUsagePage() {
             {(["all", "Daily", "Fixed", "Unlimited"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-                  activeTab === tab ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                  activeTab === tab ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
                 {tab === "all" ? "Tất cả" : tab}
               </button>
             ))}
@@ -659,10 +660,10 @@ export default function ThreeHKDataUsagePage() {
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input type="text" placeholder="Search ICCID, Order Code..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm" />
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all shadow-sm" />
           </div>
 
-          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-500/20">
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-brand-500/20">
             <Calendar className="w-4 h-4 text-slate-400" />
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-sm font-medium focus:outline-none" />
             <span className="text-slate-300 mx-1">—</span>
@@ -672,7 +673,7 @@ export default function ThreeHKDataUsagePage() {
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
 
           <button onClick={() => { setPage(1); setAppliedTick(t => t + 1) }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
+            className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
 
           <button onClick={() => { setPage(1); fetchTotals(); fetchSKUMetrics(); fetchSKUTypeMetrics(); fetchRecords(1, true) }}
             className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">
@@ -685,7 +686,7 @@ export default function ThreeHKDataUsagePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-blue-50 rounded-xl text-blue-600"><BarChart3 className="w-5 h-5" /></div>
+            <div className="p-2 bg-brand-50 rounded-xl text-brand-600"><BarChart3 className="w-5 h-5" /></div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Usage</span>
           </div>
           <p className="text-2xl font-bold text-slate-900">{formatNumber(totals.totalUsage)} GB</p>
@@ -740,7 +741,7 @@ export default function ThreeHKDataUsagePage() {
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h3 className="font-bold text-slate-900 flex items-center gap-2">
-              <Database className="w-4 h-4 text-blue-600" />
+              <Database className="w-4 h-4 text-brand-600" />
               Data Usage by Country × Month (TB)
             </h3>
             <p className="text-xs text-slate-500 mt-1">
@@ -752,7 +753,7 @@ export default function ThreeHKDataUsagePage() {
           </div>
           <div className="flex items-center gap-3">
             {countryMonths.length > 0 && (
-              <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
+              <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
                 RUN-RATE 12M = {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)} × 12 = {fmtTB(countryGrand.runRate)} TB
               </span>
             )}
@@ -779,7 +780,7 @@ export default function ThreeHKDataUsagePage() {
                     <th key={m} className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider whitespace-nowrap">{monthLabel(m, countryMultiYear)}</th>
                   ))}
                   <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-slate-800 whitespace-nowrap">Total</th>
-                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-blue-700 whitespace-nowrap">Run-rate 12M</th>
+                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-brand-700 whitespace-nowrap">Run-rate 12M</th>
                 </tr>
               </thead>
               <tbody>
@@ -790,7 +791,7 @@ export default function ThreeHKDataUsagePage() {
                       <td key={m} className="px-3 py-2 tabular-nums text-slate-600">{fmtTB(row.monthly[m] ?? 0)}</td>
                     ))}
                     <td className="px-3 py-2 tabular-nums font-bold text-slate-900 bg-slate-50">{fmtTB(row.total)}</td>
-                    <td className="px-3 py-2 tabular-nums font-semibold text-blue-700 bg-blue-50/60">{fmtTB(row.runRate)}</td>
+                    <td className="px-3 py-2 tabular-nums font-semibold text-brand-700 bg-brand-50/60">{fmtTB(row.runRate)}</td>
                   </tr>
                 ))}
                 <tr className="bg-amber-50 border-t-2 border-amber-200 font-bold text-slate-900">
@@ -799,7 +800,7 @@ export default function ThreeHKDataUsagePage() {
                     <td key={m} className="px-3 py-2.5 tabular-nums">{fmtTB(countryGrand.monthly[m] ?? 0)}</td>
                   ))}
                   <td className="px-3 py-2.5 tabular-nums bg-amber-100">{fmtTB(countryGrand.total)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-blue-800 bg-blue-100/70">{fmtTB(countryGrand.runRate)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-brand-800 bg-brand-100/70">{fmtTB(countryGrand.runRate)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1014,7 +1015,7 @@ export default function ThreeHKDataUsagePage() {
           <div className="p-4" style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={speedChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" width={60} />
                 <Tooltip formatter={(v: number, n: string) => [`${Number(v).toFixed(2)} GB`, n]} />
@@ -1044,7 +1045,7 @@ export default function ThreeHKDataUsagePage() {
           <div className="p-4" style={{ height: 340 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={usageDist.rows} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="range" tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" />
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={48} allowDecimals={false} />
                 <Tooltip formatter={(v: number, n: string) => [`${v} SIM`, n]} />
@@ -1063,7 +1064,7 @@ export default function ThreeHKDataUsagePage() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <Package className="w-4 h-4 text-blue-600" />
+            <Package className="w-4 h-4 text-brand-600" />
             Average Usage by SKU
           </h2>
         </div>
@@ -1251,7 +1252,7 @@ export default function ThreeHKDataUsagePage() {
                 return (
                   <button key={pageNum} onClick={() => handlePageChange(pageNum)}
                     className={cn("w-9 h-9 rounded-xl text-sm font-bold transition-all",
-                      page === pageNum ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm")}>
+                      page === pageNum ? "bg-brand-600 text-white shadow-lg shadow-brand-200" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm")}>
                     {pageNum}
                   </button>
                 )

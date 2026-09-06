@@ -14,6 +14,7 @@ import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedStrin
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
 import { exportToExcel, exportRawRows } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -579,13 +580,13 @@ export default function ProductPerformancePage() {
                   <div className="max-h-60 overflow-y-auto p-1">
                     {selectedSkus.length > 0 && (
                       <div className="p-2 border-b border-slate-50 mb-1">
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedSkus([]) }} className="text-xs font-bold text-blue-600 hover:text-blue-700">Clear Selection</button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedSkus([]) }} className="text-xs font-bold text-brand-600 hover:text-brand-700">Clear Selection</button>
                       </div>
                     )}
                     {filteredSkus.map(sku => (
                       <div key={sku} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group" onClick={(e) => { e.stopPropagation(); toggleSku(sku) }}>
                         <span className="text-sm text-slate-700">{sku}</span>
-                        {selectedSkus.includes(sku) && <Check className="w-4 h-4 text-blue-600" />}
+                        {selectedSkus.includes(sku) && <Check className="w-4 h-4 text-brand-600" />}
                       </div>
                     ))}
                   </div>
@@ -597,7 +598,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
               <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Categories</option>
                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
@@ -614,11 +615,11 @@ export default function ProductPerformancePage() {
                 <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto p-2 min-w-[200px]">
                   <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Select Vendors</span>
-                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-blue-600 font-bold hover:underline">Clear</button>
+                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-brand-600 font-bold hover:underline">Clear</button>
                   </div>
                   {vendors.map(v => (
                     <div key={v} onClick={() => toggleItem(v, selectedVendors, setSelectedVendors)}
-                      className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors", selectedVendors.includes(v) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50")}>
+                      className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors", selectedVendors.includes(v) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50")}>
                       <span className="text-sm font-medium">{v}</span>
                       {selectedVendors.includes(v) && <Check className="w-4 h-4" />}
                     </div>
@@ -631,9 +632,9 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Range</label>
               <div className="flex items-center gap-2">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 <span className="text-slate-400">-</span>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="pt-1" />
             </div>
@@ -642,7 +643,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
               <select value={selectedChannelGroup} onChange={(e) => { setSelectedChannelGroup(e.target.value); setSelectedChannel("all") }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Groups</option>
                 <option value="B2C">B2C</option>
                 <option value="B2B">B2B</option>
@@ -653,7 +654,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</label>
               <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Channels</option>
                 {filteredChannels.map(channel => <option key={channel} value={channel}>{channel}</option>)}
               </select>
@@ -665,7 +666,7 @@ export default function ProductPerformancePage() {
                 Destination{availableDestinations.length > 0 && <span className="ml-1 text-slate-400 font-normal normal-case">({availableDestinations.length})</span>}
               </label>
               <select value={selectedDestination} onChange={(e) => setSelectedDestination(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Destinations</option>
                 {availableDestinations.map(({ code, name }) => (
                   <option key={code} value={code}>{name} ({code})</option>
@@ -677,7 +678,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Compare To</label>
               <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="none">No Comparison</option>
                 <option value="previous_period">Previous Period</option>
                 <option value="previous_year">Previous Year</option>
@@ -685,7 +686,7 @@ export default function ProductPerformancePage() {
             </div>
           </div>
           <div className="flex justify-end pt-4 border-t border-slate-100 mt-4">
-            <button onClick={fetchPerformanceData} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+            <button onClick={fetchPerformanceData} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200">
               Apply Filters
             </button>
           </div>
@@ -695,55 +696,49 @@ export default function ProductPerformancePage() {
       <div ref={reportRef} className={cn("space-y-6", activeTab !== "performance" && "hidden")}>
         {/* Summary Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[
-            { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign, color: "blue" },
-            { label: "Units Sold", value: metrics.units, change: metrics.unitsChange, icon: Package, color: "purple" },
-            { label: "Orders", value: metrics.orders, change: metrics.ordersChange, icon: ShoppingCart, color: "indigo" },
-            { label: "ASP (VND)", value: metrics.aov, change: metrics.aovChange, icon: TrendingUp, color: "emerald" },
-            { label: "Gross Margin", value: metrics.margin, change: metrics.marginChange, icon: LayoutDashboard, color: "amber" },
-          ].map((item, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-              <div className="flex justify-between items-start mb-4">
-                <div className={cn("p-3 rounded-xl",
-                  item.color === "blue" ? "bg-blue-50 text-blue-600" :
-                  item.color === "purple" ? "bg-purple-50 text-purple-600" :
-                  item.color === "indigo" ? "bg-indigo-50 text-indigo-600" :
-                  item.color === "emerald" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-                  <item.icon className="w-6 h-6" />
-                </div>
-                {loading ? <Skeleton className="h-4 w-12" /> : (comparisonType !== "none" && (
-                  <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full", item.change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                    {item.change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {Math.abs(item.change)}%
-                  </div>
-                ))}
+          {([
+            { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
+            { label: "Units Sold",    value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
+            { label: "Orders",        value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
+            { label: "ASP (VND)",     value: metrics.aov,     change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
+            { label: "Gross Margin",  value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
+          ] as { label: string; value: number; change: number; icon: React.ElementType; accent: MetricAccent }[]).map((item, idx) => (
+            loading ? (
+              <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <Skeleton className="h-9 w-9 rounded-xl" />
+                <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
               </div>
-              <p className="text-slate-500 text-sm font-medium">{item.label}</p>
-              {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
-                <h3 className="text-2xl font-bold text-slate-900 mt-1">{item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}</h3>
-              )}
-            </div>
+            ) : (
+              <StatTile
+                key={idx}
+                icon={<item.icon className="w-5 h-5" />}
+                label={item.label}
+                value={item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
+                accent={item.accent}
+                deltas={comparisonType !== "none" ? [{ label: "So sánh", value: `${item.change >= 0 ? "+" : ""}${item.change}%`, kind: item.change >= 0 ? "up" : "down" }] : undefined}
+              />
+            )
           ))}
         </div>
 
         {/* Projection */}
         {projection && !loading && (
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+          <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white"><TrendingUp className="w-6 h-6" /></div>
+              <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white"><TrendingUp className="w-6 h-6" /></div>
               <div>
-                <h3 className="text-lg font-bold text-blue-900">Month-End Projection</h3>
-                <p className="text-sm text-blue-600">Based on {projection.daysElapsed} days of performance</p>
+                <h3 className="text-lg font-bold text-brand-800">Month-End Projection</h3>
+                <p className="text-sm text-brand-600">Based on {projection.daysElapsed} days of performance</p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Revenue</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(projection.revenue)}</p>
+                <p className="text-2xl font-bold text-brand-600">{formatCurrency(projection.revenue)}</p>
               </div>
-              <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Units</p>
-                <p className="text-2xl font-bold text-blue-600">{formatNumber(Math.round(projection.units))}</p>
+                <p className="text-2xl font-bold text-brand-600">{formatNumber(Math.round(projection.units))}</p>
               </div>
             </div>
           </div>
@@ -755,8 +750,8 @@ export default function ProductPerformancePage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-slate-900">Sales &amp; Units Trend</h2>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 bg-blue-500 rounded-full"></div> Revenue</div>
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Units</div>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[0] }}></div> Revenue</div>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[1] }}></div> Units</div>
               </div>
             </div>
             <div className="h-[350px] w-full">
@@ -765,16 +760,16 @@ export default function ProductPerformancePage() {
                   <AreaChart data={trendData}>
                     <defs>
                       <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} /><stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
                     <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#10b981", fontSize: 12 }} />
-                    <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                    <Line yAxisId="right" type="monotone" dataKey="units" stroke="#10b981" strokeWidth={2} dot={false} name="Units" />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: CHART_PALETTE[1], fontSize: 12 }} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
+                    <Line yAxisId="right" type="monotone" dataKey="units" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Units" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -784,18 +779,18 @@ export default function ProductPerformancePage() {
           {/* Top Regions */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 mb-6">
-              <MapPin className="w-5 h-5 text-blue-600" />
+              <MapPin className="w-5 h-5 text-brand-600" />
               <h2 className="text-lg font-bold text-slate-900">Top Regions</h2>
             </div>
             <div className="h-[500px] w-full">
               {loading ? <Skeleton className="h-full w-full" /> : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={regionData} layout="vertical" margin={{ left: 30, right: 40, top: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={CHART_GRID_COLOR} />
                     <XAxis type="number" hide />
                     <YAxis dataKey="region" type="category" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={180} interval={0} tickFormatter={(value) => formatTruncatedString(value, 20)} />
-                    <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [formatCompactNumber(val), "Revenue"]} />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={32} />
+                    <Tooltip contentStyle={chartTooltipStyle} formatter={(val: number) => [formatCompactNumber(val), "Revenue"]} />
+                    <Bar dataKey="revenue" fill={CHART_PALETTE[0]} radius={[0, 4, 4, 0]} barSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -813,7 +808,7 @@ export default function ProductPerformancePage() {
             <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg", group.color === "indigo" ? "bg-indigo-50 text-indigo-600" : group.color === "blue" ? "bg-blue-50 text-blue-600" : "bg-slate-50 text-slate-600")}>
+                  <div className={cn("p-2 rounded-lg", group.color === "indigo" ? "bg-indigo-50 text-indigo-600" : group.color === "blue" ? "bg-brand-50 text-brand-600" : "bg-slate-50 text-slate-600")}>
                     <LayoutDashboard className="w-5 h-5" />
                   </div>
                   <h2 className="text-lg font-bold text-slate-900">{group.title}</h2>
