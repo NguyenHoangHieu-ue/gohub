@@ -28,6 +28,10 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s194+10 (2026-09-06)**: UI redesign — hero "Month-End Projection" banner gradient `blue-600/700`→
+  `brand-600/700`; 5 KPI card viết tay đổi sang `StatTile`; chart Revenue Trend đổi sang `CHART_PALETTE`/
+  `CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→`brand-*` toàn trang (giữ indigo/purple/amber phân biệt
+  Orders/Units Sold/Gross Margin, đúng tiền lệ Channels). Không đổi logic/data.
 - **Vendor 3HK** lưu `'3HK DATAPOOL'` (có dấu cách) → lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
 - Created mode → margin = 0.
 - Đây là hiệu suất **bán ra theo vendor** (không phải giá vốn/COGS catalog — cái đó ở SP Hệ Thống).

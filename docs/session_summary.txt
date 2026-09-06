@@ -8824,3 +8824,49 @@ Channels Overview table đúng màu, chọn 1 kênh (VN-Wholesales) xem đủ 6 
 (line/area brand navy đúng, không còn xanh dương mặc định) + Performance Breakdown + Daily Performance +
 Top Selling Products — tất cả hiển thị đúng, số liệu không đổi, không lỗi. Lô 2 (Channels/B2B/B2C) coi như
 hoàn tất hẳn. Wiki `docs/wiki/system/tabs/analytics-channels.md` cập nhật mục Gotchas.
+
+### s194+10 (2026-09-06) — UI Lô 3: Website, Staff, Customers, Vendors
+
+Hiếu: "tiếp tục làm lô UI B2B + B2C QA đi" → xong → "làm luôn đi" (Channels, lô 2 hoàn tất) → "làm luôn đi"
+(lô 3: Website/Staff/Customers/Vendors, theo đúng thứ tự trong plan `eager-popping-aho.md` mục "Đợt 4+").
+
+**Website Analytics**: 5 KPI card viết tay (`kpi.color` string map thủ công) đổi sang `StatTile` — accent
+theo ý nghĩa: Revenue=revenue, Purchases/Avg.CTR=positive, Sessions/Search Clicks=neutral. 3 chart (Traffic
+Overview area, Search Trends line, Revenue Breakdown bar) đổi hex tự chọn (`#3b82f6`/`#10b981`/`#f1f5f9`)
+sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung — Revenue Breakdown dùng
+`CHART_PALETTE[2]` (amber) khớp icon chip cam sẵn có. `blue-*`→`brand-*` toàn trang (giữ `indigo-*`/
+`purple-*` cho App badge/Search Clicks — semantic riêng).
+
+**Staff Performance**: phát hiện `STAFF_COLORS[0]` (màu categorical đầu cho biểu đồ nhiều sales) là hex navy
+SAI `#003B95` — đúng file audit s192 từng flag "Staff Performance nặng nhất, 16 hex ngẫu hứng" nhưng chưa ai
+sửa tới giờ. Sửa đúng `#0f4c81`. 6 KPI card viết tay (chỉ số màu, KHÔNG có icon) đổi sang `StatTile` (thêm
+icon DollarSign/Zap/TrendingUp/Target/Users/UserCheck theo ý nghĩa). Giữ nguyên HOÀN TOÀN bảng màu tier
+Strategic(indigo)/VIP(purple)/Gold(amber)/Silver(slate)/B2C(emerald) và phần còn lại `STAFF_COLORS`
+(categorical 10 màu, cần phân biệt tối đa 8-10 sales cùng lúc trên 1 chart — đây KHÔNG phải "màu ngẫu
+hứng cần dọn" như #003B95, mà là bảng màu phân biệt thực thể có chủ đích).
+
+**Customers**: quét thấy CHỈ 1 chỗ hex sai `#003B95` (tier badge "All Customers Breakdown") + vài chỗ CM1
+dùng `text-blue-*` — sửa tất cả sang `brand-*`. Quyết định KHÔNG đổi theme `indigo-*` xuyên suốt trang dù
+đây là màu "không phải brand navy" — vì cả trang dùng nhất quán 1 ngôn ngữ thiết kế riêng ("editorial": bo
+góc `rounded-[2.5rem]`, chữ in nghiêng hoa `italic uppercase`, indigo làm màu chủ đạo xuyên suốt mọi nút/
+badge/section từ đầu) — đánh giá đây là lựa chọn thiết kế có chủ đích từ trước, không phải "lệch màu ngẫu
+nhiên", tương tự quyết định giữ nguyên Apple-glass style ở B2C Advanced trước đó. Đổi cả trang sang brand
+sẽ là 1 quyết định redesign lớn hơn hẳn scope "dọn màu lệch" của lô này.
+
+**Vendors**: cấu trúc gần giống hệt Channels (cùng tác giả gốc — hero projection card, KPI 5 card, chart,
+product breakdown table). Hero "Month-End Projection" banner gradient `from-blue-600 to-blue-700`→
+`from-brand-600 to-brand-700` (`shadow-blue-900/20`→`shadow-brand-800/25`, scale `brand-*` chỉ có tới 800,
+không có 900). 5 KPI card viết tay đổi sang `StatTile`. Chart Revenue Trend đổi sang `CHART_PALETTE`/
+`CHART_GRID_COLOR`/`chartTooltipStyle`. `blue-*`→`brand-*` toàn trang, giữ indigo/purple/amber phân biệt
+Orders/Units Sold/Gross Margin (đúng tiền lệ Channels).
+
+Không đổi logic/công thức/API nào ở cả 4 trang — chỉ đổi presentation. tsc + lint (0 lỗi mới, warning cũ
+không liên quan — vài biến/import chưa dùng có sẵn từ trước ở customers.tsx/staff.tsx/vendors.tsx) + vitest
+(185/185) PASS. Tự QA qua Chrome trên staging sau deploy cho cả 4 trang: Website (StatTile+3 chart đúng
+màu), Staff (STAFF_COLORS[0] navy đúng thay hex sai cũ, expand-row + tier badge indigo/purple/amber giữ
+nguyên đúng), Customers (chọn 1 KH thật — tier badge "Strategic" giờ brand navy đúng, CM1 brand-700 đúng),
+Vendors (chọn 40 vendor — StatTile + hero banner brand + chart navy area đều đúng, product table không
+lỗi). Không phát hiện lỗi, số liệu không đổi so với trước redesign. Lô 3 coi như hoàn tất hẳn — lô tiếp
+theo: Orders/Inventory/3HK Usage/CS Troubleshoot/Products/Targets/My Metrics (lô 4). Wiki 4 file
+(`analytics-website.md`/`analytics-staff.md`/`analytics-customers.md`/`analytics-vendors.md`) cập nhật mục
+Gotchas.

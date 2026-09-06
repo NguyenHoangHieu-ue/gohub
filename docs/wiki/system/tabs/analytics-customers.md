@@ -28,6 +28,10 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 - Thường lọc B2B (`group_name='B2B'`).
 
 ## 3. Gotchas
+- **s194+10 (2026-09-06)**: fix 1 hex sai `#003B95` (tier badge "All Customers Breakdown") → `brand-600`;
+  vài chỗ CM1 `text-blue-*`→`brand-*`. KHÔNG đổi theme indigo xuyên suốt trang (bo góc lớn/in nghiêng hoa —
+  thiết kế "editorial" riêng biệt có chủ đích từ đầu, giống cách B2C Advanced giữ nguyên Apple-glass style,
+  không phải màu ngẫu nhiên cần dọn).
 - **KPI `change` (CUST-1, 2026-08-02)**: API trả `change = giá trị tuyệt đối` (currRev − prevRev), KHÁC các tab dùng % thay đổi. Đã kiểm FE: KPI card CHỈ render `label` + `value`, KHÔNG render `change`/`isPositive`/`lastPeriod` → không có lỗi hiển thị. Giữ nguyên (nếu sau này hiện `change` phải rõ là số tuyệt đối, không phải %).
 - Khách không map được → hiển thị `TRIM(customer_code)` hoặc "Unknown".
 - Created mode → margin = 0.

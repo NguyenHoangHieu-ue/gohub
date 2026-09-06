@@ -91,6 +91,12 @@ CM1 staff = SUM(gross_profit_vnd) của staff đó
 
 ## 7. Gotchas
 
+**s194+10 (2026-09-06) — UI redesign:** `STAFF_COLORS[0]` (màu categorical đầu tiên cho biểu đồ nhiều sales)
+đổi từ hex navy SAI `#003B95` sang đúng `#0f4c81` (audit s192 từng flag file này nặng nhất — 16 hex ngẫu
+hứng). 6 KPI card viết tay đổi sang `StatTile`. Giữ nguyên bảng màu tier Strategic/VIP/Gold/Silver/B2C và
+phần còn lại của `STAFF_COLORS` (categorical, cần phân biệt tối đa 8-10 sales cùng lúc trên 1 chart, không
+phải "màu ngẫu nhiên" cần dọn). Không đổi logic/data.
+
 **3HK vendor (STAFF-1, s126):**
 - Định nghĩa chuẩn: `REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'` (7.930 SKU)
 - Trước: `LIKE '3HK%'` → bao gồm 61 SKU vendor "3HK" không phải datapool

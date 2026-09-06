@@ -67,6 +67,9 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].
 
 ## 6. Gotchas
+- **s194+10 (2026-09-06)**: UI redesign — 5 KPI card viết tay đổi sang `StatTile` (dashboard-kit), 3 chart
+  đổi sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung, `blue-*`→`brand-*` toàn trang.
+  Không đổi logic/data.
 - Cần credentials Google hợp lệ (service account JSON) — thiếu thì section rỗng graceful.
 - App platform chỉ có data nếu Firebase Analytics đang collect và property được cấp quyền cho service account.
 - `siteUrl: ""` trong config → `buildDimensionFilter` bỏ qua `hostName` filter → đúng cho app property.
