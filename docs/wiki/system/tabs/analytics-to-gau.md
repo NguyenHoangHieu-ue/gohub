@@ -7,6 +7,30 @@
 
 ---
 
+## ⚠️ s194+6 (2026-09-06) — panel "Câu hỏi CS" + AI search thêm Docs/Notes nhóm + trích nguồn
+
+Theo yêu cầu Hiếu: CS hay tag người trong ticket/troubleshoot hỏi về sản phẩm/policy nhưng câu hỏi "trôi mất",
+không ai biết đã trả lời/update thông tin chưa. 4 phần:
+
+1. **Panel "❓ Câu hỏi" mới** — sub-tab thứ 3 cạnh Docs/Notes trong track "Của nhóm" (`groupSubTab`).
+   Bảng mới `chat_questions` (migration v48) — xem §DB Tables. Bất kỳ member nào trong nhóm đặt câu hỏi,
+   trạng thái mặc định `chua`; bất kỳ member nào khác (không riêng người hỏi) đổi trạng thái/trả lời được
+   — mang tính cộng tác, ai biết thông tin thì trả lời. Trả lời xong tự chuyển `da_xu_ly`.
+2. **AI Gấu Tổ tìm kiếm thêm Docs + Notes của group** (`searchKB()` trong `ai/route.ts`) — trước đây CHỈ tìm
+   `kb_wiki_pages` (Wiki toàn hệ thống), nên nội dung lưu vào Docs/Notes của 1 group không có tác dụng gì với
+   AI của chính group đó. Nay search cả 3 nguồn song song (`Promise.all`), gộp context theo nhãn
+   `[Wiki]` / `[Tài liệu nhóm]` / `[Ghi chú nhóm]`. Không cần pipeline embedding/reindex riêng — search chạy
+   trực tiếp (ILIKE) trên bảng sống mỗi lần hỏi, nên lưu Doc/Note mới có hiệu lực ngay lập tức.
+3. **Trích dẫn nguồn để kiểm chứng** — system prompt Gấu Tổ thêm rule: dùng thông tin từ tài liệu tham khảo
+   thì PHẢI ghi `(Nguồn: [Wiki] Tên trang)` / `(Nguồn: [Tài liệu nhóm] Tên file)` /
+   `(Nguồn: [Ghi chú nhóm] người viết)` ở cuối câu trả lời — người hỏi bấm sang tab Docs/Notes/Wiki đọc lại
+   nguyên văn để kiểm chứng, không bịa nguồn nếu không có tài liệu nào khớp.
+4. Component mới `components/to-gau/questions-panel.tsx`, type `QuestionItem` (`lib/to-gau-types.ts`).
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS. Chưa QA UI trên staging (Hiếu tự QA sau).
+
+---
+
 ## ⚠️ s170 (2026-08-31) — audit bảo mật, fix 4 bug thật
 
 Theo yêu cầu Hiếu "quét tab Tổ Gấu". 4 bug xác nhận qua đọc code trực tiếp:
@@ -135,6 +159,19 @@ Index: `idx_chat_messages_group_created ON chat_messages(group_id, created_at DE
 
 **Yêu cầu users table:** cột `lark_open_id text` để gửi Lark DM.
 
+### `chat_questions` (migration v48, s194+6)
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| id | uuid PK | gen_random_uuid() |
+| group_id | uuid FK → chat_groups | CASCADE |
+| question | text | |
+| asked_by / asked_by_name | text | username (không phải email thật, cùng quy ước các bảng khác) |
+| status | text | `chua` \| `dang` \| `da_xu_ly`, default `chua` |
+| answer / answered_by / answered_by_name | text nullable | Set khi có người trả lời |
+| created_at / updated_at | timestamptz | |
+
+Index: `(group_id, created_at DESC)`, `(group_id, status)`.
+
 ### Tài liệu Chính thức — mở rộng `kb_wiki_pages` (migration v43, s163)
 
 Track "Chính thức" (creator/admin viết) dùng **chung bảng `kb_wiki_pages`** với trang `/kb` cũ (đã xoá) — KHÔNG
@@ -170,6 +207,7 @@ Trang tạo TỪ trong 1 group Tổ Gấu → mặc định `visibility_mode='gr
 | POST | `/api/to-gau/groups/[id]/ai` | member / creator | Hỏi AI Gấu Tổ |
 | GET/POST/DELETE | `/api/to-gau/groups/[id]/docs` | member / creator | CRUD tài liệu nhóm |
 | GET/POST/PATCH/DELETE | `/api/to-gau/groups/[id]/notes` | member / creator | CRUD ghi chú chung |
+| GET/POST/PATCH/DELETE | `/api/to-gau/groups/[id]/questions` | member / creator | CRUD câu hỏi CS (s194+6) — PATCH nhận `{status?, answer?}` |
 | POST | `/api/to-gau/upload` | member / creator | Upload file lên Supabase Storage |
 | GET | `/api/kb/wiki?groupId=<id>&search=` | member / creator | List trang Chính thức hiện cho group đó (`visibility_mode='all'` hoặc gán riêng group) |
 | GET/PATCH/DELETE | `/api/kb/wiki/[id]` | creator/admin (PATCH/DELETE) | Đọc 1 trang (+ lịch sử version) / sửa nội dung / xoá — dùng chung với pipeline MRP (Creator Settings) |
@@ -235,7 +273,7 @@ Trang tạo TỪ trong 1 group Tổ Gấu → mặc định `visibility_mode='gr
 - (nếu archived) Banner warning + disable input
 - (nếu có pinned) Strip amber collapsible trước tab bar
 - Tab bar: **💬 Chat | 📚 Tài liệu**. Tab Tài liệu có sub-tab: **Chính thức** (Wiki, chỉ admin/creator viết,
-  gán nhóm) | **Của nhóm** (📄 Docs + 📌 Notes như cũ, member trong group tự up — không đổi logic, chỉ đổi vị trí UI)
+  gán nhóm) | **Của nhóm** (📄 Docs + 📌 Notes + ❓ Câu hỏi — member trong group tự up/đặt câu hỏi)
 - Messages: ASC (cũ → mới), scroll-to-bottom auto, real-time INSERT + UPDATE
 - Bubble: mình = `bg-[#003B95] text-white` right; người khác = `bg-white border` left; AI = indigo gradient
 - Hover trên bubble → nút Ghim (creator/admin) absolute

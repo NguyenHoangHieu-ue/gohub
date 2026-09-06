@@ -69,6 +69,20 @@ export interface NoteItem {
   updated_at:   string
 }
 
+export interface QuestionItem {
+  id:               string
+  group_id:         string
+  question:         string
+  asked_by:         string
+  asked_by_name:    string | null
+  status:           "chua" | "dang" | "da_xu_ly"
+  answer:           string | null
+  answered_by:      string | null
+  answered_by_name: string | null
+  created_at:       string
+  updated_at:       string
+}
+
 export interface WikiPage {
   id:               string
   title:            string

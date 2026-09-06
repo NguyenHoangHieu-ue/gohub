@@ -17,6 +17,7 @@ import { SettingsModal } from "@/components/to-gau/settings-modal"
 import { DocsPanel } from "@/components/to-gau/docs-panel"
 import { NotesPanel } from "@/components/to-gau/notes-panel"
 import { WikiPanel } from "@/components/to-gau/wiki-panel"
+import { QuestionsPanel } from "@/components/to-gau/questions-panel"
 import { FilePreviewItem, AttachmentDisplay } from "@/components/to-gau/file-preview"
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { renderContent, fmtTime } from "@/lib/to-gau-format"
@@ -64,7 +65,7 @@ export default function ToGauRoomPage() {
   // Phase 3: tabs — "tailieu" gộp Wiki (Chính thức) + Docs/Notes (Của nhóm)
   const [activeTab, setActiveTab]     = useState<"chat" | "tailieu">("chat")
   const [docTrack, setDocTrack]       = useState<"official" | "group">("official")
-  const [groupSubTab, setGroupSubTab] = useState<"docs" | "notes">("docs")
+  const [groupSubTab, setGroupSubTab] = useState<"docs" | "notes" | "questions">("docs")
 
   // Phase 4: @mention
   const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
@@ -796,7 +797,7 @@ export default function ToGauRoomPage() {
             </div>
             {docTrack === "group" && (
               <div className="flex gap-1.5">
-                {(["docs", "notes"] as const).map(sub => (
+                {(["docs", "notes", "questions"] as const).map(sub => (
                   <button
                     key={sub}
                     onClick={() => setGroupSubTab(sub)}
@@ -807,7 +808,7 @@ export default function ToGauRoomPage() {
                         : "bg-transparent border-transparent text-slate-500 hover:text-slate-700"
                     )}
                   >
-                    {sub === "docs" ? "📄 Docs" : "📌 Notes"}
+                    {sub === "docs" ? "📄 Docs" : sub === "notes" ? "📌 Notes" : "❓ Câu hỏi"}
                   </button>
                 ))}
               </div>
@@ -1167,6 +1168,10 @@ export default function ToGauRoomPage() {
 
         {activeTab === "tailieu" && docTrack === "group" && groupSubTab === "notes" && (
           <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
+        )}
+
+        {activeTab === "tailieu" && docTrack === "group" && groupSubTab === "questions" && (
+          <QuestionsPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
         )}
       </div>
 
