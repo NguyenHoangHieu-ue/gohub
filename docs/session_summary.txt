@@ -8787,4 +8787,5 @@ nguyên gate cho mọi trang analytics thật khác — không đổi logic phâ
 vitest (185/185) PASS. QA lại bằng chính acc "hieu" (role bod) qua Chrome trên staging sau deploy — vào
 được danh sách Tổ Gấu, vào được group, thấy chat/members/AI trích nguồn đầy đủ. Wiki
 `docs/wiki/system/tabs/analytics-to-gau.md` cập nhật (mục riêng + ghi chú cảnh báo trong §Access Control để
-tránh tái phát nếu ai refactor layout này sau này).
+tránh tái phát nếu ai refactor layout này sau này). **Hiếu tự xác nhận trên staging bằng chính acc "hieu" —
+vào được, OK.**

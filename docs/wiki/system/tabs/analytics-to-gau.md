@@ -28,7 +28,7 @@ creator (tự động bypass).
 **Fix**: thêm early-return `if (id === "to-gau") return <>{children}</>` ngay trước đoạn check `granted`,
 giữ nguyên gate cho mọi trang analytics thật khác. tsc + lint + vitest (185/185) PASS. QA lại bằng chính
 acc `hieu` (role bod) qua Chrome trên staging — vào được danh sách Tổ Gấu, vào được group, thấy chat/
-members/AI đầy đủ.
+members/AI đầy đủ. ✅ **Hiếu đã tự xác nhận trên staging — vào được, OK.**
 
 ---
 
