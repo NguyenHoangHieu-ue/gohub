@@ -32,12 +32,12 @@
 
 - [ ] **s194 — QA thị giác tab B2B trên staging** (KPI cards StatTile + màu brand-*/chart palette, số liệu
   KHÔNG đổi) — xong thì làm tiếp B2C (cần audit thêm 2 component con trước) hoặc Channels (cùng lô 2).
-- [ ] **GA4 App connect — chỉ còn 1 bước: chạy SQL** — Hiếu đã cấp quyền Viewer cho service account
-  (2026-09-06, xác nhận). Code đã sửa xong (`kind: "web"|"app"` trên `GA4Site`, tab Website + `b2c/metric`
-  tự chọn đúng site/property theo platform, xem `docs/wiki/system/tabs/analytics-website.md` mục 4). Còn
-  thiếu: Hiếu chạy 1 câu SQL trong Supabase SQL Editor để thêm entry `gohub-app` vào
-  `app_settings.ga4_configs` (SQL đầy đủ + lưu ý `kind:"app"` bắt buộc — xem file wiki trên, mục 4). Sau
-  khi chạy, mở tab Website → toggle App → tự có data, không cần đổi gì thêm.
+- [x] **GA4 App connect — XONG (2026-09-06)** — Hiếu cấp quyền Viewer + chạy SQL thêm entry `gohub-app`
+  vào `app_settings.ga4_configs`. Đã tự QA qua Chrome thật trên staging: toggle Web/App tab Website ra
+  đúng data mỗi lần (kể cả bấm nhanh liên tục App→Web→App). Trong lúc QA phát hiện thêm 1 race condition ở
+  chính fix này (useEffect đổi site SAU platform → 2 fetch chồng nhau, response về không theo thứ tự có
+  thể kẹt UI ở data site cũ) — đã sửa gộp chung 1 handler `switchPlatform()`, xem
+  `docs/wiki/system/tabs/analytics-website.md` mục "s194". Không cần làm gì thêm.
 - [ ] **s191 — QA thị giác 3 tab vừa đổi UI trên staging** (BOD Report/Dashboard/Quarter Report — đã tự QA
   qua Chrome, số liệu khớp bản cũ, nhưng Hiếu nên tự xem 1 lượt trước khi làm tiếp lô tab kế) — xem plan
   `C:\Users\nhhie\.claude\plans\eager-popping-aho.md` để biết lô tiếp theo (Channels/B2B/B2C).
