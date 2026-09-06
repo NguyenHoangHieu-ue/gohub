@@ -8713,3 +8713,43 @@ hết hàng), expand breakdown theo kho đúng, ô auto-suggest tồn thực t�
 thật (36.007, khớp cả 2 sub-tab). Không đổi logic/API cũ nào (PO tracker, roles, sales_forecast/import_qty
 auto-suggest) — chỉ thêm mới + 1 chỗ nối dữ liệu thật vào ô đã có sẵn khái niệm "auto". Wiki
 `docs/wiki/system/tabs/analytics-fulfillment.md` cập nhật đầy đủ (data model mới, UI 2 sub-tab, gotchas).
+
+### s194+6/+7 (2026-09-06) — Tổ Gấu: panel "Câu hỏi CS" + AI trích nguồn + fix Gemini model chết
+
+Hiếu mô tả điểm đau CS: mọi người hay tag người trong ticket/troubleshoot hỏi về sản phẩm/policy, câu hỏi
+"trôi mất" — không ai biết đã trả lời/update thông tin hay chưa. Yêu cầu 4 phần: (a) kho thông tin sản
+phẩm/policy, (b) note thay đổi thông tin sản phẩm, (c) CS đặt câu hỏi có trạng thái chưa/đang/đã xử lý,
+(d) Assistant hỏi-đáp sản phẩm có thể kiểm chứng ngay, tự cập nhật khi có tài liệu mới lưu vào.
+
+Trước khi code: đọc `to-gau/groups/[id]/ai/route.ts`, `docs/route.ts`, `notes/route.ts` — xác nhận AI Gấu
+Tổ (per-group, đã có sẵn) chỉ search `kb_wiki_pages` (ILIKE keyword), KHÔNG đụng gì tới Docs/Notes của
+group — đây chính là gap (d). Không có tính năng question/status-tracking nào tồn tại. Hỏi Hiếu 3 câu
+AskUserQuestion chốt scope: câu hỏi hiển thị ở panel mới trong Tổ Gấu (không phải trang riêng); "kiểm
+chứng" = trích dẫn nguồn; "cập nhật ngay" = mở rộng ILIKE hiện có sang Docs/Notes (không cần embedding
+pipeline riêng).
+
+Kết quả: (1) Bảng mới `chat_questions` (migration `v48_chat_questions.sql`) — status
+`chua`/`dang`/`da_xu_ly`, bất kỳ member nào trả lời/đổi trạng thái được (mang tính cộng tác, không giới hạn
+người hỏi). Panel mới `components/to-gau/questions-panel.tsx`, sub-tab thứ 3 "❓ Câu hỏi" cạnh Docs/Notes
+trong track "Của nhóm" (`to-gau/[id]/page.tsx`). (2) `searchKB()` mở rộng tìm thêm `chat_docs`+`chat_notes`
+CỦA CHÍNH GROUP song song với `kb_wiki_pages` (Promise.all, gộp context có nhãn nguồn) — search ILIKE trực
+tiếp trên bảng sống nên lưu Doc/Note mới có hiệu lực ngay, không cần bước reindex riêng. (3) System prompt
+Gấu Tổ thêm rule bắt buộc trích nguồn `(Nguồn: [Wiki]/[Tài liệu nhóm]/[Ghi chú nhóm] ...)` cuối câu trả
+lời.
+
+QA qua Chrome trên staging thật (`stg-intel-v2.gohub.cloud` — domain thật, khác hẳn URL preview Vercel tự
+sinh dùng nhầm lúc đầu gây mất session đăng nhập vài lần, Hiếu phải chỉ đúng domain): đặt câu hỏi/đổi trạng
+thái chưa→đang→đã xử lý/trả lời tự chuyển đã xử lý — PASS cả panel. Hỏi AI 1 câu có đáp án trong 1 Note
+test mới thêm ("SKU EGGX99... ngừng nhập") → AI ban đầu trả 500 rỗng body.
+
+**Bug thật tìm ra lúc QA (không liên quan task đang làm)**: tra `get_runtime_errors` (Vercel MCP) thấy model
+`gemini-2.0-flash` trả 404 "no longer available" liên tục từ **2026-08-31** — Gấu Tổ AI đã chết âm thầm 6
+ngày trước khi bắt đầu session này, không ai biết vì route không có try/catch nên lỗi không hiện gì cho
+user, chỉ 500 rỗng. Grep repo: toàn hệ thống đã chuyển sang `gemini-3.6-flash` từ trước, chỉ sót đúng 3
+route dùng model cũ — `to-gau/groups/[id]/ai/route.ts`, `api/analytics/usage-stats/classify`,
+`api/analytics/usage-stats/evaluate` — cả 3 đổi sang `gemini-3.6-flash`. Thêm try/catch quanh lời gọi
+Gemini trong `ai/route.ts` (trả "Hiếu đang fix, vui lòng đợi" thay vì 500 rỗng khó chẩn đoán).
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS cả 2 đợt commit. QA lại qua Chrome + fetch trực tiếp trên
+staging sau fix — AI trả lời đúng + trích đúng nguồn `(Nguồn: [Ghi chú nhóm] Nguyễn Hoàng Hiếu)`. Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật đầy đủ (bảng mới, API mới, cả phần fix Gemini).
