@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
+import { InventoryStockView } from "@/components/inventory/stock-view"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inventory — kế hoạch nhập hàng theo tuần (VN/US) + PO tracker.
@@ -22,7 +23,7 @@ type Company = "VN" | "US"
 
 interface WeekMeta { weekStart: string; isActual: boolean }
 interface ComputedWeek extends WeekMeta {
-  beginStock: number; actualStock: number | null
+  beginStock: number; actualStock: number | null; actualStockAuto: boolean
   salesForecast: number; salesForecastAuto: boolean
   importQty: number; importQtyAuto: boolean
   suggestedImport: number; endStock: number; coverageWeeks: number | null
@@ -241,7 +242,8 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
                   )
                   if (row.key === "actual") return (
                     <td key={w.weekStart} className="px-2 py-1 text-right">
-                      <WeekCell value={d?.actual_stock !== undefined ? d.actual_stock : w.actualStock} placeholder={0} isAuto={false}
+                      <WeekCell value={d?.actual_stock !== undefined ? d.actual_stock : (w.actualStockAuto ? null : w.actualStock)}
+                        placeholder={w.actualStock ?? 0} isAuto={w.actualStockAuto}
                         onChange={v => setField(w.weekStart, "actual_stock", v)} />
                     </td>
                   )
@@ -468,12 +470,9 @@ function InventoryInner() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Package className="w-5 h-5 text-white" /></div>
-          <div>
-            <h1 className="text-lg font-black text-slate-900">Inventory — Kế hoạch nhập hàng</h1>
-            <p className="text-xs text-slate-500 font-bold">Dự phóng tồn kho theo tuần từng SKU · gợi ý bán/nhập tự động, OPS chỉnh tay khi cần</p>
-          </div>
+        <div>
+          <h2 className="text-sm font-black text-slate-900">Kế hoạch nhập hàng theo tuần</h2>
+          <p className="text-xs text-slate-500 font-bold">Dự phóng tồn kho theo tuần từng SKU · gợi ý bán/nhập tự động (tồn thực tế tuần này lấy từ Sapo), OPS chỉnh tay khi cần</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 rounded-lg p-0.5">
@@ -567,6 +566,31 @@ function InventoryInner() {
   )
 }
 
+// ─── Page — 2 sub-tab: Tồn kho (thật, Sapo sync) / Kế hoạch nhập hàng (plan theo tuần, PO tracker) ──────
+function FulfillmentInner() {
+  const [tab, setTab] = useState<"stock" | "plan">("stock")
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0"><Package className="w-5 h-5 text-white" /></div>
+        <div className="flex-1">
+          <h1 className="text-lg font-black text-slate-900">Inventory — Quản lý tồn kho & nhập hàng</h1>
+          <p className="text-xs text-slate-500 font-bold">Tồn kho thật (Sapo sync) · Kế hoạch nhập hàng theo tuần · PO tracker</p>
+        </div>
+        <div className="flex bg-slate-100 rounded-lg p-0.5">
+          {([["stock", "Tồn kho"], ["plan", "Kế hoạch nhập hàng"]] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={cn("px-3.5 py-1.5 rounded-md text-xs font-black transition-all", tab === key ? "bg-white shadow text-blue-600" : "text-slate-500 hover:text-slate-700")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === "stock" ? <InventoryStockView /> : <InventoryInner />}
+    </div>
+  )
+}
+
 export default function FulfillmentPage() {
-  return <Suspense><InventoryInner /></Suspense>
+  return <Suspense><FulfillmentInner /></Suspense>
 }
