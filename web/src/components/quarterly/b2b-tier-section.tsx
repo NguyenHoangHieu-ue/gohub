@@ -1,9 +1,11 @@
 // Tách từ quarterly/page.tsx (s183 Phase 5 tiếp — tách cơ học, JSX/logic giữ nguyên y hệt bản gốc).
 import React, { useState, useEffect, useMemo, useRef } from "react"
-import { Building2, ChevronDown, ChevronRight, FileDown, Pencil, Plus, RefreshCw, Save, Search, Trash2, Upload, Users, X } from "lucide-react"
+import { Building2, ChevronDown, ChevronRight, FileDown, Pencil, Plus, RefreshCw, Save, Search, Trash2, Upload, Users, X, BarChart3 } from "lucide-react"
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { cn } from "@/lib/utils"
 import { fc, pct, parseFmt, fmtInput, cm1Color } from "@/lib/quarterly-format"
 import { ColInfo } from "@/components/quarterly/col-info"
+import { CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 import type { MonthSummary } from "@/lib/quarterly-types"
 
 const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
@@ -139,10 +141,12 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const [editingTargetCode, setEditingTargetCode] = useState<string | null>(null)
   const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string; rev: string; hk3rev: string }>>({})
   const [savingTargetCode, setSavingTargetCode] = useState<string | null>(null)
-  // Creator: orders explorer per-customer
+  // Creator: orders explorer per-customer — Tháng/Ngày (theo kỳ) hoặc Sản phẩm (theo SKU, không tách kỳ)
+  // để biết KH thường mua SKU/sản phẩm gì.
   const [ordersData, setOrdersData] = useState<Record<string, { rows: any[]; groupBy: string; loading: boolean }>>({})
-  const [ordersGroupBy, setOrdersGroupBy] = useState<Record<string, "month" | "day">>({})
-  const loadOrders = (c: any, gb: "month" | "day" = "month") => {
+  const [ordersGroupBy, setOrdersGroupBy] = useState<Record<string, "month" | "day" | "sku">>({})
+  const [ordersShowChart, setOrdersShowChart] = useState<Record<string, boolean>>({})
+  const loadOrders = (c: any, gb: "month" | "day" | "sku" = "month") => {
     if (!quarterLabel) return
     const parts = quarterLabel.split("-")
     if (parts.length !== 2) return
@@ -827,6 +831,16 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   const gb = ordersGroupBy[c.code] ?? "month"
                                   const odKey = `${c.code}_${gb}`
                                   const od = ordersData[odKey]
+                                  // Chart: sku → mỗi row đã là 1 SKU riêng (top 10 theo revenue, BE trả sẵn DESC).
+                                  // month/day → mỗi period có NHIỀU dòng (1/kênh) → phải cộng dồn theo period,
+                                  // không thì cùng 1 tháng/ngày hiện lặp lại nhiều cột chồng lấn trên chart.
+                                  const chartData = !od ? [] : gb === "sku"
+                                    ? od.rows.slice(0, 10).map((r: any) => ({ name: r.period, revenue: r.revenue }))
+                                    : (() => {
+                                        const agg = new Map<string, number>()
+                                        od.rows.forEach((r: any) => agg.set(r.period, (agg.get(r.period) || 0) + r.revenue))
+                                        return [...agg.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, revenue]) => ({ name, revenue }))
+                                      })()
                                   return (
                                     <tr className="border-t border-slate-200">
                                       <td colSpan={colSpanAll} className="p-0">
@@ -992,18 +1006,23 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                               </div>
                                             </div>
 
-                                            {/* Chi tiết số liệu — tất cả roles */}
+                                            {/* Chi tiết số liệu — tất cả roles. 3 chế độ: Tháng/Ngày (theo kỳ) hoặc
+                                                Sản phẩm (theo SKU, không tách kỳ — biết KH thường mua SKU/sản phẩm gì). */}
                                             <div>
                                               <div className="flex items-center gap-2 mb-2 flex-wrap">
                                                   <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Chi tiết số liệu</p>
                                                   <div className="flex items-center gap-1 ml-auto">
-                                                    <button onClick={() => { setOrdersGroupBy(prev => ({ ...prev, [c.code]: "month" })); loadOrders(c, "month") }}
-                                                      className={cn("px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", (ordersGroupBy[c.code] ?? "month") === "month" ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
-                                                      Tháng
-                                                    </button>
-                                                    <button onClick={() => { setOrdersGroupBy(prev => ({ ...prev, [c.code]: "day" })); loadOrders(c, "day") }}
-                                                      className={cn("px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", ordersGroupBy[c.code] === "day" ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
-                                                      Ngày
+                                                    {([["month", "Tháng"], ["day", "Ngày"], ["sku", "Sản phẩm"]] as const).map(([gbOpt, label]) => (
+                                                      <button key={gbOpt} onClick={() => { setOrdersGroupBy(prev => ({ ...prev, [c.code]: gbOpt })); loadOrders(c, gbOpt) }}
+                                                        className={cn("px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", (ordersGroupBy[c.code] ?? "month") === gbOpt ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                                                        {label}
+                                                      </button>
+                                                    ))}
+                                                    <span className="w-px h-3.5 bg-slate-200 mx-0.5" />
+                                                    <button onClick={() => setOrdersShowChart(prev => ({ ...prev, [c.code]: !prev[c.code] }))}
+                                                      title="Hiện/ẩn biểu đồ"
+                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", ordersShowChart[c.code] ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                                                      <BarChart3 className="w-3 h-3" />Biểu đồ
                                                     </button>
                                                   </div>
                                                 </div>
@@ -1017,31 +1036,48 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 ) : od.rows.length === 0 ? (
                                                   <p className="text-[11px] text-slate-400 italic">Không có dữ liệu</p>
                                                 ) : (
-                                                  <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                                                    <table className="text-[10px] border-collapse w-full">
-                                                      <thead className="sticky top-0 bg-purple-50">
-                                                        <tr>
-                                                          <th className="px-2 py-1 text-left font-bold text-purple-700 uppercase">Kỳ</th>
-                                                          <th className="px-2 py-1 text-left font-bold text-purple-700 uppercase">Kênh</th>
-                                                          <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">Đơn</th>
-                                                          <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">Revenue</th>
-                                                          <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">GP</th>
-                                                          <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">GP%</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody>
-                                                        {od.rows.map((r: any, ri: number) => (
-                                                          <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-purple-50/30"}>
-                                                            <td className="px-2 py-0.5 tabular-nums text-slate-500 whitespace-nowrap">{r.period}</td>
-                                                            <td className="px-2 py-0.5 text-slate-700 max-w-[120px] truncate">{r.channel}</td>
-                                                            <td className="px-2 py-0.5 text-right tabular-nums text-slate-600">{r.orders.toLocaleString("vi-VN")}</td>
-                                                            <td className="px-2 py-0.5 text-right tabular-nums text-slate-700 font-semibold">{fc(r.revenue)}</td>
-                                                            <td className={cn("px-2 py-0.5 text-right tabular-nums font-semibold", r.gp >= 0 ? "text-blue-700" : "text-red-500")}>{fc(r.gp)}</td>
-                                                            <td className="px-2 py-0.5 text-right text-slate-500">{r.revenue > 0 ? pct(r.gp / r.revenue * 100) : "—"}</td>
+                                                  <div className="space-y-2">
+                                                    {ordersShowChart[c.code] && (
+                                                      <div className="h-[160px] border border-purple-100 rounded-lg bg-white p-2">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                          <BarChart data={chartData}>
+                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
+                                                            <XAxis dataKey="name" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} interval={0} angle={gb === "sku" ? -30 : 0} textAnchor={gb === "sku" ? "end" : "middle"} height={gb === "sku" ? 36 : 20} />
+                                                            <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={v => fc(v)} width={48} />
+                                                            <Tooltip contentStyle={chartTooltipStyle} formatter={(v: number) => fc(v)} labelFormatter={l => gb === "sku" ? `SKU ${l}` : l} />
+                                                            <Bar dataKey="revenue" fill={CHART_PALETTE[3]} radius={[3, 3, 0, 0]} name="Revenue" />
+                                                          </BarChart>
+                                                        </ResponsiveContainer>
+                                                      </div>
+                                                    )}
+                                                    <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                                                      <table className="text-[10px] border-collapse w-full">
+                                                        <thead className="sticky top-0 bg-purple-50">
+                                                          <tr>
+                                                            <th className="px-2 py-1 text-left font-bold text-purple-700 uppercase">{gb === "sku" ? "SKU" : "Kỳ"}</th>
+                                                            <th className="px-2 py-1 text-left font-bold text-purple-700 uppercase">{gb === "sku" ? "Sản phẩm" : "Kênh"}</th>
+                                                            {gb === "sku" && <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">SL</th>}
+                                                            <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">Đơn</th>
+                                                            <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">Revenue</th>
+                                                            <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">GP</th>
+                                                            <th className="px-2 py-1 text-right font-bold text-purple-700 uppercase">GP%</th>
                                                           </tr>
-                                                        ))}
-                                                      </tbody>
-                                                    </table>
+                                                        </thead>
+                                                        <tbody>
+                                                          {od.rows.map((r: any, ri: number) => (
+                                                            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-purple-50/30"}>
+                                                              <td className="px-2 py-0.5 tabular-nums text-slate-500 whitespace-nowrap">{r.period}</td>
+                                                              <td className="px-2 py-0.5 text-slate-700 max-w-[120px] truncate" title={r.channel}>{r.channel}</td>
+                                                              {gb === "sku" && <td className="px-2 py-0.5 text-right tabular-nums text-slate-600">{(r.units ?? 0).toLocaleString("vi-VN")}</td>}
+                                                              <td className="px-2 py-0.5 text-right tabular-nums text-slate-600">{r.orders.toLocaleString("vi-VN")}</td>
+                                                              <td className="px-2 py-0.5 text-right tabular-nums text-slate-700 font-semibold">{fc(r.revenue)}</td>
+                                                              <td className={cn("px-2 py-0.5 text-right tabular-nums font-semibold", r.gp >= 0 ? "text-blue-700" : "text-red-500")}>{fc(r.gp)}</td>
+                                                              <td className="px-2 py-0.5 text-right text-slate-500">{r.revenue > 0 ? pct(r.gp / r.revenue * 100) : "—"}</td>
+                                                            </tr>
+                                                          ))}
+                                                        </tbody>
+                                                      </table>
+                                                    </div>
                                                   </div>
                                                 )}
                                             </div>
