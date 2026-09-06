@@ -134,11 +134,11 @@ export function DocsPanel({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-slate-700 text-[15px] flex items-center gap-2">
-          <FileText size={16} className="text-[#003B95]" /> Tài liệu nhóm
+          <FileText size={16} className="text-brand-600" /> Tài liệu nhóm
         </h2>
         <button
           onClick={() => setShowUpload(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 transition-colors"
         >
           <Upload size={13} /> Tải lên
         </button>
@@ -155,7 +155,7 @@ export function DocsPanel({
                 onChange={e => setDocTitle(e.target.value)}
                 placeholder="Tên tài liệu"
                 required
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600"
               />
             </div>
             <div>
@@ -165,7 +165,7 @@ export function DocsPanel({
                 onChange={e => setDocDesc(e.target.value)}
                 rows={2}
                 placeholder="Mô tả ngắn (tùy chọn)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95] resize-none"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600 resize-none"
               />
             </div>
             <div>
@@ -204,14 +204,14 @@ export function DocsPanel({
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
                 placeholder="Nhập tag rồi Enter..."
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600"
               />
               {docTags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {docTags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-medium">
+                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 border border-brand-200 text-brand-700 text-[11px] font-medium">
                       {tag}
-                      <button type="button" onClick={() => removeTag(tag)} className="text-blue-400 hover:text-rose-500">
+                      <button type="button" onClick={() => removeTag(tag)} className="text-brand-400 hover:text-rose-500">
                         <X size={10} />
                       </button>
                     </span>
@@ -223,7 +223,7 @@ export function DocsPanel({
               <button
                 type="submit"
                 disabled={uploading || !docTitle.trim()}
-                className="flex-1 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
               >
                 {uploading ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Upload size={13} />}
                 {uploading ? "Đang tải lên..." : "Lưu tài liệu"}
@@ -290,7 +290,7 @@ export function DocsPanel({
                         href={doc.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg border border-slate-200 text-[#003B95] hover:bg-blue-50 transition-colors"
+                        className="p-1.5 rounded-lg border border-slate-200 text-brand-600 hover:bg-brand-50 transition-colors"
                         title="Tải về"
                       >
                         <Upload size={12} className="rotate-180" />

@@ -75,7 +75,7 @@ export function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
         <p className="truncate font-medium">{attachment.name}</p>
         <p className="text-[11px] text-slate-400">{fmtFileSize(attachment.size)}</p>
       </div>
-      <span className="text-[11px] text-[#003B95] font-medium flex-shrink-0">Tải về</span>
+      <span className="text-[11px] text-brand-600 font-medium flex-shrink-0">Tải về</span>
     </a>
   )
 }

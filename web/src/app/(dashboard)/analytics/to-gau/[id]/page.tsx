@@ -588,7 +588,7 @@ export default function ToGauRoomPage() {
         <div className="text-5xl mb-4">🔒</div>
         <h3 className="text-lg font-semibold text-slate-700 mb-2">Bạn chưa được thêm vào nhóm này</h3>
         <p className="text-slate-400 text-[14px]">Liên hệ Hiếu để được cấp quyền truy cập.</p>
-        <Link href="/analytics/to-gau" className="mt-4 text-[#003B95] text-[14px] hover:underline">← Quay lại danh sách nhóm</Link>
+        <Link href="/analytics/to-gau" className="mt-4 text-brand-600 text-[14px] hover:underline">← Quay lại danh sách nhóm</Link>
       </div>
     )
   }
@@ -610,7 +610,7 @@ export default function ToGauRoomPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
         <p className="text-slate-400">Không tìm thấy nhóm.</p>
-        <Link href="/analytics/to-gau" className="mt-3 text-[#003B95] text-[14px] hover:underline">← Quay lại</Link>
+        <Link href="/analytics/to-gau" className="mt-3 text-brand-600 text-[14px] hover:underline">← Quay lại</Link>
       </div>
     )
   }
@@ -643,7 +643,7 @@ export default function ToGauRoomPage() {
             className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
               searchOpen
-                ? "bg-[#003B95] text-white"
+                ? "bg-brand-600 text-white"
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             )}
             title="Tìm kiếm tin nhắn"
@@ -670,7 +670,7 @@ export default function ToGauRoomPage() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Tìm kiếm tin nhắn trong nhóm..."
-                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-brand-600"
               />
               {searchQuery && (
                 <button
@@ -687,7 +687,7 @@ export default function ToGauRoomPage() {
               <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
                 {searchLoading ? (
                   <div className="flex items-center justify-center py-6 text-slate-400 text-[13px]">
-                    <span className="w-4 h-4 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin mr-2" /> Đang tìm...
+                    <span className="w-4 h-4 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin mr-2" /> Đang tìm...
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-[13px]">Không tìm thấy kết quả</div>
@@ -765,7 +765,7 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors",
                     activeTab === tab
-                      ? "border-[#003B95] text-[#003B95]"
+                      ? "border-brand-600 text-brand-600"
                       : "border-transparent text-slate-500 hover:text-slate-700"
                   )}
                 >
@@ -787,7 +787,7 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[12px] font-medium border transition-colors",
                     docTrack === track
-                      ? "bg-[#003B95] text-white border-[#003B95]"
+                      ? "bg-brand-600 text-white border-brand-600"
                       : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
                   )}
                 >
@@ -804,7 +804,7 @@ export default function ToGauRoomPage() {
                     className={cn(
                       "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
                       groupSubTab === sub
-                        ? "bg-white border-[#003B95] text-[#003B95]"
+                        ? "bg-white border-brand-600 text-brand-600"
                         : "bg-transparent border-transparent text-slate-500 hover:text-slate-700"
                     )}
                   >
@@ -846,7 +846,7 @@ export default function ToGauRoomPage() {
                         className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-500 text-[13px] hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 transition-colors shadow-sm"
                       >
                         {loadingMore ? (
-                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin" />
+                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin" />
                         ) : (
                           <ChevronUp size={14} />
                         )}
@@ -923,7 +923,7 @@ export default function ToGauRoomPage() {
                                 }}
                                 className={cn(
                                   "w-full rounded-xl px-3 py-2 text-[14px] resize-none focus:outline-none",
-                                  isMe ? "bg-[#003B95]/80 text-white border border-white/30" : "bg-white border border-[#003B95] text-slate-800"
+                                  isMe ? "bg-brand-600/80 text-white border border-white/30" : "bg-white border border-brand-600 text-slate-800"
                                 )}
                               />
                               <div className={cn("flex gap-1.5", isMe ? "justify-end" : "justify-start")}>
@@ -943,7 +943,7 @@ export default function ToGauRoomPage() {
                               msg.is_recalled
                                 ? "bg-slate-100 text-slate-400 italic border border-dashed border-slate-200"
                                 : isMe
-                                ? "bg-[#003B95] text-white rounded-br-sm"
+                                ? "bg-brand-600 text-white rounded-br-sm"
                                 : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm",
                               msg.is_pinned && !msg.is_recalled && "ring-1 ring-amber-400"
                             )}>
@@ -999,7 +999,7 @@ export default function ToGauRoomPage() {
                               <button
                                 onClick={() => { setEditingMsgId(msg.id); setEditContent(msg.content) }}
                                 title="Sửa tin nhắn"
-                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-[#003B95] hover:text-[#003B95] text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-brand-600 hover:text-brand-600 text-[11px] flex items-center gap-1 transition-colors shadow-sm"
                               >
                                 <Edit2 size={11} /> Sửa
                               </button>
@@ -1035,8 +1035,8 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "fixed bottom-24 right-72 z-20 rounded-full shadow-md flex items-center justify-center transition-all",
                     newMsgCount > 0
-                      ? "h-8 px-3 gap-1.5 bg-[#003B95] text-white border border-[#003B95] text-[12px] font-medium hover:bg-[#002d73]"
-                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95]"
+                      ? "h-8 px-3 gap-1.5 bg-brand-600 text-white border border-brand-600 text-[12px] font-medium hover:bg-brand-700"
+                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-brand-600 hover:text-brand-600"
                   )}
                   title="Cuộn xuống"
                 >
@@ -1072,7 +1072,7 @@ export default function ToGauRoomPage() {
                         onMouseEnter={() => setMentionIdx(idx)}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
-                          idx === mentionIdx ? "bg-blue-50" : "hover:bg-blue-50"
+                          idx === mentionIdx ? "bg-brand-50" : "hover:bg-brand-50"
                         )}
                       >
                         <Avatar name={member.user_name} email={member.user_email} size="sm" />
@@ -1091,7 +1091,7 @@ export default function ToGauRoomPage() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading || sending}
-                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-[#003B95] disabled:opacity-40 transition-colors"
+                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-brand-600 disabled:opacity-40 transition-colors"
                     title="Đính kèm file"
                   >
                     <Paperclip size={15} />
@@ -1112,7 +1112,7 @@ export default function ToGauRoomPage() {
                     onKeyDown={handleKeyDown}
                     placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng, @ để mention)"
                     rows={1}
-                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none max-h-32 overflow-y-auto"
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 resize-none max-h-32 overflow-y-auto"
                     style={{ minHeight: "42px" }}
                   />
 
@@ -1137,7 +1137,7 @@ export default function ToGauRoomPage() {
                   <button
                     onClick={sendMessage}
                     disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#003B95] text-white flex items-center justify-center hover:bg-[#002d73] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {(sending || uploading) ? (
                       <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />

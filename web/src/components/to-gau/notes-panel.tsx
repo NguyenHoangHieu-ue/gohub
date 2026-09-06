@@ -97,7 +97,7 @@ export function NotesPanel({
     <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       <div className="flex items-center gap-2 mb-4">
-        <Pin size={16} className="text-[#003B95]" />
+        <Pin size={16} className="text-brand-600" />
         <h2 className="font-semibold text-slate-700 text-[15px]">Ghi chú dùng chung</h2>
       </div>
 
@@ -108,12 +108,12 @@ export function NotesPanel({
           onChange={e => setNewNoteContent(e.target.value)}
           placeholder="Nhập ghi chú mới..."
           rows={3}
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95] resize-none"
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600 resize-none"
         />
         <button
           type="submit"
           disabled={addingNote || !newNoteContent.trim()}
-          className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex items-center gap-2"
+          className="px-4 py-2 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors flex items-center gap-2"
         >
           <Pin size={13} />
           {addingNote ? "Đang thêm..." : "Thêm ghi chú"}
@@ -145,13 +145,13 @@ export function NotesPanel({
                       onChange={e => setEditContent(e.target.value)}
                       rows={4}
                       autoFocus
-                      className="w-full border border-[#003B95] rounded-lg px-3 py-2 text-[13px] focus:outline-none resize-none"
+                      className="w-full border border-brand-600 rounded-lg px-3 py-2 text-[13px] focus:outline-none resize-none"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleSaveEdit(note.id)}
                         disabled={!editContent.trim()}
-                        className="px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[12px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-[12px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
                       >
                         Lưu
                       </button>
@@ -175,7 +175,7 @@ export function NotesPanel({
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => { setEditingNote(note.id); setEditContent(note.content) }}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-[#003B95] hover:border-blue-200 transition-colors"
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-200 transition-colors"
                             title="Sửa"
                           >
                             <Edit2 size={12} />

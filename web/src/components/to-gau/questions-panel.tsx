@@ -119,7 +119,7 @@ export function QuestionsPanel({
     <>
     <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
       <div className="flex items-center gap-2 mb-4">
-        <HelpCircle size={16} className="text-[#003B95]" />
+        <HelpCircle size={16} className="text-brand-600" />
         <h2 className="font-semibold text-slate-700 text-[15px]">Câu hỏi CS</h2>
       </div>
 
@@ -130,12 +130,12 @@ export function QuestionsPanel({
           onChange={e => setNewQuestion(e.target.value)}
           placeholder="Đặt câu hỏi về sản phẩm/policy... (thay vì tag người trong chat)"
           rows={2}
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95] resize-none"
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600 resize-none"
         />
         <button
           type="submit"
           disabled={posting || !newQuestion.trim()}
-          className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex items-center gap-2"
+          className="px-4 py-2 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors flex items-center gap-2"
         >
           <Send size={13} />
           {posting ? "Đang gửi..." : "Đặt câu hỏi"}
@@ -151,7 +151,7 @@ export function QuestionsPanel({
             className={cn(
               "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
               filter === f.key
-                ? "bg-[#003B95] text-white border-[#003B95]"
+                ? "bg-brand-600 text-white border-brand-600"
                 : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
             )}
           >
@@ -202,7 +202,7 @@ export function QuestionsPanel({
                     <button
                       key={s}
                       onClick={() => updateQuestion(q.id, { status: s })}
-                      className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] text-slate-500 hover:border-[#003B95] hover:text-[#003B95] transition-colors"
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] text-slate-500 hover:border-brand-600 hover:text-brand-600 transition-colors"
                     >
                       → {STATUS_META[s].label}
                     </button>
@@ -221,12 +221,12 @@ export function QuestionsPanel({
                       onChange={e => setAnswerDrafts(prev => ({ ...prev, [q.id]: e.target.value }))}
                       placeholder="Nhập câu trả lời..."
                       rows={1}
-                      className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-[#003B95] resize-none"
+                      className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-brand-600 resize-none"
                     />
                     <button
                       onClick={() => handleSubmitAnswer(q.id)}
                       disabled={!(answerDrafts[q.id] ?? "").trim()}
-                      className="px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[12px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex-shrink-0"
+                      className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-[12px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors flex-shrink-0"
                     >
                       Trả lời
                     </button>

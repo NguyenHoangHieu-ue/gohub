@@ -36,11 +36,11 @@ function fmtRelative(dateStr: string): string {
 function GroupCard({ group }: { group: ChatGroup }) {
   return (
     <div className={cn(
-      "bg-white border border-slate-200 rounded-xl p-5 hover:border-[#003B95]/40 hover:shadow-md transition-all group",
+      "bg-white border border-slate-200 rounded-xl p-5 hover:border-brand-600/40 hover:shadow-md transition-all group",
       group.is_archived && "opacity-60"
     )}>
       <div className="flex items-start gap-3 mb-3">
-        <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-2xl flex-shrink-0 border border-blue-100">
+        <div className="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-2xl flex-shrink-0 border border-brand-100">
           {group.avatar_emoji || "🐻"}
         </div>
         <div className="flex-1 min-w-0">
@@ -87,7 +87,7 @@ function GroupCard({ group }: { group: ChatGroup }) {
           "flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-colors",
           group.is_archived
             ? "bg-slate-100 text-slate-500 hover:bg-slate-200"
-            : "bg-[#003B95] text-white hover:bg-[#002d73]"
+            : "bg-brand-600 text-white hover:bg-brand-700"
         )}
       >
         <MessageCircle size={14} />
@@ -147,7 +147,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
                   onClick={() => setEmoji(e)}
                   className={cn(
                     "w-10 h-10 rounded-lg text-xl flex items-center justify-center border-2 transition-all",
-                    emoji === e ? "border-[#003B95] bg-blue-50 scale-110" : "border-slate-200 hover:border-slate-400"
+                    emoji === e ? "border-brand-600 bg-brand-50 scale-110" : "border-slate-200 hover:border-slate-400"
                   )}
                 >
                   {e}
@@ -162,7 +162,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="VD: Team B2C, Dev Group..."
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
               required
             />
           </div>
@@ -174,7 +174,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
               onChange={e => setDesc(e.target.value)}
               placeholder="Mô tả ngắn về nhóm..."
               rows={3}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 resize-none"
             />
           </div>
 
@@ -189,7 +189,7 @@ function CreateGroupModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <button
               type="submit"
               disabled={saving || !name.trim()}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? "Đang tạo..." : "Tạo nhóm"}
             </button>
@@ -239,7 +239,7 @@ export default function ToGauPage() {
         {isCreator && (
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 transition-colors shadow-sm"
           >
             <Plus size={16} />
             Tạo nhóm
@@ -254,7 +254,7 @@ export default function ToGauPage() {
           className={cn(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors border",
             !showArchived
-              ? "bg-[#003B95] text-white border-[#003B95]"
+              ? "bg-brand-600 text-white border-brand-600"
               : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
           )}
         >
@@ -307,7 +307,7 @@ export default function ToGauPage() {
           {!showArchived && isCreator && (
             <button
               onClick={() => setShowCreate(true)}
-              className="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#003B95] text-white text-[14px] font-medium hover:bg-[#002d73] transition-colors"
+              className="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 text-white text-[14px] font-medium hover:bg-brand-700 transition-colors"
             >
               <Plus size={16} />
               Tạo nhóm đầu tiên

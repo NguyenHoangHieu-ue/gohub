@@ -174,7 +174,7 @@ function AnalyticsSettings() {
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#003B95] rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 text-white" /></div>
+          <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 text-white" /></div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Analytics Settings</h1>
             <p className="text-slate-500 text-sm">Đối tác chiến lược · Chính sách truy cập chatbot · Lọc dòng BI theo role</p>
@@ -188,7 +188,7 @@ function AnalyticsSettings() {
       {/* Database Status — kiểm tra nhanh kho dữ liệu còn cập nhật không */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Database className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
+          <div className="flex items-center gap-2"><Database className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
           <span className="flex items-center gap-2 flex-wrap justify-end">
             <button onClick={flushCache} disabled={flushing} className="flex items-center gap-2 px-3 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 disabled:opacity-50" title="Xoá L2 Supabase cache — lần tải tiếp lấy dữ liệu mới từ gohub_dw">
               {flushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Xoá Cache"}
@@ -201,7 +201,7 @@ function AnalyticsSettings() {
               {"Sync B2B KH"}
               {b2bCacheInfo && <span className="ml-1 bg-blue-500/50 px-1.5 py-0.5 rounded text-[10px]">{b2bCacheInfo.cached_count}</span>}
             </button>
-            <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-[#003B95] text-white rounded-xl text-xs font-bold hover:bg-[#002B70] disabled:opacity-50">
+            <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 disabled:opacity-50">
               {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiểm tra"}
             </button>
           </span>
@@ -297,13 +297,13 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-[#003B95]" />
+            <Shield className="w-5 h-5 text-brand-600" />
             <div>
               <h2 className="font-bold text-slate-800">Channel &amp; Customer Tiers (Partner Tiers)</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">Phân loại đối tác chiến lược. Mỗi nhóm hiển thị riêng trong báo cáo B2B / BOD / Dashboard / All-Time.</p>
             </div>
           </div>
-          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers" || !dirtyTiers} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyTiers ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers" || !dirtyTiers} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyTiers ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "tiers" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -319,7 +319,7 @@ function AnalyticsSettings() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên nhóm mới</label>
               <input value={newTier} onChange={e => setNewTier(e.target.value)} onKeyDown={e => e.key === "Enter" && addTier()}
                 placeholder="VD: Strategic, Preferred..."
-                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
+                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-600" />
             </div>
             <button onClick={addTier} className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg">
               <Plus size={14} /> Thêm nhóm
@@ -354,8 +354,8 @@ function AnalyticsSettings() {
                       onChange={e => setAddInputs(prev => ({ ...prev, [tier]: e.target.value }))}
                       onKeyDown={e => e.key === "Enter" && addPartner(tier, addInputs[tier] || "")}
                       placeholder="Thêm đối tác (gõ hoặc chọn kênh)..."
-                      className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#003B95]" />
-                    <button onClick={() => addPartner(tier, addInputs[tier] || "")} className="px-2.5 py-1.5 bg-[#003B95] hover:bg-[#002B70] text-white text-xs font-semibold rounded-lg shrink-0"><Plus size={13} /></button>
+                      className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-600" />
+                    <button onClick={() => addPartner(tier, addInputs[tier] || "")} className="px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg shrink-0"><Plus size={13} /></button>
                   </div>
                 </div>
               )
@@ -367,7 +367,7 @@ function AnalyticsSettings() {
       {/* Guardian — simplified */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-          <Shield className="w-5 h-5 text-[#003B95]" />
+          <Shield className="w-5 h-5 text-brand-600" />
           <h2 className="font-bold text-slate-800">Chatbot Guardian</h2>
         </div>
         <div className="p-6 space-y-4">
@@ -391,7 +391,7 @@ function AnalyticsSettings() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hướng dẫn tùy chỉnh cho Chatbot (tùy chọn)</label>
-              <button onClick={() => savePost("custom-rules", "/api/config/chatbot-rules", { rules: customRules })} disabled={saving === "custom-rules" || !dirtyCustomRules} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50", dirtyCustomRules ? "bg-[#003B95] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+              <button onClick={() => savePost("custom-rules", "/api/config/chatbot-rules", { rules: customRules })} disabled={saving === "custom-rules" || !dirtyCustomRules} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50", dirtyCustomRules ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
                 {saving === "custom-rules" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
               </button>
             </div>
@@ -400,7 +400,7 @@ function AnalyticsSettings() {
               onChange={e => setCustomRules(e.target.value)}
               rows={4}
               placeholder={"Nhập hướng dẫn bổ sung cho chatbot (tiếng Việt hoặc tiếng Anh).\nVí dụ: \"Staff chỉ được xem doanh thu của kênh họ phụ trách.\"\nĐể trống = chatbot chạy theo mặc định."}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none"
             />
             <p className="text-[11px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
           </div>
@@ -410,8 +410,8 @@ function AnalyticsSettings() {
       {/* Role Filters */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
-          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters" || !dirtyFilters} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyFilters ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+          <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
+          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters" || !dirtyFilters} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyFilters ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "filters" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -419,7 +419,7 @@ function AnalyticsSettings() {
           {FILTER_ROLES.map(role => (
             <div key={role}>
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {ROLE_LABELS[role] ?? role}</label>
-              <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
+              <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none resize-none" />
             </div>
           ))}
           <p className="text-xs text-slate-400">Điều kiện này được AND thêm vào truy vấn BI cho role tương ứng (admin không bị lọc).</p>
@@ -429,8 +429,8 @@ function AnalyticsSettings() {
       {/* SKU Destination Definition */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-[#003B95]" /><h2 className="font-bold text-slate-800">SKU Destination Definition</h2></div>
-          <button onClick={() => savePost("sku-dest", "/api/config/sku-destination-rule", { rules: skuRules })} disabled={saving === "sku-dest" || !dirtySkuRules} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtySkuRules ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+          <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">SKU Destination Definition</h2></div>
+          <button onClick={() => savePost("sku-dest", "/api/config/sku-destination-rule", { rules: skuRules })} disabled={saving === "sku-dest" || !dirtySkuRules} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtySkuRules ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
             {saving === "sku-dest" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
         </div>
@@ -441,11 +441,11 @@ function AnalyticsSettings() {
               <div key={i} className="border border-slate-200 rounded-xl p-4 space-y-2 bg-slate-50/40">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 w-5">{i + 1}.</span>
-                  <input value={rule.startsWith} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, startsWith: e.target.value } : r))} placeholder="SKU startsWith (vd: GH)" className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                  <input type="number" value={rule.codeLength} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, codeLength: parseInt(e.target.value) || 0 } : r))} placeholder="Độ dài" className="w-20 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input value={rule.startsWith} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, startsWith: e.target.value } : r))} placeholder="SKU startsWith (vd: GH)" className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
+                  <input type="number" value={rule.codeLength} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, codeLength: parseInt(e.target.value) || 0 } : r))} placeholder="Độ dài" className="w-20 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
                   <button onClick={() => setSkuRules(prev => prev.filter((_, j) => j !== i))} className="text-rose-400 hover:text-rose-600"><X className="w-4 h-4" /></button>
                 </div>
-                <input value={rule.description} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, description: e.target.value } : r))} placeholder="Mô tả quy tắc" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input value={rule.description} onChange={e => setSkuRules(prev => prev.map((r, j) => j === i ? { ...r, description: e.target.value } : r))} placeholder="Mô tả quy tắc" className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none" />
               </div>
             ))}
             <button onClick={() => setSkuRules(prev => [...prev, { startsWith: "", codeLength: 3, description: "" }])} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">
@@ -476,7 +476,7 @@ function AnalyticsSettings() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Tag className="w-5 h-5 text-[#003B95]" />
+            <Tag className="w-5 h-5 text-brand-600" />
             <div>
               <h2 className="font-bold text-slate-800">Phân loại Item Type theo Kênh</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">Chatbot dùng danh sách prefix này để lọc giá bán đúng kênh B2C/B2B</p>
@@ -486,7 +486,7 @@ function AnalyticsSettings() {
             onClick={() => savePost("item-channel", "/api/config/item-channel-types", itemChannelTypes)}
             disabled={saving === "item-channel" || !dirtyItemChannelTypes}
             className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50",
-              dirtyItemChannelTypes ? "bg-[#003B95] text-white hover:bg-[#002B70]" : "bg-slate-200 text-slate-400 cursor-not-allowed")}
+              dirtyItemChannelTypes ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}
           >
             {saving === "item-channel" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
           </button>
@@ -525,7 +525,7 @@ function AnalyticsSettings() {
                       }
                     }}
                     placeholder="Thêm prefix rồi Enter…"
-                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
                   />
                   <button
                     onClick={() => {

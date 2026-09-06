@@ -175,13 +175,13 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Tìm tài liệu..."
-            className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+            className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-brand-600"
           />
         </div>
         {isPrivileged && (
           <button
             onClick={startCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] hover:bg-[#002d73] text-white text-[12px] font-medium rounded-lg transition-colors ml-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-[12px] font-medium rounded-lg transition-colors ml-auto"
           >
             <Plus size={13} /> Soạn trang mới
           </button>
@@ -214,7 +214,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
               </button>
               {isPrivileged && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => openGroupModal(page)} title="Gán nhóm" className="p-1.5 rounded-lg text-slate-400 hover:text-[#003B95] hover:bg-slate-100 transition-colors">
+                  <button onClick={() => openGroupModal(page)} title="Gán nhóm" className="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-slate-100 transition-colors">
                     <Users size={13} />
                   </button>
                   <button onClick={() => toggleHidden(page)} title={page.is_hidden ? "Hiện trang" : "Ẩn trang"} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
@@ -261,7 +261,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
               <button
                 onClick={saveGroups}
                 disabled={savingGroups}
-                className="px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {savingGroups ? "Đang lưu..." : "Lưu"}
               </button>
@@ -277,22 +277,22 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
   if (view === "read" && selected) return (
     <div className="flex-1 overflow-y-auto bg-white">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 sticky top-0 bg-white z-10">
-        <button onClick={() => setView("list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-[#003B95] transition-colors">
+        <button onClick={() => setView("list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-brand-600 transition-colors">
           <ChevronLeft size={15} /> Danh sách
         </button>
         <div className="flex gap-1 ml-auto">
           <button
             onClick={() => setShowHistory(h => !h)}
-            className={cn("flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border transition-colors", showHistory ? "bg-blue-50 border-blue-300 text-[#003B95]" : "border-slate-200 text-slate-500 hover:border-slate-400")}
+            className={cn("flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border transition-colors", showHistory ? "bg-brand-50 border-brand-300 text-brand-600" : "border-slate-200 text-slate-500 hover:border-slate-400")}
           >
             <History size={12} /> Lịch sử ({versions.length})
           </button>
           {isPrivileged && (
             <>
-              <button onClick={() => openGroupModal(selected)} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-[#003B95] hover:text-[#003B95] transition-colors">
+              <button onClick={() => openGroupModal(selected)} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-brand-600 hover:text-brand-600 transition-colors">
                 <Users size={12} /> Gán nhóm
               </button>
-              <button onClick={startEdit} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-[#003B95] hover:text-[#003B95] transition-colors">
+              <button onClick={startEdit} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-brand-600 hover:text-brand-600 transition-colors">
                 <Edit2 size={11} /> Sửa
               </button>
               <button onClick={deletePage} disabled={deleting} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-colors">
@@ -339,7 +339,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
   return (
     <div className="flex-1 overflow-y-auto bg-white">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200">
-        <button onClick={() => setView(selected ? "read" : "list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-[#003B95] transition-colors">
+        <button onClick={() => setView(selected ? "read" : "list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-brand-600 transition-colors">
           <ChevronLeft size={15} /> {selected ? "Quay lại" : "Danh sách"}
         </button>
         <h3 className="text-[13px] font-semibold text-slate-700 ml-1">{selected ? "Chỉnh sửa trang" : "Soạn trang mới"}</h3>
@@ -353,7 +353,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
               value={editForm.title}
               onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
               placeholder="Tên trang"
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] font-medium"
+              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-brand-600 font-medium"
             />
           </div>
           <div>
@@ -361,7 +361,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
             <select
               value={editForm.page_type}
               onChange={e => setEditForm(f => ({ ...f, page_type: e.target.value }))}
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] bg-white"
+              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-brand-600 bg-white"
             >
               {Object.entries(WIKI_PAGE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
@@ -371,7 +371,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
             <select
               value={editForm.department}
               onChange={e => setEditForm(f => ({ ...f, department: e.target.value as Department }))}
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] bg-white"
+              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-brand-600 bg-white"
             >
               {Object.entries(DEPT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
@@ -382,7 +382,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
               value={editForm.tags}
               onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
               placeholder="WM, Japan, eSIM..."
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95]"
+              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-brand-600"
             />
           </div>
         </div>
@@ -390,7 +390,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-[11px] font-medium text-slate-600">Nội dung (Markdown)</label>
-            <button onClick={() => setPreviewMd(p => !p)} className="flex items-center gap-1 text-[11px] text-[#003B95] hover:underline">
+            <button onClick={() => setPreviewMd(p => !p)} className="flex items-center gap-1 text-[11px] text-brand-600 hover:underline">
               {previewMd ? <><Edit2 size={11} /> Soạn thảo</> : <><Eye size={11} /> Xem trước</>}
             </button>
           </div>
@@ -405,7 +405,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
               onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
               rows={16}
               placeholder="# Tiêu đề&#10;&#10;Nội dung Markdown..."
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] font-mono resize-y"
+              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-brand-600 font-mono resize-y"
             />
           )}
         </div>
@@ -414,7 +414,7 @@ export function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivil
           <button
             onClick={savePage}
             disabled={saving || !formDirty}
-            className="px-4 py-2 bg-[#003B95] hover:bg-[#002d73] text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
           >
             {saving ? "Đang lưu..." : selected ? "Lưu thay đổi" : "Tạo trang"}
           </button>

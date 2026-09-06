@@ -505,15 +505,15 @@ function SqlExplorerTab() {
       <div className="w-72 border-r border-slate-200 bg-white flex flex-col shrink-0">
         <div className="p-4 border-b border-slate-100">
           <div className="flex items-center gap-2 font-bold text-slate-800 mb-3 text-sm">
-            <Database className="w-4 h-4 text-blue-600" />
+            <Database className="w-4 h-4 text-brand-600" />
             Schema Browser
-            <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">PostgreSQL</span>
+            <span className="ml-auto text-[10px] font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">PostgreSQL</span>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input type="text" placeholder="Search tables / columns..."
               value={schemaSearch} onChange={e => setSchemaSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -536,7 +536,7 @@ function SqlExplorerTab() {
                   }}
                   title={`Preview: SELECT * FROM ${t.tableName} LIMIT 50`}
                   className="flex items-center gap-1.5 flex-1 py-2 pr-3 text-left">
-                  <TableIcon className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                  <TableIcon className="w-3.5 h-3.5 text-brand-500 flex-shrink-0" />
                   <span className="text-xs font-medium text-slate-700 truncate">{t.tableName}</span>
                 </button>
               </div>
@@ -572,7 +572,7 @@ function SqlExplorerTab() {
                 {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
               </button>
               <button onClick={run} disabled={loading}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all disabled:opacity-50 shadow-lg shadow-blue-600/20">
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 shadow-lg shadow-brand-600/20">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                 Run
               </button>
@@ -582,7 +582,7 @@ function SqlExplorerTab() {
             <textarea value={query} onChange={e => setQuery(e.target.value)}
               onKeyDown={e => { if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); run() } }}
               spellCheck={false}
-              className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-slate-900 text-slate-200 selection:bg-blue-500/30"
+              className="w-full h-full p-4 font-mono text-sm resize-none focus:outline-none bg-slate-900 text-slate-200 selection:bg-brand-500/30"
               placeholder="-- Ctrl+Enter để chạy query..." />
           </div>
         </div>
@@ -607,7 +607,7 @@ function SqlExplorerTab() {
           <div className="flex-1 overflow-auto relative">
             {loading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-10">
-                <Loader2 className="w-7 h-7 text-blue-600 animate-spin mb-2" />
+                <Loader2 className="w-7 h-7 text-brand-600 animate-spin mb-2" />
                 <p className="text-sm text-slate-500">Executing query...</p>
               </div>
             )}

@@ -175,7 +175,7 @@ export function SettingsModal({
                   {EMOJI_OPTIONS.map(e => (
                     <button key={e} type="button" onClick={() => setEmoji(e)}
                       className={cn("w-9 h-9 rounded-lg text-xl flex items-center justify-center border-2 transition-all",
-                        emoji === e ? "border-[#003B95] bg-blue-50 scale-110" : "border-slate-200 hover:border-slate-400")}>
+                        emoji === e ? "border-brand-600 bg-brand-50 scale-110" : "border-slate-200 hover:border-slate-400")}>
                       {e}
                     </button>
                   ))}
@@ -184,15 +184,15 @@ export function SettingsModal({
               <div>
                 <label className="text-[13px] font-medium text-slate-600 block mb-1">Tên nhóm</label>
                 <input value={name} onChange={e => setName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95]" required />
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-brand-600" required />
               </div>
               <div>
                 <label className="text-[13px] font-medium text-slate-600 block mb-1">Mô tả</label>
                 <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95] resize-none" />
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-brand-600 resize-none" />
               </div>
               <button type="submit" disabled={saving}
-                className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-[13px] font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors">
                 {saving ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
             </form>
@@ -215,7 +215,7 @@ export function SettingsModal({
                       <select
                         value={m.role || "member"}
                         onChange={e => handleRoleChange(m.user_email, e.target.value)}
-                        className="text-[11px] border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-600 focus:outline-none focus:border-[#003B95] flex-shrink-0"
+                        className="text-[11px] border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-600 focus:outline-none focus:border-brand-600 flex-shrink-0"
                       >
                         <option value="manager">Manager</option>
                         <option value="member">Thành viên</option>
@@ -248,7 +248,7 @@ export function SettingsModal({
                     onChange={e => { setAddEmail(e.target.value); setSelectedUser(null); setShowSuggestions(false) }}
                     onFocus={() => userSuggestions.length > 0 && setShowSuggestions(true)}
                     placeholder="Tìm theo tên hoặc email — bấm chọn từ danh sách *"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-brand-600"
                   />
                   {showSuggestions && (
                     <div className="absolute top-full left-0 right-0 z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 overflow-hidden">
@@ -257,7 +257,7 @@ export function SettingsModal({
                           key={u.username}
                           type="button"
                           onMouseDown={e => { e.preventDefault(); setSelectedUser({ username: u.username, name: u.name }); setAddEmail(u.name || u.email || u.username); setShowSuggestions(false) }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-brand-50 text-left"
                         >
                           <Avatar name={u.name} email={u.email || u.username} size="sm" />
                           <div>

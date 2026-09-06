@@ -80,7 +80,7 @@ export function renderContent(
     })
     if (matchedMember) {
       return (
-        <span key={i} className="text-[#003B95] font-medium">
+        <span key={i} className="text-brand-600 font-medium">
           {part}
         </span>
       )
@@ -107,7 +107,7 @@ export function renderMarkdown(md: string): string {
     .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold text-slate-900 mb-3">$1</h1>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded text-[12px] font-mono">$1</code>')
-    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-[#003B95] pl-3 text-slate-600 italic text-[13px] my-2">$1</blockquote>')
+    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-brand-600 pl-3 text-slate-600 italic text-[13px] my-2">$1</blockquote>')
     .replace(/^\| (.+) \|$/gm, (line) => {
       const cells = line.split("|").filter(c => c.trim()).map(c => `<td class="px-2 py-1 text-[12px] border border-slate-200">${c.trim()}</td>`)
       return `<tr>${cells.join("")}</tr>`
