@@ -15,6 +15,16 @@ Số liệu từ **Google Analytics 4** (sessions, users, conversion, revenue) +
 
 **s156 (2026-08-20)**: thêm platform toggle **Web / App**. Khi App: filter GA4 bằng `platform=ios|android` thay vì `hostName`; ẩn GSC section (không áp dụng cho app). Cần GA4 property là cross-platform (Web+App) — nếu chỉ có web property thì App tab trả 0.
 
+**s194 (2026-09-06)**: App KHÔNG chung property với web (property riêng `465150028`, Firebase) — trước đây
+toggle App chỉ đổi FILTER (`platform=ios|android`) trên site đang chọn ở dropdown, không tự đổi SITE, nên
+nếu người dùng để dropdown ở "gohub.com"/"gohub.vn" rồi bấm App → query nhầm property web (0 kết quả) trừ
+khi tự tay đổi dropdown sang "GoHub App" nữa. Thêm field `kind?: "web"|"app"` vào `GA4Site`/config — toggle
+App giờ TỰ ĐỘNG chọn đúng site có `kind:"app"` (dropdown cũng chỉ hiện site cùng kind với tab đang chọn).
+Field cũ thiếu `kind` mặc định coi là `"web"` (backward-compat, không cần sửa 2 entry gohub.com/gohub.vn có
+sẵn). `api/analytics/b2c/metric` (Traffic/Users by platform) cũng đổi tương tự: trước gọi `platform:"app"`
+trên site web đầu tiên (`sites[0]`), nay tìm đúng site `kind==="app"`, không có thì bỏ qua phần app (graceful,
+không throw).
+
 ---
 
 ## 1. Đường dẫn & File
@@ -35,22 +45,23 @@ Số liệu từ **Google Analytics 4** (sessions, users, conversion, revenue) +
 - Cơ chế: `lib/ga4.ts` → `buildDimensionFilter(cfg, eventNameFilter, platform)`. API `?platform=app` → `runGA4Report({..., platform: "app"})`.
 
 ## 4. Cấu hình GA4 App (Firebase Analytics)
-GoHub App dùng **Firebase Analytics** property ID `465150028`.
+GoHub App dùng **Firebase Analytics** property ID `465150028`. Đã cấp quyền Viewer cho service account
+(2026-09-06, Hiếu xác nhận) — còn thiếu bước thêm entry config.
 
-**Để connect App data:**
-1. Firebase Console → Project Settings → Integrations → Google Analytics → **Manage** → Property Access Management → thêm service account email, role **Viewer**
-2. Supabase SQL Editor — thêm entry vào `app_settings.ga4_configs`:
-```json
-{
-  "id": "gohub-app",
-  "name": "GoHub App",
-  "propertyId": "465150028",
-  "siteUrl": "",
-  "currency": "VND",
-  "credentials": "... copy từ entry web đã có ..."
-}
+**Để connect App data — Supabase SQL Editor**, append entry mới vào mảng, tự lấy lại `credentials` từ entry
+web đầu tiên (không cần copy tay chuỗi JSON service account):
+```sql
+UPDATE app_settings
+SET value = ((value::jsonb) || jsonb_build_array(jsonb_build_object(
+  'id', 'gohub-app', 'name', 'GoHub App', 'propertyId', '465150028',
+  'siteUrl', '', 'currency', 'VND', 'kind', 'app',
+  'credentials', (value::jsonb)->0->'credentials'
+)))::text
+WHERE key = 'ga4_configs';
 ```
-3. Sau khi thêm, toggle App trong Web Analytics tab sẽ có data.
+`kind: "app"` **bắt buộc** từ s194 — thiếu field này thì toggle App không tự chọn đúng site (xem mục
+s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) — kiểm tra trước bằng
+`SELECT value::jsonb FROM app_settings WHERE key='ga4_configs';` nếu không chắc đã thêm chưa.
 
 ## 5. Liên quan
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].

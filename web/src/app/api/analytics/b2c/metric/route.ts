@@ -188,12 +188,15 @@ export async function GET(req: NextRequest) {
     // 3. GA4: Traffic (sessions) + Users (activeUsers) by yearMonth, cả web và app
     try {
       const sites = await ga4Sites()
-      const mainSite = sites[0]
+      // App = property RIÊNG (Firebase), KHÔNG chung với web property — không thể filter platform=app
+      // trên site web (mainSite) như trước, property đó không có row nào platform=ios/android.
+      const mainSite = sites.find(s => (s.kind || "web") === "web") || sites[0]
+      const appSite = sites.find(s => s.kind === "app")
       if (mainSite) {
-        const gaOpts = { siteId: mainSite.id, startDate: yearStart, endDate: windowEnd, dimensions: ["yearMonth"], metrics: ["sessions", "activeUsers"] }
+        const dateOpts = { startDate: yearStart, endDate: windowEnd, dimensions: ["yearMonth"], metrics: ["sessions", "activeUsers"] }
         const [webRep, appRep] = await Promise.allSettled([
-          runGA4Report(gaOpts),
-          runGA4Report({ ...gaOpts, platform: "app" }),
+          runGA4Report({ ...dateOpts, siteId: mainSite.id }),
+          appSite ? runGA4Report({ ...dateOpts, siteId: appSite.id, platform: "app" }) : Promise.reject(new Error("GA4 app site chưa cấu hình")),
         ])
 
         const applyGA4 = (rep: typeof webRep, key: "web" | "app") => {

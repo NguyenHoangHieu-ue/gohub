@@ -3,7 +3,8 @@
 import { google } from "googleapis"
 import { supabaseAdmin } from "./supabase"
 
-export interface GA4Site { id: string; name: string; propertyId: string; siteUrl?: string; currency?: string }
+// kind="app" → property riêng cho GoHub App (Firebase, không có hostName) — FE lọc site theo tab Web/App.
+export interface GA4Site { id: string; name: string; propertyId: string; siteUrl?: string; currency?: string; kind?: "web" | "app" }
 interface GA4Config extends GA4Site { credentials: string }
 
 interface ReportRow { dimensionValues: { value: string }[]; metricValues: { value: string }[] }
@@ -18,7 +19,7 @@ async function loadConfigs(): Promise<GA4Config[]> {
 
 // Danh sách site (KHÔNG kèm credentials) — cho selector.
 export async function ga4Sites(): Promise<GA4Site[]> {
-  return (await loadConfigs()).map(({ id, name, propertyId, siteUrl, currency }) => ({ id, name, propertyId, siteUrl, currency }))
+  return (await loadConfigs()).map(({ id, name, propertyId, siteUrl, currency, kind }) => ({ id, name, propertyId, siteUrl, currency, kind }))
 }
 
 export async function ga4Configured(): Promise<boolean> {

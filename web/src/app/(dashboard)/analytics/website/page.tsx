@@ -39,7 +39,7 @@ export default function WebsiteAnalyticsPage() {
   const [loadingSites, setLoadingSites] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gscError, setGscError] = useState<string | null>(null)
-  const [sites, setSites] = useState<{ id: string, name: string, currency?: string }[]>([])
+  const [sites, setSites] = useState<{ id: string, name: string, currency?: string, kind?: "web" | "app" }[]>([])
   const [selectedSiteId, setSelectedSiteId] = useState<string>("")
   const [generalData, setGeneralData] = useState<GAData | null>(null)
   const [ecommerceData, setEcommerceData] = useState<GAData | null>(null)
@@ -85,6 +85,16 @@ export default function WebsiteAnalyticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Đổi tab Web/App → site đang chọn phải cùng kind, không thì property cũ (vd gohub.com) bị lọc
+  // platform=ios/android → luôn rỗng, vì App là property RIÊNG (Firebase), không chung với web.
+  useEffect(() => {
+    const current = sites.find(s => s.id === selectedSiteId)
+    if (current && (current.kind || "web") === platform) return
+    const match = sites.find(s => (s.kind || "web") === platform)
+    if (match) setSelectedSiteId(match.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform, sites])
+
   useEffect(() => {
     if (selectedSiteId) {
       fetchAnalytics()
@@ -105,7 +115,8 @@ export default function WebsiteAnalyticsPage() {
         const list = Array.isArray(data) ? data : (data?.sites ?? [])
         setSites(list)
         if (list.length > 0) {
-          setSelectedSiteId(list[0].id)
+          // Mặc định chọn site "web" (kind cũ không có field này → coi như web) — tránh vô tình chọn property App.
+          setSelectedSiteId((list.find((s: { kind?: string }) => (s.kind || "web") === "web") || list[0]).id)
         } else {
           setLoading(false)
         }
@@ -555,15 +566,19 @@ export default function WebsiteAnalyticsPage() {
             </button>
           </div>
 
-          {sites.length > 0 && (
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-500">
-              <Globe className="w-4 h-4 text-blue-500" />
-              <select value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)}
-                className="text-xs font-bold text-slate-700 outline-none bg-transparent cursor-pointer min-w-[120px]">
-                {sites.map(site => (<option key={site.id} value={site.id}>{site.name}</option>))}
-              </select>
-            </div>
-          )}
+          {(() => {
+            const platformSites = sites.filter(s => (s.kind || "web") === platform)
+            if (platformSites.length === 0) return null
+            return (
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-500">
+                <Globe className="w-4 h-4 text-blue-500" />
+                <select value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)}
+                  className="text-xs font-bold text-slate-700 outline-none bg-transparent cursor-pointer min-w-[120px]">
+                  {platformSites.map(site => (<option key={site.id} value={site.id}>{site.name}</option>))}
+                </select>
+              </div>
+            )
+          })()}
 
           <div className="flex flex-col gap-2 items-end">
             <div className="flex items-center gap-4">
