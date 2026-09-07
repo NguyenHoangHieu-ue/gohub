@@ -37,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 30 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195)", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(30)
+  it("có đúng 32 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(32)
   })
 
   it("mỗi declaration có name, description, parameters", () => {

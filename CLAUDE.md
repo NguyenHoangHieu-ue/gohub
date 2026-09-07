@@ -6,10 +6,28 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195)
+## Trạng thái hiện tại (2026-09-07, s195+1)
 
 | | |
 |---|---|
+| ✅ **s195+1 (2026-09-07) — Gấu Pro: Extension điều khiển browser cá nhân Hiếu** | Tiếp lộ trình s195.
+  `browseWeb` (s195) duyệt web công khai; phase này cho Gấu Pro đọc/thao tác trên chính tab Chrome ĐANG MỞ
+  của Hiếu (session đăng nhập thật Lark/Sapo/portal) — giống `claude-in-chrome`. Kiến trúc: hàng đợi lệnh
+  Supabase (`browser_bridge_commands`, migration `v50_browser_bridge.sql`) + polling 2 chiều (không dựng
+  WebSocket riêng — Vercel serverless không giữ được kết nối 2 chiều). 2 tool mới: `readMyBrowser`
+  (list_tabs/read_tab, không cần duyệt) + `controlMyBrowser` (click/fill/navigate — **bắt buộc Hiếu duyệt**
+  qua `chrome.notifications` trước khi thực thi vì là session thật; scroll không cần duyệt). Cờ duyệt set
+  CỨNG server-side (model không lách được). Trang mới `/analytics/creator/bridge` (creator-only) sinh/xem
+  token pairing. Extension mới `browser-extension/` (Manifest V3, unpacked/dev-only, KHÔNG publish Web
+  Store) — xử lý đúng gotcha React (Lark/Sapo web) cần native setter khi `fill` input, và giữ service
+  worker sống bằng vòng lặp `setTimeout` 15s (né giới hạn `chrome.alarms` tối thiểu 1 phút/lần). Chỉ Gấu
+  Pro, chỉ Hiếu — không mở Bé Gấu, không nhiều token. tsc + lint (0 lỗi mới) + vitest (196/196) PASS.
+  **Cần Hiếu**: chạy migration v50, load unpacked extension (`chrome://extensions` → Developer mode →
+  Load unpacked → `browser-extension/`), vào `/analytics/creator/bridge` sinh token, dán token + Server URL
+  vào popup extension, bật toggle, rồi tự QA (list tab, thử 1 lệnh click/fill xem notification Duyệt hiện
+  đúng không) — chưa QA được ở máy dev (cần Chrome thật + extension load thủ công). Xem
+  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+1". Lộ trình còn lại (chưa làm): mở rộng Lark
+  OAuth scope cá nhân · bật thật multi-tenant (cần chính sách privacy trước).
 | ✅ **s195 (2026-09-07) — Gấu Pro: tool `browseWeb` (headless browser thật qua CDP)** | Bước đầu lộ trình
   biến Gấu Pro thành "agent assistant" rộng hơn (yêu cầu Hiếu). Đã audit trước: `be-gau.ts` (s190) **đã
   âm thầm merge gần hết tool Gấu Pro sang Bé Gấu** theo đúng tiêu chí "không cá nhân/nội bộ thì mở" —
@@ -59,6 +77,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+1 — Gấu Pro Extension: chạy migration v50 + load extension + pair token** —
+  (1) Chạy `web/db/migrations/v50_browser_bridge.sql` trên Supabase. (2) `chrome://extensions` → bật
+  Developer mode → Load unpacked → chọn thư mục `browser-extension/`. (3) Vào `/analytics/creator/bridge`
+  (creator-only) sinh token. (4) Bấm icon extension → dán token + Server URL (domain đang dùng) → bật
+  toggle Bridge ON. (5) Hỏi Gấu Pro "list các tab đang mở" xác nhận đọc được; thử 1 lệnh click/fill xem
+  notification Duyệt/Từ chối hiện đúng trên Chrome không. Xem
+  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+1".
 - [x] **s195 — Gấu Pro `browseWeb` — XONG (2026-09-07), Hiếu đã tự QA trên staging** — migration v49 đã
   chạy; container `ghcr.io/browserless/chromium` tự host trên Render free tier (`browserless-gohub`) +
   keep-alive cron-job.org (10 phút/lần, KHÔNG dùng GitHub Actions — bài học cũ repo); env
@@ -143,7 +168,8 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 `okr_evidence_records`/`okr_sku_tags` · **v45** `okr_lark_events` + nới `okr_sku_tags.effective_date` ·
 **v46** `okr_lark_message_log` — tất cả v44-v46 Hiếu đã xác nhận chạy. · **v47** `analytics_query_cache.deps` (Hiếu đã xác nhận chạy 2026-09-05) · **v48** `chat_questions` (Hiếu đã chạy, đã QA xong 2026-09-06) ·
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
-CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07).
+CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bridge_commands` (hàng đợi lệnh Extension —
+⚠️ Hiếu CẦN CHẠY, chưa xác nhận).
 
 ---
 

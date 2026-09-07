@@ -310,6 +310,7 @@ ETL gohub_dw = ~08:00 ICT (01:00 UTC)
 ### Hàng tháng
 - [ ] Review JWT sessions (có user nào cần revoke không)
 - [ ] Xóa lark dedup entries cũ: `DELETE FROM app_settings WHERE category='lark_dedup' AND updated_at < NOW() - INTERVAL '7 days'`
+- [ ] Xóa `browser_bridge_commands` cũ (Gấu Pro Extension bridge, s195+1): `DELETE FROM browser_bridge_commands WHERE created_at < NOW() - INTERVAL '7 days'`
 - [ ] Review Gemini API usage + cost
 - [ ] Kiểm tra trend_snapshots không duplicate (same date + category)
 

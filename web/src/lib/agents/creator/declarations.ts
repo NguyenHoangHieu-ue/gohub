@@ -327,6 +327,35 @@ export const browseWebDecl = {
   },
 }
 
+export const readMyBrowserDecl = {
+  name: "readMyBrowser",
+  description: "Đọc tab Chrome THẬT đang mở trên máy Hiếu (dùng session đăng nhập sẵn Lark/Sapo/portal) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab. KHÔNG cần Hiếu duyệt (chỉ đọc). Nếu lỗi 'Bridge chưa phản hồi' → báo Hiếu kiểm tra đã bật extension + toggle Bridge ON chưa.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action: { type: SchemaType.STRING, description: "list_tabs | read_tab" },
+      tab_id: { type: SchemaType.NUMBER, description: "ID tab cần đọc (lấy từ list_tabs) — bỏ trống ở read_tab để đọc tab đang active." },
+    },
+    required: ["action"],
+  },
+}
+
+export const controlMyBrowserDecl = {
+  name: "controlMyBrowser",
+  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của Hiếu qua Extension đã pair. click/fill/navigate sẽ hiện thông báo yêu cầu Hiếu bấm Duyệt trên extension trước khi thực thi (session đăng nhập thật — không tự ý làm nếu chưa được duyệt). LUÔN nói rõ với Hiếu bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:   { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
+      tab_id:   { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
+      selector: { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
+      value:    { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
+      url:      { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
+    },
+    required: ["action", "tab_id"],
+  },
+}
+
 export const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -496,4 +525,6 @@ export const ALL_TOOL_DECLARATIONS = [
   sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,
   // Phase 3 tools
   generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
+  // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
+  readMyBrowserDecl, controlMyBrowserDecl,
 ]

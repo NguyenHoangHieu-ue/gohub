@@ -15,6 +15,7 @@ import { runWebSearchTool }        from "./search"
 import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
+import { runReadMyBrowser, runControlMyBrowser } from "./bridge"
 
 export async function dispatchTool(
   call: { name: string; args: any },
@@ -64,6 +65,12 @@ export async function dispatchTool(
 
   if (call.name === "browseWeb")
     return wrap(await runBrowseWeb(call.args))
+
+  if (call.name === "readMyBrowser")
+    return wrap(await runReadMyBrowser(call.args, onEvent))
+
+  if (call.name === "controlMyBrowser")
+    return wrap(await runControlMyBrowser(call.args, onEvent))
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

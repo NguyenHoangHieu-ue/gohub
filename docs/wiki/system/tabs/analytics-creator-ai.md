@@ -60,6 +60,8 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
 | `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
+| `readMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | Đọc tab Chrome THẬT đang mở của Hiếu (list_tabs/read_tab) — dùng session đăng nhập sẵn. Không cần duyệt |
+| `controlMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | click/fill/navigate/scroll trên tab Chrome THẬT — click/fill/navigate bắt buộc Hiếu duyệt qua notification trước khi thực thi |
 
 ## Web Search
 
@@ -280,6 +282,37 @@ người thật mở browser.
 - **Lộ trình còn lại** (chưa làm, phase riêng): điều khiển browser CÁ NHÂN Hiếu qua extension (giống cơ
   chế `claude-in-chrome`) · mở rộng scope Lark OAuth cá nhân (`lark_oauth_creator`) · bật thật multi-tenant
   (cần chính sách privacy rõ trước khi đọc dữ liệu Lark cá nhân của người khác).
+
+## § Gấu Pro s195+1 (2026-09-07) — Extension điều khiển browser cá nhân Hiếu
+
+Tiếp lộ trình s195: `browseWeb` duyệt web CÔNG KHAI, còn phase này cho Gấu Pro đọc/thao tác trên chính tab
+Chrome ĐANG MỞ của Hiếu (dùng session đăng nhập thật Lark/Sapo/portal) — giống cơ chế `claude-in-chrome`.
+
+- **Kiến trúc**: hàng đợi lệnh Supabase (`browser_bridge_commands`, migration `v50_browser_bridge.sql`) +
+  polling 2 chiều — KHÔNG dựng thêm hạ tầng WebSocket (Vercel serverless không giữ được kết nối 2 chiều
+  tới browser Hiếu). Gấu Pro (2 tool mới, `web/src/lib/agents/creator/tools/bridge.ts`) INSERT lệnh rồi
+  poll 2s/lần chờ `status=done`; Extension (máy Hiếu) poll `GET /api/creator-ai/bridge/next` mỗi ~15s để
+  lấy lệnh, thực thi, rồi `POST /api/creator-ai/bridge/result` ghi kết quả.
+- **Auth**: 1 token cá nhân lưu Supabase `app_settings` key `browser_bridge_token` (plaintext — đúng mức
+  đơn giản `MCP_SECRET` đang dùng, không phải password hệ thống ngoài). Sinh/xem token qua trang mới
+  `/analytics/creator/bridge` (creator-only) — `GET/POST /api/creator-ai/bridge/token`.
+- **2 tool**: `readMyBrowser` (`list_tabs`/`read_tab` — không cần duyệt, rủi ro thấp) và `controlMyBrowser`
+  (`click`/`fill`/`navigate` — **bắt buộc Hiếu duyệt** qua `chrome.notifications` trên extension trước khi
+  thực thi, vì đây là session đăng nhập THẬT; `scroll` không cần duyệt). Cờ `requires_confirm` set CỨNG ở
+  server theo tên action (`bridge.ts` `CONFIRM_ACTIONS`) — model không truyền được, tránh Gemini "lách" bỏ
+  qua bước duyệt.
+- **Extension** (`browser-extension/` — ngoài `web/`, không qua Next.js build): Manifest V3, unpacked only
+  (Hiếu tự `chrome://extensions` → Developer mode → Load unpacked — KHÔNG publish Chrome Web Store).
+  - `background.js`: vòng lặp `setTimeout` đệ quy ~15s giữ service worker "sống" (mỗi fetch reset đồng hồ
+    idle-suspend ~30s mặc định MV3) — tránh dùng `chrome.alarms` làm vòng lặp chính (Chrome ép tối thiểu 1
+    phút/lần cho alarm định kỳ, quá chậm). `chrome.alarms` 1 phút chỉ làm lưới an toàn phòng worker bị kill.
+  - **Gotcha đã xử lý**: Lark/Sapo web là SPA React — set `.value` trực tiếp KHÔNG kích hoạt `onChange`,
+    phải dùng native setter (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set`)
+    rồi `dispatchEvent(new Event('input',{bubbles:true}))` (xem `execAction()` action `fill`).
+  - Chỉ chạy khi Hiếu bật toggle "Bridge" ở popup (`popup.html`/`popup.js`) — không âm thầm nền 24/7.
+- **Chỉ Gấu Pro, chỉ Hiếu** — không có khái niệm nhiều token/nhiều người pair ở v1.
+- **Việc dọn tay** (không có cron riêng): `DELETE FROM browser_bridge_commands WHERE created_at < NOW() -
+  INTERVAL '7 days'` định kỳ, giống tiền lệ dọn lark dedup entries.
 
 ### Bé Gấu (chatbot team) — s131
 
