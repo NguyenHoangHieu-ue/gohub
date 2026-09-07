@@ -19,13 +19,17 @@
   Puppeteer của `card-images.ts`) — đọc được trang SPA/JS-nặng mà `webSearch`/`browsePortal` không đọc
   được. Chỉ Gấu Pro (chưa merge Bé Gấu). Migration `v49_creator_kb_owner_prep.sql` thêm cột nullable
   chuẩn bị multi-tenant (chưa bật, không đổi hành vi). tsc + lint (0 lỗi mới) + vitest (190/190) PASS.
-  **Cần Hiếu**: dựng container `browserless/chrome` trên 1 host luôn bật (Fly.io/Railway/VPS — KHÔNG
-  Vercel) + set `BROWSERLESS_WS_URL`/`BROWSERLESS_TOKEN` trên Vercel, rồi tự QA trên staging (chưa QA
-  được — máy dev không gọi được container thật). Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục
-  "s195". Lộ trình còn lại (chưa làm): extension điều khiển browser cá nhân Hiếu · mở rộng Lark OAuth scope
-  cá nhân · bật thật multi-tenant (cần chính sách privacy trước).
+  Hạ tầng: container `ghcr.io/browserless/chromium` tự host trên **Render free tier** (`browserless-gohub`)
+  + keep-alive qua **cron-job.org** ping `/json/version` mỗi 10 phút (KHÔNG dùng GitHub Actions cron —
+  đúng bài học cũ của repo, xem `scheduled-messages.yml`: lịch GitHub Actions trễ 15-60 phút giờ thấp
+  điểm, không đủ nhanh để giữ Render free tier khỏi ngủ 15 phút). Env `BROWSERLESS_WS_URL`/
+  `BROWSERLESS_TOKEN` đã set Vercel (Production+Preview) + redeploy. **✅ Hiếu đã tự QA trên staging —
+  hỏi Gấu Pro mở URL thật, trả đúng nội dung.** Migration v49 Hiếu đã chạy. Xem
+  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195". Lộ trình còn lại (chưa làm, phase riêng sau):
+  extension điều khiển browser cá nhân Hiếu · mở rộng Lark OAuth scope cá nhân · bật thật multi-tenant
+  (cần chính sách privacy trước).
 | Branch làm việc | `staging` (làm việc ở đây, merge main **CHỈ khi Hiếu yêu cầu RÕ RÀNG** trong chính tin nhắn đó) |
-| tsc + `next build` + `next lint` + vitest | PASS (lint: 0 error mới; vitest 185/185) |
+| tsc + `next build` + `next lint` + vitest | PASS (lint: 0 error mới; vitest 190/190) |
 | ✅ **s194+12 (2026-09-06) — UI Lô 5: Management (Users/Settings/Admin), Dev Tools, To-Gau + fix bug brand-900/950** | Tiếp lô 5 (plan `eager-popping-aho.md`). **Bug thật phát hiện lúc làm**: `tailwind.config.ts` scale `brand` chỉ có tới 800 (không có 900/950) — nhưng `channels/staff/vendors/cost-management-modal` (do chính sed `blue-*→brand-*` của tôi ở s194+9/+10 convert nhầm `blue-900`→`brand-900` không hợp lệ) và `chatbot/page.tsx` (bug có sẵn từ s192, tác giả gõ tay `brand-900` giả định scale đủ) đều có class KHÔNG LÊN MÀU GÌ (invisible). Đổi toàn bộ `brand-900/950`→`brand-800`. Đã tự QA lại xác nhận đúng (Staff: header "So sánh KH — {tên sales}" giờ hiện navy, trước có nguy cơ hiện đen mặc định). **Users + Admin (Product)**: fix hex `#003B95`/`#002B70` → `brand-*`; giữ role badge categorical (`bod`=blue, `vendor_code` badge=blue cạnh `product_code`=brand). **Settings**: fix hex 5 khu vực config; giữ nút "Sync B2B KH" blue-700 riêng biệt với nút "Kiểm tra" navy (4 nút DB status mỗi nút 1 màu). **Dev Tools**: fix khu SQL Query→brand; giữ HTTP method GET=emerald/POST=blue/khác=orange. **To-Gau** (list + room + toàn bộ 6 component con + `to-gau-format.tsx`): fix LỚN NHẤT — hex `#003B95` là màu bubble chat "mình" + màu chủ đạo xuyên suốt toàn tab (header/input focus/mention/wiki/docs/notes/questions panel) → `brand-600/700`; giữ role tag "Manager"=blue trong danh sách thành viên. Không đổi logic/quyền hạn nào. tsc + lint (0 lỗi mới) + vitest (185/185) PASS. **Đã tự QA qua Chrome trên staging** bằng acc role `bod` (Test tab: chat bubble navy đúng, Docs/Notes/Câu hỏi panel đúng màu; Staff: xác nhận trực tiếp fix brand-800 hiện đúng navy không phải đen). **Users/Settings/Admin/Dev Tools cần quyền admin/creator — acc bod bị redirect về /chatbot đúng thiết kế, CHƯA tự QA được phần này, cần Hiếu tự xem lại bằng acc creator.** |
 | ✅ **s194+11 (2026-09-06) — UI Lô 4: Orders, Inventory, 3HK Usage, CS Troubleshoot, Products, Targets — XONG, đã tự QA Chrome** | Tiếp lô 4 sau lô 3 (plan `eager-popping-aho.md` mục "Đợt 4+"). **Orders**: fix hex navy SAI `#003B95`/`#002d73` (audit s192 từng flag, sót từ trước redesign) → `brand-600`/`brand-700`. **CS Troubleshoot**: cùng fix hex sai (`#003B95`/`#002B70`, 16 chỗ) + `blue-*`→`brand-*`; 4 KPI card viết tay → `StatTile` (Units Sold=neutral, TBS Tickets=warn, TBS Rate=cost, Avg Handle Time=margin); chart TBS Volume → `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`. **Inventory**: phần "Kế hoạch nhập hàng" cũ (PO tracker + lưới tuần, giữ nguyên logic s194+5) còn sót `blue-*` (16 chỗ, cả `stock-view.tsx`) → `brand-*`; sub-tab "Tồn kho" đã StatTile từ trước không đổi. **3HK Data Usage**: `blue-*`→`brand-*`, 2 chart grid→`CHART_GRID_COLOR`; giữ nguyên màu semantic thật (đỏ=vượt mức/xanh lá=trong kế hoạch/xám=kế hoạch/dải màu categorical nhóm tốc độ). **Products**: 5 KPI card viết tay→`StatTile`; banner "Month-End Projection" + 2 chart (Trend, Top Regions)→`CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→`brand-*` (giữ indigo=B2C, slate=B2B Non-Strategic). **Targets**: `blue-*`→`brand-*` toàn trang. **My Metrics**: đã sạch từ trước, không cần sửa. Không đổi logic/công thức/API nào ở cả 6 trang có thay đổi. tsc + lint (0 lỗi mới) + vitest (185/185) PASS. **Đã tự QA qua Chrome trên staging cả 6 trang** — StatTile/chart/badge/expand-row/WeeklyGrid đều đúng màu, số liệu không đổi, không phát hiện lỗi. **Lô 4 coi như hoàn tất hẳn** (My Metrics vốn đã sạch). Lô 5 (Management/Scheduled/Dev Tools/To-Gau) và Lô 6 (ngoài analytics: Admin/Chatbot/NCC/SKUs/Countries/Promotions/Users/Creator Settings/Gấu Pro) còn lại — xem `eager-popping-aho.md`. |
 | ✅ **s194+10 (2026-09-06) — UI Lô 3: Website, Staff, Customers, Vendors — XONG, đã tự QA Chrome** | Tiếp lô 3 (theo plan `eager-popping-aho.md`). **Website Analytics**: 5 KPI card viết tay → StatTile (accent theo ý nghĩa: Revenue=revenue, Purchases/Avg.CTR=positive, Sessions/Search Clicks=neutral); 3 chart (Traffic Overview/Search Trends/Revenue Breakdown) đổi hex tự chọn sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→`brand-*` toàn trang. **Staff Performance**: `STAFF_COLORS[0]` từ hex navy SAI `#003B95` (audit s192 từng flag, nặng nhất 16 hex ngẫu hứng) sửa đúng `#0f4c81`; 6 KPI card viết tay → StatTile (thêm icon, trước chỉ chữ màu không icon); giữ nguyên bảng màu tier Strategic/VIP/Gold/Silver/B2C và `STAFF_COLORS` categorical (biểu đồ nhiều sales cùng lúc — cần phân biệt thực thể, không phải màu ngẫu nhiên). **Customers**: fix đúng 1 chỗ hex sai `#003B95` (tier badge) → `brand-600`; vài chỗ CM1 `text-blue-*`→`brand-*`; KHÔNG đổi theme indigo xuyên suốt trang (thiết kế "editorial" bo góc lớn/in nghiêng hoa riêng biệt, giống cách B2C Advanced giữ Apple-glass style — không phải màu lệch). **Vendors**: hero "Month-End Projection" banner gradient `blue-600/700`→`brand-600/700`; 5 KPI card → StatTile; chart Revenue Trend → `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→`brand-*` toàn trang (giữ indigo/purple/amber phân biệt Orders/Units/Margin, đúng tiền lệ Channels). Không đổi logic/công thức/API nào ở cả 4 trang. tsc + lint (0 lỗi mới) + vitest (185/185) PASS. **Đã tự QA qua Chrome trên staging cả 4 trang** — StatTile/chart/tier badge/expand-row đều đúng màu, số liệu không đổi, không phát hiện lỗi. **Lô 3 coi như hoàn tất hẳn** — lô tiếp theo: Orders/Inventory/3HK Usage/CS Troubleshoot/Products/Targets/My Metrics (lô 4). |
@@ -55,14 +59,11 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s195 — Gấu Pro `browseWeb`: dựng container browserless + set 2 env + chạy migration v49** —
-  (1) Chạy `web/db/migrations/v49_creator_kb_owner_prep.sql` trên Supabase (chỉ thêm cột nullable, không
-  đổi hành vi). (2) Dựng 1 host luôn bật (Fly.io/Railway/Render/VPS nhỏ — KHÔNG Vercel) chạy Docker image
-  `ghcr.io/browserless/chromium` (hoặc `browserless/chrome`), set env container `TOKEN=<chuỗi bí mật>` +
-  `MAX_CONCURRENT_SESSIONS` (gợi ý 2-3). (3) Set trên Vercel (Production + Preview): `BROWSERLESS_WS_URL`
-  (endpoint WS container, vd `wss://browserless.gohub.cloud`), `BROWSERLESS_TOKEN` (khớp `TOKEN` bước 2).
-  (4) Tự hỏi Gấu Pro 1 URL SPA/JS-nặng để xác nhận đọc được nội dung thật (chưa QA được ở máy dev — không
-  gọi được container thật). Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195".
+- [x] **s195 — Gấu Pro `browseWeb` — XONG (2026-09-07), Hiếu đã tự QA trên staging** — migration v49 đã
+  chạy; container `ghcr.io/browserless/chromium` tự host trên Render free tier (`browserless-gohub`) +
+  keep-alive cron-job.org (10 phút/lần, KHÔNG dùng GitHub Actions — bài học cũ repo); env
+  `BROWSERLESS_WS_URL`/`BROWSERLESS_TOKEN` đã set Vercel + redeploy. Hỏi Gấu Pro mở 1 URL thật → trả đúng
+  nội dung. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195".
 - [ ] **s194+12 — QA bằng acc creator/admin: Users, Settings, Admin (Product), Dev Tools** — UI Lô 5 đã fix
   màu (hex sai `#003B95` → brand, fix thêm bug `brand-900/950` không tồn tại làm vài chỗ mất màu ở Channels/
   Staff/Vendors/Bé Gấu). Acc test của tôi chỉ có quyền `bod` nên bị chặn ở 4 trang này (đúng thiết kế,
@@ -142,7 +143,7 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 `okr_evidence_records`/`okr_sku_tags` · **v45** `okr_lark_events` + nới `okr_sku_tags.effective_date` ·
 **v46** `okr_lark_message_log` — tất cả v44-v46 Hiếu đã xác nhận chạy. · **v47** `analytics_query_cache.deps` (Hiếu đã xác nhận chạy 2026-09-05) · **v48** `chat_questions` (Hiếu đã chạy, đã QA xong 2026-09-06) ·
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
-CHƯA đổi hành vi — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận).
+CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07).
 
 ---
 
