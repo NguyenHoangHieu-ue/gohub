@@ -29,7 +29,11 @@ export async function dispatchTool(
     : call.name === "browsePortal"
       ? `🔗 Đang truy cập portal ${call.args?.portal_name || ""}...`
       : call.name === "browseWeb"
-        ? `🌐 Đang mở trang ${(call.args?.url || "").slice(0, 60)}...`
+        ? (call.args?.urls?.length
+            ? `🌐 Đang mở ${call.args.urls.length} trang...`
+            : call.args?.pagination
+              ? `🌐 Đang duyệt nhiều trang: ${(call.args?.url || "").slice(0, 50)}...`
+              : `🌐 Đang mở trang ${(call.args?.url || "").slice(0, 60)}...`)
         : TOOL_STATUS[call.name] ?? "⚙️ Đang xử lý..."
   onEvent?.({ type: "status", text: statusMsg })
 

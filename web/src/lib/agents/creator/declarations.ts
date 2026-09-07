@@ -303,14 +303,15 @@ export const writeKBDecl = {
 
 export const browseWebDecl = {
   name: "browseWeb",
-  description: "Mở 1 trang web THẬT bằng headless browser (chạy JavaScript đầy đủ) và đọc nội dung — dùng cho trang SPA/JS-nặng/infinite-scroll mà webSearch (chỉ đọc snippet search) không đọc được nội dung thật, ví dụ trang đối thủ, trang bảng giá động, landing page. KHÔNG dùng cho portal NCC có login (dùng browsePortal cho việc đó).",
+  description: "Mở trang web THẬT bằng headless browser (chạy JavaScript đầy đủ) và đọc nội dung — dùng cho trang SPA/JS-nặng mà webSearch (chỉ đọc snippet search) không đọc được nội dung thật. Đọc được NHIỀU trang trong 1 lần gọi bằng 3 cách: (1) truyền `urls` (mảng URL đã biết sẵn, vd tự ghép ?page=1,2,3), (2) truyền `pagination.mode='click_next'` + `next_selector` nếu site có nút/link 'Next' phải bấm (URL không đổi), (3) truyền `pagination.mode='infinite_scroll'` nếu site tự load thêm khi cuộn xuống (không có nút Next). Chỉ dùng `url` đơn (không kèm pagination) khi thật sự chỉ cần 1 trang. KHÔNG dùng cho portal NCC có login (dùng browsePortal cho việc đó).",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      url: { type: SchemaType.STRING, description: "URL đầy đủ (kèm https://) cần mở." },
+      url:  { type: SchemaType.STRING, description: "URL đầy đủ (kèm https://) cần mở — dùng khi KHÔNG truyền urls[]. Bắt buộc nếu dùng pagination." },
+      urls: { type: SchemaType.ARRAY, description: "Mảng URL cụ thể cần đọc lần lượt (tối đa 20) — dùng khi đã biết trước link từng trang (vd ?page=1,2,3). Mỗi URL đọc độc lập, không áp actions.", items: { type: SchemaType.STRING } },
       actions: {
         type: SchemaType.ARRAY,
-        description: "Tối đa 8 thao tác thực hiện tuần tự sau khi trang load xong (tuỳ chọn) — dùng để bấm 'xem thêm', điền ô tìm kiếm, cuộn trang.",
+        description: "Tối đa 8 thao tác thực hiện MỘT LẦN ngay sau khi trang đầu tiên load xong (tuỳ chọn) — dùng để đóng cookie banner, bấm 'xem thêm', điền ô tìm kiếm trước khi bắt đầu đọc/phân trang. Không áp dụng khi dùng urls[].",
         items: {
           type: SchemaType.OBJECT,
           properties: {
@@ -322,8 +323,19 @@ export const browseWebDecl = {
         },
       },
       wait_ms: { type: SchemaType.NUMBER, description: "Chờ thêm N ms sau khi load + actions xong trước khi đọc nội dung (tối đa 5000)." },
+      pagination: {
+        type: SchemaType.OBJECT,
+        description: "Tự động đọc nhiều trang bắt đầu từ `url` — bỏ trống nếu chỉ cần 1 trang hoặc đang dùng urls[].",
+        properties: {
+          mode:            { type: SchemaType.STRING, description: "click_next (bấm nút/link Next lặp lại) | infinite_scroll (cuộn xuống lặp lại)" },
+          next_selector:   { type: SchemaType.STRING, description: "CSS selector nút/link 'Next' — BẮT BUỘC nếu mode=click_next." },
+          max_pages:       { type: SchemaType.NUMBER, description: "Số trang tối đa cho click_next, mặc định 5, tối đa 20." },
+          max_scrolls:     { type: SchemaType.NUMBER, description: "Số lần cuộn tối đa cho infinite_scroll, mặc định 6, tối đa 20." },
+          scroll_pause_ms: { type: SchemaType.NUMBER, description: "Thời gian chờ sau mỗi lần cuộn (ms) cho infinite_scroll, mặc định 1500, tối đa 5000." },
+        },
+      },
     },
-    required: ["url"],
+    required: [],
   },
 }
 

@@ -6,9 +6,20 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+4)
+## Trạng thái hiện tại (2026-09-07, s195+5)
 
 | | |
+|---|---|
+| ✅ **s195+5 (2026-09-07) — `browseWeb` đọc được nhiều trang/lần gọi** | Hiếu phản hồi `browseWeb` (s195)
+  chỉ đọc đúng 1 trang, không đủ cho lấy dữ liệu tự động nhiều trang. Hỏi rõ kiểu phân trang thật cần trước
+  khi code — Hiếu chọn cả 3: `urls[]` (list URL biết trước, tối đa 20, 1 URL lỗi không chặn URL khác),
+  `pagination.mode=click_next` (bấm Next lặp tới `max_pages`, dừng êm khi hết nút — không phải lỗi),
+  `pagination.mode=infinite_scroll` (cuộn lặp, tự dừng khi nội dung hết phát triển). Output: text thô gộp
+  từng trang có đánh dấu (Hiếu chọn đơn giản hơn structured extraction). Cắt nội dung 2 tầng
+  (8000/trang, 60000 tổng) + timeout co giãn theo số bước (20s+8s/bước, trần 180s) — không phá tương
+  thích ngược (gọi `{url}` đơn như cũ vẫn y hệt hành vi trước). tsc + lint (0 lỗi mới) + vitest (212/212)
+  PASS. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+5". Chưa cần Hiếu làm gì thêm (không
+  đổi hạ tầng/env) — tự thử Gấu Pro với 1 trang có phân trang thật khi rảnh để xác nhận.
 |---|---|
 | ✅ **s195+4 (2026-09-07) — API sản phẩm cho hệ thống bên ngoài (manager tích hợp)** | Hiếu muốn cấp API
   đọc thông tin sản phẩm (kèm giá vốn/COGS) cho manager để tích hợp vào 1 hệ thống/tool khác họ đang xây

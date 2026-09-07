@@ -59,7 +59,7 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryGSC` | Google Search Console | SEO, keyword, click data |
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
-| `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
+| `browseWeb` (s195, đa trang từ s195+5) | Headless browser (CDP, container tự host) | Mở URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. Đọc được NHIỀU trang/lần gọi: `urls[]` (list biết trước), `pagination.mode=click_next` (bấm Next), `pagination.mode=infinite_scroll` (cuộn tự load). KHÔNG dùng cho portal có login (đó là `browsePortal`) |
 | `readMyBrowser` (s195+1) | Extension trên máy người dùng (bridge queue riêng/user, s195+3) | Đọc tab Chrome THẬT đang mở của người gọi (list_tabs/read_tab) — dùng session đăng nhập sẵn của họ. Mọi user có quyền Gấu Pro (`gp_enabled`) |
 | `controlMyBrowser` (s195+1, Auto từ s195+2, multi-tenant s195+3) | Extension trên máy người dùng (bridge queue riêng/user) | click/fill/navigate/scroll trên tab Chrome THẬT của người gọi — thực thi NGAY (Auto), chỉ hiện notification không chặn để biết. `press_enter` cho ô nhập kiểu sheet cần Enter mới commit. Mọi user có quyền Gấu Pro |
 
@@ -392,6 +392,38 @@ Nếu sau này thêm bảng mới bằng migration mà gặp `PGRST205`, nhớ n
 **Xác nhận trình duyệt**: hoạt động trên Microsoft Edge (và mọi trình Chromium khác: Brave/Opera/Vivaldi)
 — chỉ khác chỗ vào `edge://extensions` thay vì `chrome://extensions`, code dùng chung API `chrome.*`
 chuẩn Chromium nên không cần sửa gì.
+
+## § Gấu Pro s195+5 (2026-09-07) — `browseWeb` đọc được NHIỀU trang trong 1 lần gọi
+
+Hiếu phản hồi `browseWeb` (s195) chỉ đọc được đúng 1 trang mỗi lần gọi — không đủ cho việc lấy dữ liệu tự
+động từ trang có nhiều trang/nhiều mục. Hỏi rõ 3 kiểu phân trang thật gặp (Hiếu chọn cả 3) + kiểu output
+(text thô gộp lại, đơn giản hơn structured extraction) trước khi code.
+
+`runBrowseWeb()` (`web/src/lib/agents/creator/tools/browser.ts`) giờ có 3 chế độ, tự chọn theo tham số
+truyền vào (không phá tương thích ngược — gọi như cũ với chỉ `url` vẫn y hệt hành vi trước):
+
+1. **`urls: string[]`** (tối đa 20) — danh sách URL biết trước (vd Gấu Pro tự ghép `?page=1,2,3`), đọc lần
+   lượt độc lập, không áp `actions`. 1 URL lỗi không chặn URL còn lại — ghi rõ `--- Trang N: <url> — LỖI:
+   ... ---` trong nội dung thay vì fail cả lô.
+2. **`pagination.mode="click_next"`** + `next_selector` — bấm nút/link Next lặp lại tới `max_pages`
+   (mặc định 5, tối đa 20). Click lỗi (hết nút Next / đã disabled) → dừng êm, coi là đã hết trang chứ
+   KHÔNG phải lỗi (trả kết quả các trang đã đọc được, không trả `error`).
+3. **`pagination.mode="infinite_scroll"`** — cuộn xuống đáy lặp lại, tự dừng khi `innerText` không dài
+   thêm sau 1 lần cuộn (đã tải hết) hoặc chạm `max_scrolls` (mặc định 6, tối đa 20).
+
+Nội dung nhiều trang cắt theo 2 tầng: mỗi trang tối đa `MULTI_PAGE_CHARS=8000` ký tự, tổng toàn bộ tối đa
+`TOTAL_CONTENT_CHARS=60000` — dừng sớm nếu chạm trần tổng (khác mode 1-trang cũ vẫn giữ nguyên trần
+`15000`). **Timeout co giãn theo số bước** (`computeOverallTimeout`): `20s + 8s × số trang/scroll dự kiến`,
+trần 180s — đủ cho tới 20 bước mà vẫn chừa ngân sách cho phần hội thoại còn lại trong giới hạn
+`maxDuration=300s` của route Gấu Pro.
+
+`actions` (click/fill/scroll/wait, tối đa 8) giờ chỉ áp dụng **1 lần** ngay sau khi load trang ĐẦU TIÊN —
+dùng để đóng cookie banner/điền filter trước khi bắt đầu đọc hoặc phân trang; không áp cho từng URL trong
+`urls[]` (mỗi URL độc lập, giữ đơn giản).
+
+Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 URL lỗi giữa chừng, click_next dừng
+sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới). tsc + lint (0 lỗi mới) + vitest
+(212/212) PASS.
 
 ### Bé Gấu (chatbot team) — s131
 
