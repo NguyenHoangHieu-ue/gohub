@@ -60,8 +60,8 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
 | `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
-| `readMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | Đọc tab Chrome THẬT đang mở của Hiếu (list_tabs/read_tab) — dùng session đăng nhập sẵn. Không cần duyệt |
-| `controlMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | click/fill/navigate/scroll trên tab Chrome THẬT — click/fill/navigate bắt buộc Hiếu duyệt qua notification trước khi thực thi |
+| `readMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | Đọc tab Chrome THẬT đang mở của Hiếu (list_tabs/read_tab) — dùng session đăng nhập sẵn. **Chỉ creator** (không lộ browser Hiếu cho user khác trong `gp_allowed_users`) |
+| `controlMyBrowser` (s195+1, Auto từ s195+2) | Extension trên máy Hiếu (bridge queue) | click/fill/navigate/scroll trên tab Chrome THẬT — thực thi NGAY (Auto), chỉ hiện notification không chặn để biết. `press_enter` cho ô nhập kiểu sheet cần Enter mới commit. **Chỉ creator** |
 
 ## Web Search
 
@@ -296,11 +296,11 @@ Chrome ĐANG MỞ của Hiếu (dùng session đăng nhập thật Lark/Sapo/por
 - **Auth**: 1 token cá nhân lưu Supabase `app_settings` key `browser_bridge_token` (plaintext — đúng mức
   đơn giản `MCP_SECRET` đang dùng, không phải password hệ thống ngoài). Sinh/xem token qua trang mới
   `/analytics/creator/bridge` (creator-only) — `GET/POST /api/creator-ai/bridge/token`.
-- **2 tool**: `readMyBrowser` (`list_tabs`/`read_tab` — không cần duyệt, rủi ro thấp) và `controlMyBrowser`
-  (`click`/`fill`/`navigate` — **bắt buộc Hiếu duyệt** qua `chrome.notifications` trên extension trước khi
-  thực thi, vì đây là session đăng nhập THẬT; `scroll` không cần duyệt). Cờ `requires_confirm` set CỨNG ở
-  server theo tên action (`bridge.ts` `CONFIRM_ACTIONS`) — model không truyền được, tránh Gemini "lách" bỏ
-  qua bước duyệt.
+- **2 tool**: `readMyBrowser` (`list_tabs`/`read_tab`) và `controlMyBrowser` (`click`/`fill`/`navigate`/
+  `scroll`). ⚠️ Thiết kế BAN ĐẦU bắt buộc Hiếu duyệt qua `chrome.notifications` trước khi thực thi
+  click/fill/navigate — **đã đổi sang Auto ngay trong s195+1** (xem mục "s195+2" bên dưới), đoạn này giữ để
+  hiểu lý do kiến trúc hàng đợi có cột `requires_confirm` (nay chỉ mang tính phân loại/log, không còn chặn
+  thực thi).
 - **Extension** (`browser-extension/` — ngoài `web/`, không qua Next.js build): Manifest V3, unpacked only
   (Hiếu tự `chrome://extensions` → Developer mode → Load unpacked — KHÔNG publish Chrome Web Store).
   - `background.js`: vòng lặp `setTimeout` đệ quy ~15s giữ service worker "sống" (mỗi fetch reset đồng hồ
@@ -313,6 +313,40 @@ Chrome ĐANG MỞ của Hiếu (dùng session đăng nhập thật Lark/Sapo/por
 - **Chỉ Gấu Pro, chỉ Hiếu** — không có khái niệm nhiều token/nhiều người pair ở v1.
 - **Việc dọn tay** (không có cron riêng): `DELETE FROM browser_bridge_commands WHERE created_at < NOW() -
   INTERVAL '7 days'` định kỳ, giống tiền lệ dọn lark dedup entries.
+
+## § Gấu Pro s195+2 (2026-09-07) — Auto (bỏ Duyệt) + fix Enter + chặn user khác dùng bridge
+
+Hiếu QA thử s195+1 ngay trong ngày, phát hiện 3 việc cần sửa:
+
+1. **Bỏ bước Duyệt, chuyển Auto** — lý do Hiếu nêu: thói quen người dùng sẽ luôn bấm Duyệt, khiến bước xác
+   nhận chặn (`chrome.notifications` có nút Duyệt/Từ chối, `requireInteraction:true`) không còn giá trị an
+   toàn thật, chỉ gây chậm. `background.js` bỏ hẳn `askConfirm()`/`onButtonClicked` — `processCommand()` thực
+   thi NGAY mọi action, chỉ còn `notifyAction()` hiện notification **không chặn** (`requireInteraction:false`,
+   không nút) để Hiếu biết Gấu Pro vừa làm gì, không cần bấm. Cột `requires_confirm` trong
+   `browser_bridge_commands` vẫn giữ (đổi ý nghĩa: chỉ còn phân loại "action ghi" cho mục đích log, không
+   còn chặn thực thi).
+2. **Fix "fill xong không thấy chữ hiện lên"** — Hiếu test điền 1 dòng vào ô nhập nhanh kiểu spreadsheet,
+   Gấu Pro báo đã fill nhưng không hiện vì ô đó cần phím **Enter thật** để commit dòng mới (chỉ set
+   `.value` + dispatch `input`/`change` là chưa đủ cho loại ô này, khác input thường). Thêm tham số
+   `press_enter` (`controlMyBrowserDecl`, `bridge.ts`, `background.js` action `fill`) — khi `true`, sau khi
+   set value sẽ dispatch thêm `keydown`/`keypress`/`keyup` phím Enter. **Gotcha kỹ thuật**: `keyCode`/`which`
+   không set được qua `new KeyboardEvent(type, {keyCode:13})` (browser giữ readonly, constructor bỏ qua) —
+   phải `Object.defineProperty(ev, "keyCode", {get: () => 13})` đè lên sau khi tạo event thì code cũ (check
+   `e.keyCode===13`) mới nhận đúng. Gấu Pro tự quyết định truyền `press_enter=true` khi ngữ cảnh là ô
+   nhập nhanh/sheet cell (mô tả trong description tool, không phải mặc định luôn bật vì textarea nhiều dòng
+   sẽ hỏng nếu Enter tự động xuống dòng).
+3. **Fix lỗ hổng thật: user khác trong `gp_allowed_users` gọi được bridge = thao tác browser của HIẾU, không
+   phải của họ** — Hiếu hỏi "người khác có dùng được không". Phát hiện khi audit: `readMyBrowser`/
+   `controlMyBrowser` trước nằm chung `ALL_TOOL_DECLARATIONS` tĩnh mà MỌI user có quyền Gấu Pro đều thấy y
+   hệt nhau (route `/api/creator-ai/chat` chỉ check "có được dùng Gấu Pro không" — creator hoặc trong
+   `gp_allowed_users` — KHÔNG phân biệt tool theo từng người). Vì bridge là **1 token = 1 browser** (máy
+   Hiếu), nếu Hiếu từng cấp Gấu Pro cho ai đó qua Creator Settings, người đó gọi `readMyBrowser`/
+   `controlMyBrowser` sẽ đọc/thao tác thẳng lên browser THẬT của Hiếu — rò rỉ dữ liệu cá nhân nghiêm trọng,
+   không phải lỗi phân quyền thường. Fix: `runCreatorAI()` (`creator-ai.ts`) nhận thêm tham số `isCreator`,
+   hàm mới `buildFunctionDeclarations(isCreator)` loại bỏ 2 tool bridge khỏi danh sách nếu `!isCreator`.
+   `route.ts` truyền `isCreator` (đã có sẵn biến, trước đây chỉ dùng để check allowlist chứ chưa truyền vào
+   agent). Chặn bằng declaration (Gemini không thấy tool thì không gọi được) — đúng pattern đã dùng ở
+   `be-gau.ts` (`GP_TOOLS_ADMIN_ONLY`), không phải qua guardian.
 
 ### Bé Gấu (chatbot team) — s131
 

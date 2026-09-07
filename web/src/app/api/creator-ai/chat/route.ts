@@ -159,6 +159,7 @@ export async function POST(req: NextRequest) {
           history, lastMsg,
           fileContexts.length > 0 ? fileContexts : undefined,
           emit,
+          isCreator,
         )
 
         // Tạo/cập nhật conversation (đồng bộ để có convId trước khi gửi done)

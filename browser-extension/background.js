@@ -1,14 +1,13 @@
 // GoHub Gấu Pro Bridge — background service worker.
-// Poll /api/creator-ai/bridge/next định kỳ, thực thi lệnh (đọc ngay; click/fill/navigate xin Duyệt qua
-// chrome.notifications trước), POST kết quả về /api/creator-ai/bridge/result.
+// Poll /api/creator-ai/bridge/next định kỳ, thực thi lệnh NGAY (Auto — Hiếu chọn bỏ bước Duyệt vì
+// thói quen luôn bấm Duyệt khiến bước xác nhận vô nghĩa), hiện notification KHÔNG chặn để biết Gấu Pro
+// vừa làm gì, rồi POST kết quả về /api/creator-ai/bridge/result.
 
 const TINY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 const POLL_INTERVAL_MS = 15000
-const CONFIRM_TIMEOUT_MS = 30000
 
 let pollTimer = null
-const pendingConfirms = new Map()
 
 async function getConfig() {
   const { serverUrl, token, enabled } = await chrome.storage.local.get(["serverUrl", "token", "enabled"])
@@ -74,7 +73,7 @@ async function execAction(action, payload) {
   if (action === "fill") {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: payload.tab_id },
-      func: (selector, value) => {
+      func: (selector, value, pressEnter) => {
         const el = document.querySelector(selector)
         if (!el) return { ok: false, error: "Không tìm thấy selector" }
         // React (Lark/Sapo web) không nhận .value gán trực tiếp — phải dùng native setter rồi
@@ -84,9 +83,20 @@ async function execAction(action, payload) {
         if (setter) setter.call(el, value); else el.value = value
         el.dispatchEvent(new Event("input", { bubbles: true }))
         el.dispatchEvent(new Event("change", { bubbles: true }))
+        if (pressEnter) {
+          // Nhiều ô nhập nhanh kiểu spreadsheet/quick-add chỉ COMMIT giá trị khi nhận phím Enter thật,
+          // không đủ nếu chỉ có 'input'/'change'. keyCode/which không set được qua constructor options
+          // (browser giữ readonly) → phải defineProperty đè lên để code cũ (check e.keyCode===13) vẫn nhận.
+          for (const type of ["keydown", "keypress", "keyup"]) {
+            const ev = new KeyboardEvent(type, { key: "Enter", code: "Enter", bubbles: true, cancelable: true })
+            Object.defineProperty(ev, "keyCode", { get: () => 13 })
+            Object.defineProperty(ev, "which", { get: () => 13 })
+            el.dispatchEvent(ev)
+          }
+        }
         return { ok: true }
       },
-      args: [payload.selector, payload.value],
+      args: [payload.selector, payload.value, !!payload.press_enter],
     })
     if (!result.ok) throw new Error(result.error)
     return { ok: true }
@@ -107,48 +117,20 @@ function describeAction(action, payload) {
   return action
 }
 
-function askConfirm(command) {
-  return new Promise((resolve) => {
-    const notifId = `bridge-confirm-${command.id}`
-    pendingConfirms.set(notifId, resolve)
-    chrome.notifications.create(notifId, {
-      type: "basic",
-      iconUrl: TINY_ICON,
-      title: "Gấu Pro xin phép thao tác",
-      message: describeAction(command.action, command.payload || {}),
-      buttons: [{ title: "Duyệt" }, { title: "Từ chối" }],
-      requireInteraction: true,
-    })
-    setTimeout(() => {
-      if (pendingConfirms.has(notifId)) {
-        pendingConfirms.delete(notifId)
-        chrome.notifications.clear(notifId)
-        resolve(false)
-      }
-    }, CONFIRM_TIMEOUT_MS)
+function notifyAction(command) {
+  // Thông báo KHÔNG chặn — chỉ để biết Gấu Pro vừa làm gì, tự biến mất, không cần bấm gì.
+  chrome.notifications.create(`bridge-info-${command.id}`, {
+    type: "basic",
+    iconUrl: TINY_ICON,
+    title: "Gấu Pro vừa thao tác",
+    message: describeAction(command.action, command.payload || {}),
+    requireInteraction: false,
   })
 }
 
-chrome.notifications.onButtonClicked.addListener((notifId, buttonIndex) => {
-  const resolve = pendingConfirms.get(notifId)
-  if (!resolve) return
-  pendingConfirms.delete(notifId)
-  chrome.notifications.clear(notifId)
-  resolve(buttonIndex === 0)
-})
-
 async function processCommand(command) {
   try {
-    if (WRITE_ACTIONS.has(command.action)) {
-      const approved = await askConfirm(command)
-      if (!approved) {
-        await apiFetch("/api/creator-ai/bridge/result", {
-          method: "POST",
-          body: JSON.stringify({ id: command.id, error: "Hiếu từ chối hoặc không phản hồi kịp." }),
-        })
-        return
-      }
-    }
+    if (WRITE_ACTIONS.has(command.action)) notifyAction(command)
     const result = await execAction(command.action, command.payload || {})
     await apiFetch("/api/creator-ai/bridge/result", { method: "POST", body: JSON.stringify({ id: command.id, result }) })
   } catch (e) {

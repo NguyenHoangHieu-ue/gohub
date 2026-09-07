@@ -342,15 +342,16 @@ export const readMyBrowserDecl = {
 
 export const controlMyBrowserDecl = {
   name: "controlMyBrowser",
-  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của Hiếu qua Extension đã pair. click/fill/navigate sẽ hiện thông báo yêu cầu Hiếu bấm Duyệt trên extension trước khi thực thi (session đăng nhập thật — không tự ý làm nếu chưa được duyệt). LUÔN nói rõ với Hiếu bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có).",
+  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của Hiếu qua Extension đã pair — thực thi NGAY (không cần Hiếu duyệt), dùng session đăng nhập thật nên LUÔN nói rõ với Hiếu bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có). Với ô nhập kiểu spreadsheet/quick-add cần bấm Enter mới lưu (vd thêm dòng trong sheet) → set press_enter=true.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      action:   { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
-      tab_id:   { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
-      selector: { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
-      value:    { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
-      url:      { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
+      action:      { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
+      tab_id:      { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
+      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
+      value:       { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
+      url:         { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
+      press_enter: { type: SchemaType.BOOLEAN, description: "true = sau khi fill xong, gửi thêm phím Enter — cần cho ô nhập nhanh (sheet cell, quick-add) mà chỉ set giá trị KHÔNG tự lưu, phải Enter mới commit." },
     },
     required: ["action", "tab_id"],
   },

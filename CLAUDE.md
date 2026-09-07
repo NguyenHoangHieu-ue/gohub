@@ -6,9 +6,26 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+1)
+## Trạng thái hiện tại (2026-09-07, s195+2)
 
 | | |
+|---|---|
+| ✅ **s195+2 (2026-09-07) — Fix 3 việc phát hiện khi Hiếu QA s195+1** | (1) **Bỏ Duyệt → Auto**: Hiếu
+  nhận thấy thói quen luôn bấm Duyệt khiến bước xác nhận vô nghĩa — `background.js` bỏ hẳn
+  `chrome.notifications` chặn (Duyệt/Từ chối), `controlMyBrowser` thực thi NGAY, chỉ còn notification
+  KHÔNG chặn để biết đã làm gì. (2) **Fix fill không hiện chữ**: Hiếu test điền ô nhập nhanh kiểu sheet,
+  Gấu Pro báo đã fill nhưng không thấy vì thiếu phím Enter để commit — thêm tham số `press_enter` (dispatch
+  keydown/keypress/keyup Enter sau khi set value, kèm `Object.defineProperty` đè `keyCode`/`which` vì
+  `KeyboardEvent` constructor không set được 2 field này). (3) **Fix lỗ hổng thật phát hiện qua câu hỏi
+  "người khác dùng được không"**: `readMyBrowser`/`controlMyBrowser` trước đây MỌI user có quyền Gấu Pro
+  (`gp_allowed_users`) đều gọi được y hệt nhau, nhưng bridge là 1 token = browser THẬT của Hiếu → người
+  khác gọi sẽ đọc/thao tác lên browser Hiếu, không phải của họ (rò rỉ dữ liệu cá nhân). Fix: `runCreatorAI`
+  nhận `isCreator`, hàm mới `buildFunctionDeclarations(isCreator)` loại 2 tool bridge khỏi danh sách nếu
+  không phải creator — đúng pattern `GP_TOOLS_ADMIN_ONLY` đã dùng ở `be-gau.ts`. tsc + lint (0 lỗi mới) +
+  vitest (199/199) PASS. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+2". **Cần Hiếu**:
+  pull code mới (redeploy tự động qua Vercel), tự QA lại: (a) fill ô sheet có `press_enter` giờ hiện chữ
+  chưa, (b) nếu có cấp Gấu Pro cho ai khác qua Creator Settings, xác nhận người đó KHÔNG còn thấy/gọi được
+  bridge nữa.
 |---|---|
 | ✅ **s195+1 (2026-09-07) — Gấu Pro: Extension điều khiển browser cá nhân Hiếu** | Tiếp lộ trình s195.
   `browseWeb` (s195) duyệt web công khai; phase này cho Gấu Pro đọc/thao tác trên chính tab Chrome ĐANG MỞ

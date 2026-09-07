@@ -91,6 +91,30 @@ describe("ALL_TOOL_DECLARATIONS", () => {
   })
 })
 
+// ─── buildFunctionDeclarations — bridge tools chỉ dành creator ────────────────
+
+import { buildFunctionDeclarations } from "@/lib/agents/creator-ai"
+
+describe("buildFunctionDeclarations", () => {
+  it("isCreator=true → có readMyBrowser/controlMyBrowser", () => {
+    const names = buildFunctionDeclarations(true).map(d => d.name)
+    expect(names).toContain("readMyBrowser")
+    expect(names).toContain("controlMyBrowser")
+  })
+
+  it("isCreator=false → KHÔNG có readMyBrowser/controlMyBrowser (tránh lộ browser cá nhân Hiếu cho user khác trong gp_allowed_users)", () => {
+    const names = buildFunctionDeclarations(false).map(d => d.name)
+    expect(names).not.toContain("readMyBrowser")
+    expect(names).not.toContain("controlMyBrowser")
+  })
+
+  it("isCreator=false vẫn giữ đủ tool khác (chỉ trừ đúng 2 tool bridge)", () => {
+    const all = buildFunctionDeclarations(true)
+    const restricted = buildFunctionDeclarations(false)
+    expect(restricted.length).toBe(all.length - 2)
+  })
+})
+
 // ─── buildDateContext ─────────────────────────────────────────────────────────
 
 describe("buildDateContext", () => {

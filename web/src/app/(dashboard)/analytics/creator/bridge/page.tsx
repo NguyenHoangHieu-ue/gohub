@@ -120,7 +120,7 @@ function BridgeSettings() {
           <p>2. Bấm <strong>Load unpacked</strong> → chọn thư mục <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">browser-extension/</code> trong repo.</p>
           <p>3. Bấm icon extension trên thanh Chrome → dán token phía trên + Server URL (domain đang dùng, vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://stg-intel-v2.gohub.cloud</code>) → bật toggle <strong>Bridge ON</strong>.</p>
           <p>4. Vào Gấu Pro, thử hỏi "list các tab đang mở" để xác nhận kết nối.</p>
-          <p className="text-amber-700 pt-1">⚠️ click/fill/navigate sẽ hiện thông báo xin Duyệt trên Chrome trước khi thực thi — đây là session đăng nhập thật của Hiếu, luôn xem kỹ trước khi bấm Duyệt.</p>
+          <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần Hiếu duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của Hiếu — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng.</p>
         </div>
       </div>
     </div>

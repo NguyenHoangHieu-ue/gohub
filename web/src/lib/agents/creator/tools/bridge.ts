@@ -1,10 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-// Action nào bắt buộc Hiếu duyệt trên extension trước khi thực thi — set CỨNG ở đây (server), model
-// không truyền được cờ này → không "lách" bỏ qua bước duyệt cho action đổi trạng thái session thật.
-const CONFIRM_ACTIONS = new Set(["click", "fill", "navigate"])
+// Action đổi trạng thái tab (khác đọc thuần) — Hiếu chọn bỏ bước "Duyệt" (thói quen luôn bấm Duyệt khiến
+// bước xác nhận vô nghĩa), extension thực thi NGAY + hiện notification không chặn để biết. Cột
+// `requires_confirm` vẫn lưu để phân biệt/log — không còn chặn thực thi phía extension.
+const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 
 const POLL_MS = 2000
+const TTL_SECONDS = 60
 
 type OnEvent = ((e: { type: "status"; text: string }) => void) | undefined
 
@@ -13,17 +15,16 @@ async function enqueueAndPoll(
   payload: any,
   onEvent?: OnEvent,
 ): Promise<{ result?: any; error?: string }> {
-  const requiresConfirm = CONFIRM_ACTIONS.has(action)
-  const ttlSeconds = requiresConfirm ? 120 : 60
-  const maxPolls = Math.ceil((ttlSeconds * 1000) / POLL_MS)
+  const isWrite = WRITE_ACTIONS.has(action)
+  const maxPolls = Math.ceil((TTL_SECONDS * 1000) / POLL_MS)
 
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from("browser_bridge_commands")
     .insert({
       action,
       payload,
-      requires_confirm: requiresConfirm,
-      expires_at: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+      requires_confirm: isWrite,
+      expires_at: new Date(Date.now() + TTL_SECONDS * 1000).toISOString(),
     })
     .select("id")
     .single()
@@ -33,9 +34,7 @@ async function enqueueAndPoll(
   const id = inserted.id
   onEvent?.({
     type: "status",
-    text: requiresConfirm
-      ? "🖱️ Đã gửi lệnh — đợi Hiếu duyệt trên extension..."
-      : "👀 Đang đọc từ browser Hiếu...",
+    text: isWrite ? "🖱️ Đang thao tác trên browser Hiếu..." : "👀 Đang đọc từ browser Hiếu...",
   })
 
   for (let i = 0; i < maxPolls; i++) {
@@ -51,7 +50,7 @@ async function enqueueAndPoll(
     if (row.status === "done") return { result: row.result }
     if (row.status === "error") return { error: row.error || "Extension báo lỗi không rõ." }
     if (row.status === "expired") {
-      return { error: "Lệnh hết hạn — extension chưa nhận hoặc Hiếu chưa duyệt kịp." }
+      return { error: "Lệnh hết hạn — extension chưa kịp nhận." }
     }
   }
 
@@ -71,7 +70,7 @@ export async function runReadMyBrowser(
 }
 
 export async function runControlMyBrowser(
-  args: { action: "click" | "fill" | "navigate" | "scroll"; tab_id: number; selector?: string; value?: string; url?: string },
+  args: { action: "click" | "fill" | "navigate" | "scroll"; tab_id: number; selector?: string; value?: string; url?: string; press_enter?: boolean },
   onEvent?: OnEvent,
 ): Promise<{ result?: any; error?: string }> {
   if (!["click", "fill", "navigate", "scroll"].includes(args.action)) {
@@ -79,6 +78,6 @@ export async function runControlMyBrowser(
   }
   if (!args.tab_id) return { error: "Thiếu tab_id — gọi readMyBrowser action=list_tabs trước để lấy tab_id." }
   return enqueueAndPoll(args.action, {
-    tab_id: args.tab_id, selector: args.selector, value: args.value, url: args.url,
+    tab_id: args.tab_id, selector: args.selector, value: args.value, url: args.url, press_enter: args.press_enter,
   }, onEvent)
 }
