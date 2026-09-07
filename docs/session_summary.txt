@@ -9157,3 +9157,9 @@ Hiếu: "thêm vào trong Inventory 1 chỗ note công thức tính đi". Dùng 
 Cảnh báo (đã có sẵn trong wiki `analytics-fulfillment.md` từ s194+5, lần này chỉ đưa lên UI). Không đổi
 logic/số liệu. tsc + vitest (212/212) PASS, 2 warning lint có sẵn từ trước (XCircle/`d` unused, không
 liên quan chỗ sửa).
+
+Hiếu phản hồi ngay sau đó: hiện sẵn note công thức trên trang mất thẩm mỹ, muốn gói vào 1 nút bấm "Công
+thức". `LogicNote` (`dashboard-kit.tsx`) thêm prop `collapsible`/`label` — mặc định `collapsible=false`
+(giữ nguyên hành vi mọi chỗ dùng khác, vd B2C Metric/`Panel`), khi bật thu gọn thành 1 nút nhỏ viền brand
+"ⓘ Công thức", bấm mới render nội dung đầy đủ + thêm nút "Ẩn công thức" ở cuối để đóng lại. Inventory đổi
+sang `<LogicNote collapsible>`. tsc + vitest (212/212) PASS.
