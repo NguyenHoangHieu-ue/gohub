@@ -17,29 +17,47 @@ async function requireGpAccess() {
 
 // GET: xem token hiện tại của CHÍNH mình (nếu có) + lần cuối extension của mình poll.
 export async function GET() {
-  const guard = await requireGpAccess()
-  if (guard.error) return guard.error
+  try {
+    const guard = await requireGpAccess()
+    if (guard.error) return guard.error
 
-  const { data } = await supabaseAdmin
-    .from("browser_bridge_pairings")
-    .select("token,last_seen")
-    .eq("username", guard.username)
-    .maybeSingle()
+    const { data, error } = await supabaseAdmin
+      .from("browser_bridge_pairings")
+      .select("token,last_seen")
+      .eq("username", guard.username)
+      .maybeSingle()
 
-  return NextResponse.json({ token: data?.token ?? null, last_seen: data?.last_seen ?? null })
+    if (error) {
+      console.error("[bridge/token] select error:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ token: data?.token ?? null, last_seen: data?.last_seen ?? null })
+  } catch (e: any) {
+    console.error("[bridge/token] unhandled error:", e)
+    return NextResponse.json({ error: e?.message || String(e) }, { status: 500 })
+  }
 }
 
 // POST: sinh token mới cho CHÍNH mình (ghi đè token cũ của mình — extension cũ sẽ mất kết nối).
 export async function POST() {
-  const guard = await requireGpAccess()
-  if (guard.error) return guard.error
+  try {
+    const guard = await requireGpAccess()
+    if (guard.error) return guard.error
 
-  const token = randomBytes(24).toString("hex")
-  const { error } = await supabaseAdmin.from("browser_bridge_pairings").upsert(
-    { username: guard.username, token },
-    { onConflict: "username" },
-  )
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const token = randomBytes(24).toString("hex")
+    const { error } = await supabaseAdmin.from("browser_bridge_pairings").upsert(
+      { username: guard.username, token },
+      { onConflict: "username" },
+    )
+    if (error) {
+      console.error("[bridge/token] upsert error:", error)
+      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+    }
 
-  return NextResponse.json({ token })
+    return NextResponse.json({ token })
+  } catch (e: any) {
+    console.error("[bridge/token] unhandled error:", e)
+    return NextResponse.json({ error: e?.message || String(e) }, { status: 500 })
+  }
 }
