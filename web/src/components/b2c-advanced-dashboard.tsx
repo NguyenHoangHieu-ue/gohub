@@ -5,10 +5,9 @@ import {
   AreaChart, Area, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList,
 } from "recharts"
 import {
-  ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
+  ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe, Target,
 } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
-import { cn } from "@/lib/utils"
 import { SourceBadge, LogicNote, type SourceKind } from "@/components/dashboard-kit"
 
 // ── types ───────────────────────────────────────────────────────────────────
@@ -22,9 +21,12 @@ interface KpiTarget { vn: number; us: number; total: number }
 interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturning: number; total: number }
 interface MarketBudgetCell { vn: number; us: number; total: number }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
+interface GA4CategoryRow { category: string; traffic: number; purchases: number; cr: number; prevTraffic: number; trafficDelta: number | null }
+interface GA4CategorySite { siteId: string; name: string; siteUrl?: string; error?: string; rows: GA4CategoryRow[] }
 interface MonthlyData {
   months:       string[]
   currentMonth: string
+  dataAsOf?:    string
   elapsedDays:  number
   totalDays:    number
   markets:      Record<string, MarketCell>
@@ -36,6 +38,7 @@ interface MonthlyData {
   channels:     Record<string, ChannelCell>
   marketChannels?: Record<string, MarketChannelCell>
   profitByChannel?: Record<string, Record<string, ProfitCell>>
+  revenueComparison?: { previousSamePeriod: number; previousFullMonth: number; compareThrough: string }
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
   budget:       Record<string, number>
@@ -52,6 +55,12 @@ const DEMO_MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "202
 const demoMonthLabel = (m: string) => {
   const [y, mo] = m.split("-")
   return { top: `Thg ${parseInt(mo)}`, sub: `'${y.slice(2)}` }
+}
+const formatDateLabel = (isoDate?: string) => {
+  if (!isoDate) return null
+  const [year, month, day] = isoDate.split("-")
+  if (!year || !month || !day) return null
+  return `${day}/${month}/${year}`
 }
 const blankCust = (revenue = 0, count = 0): CustCell => ({ revenue, count })
 const byMonth = <T,>(values: T[]) => Object.fromEntries(DEMO_MONTHS.map((m, i) => [m, values[i]])) as Record<string, T>
@@ -285,29 +294,48 @@ const Section = ({ icon, title, desc, children, action, source }: {
   </section>
 )
 
-// KPI metric card — Apple .metric style từ mockup
-const KpiCard = ({ label, value, sub, delta, source: src }: {
-  label: string; value: string; sub?: string; delta?: number | null; source?: string; accent?: string; icon?: React.ReactNode
-}) => (
-  <div className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]" style={APPLE_CARD_STYLE}>
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight">{label}</span>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        {src && <span className="text-[9px] font-[650] px-1.5 py-0.5 rounded-full bg-[#eaf4ff] text-[#0071e3] uppercase tracking-wide">{src}</span>}
-        {delta !== undefined && delta !== null && (
-          <span className={cn("text-[10px] font-[620] px-1.5 py-0.5 rounded-full whitespace-nowrap",
-            delta >= 0 ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]")}>
-            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
+const RevenueCompareCard = ({ icon, label, value, caption, referenceLabel, referenceValue, metricLabel, metricValue, mode = "delta" }: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  caption: string
+  referenceLabel: string
+  referenceValue: string
+  metricLabel: string
+  metricValue: number | null
+  mode?: "delta" | "attainment"
+}) => {
+  const positive = metricValue !== null && (mode === "attainment" ? metricValue >= 100 : metricValue >= 0)
+  const metricText = metricValue === null
+    ? "—"
+    : mode === "attainment"
+      ? `${metricValue.toFixed(1)}%`
+      : `${metricValue >= 0 ? "↑" : "↓"} ${Math.abs(metricValue).toFixed(1)}%`
+
+  return (
+    <div className="min-w-0 rounded-lg border border-black/[0.09] bg-white/85 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.055)] backdrop-blur">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eaf4ff] text-[#0071e3]">{icon}</span>
+        <span className="text-[11px] font-[650] uppercase text-[#6e6e73]">{label}</span>
+      </div>
+      <div className="mt-4 min-w-0 text-[clamp(22px,2.2vw,32px)] font-[650] leading-none text-[#1d1d1f] tabular-nums break-words">{value}</div>
+      <div className="mt-2 text-[11px] leading-snug text-[#86868b]">{caption}</div>
+      <div className="my-4 h-px bg-black/[0.06]" />
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+        <div className="min-w-0">
+          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{referenceLabel}</div>
+          <div className="mt-1 truncate text-[12px] font-[650] text-[#5f6368] tabular-nums" title={referenceValue}>{referenceValue}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{metricLabel}</div>
+          <span className={`mt-1 inline-flex min-w-[64px] justify-center rounded-full px-2 py-1 text-[11px] font-[700] ${metricValue === null ? "bg-[#eef1f5] text-[#6e6e73]" : positive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"}`}>
+            {metricText}
           </span>
-        )}
+        </div>
       </div>
     </div>
-    <div>
-      <div className="text-[24px] font-[560] text-[#1d1d1f] leading-none mt-2">{value}</div>
-      {sub && <div className="text-[11px] text-[#6e6e73] mt-1.5 leading-tight">{sub}</div>}
-    </div>
-  </div>
-)
+  )
+}
 
 // Placeholder cho section chờ nguồn dữ liệu
 const AwaitingData = ({ note }: { note: string }) => (
@@ -359,6 +387,14 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     kpis:   { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }
     series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]
   }[] | null>(null)
+  const [ga4Categories, setGa4Categories] = useState<{
+    month: string
+    elapsedDays: number
+    prevMonth: string
+    web: GA4CategorySite[]
+    app: GA4CategorySite[]
+    error?: string
+  } | null>(null)
 
   useEffect(() => {
     if (demoMode) {
@@ -441,6 +477,41 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     })()
   }, [demoMode, localPreview])
 
+  useEffect(() => {
+    if (demoMode) {
+      setGa4Categories({
+        month: DEMO_DATA.currentMonth,
+        elapsedDays: DEMO_DATA.elapsedDays,
+        prevMonth: "2026-06",
+        web: [],
+        app: [],
+        error: "Demo mode chưa có GA4 category",
+      })
+      return
+    }
+    if (!data?.currentMonth) return
+    (async () => {
+      try {
+        const params = new URLSearchParams()
+        if (localPreview) params.set("localPreview", "1")
+        params.set("month", data.currentMonth)
+        params.set("elapsedDays", String(data.elapsedDays))
+        const res = await fetch(`/api/analytics/b2c/ga4-categories?${params.toString()}`)
+        if (!res.ok) throw new Error(`${res.status}`)
+        setGa4Categories(await res.json())
+      } catch {
+        setGa4Categories({
+          month: data.currentMonth,
+          elapsedDays: data.elapsedDays,
+          prevMonth: "",
+          web: [],
+          app: [],
+          error: "GA4 category chưa có dữ liệu",
+        })
+      }
+    })()
+  }, [demoMode, localPreview, data?.currentMonth, data?.elapsedDays])
+
   const quarterKey = (m: string) => {
     const [y, mo] = m.split("-")
     return `${y}-Q${Math.ceil(parseInt(mo) / 3)}`
@@ -512,18 +583,13 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   const periodSuffix = viewMode === "quarter" ? "QTD" : "MTD"
   const periodTitle = viewMode === "quarter" ? "Quarterly B2C report" : "Monthly B2C report"
   const periodProgressLabel = current ? `${periodElapsedDays(current)}/${periodTotalDays(current)} ngày` : "—"
-  const prorataLabel = viewMode === "quarter" ? "Prorata quarter-end" : "Prorata month-end"
+  const dataAsOfLabel = formatDateLabel(data?.dataAsOf)
 
   // ── KPI values (MTD tháng hiện tại) ─────────────────────────────────────────
   const marketOf = (key: string): MarketCell => ({
     vn: sumActualFor(key, m => data?.markets[m]?.vn ?? 0),
     us: sumActualFor(key, m => data?.markets[m]?.us ?? 0),
     total: sumActualFor(key, m => data?.markets[m]?.total ?? 0),
-  })
-  const channelOf = (key: string): ChannelCell => ({
-    web: sumActualFor(key, m => data?.channels[m]?.web ?? 0),
-    app: sumActualFor(key, m => data?.channels[m]?.app ?? 0),
-    other: sumActualFor(key, m => data?.channels[m]?.other ?? 0),
   })
   const marketChannelOf = (key: string): MarketChannelCell => ({
     vnSales: sumActualFor(key, m => data?.marketChannels?.[m]?.vnSales ?? 0),
@@ -580,6 +646,15 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   })
   const mtdTotal   = marketOf(current).total
   const prevTotal  = marketOf(prevFull).total
+  const previousSamePeriod = viewMode === "month"
+    ? data?.revenueComparison?.previousSamePeriod ?? comparablePrevPeriodValue(m => data?.markets[m]?.total ?? 0)
+    : comparablePrevPeriodValue(m => data?.markets[m]?.total ?? 0)
+  const previousFullRevenue = viewMode === "month"
+    ? data?.revenueComparison?.previousFullMonth ?? prevTotal
+    : prevTotal
+  const projectedRevenue = proj(mtdTotal)
+  const currentRevenueTarget = targetOf(current).total
+  const targetAttainment = currentRevenueTarget > 0 ? (mtdTotal / currentRevenueTarget) * 100 : null
   const cust       = customerOf(current)
   const newRev     = cust.new.revenue
   const retRev     = cust.returning.revenue
@@ -963,6 +1038,66 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     </div>
   )
 
+  const TrafficDelta = ({ value }: { value: number | null }) => {
+    if (value === null) return <span className="text-slate-300">—</span>
+    const up = value >= 0
+    return (
+      <span className={`inline-flex items-center justify-end gap-1 font-semibold ${up ? "text-emerald-600" : "text-rose-500"}`}>
+        {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+        {Math.abs(value).toFixed(1)}%
+      </span>
+    )
+  }
+
+  const GA4CategoryTable = ({ groups, emptyNote }: { groups: GA4CategorySite[]; emptyNote: string }) => {
+    const visibleGroups = groups.filter(site => site.rows.length > 0 || site.error)
+    if (!visibleGroups.length) return <AwaitingData note={emptyNote} />
+
+    return (
+      <div className="space-y-3 px-5 pb-5 pt-3">
+        {visibleGroups.map(site => (
+          <div key={site.siteId} className="overflow-hidden rounded-lg border border-black/[0.06] bg-white/75">
+            <div className="flex items-center justify-between border-b border-black/[0.05] px-4 py-3">
+              <div>
+                <h4 className="text-[14px] font-[700] text-slate-800">{site.name}</h4>
+                {site.siteUrl && <p className="text-[11px] text-slate-400">{site.siteUrl}</p>}
+              </div>
+              <span className="text-[11px] font-[650] text-slate-400">MTD vs prev MTD</span>
+            </div>
+            {site.error ? (
+              <div className="px-4 py-4 text-[12px] text-rose-500">{site.error}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-[680px] w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] uppercase tracking-wider text-slate-400">
+                      <th className="px-4 py-2.5 text-left font-semibold">Category</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Traffic</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">CR</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Purchases</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Traffic tăng/giảm</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {site.rows.map(row => (
+                      <tr key={`${site.siteId}-${row.category}`} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-semibold text-slate-700">{row.category}</td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">{formatNumber(Math.round(row.traffic))}</td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">{row.cr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700">{formatNumber(Math.round(row.purchases))}</td>
+                        <td className="px-4 py-3 text-right tabular-nums"><TrafficDelta value={row.trafficDelta} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   type AcquisitionRow = {
     label: string
     highlight?: boolean
@@ -1126,16 +1261,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     )
   }
 
-  // GA4 totals cho KPI cards (Section trên cùng)
-  const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
-  const ga4Users  = ga4?.reduce((s, site) => s + (site.kpis.activeUsers ?? 0), 0) ?? 0
-  const spendCur  = spendOf(current)
-  const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
-  const leadsCur  = leadsOf(current)
-  const customersForCac = acquisitionCustomerOf(current)
-  const cacCur    = spendCur > 0 && customersForCac > 0 ? spendCur / customersForCac : 0
-  const cplCur     = spendCur > 0 && leadsCur > 0 ? spendCur / leadsCur : 0
-
   return (
     <div className="min-h-screen p-4 lg:p-6" style={APPLE_BG_STYLE}>
       <div className="max-w-[1400px] mx-auto space-y-5">
@@ -1176,54 +1301,38 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
         {data && !loading && (
           <>
-            {/* Hero card — big number MTD + mini meter bars (từ mockup) */}
-            <div className={APPLE_CARD} style={{ ...APPLE_CARD_STYLE, borderRadius: 10 }}>
-              <div className="p-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 items-center">
-                <div>
-	                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#0071e3] bg-[#eaf4ff] px-2.5 py-1 rounded-full">Snapshot</span>
-	                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
-	                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">{periodSuffix} B2C</span>
-	                  </div>
-	                  <div className="mt-3 text-[14px] text-[#6e6e73] leading-relaxed max-w-lg">
-	                    {prorataLabel}: <strong className="text-[#1d1d1f]">{formatCurrency(proj(mtdTotal))}</strong>
-	                    {periodTotalDays(current) > 0 && <> · {periodSuffix} {((periodElapsedDays(current) / periodTotalDays(current)) * 100).toFixed(0)}%</>}
-                    {prevTotal > 0 && <> · MoM <span className={pct(mtdTotal, prevTotal)! >= 0 ? "text-[#2f9d55]" : "text-[#d93025]"}>{pct(mtdTotal, prevTotal)! >= 0 ? "↑" : "↓"}{Math.abs(pct(mtdTotal, prevTotal)!).toFixed(1)}%</span></>}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { label: "VN B2C", val: marketOf(current).vn, total: mtdTotal, proj: proj(marketOf(current).vn), color: "#0071e3" },
-                    { label: "US B2C", val: marketOf(current).us, total: mtdTotal, proj: proj(marketOf(current).us), color: "#6366f1" },
-                    { label: "Web",    val: channelOf(current).web, total: mtdTotal, proj: proj(channelOf(current).web), color: "#00a6a6" },
-                    { label: "App",    val: channelOf(current).app, total: mtdTotal, proj: proj(channelOf(current).app), color: "#2f9d55" },
-                    { label: "Khác",   val: channelOf(current).other, total: mtdTotal, proj: proj(channelOf(current).other), color: "#b7791f" },
-                  ].map(({ label, val, total, proj: p, color }) => (
-                    <div key={label} className="grid grid-cols-[90px_1fr_140px] items-center gap-3">
-                      <span className="text-[13px] font-[600] text-[#1d1d1f]">{label}</span>
-                      <div className="h-[10px] rounded-full bg-[#e8ecf1] overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, total > 0 ? (val / total) * 100 : 0)}%`, background: color }} />
-                      </div>
-                      <span className="text-[13px] font-[560] text-[#1d1d1f] text-right">{formatCurrency(val)} <span className="text-[#6e6e73]">/ {formatCurrency(p)}</span></span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* 6 KPI cards — y chang mockup: Users, Customers, Budget, ROAS, CAC, Leads */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"}
-                sub={ga4 && ga4.length > 0 ? `CR ${(ga4Total / ga4.length).toFixed(1)}%` : "GA4 chưa kết nối"} source="GA4" />
-              <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"}
-                sub="Paid media blended" source="Chat" />
-              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)}
-                sub={data.customerError ? "Admin API lỗi" : data.customerBreakdown === "total-only" ? "Total từ Admin API" : `Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
-              <KpiCard label="CAC" value={cacCur > 0 ? formatCurrency(cacCur) : "—"}
-                sub="Spend ÷ khách mới" source="Chat" />
-              <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"}
-                sub="Chatwoot all channels" source="Chat" />
-              <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"}
-                sub="Spend ÷ Leads" source="Chat" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <RevenueCompareCard
+                icon={<DollarSign className="h-4 w-4" />}
+                label={`${periodSuffix} B2C · Cùng kỳ`}
+                value={formatCurrency(mtdTotal)}
+                caption={dataAsOfLabel ? `Dữ liệu T-1 đến ${dataAsOfLabel}` : periodProgressLabel}
+                referenceLabel={viewMode === "month" ? "Cùng kỳ tháng trước" : "Cùng kỳ quý trước"}
+                referenceValue={previousSamePeriod > 0 ? formatCurrency(previousSamePeriod) : "Chưa có dữ liệu"}
+                metricLabel="Tăng / giảm"
+                metricValue={pct(mtdTotal, previousSamePeriod)}
+              />
+              <RevenueCompareCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label={viewMode === "month" ? "Prorata tháng" : "Prorata quý"}
+                value={formatCurrency(projectedRevenue)}
+                caption={`${periodProgressLabel} · dự phóng cuối ${viewMode === "month" ? "tháng" : "quý"}`}
+                referenceLabel={viewMode === "month" ? "Doanh thu tháng trước" : "Doanh thu quý trước"}
+                referenceValue={previousFullRevenue > 0 ? formatCurrency(previousFullRevenue) : "Chưa có dữ liệu"}
+                metricLabel="Tăng / giảm"
+                metricValue={pct(projectedRevenue, previousFullRevenue)}
+              />
+              <RevenueCompareCard
+                icon={<Target className="h-4 w-4" />}
+                label={`${periodSuffix} B2C · Target`}
+                value={formatCurrency(mtdTotal)}
+                caption="Target từ KPI Target B2C · Total"
+                referenceLabel={viewMode === "month" ? "Target tháng này" : "Target quý này"}
+                referenceValue={currentRevenueTarget > 0 ? formatCurrency(currentRevenueTarget) : "Chưa nhập target"}
+                metricLabel="Đã đạt"
+                metricValue={targetAttainment}
+                mode="attainment"
+              />
             </div>
 
             <Section
@@ -1330,7 +1439,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 { key: "vn-sales", label: "VN Sales B2C", get: m => marketChannelOf(m).vnSales, breakdown: true },
                 { key: "vn-web",   label: "Web",          get: m => marketChannelOf(m).vnWeb,   breakdown: true },
                 { label: "US B2C",        get: m => marketOf(m).us },
-                { key: "us-sales", label: "US Sales B2C", get: m => marketChannelOf(m).usSales, breakdown: true },
                 { key: "us-app",   label: "App",          get: m => marketChannelOf(m).usApp,   breakdown: true },
                 { key: "us-web",   label: "Web",          get: m => marketChannelOf(m).usWeb,   breakdown: true },
                 { label: "Total B2C",     get: m => marketOf(m).total, highlight: true },
@@ -1343,7 +1451,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 >
               {data.customerError && (
                 <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-                  Customer Admin API lỗi: {data.customerError}.
+                  {data.customerError}.
                 </div>
               )}
               {data.customerBreakdown === "total-only" && !data.customerError && (
@@ -1409,6 +1517,38 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 </>
               ) : (
                 <AwaitingData note="Chưa có spend hoặc lead để tính CAC/CPL. Cần dữ liệu chi phí MKT và lead theo kênh." />
+              )}
+            </Section>
+
+            <Section
+              icon={<Globe className="w-5 h-5" />}
+              title="GA4 Web Category Performance"
+              desc="gohub.com + gohub.vn · Category theo session default channel group · CR = Purchases / Traffic"
+              source="ga4"
+            >
+              {ga4Categories === null ? (
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4 category…</div>
+              ) : (
+                <GA4CategoryTable
+                  groups={ga4Categories.web}
+                  emptyNote={ga4Categories.error || "Chưa có dữ liệu category từ GA4 web. Kiểm tra cấu hình GA4 cho gohub.com và gohub.vn."}
+                />
+              )}
+            </Section>
+
+            <Section
+              icon={<TrendingUp className="w-5 h-5" />}
+              title="GA4 App Category Performance"
+              desc="gohub app · Category theo session default channel group · CR = Purchases / Traffic"
+              source="ga4"
+            >
+              {ga4Categories === null ? (
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4 app category…</div>
+              ) : (
+                <GA4CategoryTable
+                  groups={ga4Categories.app}
+                  emptyNote={ga4Categories.error || "Chưa có dữ liệu category từ GA4 app. Kiểm tra cấu hình GA4 app trong Admin settings."}
+                />
               )}
             </Section>
 

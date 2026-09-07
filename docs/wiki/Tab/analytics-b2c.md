@@ -50,6 +50,7 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 ### Nguyên tắc vận hành production
 - Dashboard dùng cho nhiều người nên **không gọi live toàn bộ nguồn mỗi lần mở trang**.
 - Luồng đúng là: cron chạy hằng ngày lúc **00:00 UTC+7** → kéo dữ liệu từ các nguồn → ghi snapshot/cache có `refreshed_at` → dashboard chỉ đọc snapshot/cache.
+- Nếu snapshot chưa có hoặc chưa đủ tháng, dashboard fallback sang analytics DB cho Customer và tuyệt đối không gọi Admin GoHub trực tiếp. Cách này giữ trang hoạt động khi Admin API chạm rate limit `30 requests / 5 minutes`; số Customer theo fallback được báo nguồn ngay trong section.
 - `vercel.json` đã có cron `0 17 * * *` tương ứng 00:00 UTC+7.
 - Route cron đã có: `/api/cron/refresh-b2c-report`.
 - Trước khi deploy cần sửa lỗi snapshot hiện tại: log local đang báo `Invalid API key`, cần kiểm tra `SUPABASE_SERVICE_KEY` và chạy migration `web/db/migrations/v17_b2c_report_monthly_snapshots.sql`.
@@ -118,3 +119,9 @@ Trước khi đưa lên Git/prod, nên nhập các số này vào nguồn thật
 - [ ] Kiểm tra Turso lead token hoặc fallback Omni/Chatwoot.
 - [ ] Kiểm tra Customer New/Returning bằng `summary.byUserType`.
 - [ ] Kiểm tra local build `npm run build`.
+
+### Revenue cutoff reconciliation — 2026-09-07
+
+The monthly endpoint and revenue snapshot queries must bound fulfillment dates through the last completed day in Asia/Ho_Chi_Minh, including customer and profit breakdowns. Cache keys include the cutoff; snapshots without matching `payload.revenueAsOf` fall back to the bounded warehouse queries.
+
+Verified against Analytics DB: September 1–6 B2C revenue is VND 284,852,800.82 (VN 258,485,490.02; US 26,367,310.80). The former unbounded query included September 7 revenue of VND 24,126,445.36, producing VND 308,979,246.18. Correct September prorata is VND 1,424,264,004.10. The local endpoint returns the corrected total with `dataAsOf=2026-09-06`; TypeScript and five UTC/Vietnam date boundary tests pass.

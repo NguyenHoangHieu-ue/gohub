@@ -1,12 +1,12 @@
+import { getReportAsOfDate, isoDateLocal } from "@/lib/b2c-report-period"
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isCronReq, isLocalPreviewReq } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
-import { adminGohubConfigured, adminGohubCustomerChannelRows, adminGohubCustomerRows } from "@/lib/admin-gohub"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
@@ -23,12 +23,15 @@ interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
 interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
+interface CustomerChannelRow { month: string; bucket: "vnWeb" | "usWeb" | "usApp"; type: "new" | "returning"; revenue: string; count: string }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
+interface RevenueComparison { previousSamePeriod: number; previousFullMonth: number; compareThrough: string }
 type CostValue = { type?: string; value?: number }
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
-const localPreviewAllowed = (req: NextRequest) =>
-  process.env.NODE_ENV === "development" && req.nextUrl.searchParams.get("localPreview") === "1"
+const localPreviewAllowed = (req: NextRequest) => isLocalPreviewReq(req)
+
+
 
 function parseCostValue(value: unknown): CostValue {
   if (!value) return { type: "amount", value: 0 }
@@ -80,24 +83,57 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session && !localPreviewAllowed(req) && !isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // YTD: từ tháng 1 đến tháng hiện tại
-  const now = new Date()
+  // YTD theo dữ liệu đã chốt T-1, để prorata không lấy nhầm ngày hôm nay.
+  const reportAsOf = getReportAsOfDate()
+  const dataAsOf = isoDateLocal(reportAsOf)
   const months: string[] = []
-  for (let i = 0; i <= now.getMonth(); i++) {
-    months.push(`${now.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
+  for (let i = 0; i <= reportAsOf.getMonth(); i++) {
+    months.push(`${reportAsOf.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
   }
   const windowStart = `${months[0]}-01`
   const currentMonth = months[months.length - 1]
-  const elapsedDays = now.getDate()
-  const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const elapsedDays = reportAsOf.getDate()
+  const totalDays = new Date(reportAsOf.getFullYear(), reportAsOf.getMonth() + 1, 0).getDate()
+  const previousMonthStart = new Date(reportAsOf.getFullYear(), reportAsOf.getMonth() - 1, 1)
+  const previousMonthEnd = new Date(reportAsOf.getFullYear(), reportAsOf.getMonth(), 0)
+  const previousCompareEnd = new Date(
+    previousMonthStart.getFullYear(),
+    previousMonthStart.getMonth(),
+    Math.min(elapsedDays, previousMonthEnd.getDate()),
+  )
   const skipLeads = req.nextUrl.searchParams.get("skipLeads") === "1"
   const onlyLeads = req.nextUrl.searchParams.get("onlyLeads") === "1"
+
+  const loadRevenueComparison = async (): Promise<RevenueComparison> => {
+    const previousStart = isoDateLocal(previousMonthStart)
+    const previousEnd = isoDateLocal(previousMonthEnd)
+    const compareThrough = isoDateLocal(previousCompareEnd)
+    const rows = await cachedQuery(
+      `b2c-revenue-comparison:v1:${dataAsOf}`,
+      () => queryAnalytics<{ previous_same_period: string; previous_full_month: string }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN f.fulfiled_date::date <= $2::date THEN f.fulfilled_revenue_amount_vnd ELSE 0 END), 0) AS previous_same_period,
+           COALESCE(SUM(f.fulfilled_revenue_amount_vnd), 0) AS previous_full_month
+         FROM fact_fulfillment_revenue f
+         JOIN dim_order_source s ON f.order_source_code = s.code
+         WHERE UPPER(s.group_name) = 'B2C'
+           AND f.fulfiled_date::date BETWEEN $1::date AND $3::date`,
+        [previousStart, compareThrough, previousEnd],
+      ),
+      12 * 60,
+    )
+    return {
+      previousSamePeriod: Number(rows[0]?.previous_same_period) || 0,
+      previousFullMonth: Number(rows[0]?.previous_full_month) || 0,
+      compareThrough,
+    }
+  }
 
   try {
     try {
       const snapshots = await readB2CMonthlySnapshots(months)
       const hasCurrentBreakdowns = snapshots.every(s => (s.payload as any)?.marketChannels && (s.payload as any)?.customerChannels)
-      if (snapshots.length === months.length && hasCurrentBreakdowns) {
+      if (snapshots.length === months.length && hasCurrentBreakdowns && snapshots.every(s => s.payload.revenueAsOf === dataAsOf)) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
         if (onlyLeads) {
           return NextResponse.json(
@@ -109,12 +145,14 @@ export async function GET(req: NextRequest) {
           {
             months,
             currentMonth,
+            dataAsOf,
             elapsedDays,
             totalDays,
             targets: await readTargets(),
             customerSource: "admin-gohub-snapshot",
             customerBreakdown: "new-returning",
             refreshTimestamp: snapshots[snapshots.length - 1]?.refreshed_at ?? new Date().toISOString(),
+            revenueComparison: await loadRevenueComparison(),
             ...snapshotData,
           },
           { headers: CACHE_HEADERS },
@@ -171,7 +209,7 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
              AND f.customer_code IS NOT NULL
            GROUP BY 1, 2
          )
@@ -182,29 +220,56 @@ export async function GET(req: NextRequest) {
          FROM monthly m
          JOIN first_order fo ON m.customer_code = fo.customer_code
          GROUP BY 1, 2`,
-        [windowStart]
+        [windowStart, dataAsOf]
       )
 
-    let customerSource: "admin-gohub" | "analytics-db" = adminGohubConfigured() ? "admin-gohub" : "analytics-db"
+    // Opening the dashboard must never call Admin GoHub directly. The daily cron owns
+    // that API and writes snapshots; this warehouse query is the resilient fallback.
+    const customerSource = "analytics-db" as const
     let customerBreakdown: "new-returning" | "total-only" = "new-returning"
-    let customerError: string | undefined
-    const loadCustomerRows = async () => {
-      if (!adminGohubConfigured()) return customerRowsFromDb()
-      try {
-        return await adminGohubCustomerRows(months)
-      } catch (e) {
-        customerError = (e as Error).message
-        console.error("[b2c/monthly] customers (admin-gohub)", customerError)
-        return months.map(month => ({ month, type: "total", revenue: "0", count: "0" }))
-      }
-    }
-    const loadCustomerChannelRows = async () => {
-      if (!adminGohubConfigured()) return []
-      const startMonth = process.env.ADMIN_GOHUB_CUSTOMER_CHANNEL_START_MONTH || "2026-05"
-      return adminGohubCustomerChannelRows(months.filter(month => month >= startMonth))
-    }
+    const customerError = "Snapshot Admin chưa sẵn sàng; đang dùng dữ liệu khách từ Analytics DB"
+    const customerChannelRowsFromDb = () =>
+      queryAnalytics<CustomerChannelRow>(
+        `WITH first_order AS (
+           SELECT f.customer_code,
+                  MIN(f.fulfiled_date::date) AS first_order_date
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.customer_code IS NOT NULL
+           GROUP BY 1
+         ),
+         monthly AS (
+           SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                  f.customer_code,
+                  COALESCE(f.company_code, 'NA') AS market,
+                  CASE WHEN s.sub_group_name = 'Websites' THEN 'web'
+                       WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                       ELSE 'other' END AS ctype,
+                  SUM(f.fulfilled_revenue_amount_vnd) AS revenue
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
+             AND f.customer_code IS NOT NULL
+           GROUP BY 1, 2, 3, 4
+         )
+         SELECT m.month,
+                CASE WHEN m.market = 'VN' AND m.ctype = 'web' THEN 'vnWeb'
+                     WHEN m.market = 'US' AND m.ctype = 'web' THEN 'usWeb'
+                     WHEN m.market = 'US' AND m.ctype = 'app' THEN 'usApp' END AS bucket,
+                CASE WHEN to_char(fo.first_order_date, 'YYYY-MM') = m.month THEN 'new' ELSE 'returning' END AS type,
+                SUM(m.revenue) AS revenue,
+                COUNT(DISTINCT m.customer_code) AS count
+         FROM monthly m
+         JOIN first_order fo ON m.customer_code = fo.customer_code
+         WHERE (m.market = 'VN' AND m.ctype = 'web')
+            OR (m.market = 'US' AND m.ctype IN ('web', 'app'))
+         GROUP BY 1, 2, 3`,
+        [windowStart, dataAsOf]
+      )
 
-    const data = await cachedQuery(`b2c-monthly:v12:${windowStart}:${adminGohubConfigured() ? "admin-summary" : "db"}`, async () => {
+    const data = await cachedQuery(`b2c-monthly:v14:${windowStart}:${dataAsOf}:snapshot-first`, async () => {
       const [marketRows, custRows, customerChannelRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -213,12 +278,12 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
           GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
-        loadCustomerRows(),
-        loadCustomerChannelRows(),
+        customerRowsFromDb(),
+        customerChannelRowsFromDb(),
         // Channel-type breakdown: Web (Websites) / App (Mobile-App) / Khác (còn lại)
         queryAnalytics<{ month: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -229,9 +294,9 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
         queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -243,9 +308,9 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2, 3`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
         queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM')        AS month,
@@ -256,9 +321,9 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
       ])
 
@@ -307,15 +372,17 @@ export async function GET(req: NextRequest) {
       for (const r of customerChannelRows) {
         const monthCell = customerChannels[r.month]
         if (!monthCell) continue
-        const bucket = monthCell[r.bucket]
-        if (!bucket) continue
-        const target = r.type === "new" ? bucket.new : bucket.returning
         const revenue = parseFloat(r.revenue || "0")
         const count = parseInt(r.count || "0")
-        target.revenue += revenue
-        target.count += count
-        bucket.total.revenue += revenue
-        bucket.total.count += count
+        const addToBucket = (bucket: CustRow) => {
+          const target = r.type === "new" ? bucket.new : bucket.returning
+          target.revenue += revenue
+          target.count += count
+          bucket.total.revenue += revenue
+          bucket.total.count += count
+        }
+        addToBucket(monthCell[r.bucket])
+        addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
       }
 
       // ── Channels: Web / App / Khác per month ──
@@ -435,7 +502,21 @@ export async function GET(req: NextRequest) {
       : await loadLeads()
 
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, targets, budget, spend, leads, leadsByChannel, refreshTimestamp: new Date().toISOString(), ...data },
+      {
+        months,
+        currentMonth,
+        dataAsOf,
+        elapsedDays,
+        totalDays,
+        targets,
+        budget,
+        spend,
+        leads,
+        leadsByChannel,
+        refreshTimestamp: new Date().toISOString(),
+        revenueComparison: await loadRevenueComparison(),
+        ...data,
+      },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {

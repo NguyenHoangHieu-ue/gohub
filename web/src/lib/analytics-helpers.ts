@@ -4,6 +4,15 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 
+export function isLocalPreviewReq(req: NextRequest): boolean {
+  const host = req.nextUrl.hostname
+  return process.env.NODE_ENV === "development" && req.nextUrl.searchParams.get("localPreview") === "1" && (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1"
+  )
+}
+
 // ── Two-level query cache ──────────────────────────────────────────────────────
 // L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
 // L2: Supabase analytics_query_cache (shared, sống qua cold start, TTL 10 phút)
