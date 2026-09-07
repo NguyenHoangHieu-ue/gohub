@@ -15,11 +15,13 @@ import { runWebSearchTool }        from "./search"
 import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
+import { runReadMyBrowser, runControlMyBrowser } from "./bridge"
 
 export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
+  ctx?: { username?: string },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   // Emit status event
   const statusMsg = call.name === "webSearch"
@@ -27,7 +29,11 @@ export async function dispatchTool(
     : call.name === "browsePortal"
       ? `🔗 Đang truy cập portal ${call.args?.portal_name || ""}...`
       : call.name === "browseWeb"
-        ? `🌐 Đang mở trang ${(call.args?.url || "").slice(0, 60)}...`
+        ? (call.args?.urls?.length
+            ? `🌐 Đang mở ${call.args.urls.length} trang...`
+            : call.args?.pagination
+              ? `🌐 Đang duyệt nhiều trang: ${(call.args?.url || "").slice(0, 50)}...`
+              : `🌐 Đang mở trang ${(call.args?.url || "").slice(0, 60)}...`)
         : TOOL_STATUS[call.name] ?? "⚙️ Đang xử lý..."
   onEvent?.({ type: "status", text: statusMsg })
 
@@ -64,6 +70,12 @@ export async function dispatchTool(
 
   if (call.name === "browseWeb")
     return wrap(await runBrowseWeb(call.args))
+
+  if (call.name === "readMyBrowser")
+    return wrap(await runReadMyBrowser(call.args, ctx?.username || "", onEvent))
+
+  if (call.name === "controlMyBrowser")
+    return wrap(await runControlMyBrowser(call.args, ctx?.username || "", onEvent))
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

@@ -6,10 +6,84 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195)
+## Trạng thái hiện tại (2026-09-07, s195+5)
 
 | | |
 |---|---|
+| ✅ **s195+5 (2026-09-07) — `browseWeb` đọc được nhiều trang/lần gọi** | Hiếu phản hồi `browseWeb` (s195)
+  chỉ đọc đúng 1 trang, không đủ cho lấy dữ liệu tự động nhiều trang. Hỏi rõ kiểu phân trang thật cần trước
+  khi code — Hiếu chọn cả 3: `urls[]` (list URL biết trước, tối đa 20, 1 URL lỗi không chặn URL khác),
+  `pagination.mode=click_next` (bấm Next lặp tới `max_pages`, dừng êm khi hết nút — không phải lỗi),
+  `pagination.mode=infinite_scroll` (cuộn lặp, tự dừng khi nội dung hết phát triển). Output: text thô gộp
+  từng trang có đánh dấu (Hiếu chọn đơn giản hơn structured extraction). Cắt nội dung 2 tầng
+  (8000/trang, 60000 tổng) + timeout co giãn theo số bước (20s+8s/bước, trần 180s) — không phá tương
+  thích ngược (gọi `{url}` đơn như cũ vẫn y hệt hành vi trước). tsc + lint (0 lỗi mới) + vitest (212/212)
+  PASS. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+5". Chưa cần Hiếu làm gì thêm (không
+  đổi hạ tầng/env) — tự thử Gấu Pro với 1 trang có phân trang thật khi rảnh để xác nhận.
+|---|---|
+| ✅ **s195+4 (2026-09-07) — API sản phẩm cho hệ thống bên ngoài (manager tích hợp)** | Hiếu muốn cấp API
+  đọc thông tin sản phẩm (kèm giá vốn/COGS) cho manager để tích hợp vào 1 hệ thống/tool khác họ đang xây
+  (backend-to-backend, không phải browser). Audit trước: `/api/products`/`/api/skus` hiện có chỉ
+  session-cookie (không dùng được ngoài browser); `/api/mcp` (`MCP_SECRET`) đã lộ COGS từ trước nhưng dùng
+  1 secret tĩnh chung mọi mục đích, không revoke/audit riêng được — cố ý KHÔNG tái dùng. Thiết kế mới: 2
+  route `GET /api/external/products`/`/api/external/skus` (Bearer API key riêng, field list tách hẳn route
+  UI nội bộ, `page_size` tới 200, rate-limit 60/phút/key). Bảng `external_api_keys` (migration
+  `v52_external_api_keys.sql`) lưu **hash** key (không lưu plaintext — khác token Bridge cá nhân). Tab mới
+  "API bên ngoài" trong `/admin` (admin/creator) — tạo/thu hồi key, key thật chỉ hiện 1 lần lúc tạo. tsc +
+  lint (0 lỗi mới) + vitest (207/207) PASS. **Cần Hiếu**: chạy migration v52 (nhớ Reload schema Supabase
+  sau khi tạo bảng mới), vào `/admin` tab "API bên ngoài" tạo key label "Manager - <tên tool>", gửi
+  manager. Xem `docs/wiki/system/tabs/admin-product.md` mục 4.
+|---|---|
+| ✅ **s195+3 (2026-09-07) — Bridge multi-tenant: mọi user có quyền Gấu Pro tự pair browser CỦA CHÍNH HỌ** |
+  Hiếu hỏi ngược s195+2: muốn người khác dùng Gấu Pro như trợ lý riêng của họ. Khác rủi ro đã cảnh báo
+  trước (Hiếu đọc dữ liệu người khác — cần chính sách privacy) — đây là mỗi người tự cấp quyền cho máy của
+  CHÍNH HỌ, nên sửa đúng gốc: token/queue chuyển 1-global → 1-per-user. Bảng mới
+  `browser_bridge_pairings` (migration `v51_browser_bridge_multitenant.sql`) thay `app_settings` singleton
+  cũ; `browser_bridge_commands` thêm `owner_username`. 3 route bridge scope theo user (helper mới
+  `lib/gp-access.ts` `hasGpAccess()`, dùng chung với `chat/route.ts`). `username` thread xuống tool
+  (`dispatchTool` thêm tham số `ctx` thứ 4 optional). `CREATOR_ONLY_TOOLS` rỗng lại — mở `readMyBrowser`/
+  `controlMyBrowser` cho MỌI user có `gp_enabled` (đúng field self-check có sẵn, dùng chung
+  `analytics/creator/ai/page.tsx`/`sidebar.tsx`). Trang `/analytics/creator/bridge` + nav "Bridge" giờ
+  hiện cho non-creator allowed user (không chỉ creator). tsc + lint (0 lỗi mới) + vitest (201/201) PASS.
+  **Cần Hiếu**: chạy migration v51 (token cũ tự giữ nếu backfill khớp, không thì tạo lại 1 lần trên trang
+  Bridge). Nhờ 1 người đã có `gp_allowed_users` tự pair — xác nhận `list_tabs` ra ĐÚNG tab của họ, không
+  lẫn với Hiếu. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+3".
+|---|---|
+| ✅ **s195+2 (2026-09-07) — Fix 3 việc phát hiện khi Hiếu QA s195+1** | (1) **Bỏ Duyệt → Auto**: Hiếu
+  nhận thấy thói quen luôn bấm Duyệt khiến bước xác nhận vô nghĩa — `background.js` bỏ hẳn
+  `chrome.notifications` chặn (Duyệt/Từ chối), `controlMyBrowser` thực thi NGAY, chỉ còn notification
+  KHÔNG chặn để biết đã làm gì. (2) **Fix fill không hiện chữ**: Hiếu test điền ô nhập nhanh kiểu sheet,
+  Gấu Pro báo đã fill nhưng không thấy vì thiếu phím Enter để commit — thêm tham số `press_enter` (dispatch
+  keydown/keypress/keyup Enter sau khi set value, kèm `Object.defineProperty` đè `keyCode`/`which` vì
+  `KeyboardEvent` constructor không set được 2 field này). (3) **Fix lỗ hổng thật phát hiện qua câu hỏi
+  "người khác dùng được không"**: `readMyBrowser`/`controlMyBrowser` trước đây MỌI user có quyền Gấu Pro
+  (`gp_allowed_users`) đều gọi được y hệt nhau, nhưng bridge là 1 token = browser THẬT của Hiếu → người
+  khác gọi sẽ đọc/thao tác lên browser Hiếu, không phải của họ (rò rỉ dữ liệu cá nhân). Fix: `runCreatorAI`
+  nhận `isCreator`, hàm mới `buildFunctionDeclarations(isCreator)` loại 2 tool bridge khỏi danh sách nếu
+  không phải creator — đúng pattern `GP_TOOLS_ADMIN_ONLY` đã dùng ở `be-gau.ts`. tsc + lint (0 lỗi mới) +
+  vitest (199/199) PASS. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+2". **Cần Hiếu**:
+  pull code mới (redeploy tự động qua Vercel), tự QA lại: (a) fill ô sheet có `press_enter` giờ hiện chữ
+  chưa, (b) nếu có cấp Gấu Pro cho ai khác qua Creator Settings, xác nhận người đó KHÔNG còn thấy/gọi được
+  bridge nữa.
+|---|---|
+| ✅ **s195+1 (2026-09-07) — Gấu Pro: Extension điều khiển browser cá nhân Hiếu** | Tiếp lộ trình s195.
+  `browseWeb` (s195) duyệt web công khai; phase này cho Gấu Pro đọc/thao tác trên chính tab Chrome ĐANG MỞ
+  của Hiếu (session đăng nhập thật Lark/Sapo/portal) — giống `claude-in-chrome`. Kiến trúc: hàng đợi lệnh
+  Supabase (`browser_bridge_commands`, migration `v50_browser_bridge.sql`) + polling 2 chiều (không dựng
+  WebSocket riêng — Vercel serverless không giữ được kết nối 2 chiều). 2 tool mới: `readMyBrowser`
+  (list_tabs/read_tab, không cần duyệt) + `controlMyBrowser` (click/fill/navigate — **bắt buộc Hiếu duyệt**
+  qua `chrome.notifications` trước khi thực thi vì là session thật; scroll không cần duyệt). Cờ duyệt set
+  CỨNG server-side (model không lách được). Trang mới `/analytics/creator/bridge` (creator-only) sinh/xem
+  token pairing. Extension mới `browser-extension/` (Manifest V3, unpacked/dev-only, KHÔNG publish Web
+  Store) — xử lý đúng gotcha React (Lark/Sapo web) cần native setter khi `fill` input, và giữ service
+  worker sống bằng vòng lặp `setTimeout` 15s (né giới hạn `chrome.alarms` tối thiểu 1 phút/lần). Chỉ Gấu
+  Pro, chỉ Hiếu — không mở Bé Gấu, không nhiều token. tsc + lint (0 lỗi mới) + vitest (196/196) PASS.
+  **Cần Hiếu**: chạy migration v50, load unpacked extension (`chrome://extensions` → Developer mode →
+  Load unpacked → `browser-extension/`), vào `/analytics/creator/bridge` sinh token, dán token + Server URL
+  vào popup extension, bật toggle, rồi tự QA (list tab, thử 1 lệnh click/fill xem notification Duyệt hiện
+  đúng không) — chưa QA được ở máy dev (cần Chrome thật + extension load thủ công). Xem
+  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+1". Lộ trình còn lại (chưa làm): mở rộng Lark
+  OAuth scope cá nhân · bật thật multi-tenant (cần chính sách privacy trước).
 | ✅ **s195 (2026-09-07) — Gấu Pro: tool `browseWeb` (headless browser thật qua CDP)** | Bước đầu lộ trình
   biến Gấu Pro thành "agent assistant" rộng hơn (yêu cầu Hiếu). Đã audit trước: `be-gau.ts` (s190) **đã
   âm thầm merge gần hết tool Gấu Pro sang Bé Gấu** theo đúng tiêu chí "không cá nhân/nội bộ thì mở" —
@@ -59,6 +133,22 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+4 — API sản phẩm cho manager: chạy migration v52 + tạo key + gửi manager** —
+  (1) Chạy `web/db/migrations/v52_external_api_keys.sql` trên Supabase, nhớ Reload schema (Database → API
+  → Reload schema, hoặc `NOTIFY pgrst, 'reload schema';`) — đúng gotcha đã gặp ở v51. (2) Vào `/admin` →
+  tab "API bên ngoài" → tạo key, đặt label rõ (vd "Manager - CRM tool") → copy key gửi manager (chỉ hiện 1
+  lần). (3) Gửi manager 2 endpoint: `GET /api/external/products`, `GET /api/external/skus` (header
+  `Authorization: Bearer <key>`) — xem `docs/wiki/system/tabs/admin-product.md` mục 4 để biết field trả
+  về. (4) Test thử `curl` xác nhận trả đúng data + COGS trước khi gửi manager.
+- [x] **s195+3 — Bridge multi-tenant — XONG (2026-09-07), Hiếu đã tự QA với acc khác** — migration v51 đã
+  chạy; gặp gotcha PostgREST schema cache chưa nạp bảng mới (`Could not find table 'browser_bridge_pairings'
+  in schema cache`) → fix bằng "Reload schema" trong Supabase Dashboard (Database → API) hoặc
+  `NOTIFY pgrst, 'reload schema';` — không phải bug code, xem wiki mục "s195+3" phần Gotcha. Acc khác tự
+  tạo token + pair thành công, xác nhận hoạt động độc lập với token Hiếu. Xác nhận thêm: hoạt động trên
+  Microsoft Edge (và mọi trình Chromium khác) — chỉ đổi `chrome://extensions` → `edge://extensions`, code
+  không cần sửa gì (dùng chung API `chrome.*`).
+- [x] **s195+1/+2 — Gấu Pro Extension + Auto + fix Enter — XONG, Hiếu đã tự QA** — đã pair, list_tabs +
+  fill (kèm `press_enter`) hoạt động đúng. Xem mục "s195+1"/"s195+2" trong wiki.
 - [x] **s195 — Gấu Pro `browseWeb` — XONG (2026-09-07), Hiếu đã tự QA trên staging** — migration v49 đã
   chạy; container `ghcr.io/browserless/chromium` tự host trên Render free tier (`browserless-gohub`) +
   keep-alive cron-job.org (10 phút/lần, KHÔNG dùng GitHub Actions — bài học cũ repo); env
@@ -143,7 +233,11 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 `okr_evidence_records`/`okr_sku_tags` · **v45** `okr_lark_events` + nới `okr_sku_tags.effective_date` ·
 **v46** `okr_lark_message_log` — tất cả v44-v46 Hiếu đã xác nhận chạy. · **v47** `analytics_query_cache.deps` (Hiếu đã xác nhận chạy 2026-09-05) · **v48** `chat_questions` (Hiếu đã chạy, đã QA xong 2026-09-06) ·
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
-CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07).
+CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bridge_commands` (hàng đợi lệnh Extension —
+Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
+(bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07) ·
+**v52** `external_api_keys` (API sản phẩm cho manager — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận — nhớ Reload schema
+Supabase sau khi chạy).
 
 ---
 

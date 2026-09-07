@@ -8977,3 +8977,174 @@ trang này bằng Chrome — đã ghi rõ vào checklist xin Hiếu tự xem b�
 fix brand-900/950 hoạt động đúng qua Staff Performance (header "So sánh KH" navy, không đen). Wiki
 `docs/wiki/system/tabs/analytics-to-gau.md` cập nhật mục riêng. Users/Settings/Admin/Dev Tools không có
 wiki doc riêng (công cụ nội bộ, chưa từng được viết doc) nên không có gì để cập nhật ở đó.
+
+### s195 (2026-09-07) — Gấu Pro: tool `browseWeb` (headless browser thật qua CDP)
+
+Hiếu muốn Gấu Pro thành "agent assistant" rộng hơn: tự duyệt web, điều khiển browser cá nhân, đọc Lark cá
+nhân sâu hơn, và (xa hơn) trợ lý riêng cho từng người có tự học. Trước khi code, tự nhận vai trò Staff
+Engineer/DevSecOps rồi audit toàn bộ 4 hướng, trình bày rõ đây là 4 kiến trúc khác hẳn nhau — không gộp làm
+1 "cài extension" như Hiếu nghĩ ban đầu. Hiếu chọn làm trước: #1 duyệt web server-side.
+
+Kiến trúc: `web/src/lib/agents/creator/tools/browser.ts` (`runBrowseWeb`) dùng `playwright-core`
+(`chromium.connectOverCDP()`) nối tới 1 container `browserless/chrome` **Hiếu tự host** (không dùng SaaS
+Browserless.io — Hiếu chọn tự host tiết kiệm dài hạn) — KHÔNG bundle Chromium vào Vercel, đúng tiền lệ team
+đã né Puppeteer ở `card-images.ts` (dùng `next/og`/satori thay thế). Tool nhận `url` + `actions[]` tối đa 8
+bước (allow-list `click`/`fill`/`scroll`/`wait`, không cho `page.evaluate` tuỳ ý), trả `title`+`content`
+(cắt 15000 ký tự khớp `browsePortal`). Chỉ thêm cho Gấu Pro (chưa merge Bé Gấu, giống tiền lệ
+`generateImageStability`/`generateVideo`). Kèm migration `v49_creator_kb_owner_prep.sql` (cột nullable
+`owner_username` chuẩn bị multi-tenant KB — Hiếu chọn "thiết kế sẵn, chưa bật", không đổi hành vi).
+
+Trong lúc audit trước khi code, phát hiện `s190` **đã âm thầm merge gần hết tool Gấu Pro sang Bé Gấu** theo
+đúng tiêu chí "không cá nhân/nội bộ thì mở" (`be-gau.ts` `GP_TOOLS_OPEN`/`GP_TOOLS_ADMIN_ONLY`) — chỉ wiki
+`chatbot.md` chưa ghi lại tới giờ mới bổ sung mục 4a-3 (không cần code gì thêm, trả lời sai lúc đầu vì chỉ
+grep literal "name:" trong `be-gau.ts`, bỏ sót declaration import từ file khác).
+
+**Bug build vỡ ngay sau khi push staging**: `next build` fail `Module not found: chromium-bidi/...`,
+`kerberos` — `playwright-core` có `require()` động tới optional native deps không có trong `node_modules`,
+webpack cố bundle tĩnh vỡ ngay. Fix: `next.config.js` `experimental.serverComponentsExternalPackages`
+(tên đúng cho Next 14.2 — phát hiện luôn bug âm thầm có sẵn: top-level `serverExternalPackages` là tên
+Next 15, bị Next 14 phớt lờ với warning "Unrecognized key(s)" từ trước, khiến 6 package cũ
+docx/mammoth/pdf-parse/pdfjs-dist/pg/googleapis chưa từng thật sự được external — sửa luôn dùng đúng tên
+cho cả 7 package). Verify local: `next build` qua được bước webpack compile (trước đó fail ngay đây).
+
+**Hạ tầng**: container `ghcr.io/browserless/chromium` tự host trên **Render free tier** + keep-alive qua
+**cron-job.org** (ping `/json/version` mỗi 10 phút) — CHỌN cron-job.org thay vì GitHub Actions vì tự tra
+lại code cũ (`scheduled-messages.yml`) thấy team đã tự phát hiện + ghi lại bài học "GitHub Actions cron trễ
+15-60 phút giờ thấp điểm, không đủ nhanh", đã chuyển hẳn sang cron-job.org cho việc tương tự — áp dụng lại
+đúng bài học có sẵn thay vì lặp lại sai lầm cũ. `BROWSERLESS_WS_URL`/`BROWSERLESS_TOKEN` set Vercel. Hiếu
+tự QA: hỏi Gấu Pro mở 1 URL thật → trả đúng nội dung. Migration v49 Hiếu đã chạy.
+
+### s195+1 (2026-09-07) — Extension điều khiển browser cá nhân Hiếu (Bridge)
+
+Hiếu tiếp tục lộ trình: muốn Gấu Pro đọc/thao tác trên chính tab Chrome ĐANG MỞ của Hiếu (dùng session đăng
+nhập thật Lark/Sapo/portal) — giống cơ chế `claude-in-chrome`. Việc mới hoàn toàn, audit trước xác nhận
+repo chưa có pairing/device-token/queue nào — thiết kế từ đầu, mượn 2 pattern gần nhất có sẵn: bearer secret
+đơn giản kiểu `MCP_SECRET` (`api/mcp/route.ts`) và poll-with-timeout loop kiểu Kling video (`video.ts`
+`pollUntilDone`).
+
+Kiến trúc: hàng đợi lệnh Supabase `browser_bridge_commands` (migration `v50_browser_bridge.sql`) — Gấu Pro
+INSERT lệnh rồi poll 2s/lần chờ `status=done`; Extension (máy Hiếu) poll `GET /api/creator-ai/bridge/next`
+mỗi ~15s lấy lệnh, thực thi, `POST /api/creator-ai/bridge/result` ghi kết quả. Không dựng WebSocket riêng
+(Vercel serverless không giữ được kết nối 2 chiều). Token 1 cái lưu `app_settings.browser_bridge_token`
+(plaintext, đúng mức đơn giản MCP_SECRET). 2 tool: `readMyBrowser` (list_tabs/read_tab, không cần duyệt) +
+`controlMyBrowser` (click/fill/navigate/scroll — v1 thiết kế BẮT BUỘC Hiếu duyệt qua `chrome.notifications`
+trước khi thực thi, vì session đăng nhập thật).
+
+Extension mới `browser-extension/` (Manifest V3, unpacked/dev-only, KHÔNG publish Chrome Web Store) —
+`background.js` giữ service worker "sống" bằng vòng lặp `setTimeout` đệ quy ~15s (mỗi fetch reset đồng hồ
+idle-suspend mặc định MV3 ~30s, tránh đúng cái bẫy `chrome.alarms` ép tối thiểu 1 phút/lần nếu dùng alarm
+làm vòng lặp chính — latency sẽ quá chậm). Gotcha xử lý ngay từ đầu: Lark/Sapo web là SPA React, set
+`.value` trực tiếp không kích hoạt `onChange`, phải dùng native setter rồi dispatch event `input`. Trang
+mới `/analytics/creator/bridge` (creator-only lúc này) sinh/xem token.
+
+Hiếu tự QA trên staging: pair thành công, `readMyBrowser` đọc tab đúng.
+
+### s195+2 (2026-09-07) — Fix 3 việc phát hiện khi Hiếu QA s195+1 ngay trong ngày
+
+1. **Bỏ Duyệt, chuyển Auto** — Hiếu nhận xét thói quen người dùng sẽ luôn bấm Duyệt, khiến bước xác nhận
+   chặn vô nghĩa, chỉ gây chậm. `background.js` bỏ hẳn `askConfirm()`/`onButtonClicked`, thực thi NGAY mọi
+   action, chỉ còn notification KHÔNG chặn để biết đã làm gì.
+2. **Fix "fill xong không thấy chữ hiện lên"** — Hiếu test điền 1 dòng vào ô nhập nhanh kiểu spreadsheet,
+   Gấu Pro báo đã fill nhưng không hiện vì ô đó cần phím Enter thật để commit (chỉ set `.value` +
+   dispatch input/change chưa đủ). Thêm `press_enter` param — dispatch thêm keydown/keypress/keyup Enter.
+   Gotcha kỹ thuật: `keyCode`/`which` không set được qua `new KeyboardEvent(type,{keyCode:13})` (browser
+   giữ readonly, constructor bỏ qua) — phải `Object.defineProperty` đè lên sau khi tạo event.
+3. **Fix lỗ hổng thật phát hiện qua câu hỏi Hiếu "người khác dùng được không"** — `readMyBrowser`/
+   `controlMyBrowser` trước nằm chung `ALL_TOOL_DECLARATIONS` tĩnh, MỌI user có quyền Gấu Pro
+   (`gp_allowed_users`) đều thấy y hệt nhau, nhưng bridge là 1 token = 1 browser (Hiếu) → người khác gọi sẽ
+   đọc/thao tác thẳng lên browser THẬT của Hiếu, rò rỉ dữ liệu cá nhân nghiêm trọng. Fix tạm thời: khoá 2
+   tool này chỉ creator gọi được (`buildFunctionDeclarations(isCreator)`, đúng pattern `GP_TOOLS_ADMIN_ONLY`
+   ở `be-gau.ts`) — sẽ sửa gốc rễ ngay ở s195+3.
+
+### s195+3 (2026-09-07) — Bridge multi-tenant: mỗi user tự pair browser CỦA CHÍNH HỌ
+
+Hiếu hỏi ngược lại mục 3 ở s195+2: "nhưng giờ tôi muốn người khác có thể dùng Gấu Pro như 1 trợ lý của họ
+nữa thì sao". Phân tích rõ: khác hẳn rủi ro đã cảnh báo trước (đó là *Hiếu đọc dữ liệu người khác* — cần
+chính sách privacy) — đây là *mỗi người tự cấp quyền cho máy của chính họ*, giống hệt Hiếu đang làm, nên
+sửa đúng gốc rễ (multi-tenant thật) thay vì tiếp tục khoá creator-only. Audit trước khi code: pattern
+self-check quyền Gấu Pro cho non-creator ĐÃ có sẵn — `GET /api/user/me` trả field `gp_enabled`, dùng bởi
+`analytics/creator/ai/page.tsx` + `sidebar.tsx` — dùng lại đúng field này cho Bridge, không cần route mới.
+
+Token/queue chuyển 1-global → 1-per-user: bảng mới `browser_bridge_pairings` (migration
+`v51_browser_bridge_multitenant.sql`, `username` PK) thay `app_settings` singleton cũ (best-effort backfill
+giữ token Hiếu). `browser_bridge_commands` thêm `owner_username`. 3 route bridge scope theo user — helper
+mới `web/src/lib/gp-access.ts` (`hasGpAccess()`, tách ra dùng chung với `chat/route.ts` vốn có
+`loadGpAllowed()` riêng lẻ). `username` thread xuống tool qua `dispatchTool(call, onEvent, sources, ctx)`
+(tham số thứ 4 mới, optional, không phá call site cũ) → `runCreatorAI` nhận thêm `username` → `chat/route.ts`
+truyền `session.user.username`. `CREATOR_ONLY_TOOLS` rỗng lại (rủi ro cũ đã hết, mỗi user giờ có
+token/queue riêng biệt hoàn toàn) — mở `readMyBrowser`/`controlMyBrowser` cho MỌI user có `gp_enabled`.
+Trang `/analytics/creator/bridge` + nav "Bridge" (`sidebar.tsx`, đúng khối `gpEnabled &&` chỗ hiện "Gấu
+Pro" cho non-creator) giờ hiện cho non-creator allowed user, không chỉ creator.
+
+**QA phát hiện gotcha vận hành thật**: acc khác bấm "Tạo token" → 500. Route trả lỗi qua JSON body nhưng
+không log server-side nên không tra được qua Vercel logs ngay — thêm `console.error`+try/catch vào cả
+GET/POST trước (`debug(bridge)` commit riêng) để lần sau debug nhanh hơn. Log lộ ra:
+`Could not find the table 'public.browser_bridge_pairings' in the schema cache` (`PGRST205`) — KHÔNG phải
+bug code, PostgREST (lớp API Supabase) cache schema DB, tạo bảng mới bằng migration không tự trigger reload
+cache ngay. Fix: Supabase Dashboard → Database → API → Reload schema (hoặc
+`NOTIFY pgrst, 'reload schema';`). Sau đó hoạt động ngay, không cần redeploy Vercel. Đã ghi gotcha này vào
+wiki để lần sau thêm bảng mới gặp `PGRST205` là nhớ ngay hướng fix.
+
+Hiếu tự QA với acc khác: tạo token, pair, `list_tabs` ra đúng tab của họ, không lẫn Hiếu. Xác nhận thêm
+hoạt động trên Microsoft Edge (và mọi trình Chromium khác) — chỉ đổi `chrome://extensions` →
+`edge://extensions`, code dùng chung API `chrome.*` nên không cần sửa gì.
+
+tsc + lint (0 lỗi mới) + vitest (201/201) PASS xuyên suốt cả 4 sub-session s195→s195+3. Wiki
+`docs/wiki/system/tabs/analytics-creator-ai.md` cập nhật đầy đủ 4 mục con. Lộ trình còn lại (chưa làm, theo
+đúng thứ tự Hiếu đã chọn ban đầu): mở rộng scope Lark OAuth cá nhân (`lark_oauth_creator`) · bật thật
+multi-tenant cho Creator KB/tự học (khác bridge — đây là Hiếu đọc dữ liệu người khác, cần chính sách privacy
+rõ trước, migration `v49` đã chuẩn bị sẵn cột nhưng chưa bật).
+
+Ngoài luồng Gấu Pro: Hiếu yêu cầu merge `staging`→`main` giữa chừng (đã merge sạch, không conflict, gồm
+toàn bộ UI Lô 3-5 + s194 fixes tích luỹ từ trước + s195 browseWeb) — production đã lên bản mới, xác nhận
+qua Vercel deployment READY.
+
+### s195+4 (2026-09-07) — API sản phẩm cho hệ thống bên ngoài (manager tích hợp)
+
+Hiếu muốn cấp API đọc thông tin sản phẩm (kèm giá vốn/COGS) cho manager để tích hợp vào 1 hệ thống/tool
+khác họ đang tự xây (backend-to-backend, không phải browser session). Hỏi rõ "họ là ai" + "dùng để làm gì"
++ "field nào" qua 3 câu hỏi trước khi thiết kế (manager → tích hợp hệ thống khác → cần cả COGS).
+
+Audit trước khi code: `/api/products`/`/api/skus` hiện có chỉ session-cookie (không dùng được ngoài
+browser) — `skus/route.ts` đã select sẵn COGS (`latest_cogs`/`latest_cogs_currency`) không qua gate quyền
+nào. `/api/mcp` (`MCP_SECRET` tĩnh) đã lộ COGS ra ngoài từ trước qua `search_products`/`get_sku_detail`
+nhưng dùng 1 secret chung mọi mục đích (ban đầu cho Claude Code dev tool) — cố ý KHÔNG tái dùng cho manager
+vì trộn 2 mục đích vào 1 secret không revoke/audit riêng được là thực hành xấu. Repo chưa có bảng API key
+DB-backed nào — chỉ secret tĩnh qua env.
+
+Thiết kế: bảng mới `external_api_keys` (migration `v52_external_api_keys.sql`) lưu **hash SHA-256** key
+(KHÔNG lưu plaintext — khác token Bridge cá nhân ở `app_settings`, đây là credential giao hệ thống NGOÀI
+công ty, giá trị rủi ro cao hơn). 2 route mới `GET /api/external/products`/`/api/external/skus` — auth
+`Bearer <key>` (`web/src/lib/external-api-auth.ts` `requireExternalApiKey()`), field list RIÊNG tách hẳn
+route UI nội bộ (sửa UI sau này không vô tình đổi field trả bên ngoài), `page_size` tới 200 (khác cứng 20
+của route UI, phù hợp bên ngoài kéo hàng loạt), rate-limit 60/phút/key. Tab mới "API bên ngoài" trong
+`/admin` (admin/creator) — tạo/thu hồi key, key thật chỉ hiện đúng 1 lần lúc tạo (giống Stripe/GitHub PAT).
+
+Test thật bằng `curl` với key vừa tạo → 200, trả đúng 20 SKU kèm COGS thật (vd `latest_cogs:76000
+VND`). Viết luôn 1 trang tài liệu API riêng (Artifact HTML, palette teal/amber lấy cảm hứng "tín hiệu
+kết nối" phù hợp chủ đề eSIM/telecom, font Archivo+IBM Plex Sans+IBM Plex Mono) dùng chính data thật vừa
+test — gồm auth, bảng tham số 2 endpoint (cơ bản + nâng cao theo từng vị trí ký tự mã SKU/Product 13/8
+ký tự), ví dụ curl/response thật, cách phân trang, bảng lỗi/rate limit — để Hiếu gửi thẳng cho manager,
+key thật KHÔNG nhúng vào doc (dặn gửi riêng qua kênh chat).
+
+### s195+5 (2026-09-07) — `browseWeb` đọc được NHIỀU trang trong 1 lần gọi
+
+Hiếu quay lại phản hồi `browseWeb` (s195): hiện chỉ đọc đúng 1 trang, không đủ cho việc lấy dữ liệu tự
+động thật (site nhiều trang/nhiều mục). Hỏi rõ 3 kiểu phân trang thật cần trước khi code (Hiếu chọn cả 3:
+phân trang số, cuộn vô hạn, danh sách URL biết trước) + định dạng output (text thô gộp lại, đơn giản hơn
+trích field có cấu trúc).
+
+`runBrowseWeb()` thêm 3 chế độ tự chọn theo tham số truyền vào, KHÔNG phá tương thích ngược (gọi `{url}`
+đơn như cũ vẫn y hệt hành vi trước — vẫn cắt 15000 ký tự như s195): `urls: string[]` (tối đa 20, đọc lần
+lượt độc lập, 1 URL lỗi không chặn URL còn lại); `pagination.mode="click_next"` + `next_selector` (bấm
+Next lặp tới `max_pages` mặc định 5 tối đa 20, hết nút Next → dừng êm KHÔNG phải lỗi); `pagination.
+mode="infinite_scroll"` (cuộn lặp, tự dừng khi `innerText` không dài thêm sau 1 lần cuộn, hoặc chạm
+`max_scrolls` mặc định 6 tối đa 20). Nội dung nhiều trang cắt 2 tầng (8000 ký tự/trang, 60000 tổng) +
+timeout co giãn theo số bước dự kiến (`20s + 8s × số bước`, trần 180s) — vẫn nằm trong ngân sách
+`maxDuration=300s` của route Gấu Pro. `actions` (click/fill/scroll/wait) giờ chỉ áp 1 lần sau khi load
+trang ĐẦU TIÊN (đóng cookie banner/điền filter trước khi bắt đầu đọc/phân trang), không áp riêng từng URL
+trong `urls[]` (giữ đơn giản).
+
+Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 URL lỗi giữa chừng vẫn tiếp tục,
+click_next dừng sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới) — 10/10 pass riêng file
+này, 212/212 toàn repo. tsc + lint (0 lỗi mới) PASS.

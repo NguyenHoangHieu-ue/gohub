@@ -59,7 +59,9 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryGSC` | Google Search Console | SEO, keyword, click data |
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
-| `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
+| `browseWeb` (s195, đa trang từ s195+5) | Headless browser (CDP, container tự host) | Mở URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. Đọc được NHIỀU trang/lần gọi: `urls[]` (list biết trước), `pagination.mode=click_next` (bấm Next), `pagination.mode=infinite_scroll` (cuộn tự load). KHÔNG dùng cho portal có login (đó là `browsePortal`) |
+| `readMyBrowser` (s195+1) | Extension trên máy người dùng (bridge queue riêng/user, s195+3) | Đọc tab Chrome THẬT đang mở của người gọi (list_tabs/read_tab) — dùng session đăng nhập sẵn của họ. Mọi user có quyền Gấu Pro (`gp_enabled`) |
+| `controlMyBrowser` (s195+1, Auto từ s195+2, multi-tenant s195+3) | Extension trên máy người dùng (bridge queue riêng/user) | click/fill/navigate/scroll trên tab Chrome THẬT của người gọi — thực thi NGAY (Auto), chỉ hiện notification không chặn để biết. `press_enter` cho ô nhập kiểu sheet cần Enter mới commit. Mọi user có quyền Gấu Pro |
 
 ## Web Search
 
@@ -280,6 +282,148 @@ người thật mở browser.
 - **Lộ trình còn lại** (chưa làm, phase riêng): điều khiển browser CÁ NHÂN Hiếu qua extension (giống cơ
   chế `claude-in-chrome`) · mở rộng scope Lark OAuth cá nhân (`lark_oauth_creator`) · bật thật multi-tenant
   (cần chính sách privacy rõ trước khi đọc dữ liệu Lark cá nhân của người khác).
+
+## § Gấu Pro s195+1 (2026-09-07) — Extension điều khiển browser cá nhân Hiếu
+
+Tiếp lộ trình s195: `browseWeb` duyệt web CÔNG KHAI, còn phase này cho Gấu Pro đọc/thao tác trên chính tab
+Chrome ĐANG MỞ của Hiếu (dùng session đăng nhập thật Lark/Sapo/portal) — giống cơ chế `claude-in-chrome`.
+
+- **Kiến trúc**: hàng đợi lệnh Supabase (`browser_bridge_commands`, migration `v50_browser_bridge.sql`) +
+  polling 2 chiều — KHÔNG dựng thêm hạ tầng WebSocket (Vercel serverless không giữ được kết nối 2 chiều
+  tới browser Hiếu). Gấu Pro (2 tool mới, `web/src/lib/agents/creator/tools/bridge.ts`) INSERT lệnh rồi
+  poll 2s/lần chờ `status=done`; Extension (máy Hiếu) poll `GET /api/creator-ai/bridge/next` mỗi ~15s để
+  lấy lệnh, thực thi, rồi `POST /api/creator-ai/bridge/result` ghi kết quả.
+- **Auth**: 1 token cá nhân lưu Supabase `app_settings` key `browser_bridge_token` (plaintext — đúng mức
+  đơn giản `MCP_SECRET` đang dùng, không phải password hệ thống ngoài). Sinh/xem token qua trang mới
+  `/analytics/creator/bridge` (creator-only) — `GET/POST /api/creator-ai/bridge/token`.
+- **2 tool**: `readMyBrowser` (`list_tabs`/`read_tab`) và `controlMyBrowser` (`click`/`fill`/`navigate`/
+  `scroll`). ⚠️ Thiết kế BAN ĐẦU bắt buộc Hiếu duyệt qua `chrome.notifications` trước khi thực thi
+  click/fill/navigate — **đã đổi sang Auto ngay trong s195+1** (xem mục "s195+2" bên dưới), đoạn này giữ để
+  hiểu lý do kiến trúc hàng đợi có cột `requires_confirm` (nay chỉ mang tính phân loại/log, không còn chặn
+  thực thi).
+- **Extension** (`browser-extension/` — ngoài `web/`, không qua Next.js build): Manifest V3, unpacked only
+  (Hiếu tự `chrome://extensions` → Developer mode → Load unpacked — KHÔNG publish Chrome Web Store).
+  - `background.js`: vòng lặp `setTimeout` đệ quy ~15s giữ service worker "sống" (mỗi fetch reset đồng hồ
+    idle-suspend ~30s mặc định MV3) — tránh dùng `chrome.alarms` làm vòng lặp chính (Chrome ép tối thiểu 1
+    phút/lần cho alarm định kỳ, quá chậm). `chrome.alarms` 1 phút chỉ làm lưới an toàn phòng worker bị kill.
+  - **Gotcha đã xử lý**: Lark/Sapo web là SPA React — set `.value` trực tiếp KHÔNG kích hoạt `onChange`,
+    phải dùng native setter (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set`)
+    rồi `dispatchEvent(new Event('input',{bubbles:true}))` (xem `execAction()` action `fill`).
+  - Chỉ chạy khi Hiếu bật toggle "Bridge" ở popup (`popup.html`/`popup.js`) — không âm thầm nền 24/7.
+- **Chỉ Gấu Pro, chỉ Hiếu** — không có khái niệm nhiều token/nhiều người pair ở v1.
+- **Việc dọn tay** (không có cron riêng): `DELETE FROM browser_bridge_commands WHERE created_at < NOW() -
+  INTERVAL '7 days'` định kỳ, giống tiền lệ dọn lark dedup entries.
+
+## § Gấu Pro s195+2 (2026-09-07) — Auto (bỏ Duyệt) + fix Enter + chặn user khác dùng bridge
+
+Hiếu QA thử s195+1 ngay trong ngày, phát hiện 3 việc cần sửa:
+
+1. **Bỏ bước Duyệt, chuyển Auto** — lý do Hiếu nêu: thói quen người dùng sẽ luôn bấm Duyệt, khiến bước xác
+   nhận chặn (`chrome.notifications` có nút Duyệt/Từ chối, `requireInteraction:true`) không còn giá trị an
+   toàn thật, chỉ gây chậm. `background.js` bỏ hẳn `askConfirm()`/`onButtonClicked` — `processCommand()` thực
+   thi NGAY mọi action, chỉ còn `notifyAction()` hiện notification **không chặn** (`requireInteraction:false`,
+   không nút) để Hiếu biết Gấu Pro vừa làm gì, không cần bấm. Cột `requires_confirm` trong
+   `browser_bridge_commands` vẫn giữ (đổi ý nghĩa: chỉ còn phân loại "action ghi" cho mục đích log, không
+   còn chặn thực thi).
+2. **Fix "fill xong không thấy chữ hiện lên"** — Hiếu test điền 1 dòng vào ô nhập nhanh kiểu spreadsheet,
+   Gấu Pro báo đã fill nhưng không hiện vì ô đó cần phím **Enter thật** để commit dòng mới (chỉ set
+   `.value` + dispatch `input`/`change` là chưa đủ cho loại ô này, khác input thường). Thêm tham số
+   `press_enter` (`controlMyBrowserDecl`, `bridge.ts`, `background.js` action `fill`) — khi `true`, sau khi
+   set value sẽ dispatch thêm `keydown`/`keypress`/`keyup` phím Enter. **Gotcha kỹ thuật**: `keyCode`/`which`
+   không set được qua `new KeyboardEvent(type, {keyCode:13})` (browser giữ readonly, constructor bỏ qua) —
+   phải `Object.defineProperty(ev, "keyCode", {get: () => 13})` đè lên sau khi tạo event thì code cũ (check
+   `e.keyCode===13`) mới nhận đúng. Gấu Pro tự quyết định truyền `press_enter=true` khi ngữ cảnh là ô
+   nhập nhanh/sheet cell (mô tả trong description tool, không phải mặc định luôn bật vì textarea nhiều dòng
+   sẽ hỏng nếu Enter tự động xuống dòng).
+3. **Fix lỗ hổng thật: user khác trong `gp_allowed_users` gọi được bridge = thao tác browser của HIẾU, không
+   phải của họ** — Hiếu hỏi "người khác có dùng được không". Phát hiện khi audit: `readMyBrowser`/
+   `controlMyBrowser` trước nằm chung `ALL_TOOL_DECLARATIONS` tĩnh mà MỌI user có quyền Gấu Pro đều thấy y
+   hệt nhau (route `/api/creator-ai/chat` chỉ check "có được dùng Gấu Pro không" — creator hoặc trong
+   `gp_allowed_users` — KHÔNG phân biệt tool theo từng người). Vì bridge là **1 token = 1 browser** (máy
+   Hiếu), nếu Hiếu từng cấp Gấu Pro cho ai đó qua Creator Settings, người đó gọi `readMyBrowser`/
+   `controlMyBrowser` sẽ đọc/thao tác thẳng lên browser THẬT của Hiếu — rò rỉ dữ liệu cá nhân nghiêm trọng,
+   không phải lỗi phân quyền thường. Fix: `runCreatorAI()` (`creator-ai.ts`) nhận thêm tham số `isCreator`,
+   hàm mới `buildFunctionDeclarations(isCreator)` loại bỏ 2 tool bridge khỏi danh sách nếu `!isCreator`.
+   `route.ts` truyền `isCreator` (đã có sẵn biến, trước đây chỉ dùng để check allowlist chứ chưa truyền vào
+   agent). Chặn bằng declaration (Gemini không thấy tool thì không gọi được) — đúng pattern đã dùng ở
+   `be-gau.ts` (`GP_TOOLS_ADMIN_ONLY`), không phải qua guardian.
+
+## § Gấu Pro s195+3 (2026-09-07) — Bridge multi-tenant: mỗi user tự pair browser CỦA CHÍNH HỌ
+
+Hiếu hỏi ngược lại mục 3 ở s195+2: "nhưng giờ tôi muốn người khác có thể dùng Gấu Pro như 1 trợ lý của họ
+nữa thì sao". Khác hẳn rủi ro đã cảnh báo trước (đó là *Hiếu đọc dữ liệu người khác* — cần chính sách
+privacy) — đây là *mỗi người tự cấp quyền cho máy của chính họ*, giống hệt Hiếu đang làm, nên sửa đúng gốc
+rễ (multi-tenant thật) thay vì tiếp tục khoá creator-only.
+
+- **Token/queue chuyển 1-global → 1-per-user**: bảng mới `browser_bridge_pairings` (migration
+  `v51_browser_bridge_multitenant.sql`, `username TEXT PRIMARY KEY, token TEXT UNIQUE, last_seen`) thay
+  cho `app_settings.browser_bridge_token` cũ. `browser_bridge_commands` thêm cột `owner_username` — mỗi
+  lệnh biết thuộc hàng đợi của ai. Migration best-effort giữ token Hiếu (creator) đã pair từ s195+1, khỏi
+  re-pair (không khớp thì tự tạo lại 1 lần, không sao).
+- **3 route bridge đổi sang scope theo user**: `token/route.ts` bỏ `requireCreator()` →
+  `requireGpAccess()` (helper mới `web/src/lib/gp-access.ts` — `hasGpAccess(role, username)`, tách ra dùng
+  chung với `chat/route.ts` vốn có `loadGpAllowed()` riêng lẻ trước đó); GET/POST đọc/ghi đúng row của
+  CHÍNH session gọi. `next/route.ts`/`result/route.ts`: Bearer token → `SELECT username FROM
+  browser_bridge_pairings WHERE token=$1` → mọi thao tác sweep/claim/update chỉ trong
+  `WHERE owner_username=$username` của chính họ.
+- **Thread `username` xuống tool**: `runCreatorAI()` nhận thêm `username`, truyền vào
+  `dispatchTool(call, onEvent, sources, { username })` (tham số thứ 4 mới, optional — không phá call site
+  cũ), `bridge.ts` (`runReadMyBrowser`/`runControlMyBrowser`/`enqueueAndPoll`) nhận `username` để stamp
+  `owner_username` lúc INSERT. `chat/route.ts` truyền `session.user.username`.
+- **Mở lại declaration cho mọi user có quyền Gấu Pro**: `CREATOR_ONLY_TOOLS` (`creator-ai.ts`) rỗng lại —
+  rủi ro cũ (1 token = browser Hiếu) đã hết vì mỗi user giờ có token/queue riêng biệt hoàn toàn. Giữ cơ chế
+  `buildFunctionDeclarations()` cho tool nào thật sự cần creator-only về sau.
+- **UI**: `bridge/page.tsx` đổi guard từ `role==="creator"` sang đọc `gp_enabled` từ `/api/user/me` (field
+  đã có sẵn, dùng chung với `analytics/creator/ai/page.tsx` và `sidebar.tsx` — KHÔNG cần field/route mới).
+  `sidebar.tsx` thêm nav "Bridge" vào đúng khối `gpEnabled &&` (chỗ hiện "Gấu Pro" cho non-creator allowed
+  user) — giữ nguyên entry "Bridge" trong `CREATOR_GROUP` tĩnh cho creator, 2 nơi phục vụ 2 nhóm khác nhau.
+- **Không đụng**: persona/system prompt Gấu Pro, `nav.ts` Command Palette (vốn đã không có nhánh
+  `gp_enabled` cho "Gấu Pro" — gap có từ trước, không do task này), việc dọn `app_settings.browser_bridge_*`
+  cũ (vô hại, để đó).
+
+**Gotcha QA (2026-09-07)**: acc khác bấm "Tạo token" → 500. Log Vercel (`console.error` thêm vào lúc debug,
+xem `bridge/token/route.ts`) cho thấy: `Could not find the table 'public.browser_bridge_pairings' in the
+schema cache` (`code: PGRST205`). **Không phải bug code** — PostgREST (lớp API Supabase dùng) cache schema
+DB, tạo bảng mới bằng migration đôi khi không tự trigger reload cache ngay. Fix: Supabase Dashboard →
+Database → API → **Reload schema**, hoặc chạy `NOTIFY pgrst, 'reload schema';` trong SQL Editor. Sau đó
+GET/POST `bridge/token` hoạt động bình thường ngay, không cần redeploy Vercel (lỗi hoàn toàn phía Supabase).
+Nếu sau này thêm bảng mới bằng migration mà gặp `PGRST205`, nhớ ngay lỗi này.
+
+**Xác nhận trình duyệt**: hoạt động trên Microsoft Edge (và mọi trình Chromium khác: Brave/Opera/Vivaldi)
+— chỉ khác chỗ vào `edge://extensions` thay vì `chrome://extensions`, code dùng chung API `chrome.*`
+chuẩn Chromium nên không cần sửa gì.
+
+## § Gấu Pro s195+5 (2026-09-07) — `browseWeb` đọc được NHIỀU trang trong 1 lần gọi
+
+Hiếu phản hồi `browseWeb` (s195) chỉ đọc được đúng 1 trang mỗi lần gọi — không đủ cho việc lấy dữ liệu tự
+động từ trang có nhiều trang/nhiều mục. Hỏi rõ 3 kiểu phân trang thật gặp (Hiếu chọn cả 3) + kiểu output
+(text thô gộp lại, đơn giản hơn structured extraction) trước khi code.
+
+`runBrowseWeb()` (`web/src/lib/agents/creator/tools/browser.ts`) giờ có 3 chế độ, tự chọn theo tham số
+truyền vào (không phá tương thích ngược — gọi như cũ với chỉ `url` vẫn y hệt hành vi trước):
+
+1. **`urls: string[]`** (tối đa 20) — danh sách URL biết trước (vd Gấu Pro tự ghép `?page=1,2,3`), đọc lần
+   lượt độc lập, không áp `actions`. 1 URL lỗi không chặn URL còn lại — ghi rõ `--- Trang N: <url> — LỖI:
+   ... ---` trong nội dung thay vì fail cả lô.
+2. **`pagination.mode="click_next"`** + `next_selector` — bấm nút/link Next lặp lại tới `max_pages`
+   (mặc định 5, tối đa 20). Click lỗi (hết nút Next / đã disabled) → dừng êm, coi là đã hết trang chứ
+   KHÔNG phải lỗi (trả kết quả các trang đã đọc được, không trả `error`).
+3. **`pagination.mode="infinite_scroll"`** — cuộn xuống đáy lặp lại, tự dừng khi `innerText` không dài
+   thêm sau 1 lần cuộn (đã tải hết) hoặc chạm `max_scrolls` (mặc định 6, tối đa 20).
+
+Nội dung nhiều trang cắt theo 2 tầng: mỗi trang tối đa `MULTI_PAGE_CHARS=8000` ký tự, tổng toàn bộ tối đa
+`TOTAL_CONTENT_CHARS=60000` — dừng sớm nếu chạm trần tổng (khác mode 1-trang cũ vẫn giữ nguyên trần
+`15000`). **Timeout co giãn theo số bước** (`computeOverallTimeout`): `20s + 8s × số trang/scroll dự kiến`,
+trần 180s — đủ cho tới 20 bước mà vẫn chừa ngân sách cho phần hội thoại còn lại trong giới hạn
+`maxDuration=300s` của route Gấu Pro.
+
+`actions` (click/fill/scroll/wait, tối đa 8) giờ chỉ áp dụng **1 lần** ngay sau khi load trang ĐẦU TIÊN —
+dùng để đóng cookie banner/điền filter trước khi bắt đầu đọc hoặc phân trang; không áp cho từng URL trong
+`urls[]` (mỗi URL độc lập, giữ đơn giản).
+
+Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 URL lỗi giữa chừng, click_next dừng
+sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới). tsc + lint (0 lỗi mới) + vitest
+(212/212) PASS.
 
 ### Bé Gấu (chatbot team) — s131
 

@@ -37,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 30 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195)", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(30)
+  it("có đúng 32 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(32)
   })
 
   it("mỗi declaration có name, description, parameters", () => {
@@ -88,6 +88,30 @@ describe("ALL_TOOL_DECLARATIONS", () => {
     expect(names).toContain("createLarkTask")
     expect(names).toContain("updateLarkTask")
     expect(names).toContain("queryLarkBase")
+  })
+})
+
+// ─── buildFunctionDeclarations — bridge multi-tenant (s195+3): mọi user có quyền Gấu Pro đều thấy ──────
+
+import { buildFunctionDeclarations } from "@/lib/agents/creator-ai"
+
+describe("buildFunctionDeclarations", () => {
+  it("isCreator=true → có readMyBrowser/controlMyBrowser", () => {
+    const names = buildFunctionDeclarations(true).map(d => d.name)
+    expect(names).toContain("readMyBrowser")
+    expect(names).toContain("controlMyBrowser")
+  })
+
+  it("isCreator=false → VẪN có readMyBrowser/controlMyBrowser (bridge đã multi-tenant, mỗi user 1 hàng đợi/token riêng — không còn nhắm nhầm vào browser Hiếu)", () => {
+    const names = buildFunctionDeclarations(false).map(d => d.name)
+    expect(names).toContain("readMyBrowser")
+    expect(names).toContain("controlMyBrowser")
+  })
+
+  it("isCreator true/false trả về cùng danh sách tool (không còn khác biệt — cơ chế lọc giữ lại cho tool khác sau này)", () => {
+    const all = buildFunctionDeclarations(true)
+    const restricted = buildFunctionDeclarations(false)
+    expect(restricted.length).toBe(all.length)
   })
 })
 

@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Plug } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -100,6 +100,7 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator/knowledge", label: "Own Info",         icon: BookOpen },
     { href: "/analytics/creator/devtools",  label: "API & Database",   icon: Terminal },
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
+    { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
   ],
 }
@@ -420,6 +421,9 @@ export function Sidebar() {
             {gpEnabled && (
               <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
             )}
+            {gpEnabled && (
+              <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed accent="violet" />
+            )}
             {myMetricsEnabled && (
               <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed accent="violet" />
             )}
@@ -483,6 +487,7 @@ export function Sidebar() {
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
+                    <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed={false} accent="violet" />
                   </div>
                 )}
                 {analystOpen && myMetricsEnabled && (

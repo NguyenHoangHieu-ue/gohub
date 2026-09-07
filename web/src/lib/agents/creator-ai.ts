@@ -625,11 +625,23 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 → Khi user nói "tháng này" / "gần đây" / "hôm nay" / "tháng trước" → DÙNG NGAY các mốc trên, KHÔNG hỏi lại ngày. Luôn cắt data tới ${fmt(yesterday)}.`
 }
 
+// s195+2 từng khoá readMyBrowser/controlMyBrowser chỉ creator (lúc đó bridge dùng 1 token global = 1
+// browser Hiếu, user khác gọi sẽ nhắm nhầm vào browser Hiếu). s195+3: bridge đã multi-tenant thật (mỗi
+// user 1 token/1 queue riêng — owner_username) nên rủi ro đó hết, bỏ 2 tool ra khỏi set này. Giữ cơ chế
+// buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
+const CREATOR_ONLY_TOOLS = new Set<string>([])
+
+export function buildFunctionDeclarations(isCreator: boolean) {
+  return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))
+}
+
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
   fileContexts?: FileContext[],
   onEvent?: (e: GPEvent) => void,
+  isCreator = true,
+  username = "",
 ): Promise<{ text: string; sources: WebSource[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
@@ -668,7 +680,7 @@ export async function runCreatorAI(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
-    tools: [{ functionDeclarations: ALL_TOOL_DECLARATIONS }],
+    tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
     generationConfig: { temperature: 0 },
   })
 
@@ -720,7 +732,7 @@ export async function runCreatorAI(
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources)))
+    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources, { username })))
 
     // Send function responses as role "user" — required by gemini-3.6-flash
     contents.push({ role: "user", parts: fnParts })
