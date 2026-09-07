@@ -10,6 +10,7 @@ import { runGenerateImage, runGenerateImageStability, runGetTrendSnapshots } fro
 import { runLarkTask, runLarkBase } from "./lark"
 import { runSendLarkMessage }      from "./lark-send"
 import { runBrowsePortal, runManagePortalCredentials } from "./portal"
+import { runBrowseWeb }            from "./browser"
 import { runWebSearchTool }        from "./search"
 import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
@@ -25,7 +26,9 @@ export async function dispatchTool(
     ? `🌐 Đang tìm kiếm: "${(call.args?.query || "").slice(0, 60)}"`
     : call.name === "browsePortal"
       ? `🔗 Đang truy cập portal ${call.args?.portal_name || ""}...`
-      : TOOL_STATUS[call.name] ?? "⚙️ Đang xử lý..."
+      : call.name === "browseWeb"
+        ? `🌐 Đang mở trang ${(call.args?.url || "").slice(0, 60)}...`
+        : TOOL_STATUS[call.name] ?? "⚙️ Đang xử lý..."
   onEvent?.({ type: "status", text: statusMsg })
 
   const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
@@ -58,6 +61,9 @@ export async function dispatchTool(
     console.log(`[CreatorAI] browsePortal: ${call.args?.portal_name}`)
     return wrap(await runBrowsePortal(call.args))
   }
+
+  if (call.name === "browseWeb")
+    return wrap(await runBrowseWeb(call.args))
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, chatbot, ai]
 created: 2026-06-28
-updated: 2026-07-18
+updated: 2026-09-07
 status: active
 ---
 
@@ -101,6 +101,28 @@ tự động khi bảng >15 dòng). Route riêng `POST /api/chat/export` (mở c
 `web/src/components/chat-export.tsx` (`ExportBar`, dùng chung cả 2 agent). PDF vẫn sinh client-side
 (html2canvas+jsPDF), không qua route. Nút xuất tự ẩn khi CHÍNH message đó đang stream dở (tránh flicker vì
 marker `\`\`\`export` có thể chưa đóng xong).
+
+## 4a-3. Gộp tool Gấu Pro vào Bé Gấu (s190, 2026-09-05 — retroactive doc, code đã làm từ s190 nhưng chưa ghi wiki tới lúc audit s192)
+
+`be-gau.ts` import trực tiếp `creator/declarations.ts` + `creator/tools/dispatch.ts` (dùng CHUNG executor
+với Gấu Pro, không chép lại logic) và chia 2 nhóm:
+
+- **`GP_TOOLS_OPEN`** (mọi role đã đăng nhập, đúng tinh thần "ai cũng như nhau"): `generateImage`
+  (Pollinations, miễn phí), `getTrendSnapshots`, `queryLarkBase`, `compareVendorQuotes`,
+  `trackSKUWinRate`, `searchKnowledgeBase` (đọc chung `creator_kb` với `readKnowledgeBase` sẵn có — che
+  category `cogs` cho role không có quyền xem giá vốn, khớp cách `readKnowledgeBase` xử lý).
+- **`GP_TOOLS_ADMIN_ONLY`** (chỉ `admin`/`creator` — `isAdminCreator`, KHÔNG gồm manager/bod): `writeKnowledgeBase`/
+  `reviewPendingLearning`/`approveLearning`/`rejectLearning` (ghi đè KB dùng chung cho mọi người hỏi Bé Gấu
+  sau này — 1 người ghi sai/ghi bậy lan ra toàn bộ câu trả lời sau đó), `browsePortal`/
+  `managePortalCredentials` (đăng nhập + đọc credential portal NCC bên thứ 3), `sendLarkMessage` (gửi tin
+  Lark tới bất kỳ group nào — rủi ro spam/mạo danh), `listLarkTasks`/`listLarkTasklists`/`getLarkTask`/
+  `createLarkTask`/`updateLarkTask` (luôn thao tác trên tài khoản Lark CÁ NHÂN của Hiếu qua OAuth riêng —
+  mở cho role khác sẽ lộ task cá nhân, không phải lỗi phân quyền thường mà là rò rỉ dữ liệu cá nhân),
+  `generateImageStability`/`generateVideo`/`checkVideoStatus` (API trả phí Stability AI/Kling — tránh lạm
+  dụng tốn tiền khi mở toàn công ty).
+- Cơ chế chặn: Gemini chỉ thấy `functionDeclarations` được đăng ký trong request — role không phải
+  admin/creator thì mảng `GP_TOOLS_ADMIN_ONLY` không được thêm vào, nên Gemini vật lý không gọi được (độc
+  lập với Guardian, vốn chỉ chặn ở tầng CÂU HỎI category `system_internal`).
 
 ## 4b. Lưu hội thoại & Ghi chú kỹ thuật
 - **Lịch sử chat** lưu Supabase: `conversations` + `chat_messages` (API `/api/chat/conversations` + `/[id]`).

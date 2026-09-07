@@ -2,7 +2,7 @@
 title: "Gấu Pro (Creator AI)"
 page_type: tab_guide
 is_hidden: true
-updated: 2026-08-09
+updated: 2026-09-07
 ---
 
 # Gấu Pro — Creator AI
@@ -59,6 +59,7 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryGSC` | Google Search Console | SEO, keyword, click data |
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
+| `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
 
 ## Web Search
 
@@ -249,6 +250,36 @@ Hook → Context → Solution → CTA → Hashtags → Storyboard, kèm 2 biến
 - Prompt template rõ hơn (style + subject + lighting + quality suffix)
 - Negative hints trong prompt: "no blur, sharp focus, no watermarks"
 - Video generation: chờ Kling AI API key (`KLING_API_KEY` — Hiếu đăng ký klingai.com)
+
+## § Gấu Pro s195 (2026-09-07) — tool `browseWeb` (headless browser thật)
+
+Bước đầu trong lộ trình biến Gấu Pro thành "agent assistant" rộng hơn (theo yêu cầu Hiếu). Trước đây Gấu
+Pro chỉ đọc web qua `webSearch` (snippet Google grounding, không render JS) hoặc `browsePortal` (fetch +
+regex thô, chỉ dùng cho portal NCC có login sẵn credential). Không có cách đọc 1 trang SPA/JS-nặng như
+người thật mở browser.
+
+- **Kiến trúc**: `web/src/lib/agents/creator/tools/browser.ts` (`runBrowseWeb`) dùng `playwright-core`
+  (gói nhẹ, KHÔNG bundle Chromium — team từng né đúng vấn đề Puppeteer/Chromium-trong-serverless, xem
+  `web/src/lib/weekly-report/card-images.ts:1-2`) để `chromium.connectOverCDP()` vào 1 container
+  `browserless/chrome`/`browserless/chromium` **Hiếu tự host** trên 1 VM/PaaS luôn bật (KHÔNG phải
+  Vercel — Vercel không chạy container dài hạn). Vercel function chỉ là client CDP nhẹ.
+- **Env cần set trên Vercel** (Production + Preview): `BROWSERLESS_WS_URL` (endpoint WS container tự
+  host), `BROWSERLESS_TOKEN` (khớp `TOKEN` set trong container). Thiếu 1 trong 2 → tool trả lỗi rõ ràng,
+  không throw 500 (theo đúng pattern `STABILITY_API_KEY`/`KLING_API_KEY`).
+- **Tham số**: `url` (bắt buộc), `actions[]` tối đa 8 bước — allow-list `click`/`fill`/`scroll`/`wait`
+  (CỐ Ý không cho `page.evaluate` JS tuỳ ý — input do model sinh ra, phải giới hạn bề mặt tấn công),
+  `wait_ms`. Trả `title` + `content` (innerText, cắt 15000 ký tự khớp `browsePortal`) + `action_log`.
+  Luôn `browser.close()` trong `finally` (tránh leak browser-minute/session trên container nhỏ) + timeout
+  tổng ~25s.
+- **Chỉ Gấu Pro** — KHÔNG merge sang Bé Gấu ở bước này (giống tiền lệ `generateImageStability`/
+  `generateVideo`: tool mới/tốn tài nguyên hạ tầng riêng thì giữ ở Gấu Pro trước).
+- **Chuẩn bị multi-tenant (chưa bật)**: migration `v49_creator_kb_owner_prep.sql` thêm cột nullable
+  `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` — KHÔNG đổi hành vi code nào
+  (mọi query vẫn đọc/ghi toàn bảng như cũ), chỉ tránh việc sau này phải retroactive-migrate bảng đang có
+  data thật khi Hiếu quyết định bật KB riêng/tự học riêng cho từng nhân viên.
+- **Lộ trình còn lại** (chưa làm, phase riêng): điều khiển browser CÁ NHÂN Hiếu qua extension (giống cơ
+  chế `claude-in-chrome`) · mở rộng scope Lark OAuth cá nhân (`lark_oauth_creator`) · bật thật multi-tenant
+  (cần chính sách privacy rõ trước khi đọc dữ liệu Lark cá nhân của người khác).
 
 ### Bé Gấu (chatbot team) — s131
 
