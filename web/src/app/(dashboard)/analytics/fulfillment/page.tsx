@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
 import { InventoryStockView } from "@/components/inventory/stock-view"
+import { LogicNote } from "@/components/dashboard-kit"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inventory — kế hoạch nhập hàng theo tuần (VN/US) + PO tracker.
@@ -491,6 +492,15 @@ function InventoryInner() {
           </button>
         </div>
       </div>
+
+      <LogicNote>
+        <strong>Vận tốc bán</strong> = SUM(fulfilled_quantity) 30 ngày gần nhất ÷ 30 × 7 (đơn vị/tuần).
+        <strong>Đầu tuần</strong> = Tồn thực tế OPS ghi tay, hoặc tự lấy từ Sapo (đúng tuần đang chạy),
+        else 0. <strong>Gợi ý nhập</strong> = nếu (tồn trước khi nhập &lt; safety_weeks × vận tốc) →
+        max(0, target_weeks_coverage × vận tốc − tồn trước khi nhập), else 0.
+        <strong>Cảnh báo</strong>: số tuần tồn còn lại (đầu tuần ÷ vận tốc) &lt; safety_weeks → "Nguy hiểm";
+        &lt; target_weeks_coverage → "Cần chú ý". Ô nào OPS đã gõ tay thì không bị gợi ý ghi đè lại.
+      </LogicNote>
 
       {(criticalCount > 0 || orderSoonCount > 0) && (
         <div className="flex gap-2 flex-wrap">
