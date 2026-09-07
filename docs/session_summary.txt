@@ -9098,3 +9098,53 @@ rõ trước, migration `v49` đã chuẩn bị sẵn cột nhưng chưa bật).
 Ngoài luồng Gấu Pro: Hiếu yêu cầu merge `staging`→`main` giữa chừng (đã merge sạch, không conflict, gồm
 toàn bộ UI Lô 3-5 + s194 fixes tích luỹ từ trước + s195 browseWeb) — production đã lên bản mới, xác nhận
 qua Vercel deployment READY.
+
+### s195+4 (2026-09-07) — API sản phẩm cho hệ thống bên ngoài (manager tích hợp)
+
+Hiếu muốn cấp API đọc thông tin sản phẩm (kèm giá vốn/COGS) cho manager để tích hợp vào 1 hệ thống/tool
+khác họ đang tự xây (backend-to-backend, không phải browser session). Hỏi rõ "họ là ai" + "dùng để làm gì"
++ "field nào" qua 3 câu hỏi trước khi thiết kế (manager → tích hợp hệ thống khác → cần cả COGS).
+
+Audit trước khi code: `/api/products`/`/api/skus` hiện có chỉ session-cookie (không dùng được ngoài
+browser) — `skus/route.ts` đã select sẵn COGS (`latest_cogs`/`latest_cogs_currency`) không qua gate quyền
+nào. `/api/mcp` (`MCP_SECRET` tĩnh) đã lộ COGS ra ngoài từ trước qua `search_products`/`get_sku_detail`
+nhưng dùng 1 secret chung mọi mục đích (ban đầu cho Claude Code dev tool) — cố ý KHÔNG tái dùng cho manager
+vì trộn 2 mục đích vào 1 secret không revoke/audit riêng được là thực hành xấu. Repo chưa có bảng API key
+DB-backed nào — chỉ secret tĩnh qua env.
+
+Thiết kế: bảng mới `external_api_keys` (migration `v52_external_api_keys.sql`) lưu **hash SHA-256** key
+(KHÔNG lưu plaintext — khác token Bridge cá nhân ở `app_settings`, đây là credential giao hệ thống NGOÀI
+công ty, giá trị rủi ro cao hơn). 2 route mới `GET /api/external/products`/`/api/external/skus` — auth
+`Bearer <key>` (`web/src/lib/external-api-auth.ts` `requireExternalApiKey()`), field list RIÊNG tách hẳn
+route UI nội bộ (sửa UI sau này không vô tình đổi field trả bên ngoài), `page_size` tới 200 (khác cứng 20
+của route UI, phù hợp bên ngoài kéo hàng loạt), rate-limit 60/phút/key. Tab mới "API bên ngoài" trong
+`/admin` (admin/creator) — tạo/thu hồi key, key thật chỉ hiện đúng 1 lần lúc tạo (giống Stripe/GitHub PAT).
+
+Test thật bằng `curl` với key vừa tạo → 200, trả đúng 20 SKU kèm COGS thật (vd `latest_cogs:76000
+VND`). Viết luôn 1 trang tài liệu API riêng (Artifact HTML, palette teal/amber lấy cảm hứng "tín hiệu
+kết nối" phù hợp chủ đề eSIM/telecom, font Archivo+IBM Plex Sans+IBM Plex Mono) dùng chính data thật vừa
+test — gồm auth, bảng tham số 2 endpoint (cơ bản + nâng cao theo từng vị trí ký tự mã SKU/Product 13/8
+ký tự), ví dụ curl/response thật, cách phân trang, bảng lỗi/rate limit — để Hiếu gửi thẳng cho manager,
+key thật KHÔNG nhúng vào doc (dặn gửi riêng qua kênh chat).
+
+### s195+5 (2026-09-07) — `browseWeb` đọc được NHIỀU trang trong 1 lần gọi
+
+Hiếu quay lại phản hồi `browseWeb` (s195): hiện chỉ đọc đúng 1 trang, không đủ cho việc lấy dữ liệu tự
+động thật (site nhiều trang/nhiều mục). Hỏi rõ 3 kiểu phân trang thật cần trước khi code (Hiếu chọn cả 3:
+phân trang số, cuộn vô hạn, danh sách URL biết trước) + định dạng output (text thô gộp lại, đơn giản hơn
+trích field có cấu trúc).
+
+`runBrowseWeb()` thêm 3 chế độ tự chọn theo tham số truyền vào, KHÔNG phá tương thích ngược (gọi `{url}`
+đơn như cũ vẫn y hệt hành vi trước — vẫn cắt 15000 ký tự như s195): `urls: string[]` (tối đa 20, đọc lần
+lượt độc lập, 1 URL lỗi không chặn URL còn lại); `pagination.mode="click_next"` + `next_selector` (bấm
+Next lặp tới `max_pages` mặc định 5 tối đa 20, hết nút Next → dừng êm KHÔNG phải lỗi); `pagination.
+mode="infinite_scroll"` (cuộn lặp, tự dừng khi `innerText` không dài thêm sau 1 lần cuộn, hoặc chạm
+`max_scrolls` mặc định 6 tối đa 20). Nội dung nhiều trang cắt 2 tầng (8000 ký tự/trang, 60000 tổng) +
+timeout co giãn theo số bước dự kiến (`20s + 8s × số bước`, trần 180s) — vẫn nằm trong ngân sách
+`maxDuration=300s` của route Gấu Pro. `actions` (click/fill/scroll/wait) giờ chỉ áp 1 lần sau khi load
+trang ĐẦU TIÊN (đóng cookie banner/điền filter trước khi bắt đầu đọc/phân trang), không áp riêng từng URL
+trong `urls[]` (giữ đơn giản).
+
+Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 URL lỗi giữa chừng vẫn tiếp tục,
+click_next dừng sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới) — 10/10 pass riêng file
+này, 212/212 toàn repo. tsc + lint (0 lỗi mới) PASS.
