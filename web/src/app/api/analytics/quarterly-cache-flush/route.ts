@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { flushAnalyticsCacheByPrefixes, B2B_COST_CACHE_PREFIXES } from "@/lib/analytics-helpers"
+import { flushAnalyticsCacheByPrefixes, flushByDeps } from "@/lib/analytics-helpers"
 import { QREPORT_CACHE_PREFIX, QB2B_CACHE_PREFIX } from "@/lib/quarterly-settings"
 
 // Xóa cache analytics (accessible bởi mọi user đã login) — nút "Tải lại mới" ở Quarter Report.
@@ -16,15 +16,16 @@ import { QREPORT_CACHE_PREFIX, QB2B_CACHE_PREFIX } from "@/lib/quarterly-setting
 // lần Hiếu bấm nút trong lúc test liên tục. Fix cuối: import hằng số PREFIX HIỆN HÀNH từ
 // `lib/quarterly-settings.ts` (QREPORT_CACHE_PREFIX/QB2B_CACHE_PREFIX — đặt ở lib chứ không phải ngay
 // trong route.ts vì Next.js App Router chỉ cho phép export tên hàm đã biết như GET/POST) — dùng CHUNG
-// 1 hằng số với chính route sinh ra key đó nên không bao giờ lệch version, + B2B_COST_CACHE_PREFIXES
-// (các tab khác phụ thuộc cost B2B, để "Tải lại mới" cũng làm chúng tươi theo nếu Hiếu vừa sửa cost)
-// — KHÔNG nuke sạch cache của các tab không liên quan.
+// 1 hằng số với chính route sinh ra key đó nên không bao giờ lệch version.
+// s190+2: nhóm cost B2B đổi sang `flushByDeps(["b2b-cost"])` (khai deps tại chỗ cache thay vì prefix
+// cứng `B2B_COST_CACHE_PREFIXES` đã xoá) — "Tải lại mới" gọi cả 2 để vẫn làm tươi mọi tab phụ thuộc.
 export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  await flushAnalyticsCacheByPrefixes([
-    QREPORT_CACHE_PREFIX, QB2B_CACHE_PREFIX, ...B2B_COST_CACHE_PREFIXES,
-  ]).catch(() => {})
+  await Promise.all([
+    flushAnalyticsCacheByPrefixes([QREPORT_CACHE_PREFIX, QB2B_CACHE_PREFIX]).catch(() => {}),
+    flushByDeps(["b2b-cost"]).catch(() => {}),
+  ])
   return NextResponse.json({ ok: true })
 }

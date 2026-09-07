@@ -28,8 +28,15 @@ const nextConfig = {
   },
   // Server-only packages — TUYỆT ĐỐI không bundle vào client. pdf-parse/pdfjs-dist mang theo
   // qcms_bg.wasm (wasm-bindgen) → nếu leak vào client, browser fetch .wasm → 404 (__wbg_fetch).
-  // pg = node-postgres (server DB). googleapis = GA4 server. Khai báo external = chặn tận gốc.
-  serverExternalPackages: ["docx", "mammoth", "pdf-parse", "pdfjs-dist", "pg", "googleapis"],
+  // pg = node-postgres (server DB). googleapis = GA4 server. playwright-core (s195) có require() động
+  // tới optional native deps (chromium-bidi/kerberos) không có trong node_modules — webpack cố bundle
+  // tĩnh sẽ vỡ build ("Module not found"), phải external hoàn toàn. Khai báo external = chặn tận gốc.
+  // Next 14.2 dùng tên `experimental.serverComponentsExternalPackages` — top-level `serverExternalPackages`
+  // (tên Next 15) bị Next 14 phớt lờ với warning "Unrecognized key(s)" (bug âm thầm trước đây: 6 package
+  // cũ chưa từng thật sự được external, chỉ tình cờ chưa gói nào cần require() động như playwright-core).
+  experimental: {
+    serverComponentsExternalPackages: ["docx", "mammoth", "pdf-parse", "pdfjs-dist", "pg", "googleapis", "playwright-core"],
+  },
   // Skip type-check và ESLint trong next build để tránh OOM (codebase lớn ~2GB heap).
   // Type-check được chạy riêng qua: npx.cmd tsc --noEmit
   typescript: { ignoreBuildErrors: true },

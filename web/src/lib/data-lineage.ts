@@ -323,7 +323,7 @@ export const CONNECTIONS: Connection[] = [
   { tabId: 'orders', tableId: 'dim_order_source', fields: ['code', 'channel_name'], metrics: ['Channel name trong order list'] },
   { tabId: 'orders', tableId: 'dim_staff', fields: ['code', 'name'], metrics: ['Staff name trong order list'] },
   { tabId: 'orders', tableId: 'dim_customer', fields: ['code', 'name'], metrics: ['Customer name trong order list'] },
-  // Inventory (kế hoạch nhập hàng — s160, xem docs/wiki/Tab/analytics-fulfillment.md)
+  // Inventory (kế hoạch nhập hàng — s160, xem docs/wiki/system/tabs/analytics-fulfillment.md)
   { tabId: 'fulfillment', tableId: 'fact_fulfillment_revenue', fields: ['fulfiled_date', 'fulfilled_quantity', 'sku'], metrics: ['Vận tốc bán 30 ngày/SKU cho gợi ý Bán dự kiến/Số nhập'] },
   { tabId: 'fulfillment', tableId: 'dim_sku', fields: ['sku', 'vendor'], metrics: ['Auto-lookup vendor khi thêm SKU theo dõi'] },
   // 3HK Usage

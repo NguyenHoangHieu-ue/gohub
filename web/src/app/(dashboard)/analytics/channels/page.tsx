@@ -16,6 +16,8 @@ import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "@/components/cost-management-modal"
 import { exportRawRows } from "@/lib/export-excel"
 import { useDbRole } from "@/lib/use-role-guard"
+import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -57,32 +59,32 @@ const Skeleton = ({ className }: { className?: string }) => (
   <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
 )
 
-const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-    <div className="flex items-center justify-between mb-4">
-      <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-        <Icon className="w-6 h-6" />
+// Màu icon theo Ý NGHĨA số liệu (đợt UI redesign s190+2, đồng bộ BOD/Dashboard) — trước đây cả 6 card
+// dùng chung 1 màu xanh dương, không phân biệt doanh thu/margin/số lượng.
+const METRIC_ACCENT: Record<string, MetricAccent> = {
+  "Total Revenue": "revenue", "Gross Profit": "margin", "Contribution Margin 1": "margin",
+  "Total Orders": "neutral", "Units Sold": "neutral", "Average Order Value": "positive",
+}
+
+const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => {
+  if (loading) {
+    return (
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <Skeleton className="h-9 w-9 rounded-xl" />
+        <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
       </div>
-      {loading ? (
-        <Skeleton className="h-5 w-12 rounded-full" />
-      ) : comparisonActive && (
-        <div className={cn(
-          "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full",
-          change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-        )}>
-          {change >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-          {Math.abs(change)}%
-        </div>
-      )}
-    </div>
-    <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-    {loading ? (
-      <Skeleton className="h-8 w-32" />
-    ) : (
-      <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-    )}
-  </div>
-)
+    )
+  }
+  return (
+    <StatTile
+      icon={<Icon className="w-5 h-5" />}
+      label={title}
+      value={value}
+      accent={METRIC_ACCENT[title] ?? "neutral"}
+      deltas={comparisonActive ? [{ label: "So sánh", value: `${change >= 0 ? "+" : ""}${change}%`, kind: change >= 0 ? "up" : "down" }] : undefined}
+    />
+  )
+}
 
 export default function ChannelPerformancePage() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -192,8 +194,8 @@ export default function ChannelPerformancePage() {
   const ProductSortIcon = ({ column }: { column: string }) => {
     if (productSortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
     return productSortConfig.direction === "asc"
-      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-600" />
-      : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
+      ? <ChevronUp className="w-3 h-3 ml-1 text-brand-600" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-brand-600" />
   }
 
   // Export Performance Breakdown — KHỚP ĐÚNG cột + số của bảng hiển thị (tính lại y hệt JSX).
@@ -845,7 +847,7 @@ export default function ChannelPerformancePage() {
               {(["ALL","Strategic","VIP","Gold","Silver"] as const).map(t => (
                 <button key={t} onClick={() => { setB2bTierFilter(t); setSelectedCustomer(null) }}
                   className={cn("px-2.5 py-1 text-xs font-bold rounded-lg transition-all",
-                    b2bTierFilter === t ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                    b2bTierFilter === t ? "bg-brand-600 text-white" : "text-slate-500 hover:bg-slate-50")}>
                   {t === "ALL" ? "Tất cả" : t}
                 </button>
               ))}
@@ -890,7 +892,7 @@ export default function ChannelPerformancePage() {
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
             )}
           >
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
@@ -917,7 +919,7 @@ export default function ChannelPerformancePage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
               />
             </div>
             <div className="space-y-1.5">
@@ -926,7 +928,7 @@ export default function ChannelPerformancePage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
               />
             </div>
 
@@ -950,7 +952,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedVendors([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -962,7 +964,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleVendor(vendor) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedVendors.includes(vendor) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedVendors.includes(vendor) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{vendor}</span>
@@ -994,7 +996,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Sub Channels</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedSubChannels([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1006,7 +1008,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleSubChannel(sc) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedSubChannels.includes(sc) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedSubChannels.includes(sc) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{sc}</span>
@@ -1038,7 +1040,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Types</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedProductTypes([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1050,7 +1052,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleProductType(type) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedProductTypes.includes(type) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedProductTypes.includes(type) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{type}</span>
@@ -1069,7 +1071,7 @@ export default function ChannelPerformancePage() {
                   onClick={() => setDateColumn("fulfiled_date")}
                   className={cn(
                     "flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all",
-                    dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    dateColumn === "fulfiled_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                 >
                   Fulfillment
@@ -1078,7 +1080,7 @@ export default function ChannelPerformancePage() {
                   onClick={() => setDateColumn("created_date")}
                   className={cn(
                     "flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all",
-                    dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    dateColumn === "created_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                 >
                   Created
@@ -1111,7 +1113,7 @@ export default function ChannelPerformancePage() {
               </div>
               <button
                 onClick={() => { fetchChannelData(); setShowFilters(false) }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200"
               >
                 Apply Filters
               </button>
@@ -1128,7 +1130,7 @@ export default function ChannelPerformancePage() {
             <div>
               {selectedCustomer ? (
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-[#003B95] hover:underline">
+                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
                     ← Quay lại
                   </button>
                   <span className="text-slate-300">/</span>
@@ -1136,7 +1138,7 @@ export default function ChannelPerformancePage() {
                   <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
                     selectedCustomer.tier === "VIP" ? "bg-purple-50 text-purple-600" :
                     selectedCustomer.tier === "Gold" ? "bg-amber-50 text-amber-600" :
-                    selectedCustomer.tier === "Silver" ? "bg-slate-100 text-slate-500" : "bg-blue-50 text-blue-700")}>
+                    selectedCustomer.tier === "Silver" ? "bg-slate-100 text-slate-500" : "bg-brand-50 text-brand-700")}>
                     {selectedCustomer.tier}
                   </span>
                 </div>
@@ -1160,7 +1162,7 @@ export default function ChannelPerformancePage() {
               {!loadingB2B && b2bCustomers.length > 0 && (() => {
                 const tiers = ["Strategic", "VIP", "Gold", "Silver"] as const
                 const tierColors: Record<string, string> = {
-                  Strategic: "border-l-blue-500",
+                  Strategic: "border-l-brand-500",
                   VIP: "border-l-purple-500",
                   Gold: "border-l-amber-500",
                   Silver: "border-l-slate-400",
@@ -1174,7 +1176,7 @@ export default function ChannelPerformancePage() {
                       return (
                         <button key={tier} onClick={() => setB2bTierFilter(b2bTierFilter === tier ? "ALL" : tier)}
                           className={cn("text-left p-4 rounded-xl border-l-4 border border-slate-100 hover:border-slate-200 transition-all",
-                            tierColors[tier], b2bTierFilter === tier ? "bg-blue-50/60 border-slate-200" : "bg-slate-50/50")}>
+                            tierColors[tier], b2bTierFilter === tier ? "bg-brand-50/60 border-slate-200" : "bg-slate-50/50")}>
                           <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{tier}</p>
                           <p className="text-lg font-black text-slate-900 tabular-nums mt-0.5">
                             {rev >= 1e9 ? `${(rev/1e9).toFixed(1)} Tỷ` : `${(rev/1e6).toFixed(0)} Tr`}
@@ -1190,7 +1192,7 @@ export default function ChannelPerformancePage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#003B95]">
+                    <tr className="bg-brand-600">
                       <th className="px-5 py-3 text-xs font-bold text-slate-300 uppercase">Khách hàng</th>
                       <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Tier</th>
                       <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Bảng giá</th>
@@ -1210,17 +1212,17 @@ export default function ChannelPerformancePage() {
                       (b2bTierFilter === "ALL" ? b2bCustomers : b2bCustomers.filter(c => c.tier === b2bTierFilter))
                         .map((c, i) => {
                           const tierBadge: Record<string, string> = {
-                            Strategic: "bg-blue-50 text-blue-700",
+                            Strategic: "bg-brand-50 text-brand-700",
                             VIP: "bg-purple-50 text-purple-700",
                             Gold: "bg-amber-50 text-amber-700",
                             Silver: "bg-slate-100 text-slate-600",
                           }
                           const gpm = c.revenue > 0 ? (c.margin / c.revenue * 100) : 0
                           return (
-                            <tr key={i} className="hover:bg-blue-50/20 transition-colors cursor-pointer"
+                            <tr key={i} className="hover:bg-brand-50/20 transition-colors cursor-pointer"
                               onClick={() => setSelectedCustomer(c)}>
                               <td className="px-5 py-3">
-                                <span className="text-sm font-bold text-slate-900 hover:text-[#003B95]">{c.customer_name}</span>
+                                <span className="text-sm font-bold text-slate-900 hover:text-brand-600">{c.customer_name}</span>
                               </td>
                               <td className="px-4 py-3">
                                 <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", tierBadge[c.tier] || "bg-slate-100 text-slate-500")}>{c.tier}</span>
@@ -1286,13 +1288,13 @@ export default function ChannelPerformancePage() {
                     <tr key={idx} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setSelectedChannel(ch.channel)}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600"><Globe className="w-4 h-4" /></div>
-                          <span className="text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors">{ch.channel}</span>
+                          <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center text-brand-600"><Globe className="w-4 h-4" /></div>
+                          <span className="text-sm font-bold text-slate-900 hover:text-brand-600 transition-colors">{ch.channel}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
-                          ch.group_name === "B2B" ? "bg-blue-50 text-blue-600" :
+                          ch.group_name === "B2B" ? "bg-brand-50 text-brand-600" :
                           ch.group_name === "B2C" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>
                           {ch.group_name || "-"}
                         </span>
@@ -1346,18 +1348,18 @@ export default function ChannelPerformancePage() {
       <>
       {/* Pro-rata Projection */}
       {projection && !loading && (
-        <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+        <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-brand-800 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Month-End Projection (Pro-rata)
               </h3>
-              <p className="text-sm text-blue-600">
+              <p className="text-sm text-brand-600">
                 Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.
               </p>
             </div>
-            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">
+            <div className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-brand-800/20">
               {((projection.factor - 1) * 100).toFixed(0)}% Growth Expected
             </div>
           </div>
@@ -1369,10 +1371,10 @@ export default function ChannelPerformancePage() {
               { label: "Projected AOV", value: formatCurrency(projection.aov), change: projection.aovChange },
               { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
-              <div key={label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div key={label} className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
-                  <p className="text-lg font-bold text-blue-600">{value}</p>
+                  <p className="text-lg font-bold text-brand-600">{value}</p>
                   <div className={cn(
                     "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
                     change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
@@ -1390,7 +1392,7 @@ export default function ChannelPerformancePage() {
 
       {/* KPI Cards */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider rounded border border-blue-100">
+        <div className="px-2 py-1 bg-brand-50 text-brand-600 text-[10px] font-bold uppercase tracking-wider rounded border border-brand-100">
           Viewing by: {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"}
         </div>
         {dateColumn === "created_date" && (
@@ -1417,7 +1419,7 @@ export default function ChannelPerformancePage() {
             {!loading && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-brand-500 rounded-full"></div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current</span>
                 </div>
                 {comparisonType !== "none" && (
@@ -1437,19 +1439,19 @@ export default function ChannelPerformancePage() {
                 <ComposedChart data={trendData}>
                   <defs>
                     <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} tickFormatter={(val) => formatCompactNumber(val)} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "#fff", borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+                    contentStyle={{ ...chartTooltipStyle, padding: "12px" }}
                     formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current" : "Previous"]}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
-                  <Line type="monotone" dataKey="margin" stroke="#10b981" strokeWidth={2} dot={false} name="Gross Profit" />
+                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
+                  <Line type="monotone" dataKey="margin" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Gross Profit" />
                   {comparisonType !== "none" && (
                     <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
                   )}
@@ -1467,7 +1469,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
             <p className="text-sm text-slate-500">Breakdown by sub-channel for {selectedChannel} (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={exportPerformanceBreakdown} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportPerformanceBreakdown} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -1480,11 +1482,11 @@ export default function ChannelPerformancePage() {
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units Sold</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contribution Margin 1</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1 %</th>
                 {comparisonType !== "none" && (
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
@@ -1545,7 +1547,7 @@ export default function ChannelPerformancePage() {
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                          <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center text-brand-600">
                             <Globe className="w-4 h-4" />
                           </div>
                           <span className="text-sm font-bold text-slate-900">{row.sub_channel}</span>
@@ -1554,15 +1556,15 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(row.orders)}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(row.units)}</td>
                       <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(row.revenue)}</td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency(row.revenue * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency(row.revenue * projection.factor) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", row.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.margin || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(rowGpm2 || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor - ((row.margin || 0) - (rowGpm2 || 0))) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor - ((row.margin || 0) - (rowGpm2 || 0))) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2Percent >= 0 ? "text-emerald-600" : "text-rose-600")}>{rowGpm2Percent.toFixed(1)}%</span>
                       </td>
@@ -1578,7 +1580,7 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <div className="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contribution}%` }}></div>
+                            <div className="h-full bg-brand-500 rounded-full" style={{ width: `${contribution}%` }}></div>
                           </div>
                           <span className="text-xs font-bold text-slate-500 w-10">{contribution.toFixed(1)}%</span>
                         </div>
@@ -1602,15 +1604,15 @@ export default function ChannelPerformancePage() {
                     <td className="px-6 py-4 text-slate-900 text-right">{formatNumber(metrics?.orders || 0)}</td>
                     <td className="px-6 py-4 text-slate-900 text-right">{formatNumber(metrics?.units || 0)}</td>
                     <td className="px-6 py-4 text-slate-900 text-right">{formatCurrency(metrics?.revenue || 0)}</td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.revenue || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency((metrics?.revenue || 0) * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", (metrics?.margin || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(metrics?.margin || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.margin || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency((metrics?.margin || 0) * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", (metrics?.gpm2 || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(metrics?.gpm2 || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency(projection.cm1) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency(projection.cm1) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", ((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100) >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100).toFixed(1)}%
@@ -1677,7 +1679,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Daily Performance Details</h3>
             <p className="text-sm text-slate-500">Daily breakdown (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={exportDaily} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportDaily} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -1745,7 +1747,7 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Top Selling Products</h3>
             <p className="text-sm text-slate-500">Highest revenue products (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={exportTopProductsFull} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportTopProductsFull} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
             Export
           </button>
@@ -1767,7 +1769,7 @@ export default function ChannelPerformancePage() {
                 ] as const).map(col => (
                   <th
                     key={col.key}
-                    className={cn("px-6 py-4 text-xs font-bold uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors", col.key === "projection" ? "text-blue-600" : "text-slate-500")}
+                    className={cn("px-6 py-4 text-xs font-bold uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors", col.key === "projection" ? "text-brand-600" : "text-slate-500")}
                     onClick={() => handleProductSort(col.key)}
                   >
                     <div className="flex items-center justify-end">
@@ -1808,7 +1810,7 @@ export default function ChannelPerformancePage() {
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", product.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(product.margin || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency(product.revenue * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency(product.revenue * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatCurrency(product.revenue / (product.orders || 1))}</td>
                   </tr>
                 ))
@@ -1825,7 +1827,7 @@ export default function ChannelPerformancePage() {
         </div>
         {!loading && topProducts.length > 0 && (
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-center">
-            <button onClick={() => setShowAllProducts(!showAllProducts)} className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
+            <button onClick={() => setShowAllProducts(!showAllProducts)} className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-brand-600 transition-colors">
               {showAllProducts ? (<><ChevronUp className="w-4 h-4" />Show Less</>) : (<><ChevronDown className="w-4 h-4" />View All Products</>)}
             </button>
           </div>
@@ -1839,106 +1841,4 @@ export default function ChannelPerformancePage() {
 }
 
 // ─── B2BCustomerDetail ────────────────────────────────────────────────────────
-function B2BCustomerDetail({ customer, startDate, endDate, dateColumn, countryMap }: {
-  customer: any; startDate: string; endDate: string; dateColumn: string; countryMap: Record<string, string>
-}) {
-  const [channels, setChannels] = React.useState<any[]>([])
-  const [products, setProducts] = React.useState<any[]>([])
-  const [loading, setLoading] = React.useState(true)
-
-  React.useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      const dateF = `${dateColumn}::date >= '${startDate}' AND ${dateColumn}::date <= '${endDate}'`
-      const custF = `TRIM(customer_code) = '${customer.customer_code.replace(/'/g, "''")}'`
-
-      const [chRows, prRows] = await Promise.all([
-        fetch("/api/analytics/query", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sql: `
-            SELECT COALESCE(TRIM(s.channel_name), 'Other') as channel,
-              SUM(f.fulfilled_revenue_amount_vnd) as revenue,
-              SUM(f.gross_profit_vnd) as margin,
-              COUNT(DISTINCT f.order_code) as orders
-            FROM fact_fulfillment_revenue f
-            LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-            WHERE ${custF} AND f.${dateF}
-              AND f.sku != 'SHIPPINGFEE0'
-            GROUP BY 1 ORDER BY 2 DESC LIMIT 10` }),
-        }).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
-        fetch("/api/analytics/query", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sql: `
-            SELECT f.sku as product_name,
-              MAX(sk.category_name) as category,
-              UPPER(SUBSTRING(f.sku, 3, 3)) as destination,
-              SUM(f.fulfilled_revenue_amount_vnd) as revenue,
-              SUM(f.fulfilled_quantity) as units
-            FROM fact_fulfillment_revenue f
-            LEFT JOIN dim_sku sk ON TRIM(f.sku) = TRIM(sk.sku)
-            WHERE ${custF} AND f.${dateF} AND f.sku != 'SHIPPINGFEE0'
-            GROUP BY 1, 3 ORDER BY 4 DESC LIMIT 10` }),
-        }).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
-      ])
-      setChannels(chRows.map((r: any) => ({ ...r, revenue: parseFloat(r.revenue||0), margin: parseFloat(r.margin||0), orders: parseInt(r.orders||0) })))
-      setProducts(prRows.map((r: any) => ({ ...r, revenue: parseFloat(r.revenue||0), units: parseInt(r.units||0) })))
-      setLoading(false)
-    }
-    load()
-  }, [customer.customer_code, startDate, endDate, dateColumn])
-
-  if (loading) return <div className="p-8 text-center text-slate-400 text-sm"><RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải...</div>
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-x divide-slate-100">
-      {/* Channels */}
-      <div>
-        <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Kênh bán hàng</p>
-        <table className="w-full text-[12px] border-collapse">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">
-            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Kênh</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">GP</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Orders</th>
-          </tr></thead>
-          <tbody className="divide-y divide-slate-50">
-            {channels.map((c, i) => (
-              <tr key={i} className="hover:bg-slate-50">
-                <td className="px-5 py-2.5 font-semibold text-slate-800">{c.channel}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(c.revenue)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600 font-semibold">{formatCurrency(c.margin)}</td>
-                <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(c.orders)}</td>
-              </tr>
-            ))}
-            {channels.length === 0 && <tr><td colSpan={4} className="px-5 py-6 text-center text-slate-400 italic">Không có dữ liệu</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      {/* Products */}
-      <div>
-        <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Top sản phẩm</p>
-        <table className="w-full text-[12px] border-collapse">
-          <thead><tr className="bg-slate-50 border-b border-slate-100">
-            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">SKU</th>
-            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Dest</th>
-            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Category</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Units</th>
-          </tr></thead>
-          <tbody className="divide-y divide-slate-50">
-            {products.map((p, i) => (
-              <tr key={i} className="hover:bg-slate-50">
-                <td className="px-5 py-2.5 font-mono text-[11px] text-slate-700 truncate max-w-[140px]">{p.product_name}</td>
-                <td className="px-3 py-2.5 font-bold text-[11px] text-slate-600" title={p.destination || ""}>{p.destination ? (countryMap[p.destination] || p.destination) : "—"}</td>
-                <td className="px-3 py-2.5 text-[11px] text-slate-400 truncate max-w-[100px]">{p.category || "—"}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(p.revenue)}</td>
-                <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(p.units)}</td>
-              </tr>
-            ))}
-            {products.length === 0 && <tr><td colSpan={5} className="px-5 py-6 text-center text-slate-400 italic">Không có dữ liệu</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
+// B2BCustomerDetail — tách sang components/channels/b2b-customer-detail.tsx (s183 Phase 5, import ở đầu file).

@@ -13,7 +13,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 async function generateEmbedding(text: string): Promise<number[] | null> {
   try {
-    const genai  = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+    // s190: sửa lệch tên env — mọi nơi khác trong repo dùng GEMINI_KEY, chỗ này lỡ viết GEMINI_API_KEY
+    // (Hiếu chưa từng set biến này trên Vercel) → searchKnowledgeBase luôn lỗi "GEMINI_API_KEY chưa set"
+    // dù GEMINI_KEY đã có. Phát hiện qua audit env s190 — tool này giờ mở cho MỌI role nên đáng fix ngay.
+    const genai  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const model  = genai.getGenerativeModel({ model: "text-embedding-004" })
     const result = await model.embedContent(text)
     return result.embedding.values
@@ -123,7 +126,7 @@ export async function runRejectLearning(a: any): Promise<any> {
 
 export async function runSearchKnowledgeBase(args: { query: string; limit?: number }): Promise<any> {
   const embedding = await generateEmbedding(args.query)
-  if (!embedding) return { error: "Không thể tạo embedding — kiểm tra GEMINI_API_KEY." }
+  if (!embedding) return { error: "Không thể tạo embedding — kiểm tra GEMINI_KEY." }
 
   const { data, error } = await supabaseAdmin.rpc("search_creator_kb", {
     query_embedding: `[${embedding.join(",")}]`,

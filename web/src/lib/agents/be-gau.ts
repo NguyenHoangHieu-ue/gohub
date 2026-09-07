@@ -6,9 +6,57 @@ import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { SUPABASE_TABLES, SENSITIVE_TABLES, runQuerySupabase } from "./data-explorer"
 import { getRoleDataFilter }             from "./bi-analyst"
 import { getCustomRules }                from "./guardian"
-import { runWebSearch, runReadKnowledgeBase, type WebSource } from "./creator-ai"
+import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { sendLarkDM }                    from "@/lib/lark"
 import { compressHistory }              from "./creator/compress"
+
+// ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
+// Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
+// creator/declarations.ts + creator/tools/dispatch.ts — không chép lại logic, tránh đúng kiểu "code
+// thừa/trùng lặp" mà audit s190 tìm thấy ở chỗ khác). Gấu Pro (route/trang riêng, creator-only) GIỮ
+// NGUYÊN không đổi — Hiếu sẽ quyết hướng xử lý sau.
+// Phân quyền theo đúng yêu cầu: "code/hệ thống/quy trình" → guardian.ts chặn ở tầng CÂU HỎI (category
+// system_internal, chỉ admin/creator). Ở tầng CÔNG CỤ, một số tool Gấu Pro không phải "hỏi thông tin" mà
+// là HÀNH ĐỘNG có rủi ro/chi phí riêng — những tool đó bị giữ admin/creator-only bằng cách không đăng ký
+// declaration cho role khác (Gemini không thể gọi hàm nó không thấy), độc lập với Guardian:
+//   - browsePortal/managePortalCredentials: đăng nhập + đọc credential portal NCC bên thứ 3.
+//   - writeKnowledgeBase/reviewPendingLearning/approveLearning/rejectLearning: ghi đè KB dùng chung cho
+//     MỌI người hỏi Bé Gấu sau này — 1 người ghi sai/ghi bậy sẽ lan ra toàn bộ câu trả lời sau đó.
+//   - sendLarkMessage: gửi tin nhắn Lark tới bất kỳ group nào (rủi ro spam/mạo danh).
+//   - listLarkTasks/listLarkTasklists/getLarkTask/createLarkTask/updateLarkTask: các API Lark Task này
+//     LUÔN thao tác trên tài khoản Lark CÁ NHÂN của Hiếu (gán task cho creatorOpenId, đọc task của chính
+//     Hiếu) — mở cho role khác sẽ lộ task cá nhân của Hiếu cho bất kỳ ai hỏi, không phải lỗi phân quyền
+//     thường mà là rò rỉ dữ liệu cá nhân, nên giữ creator/admin dù bản chất là "đọc", không phải "ghi".
+//   - generateImageStability/generateVideo/checkVideoStatus: gọi API trả phí (Stability AI/Kling) —
+//     generateImage (Pollinations, miễn phí) thì mở cho mọi người, 2 cái trả phí giữ admin/creator để
+//     tránh bị lạm dụng tốn tiền khi mở cho toàn công ty.
+// Còn lại (generateImage, getTrendSnapshots, queryLarkBase, compareVendorQuotes, trackSKUWinRate,
+// searchKnowledgeBase) mở cho MỌI role đã đăng nhập — đúng tinh thần "ai cũng như nhau".
+import {
+  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
+  trackSKUWinRateDecl, searchKBDecl,
+  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
+  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
+  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
+  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
+} from "./creator/declarations"
+import { dispatchTool } from "./creator/tools/dispatch"
+
+// Tool mở cho MỌI role (business/productivity, không phải hành động nhạy cảm/trả phí).
+const GP_TOOLS_OPEN = [
+  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
+  trackSKUWinRateDecl, searchKBDecl,
+]
+// Tool CHỈ admin/creator — hành động/credential/chi phí/dữ liệu cá nhân Hiếu (xem giải thích ở trên).
+const GP_TOOLS_ADMIN_ONLY = [
+  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
+  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
+  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
+  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
+]
+const GP_DISPATCH_NAMES = new Set(
+  [...GP_TOOLS_OPEN, ...GP_TOOLS_ADMIN_ONLY].map(d => d.name),
+)
 
 // ─── Helpers dùng chung ─────────────────────────────────────────────────────────
 
@@ -48,13 +96,15 @@ const _learningRL = new Map<string, number>()
 const LEARNING_COOLDOWN = 5 * 60_000
 
 // ─── Bé Gấu ─────────────────────────────────────────────────────────────────────
-// Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). MÔ PHỎNG cơ chế Gấu Pro
-// (1 agent function-calling lặp, tự chọn công cụ) NHƯNG:
-//   · Guardian pre-flight (guardCheck ở tầng route) chặn hỏi code/hệ thống/nội bộ.
+// Trợ lý chatbot chung của GoHub (Sales/CS/Ops/Business). Từ s190: gộp TOÀN BỘ công cụ Gấu Pro vào đây
+// (xem khối import creator/declarations ở trên) — 1 agent function-calling lặp, tự chọn công cụ, NHƯNG:
+//   · Guardian pre-flight (guardCheck ở tầng route) chặn hỏi code/hệ thống/nội bộ — CHỈ admin/creator
+//     được hỏi nhóm này (system_internal), còn lại "ai cũng như nhau" cho mọi dữ liệu kinh doanh.
 //   · Lọc dữ liệu theo role (getRoleDataFilter) + bảng nhạy cảm chỉ admin/creator +
 //     che cột COGS nếu role không có quyền (runQuerySupabase của data-explorer đã xử lý).
+//   · Công cụ Gấu Pro có rủi ro hành động/credential/chi phí/dữ liệu cá nhân Hiếu (portal, ghi KB, Lark
+//     task cá nhân, gen ảnh/video trả phí) → CHỈ đăng ký declaration cho admin/creator (GP_TOOLS_ADMIN_ONLY).
 //   · TUYỆT ĐỐI KHÔNG lộ cách hoạt động / code / SQL / schema / tên bảng-công cụ cho user.
-// Khác Gấu Pro: KHÔNG có ghi KB / portal / export marker / onboarding (creator-only).
 
 const priv = (role?: string) => {
   const r = (role || "").toLowerCase()
@@ -194,7 +244,37 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 
 ## Đa lượt hội thoại
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
-- Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"`
+- Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"
+
+## Xuất file (chỉ khi được yêu cầu)
+Nút tải file CHỈ hiện khi bạn xuất khối \`\`\`export ở CUỐI câu trả lời. Chỉ làm việc này khi user rõ ràng
+xin xuất/tải/download/lưu file (từ khoá: "xuất", "tải", "download", "lưu file", "file Excel/Word/PDF").
+KHÔNG hỏi ngược "bạn có muốn xuất không?" — chỉ hành động khi được yêu cầu.
+
+Cú pháp (đặt CUỐI câu trả lời):
+\`\`\`export
+formats: excel
+title: Doanh thu theo khách hàng T7
+sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=TRIM(c.code) WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
+\`\`\`
+- \`formats\`: danh sách cách nhau dấu phẩy, CHỈ đúng thứ user hỏi: pdf | word | excel | csv.
+- \`title\`: tiêu đề báo cáo (dùng làm tên file).
+- **Dữ liệu doanh thu/đơn/khách/nhân viên...**: đặt ĐÚNG câu SELECT đã dùng vào \`sql:\` (dòng CUỐI marker)
+  → nút Excel chạy lại query đó ở server, xuất ĐỦ dòng (không giới hạn như xem trên màn hình). Kèm thêm 1
+  khối \`\`\`csv nhỏ (~20 dòng đầu) để user xem trước ngay trong khung chat.
+- Dữ liệu KHÔNG phải từ SQL (tra cứu sản phẩm/catalog...): chỉ cần khối \`\`\`csv đầy đủ, không cần \`sql:\`.
+- "xuất báo cáo" chung chung không rõ định dạng → mặc định \`formats: pdf, word\`.
+- **Tự động xuất bảng lớn**: bảng > 15 dòng trong câu trả lời (dù user không yêu cầu) → TỰ thêm
+  \`\`\`export (formats: excel + \`sql:\` nếu có) và ghi 1 dòng "📎 Đã chuẩn bị file Excel để tải bên dưới."
+  Bảng ≤ 15 dòng thì thôi, trừ khi được yêu cầu riêng.
+- Số trong CSV: số thô, không dấu phân cách nghìn.
+
+## Phân tích file/ảnh người dùng gửi kèm
+- Đọc kỹ nội dung file/ảnh rồi trả lời đúng câu hỏi về nó.
+- Bảng tính/CSV: mô tả cấu trúc, đếm dòng, liệt kê cột, nêu số liệu chính nếu được hỏi.
+- Ảnh/PDF: mô tả nội dung, trích thông tin cần thiết (vd bảng giá NCC, ảnh chụp màn hình lỗi, hoá đơn).
+- File code: đọc và giải thích/trả lời theo đúng câu hỏi.
+- Không rõ người dùng muốn gì với file → hỏi lại ngắn gọn thay vì đoán.`
 
 // ─── Executor: gohub_dw SQL ─────────────────────────────────────────────────────
 async function execSQL(sql: string): Promise<any> {
@@ -365,9 +445,11 @@ export async function runBeGau(opts: {
   sessionId?: string
   isCost?: boolean          // canViewCogs
   extraDirective?: string   // vd quy tắc tạm thời
+  fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
 }): Promise<{ text: string; sources: WebSource[] }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "" } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts } = opts
   const isPriv = priv(role)
+  const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
   const isFreshConv = geminiHistory.length <= 1
 
@@ -409,16 +491,49 @@ export async function runBeGau(opts: {
     extraDirective,
   ].join("")
 
+  // s190: + toàn bộ công cụ Gấu Pro — mở cho mọi role (GP_TOOLS_OPEN), phần nhạy cảm/trả phí/cá nhân
+  // Hiếu chỉ đăng ký cho admin/creator (GP_TOOLS_ADMIN_ONLY) — Gemini không thấy thì không gọi được.
+  const functionDeclarations = [
+    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl,
+    ...GP_TOOLS_OPEN,
+    ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
+  ]
+
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.6-flash",
     systemInstruction,
-    tools: [{ functionDeclarations: [readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl] }],
+    tools: [{ functionDeclarations }],
     generationConfig: { temperature: 0 },
   })
 
+  // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
+  const files    = fileContexts || []
+  const texts    = files.filter(f => f.type === "text")
+  const binaries = files.filter(f => f.type !== "text")
+  const msgText  = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
+
+  let userParts: any[]
+  if (files.length > 0) {
+    const textContent = texts.map(f => {
+      const raw = f.content.length > 50000
+        ? f.content.slice(0, 50000) + `\n... [cắt bớt — ${f.content.length} ký tự]`
+        : f.content
+      return `=== FILE: ${f.name} ===\n${raw}`
+    }).join("\n\n---\n\n")
+
+    userParts = binaries.length > 0
+      ? [
+          { text: msgText + (textContent ? `\n\n=== FILE VĂN BẢN KÈM THEO ===\n${textContent.slice(0, 20000)}` : "") },
+          ...binaries.map(b => ({ inlineData: { mimeType: b.mimeType || "application/octet-stream", data: b.content } })),
+        ]
+      : [{ text: `${msgText}\n\n${textContent}` }]
+  } else {
+    userParts = [{ text: msgText }]
+  }
+
   // Fix #8: dùng history đã nén
-  const contents: any[] = [...compressedHistory, { role: "user", parts: [{ text: lastMsg }] }]
+  const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
   // Fix #4: genWithRetry thay vì generateContent trực tiếp
   let genResult = await genWithRetry(model, { contents })
   const sources: WebSource[] = []
@@ -474,6 +589,19 @@ export async function runBeGau(opts: {
           const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
           return wrap({ rows: rows.slice(0, 100) })
         } catch (e: any) { return wrap({ error: e.message }) }
+      }
+
+      // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
+      // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
+      if (GP_DISPATCH_NAMES.has(call.name)) {
+        const res = await dispatchTool({ name: call.name, args: a }, undefined, sources)
+        // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
+        // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
+        if (call.name === "searchKnowledgeBase" && !isPriv) {
+          const resp = res.functionResponse.response
+          if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
+        }
+        return res
       }
 
       return wrap({ error: "Unknown tool" })

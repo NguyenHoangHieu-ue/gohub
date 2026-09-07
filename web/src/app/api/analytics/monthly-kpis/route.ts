@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
         .slice(0, 12)
 
       return { summary, channels }
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
 
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err: any) {

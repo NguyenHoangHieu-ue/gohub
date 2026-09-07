@@ -1788,7 +1788,7 @@ function ScheduledTab({ onNotify }: { onNotify: (t: "success" | "error", m: stri
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => testRun(msg)} disabled={testingId === msg.id} title="Gửi test ngay"
-                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50">
+                    className="p-1.5 text-brand-500 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50">
                     {testingId === msg.id ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
                   </button>
                   <button onClick={() => toggle(msg)} title={msg.is_active ? "Tắt" : "Bật"}
@@ -1898,7 +1898,7 @@ function RefImportTab({ onNotify }: { onNotify: (type: "success" | "error", text
         <div className="space-y-1.5">
           {Object.entries(TABLE_META).map(([tbl, meta]) => (
             <div key={tbl} className="flex items-start gap-3">
-              <code className="text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-0.5 rounded text-blue-700 dark:text-blue-300 shrink-0">{meta.file}</code>
+              <code className="text-[10px] font-mono bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-0.5 rounded text-brand-700 dark:text-brand-300 shrink-0">{meta.file}</code>
               <div>
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{meta.label}</span>
                 <span className="text-[10px] text-slate-400 ml-1.5">({tbl})</span>
@@ -1912,7 +1912,7 @@ function RefImportTab({ onNotify }: { onNotify: (type: "success" | "error", text
       {/* Drop zone */}
       <div
         className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${
-          dragging ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-300 dark:border-slate-600 hover:border-blue-400 hover:bg-blue-50/40"
+          dragging ? "border-brand-500 bg-brand-50 dark:bg-brand-800/30" : "border-slate-300 dark:border-slate-600 hover:border-brand-400 hover:bg-brand-50/40"
         }`}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -1953,7 +1953,7 @@ function RefImportTab({ onNotify }: { onNotify: (type: "success" | "error", text
         <button
           onClick={handleImport}
           disabled={loading || !files.length}
-          className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white text-sm font-bold rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-40"
         >
           {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
           {loading ? "Đang import…" : "Import tất cả"}

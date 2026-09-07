@@ -1,5 +1,5 @@
 == TÓM TẮT SESSION ==
-Cập nhật lần cuối: 2026-08-21 (Session 157 — fix Daily Report + Squad Progress CM1 + 3HK Rev display).
+Cập nhật lần cuối: 2026-09-05 (Session 189 — Phase 6: lint script thật + trim CLAUDE.md).
 
 ## ══════ SESSION 157 (2026-08-21) — DAILY REPORT FIX + SQUAD PROGRESS CM1 + 3HK REV ══════
 
@@ -8210,3 +8210,770 @@ Quét toàn bộ: auth flow, middleware, API routes (76 analytics + admin), cron
 - tsc PASS toàn bộ 2 lần (giữa chừng + cuối).
 - Wiki: docs/wiki/Tab/analytics-to-gau.md thêm §"Fix identity-collision" ngay dưới bảng chat_group_members,
   đánh dấu cột user_email/added_by giờ lưu username không phải email thật.
+
+## Session s164 (2026-08-27)
+### Rebuild tab My Metrics (OKR cá nhân Hiếu) cho minh bạch/đáng tin hơn
+- Lý do: Hiếu chưa ưng ý số liệu, sếp (Bảo) chưa tin số chính xác. Đọc offer letter thật lấy đúng 5 KPI +
+  trọng số 70/30 time-allocation. Hỏi Hiếu chốt 3 quyết định trước khi code: SKU GM giữ cả verified+blended;
+  Bé Gấu đếm company-wide có lọc "trả lời được"; SLA/Vendor Speed giữ manual nhưng siết trust.
+- Migration v44_okr_tracking.sql (Hiếu đã chạy): ghi lại schema okr_evidence_records + cột audit
+  updated_by/updated_at + bảng mới okr_sku_tags.
+- SKU GM verified (mới): api/analytics/my-metrics/sku-tags — Hiếu tag SKU + ngày áp dụng giá/rate mới → API
+  tự so margin THẬT (gohub_dw) trước/sau ngày đó. SKU mới so baseline công ty 36.7%. Weighted theo revenue.
+- Evidence SLA/Vendor Speed siết trust: bắt buộc đủ 2 ảnh mới tính vào TB KPI; audit trail; khoá quý đã đóng
+  (isQuarterLocked).
+- Weighted OKR Score (card mới): Σ(đạt-%ᵢ × trọng-sốᵢ)/100, trọng số 70/30 theo offer letter, 4 chỉ số nhóm
+  70% chia đều 17.5% — hằng số WEIGHTS sửa được nếu sếp chốt khác.
+- File mới: lib/okr-helpers.ts. Wiki mới: analytics-my-metrics.md (tab trước đây chưa có wiki).
+
+## Session s165 (2026-08-27)
+### Fix quyền ghi (write) admin bị 403 oan trên nhiều tab analytics
+- Hiếu báo: admin không sửa được Target Squad trong Squad Progress. Root cause: JWT stale — squad-targets/
+  route.ts (và 33 route ghi khác) check role bằng session.user.role (JWT) trực tiếp, không fallback đọc role
+  tươi từ DB. JWT maxAge = 1 ngày (giảm từ 7 ở s159) → role DB đổi mà chưa re-login → JWT role cũ → 403 dù
+  FE đã cho hiện nút (FE dùng role tươi qua /api/user/me).
+- Thêm canWrite(session, tabKey, baseRoles) trong lib/writable-tabs.ts: fast-path JWT trước → fallback
+  canWriteTab (role tươi qua getDbRole) khi fast-path fail. Áp cho 34 route ghi dính cùng họ bug (Quarter
+  Report, Channels, Settings/Users/Products/B2C/Targets/SQL/Schema...) — chỉ nới, không siết quyền nào.
+- Không đụng: config/tab-visibility, usage-stats/*, to-gau/*, kb/documents, ncc/import-*, feedbacks, chat,
+  creator-ai/*, analytics/query (permission model khác, không phải bug).
+
+## Session s166 (2026-08-27)
+### Fix %TGT CM1 Squad Progress lệch bảng KH nhóm bên Tổng quan
+- Đối chiếu custPr() (quarterly/page.tsx) với calcCustCm1AndPr (squad-progress/route.ts) — cost dạng
+  "amount" (tiền cố định/tháng) bị Squad Progress hardcode elapsedRatio=1 rồi VẪN nhân CM1 với
+  factor=dim/elapsed → cost amount bị nhân đúp theo factor, CM1 thấp hơn Tổng quan có hệ thống GIỮA THÁNG
+  (đầu/cuối tháng elapsed≈dim nên không lộ, dễ sót khi QA).
+- Fix: thêm elapsedRatioOf(i) khớp công thức Tổng quan, áp cho cả 2 chỗ gọi calcRecordCostProjected
+  (per-customer + squad-level recompute).
+
+## Session s167 (2026-08-27)
+### Rebuild My Metrics lần 2 — theo offer letter thật + bot Lark tự động phát hiện SLA/Vendor Speed
+- Đọc offer letter thật xác nhận số Q4 trước đó là ước lượng (PDF gốc cắt cột Target Q4). Hỏi Hiếu chốt 3
+  quyết định: nguồn Lark = 1 group có sẵn; nhận diện = AI đề xuất + Hiếu duyệt 1-click; SKU scope = quét
+  toàn hệ thống theo Pareto doanh thu + SKU mới.
+- SKU Gross Margin: bỏ hẳn tag tay, quét TOÀN BỘ SKU công ty (api/analytics/my-metrics/sku-scan) — so GM%
+  quý này vs trước, Pareto 80% doanh thu = "trọng điểm" + SKU mới trong quý, weighted theo revenue = KPI
+  chính thức. okr_sku_tags hạ cấp thành ghi chú tuỳ chọn.
+- Bot Lark tự động: cron my-metrics-lark-scan (1x/ngày 17:00 ICT — 4x/ngày ban đầu bị Vercel Hobby reject)
+  quét 1 group Lark → Gemini (okr-lark-classify.ts) phân loại Product Request (SLA)/Vendor Rate Query → ghi
+  okr_lark_events (pending_review) + DM Lark báo case mới. Hiếu duyệt Xác nhận/Sửa giờ/Từ chối trong panel.
+- Tách lib/lark-thread-scan.ts (fetchRecentThreads) từ Cà Thread ra dùng chung.
+- Migration v45_okr_lark_events.sql (Hiếu đã chạy).
+- **Cùng ngày, follow-up**: Hiếu báo set 30 ngày quét ra 0 case + màu chưa ổn. 2 bug thật: (1) trần cứng 5
+  trang fetch (250 tin) không scale theo days_back → cửa sổ 30 ngày không bao giờ được fetch hết, fix scale
+  theo daysBack; (2) không lưu case bị AI từ chối → cron giẫm chân vô hạn, fix ghi status='not_matched' để
+  dedupe đẩy cron tiến qua backlog. Thêm lib/lark-scan-runner.ts + nút "Quét ngay để test".
+- Màu sửa lần 2: hex #003B95 tự đoán lúc đầu SAI — brand color thật là brand-600=#0f4c81 (tailwind.config.ts)
+  — đổi toàn bộ sang class brand-*.
+
+## Session s168 (2026-08-28)
+### Fix 2 bug thật trong Scheduled Messages (Daily/Weekly/Monthly Report)
+- Lỗi "column f.fulfiled_date does not exist" toàn bộ report fail: fetchBODGroupMarginData (lib/bod-data.ts)
+  — CTE filtered_f không SELECT cột ngày nhưng query ngoài dùng TO_CHAR(f.${dateCol}::date,...) tham chiếu
+  CTE đó. Fix: thêm ${source.dateCol} vào SELECT của CTE. Commit 92d4a5d.
+- Daily Report mục 【3】 thiếu target quý: root cause getQuarterTargets nuốt im lặng MỌI lỗi Turso, không
+  phân biệt lỗi thật với thiếu data. Fix log lỗi + tách 2 thông báo. Hiếu xác nhận: do thiếu data thật (chưa
+  nhập target Q3), không phải lỗi code. Commit 984b4e8.
+
+## Session s168b/s169 (2026-08-28)
+### Audit toàn diện B2B Performance ↔ Quarter Report — 7 bug thật (CM1 sai + cache không đồng bộ)
+1. B2B Performance thiếu lọc KH INACTIVE (b2b/kpis, b2b/performance, b2b/trend) — Quarter Report lọc từ lâu,
+   3 route B2B Performance thì không → Revenue/GP/CM1 cao hơn có hệ thống. Thêm excludeInactiveCustomers()
+   dùng chung. Vá luôn b2b/trend thiếu cả 3 filter chuẩn (includeShip/includeInternalOps/includeOpsCustomers).
+2. Sub-channel CM1 breakdown cao hơn CM1 hàng cha (b2b/performance) — sub_channels.gpm2 chỉ trừ cost khớp
+   ĐÚNG TÊN sub-channel (gần như không khớp cho B2B) → bỏ qua chCost Turso + group cost (case thật: Momo
+   cm1=215tr nhưng sub-channel cộng lại 437tr). Fix: phần cost chung phân bổ theo tỷ trọng revenue.
+3. Root cause chính "sửa cost ở Quarter Report không cập nhật B2B Performance": /api/analytics/
+   b2b-customer-costs KHÔNG flush cache nào — channel-costs/channel-group-costs (Supabase) đã flush từ lâu.
+   Ảnh hưởng: channels/*, bod-*, monthly-kpis, all-time-performance đều cache tới 12h. Fix: flushAnalyticsCache()
+   sau khi lưu/xoá cost (3 route ghi). Vá luôn quarterly-cache-flush (prefix list cứng lỗi thời v7 trong khi
+   key thật đã lên v9).
+4. b2b/performance: mẫu số chia group cost theo tỷ trọng revenue tính từ danh sách cap .slice(0,500) → CM1
+   tổng lệch nhẹ khi >500 KH/kênh. Đổi mẫu số sang tổng doanh thu không cap.
+5. Bảng B2B Tier Performance (FE): 2 chỗ field cm1 không đồng bộ gpm2 khi lọc trùng Strategic / merge 2 dòng
+   cùng tên khác customer_code — chỉ cộng gpm2 không cộng cm1/ch_cost.
+6. Squad Progress — 2 bug field-mismatch flat view: cột "GP PR" đọc field c.gp_pr KHÔNG TỒN TẠI → luôn "0";
+   cột "%TGT CM1" đọc nhầm c.cm1_pct thay vì c.cm1_tgt_pct. Root cause: flat view là JSX viết tay riêng,
+   không share component với per-squad view.
+7. Squad Progress không hiện companyCode (ALL/VN/US) đang chọn trong tiêu đề card — 2 người khác companyCode
+   ra số khác THẬT nhưng không có dấu hiệu nhận ra (route zero role-branching/cache, không phải bug code).
+- s169(c) — TỰ GÂY RA rồi tự fix cùng ngày: fix mục 3 dùng flushAnalyticsCache() (xoá sạch bảng) sau mỗi lần
+  sửa cost → nuke cache MỌI tab không liên quan lặp lại nhiều lần trong session test → "web load lâu quá".
+  Fix: B2B_COST_CACHE_PREFIXES + flushB2BCostCaches() (analytics-helpers.ts) — chỉ flush đúng route phụ
+  thuộc cost B2B. quarterly-cache-flush đổi sang import hằng số trực tiếp từ lib/quarterly-settings.ts.
+
+## Session s170(a)-(c) (2026-08-31)
+- (a) bỏ filter SG/HK Orders. (b) audit + vá 4 lỗ hổng bảo mật Tổ Gấu.
+- (c) Weekly Report: nút "Create Weekly Report" (Scheduled Messages) → POST
+  api/admin/scheduled-messages/weekly-report → tính số liệu + render .docx. Ảnh minh chứng vẽ bằng
+  next/og ImageResponse (không Puppeteer). markdownToDocx tách ra lib/docx-markdown.ts dùng chung với
+  creator-ai/export, thêm marker ![[IMG:key]]. fetchChannelMoM() (lib/weekly-report/data.ts) tính pro-rata
+  theo từng channel, filter khớp B2B Performance. PDF làm rồi BỎ theo yêu cầu Hiếu sau khi test .docx ổn.
+  File: web/src/lib/weekly-report/{period,data,narrative,card-images,report-content,docx-export}.ts.
+  Hiếu đã test trên staging: file .docx xuất ra ổn kể cả card ảnh.
+
+## Session s171 (2026-08-31)
+### Audit tab My Metrics ("quét ra tab My Metrics") — 3 bug thật, đã fix
+- HIGH: 2 route lark-config/lark-config/scan-now check quyền bằng JWT role thay role tươi DB (cùng họ bug
+  s165, route thêm sau s165 nên sót) — đổi sang canWriteTab().
+- MEDIUM: %3HK+BC Datapool (my-metrics/route.ts) có thể đếm trùng doanh thu nếu dim_sku có SKU trùng dòng
+  khác vendor — đổi sang 1 JOIN dedupe DISTINCT ON + 1 CASE.
+- LOW: conversations/route.ts tự tính lại quarter range thay vì dùng chung parseQuarterLabel() — đổi sang
+  dùng chung, hết phụ thuộc timezone server.
+
+## Session s172 (2026-08-31)
+### Rebuild UI tab My Metrics (trẻ trung/hiện đại/rõ ràng, theo yêu cầu Hiếu)
+- Thêm 4 chart mới (my-metrics-charts.tsx, cùng pattern bod-charts.tsx): radar Weighted Score, area
+  %Datapool theo tháng, stacked bar Bé Gấu theo tháng, bar ngang SKU GM movers — dùng lại data đã fetch.
+- Gom mọi ghi chú/công thức luôn-hiện-inline vào NotesDrawer (slide-over, nút "📖 Cách tính"). Polish hero
+  sang gradient dùng đúng scale brand-* có sẵn. CHỈ đổi presentation, không đổi công thức/API nào.
+
+## Session s173 (2026-08-31)
+### Lark bot My Metrics chuyển real-time capture, bỏ giới hạn 1 group
+- Hiếu đưa mẫu Hieu/lark-sla-bot yêu cầu áp dụng — KHÔNG deploy bot riêng, tích hợp thẳng vào webhook Lark
+  có sẵn (api/lark/events). Thêm tap fire-and-forget (lib/okr-lark-capture.ts) ghi mọi tin Hiếu tự gửi HOẶC
+  được @mention (bất kỳ group nào bot có mặt) vào bảng mới okr_lark_message_log (migration v46).
+- lark-thread-scan.ts thêm fetchThreadsFromCapturedLog() (đọc thread_id từ log rồi hydrate qua REST).
+- Config lark-config bỏ hẳn field chat_id. LarkThread type thêm chat_id (mỗi thread có thể ở group khác).
+- Hạn chế biết trước: không có dữ liệu lịch sử (chỉ capture từ lúc deploy), cần Hiếu đã Kết nối Lark cá
+  nhân + bot đã add vào group liên quan.
+
+## Session s174 (2026-08-31)
+### Mở rộng phân loại "sla" + bảng 20 dòng/trang (My Metrics)
+- SYSTEM_PROMPT (lib/okr-lark-classify.ts) nêu rõ 3 nhóm ví dụ SLA (tạo/thêm SP · cung cấp/xác nhận thông
+  tin · báo lỗi SP) + "các dạng khác cùng bản chất" — Gemini tự suy luận theo tinh thần, không so khớp từ
+  khoá cứng.
+- Fix bug: prompt cũ dặn trả is_match=false cho thread CHƯA hoàn thành → thread biến mất khỏi hàng chờ
+  duyệt. Đổi: request thật chưa xong → is_match=true, completion_reply_index=null → HIỆN trong hàng chờ.
+- DataTable (component dùng chung) đổi pageSize mặc định 50→20, áp cho mọi bảng trong tab.
+
+## Session s175 (2026-08-31)
+### Fix ROOT CAUSE "0 case" thật + auto-size chart + Bé Gấu Insights
+- Bug thật: máy dev LẦN NÀY có credential Supabase → query trực tiếp okr_lark_message_log = 0 dòng → truy
+  ngược getLarkUserOpenId() đọc field open_id từ app_settings.lark_oauth_creator, record thật KHÔNG CÓ field
+  này. Root cause: oauth/callback/route.ts gọi saveLarkUserToken(tok, tok.open_id) — Lark OAuth v2
+  token-exchange response KHÔNG có field open_id (phải gọi riêng GET /authen/v1/user_info) — bug có từ lúc
+  code viết, không phải bug mới s173.
+- Fix + backfill NGAY: thêm getLarkSelfOpenId() gọi đúng endpoint; BACKFILL trực tiếp Supabase bằng
+  access_token còn hạn — không cần Hiếu re-OAuth.
+- Side-fix: mọi tính năng khác âm thầm bị cùng bug (DM cảnh báo case mới, gán task assignee Gấu Pro) cũng
+  hết lỗi luôn.
+- Chart SKU/tên tự lấn chữ → auto-size YAxis theo độ dài chuỗi dài nhất trong data (SkuMoversChart +
+  TopUsersChart).
+- Bé Gấu Insights (mới): route begau-insights + lib/begau-insights.ts — top người dùng, chủ đề hay hỏi (đếm
+  tần suất từ khoá, KHÔNG AI), chấm điểm câu trả lời (heuristic rõ ràng, không phải AI chấm). Verify chạy
+  thật trên Supabase Q3-2026 (328 task): top user Hồ Công Minh 74 task, chất lượng TB 93.0 điểm.
+
+## Session s176 (2026-08-31)
+### Bug KHẨN — Lark webhook production reject 100% request thật
+- Hiếu báo tạo group Lark mới + test → vẫn 0 case dù s175 đã fix open_id. Điều tra bằng Vercel runtime log
+  thật (không đoán): log preview (staging) ZERO request /api/lark/events trong khung giờ Hiếu test — webhook
+  Lark trỏ về production. Log production cùng khung giờ → CÓ 12 request nhưng TOÀN BỘ bị reject:
+  "[Lark] signature mismatch".
+- Root cause thật: verifyLarkSignature() ký HMAC-SHA256 bằng LARK_VERIFICATION_TOKEN — nhưng spec Lark khi
+  app bật Encrypt Key (app này CÓ bật) yêu cầu chữ ký = sha256(timestamp+nonce+ENCRYPT_KEY+rawBody) — SHA256
+  THƯỜNG không phải HMAC, dùng Encrypt Key chứ không phải Verification Token. Sai cả 2 chỗ → reject 100% bất
+  kể LARK_VERIFICATION_TOKEN set gì. Bug có từ s159 (lúc thêm chữ ký hardening) — không liên quan s171-175.
+- 🔴 Hệ quả nghiêm trọng hơn phạm vi My Metrics: bug này chặn MỌI request Lark thật tới production từ
+  2026-08-24 — Bé Gấu (chatbot chính) trên Lark không trả lời ai suốt từ đó tới giờ.
+- Fix: đổi verifyLarkSignature dùng LARK_ENCRYPT_KEY + createHash("sha256").
+- Chart SKU movers lấn chữ (lần 2): fix trước (auto-width ước lượng px/ký tự) vẫn sai vì SVG text không tự
+  wrap theo layout Recharts YAxis. Đổi: width CỐ ĐỊNH 92px + cắt chuỗi bằng tickFormatter (ellipsis sau 11
+  ký tự), tên đầy đủ xem qua Tooltip khi hover.
+
+## Session s177-s180 (2026-08-31)
+### Chuỗi fix Lark bot My Metrics sau khi Hiếu bắt đầu test tay thật (sau s176 fix chữ ký)
+- s177: classifyLarkThread có catch{return null} nuốt im lặng mọi lỗi Gemini → thêm console.error +
+  classify_errors trả về FE, hiển thị "Đã quét N group: tên (n thread)".
+- s177(b): root cause thật "Gemini không trả JSON" — gemini-3.6-flash tốn token cho "thinking" ẩn ăn hết
+  maxOutputTokens, JSON bị cắt cụt giữa chừng. thinkingConfig:{thinkingBudget:0} bị model reject 400. Fix
+  thật: bump maxOutputTokens 500→4000.
+- s178: case chờ duyệt không đủ thông tin — snippet bị CSS truncate 1 dòng. Fix: resolve chat_name qua Lark
+  API, thêm badge group + link mở thẳng Lark, bỏ truncate.
+- s179: Hiếu báo 1 group mention nhiều nhưng chỉ quét ra 1 case — tra Vercel log xác nhận 3 tiếng production
+  chỉ nhận đúng 1 request /api/lark/events thật (mention "rất nhiều" là tin CŨ trước lúc webhook sống — bug
+  s176 chặn tới tận hôm nay), không phải bug mới. Thêm "Quét lịch sử 1 lần" (runLarkHistoryScan, dùng lại
+  fetchRecentThreads) + listBotChats() route liệt kê group cho Hiếu chọn.
+- s180: case Lark confirm nhầm không xoá được (chỉ có action cho nguồn manual). Thêm route DELETE
+  lark-events/[id] — xoá hẳn để message_id hết bị dedupe, thread thật tự trôi lại hàng chờ duyệt.
+- Đã merge main (2026-08-31).
+
+## Session s183 (2026-09-04)
+### Tái cấu trúc docs/wiki/ thành business/ + system/ — Phase 0 plan rebuild toàn diện
+- Bối cảnh: Hiếu báo hệ thống "đang không ok" — sửa xong 1 chỗ, lỗi tương tự lộ ra chỗ khác. Audit xác nhận
+  root cause kỹ thuật cụ thể: không có 1 nơi tính CM1/cost duy nhất (20 file tự cài lại logic), 37 file tự
+  quản cache key riêng (từng nuke nhầm cache toàn app ở s169(c)), trang FE khổng lồ JSX chép tay 2 lần
+  (quarterly 3077 dòng, to-gau 2843, channels 1944, my-metrics 1809), 85 route gần trùng mục đích, rate
+  limit chỉ 2 route dùng in-memory Map, không có lint script thật dù docs mô tả có, chỉ 15 file test cho
+  85+ route/33 trang.
+- Plan rebuild 7 phase (lưu C:\Users\nhhie\.claude\plans\effervescent-zooming-wilkinson.md, Hiếu đã duyệt):
+  Phase 0 tài liệu, Phase 1 Analytics Reporting Engine, Phase 2 migrate route theo tab, Phase 3 gộp tab
+  trùng, Phase 4 Upstash+cache, Phase 5 dọn FE khổng lồ, Phase 6 vá quy trình lint/test.
+- Phase 0: 13 file nghiệp vụ → docs/wiki/business/*.md (viết lại HẲN văn bản, bỏ mọi bảng kể cả bảng tra
+  mã). 34 file kỹ thuật → docs/wiki/system/ + system/tabs/ (dọn nguyên khối, không đổi nội dung). Cập nhật
+  HOME.md + link nội bộ + path CLAUDE.md.
+
+## Session s184 (2026-09-04)
+### Phase 1 — engine getKpiFactor/getElapsedRatio + 30 test mới
+- analytics-engine/quarter-projection.ts thêm 2 hàm dùng chung thay kpiPrFactor/monthKpiFactor
+  (quarterly/page.tsx) và kpiFactorOf/elapsedRatioOf (squad-progress/route.ts) tự định nghĩa lại y hệt nhau
+  — root cause bug s166/s181/s182. CHƯA migrate route/page nào dùng hàm mới (đúng scope Phase 1).
+- Thêm 30 test case (cost-engine/projection/quarter-projection/b2b-customer-cost + excludeInactiveCustomers/
+  buildIsStrategicSql) — trước đây 0 test cho module tính CM1/chi phí.
+- Điều chỉnh so plan gốc: claim "20 file tự chép calcChCost" hơi quá, đa số route đã import đúng hàm chung —
+  chỉ Quarter Report (squad-progress + quarterly/page.tsx) thật sự có 3 bản trùng. Không tạo filters.ts/
+  cache.ts mới như plan gốc — analytics-helpers.ts đã gộp tốt, tạo thêm chỉ phân mảnh.
+- Phát hiện phụ (chưa sửa): buildQuarterMonthMeta trộn new Date(isoString) UTC với new Date(y,m,d) local —
+  đúng trên Vercel (UTC), lệch ±1 ngày nếu chạy máy dev timezone khác.
+
+## Session s185 (2026-09-04)
+### Phase 2 — fix bug thật All-Time + timezone date-math + migrate BOD/Quarter/B2B sang engine
+- Bug thật fix: (1) all-time-performance/route.ts — query chính CASE tham chiếu c.name/c.price_list_name
+  nhưng THIẾU LEFT JOIN dim_customer c, với DEFAULT_TIER_KEYWORDS mặc định không rỗng → CHẮC CHẮN lỗi SQL
+  thật; (2) bod-data.ts + cron/refresh-monthly-kpis — getDaysInMonth parse new Date() UTC rồi đọc lại
+  .getFullYear()/.getMonth() LOCAL, lệch ngày trên máy timezone âm (đúng trên Vercel/UTC nên chưa lộ prod).
+- Thêm lib/analytics-engine/date-math.ts (thuần, zero-dep, client-safe) làm nguồn duy nhất, thay 2 bản
+  trùng. Migrate squad-progress/quarterly-report/quarterly-b2b-customers (BE) + b2b/page.tsx (FE) sang gọi
+  hàm chung.
+- 8 test mới (date-math.test.ts, gồm timezone-invariance). tsc + vitest 173/173 PASS.
+
+## Session s186 (2026-09-04)
+### Phase 3 — dọn tàn dư Orders/Order Report đã gộp trước đó
+- Audit phát hiện: Orders + Order Report ĐÃ được gộp từ 1 session trước nhưng chưa dọn sạch — 2 route API
+  chết (GET /api/orders cũ, GET /api/staff-list) + 2 file wiki mô tả sai kiến trúc. Verify kỹ bằng grep
+  trước khi xoá — suýt xoá nhầm /api/orders/export (Products BI dùng) và /api/order-sources (vẫn sống).
+  Gộp 2 wiki thành analytics-orders.md, xoá analytics-order-report.md.
+- Candidate gộp khác (CS Troubleshoot/Feedback/3HK Usage/Website/All-Time) cần số usage thật
+  app_usage_events trước khi quyết — Hiếu chọn bỏ qua, chưa đụng.
+
+## Session s187 (2026-09-04)
+### Phase 4 — rate-limit chuyển Upstash Redis + mở rộng 4 route
+- lib/rate-limit.ts đổi từ in-memory Map (chỉ đúng 1 Vercel instance) sang Upstash Redis khi có env
+  UPSTASH_REDIS_REST_URL/_TOKEN — thiếu env tự rơi về in-memory cũ (opt-in). checkRateLimit() đổi async.
+- Mở rộng: POST /api/analytics/query (60/min/user) + POST /api/admin/sql-query (30/min/user) đúng khuyến
+  nghị operations-runbook.md §7. Thêm rate-limit.test.ts (4 test, trước đây 0 test).
+- Cần Hiếu: tạo tài khoản Upstash + set 2 env Vercel để limiter chặn thật cross-instance.
+
+## Session s188-s189 (2026-09-04/05)
+### Phase 5 — tách cơ học 4 trang FE khổng lồ (quarterly/channels/to-gau/my-metrics)
+- Nguyên tắc chốt với Hiếu: CHỈ tách cơ học (move nguyên khung JSX/logic, KHÔNG gộp khối JSX khác nhau) vì
+  máy dev không có .env.local → không chạy dev server verify UI bằng mắt, tsc là lưới an toàn duy nhất.
+- quarterly/page.tsx: 3077→2688 dòng (s188, tách KpiCard/TableHead/ColInfo/MomBadge/MonthSubRow/
+  QtSummaryRow/QtTargetRow/PivotTable) →1564 dòng (s189, tách nốt B2BTierSection ~1080 dòng — tổng -49%).
+- channels/page.tsx: 1944→1843 dòng (tách B2BCustomerDetail).
+- to-gau/[id]/page.tsx: 2843→1224 dòng (-57%, tách Avatar/SettingsModal/DocsPanel/NotesPanel/WikiPanel/
+  FilePreviewItem/AttachmentDisplay/ConfirmModal+useConfirm).
+- my-metrics/page.tsx: 1809→629 dòng (-65%, tách LarkReviewPanel/EvidenceCard/DatapoolDetailTable/
+  SkuScanSection/BegauInsightsSection/ScanResultBox/LarkConfigModal + UI dùng chung).
+- QA Chrome thật trên staging (Creator, data thật) xác nhận quarterly Tổng quan + channels PASS, không bug
+  do refactor. to-gau/My Metrics/B2BTierSection còn nợ Hiếu QA.
+- tsc + vitest 177/177 PASS + next build "Compiled successfully" sau mỗi file (lỗi collect-page-data do
+  thiếu .env.local, pre-existing).
+
+## Session s189 (2026-09-05, tiếp) — Phase 6 vá lỗ hổng quy trình
+- Hỏi Hiếu quyết định GitHub Actions CI — chọn giữ quy trình tsc-tay hiện tại, KHÔNG setup CI.
+- Thêm script lint thật: eslint + eslint-config-next + .eslintrc.json + "lint": "next lint" trong
+  package.json (trước đây package.json chỉ có dev/build/start/test/prepare dù docs mô tả có "Lint Stage").
+  Rule override pragmatic cho codebase 285+ file chưa từng chạy lint: no-explicit-any off (any dùng phổ
+  biến cho shape dữ liệu ngoài), no-unused-expressions off (pattern `cond ? a() : b()` toggle Set/Map là
+  code đúng, không phải bug), no-unused-vars/prefer-const/ban-ts-comment/no-unsafe-function-type hạ warn
+  (222 warning thật nhưng không chặn exit code). Fix 2 bug thật: cs-troubleshoot/page.tsx + analytics/
+  page.tsx dùng dấu gạch dài "—" thay "--" trong `// eslint-disable-line rule -- reason` → ESLint hiểu
+  nhầm cả chuỗi là tên rule → disable không có tác dụng thật (chưa từng chạy lint để lộ ra).
+  `next lint` nay chạy sạch: 0 error, 222 warning.
+- Mở rộng smoke test cho route đã migrate (Phase 2): KHÔNG làm được — máy dev không có credential DB thật
+  (ANALYTICS_DB_*/Supabase) nên không gọi API thật được, và các route import trực tiếp sẽ crash ngay ở
+  module load (giống lỗi "supabaseUrl is required" thấy khi next build) vì client Supabase/DB khởi tạo ở
+  top-level dùng env. Bỏ qua, không tự chế test giả tạo không giá trị thật.
+- Trim CLAUDE.md: dồn toàn bộ narrative s164-s189 (nội dung khối này) sang đây, CLAUDE.md chỉ giữ trạng
+  thái hiện tại + rule + checklist việc Hiếu cần làm.
+
+## Session s192 (2026-09-05) — audit UI/UX 32 trang + Bé Gấu: thêm upload ảnh/file
+
+Theo yêu cầu Hiếu: "quét UI/UX mọi tab analytics, đưa hướng cải tiến" + "check Bé Gấu đã có tất cả chức
+năng Gấu Pro chưa (gồm gửi ảnh, gửi file, xuất file...)". Chạy 2 audit song song (đọc code thật, không chỉ
+tin wiki cũ), tổng hợp thành 1 Artifact gửi Hiếu (không lưu file trong repo, theo đúng convention s190).
+
+### Audit 1 — UI/UX 32 trang dashboard
+- Nền tảng đã có (`dashboard-kit.tsx`): `StatTile` (KPI card, màu theo `MetricAccent`), `DataTable`,
+  `Panel`/`SnapshotMetric`/`DeltaPill`/`SourceBadge`, chart theme dùng chung — nhưng mới 4/32 trang dùng
+  (BOD/Dashboard/Quarter Report/Channels, làm ở s191).
+- Phát hiện thêm ngoài phạm vi 3 tab s191: **7 file còn hex sai** `#003B95`/`#002B70`/`#002d73` (đáng chú
+  ý nhất: `analytics/page.tsx` — Dashboard — vẫn còn sót 1 chỗ dù phần KPI đầu đã redesign đúng
+  `brand-600`) — cs-troubleshoot, orders, staff, to-gau, users, settings cũng dính. Staff Performance nặng
+  nhất: 16 hex khác nhau, màu theo cảm hứng không theo ngữ nghĩa. Nhiều tab (3hk-usage, all-time, b2b,
+  products, vendors, website) tự chọn hex Recharts rời rạc thay vì `CHART_PALETTE` chung.
+- Đã xếp chi tiết theo lô ưu tiên bên trong "Đợt 4+" của plan `eager-popping-aho.md` (không đổi lô gốc,
+  chỉ tinh chỉnh thứ tự trong lô — file nhỏ/rủi ro thấp trước). Toàn bộ là khuyến nghị, CHƯA code (UI
+  Strict Lock — chờ Hiếu/Bảo duyệt phạm vi từng lô).
+
+### Audit 2 — Bé Gấu vs Gấu Pro (đối chiếu 40 tính năng)
+- Phát hiện quan trọng nhất: s190 đã âm thầm gộp gần hết TOOL của Gấu Pro vào Bé Gấu (`GP_TOOLS_OPEN` +
+  `GP_TOOLS_ADMIN_ONLY` trong `be-gau.ts`, dùng chung `creator/declarations.ts`/`creator/tools/dispatch.ts`)
+  — wiki `docs/wiki/system/tabs/chatbot.md` (mô tả "7 agent" cũ) CHƯA phản ánh thay đổi này.
+- Khác biệt CÓ CHỦ ĐÍCH (giữ nguyên, không phải gap): tool admin/creator-only (browsePortal, writeKB+duyệt,
+  sendLarkMessage, Lark Task tools, generateImageStability/generateVideo trả phí) — lý do bảo mật/chi
+  phí/dữ liệu cá nhân Hiếu, đã ghi rõ trong comment `be-gau.ts`. Guardian chặt hơn + lọc COGS theo role ở
+  Bé Gấu, rate limit khác nhau (20 vs 10/phút) — đúng thiết kế.
+- GAP THẬT: **upload ảnh/file** (route `/api/chat` chưa nhận multipart, FE không có input/paste/drop),
+  **xuất file** (Excel full-SQL/Word/PDF — thiếu marker prompt + route export chưa mở non-creator), auto
+  date context (`buildDateContext` chưa gọi trong `runBeGau`), chart nâng cao (stacked/waterfall/scatter —
+  FE đã hỗ trợ, prompt chưa hướng dẫn), voice input, followup chips.
+
+### Fix ngay trong phiên — gap upload ảnh/file (gap lớn nhất, đúng trọng tâm câu hỏi Hiếu)
+Xuất file để dành làm riêng (ngoài scope, Hiếu chưa yêu cầu lần này).
+- **`lib/agents/file-parser.ts`** (mới) — tách `FileContext` + `parseUploadedFile()` (Excel→CSV, PPTX→text
+  qua jszip, DOCX→text qua mammoth, CSV/JSON/TXT/code→text thẳng, PDF/ảnh→base64 inlineData) từ
+  `creator-ai/chat/route.ts` ra dùng chung 2 agent — tránh chép lại ~90 dòng logic parse file.
+  `creator-ai.ts` đổi sang `import/export type { FileContext } from "./file-parser"` (không đổi hành vi
+  Gấu Pro, chỉ đổi nguồn định nghĩa type). `creator-ai/chat/route.ts` import `parseUploadedFile` từ file
+  mới thay vì định nghĩa cục bộ.
+- **`be-gau.ts`**: `runBeGau()` thêm param `fileContexts?: FileContext[]`; build Gemini `contents` cho
+  lượt cuối bằng text + `inlineData` (ảnh/PDF) + text file nối vào — y hệt cách `runCreatorAI` làm (đọc
+  code Gấu Pro rồi mirror, không tự đoán). Thêm 5 dòng hướng dẫn "Phân tích file/ảnh người dùng gửi kèm"
+  vào `BE_GAU_PROMPT` (bản rút gọn của mục tương ứng bên Gấu Pro).
+- **`api/chat/route.ts`**: thêm nhánh đọc `multipart/form-data` (giữ nguyên nhánh JSON cũ y hệt trước —
+  tin nhắn thường KHÔNG đổi hành vi/request shape) — tối đa 5 file/lượt, dùng `parseUploadedFile` chung,
+  lỗi đọc file từng cái ghi vào 1 `FileContext` lỗi để model tự báo cho user thay vì vỡ cả request.
+  Truyền `fileContexts` vào `runBeGau()`.
+- **`chatbot/page.tsx`** (FE Bé Gấu): thêm nút paperclip (mở file picker), kéo-thả file vào khung chat
+  (overlay + `onDrop`), paste ảnh Ctrl+V, chip hiển thị file đã đính kèm (preview ảnh nếu là ảnh) + nút xoá,
+  giới hạn 5 file/20MB (khớp server + khớp Gấu Pro). Khi gửi có file → build `FormData` thay vì JSON
+  (mirror đúng luồng Gấu Pro `analytics/creator/ai/page.tsx`); khi không có file → JSON như cũ, không đổi.
+  `send()` sinh nội dung fallback `"[Gửi N file: ...]"` khi user không gõ chữ, giữ nguyên UI stream plain-
+  text (`__AGENT__:` prefix) đã có, không đổi giao thức stream.
+- tsc + `next lint` (0 error) + vitest (185/185, gồm `be-gau-runner.test.ts` 45 test cũ vẫn pass nguyên) —
+  PASS. ✅ **Hiếu đã QA tay trên staging — xác nhận OK**: Bé Gấu đọc đúng ảnh/file đính kèm, tin nhắn
+  thường (không đính kèm) không bị ảnh hưởng bởi thay đổi route.
+
+## Session s192+1 (2026-09-05, tiếp) — Bé Gấu: thêm xuất file (Excel/Word/PDF/CSV)
+
+Sau khi upload ảnh/file (trên) được QA OK, Hiếu chọn làm nốt gap còn lại trong báo cáo đối chiếu Bé Gấu vs
+Gấu Pro: xuất file.
+
+- **`lib/export-docs.ts`** (mới) — tách `buildXlsxFromSql(sql, title)` (chạy lại SELECT/WITH server-side,
+  xuất Excel full — không giới hạn 200 dòng như bảng model tự gõ) và `buildDocxFromMarkdown(markdown,
+  title)` (style Times New Roman, header/footer "GoHub Intel") từ `api/creator-ai/export/route.ts` ra dùng
+  chung. Route Gấu Pro đổi sang gọi 2 hàm này, giữ nguyên `requireAccess()` (admin/creator) — không đổi
+  hành vi.
+- **`api/chat/export/route.ts`** (mới) — cùng logic xlsx/docx trên, nhưng auth = **mọi role đã đăng nhập**
+  (không giới hạn admin/creator như Gấu Pro) vì Bé Gấu phục vụ cả công ty; cùng mức tin cậy đã có sẵn ở
+  tool `executeSQL` (mọi role đã gọi được SELECT tuỳ ý qua chat từ trước — export không mở quyền mới, chỉ
+  thêm cách tải kết quả đầy đủ). Rate-limit riêng 20 req/phút/user. PDF vẫn client-side, không qua route
+  nào (giống Gấu Pro).
+- **`components/chat-export.tsx`** (mới) — tách `ExportBar` (nút CSV/Excel/JSON/PDF/Word) +
+  `parseExportMarker`/`extractCSVBlock`/`extractJSONArray`/`extractMarkdownTable`/`stripExportHelperBlocks`
+  từ `analytics/creator/ai/page.tsx` (~250 dòng) ra dùng chung 2 agent. `ExportBar` nhận prop
+  `apiEndpoint` để trỏ đúng route (`/api/creator-ai/export` hay `/api/chat/export`). Gấu Pro đổi sang
+  import từ đây — đã dọn luôn 1 chỗ trùng lặp nhỏ khác nhân tiện phát hiện (`MsgContent` tự viết lại đúng
+  3 dòng regex strip export/csv/json giống hệt `stripExportHelperBlocks`).
+- **`be-gau.ts`**: thêm mục "Xuất file" vào `BE_GAU_PROMPT` — mirror quy tắc Gấu Pro (marker \`\`\`export
+  cuối câu trả lời, chỉ khi user xin, tự-động-xuất bảng >15 dòng, kèm \`sql:\` cho dữ liệu gohub_dw để
+  Excel xuất FULL). Marker luôn bị ẩn khỏi nội dung hiển thị cho user (FE strip trước khi render) — không
+  vi phạm rule "tuyệt đối không lộ SQL" đã có, vì user không bao giờ thấy khối marker, chỉ thấy nút bấm.
+- **`chatbot/page.tsx`**: tách message assistant ra component riêng `BeGauMsgContent` (hoist luôn
+  `renderMarkdown` lên module-level cho dùng chung) — cần thiết vì `ExportBar` xuất PDF phải chụp DOM qua
+  1 `contentRef` riêng cho mỗi message, mà `useRef` không gọi được trong `.map()` inline IIFE (vi phạm
+  rule hook). Nút xuất tự ẩn khi CHÍNH message đó đang stream dở (`streaming && isLast`) — tránh flicker vì
+  Bé Gấu stream tăng dần từng chunk (khác Gấu Pro chỉ set nội dung 1 lần lúc xong), marker \`\`\`export có
+  thể chưa đóng kịp giữa chừng.
+- tsc + `next lint` (0 error mới, vài warning pre-existing không liên quan) + vitest (185/185) PASS.
+  ✅ **Hiếu đã QA tay trên staging — xác nhận OK**: xuất Excel/Word/PDF cho Bé Gấu hoạt động đúng.
+
+Bé Gấu vs Gấu Pro coi như đóng hết 2 gap chính từ audit s192 (upload ảnh/file + xuất file). Gap nhỏ còn lại
+chưa làm (auto date context, chart nâng cao stacked/waterfall/scatter, voice input, followup chips) — để
+dành làm khi Hiếu yêu cầu tiếp.
+
+## Session s193 (2026-09-05, tiếp) — UI Đợt "quick-win": All-Time, Scheduled, Schema, Promotions, Countries
+
+Hiếu chọn tiếp tục redesign UI theo hướng "quick-win nhỏ trước" (thay vì Lô 2 chính thức B2B/B2C, hoặc chỉ
+sửa hex sai) từ audit UI/UX s192. Đọc lại 5 file trước khi sửa (audit s192 chỉ ghi số dòng, chưa xem chi
+tiết bên trong) — phát hiện các trang này không hẳn "trắng đen" như All-Time (đã có card/gradient màu riêng
+nhưng dùng hex Tailwind blue/indigo tuỳ hứng, không phải token brand), nhưng Promotions/Countries đúng là
+bảng `<table>` tay không phân trang — khớp đúng mô tả gốc của Hiếu.
+
+- **All-Time**: gradient area chart + legend + text màu bảng breakdown đổi từ `#2563eb`/`#93c5fd`/`#312e81`
+  (tuỳ hứng) sang bảng nhất quán: B2B-Strategic = `brand-600` (#0f4c81), B2B-Non-Strategic = `brand-300`
+  (cùng họ brand, nhạt hơn — thể hiện "cùng nhóm B2B"), B2C = `emerald-600` (tách hue rõ khỏi B2B). Dùng
+  `CHART_GRID_COLOR`/`chartTooltipStyle` từ `dashboard-kit.tsx` thay style viết tay. Mọi nút khác (Filter
+  toggle, Apply Filters, focus ring input, metric-selector "Revenue") đổi `blue-*`→`brand-*`. KHÔNG động
+  vào 3 nút chọn metric (Revenue/GPM/CM1) — chúng vừa là KPI card vừa là toggle nên không thay bằng
+  `StatTile` được (StatTile không có khái niệm active/onClick).
+- **Scheduled**: bảng danh sách lịch (`<table>` tay, 5 cột + cột thao tác) đổi sang `DataTable` — thêm
+  phân trang 20 dòng/trang (trước hiện hết không phân trang). Bỏ pattern `opacity-0 group-hover:opacity-100`
+  cho nút Test/Sửa/Xoá (DataTable chưa hỗ trợ class `group` per-row) → nút luôn hiện thay vì chỉ hiện khi
+  hover — đơn giản hơn, chấp nhận được vì danh sách lịch thường ít dòng. Toàn bộ `blue-*` (16 chỗ: nút
+  Lưu/Sync, spinner, input, button primary) đổi `brand-*` qua `sed`.
+- **Schema**: CHỈ đổi `blue-*`→`brand-*` (13 chỗ) — đây là trang form editor (thêm/sửa bảng-cột tay cho AI
+  hiểu schema), không phải bảng liệt kê nên KHÔNG áp `DataTable`.
+- **Promotions**: bảng khuyến mãi (1 bảng, 6 cột) đổi sang `DataTable` — thêm phân trang (trước không có).
+  Giữ nguyên toàn bộ badge màu vendor/SIM/trạng thái KM (đã đúng màu ngữ nghĩa phân loại từ trước, không
+  phải "hex sai" cần sửa).
+- **Countries**: cả 4 sub-tab (Mã Nước/Nhóm Nước Hỗ Trợ/Category/Mã Vendor) đổi 4 bảng `<table>` tay sang
+  `DataTable` — quan trọng nhất là **"Mã Nước" trước hiện hết 271 dòng không phân trang**, nay có phân
+  trang 20/trang. Badge "Đa quốc gia" đổi hex lạc `blue-100/blue-700` sang `brand-100/brand-700` (trang
+  này đã dùng `brand-700` cho mọi mã code khác, chỉ badge này lạc màu).
+- Cách làm: đọc kỹ từng file trước khi sửa (không đoán), dùng `sed 's/blue-/brand-/g'` cho các file chỉ cần
+  đổi token màu thuần tuý (an toàn, verify bằng tsc+lint sau đó), sửa tay từng đoạn `<table>`→`DataTable`
+  cho các file cần đổi cấu trúc (giữ nguyên mọi cell render/badge/logic, chỉ đổi khung bảng).
+- tsc + `next lint` (0 lỗi mới; 2 warning trong scheduled/page.tsx là pre-existing — `useRef` unused +
+  1 useEffect missing dep, không phải do đợt sửa này) + vitest (185/185) PASS.
+  ✅ **Hiếu đã QA trên staging — xác nhận OK**: cả 5 trang hiển thị đúng, phân trang mới (Scheduled/
+  Promotions/Countries) hoạt động tốt.
+
+## Session s194 (2026-09-06) — GA4 App connect, UI Lô 2 (B2B+B2C), tính năng Sản phẩm/Biểu đồ B2B Quarter
+## Report, Phase 5 QA hoàn tất
+
+Session dài, nhiều task nối tiếp nhau theo yêu cầu Hiếu từng bước.
+
+**1. GA4 App connect (đóng nốt TODO cũ)**: Hiếu cấp quyền Viewer cho service account có sẵn
+(`ais-gemini-key-88b236e5f62d4cf@612144486106.iam.gserviceaccount.com`) trên property App `465150028`,
+chạy SQL Supabase thêm entry `gohub-app` vào `app_settings.ga4_configs`. Trong lúc code phát hiện + sửa
+luôn 1 bug thật: App là property RIÊNG (Firebase, không chung property web) — code cũ chỉ đổi FILTER
+platform khi toggle Web/App, không tự đổi SITE, dễ ra 0 kết quả nếu quên đổi tay dropdown. Thêm field
+`kind?: "web"|"app"` vào `GA4Site` (`lib/ga4.ts`), tab Website + `api/analytics/b2c/metric` tự chọn đúng
+site theo platform. QA qua Chrome phát hiện tiếp 1 race condition trong CHÍNH fix này (useEffect đổi site
+SAU platform → 2 fetch chồng nhau, response về không theo thứ tự có thể kẹt UI ở data site cũ) — sửa gộp
+2 setState vào 1 handler `switchPlatform()`. Xác nhận cuối: toggle Web/App ra đúng data kể cả bấm nhanh
+liên tục. Wiki `analytics-website.md` mục "s194" ghi đầy đủ.
+
+**2. UI Lô 2 — B2B**: KPI cards (Revenue/GP/CM1/Margin%/CM1%) đổi sang `StatTile` (dashboard-kit), chart
+Trend đổi `CHART_PALETTE`, mọi `blue-*` sót đổi `brand-*`. KHÔNG đổi bảng Strategic/Tier Performance sang
+`DataTable` — 2 bảng có group-header theo tier + expand-row + tổng TOTAL mà `DataTable` dùng chung chưa hỗ
+trợ, ép vào sẽ mất tính năng thật.
+
+**3. UI Lô 2 — B2C, 2 đợt**: Đợt 1 chỉ đồng bộ màu lệch (15 chỗ `blue-*`→`#0071e3` Apple accent ở Advanced,
+`bg-blue-50/30`→`bg-brand-50/30` ở Metric) — Hiếu phản hồi "vẫn chỉ nền trắng chữ đen", yêu cầu thêm màu
+thật + tự chọn role phù hợp. Đợt 2 (nạp skill `frontend-design`, vai Design Lead): dùng LẠI đúng bảng màu
+"kênh" đã có sẵn ở hero card (VN=`#0071e3`, US=`#6366f1`, Web=`#00a6a6`, App=`#2f9d55`, Khác=`#b7791f`)
+xuyên suốt trang thay vì phát minh màu mới — màu mang Ý NGHĨA (kênh/thị trường), không phải trang trí.
+`KpiCard`/`Section` ở `b2c-advanced-dashboard.tsx` có sẵn prop `icon`/`accent` nhưng CHƯA TỪNG render (dead
+code từ trước) → nay render thật: 6 KPI card có icon chip màu + viền trái màu theo ý nghĩa funnel, 6
+Section mỗi cái 1 màu icon riêng (trước tất cả cùng 1 màu). Helper `marketDot(label)` thêm chấm màu trước
+tên dòng VN/US/Web/App/New/Returning trong `RollingTable`/`SimpleRollTable`/`AcquisitionTable` — match
+CHÍNH XÁC token đầu nhãn (không lẫn "VN-Web eSIM"/"Mobile-App" là tên sản phẩm). `b2c-metric.tsx`: thêm dải
+6 `StatTile` tóm tắt tháng hiện tại (trước không có card nào), header bảng đổi gradient brand, biến
+`isBlue` (dead code, khai nhưng chưa dùng) nay dùng thật để tô nền+chữ brand cho dòng nhóm chỉ số, dot
+Web/App khớp đúng màu Advanced.
+
+**4. Quarter Report B2B — tính năng mới (không phải UI)**: Yêu cầu Hiếu — expand 1 KH trong bảng nhóm →
+"Chi tiết số liệu" trước chỉ Tháng/Ngày → thêm mục xem SKU/sản phẩm KH hay mua + nút biểu đồ. Thêm nút
+toggle thứ 3 **Sản phẩm** (`api/analytics/b2b-customer-orders?groupBy=sku`, join `dim_sku` lấy tên qua
+`type_of_sim`, tái dùng shape response cũ) + nút **Biểu đồ** hiện bar chart. Lúc code phát hiện + sửa luôn:
+chart Tháng/Ngày phải cộng dồn revenue theo period trước khi vẽ (data gốc nhiều dòng/kênh cùng period,
+không cộng ra cột trùng tên chồng lấn). QA qua Chrome dùng `javascript_tool` click DOM trực tiếp (bảng quá
+nhiều cột/dòng, toạ độ chuột từ screenshot hay trật) — xác nhận cả 3 toggle + chart hoạt động đúng.
+
+**5. Phase 5 QA hoàn tất** — to-gau (SettingsModal/DocsPanel/NotesPanel/WikiPanel/upload file+ảnh/@mention/
+xoá tin) + My Metrics (EvidenceCard/LarkReviewPanel/SkuScanSection/BegauInsightsSection/LarkConfigModal/
+DatapoolDetailTable) tự QA qua Chrome — tất cả hoạt động đúng. Riêng `BegauInsightsSection`: screenshot tool
+chụp hụt (blank) đúng vùng này nhiều lần liền dù reload/scroll nhiều cách khác nhau — soát kỹ qua DOM +
+console (màu/opacity/filter/transform bình thường, data load đúng, 0 lỗi JS) → kết luận là hạn chế/glitch
+của tool chụp ảnh tự động trong phiên này, không phải bug app thật. Phase 5 (tách 4 file FE khổng lồ s183)
+coi như đóng hẳn, hết nợ QA.
+
+**Ghi chú quy trình mới**: Hiếu yêu cầu (đứng, note vào CLAUDE.md + auto-memory) — từ nay LUÔN tự chọn role
+chuyên gia phù hợp (Staff Engineer/Design Lead/Senior Data Analyst/...) trước khi làm task không nhỏ, nêu
+ngắn gọn rồi làm.
+
+Tất cả tsc + `next lint` (0 lỗi mới) + vitest (185/185) PASS mỗi đợt, đã push staging từng commit riêng,
+wiki cập nhật đồng thời (`analytics-b2b.md`, `analytics-b2c.md`, `analytics-website.md`,
+`analytics-quarterly.md`).
+
+### s194 (tiếp) — Tab Inventory: thêm sub-tab "Tồn kho" thật (fact_inventory, Sapo sync)
+
+Hiếu: gohub_dw đã có data tồn kho, yêu cầu build tab quản lý tồn kho/nhập hàng chuyên nghiệp dựa theo 2
+file Lark OPS đang dùng thật ("Plan nhập hàng theo tháng" + "INVENTORY REPORT 2026") + luôn tự chọn role
+chuyên gia phù hợp trước khi làm (đã ghi thành rule cố định trong CLAUDE.md + auto-memory).
+
+Vai Senior Data Analyst + Product/Design Lead — đọc DB schema THẬT qua SQL Query trên staging (không đoán):
+phát hiện 2 bảng mới `fact_inventory` (date/warehouse/batch/sku/quantity/expired_date, snapshot theo NGÀY,
+Sapo sync, ~1 tuần data lúc làm) + `dim_warehouse` (10 kho: 1 MAIN + 9 BRANCH). Đọc 2 file Lark OPS: "Plan
+nhập hàng theo tháng" (PO tracker + lưới tuần — khớp gần 1:1 với app hiện có) và "INVENTORY REPORT 2026"
+(Lark Base — sheet SIM có Stock/Available for sale/Expired date left/Inventory Age/Last 15-30 days Sold;
+Draft v2 là pivot SKU×kho; nhiều tab ngày-tháng riêng = OPS phải tự copy tab mới mỗi vài ngày để lưu lịch
+sử — điểm đau lớn nhất, fact_inventory (snapshot theo ngày sẵn trong DB) giải quyết được ngay).
+
+`/analytics/fulfillment` (route "Inventory") giờ 2 sub-tab:
+- **Tồn kho** (mới, mặc định) — `api/analytics/inventory-stock`: StatTile tổng quan (SKU theo dõi/nguy
+  hiểm/sắp hết hạn/số kho), trend chart tồn kho theo ngày, bảng SKU (tồn kho, tốc độ bán/ngày, ước tính hết
+  hàng, hạn dùng gần nhất, cảnh báo) — click expand xem breakdown từng kho, filter theo mức cảnh báo +
+  search. `components/inventory/stock-view.tsx`, theo đúng convention dashboard-kit (StatTile/CHART_PALETTE)
+  đã dùng cho các tab khác trong session.
+- **Kế hoạch nhập hàng** (giữ nguyên y hệt cũ — PO tracker + lưới tuần) — chỉ thêm 1 điểm nối dữ liệu:
+  `lib/inventory-plan.ts` thêm `getLatestStock()`, `computePlan()` nhận thêm tham số `liveStock` — "Tồn
+  thực tế" tuần đang chạy giờ auto-suggest từ Sapo thật (đóng đúng TODO cũ "actual_stock chưa có nguồn tự
+  động", ghi rõ trong wiki từ s160) thay vì luôn trống, hiện khung nét đứt giống các ô auto khác
+  (sales_forecast/import_qty), OPS vẫn ghi đè tay được bình thường.
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS. Tự QA qua Chrome trên staging: cả 2 sub-tab render đúng,
+alert logic đúng (SKU tốc độ bán cao dù hạn dùng còn xa vẫn lên "Nguy hiểm" đúng theo rule <7 ngày ước tính
+hết hàng), expand breakdown theo kho đúng, ô auto-suggest tồn thực tế hiện đúng khung nét đứt khớp số liệu
+thật (36.007, khớp cả 2 sub-tab). Không đổi logic/API cũ nào (PO tracker, roles, sales_forecast/import_qty
+auto-suggest) — chỉ thêm mới + 1 chỗ nối dữ liệu thật vào ô đã có sẵn khái niệm "auto". Wiki
+`docs/wiki/system/tabs/analytics-fulfillment.md` cập nhật đầy đủ (data model mới, UI 2 sub-tab, gotchas).
+
+### s194+6/+7 (2026-09-06) — Tổ Gấu: panel "Câu hỏi CS" + AI trích nguồn + fix Gemini model chết
+
+Hiếu mô tả điểm đau CS: mọi người hay tag người trong ticket/troubleshoot hỏi về sản phẩm/policy, câu hỏi
+"trôi mất" — không ai biết đã trả lời/update thông tin hay chưa. Yêu cầu 4 phần: (a) kho thông tin sản
+phẩm/policy, (b) note thay đổi thông tin sản phẩm, (c) CS đặt câu hỏi có trạng thái chưa/đang/đã xử lý,
+(d) Assistant hỏi-đáp sản phẩm có thể kiểm chứng ngay, tự cập nhật khi có tài liệu mới lưu vào.
+
+Trước khi code: đọc `to-gau/groups/[id]/ai/route.ts`, `docs/route.ts`, `notes/route.ts` — xác nhận AI Gấu
+Tổ (per-group, đã có sẵn) chỉ search `kb_wiki_pages` (ILIKE keyword), KHÔNG đụng gì tới Docs/Notes của
+group — đây chính là gap (d). Không có tính năng question/status-tracking nào tồn tại. Hỏi Hiếu 3 câu
+AskUserQuestion chốt scope: câu hỏi hiển thị ở panel mới trong Tổ Gấu (không phải trang riêng); "kiểm
+chứng" = trích dẫn nguồn; "cập nhật ngay" = mở rộng ILIKE hiện có sang Docs/Notes (không cần embedding
+pipeline riêng).
+
+Kết quả: (1) Bảng mới `chat_questions` (migration `v48_chat_questions.sql`) — status
+`chua`/`dang`/`da_xu_ly`, bất kỳ member nào trả lời/đổi trạng thái được (mang tính cộng tác, không giới hạn
+người hỏi). Panel mới `components/to-gau/questions-panel.tsx`, sub-tab thứ 3 "❓ Câu hỏi" cạnh Docs/Notes
+trong track "Của nhóm" (`to-gau/[id]/page.tsx`). (2) `searchKB()` mở rộng tìm thêm `chat_docs`+`chat_notes`
+CỦA CHÍNH GROUP song song với `kb_wiki_pages` (Promise.all, gộp context có nhãn nguồn) — search ILIKE trực
+tiếp trên bảng sống nên lưu Doc/Note mới có hiệu lực ngay, không cần bước reindex riêng. (3) System prompt
+Gấu Tổ thêm rule bắt buộc trích nguồn `(Nguồn: [Wiki]/[Tài liệu nhóm]/[Ghi chú nhóm] ...)` cuối câu trả
+lời.
+
+QA qua Chrome trên staging thật (`stg-intel-v2.gohub.cloud` — domain thật, khác hẳn URL preview Vercel tự
+sinh dùng nhầm lúc đầu gây mất session đăng nhập vài lần, Hiếu phải chỉ đúng domain): đặt câu hỏi/đổi trạng
+thái chưa→đang→đã xử lý/trả lời tự chuyển đã xử lý — PASS cả panel. Hỏi AI 1 câu có đáp án trong 1 Note
+test mới thêm ("SKU EGGX99... ngừng nhập") → AI ban đầu trả 500 rỗng body.
+
+**Bug thật tìm ra lúc QA (không liên quan task đang làm)**: tra `get_runtime_errors` (Vercel MCP) thấy model
+`gemini-2.0-flash` trả 404 "no longer available" liên tục từ **2026-08-31** — Gấu Tổ AI đã chết âm thầm 6
+ngày trước khi bắt đầu session này, không ai biết vì route không có try/catch nên lỗi không hiện gì cho
+user, chỉ 500 rỗng. Grep repo: toàn hệ thống đã chuyển sang `gemini-3.6-flash` từ trước, chỉ sót đúng 3
+route dùng model cũ — `to-gau/groups/[id]/ai/route.ts`, `api/analytics/usage-stats/classify`,
+`api/analytics/usage-stats/evaluate` — cả 3 đổi sang `gemini-3.6-flash`. Thêm try/catch quanh lời gọi
+Gemini trong `ai/route.ts` (trả "Hiếu đang fix, vui lòng đợi" thay vì 500 rỗng khó chẩn đoán).
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS cả 2 đợt commit. QA lại qua Chrome + fetch trực tiếp trên
+staging sau fix — AI trả lời đúng + trích đúng nguồn `(Nguồn: [Ghi chú nhóm] Nguyễn Hoàng Hiếu)`. Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật đầy đủ (bảng mới, API mới, cả phần fix Gemini).
+
+### s194+8 (2026-09-06) — Fix bug lớn: MỌI role không phải admin/creator chưa từng vào được Tổ Gấu
+
+Hiếu: "mở lại Tổ Gấu cho tất cả mọi người vào được đi (vì hiện tại có vài acc tôi bấm vào không được)".
+Hỏi lại 2 vòng AskUserQuestion để làm rõ: không phải yêu cầu đổi chính sách quyền (không cần mở public),
+mà là BUG — "đã add vào group rồi mà vẫn không vào được" + "bấm nút không có phản ứng gì cả".
+
+Điều tra tĩnh qua code (sidebar.tsx/nav.ts, isMember() ở các route to-gau, auth.ts identity) không tìm ra
+nguyên nhân — mọi logic liên quan đều đúng thiết kế. Xin Hiếu tự đăng nhập trực tiếp bằng acc test thật
+(username "hieu", role `bod`, do Hiếu vừa tự add vào group "Test" để tái hiện) ngay trong tab Chrome đang
+điều khiển để bắt lỗi console/network sống thay vì đoán tiếp — tránh sa lầy đoán mò.
+
+Tái hiện: click sidebar "Tổ Gấu" → không có phản ứng gì, URL không đổi. Kiểm tra sâu hơn bằng
+`element.click()` trực tiếp trên đúng thẻ `<a href="/analytics/to-gau">` (loại trừ khả năng lệch toạ độ
+chuột) — vẫn không nhúc nhích. Navigate thẳng URL `/analytics/to-gau` qua address bar → bị BOUNCE NGƯỢC về
+`/chatbot` ngay lập tức (xác nhận qua `tabs_context_mcp` URL cuối cùng).
+
+**Root cause**: `app/(dashboard)/analytics/layout.tsx` — server-side gate áp dụng cho MỌI route con
+`/analytics/*`, dùng `granted.has(pathToAnalyticsId(pathname))` (granted = `role_permissions` ∪
+`allowed_analytics` per-user) để chặn truy cập thẳng URL trang analytics chưa cấp quyền. `/analytics/to-gau`
+khớp route pattern này nên bị coi như 1 "trang analytics" tên `to-gau`. Nhưng Tổ Gấu KHÔNG PHẢI trang
+analytics — đúng thiết kế (sidebar.tsx/nav.ts ghi rõ comment "hiển thị mọi role, chỉ ẩn qua hiddenTabs,
+KHÔNG gate theo pmAllowed"), nó hoàn toàn không nằm trong `role_permissions`/`allowed_analytics` của bất kỳ
+role nào. Kết quả: `granted.has("to-gau")` LUÔN `false` cho mọi role không phải admin/creator (2 role này
+bypass gate từ đầu layout) → redirect `/chatbot` ngay lập tức, bất kể có phải member group thật hay không.
+Bug tồn tại từ khi `analytics/layout.tsx` được tách ra làm gate chung cho mọi trang con — ảnh hưởng TOÀN BỘ
+user thường (staff/manager/bod/sale/...), không ai phát hiện vì đội test hầu như chỉ dùng acc creator/admin
+(tự động bypass đầu layout).
+
+Fix: thêm early-return `if (id === "to-gau") return <>{children}</>` ngay trước đoạn check `granted`, giữ
+nguyên gate cho mọi trang analytics thật khác — không đổi logic phân quyền gì khác. tsc + lint (0 lỗi mới) +
+vitest (185/185) PASS. QA lại bằng chính acc "hieu" (role bod) qua Chrome trên staging sau deploy — vào
+được danh sách Tổ Gấu, vào được group, thấy chat/members/AI trích nguồn đầy đủ. Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật (mục riêng + ghi chú cảnh báo trong §Access Control để
+tránh tái phát nếu ai refactor layout này sau này). **Hiếu tự xác nhận trên staging bằng chính acc "hieu" —
+vào được, OK.**
+
+### s194 (tiếp) — QA thị giác B2B + B2C + UI Lô 2 phần Channels
+
+Hiếu: "tiếp tục làm lô UI B2B + B2C QA đi" rồi "làm luôn" (Channels). Tự QA qua Chrome trên staging (acc
+"hieu" role bod, đủ quyền xem full analytics):
+
+**B2B**: đổi filter sang tháng đang chạy để hiện đủ cả 2 khối StatTile (Actual + Projected, 5 card mỗi khối)
+— đúng icon/màu theo ý nghĩa, badge "vs Prev Period" đúng dấu +/-, chart Revenue&CM1 đúng brand palette,
+bảng Tier Performance render đúng số liệu.
+
+**B2C Advanced**: hero card + 6 KPI mini-card đúng icon/viền màu; dot màu kênh (VN=xanh dương/US=tím/
+Web=teal/App=xanh lá — bảng màu quy ước đã chốt từ đợt B2C trước) hiện ĐÚNG ở mọi bảng breakdown
+(RollingTable/"Doanh thu B2C & Breakdown" — khớp chính xác token đầu nhãn dòng); chart "Doanh thu B2C theo
+thị trường" area màu brand đúng.
+
+**B2C Metric**: 6 StatTile đầu trang đúng màu, dot Web/App đúng convention trong bảng pivot.
+
+Không phát hiện lỗi nào ở B2B/B2C, số liệu không đổi so với trước redesign.
+
+**UI Lô 2 phần Channels** (nốt lô 2, sau B2B/B2C): `channels/page.tsx` — KPI card đã dùng `StatTile` từ
+trước (không cần đổi lại); chart Revenue Trend đổi hex tự chọn `#3b82f6`/`#10b981`/`#f1f5f9` sang
+`CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung; toàn bộ `blue-*` Tailwind class còn sót
+(badge Group, tier pill, progress bar contribution, nút Filters...) đổi sang `brand-*`; 4 chỗ hex inline
+`#0f4c81` đổi sang class `brand-600`. Lúc soát code phát hiện `CostManagementModal`/`showCostModal`/`dbRole`
+trong file này là dead code (import/state còn sót từ lúc "Manage Costs" đã bị ngắt hẳn ở tab này từ
+2026-07-28, đúng như wiki đã ghi) — không xoá lần này (ngoài scope đổi màu), chỉ ghi chú lại trong wiki.
+`cost-management-modal.tsx` (component thật sự đang render ở tab Targets, KHÔNG phải Channels) cũng đổi
+`blue-*`→`brand-*` (25 chỗ) nhân tiện vì cùng 1 file dùng chung. KHÔNG đụng bảng B2B Tier/Channel Overview
+(giữ `<table>` viết tay, đúng tiền lệ B2B) hay bất kỳ logic/công thức/API nào.
+
+tsc + lint (0 lỗi mới) + vitest (185/185) PASS cả 2 file. Tự QA qua Chrome trên staging sau deploy: All
+Channels Overview table đúng màu, chọn 1 kênh (VN-Wholesales) xem đủ 6 StatTile + Revenue Trend chart
+(line/area brand navy đúng, không còn xanh dương mặc định) + Performance Breakdown + Daily Performance +
+Top Selling Products — tất cả hiển thị đúng, số liệu không đổi, không lỗi. Lô 2 (Channels/B2B/B2C) coi như
+hoàn tất hẳn. Wiki `docs/wiki/system/tabs/analytics-channels.md` cập nhật mục Gotchas.
+
+### s194+10 (2026-09-06) — UI Lô 3: Website, Staff, Customers, Vendors
+
+Hiếu: "tiếp tục làm lô UI B2B + B2C QA đi" → xong → "làm luôn đi" (Channels, lô 2 hoàn tất) → "làm luôn đi"
+(lô 3: Website/Staff/Customers/Vendors, theo đúng thứ tự trong plan `eager-popping-aho.md` mục "Đợt 4+").
+
+**Website Analytics**: 5 KPI card viết tay (`kpi.color` string map thủ công) đổi sang `StatTile` — accent
+theo ý nghĩa: Revenue=revenue, Purchases/Avg.CTR=positive, Sessions/Search Clicks=neutral. 3 chart (Traffic
+Overview area, Search Trends line, Revenue Breakdown bar) đổi hex tự chọn (`#3b82f6`/`#10b981`/`#f1f5f9`)
+sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung — Revenue Breakdown dùng
+`CHART_PALETTE[2]` (amber) khớp icon chip cam sẵn có. `blue-*`→`brand-*` toàn trang (giữ `indigo-*`/
+`purple-*` cho App badge/Search Clicks — semantic riêng).
+
+**Staff Performance**: phát hiện `STAFF_COLORS[0]` (màu categorical đầu cho biểu đồ nhiều sales) là hex navy
+SAI `#003B95` — đúng file audit s192 từng flag "Staff Performance nặng nhất, 16 hex ngẫu hứng" nhưng chưa ai
+sửa tới giờ. Sửa đúng `#0f4c81`. 6 KPI card viết tay (chỉ số màu, KHÔNG có icon) đổi sang `StatTile` (thêm
+icon DollarSign/Zap/TrendingUp/Target/Users/UserCheck theo ý nghĩa). Giữ nguyên HOÀN TOÀN bảng màu tier
+Strategic(indigo)/VIP(purple)/Gold(amber)/Silver(slate)/B2C(emerald) và phần còn lại `STAFF_COLORS`
+(categorical 10 màu, cần phân biệt tối đa 8-10 sales cùng lúc trên 1 chart — đây KHÔNG phải "màu ngẫu
+hứng cần dọn" như #003B95, mà là bảng màu phân biệt thực thể có chủ đích).
+
+**Customers**: quét thấy CHỈ 1 chỗ hex sai `#003B95` (tier badge "All Customers Breakdown") + vài chỗ CM1
+dùng `text-blue-*` — sửa tất cả sang `brand-*`. Quyết định KHÔNG đổi theme `indigo-*` xuyên suốt trang dù
+đây là màu "không phải brand navy" — vì cả trang dùng nhất quán 1 ngôn ngữ thiết kế riêng ("editorial": bo
+góc `rounded-[2.5rem]`, chữ in nghiêng hoa `italic uppercase`, indigo làm màu chủ đạo xuyên suốt mọi nút/
+badge/section từ đầu) — đánh giá đây là lựa chọn thiết kế có chủ đích từ trước, không phải "lệch màu ngẫu
+nhiên", tương tự quyết định giữ nguyên Apple-glass style ở B2C Advanced trước đó. Đổi cả trang sang brand
+sẽ là 1 quyết định redesign lớn hơn hẳn scope "dọn màu lệch" của lô này.
+
+**Vendors**: cấu trúc gần giống hệt Channels (cùng tác giả gốc — hero projection card, KPI 5 card, chart,
+product breakdown table). Hero "Month-End Projection" banner gradient `from-blue-600 to-blue-700`→
+`from-brand-600 to-brand-700` (`shadow-blue-900/20`→`shadow-brand-800/25`, scale `brand-*` chỉ có tới 800,
+không có 900). 5 KPI card viết tay đổi sang `StatTile`. Chart Revenue Trend đổi sang `CHART_PALETTE`/
+`CHART_GRID_COLOR`/`chartTooltipStyle`. `blue-*`→`brand-*` toàn trang, giữ indigo/purple/amber phân biệt
+Orders/Units Sold/Gross Margin (đúng tiền lệ Channels).
+
+Không đổi logic/công thức/API nào ở cả 4 trang — chỉ đổi presentation. tsc + lint (0 lỗi mới, warning cũ
+không liên quan — vài biến/import chưa dùng có sẵn từ trước ở customers.tsx/staff.tsx/vendors.tsx) + vitest
+(185/185) PASS. Tự QA qua Chrome trên staging sau deploy cho cả 4 trang: Website (StatTile+3 chart đúng
+màu), Staff (STAFF_COLORS[0] navy đúng thay hex sai cũ, expand-row + tier badge indigo/purple/amber giữ
+nguyên đúng), Customers (chọn 1 KH thật — tier badge "Strategic" giờ brand navy đúng, CM1 brand-700 đúng),
+Vendors (chọn 40 vendor — StatTile + hero banner brand + chart navy area đều đúng, product table không
+lỗi). Không phát hiện lỗi, số liệu không đổi so với trước redesign. Lô 3 coi như hoàn tất hẳn — lô tiếp
+theo: Orders/Inventory/3HK Usage/CS Troubleshoot/Products/Targets/My Metrics (lô 4). Wiki 4 file
+(`analytics-website.md`/`analytics-staff.md`/`analytics-customers.md`/`analytics-vendors.md`) cập nhật mục
+Gotchas.
+
+### s194+11 (2026-09-06) — UI Lô 4: Orders, Inventory, 3HK Usage, CS Troubleshoot, Products, Targets
+
+Hiếu: "được" (tiếp tục lô 4 sau khi lô 3 xong, theo đúng thứ tự "Đợt 4+" trong plan `eager-popping-aho.md`).
+
+**Orders**: page nhỏ (640 dòng), có `dark:` classes (dark mode support, hiếm gặp ở các trang khác) — cẩn
+thận giữ nguyên hành vi dark mode khi đổi màu. Chỉ 1 vấn đề thật: hex navy SAI `#003B95`/`#002d73` (icon
+chip, nút Export, Entity pill, Apply button, spinner, pagination) → sed sang `brand-600`/`brand-700` class.
+KPI card 3 ô (Total Orders/Revenue/GP) có caption "sub" text mang thông tin filter-state thật (vd "gồm ship
++ internal ops") — KHÔNG ép vào `StatTile` (sẽ mất thông tin này, StatTile không có slot caption tự do),
+giữ nguyên hand-rolled vì màu vốn đã trung tính (trắng/xám), không phải lỗi màu.
+
+**CS Troubleshoot**: cùng nhóm hex sai (16 chỗ `#003B95`/`#002B70`, gồm cả 1 chỗ recharts `fill="#003B95"`
+và 1 chỗ box-shadow `rgba(0,59,149,0.3)` phải đổi rgb sang `rgba(15,76,129,0.3)` khớp brand-600 thật) +
+`blue-*`→`brand-*`. 4 KPI card viết tay → `StatTile` (Units Sold=neutral, TBS Tickets=warn vì càng nhiều
+càng xấu, TBS Rate=cost, Avg Handle Time=margin). Chart TBS Volume by Shift → `CHART_PALETTE`/
+`CHART_GRID_COLOR`/`chartTooltipStyle`.
+
+**Inventory (fulfillment)**: sub-tab "Tồn kho" đã StatTile từ s194+5, không đổi. Phần "Kế hoạch nhập hàng"
+cũ (PO tracker + lưới tuần, đã cam kết giữ nguyên logic từ s194+5) còn sót 16 chỗ `blue-*` (cả trong
+`stock-view.tsx` — 1 input ring sót) → `brand-*`. Không đụng WeeklyGrid logic.
+
+**3HK Data Usage**: `blue-*`→`brand-*`, 2 `CartesianGrid`→`CHART_GRID_COLOR`. Cân nhắc kỹ trước khi sửa 2
+chart "So sánh mức sử dụng" — màu đỏ/xanh lá ở đây là SEMANTIC THẬT (đỏ=vượt mức cấp/ngày của nhóm → chi phí
+datapool cao hơn dự kiến, xanh lá=trong kế hoạch, xám=mức kế hoạch, dải 4 màu categorical cho nhóm tốc độ)
+— quyết định KHÔNG đổi các màu đó, chỉ đổi lưới grid.
+
+**Products**: cấu trúc giống Vendors/Channels (cùng tác giả). 5 KPI card viết tay → `StatTile` (Revenue=
+revenue, Units/Orders=neutral, ASP=positive, Gross Margin=margin). Banner "Month-End Projection" (card nhạt
+`bg-blue-50/50`, không phải gradient) → `brand-50/50`; phát hiện `text-blue-900` không có `brand-900` tương
+đương (scale brand chỉ tới 800) → dùng `brand-800` thay thế. 2 chart (Sales & Units Trend, Top Regions) →
+`CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`. `blue-*`→`brand-*` toàn trang, giữ indigo=B2C và
+slate=B2B Non-Strategic (3 màu phân biệt 3 nhóm channel, đúng tiền lệ).
+
+**Targets**: trang form/bảng đơn giản, không có chart hay KPI card cần StatTile — chỉ `blue-*`→`brand-*`
+toàn trang (bảng target Revenue/3HK/CM1%, bảng KPI B2C theo thị trường, bảng Marketing Budget, 3 tips
+card). Dùng chung `CostManagementModal` với Channels (đã sửa màu ở s194+9), nên đồng bộ sẵn.
+
+**My Metrics**: quét toàn bộ page.tsx + 8 component con trong `components/my-metrics/` — 0 chỗ `blue-*`
+hay hex sai. Đã sạch từ trước (khớp với việc trang này đã tự có `DataTable` riêng từ sớm, không dùng pattern
+KPI-card-viết-tay như các trang khác). Không cần sửa gì.
+
+Không đổi logic/công thức/API nào ở cả 6 trang có thay đổi. tsc + lint (0 lỗi mới) + vitest (185/185) PASS.
+Tự QA qua Chrome trên staging sau deploy cho cả 6 trang: Orders (KPI + bảng đúng màu), Inventory (cả 2
+sub-tab, expand WeeklyGrid vẫn đúng), 3HK Usage (bảng Country×Month navy + chart Unlimited giữ đúng đỏ/xanh
+semantic), CS Troubleshoot (4 StatTile + chart + tab SKU Performance), Products (5 StatTile + 2 chart),
+Targets (bảng target navy đúng). Không phát hiện lỗi, số liệu không đổi so với trước redesign. Lô 4 coi như
+hoàn tất hẳn (My Metrics vốn đã sạch, không cần làm). Wiki 6 file cập nhật mục Gotchas. Lô 5 (Management/
+Scheduled/Dev Tools/To-Gau) và Lô 6 (ngoài analytics) còn lại theo plan.
+
+### s194+12 (2026-09-06) — UI Lô 5: Management (Users/Settings/Admin), Dev Tools, To-Gau + fix bug brand-900/950
+
+Hiếu: "típ" (tiếp tục lô 5 sau lô 4).
+
+Kiểm tra nhanh Scheduled + Schema — đã sạch từ đợt s193 (0 blue-*/hex), không cần làm lại. Còn lại: Users,
+Settings, Admin (Product), Dev Tools, To-Gau (list+room+6 component con).
+
+**Bug thật phát hiện lúc soát code trước khi sửa Admin page**: `tailwind.config.ts` định nghĩa scale
+`brand` chỉ tới 800 (50-800, không có 900/950). Grep toàn `src/` phát hiện 5 file đang dùng `brand-900`/
+`brand-950` — class KHÔNG HỢP LỆ nên Tailwind không sinh CSS gì, phần tử đó mất hẳn màu (invisible, rơi về
+màu kế thừa mặc định). 2 nguồn: (1) `channels/page.tsx`, `staff/page.tsx`, `vendors/page.tsx`,
+`cost-management-modal.tsx` — do CHÍNH sed "blue-*→brand-*" của tôi ở batch s194+9/+10 vô tình convert luôn
+`blue-900` (hợp lệ, giá trị mặc định Tailwind) thành `brand-900` (không hợp lệ trong scale custom của repo)
+— tự gây bug của chính mình, phát hiện và sửa ngay trong cùng session. (2) `chatbot/page.tsx` (Bé Gấu) — bug
+CÓ SẴN từ trước session này (git blame ra commit `3fb947f9`, s192, tác giả gõ tay `brand-900` giả định scale
+đủ 900, không phải do tôi). Sửa toàn bộ `brand-900/950`→`brand-800` (giá trị đậm nhất có sẵn) ở cả 5 file.
+QA lại xác nhận trên staging: Staff Performance → click expand 1 sales → header "So sánh KH — {tên sales}"
+hiện đúng NAVY (brand-800), zoom ảnh xác nhận không phải đen mặc định — fix đúng.
+
+**Users + Admin (Product)**: fix hex `#003B95`/`#002B70` (icon chip, nút Add/Save, focus ring, quyền
+report matrix) → `brand-*`. Giữ nguyên 2 chỗ categorical: role badge `roleBadge()` — `bod`=blue (cùng dàn
+màu admin=amber/manager=purple/bod=blue/khác=teal, y hệt pattern Staff tier badge) — và badge `vendor_code`
+trong bảng sản phẩm (blue, cạnh `product_code` đã là brand từ trước — 2 field khác nhau cố ý khác màu). Admin
+còn fix thêm nút test-run cron job/drop-zone import Excel/nút Import/code-snippet tên file mẫu — các chỗ này
+KHÔNG categorical (chỉ là accent chính của khu vực) → đổi hết sang brand.
+
+**Settings**: fix hex ở 5 khu vực config (Database status icon, Partner Tiers, Custom Rules, Role Filters,
+SKU Destination) → `brand-*`. Giữ nguyên nút "Sync B2B KH" (`bg-blue-700 hover:bg-blue-800` + badge đếm
+`bg-blue-500/50`) tách biệt màu với nút "Kiểm tra" (navy) ngay kế bên — 4 nút thao tác DB trên cùng 1 hàng
+(Xoá Cache=amber, Sync Costs=emerald, Sync B2B KH=blue, Kiểm tra=navy), mỗi nút 1 màu để phân biệt 4 hành
+động khác nhau, không phải lỗi.
+
+**Dev Tools**: khu vực "SQL Query" (schema browser icon, badge "PostgreSQL", ô search focus, nút Run, icon
+bảng, spinner) → brand — đây là accent riêng của khu Query, không phải categorical. Giữ nguyên màu HTTP
+method GET=emerald/POST=blue/khác=orange (badge phân loại method trong danh sách API test) — 2 chỗ dùng
+pattern y hệt (bảng API definitions + response log).
+
+**To-Gau — fix LỚN NHẤT lô này**: hex `#003B95` được dùng làm MÀU ĐỊNH DANH xuyên suốt toàn bộ tab (không
+chỉ 1-2 chỗ như các trang khác) — bubble chat "mình" (phải, isMe), header room, input focus ring, mention
+highlight trong `renderContent()`, blockquote trong `renderMarkdown()` (cả 2 hàm dùng chung ở
+`lib/to-gau-format.tsx`), và mọi nút hành động ở 4 sub-panel Docs/Notes/Câu hỏi (mới thêm s194+6)/Wiki. Sửa
+toàn bộ 8 file (`to-gau/page.tsx`, `to-gau/[id]/page.tsx`, `docs-panel.tsx`, `notes-panel.tsx`,
+`questions-panel.tsx`, `settings-modal.tsx`, `wiki-panel.tsx`, `to-gau-format.tsx`) sang `brand-600/700`.
+Giữ nguyên role tag "Manager"=blue trong danh sách thành viên phòng chat (categorical, phân biệt
+Admin=amber/Manager=blue, khác dàn màu Docs/Notes/Câu hỏi/Wiki).
+
+Không đổi logic/công thức/API/quyền hạn nào ở bất kỳ trang nào trong lô này. tsc + lint (0 lỗi mới) + vitest
+(185/185) PASS.
+
+**QA**: acc test hiện tại chỉ có role `bod` — Users/Settings/Admin/Dev Tools đều gate admin/creator only,
+bod bị `analytics/layout.tsx` redirect thẳng về `/chatbot` (đúng thiết kế, không phải bug — xác nhận lại
+bằng cách vào thẳng URL, bị bounce về chatbot y hệt cơ chế đã tìm ra ở s194+8). Không tự QA trực quan được 4
+trang này bằng Chrome — đã ghi rõ vào checklist xin Hiếu tự xem bằng acc creator. Đã tự QA được: To-Gau
+(chat bubble "mình" navy đúng qua zoom ảnh, 4 sub-panel Docs/Notes/Câu hỏi/Wiki đúng màu) và xác nhận riêng
+fix brand-900/950 hoạt động đúng qua Staff Performance (header "So sánh KH" navy, không đen). Wiki
+`docs/wiki/system/tabs/analytics-to-gau.md` cập nhật mục riêng. Users/Settings/Admin/Dev Tools không có
+wiki doc riêng (công cụ nội bộ, chưa từng được viết doc) nên không có gì để cập nhật ở đó.

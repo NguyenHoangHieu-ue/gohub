@@ -4,16 +4,24 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft, Send, Settings, UserPlus, X, Trash2, Crown, Paperclip, Bot,
-  FileText, Pin, Upload, Tag, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle,
-  Plus, History, Eye, EyeOff, ChevronLeft, Users,
+  ArrowLeft, Send, Settings, X, Trash2, Crown, Paperclip, Bot,
+  Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/toast"
-import { DEPT_LABELS, type Department } from "@/lib/kb-constants"
 import { useDbRole } from "@/lib/use-role-guard"
+import { Avatar } from "@/components/to-gau/avatar"
+import { SettingsModal } from "@/components/to-gau/settings-modal"
+import { DocsPanel } from "@/components/to-gau/docs-panel"
+import { NotesPanel } from "@/components/to-gau/notes-panel"
+import { WikiPanel } from "@/components/to-gau/wiki-panel"
+import { QuestionsPanel } from "@/components/to-gau/questions-panel"
+import { FilePreviewItem, AttachmentDisplay } from "@/components/to-gau/file-preview"
+import { useConfirm } from "@/components/to-gau/confirm-modal"
+import { renderContent, fmtTime } from "@/lib/to-gau-format"
+import type { Attachment, ChatMessage, Member, GroupInfo } from "@/lib/to-gau-types"
 
 // Supabase realtime client (anon key đủ để subscribe)
 const supabaseRealtime = createClient(
@@ -21,1641 +29,15 @@ const supabaseRealtime = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
 
-interface Attachment {
-  url:     string
-  name:    string
-  size:    number
-  type:    string
-}
-
-interface ChatMessage {
-  id:           string
-  group_id:     string
-  sender_email: string
-  sender_name:  string
-  content:      string
-  msg_type:     string
-  created_at:   string
-  is_pinned?:   boolean
-  edited_at?:   string | null
-  is_recalled?: boolean
-  attachments?: Attachment[]
-}
-
-interface Member {
-  id:         string
-  user_email: string
-  user_name:  string | null
-  role:       string
-  added_at:   string
-}
-
-interface GroupInfo {
-  id:                  string
-  name:                string
-  description:         string | null
-  avatar_emoji:        string
-  created_by:          string
-  is_archived:         boolean
-  members:             Member[]
-  ai_enabled?:         boolean
-  ai_scope?:           string | null
-  my_member_role?:     string | null
-}
-
-// Phase 3 interfaces
-interface DocItem {
-  id:            string
-  group_id:      string
-  title:         string
-  description:   string | null
-  file_url:      string | null
-  file_name:     string | null
-  file_size:     number | null
-  file_type:     string | null
-  tags:          string[]
-  uploaded_by:   string
-  uploader_name: string | null
-  created_at:    string
-}
-
-interface NoteItem {
-  id:           string
-  group_id:     string
-  content:      string
-  created_by:   string
-  creator_name: string | null
-  is_pinned:    boolean
-  created_at:   string
-  updated_at:   string
-}
-
-// Tạo màu avatar từ hash email
-function emailColor(email: string): string {
-  const colors = [
-    "bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-rose-500",
-    "bg-amber-500", "bg-cyan-500", "bg-pink-500", "bg-indigo-500",
-  ]
-  let hash = 0
-  for (let i = 0; i < email.length; i++) hash = email.charCodeAt(i) + ((hash << 5) - hash)
-  return colors[Math.abs(hash) % colors.length]
-}
-
-function initials(name: string | null | undefined, email: string): string {
-  const n = name || email
-  const parts = n.split(/[\s@.]+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return n.slice(0, 2).toUpperCase()
-}
-
-function Avatar({ name, email, size = "md" }: { name?: string | null; email: string; size?: "sm" | "md" | "lg" }) {
-  const sz = size === "sm" ? "w-7 h-7 text-[11px]" : size === "lg" ? "w-10 h-10 text-[14px]" : "w-8 h-8 text-[12px]"
-  return (
-    <div className={cn("rounded-full flex items-center justify-center font-semibold text-white flex-shrink-0", sz, emailColor(email))}>
-      {initials(name, email)}
-    </div>
-  )
-}
-
-function fmtTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  if (sameDay) return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
-}
-
-function fmtDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })
-}
-
-function fmtFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-const EMOJI_OPTIONS = ["🐻", "🦊", "🐼", "🐨", "🦁", "🐯", "🦋", "🌟", "🎯", "🚀", "💡", "🎉"]
-
-const AI_SCOPE_PRESETS = [
-  {
-    label: "Sale",
-    value: "Chỉ trả lời về giá bán, tình trạng SP, SKU code, so sánh gói. KHÔNG tiết lộ COGS/margin.",
-  },
-  {
-    label: "BD",
-    value: "Trả lời về specs kỹ thuật, thông tin thị trường, báo giá so sánh. KHÔNG tiết lộ chiến lược.",
-  },
-  {
-    label: "Ops",
-    value: "Trả lời về quy trình nhập hàng, tracking, trạng thái kho. KHÔNG tiết lộ chi phí vận hành.",
-  },
-  { label: "Full", value: "" },
-]
-
-// File icon by type
-function fileIcon(fileType: string | null): { icon: string; color: string } {
-  if (!fileType) return { icon: "📄", color: "text-slate-500" }
-  if (fileType.includes("pdf"))                                          return { icon: "📕", color: "text-red-500" }
-  if (fileType.includes("sheet") || fileType.includes("excel") || fileType.includes("xlsx") || fileType.includes("csv"))
-    return { icon: "📗", color: "text-emerald-600" }
-  if (fileType.includes("word") || fileType.includes("docx") || fileType.includes("msword"))
-    return { icon: "📘", color: "text-blue-600" }
-  if (fileType.startsWith("image/"))                                    return { icon: "🖼️", color: "text-violet-500" }
-  return { icon: "📄", color: "text-slate-500" }
-}
-
-// ── Render content with @mention highlight ──
-function renderContent(
-  content: string,
-  myEmail: string,
-  members: Member[],
-): React.ReactNode {
-  if (!content) return null
-  // Match @word (letters, digits, dot, dash, underscore)
-  const parts = content.split(/(@[\w.\-]+)/g)
-  return parts.map((part, i) => {
-    if (!part.startsWith("@")) return part
-    const handle = part.slice(1).toLowerCase()
-    const myPrefix = myEmail.split("@")[0].toLowerCase()
-    const myName   = members.find(m => m.user_email === myEmail)?.user_name?.toLowerCase()
-
-    const isMe = handle === myPrefix || (myName && handle === myName.replace(/\s+/g, "").toLowerCase())
-    if (isMe) {
-      return (
-        <span key={i} className="bg-yellow-100 text-yellow-800 font-semibold px-0.5 rounded">
-          {part}
-        </span>
-      )
-    }
-    // Check if it matches any member
-    const matchedMember = members.find(m => {
-      const prefix = m.user_email.split("@")[0].toLowerCase()
-      const uname  = (m.user_name || "").toLowerCase().replace(/\s+/g, "")
-      return handle === prefix || handle === uname
-    })
-    if (matchedMember) {
-      return (
-        <span key={i} className="text-[#003B95] font-medium">
-          {part}
-        </span>
-      )
-    }
-    return part
-  })
-}
-
-// ── Settings Modal ──
-function SettingsModal({
-  group, onClose, onSaved, onMemberRemoved, isCreator, isManager,
-}: {
-  group:           GroupInfo
-  onClose:         () => void
-  onSaved:         (updated: Partial<GroupInfo>) => void
-  onMemberRemoved: (email: string) => void
-  isCreator:       boolean
-  isManager:       boolean
-}) {
-  const toast = useToast()
-  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
-  const [name, setName]           = useState(group.name)
-  const [desc, setDesc]           = useState(group.description ?? "")
-  const [emoji, setEmoji]         = useState(group.avatar_emoji || "🐻")
-  const [saving, setSaving]       = useState(false)
-  const [addEmail, setAddEmail]   = useState("") // ô tìm kiếm (theo tên/email/username) — không gửi thẳng lên API
-  const [addingMember, setAddingMember] = useState(false)
-  const [members, setMembers]     = useState<Member[]>(group.members)
-
-  // User search autocomplete — bắt buộc chọn 1 gợi ý (username, không phải email) mới thêm được,
-  // vì nhiều tài khoản Lark không có email để gõ trực tiếp.
-  const [userSuggestions, setUserSuggestions]   = useState<{username: string; email: string | null; name: string}[]>([])
-  const [selectedUser, setSelectedUser]         = useState<{username: string; name: string} | null>(null)
-  const [showSuggestions, setShowSuggestions]   = useState(false)
-  const searchDebounce                          = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // AI config state
-  const [aiEnabled, setAiEnabled] = useState<boolean>(group.ai_enabled ?? false)
-  const [aiScope, setAiScope]     = useState<string>(group.ai_scope ?? "")
-  const [savingAI, setSavingAI]   = useState(false)
-
-  // User search effect (#3) — tìm theo tên/email/username, lọc bỏ user đã là member (so username)
-  useEffect(() => {
-    if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    if (!addEmail) { setUserSuggestions([]); setShowSuggestions(false); return }
-    searchDebounce.current = setTimeout(async () => {
-      try {
-        const res  = await fetch(`/api/to-gau/user-search?q=${encodeURIComponent(addEmail)}`)
-        const json = await res.json()
-        const filtered = (json.data ?? []).filter((u: { username: string }) =>
-          !members.some(m => m.user_email === u.username)
-        )
-        setUserSuggestions(filtered)
-        setShowSuggestions(filtered.length > 0)
-      } catch { setUserSuggestions([]) }
-    }, 300)
-    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [addEmail, members])
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: desc.trim() || null, avatar_emoji: emoji }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      toast.success("Đã lưu cài đặt nhóm")
-      onSaved({ name: name.trim(), description: desc.trim() || null, avatar_emoji: emoji })
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleSaveAI(e: React.FormEvent) {
-    e.preventDefault()
-    setSavingAI(true)
-    try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ai_enabled: aiEnabled, ai_scope: aiScope.trim() || null }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      toast.success("Đã lưu cài đặt AI")
-      onSaved({ ai_enabled: aiEnabled, ai_scope: aiScope.trim() || null })
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally {
-      setSavingAI(false)
-    }
-  }
-
-  async function handleAddMember(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedUser) return
-    setAddingMember(true)
-    setShowSuggestions(false)
-    try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: selectedUser.username, user_name: selectedUser.name }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      toast.success(`Đã thêm ${selectedUser.name || selectedUser.username}`)
-      setMembers(prev => [...prev, json.data])
-      setAddEmail("")
-      setSelectedUser(null)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally {
-      setAddingMember(false)
-    }
-  }
-
-  async function handleRemoveMember(username: string) {
-    if (!await confirmDialog(`Xóa ${username} khỏi nhóm?`)) return
-    try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}/members?username=${encodeURIComponent(username)}`, { method: "DELETE" })
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
-      setMembers(prev => prev.filter(m => m.user_email !== username))
-      onMemberRemoved(username)
-      toast.success("Đã xóa thành viên")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    }
-  }
-
-  // Đổi role thành viên (#2)
-  async function handleRoleChange(username: string, newRole: string) {
-    try {
-      const res = await fetch(`/api/to-gau/groups/${group.id}/members`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, role: newRole }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      setMembers(prev => prev.map(m => m.user_email === username ? { ...m, role: newRole } : m))
-      toast.success("Đã cập nhật quyền")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    }
-  }
-
-  const roleLabel: Record<string, string> = { admin: "Admin", manager: "Manager", member: "Thành viên" }
-
-  return (
-    <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <h2 className="font-semibold text-slate-800 text-[16px] flex items-center gap-2"><Settings size={16} /> Cài đặt nhóm</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
-          {/* Basic info — creator only */}
-          {isCreator && (
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="text-[13px] font-medium text-slate-600 block mb-2">Biểu tượng</label>
-                <div className="flex flex-wrap gap-2">
-                  {EMOJI_OPTIONS.map(e => (
-                    <button key={e} type="button" onClick={() => setEmoji(e)}
-                      className={cn("w-9 h-9 rounded-lg text-xl flex items-center justify-center border-2 transition-all",
-                        emoji === e ? "border-[#003B95] bg-blue-50 scale-110" : "border-slate-200 hover:border-slate-400")}>
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[13px] font-medium text-slate-600 block mb-1">Tên nhóm</label>
-                <input value={name} onChange={e => setName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95]" required />
-              </div>
-              <div>
-                <label className="text-[13px] font-medium text-slate-600 block mb-1">Mô tả</label>
-                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] focus:outline-none focus:border-[#003B95] resize-none" />
-              </div>
-              <button type="submit" disabled={saving}
-                className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors">
-                {saving ? "Đang lưu..." : "Lưu thay đổi"}
-              </button>
-            </form>
-          )}
-
-          {/* Members — creator + manager (#2) */}
-          {(isCreator || isManager) && (
-            <div className={cn(!isCreator && "pt-0")}>
-              <h3 className="text-[13px] font-semibold text-slate-700 mb-3 flex items-center gap-2"><UserPlus size={14} /> Thành viên ({members.length})</h3>
-              <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                {members.map(m => (
-                  <div key={m.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50">
-                    <Avatar name={m.user_name} email={m.user_email} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-slate-700 truncate">{m.user_name || m.user_email}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{m.user_email}</p>
-                    </div>
-                    {/* Role badge / dropdown (#2) */}
-                    {isCreator && m.role !== "admin" ? (
-                      <select
-                        value={m.role || "member"}
-                        onChange={e => handleRoleChange(m.user_email, e.target.value)}
-                        className="text-[11px] border border-slate-200 rounded-md px-1.5 py-0.5 text-slate-600 focus:outline-none focus:border-[#003B95] flex-shrink-0"
-                      >
-                        <option value="manager">Manager</option>
-                        <option value="member">Thành viên</option>
-                      </select>
-                    ) : (
-                      <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0",
-                        m.role === "admin" ? "bg-amber-50 text-amber-600" :
-                        m.role === "manager" ? "bg-blue-50 text-blue-600" :
-                        "bg-slate-100 text-slate-500"
-                      )}>
-                        {roleLabel[m.role] || "Thành viên"}
-                      </span>
-                    )}
-                    {m.role !== "admin" && (
-                      <button onClick={() => handleRemoveMember(m.user_email)}
-                        className="text-slate-300 hover:text-rose-500 transition-colors flex-shrink-0 ml-1">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Add member form with autocomplete (#3) */}
-              <form onSubmit={handleAddMember} className="space-y-2">
-                <div className="relative">
-                  <input
-                    value={addEmail}
-                    onChange={e => { setAddEmail(e.target.value); setSelectedUser(null); setShowSuggestions(false) }}
-                    onFocus={() => userSuggestions.length > 0 && setShowSuggestions(true)}
-                    placeholder="Tìm theo tên hoặc email — bấm chọn từ danh sách *"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
-                  />
-                  {showSuggestions && (
-                    <div className="absolute top-full left-0 right-0 z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 overflow-hidden">
-                      {userSuggestions.map(u => (
-                        <button
-                          key={u.username}
-                          type="button"
-                          onMouseDown={e => { e.preventDefault(); setSelectedUser({ username: u.username, name: u.name }); setAddEmail(u.name || u.email || u.username); setShowSuggestions(false) }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50 text-left"
-                        >
-                          <Avatar name={u.name} email={u.email || u.username} size="sm" />
-                          <div>
-                            <p className="text-[13px] font-medium text-slate-700">{u.name || u.username}</p>
-                            <p className="text-[11px] text-slate-400">{u.email || u.username}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button type="submit" disabled={addingMember || !selectedUser}
-                  className="w-full px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
-                  <UserPlus size={14} />
-                  {addingMember ? "Đang thêm..." : "Thêm thành viên"}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* AI config — creator only */}
-          {isCreator && (
-            <div className="border-t border-slate-100 pt-5">
-              <h3 className="text-[13px] font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                <Bot size={14} className="text-indigo-500" /> Trợ lý AI
-              </h3>
-              <form onSubmit={handleSaveAI} className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-[13px] font-medium text-slate-600">Bật Gấu Tổ AI</label>
-                  <button
-                    type="button"
-                    onClick={() => setAiEnabled(v => !v)}
-                    className={cn(
-                      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                      aiEnabled ? "bg-indigo-600" : "bg-slate-200"
-                    )}
-                  >
-                    <span className={cn(
-                      "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                      aiEnabled ? "translate-x-6" : "translate-x-1"
-                    )} />
-                  </button>
-                </div>
-                <div>
-                  <label className="text-[13px] font-medium text-slate-600 block mb-1">Phạm vi AI được phép trả lời</label>
-                  <textarea
-                    value={aiScope}
-                    onChange={e => setAiScope(e.target.value)}
-                    rows={3}
-                    placeholder="Để trống = không giới hạn"
-                    disabled={!aiEnabled}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-indigo-400 resize-none disabled:opacity-50 disabled:bg-slate-50"
-                  />
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {AI_SCOPE_PRESETS.map(preset => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        disabled={!aiEnabled}
-                        onClick={() => setAiScope(preset.value)}
-                        className={cn(
-                          "px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-40",
-                          aiScope === preset.value
-                            ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                            : "border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
-                        )}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button type="submit" disabled={savingAI}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-[13px] font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                  {savingAI ? "Đang lưu..." : "Lưu cài đặt AI"}
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-    {ConfirmDialog}
-    </>
-  )
-}
-
-// ── File Preview (before send) ──
-function FilePreviewItem({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const isImage = file.type.startsWith("image/")
-  const [objUrl, setObjUrl] = useState<string>("")
-
-  useEffect(() => {
-    if (!isImage) return
-    const url = URL.createObjectURL(file)
-    setObjUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file, isImage])
-
-  return (
-    <div className="relative flex items-center gap-2 bg-slate-100 rounded-lg px-2 py-1.5 text-[12px] text-slate-700 max-w-[160px]">
-      {isImage && objUrl ? (
-        <img src={objUrl} alt={file.name} className="w-8 h-8 rounded object-cover flex-shrink-0" />
-      ) : (
-        <span className="text-lg flex-shrink-0">📄</span>
-      )}
-      <span className="truncate flex-1 min-w-0">{file.name}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="flex-shrink-0 text-slate-400 hover:text-rose-500"
-      >
-        <X size={12} />
-      </button>
-    </div>
-  )
-}
-
-// ── Message Attachment Display ──
-function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
-  const [lightbox, setLightbox] = useState(false)
-  const isImage = attachment.type.startsWith("image/")
-
-  if (isImage) {
-    return (
-      <>
-        <img
-          src={attachment.url}
-          alt={attachment.name}
-          className="max-h-48 rounded-lg cursor-pointer object-contain mt-1"
-          onClick={() => setLightbox(true)}
-        />
-        {lightbox && (
-          <div
-            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-            onClick={() => setLightbox(false)}
-          >
-            <img src={attachment.url} alt={attachment.name} className="max-w-full max-h-full rounded-xl" />
-          </div>
-        )}
-      </>
-    )
-  }
-
-  return (
-    <a
-      href={attachment.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2 mt-1 px-3 py-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors text-[13px] text-slate-700 max-w-[240px]"
-    >
-      <span className="text-lg flex-shrink-0">📄</span>
-      <div className="flex-1 min-w-0">
-        <p className="truncate font-medium">{attachment.name}</p>
-        <p className="text-[11px] text-slate-400">{fmtFileSize(attachment.size)}</p>
-      </div>
-      <span className="text-[11px] text-[#003B95] font-medium flex-shrink-0">Tải về</span>
-    </a>
-  )
-}
-
-// ── Confirm Modal + hook ──
-function ConfirmModal({ message, onConfirm, onCancel }: {
-  message:   string
-  onConfirm: () => void
-  onCancel:  () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onCancel}
-    >
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
-        <p className="text-[14px] text-slate-700 mb-4">{message}</p>
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[13px] hover:bg-slate-50 transition-colors"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-3 py-1.5 rounded-lg bg-rose-500 text-white text-[13px] font-medium hover:bg-rose-600 transition-colors"
-          >
-            Xác nhận
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function useConfirm() {
-  const [pending, setPending] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null)
-  const confirm = useCallback((message: string) => new Promise<boolean>(resolve => {
-    setPending({ message, resolve })
-  }), [])
-  const ConfirmDialog = pending ? (
-    <ConfirmModal
-      message={pending.message}
-      onConfirm={() => { pending.resolve(true);  setPending(null) }}
-      onCancel={() =>  { pending.resolve(false); setPending(null) }}
-    />
-  ) : null
-  return { confirm, ConfirmDialog }
-}
-
-// ── Docs Panel ──
-function DocsPanel({
-  groupId, myEmail, isPrivileged,
-}: {
-  groupId: string
-  myEmail: string
-  isPrivileged: boolean
-}) {
-  const toast = useToast()
-  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
-  const [docs, setDocs]           = useState<DocItem[]>([])
-  const [docsLoading, setDocsLoading] = useState(true)
-  const [showUpload, setShowUpload]   = useState(false)
-
-  // Upload form state
-  const [docTitle, setDocTitle]     = useState("")
-  const [docDesc, setDocDesc]       = useState("")
-  const [docFile, setDocFile]       = useState<File | null>(null)
-  const [docTags, setDocTags]       = useState<string[]>([])
-  const [tagInput, setTagInput]     = useState("")
-  const [uploading, setUploading]   = useState(false)
-  const docFileRef                  = useRef<HTMLInputElement>(null)
-
-  const loadDocs = useCallback(async () => {
-    setDocsLoading(true)
-    try {
-      const res  = await fetch(`/api/to-gau/groups/${groupId}/docs`)
-      if (!res.ok) return
-      const json = await res.json()
-      setDocs(json.data ?? [])
-    } catch {
-      // ignore
-    } finally {
-      setDocsLoading(false)
-    }
-  }, [groupId])
-
-  useEffect(() => { loadDocs() }, [loadDocs])
-
-  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault()
-      const tag = tagInput.trim()
-      if (tag && !docTags.includes(tag)) setDocTags(prev => [...prev, tag])
-      setTagInput("")
-    }
-  }
-
-  function removeTag(tag: string) {
-    setDocTags(prev => prev.filter(t => t !== tag))
-  }
-
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault()
-    if (!docTitle.trim()) return
-    setUploading(true)
-    try {
-      let fileUrl: string | null   = null
-      let fileName: string | null  = null
-      let fileSize: number | null  = null
-      let fileType: string | null  = null
-
-      if (docFile) {
-        const fd = new FormData()
-        fd.append("file", docFile)
-        fd.append("group_id", groupId)
-        const upRes = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
-        if (!upRes.ok) { const j = await upRes.json(); throw new Error(j.error ?? "Upload lỗi") }
-        const upJson = await upRes.json()
-        fileUrl  = upJson.url
-        fileName = upJson.name
-        fileSize = upJson.size
-        fileType = upJson.type
-      }
-
-      const res = await fetch(`/api/to-gau/groups/${groupId}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: docTitle.trim(),
-          description: docDesc.trim() || null,
-          file_url:  fileUrl,
-          file_name: fileName,
-          file_size: fileSize,
-          file_type: fileType,
-          tags: docTags,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-
-      toast.success("Đã thêm tài liệu")
-      setDocs(prev => [json.data, ...prev])
-      // Reset form
-      setDocTitle("")
-      setDocDesc("")
-      setDocFile(null)
-      setDocTags([])
-      setTagInput("")
-      setShowUpload(false)
-      if (docFileRef.current) docFileRef.current.value = ""
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  async function handleDelete(docId: string) {
-    if (!await confirmDialog("Xóa tài liệu này?")) return
-    try {
-      const res = await fetch(`/api/to-gau/groups/${groupId}/docs?doc_id=${docId}`, { method: "DELETE" })
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
-      setDocs(prev => prev.filter(d => d.id !== docId))
-      toast.success("Đã xóa tài liệu")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    }
-  }
-
-  return (
-    <>
-    <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-slate-700 text-[15px] flex items-center gap-2">
-          <FileText size={16} className="text-[#003B95]" /> Tài liệu nhóm
-        </h2>
-        <button
-          onClick={() => setShowUpload(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] transition-colors"
-        >
-          <Upload size={13} /> Tải lên
-        </button>
-      </div>
-
-      {/* Upload form */}
-      {showUpload && (
-        <div className="mb-5 bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <form onSubmit={handleUpload} className="space-y-3">
-            <div>
-              <label className="text-[12px] font-medium text-slate-600 block mb-1">Tiêu đề *</label>
-              <input
-                value={docTitle}
-                onChange={e => setDocTitle(e.target.value)}
-                placeholder="Tên tài liệu"
-                required
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
-              />
-            </div>
-            <div>
-              <label className="text-[12px] font-medium text-slate-600 block mb-1">Mô tả</label>
-              <textarea
-                value={docDesc}
-                onChange={e => setDocDesc(e.target.value)}
-                rows={2}
-                placeholder="Mô tả ngắn (tùy chọn)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95] resize-none"
-              />
-            </div>
-            <div>
-              <label className="text-[12px] font-medium text-slate-600 block mb-1">File đính kèm</label>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={docFileRef}
-                  type="file"
-                  accept="image/*,.pdf,.xlsx,.docx,.txt,.csv"
-                  className="hidden"
-                  onChange={e => setDocFile(e.target.files?.[0] ?? null)}
-                />
-                <button
-                  type="button"
-                  onClick={() => docFileRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
-                >
-                  <Paperclip size={12} /> Chọn file
-                </button>
-                {docFile && (
-                  <span className="text-[12px] text-slate-600 truncate max-w-[160px]">
-                    {docFile.name}
-                    <button type="button" onClick={() => { setDocFile(null); if (docFileRef.current) docFileRef.current.value = "" }} className="ml-1 text-slate-400 hover:text-rose-500">
-                      <X size={11} className="inline" />
-                    </button>
-                  </span>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="text-[12px] font-medium text-slate-600 block mb-1">
-                <Tag size={11} className="inline mr-1" />Tags (Enter để thêm)
-              </label>
-              <input
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder="Nhập tag rồi Enter..."
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95]"
-              />
-              {docTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {docTags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-medium">
-                      {tag}
-                      <button type="button" onClick={() => removeTag(tag)} className="text-blue-400 hover:text-rose-500">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={uploading || !docTitle.trim()}
-                className="flex-1 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-              >
-                {uploading ? <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Upload size={13} />}
-                {uploading ? "Đang tải lên..." : "Lưu tài liệu"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowUpload(false)}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-[13px] hover:bg-slate-50 transition-colors"
-              >
-                Hủy
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Docs list */}
-      {docsLoading ? (
-        <div className="flex items-center justify-center h-32">
-          <span className="text-slate-400 text-[14px]">Đang tải...</span>
-        </div>
-      ) : docs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <FileText size={36} className="text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">Chưa có tài liệu nào</p>
-          <p className="text-slate-400 text-[13px] mt-1">Tải lên tài liệu đầu tiên!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {docs.map(doc => {
-            const fi       = fileIcon(doc.file_type)
-            const canDelete = doc.uploaded_by === myEmail || isPrivileged
-            return (
-              <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2">
-                {/* Icon + title */}
-                <div className="flex items-start gap-3">
-                  <span className={cn("text-2xl flex-shrink-0 mt-0.5", fi.color)}>{fi.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 text-[14px] leading-tight line-clamp-2">{doc.title}</p>
-                    {doc.description && (
-                      <p className="text-slate-500 text-[12px] mt-0.5 line-clamp-1">{doc.description}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Tags */}
-                {doc.tags && doc.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {doc.tags.map(tag => (
-                      <span key={tag} className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium">{tag}</span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Meta */}
-                <div className="mt-auto pt-2 border-t border-slate-50 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-slate-500 truncate">{doc.uploader_name || doc.uploaded_by}</p>
-                    <p className="text-[10px] text-slate-400">{fmtDate(doc.created_at)}{doc.file_size ? ` · ${fmtFileSize(doc.file_size)}` : ""}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {doc.file_url && (
-                      <a
-                        href={doc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg border border-slate-200 text-[#003B95] hover:bg-blue-50 transition-colors"
-                        title="Tải về"
-                      >
-                        <Upload size={12} className="rotate-180" />
-                      </a>
-                    )}
-                    {canDelete && (
-                      <button
-                        onClick={() => handleDelete(doc.id)}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-colors"
-                        title="Xóa"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-    {ConfirmDialog}
-    </>
-  )
-}
-
-// ── Notes Panel ──
-function NotesPanel({
-  groupId, myEmail, isPrivileged,
-}: {
-  groupId: string
-  myEmail: string
-  isPrivileged: boolean
-}) {
-  const toast = useToast()
-  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
-  const [notes, setNotes]           = useState<NoteItem[]>([])
-  const [notesLoading, setNotesLoading] = useState(true)
-  const [newNoteContent, setNewNoteContent] = useState("")
-  const [addingNote, setAddingNote]   = useState(false)
-  const [editingNote, setEditingNote] = useState<string | null>(null)
-  const [editContent, setEditContent] = useState("")
-
-  const loadNotes = useCallback(async () => {
-    setNotesLoading(true)
-    try {
-      const res  = await fetch(`/api/to-gau/groups/${groupId}/notes`)
-      if (!res.ok) return
-      const json = await res.json()
-      setNotes(json.data ?? [])
-    } catch {
-      // ignore
-    } finally {
-      setNotesLoading(false)
-    }
-  }, [groupId])
-
-  useEffect(() => { loadNotes() }, [loadNotes])
-
-  async function handleAddNote(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newNoteContent.trim()) return
-    setAddingNote(true)
-    try {
-      const res = await fetch(`/api/to-gau/groups/${groupId}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newNoteContent.trim() }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      setNotes(prev => [json.data, ...prev])
-      setNewNoteContent("")
-      toast.success("Đã thêm ghi chú")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally {
-      setAddingNote(false)
-    }
-  }
-
-  async function handleSaveEdit(noteId: string) {
-    if (!editContent.trim()) return
-    try {
-      const res = await fetch(`/api/to-gau/groups/${groupId}/notes?note_id=${noteId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent.trim() }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      setNotes(prev => prev.map(n => n.id === noteId ? json.data : n))
-      setEditingNote(null)
-      setEditContent("")
-      toast.success("Đã cập nhật ghi chú")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    }
-  }
-
-  async function handleDeleteNote(noteId: string) {
-    if (!await confirmDialog("Xóa ghi chú này?")) return
-    try {
-      const res = await fetch(`/api/to-gau/groups/${groupId}/notes?note_id=${noteId}`, { method: "DELETE" })
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error) }
-      setNotes(prev => prev.filter(n => n.id !== noteId))
-      toast.success("Đã xóa ghi chú")
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    }
-  }
-
-  return (
-    <>
-    <div className="flex-1 overflow-y-auto px-4 py-4 bg-slate-50">
-      <div className="flex items-center gap-2 mb-4">
-        <Pin size={16} className="text-[#003B95]" />
-        <h2 className="font-semibold text-slate-700 text-[15px]">Ghi chú dùng chung</h2>
-      </div>
-
-      {/* Add note form */}
-      <form onSubmit={handleAddNote} className="mb-5 bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
-        <textarea
-          value={newNoteContent}
-          onChange={e => setNewNoteContent(e.target.value)}
-          placeholder="Nhập ghi chú mới..."
-          rows={3}
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:border-[#003B95] resize-none"
-        />
-        <button
-          type="submit"
-          disabled={addingNote || !newNoteContent.trim()}
-          className="px-4 py-2 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors flex items-center gap-2"
-        >
-          <Pin size={13} />
-          {addingNote ? "Đang thêm..." : "Thêm ghi chú"}
-        </button>
-      </form>
-
-      {/* Notes list */}
-      {notesLoading ? (
-        <div className="flex items-center justify-center h-32">
-          <span className="text-slate-400 text-[14px]">Đang tải...</span>
-        </div>
-      ) : notes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Pin size={36} className="text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">Chưa có ghi chú nào</p>
-          <p className="text-slate-400 text-[13px] mt-1">Thêm ghi chú đầu tiên!</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {notes.map(note => {
-            const canEdit   = note.created_by === myEmail || isPrivileged
-            const isEditing = editingNote === note.id
-            return (
-              <div key={note.id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                {isEditing ? (
-                  <div className="space-y-2">
-                    <textarea
-                      value={editContent}
-                      onChange={e => setEditContent(e.target.value)}
-                      rows={4}
-                      autoFocus
-                      className="w-full border border-[#003B95] rounded-lg px-3 py-2 text-[13px] focus:outline-none resize-none"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSaveEdit(note.id)}
-                        disabled={!editContent.trim()}
-                        className="px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[12px] font-medium hover:bg-[#002d73] disabled:opacity-50 transition-colors"
-                      >
-                        Lưu
-                      </button>
-                      <button
-                        onClick={() => { setEditingNote(null); setEditContent("") }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[12px] hover:bg-slate-50 transition-colors"
-                      >
-                        Hủy
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-[14px] text-slate-800 whitespace-pre-wrap leading-relaxed">{note.content}</p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] text-slate-500">{note.creator_name || note.created_by}</p>
-                        <p className="text-[10px] text-slate-400">{fmtDate(note.created_at)}{note.updated_at !== note.created_at ? " (đã sửa)" : ""}</p>
-                      </div>
-                      {canEdit && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => { setEditingNote(note.id); setEditContent(note.content) }}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-[#003B95] hover:border-blue-200 transition-colors"
-                            title="Sửa"
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteNote(note.id)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-colors"
-                            title="Xóa"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-    {ConfirmDialog}
-    </>
-  )
-}
-
-// ── Wiki Panel ──
-interface WikiPage {
-  id:               string
-  title:            string
-  page_type:        string
-  department:       string
-  tags:             string[]
-  version:          number
-  is_hidden:        boolean
-  visibility_mode:  string
-  created_by:       string
-  updated_by:       string
-  updated_at:       string
-  content?:         string
-}
-
-interface WikiVersion {
-  id:         string
-  version:    number
-  updated_by: string
-  updated_at: string
-}
-
-interface GroupOption {
-  id:   string
-  name: string
-}
-
-const WIKI_PAGE_TYPES: Record<string, string> = {
-  vendor_profile: "Vendor",
-  product_guide:  "Sản phẩm",
-  process_sop:    "Quy trình",
-  pricing_rule:   "Giá",
-  meeting_note:   "Họp",
-  reference:      "Tham chiếu",
-  note:           "Ghi chú",
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-}
-
-function renderMarkdown(md: string): string {
-  // Bỏ YAML frontmatter, escape HTML trước khi build markup (chống XSS)
-  const body = escapeHtml(md.replace(/^---[\s\S]*?---\n?/, ""))
-  return body
-    .replace(/^### (.+)$/gm, '<h3 class="text-[14px] font-semibold text-slate-700 mt-4 mb-1">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-[15px] font-semibold text-slate-800 mt-5 mb-2 border-b border-slate-100 pb-1">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold text-slate-900 mb-3">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded text-[12px] font-mono">$1</code>')
-    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-[#003B95] pl-3 text-slate-600 italic text-[13px] my-2">$1</blockquote>')
-    .replace(/^\| (.+) \|$/gm, (line) => {
-      const cells = line.split("|").filter(c => c.trim()).map(c => `<td class="px-2 py-1 text-[12px] border border-slate-200">${c.trim()}</td>`)
-      return `<tr>${cells.join("")}</tr>`
-    })
-    .replace(/(<tr>[\s\S]*?<\/tr>)/g, '<table class="w-full border-collapse my-3 text-[12px]">$1</table>')
-    .replace(/^- (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-disc">$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li class="text-[13px] text-slate-700 ml-4 list-decimal">$2</li>')
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/✅/g, '<span class="text-emerald-600">✅</span>')
-    .replace(/⚠️/g, '<span class="text-amber-600">⚠️</span>')
-    .replace(/ℹ️/g, '<span class="text-blue-500">ℹ️</span>')
-}
-
-// ── Wiki Panel (tài liệu Chính thức — creator/admin viết, gán theo group Tổ Gấu) ──
-function WikiPanel({ groupId, isPrivileged }: { groupId: string; isPrivileged: boolean }) {
-  const toast = useToast()
-  const { confirm: confirmDialog, ConfirmDialog } = useConfirm()
-
-  const [view, setView]             = useState<"list" | "read" | "edit">("list")
-  const [pages, setPages]           = useState<WikiPage[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [search, setSearch]         = useState("")
-  const [selected, setSelected]     = useState<WikiPage | null>(null)
-  const [versions, setVersions]     = useState<WikiVersion[]>([])
-  const [showHistory, setShowHistory] = useState(false)
-  const [saving, setSaving]         = useState(false)
-  const [deleting, setDeleting]     = useState(false)
-  const [previewMd, setPreviewMd]   = useState(false)
-  const [editForm, setEditForm]     = useState({ title: "", content: "", page_type: "note", department: "all" as Department, tags: "" })
-
-  const [showGroupModal, setShowGroupModal] = useState(false)
-  const [groupTarget, setGroupTarget]       = useState<WikiPage | null>(null)
-  const [groupOptions, setGroupOptions]     = useState<GroupOption[]>([])
-  const [assignMode, setAssignMode]         = useState<"all" | "groups">("all")
-  const [assignedIds, setAssignedIds]       = useState<string[]>([])
-  const [savingGroups, setSavingGroups]     = useState(false)
-
-  const fetchPages = useCallback(async (q = "") => {
-    setLoading(true)
-    try {
-      const p = new URLSearchParams({ groupId })
-      if (q) p.set("search", q)
-      const res  = await fetch(`/api/kb/wiki?${p}`)
-      const json = await res.json()
-      setPages(json.data ?? [])
-    } catch { setPages([]) }
-    finally { setLoading(false) }
-  }, [groupId])
-
-  useEffect(() => { fetchPages() }, [fetchPages])
-  useEffect(() => {
-    const t = setTimeout(() => fetchPages(search), 300)
-    return () => clearTimeout(t)
-  }, [search, fetchPages])
-
-  async function openPage(page: WikiPage) {
-    const res  = await fetch(`/api/kb/wiki/${page.id}`)
-    const json = await res.json()
-    if (!res.ok) { toast.error("Không mở được tài liệu"); return }
-    setSelected(json.page)
-    setVersions(json.versions ?? [])
-    setShowHistory(false)
-    setView("read")
-  }
-
-  function startCreate() {
-    setSelected(null)
-    setEditForm({ title: "", content: "", page_type: "note", department: "all", tags: "" })
-    setPreviewMd(false)
-    setView("edit")
-  }
-
-  function startEdit() {
-    if (!selected) return
-    setEditForm({
-      title: selected.title, content: selected.content ?? "", page_type: selected.page_type,
-      department: selected.department as Department, tags: (selected.tags ?? []).join(", "),
-    })
-    setPreviewMd(false)
-    setView("edit")
-  }
-
-  async function savePage() {
-    if (!editForm.title.trim()) { toast.error("Cần nhập tiêu đề"); return }
-    setSaving(true)
-    try {
-      const body: Record<string, unknown> = {
-        title: editForm.title, content: editForm.content, page_type: editForm.page_type,
-        department: editForm.department, tags: editForm.tags.split(",").map(t => t.trim()).filter(Boolean),
-      }
-      let url = "/api/kb/wiki", method = "POST"
-      if (selected) { url = `/api/kb/wiki/${selected.id}`; method = "PATCH" }
-      // Trang tạo mới từ group này → mặc định gán riêng cho group này (không phải toàn công ty)
-      else { body.visibility_mode = "groups"; body.group_ids = [groupId] }
-      const res  = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      toast.success(selected ? "Đã cập nhật tài liệu" : "Đã tạo tài liệu")
-      setView("list")
-      fetchPages(search)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
-    } finally { setSaving(false) }
-  }
-
-  async function deletePage() {
-    if (!selected) return
-    const ok = await confirmDialog(`Xoá tài liệu "${selected.title}"? Lịch sử phiên bản cũng sẽ bị xoá.`)
-    if (!ok) return
-    setDeleting(true)
-    try {
-      const res = await fetch(`/api/kb/wiki/${selected.id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error()
-      toast.success("Đã xoá tài liệu")
-      setView("list"); setSelected(null)
-      fetchPages(search)
-    } catch { toast.error("Hiếu đang fix, vui lòng đợi") }
-    finally { setDeleting(false) }
-  }
-
-  async function toggleHidden(page: WikiPage) {
-    const res = await fetch(`/api/kb/wiki/${page.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_hidden: !page.is_hidden }),
-    })
-    if (res.ok) fetchPages(search)
-  }
-
-  async function openGroupModal(page: WikiPage) {
-    setGroupTarget(page)
-    try {
-      const [groupsJson, assignJson] = await Promise.all([
-        groupOptions.length ? Promise.resolve(null) : fetch("/api/to-gau/groups").then(r => r.json()),
-        fetch(`/api/kb/wiki/${page.id}/groups`).then(r => r.json()),
-      ])
-      if (groupsJson) setGroupOptions((groupsJson.data ?? []).map((g: { id: string; name: string }) => ({ id: g.id, name: g.name })))
-      setAssignMode(assignJson.visibility_mode === "groups" ? "groups" : "all")
-      setAssignedIds(assignJson.group_ids ?? [])
-      setShowGroupModal(true)
-    } catch { toast.error("Hiếu đang fix, vui lòng đợi") }
-  }
-
-  async function saveGroups() {
-    if (!groupTarget) return
-    setSavingGroups(true)
-    try {
-      const res = await fetch(`/api/kb/wiki/${groupTarget.id}/groups`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visibility_mode: assignMode, group_ids: assignedIds }),
-      })
-      if (!res.ok) throw new Error()
-      toast.success("Đã lưu phân phối nhóm")
-      setShowGroupModal(false)
-      fetchPages(search)
-    } catch { toast.error("Hiếu đang fix, vui lòng đợi") }
-    finally { setSavingGroups(false) }
-  }
-
-  const formDirty = selected
-    ? JSON.stringify(editForm) !== JSON.stringify({
-        title: selected.title, content: selected.content ?? "", page_type: selected.page_type,
-        department: selected.department, tags: (selected.tags ?? []).join(", "),
-      })
-    : editForm.title.trim() !== "" || editForm.content.trim() !== ""
-
-  // ── List view ──
-  if (view === "list") return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm tài liệu..."
-            className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
-          />
-        </div>
-        {isPrivileged && (
-          <button
-            onClick={startCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#003B95] hover:bg-[#002d73] text-white text-[12px] font-medium rounded-lg transition-colors ml-auto"
-          >
-            <Plus size={13} /> Soạn trang mới
-          </button>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center h-24 text-slate-400 text-[13px]">Đang tải...</div>
-        ) : pages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-[13px] gap-1">
-            <FileText size={24} className="text-slate-300" />
-            <span>Chưa có tài liệu chính thức nào cho nhóm này</span>
-          </div>
-        ) : (
-          pages.map(page => (
-            <div
-              key={page.id}
-              className={cn("w-full flex items-center gap-2 px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-50", page.is_hidden && "opacity-60")}
-            >
-              <button onClick={() => openPage(page)} className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-medium text-slate-800 leading-snug line-clamp-1 flex items-center gap-1.5">
-                  {page.title}
-                  {page.is_hidden && <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full font-normal">Ẩn</span>}
-                  {page.visibility_mode === "groups" && <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-normal">Riêng nhóm</span>}
-                </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {WIKI_PAGE_TYPES[page.page_type] ?? page.page_type} · Sửa bởi {page.updated_by} · {new Date(page.updated_at).toLocaleDateString("vi-VN")}
-                </p>
-              </button>
-              {isPrivileged && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => openGroupModal(page)} title="Gán nhóm" className="p-1.5 rounded-lg text-slate-400 hover:text-[#003B95] hover:bg-slate-100 transition-colors">
-                    <Users size={13} />
-                  </button>
-                  <button onClick={() => toggleHidden(page)} title={page.is_hidden ? "Hiện trang" : "Ẩn trang"} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
-                    {page.is_hidden ? <Eye size={13} /> : <EyeOff size={13} />}
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {showGroupModal && groupTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowGroupModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="text-[14px] font-semibold text-slate-800 mb-1">Gán nhóm — {groupTarget.title}</h3>
-            <p className="text-[12px] text-slate-400 mb-3">Chọn ai được xem tài liệu này.</p>
-            <div className="space-y-2 mb-3">
-              <label className="flex items-center gap-2 text-[13px] text-slate-700 cursor-pointer">
-                <input type="radio" checked={assignMode === "all"} onChange={() => setAssignMode("all")} />
-                Toàn công ty (mọi nhóm Tổ Gấu đều thấy)
-              </label>
-              <label className="flex items-center gap-2 text-[13px] text-slate-700 cursor-pointer">
-                <input type="radio" checked={assignMode === "groups"} onChange={() => setAssignMode("groups")} />
-                Chỉ nhóm được chọn
-              </label>
-            </div>
-            {assignMode === "groups" && (
-              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-50 mb-3">
-                {groupOptions.map(g => (
-                  <label key={g.id} className="flex items-center gap-2 px-3 py-2 text-[13px] text-slate-700 cursor-pointer hover:bg-slate-50">
-                    <input
-                      type="checkbox"
-                      checked={assignedIds.includes(g.id)}
-                      onChange={e => setAssignedIds(prev => e.target.checked ? [...prev, g.id] : prev.filter(id => id !== g.id))}
-                    />
-                    {g.name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowGroupModal(false)} className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[13px] hover:bg-slate-50">Hủy</button>
-              <button
-                onClick={saveGroups}
-                disabled={savingGroups}
-                className="px-3 py-1.5 rounded-lg bg-[#003B95] text-white text-[13px] font-medium hover:bg-[#002d73] disabled:opacity-50"
-              >
-                {savingGroups ? "Đang lưu..." : "Lưu"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {ConfirmDialog}
-    </div>
-  )
-
-  // ── Read view ──
-  if (view === "read" && selected) return (
-    <div className="flex-1 overflow-y-auto bg-white">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200 sticky top-0 bg-white z-10">
-        <button onClick={() => setView("list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-[#003B95] transition-colors">
-          <ChevronLeft size={15} /> Danh sách
-        </button>
-        <div className="flex gap-1 ml-auto">
-          <button
-            onClick={() => setShowHistory(h => !h)}
-            className={cn("flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border transition-colors", showHistory ? "bg-blue-50 border-blue-300 text-[#003B95]" : "border-slate-200 text-slate-500 hover:border-slate-400")}
-          >
-            <History size={12} /> Lịch sử ({versions.length})
-          </button>
-          {isPrivileged && (
-            <>
-              <button onClick={() => openGroupModal(selected)} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-[#003B95] hover:text-[#003B95] transition-colors">
-                <Users size={12} /> Gán nhóm
-              </button>
-              <button onClick={startEdit} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-slate-600 hover:border-[#003B95] hover:text-[#003B95] transition-colors">
-                <Edit2 size={11} /> Sửa
-              </button>
-              <button onClick={deletePage} disabled={deleting} className="flex items-center gap-1 px-2.5 py-1 text-[12px] rounded-lg border border-slate-200 text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-colors">
-                <Trash2 size={11} /> Xoá
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="px-5 py-4">
-        <div className="flex items-start gap-2 flex-wrap mb-1">
-          <h2 className="text-[17px] font-bold text-slate-900 flex-1">{selected.title}</h2>
-        </div>
-        <p className="text-[11px] text-slate-400 mb-4">
-          {WIKI_PAGE_TYPES[selected.page_type] ?? selected.page_type} · {DEPT_LABELS[selected.department as Department] ?? selected.department} ·
-          {" "}Cập nhật {new Date(selected.updated_at).toLocaleDateString("vi-VN")} bởi {selected.updated_by}
-        </p>
-        <div
-          className="prose-sm max-w-none text-slate-800 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(selected.content ?? "") }}
-        />
-      </div>
-
-      {showHistory && versions.length > 0 && (
-        <div className="px-5 pb-5">
-          <div className="border border-slate-200 rounded-lg p-3">
-            <h4 className="text-[12px] font-semibold text-slate-600 mb-2">Lịch sử thay đổi</h4>
-            {versions.map(v => (
-              <div key={v.id} className="flex items-center gap-3 text-[11px] text-slate-500 py-1 border-b border-slate-50 last:border-0">
-                <span className="font-mono text-slate-400">v{v.version}</span>
-                <span>{new Date(v.updated_at).toLocaleDateString("vi-VN")}</span>
-                <span>bởi {v.updated_by}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {ConfirmDialog}
-    </div>
-  )
-
-  // ── Edit / create view ──
-  return (
-    <div className="flex-1 overflow-y-auto bg-white">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-200">
-        <button onClick={() => setView(selected ? "read" : "list")} className="flex items-center gap-1 text-[13px] text-slate-500 hover:text-[#003B95] transition-colors">
-          <ChevronLeft size={15} /> {selected ? "Quay lại" : "Danh sách"}
-        </button>
-        <h3 className="text-[13px] font-semibold text-slate-700 ml-1">{selected ? "Chỉnh sửa trang" : "Soạn trang mới"}</h3>
-      </div>
-
-      <div className="p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="md:col-span-3">
-            <label className="block text-[11px] font-medium text-slate-600 mb-1">Tiêu đề *</label>
-            <input
-              value={editForm.title}
-              onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-              placeholder="Tên trang"
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] font-medium"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-600 mb-1">Loại trang</label>
-            <select
-              value={editForm.page_type}
-              onChange={e => setEditForm(f => ({ ...f, page_type: e.target.value }))}
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] bg-white"
-            >
-              {Object.entries(WIKI_PAGE_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-600 mb-1">Phòng ban</label>
-            <select
-              value={editForm.department}
-              onChange={e => setEditForm(f => ({ ...f, department: e.target.value as Department }))}
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] bg-white"
-            >
-              {Object.entries(DEPT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-slate-600 mb-1">Tags (cách nhau bằng dấu phẩy)</label>
-            <input
-              value={editForm.tags}
-              onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))}
-              placeholder="WM, Japan, eSIM..."
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95]"
-            />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-medium text-slate-600">Nội dung (Markdown)</label>
-            <button onClick={() => setPreviewMd(p => !p)} className="flex items-center gap-1 text-[11px] text-[#003B95] hover:underline">
-              {previewMd ? <><Edit2 size={11} /> Soạn thảo</> : <><Eye size={11} /> Xem trước</>}
-            </button>
-          </div>
-          {previewMd ? (
-            <div
-              className="min-h-[300px] p-4 border border-slate-200 rounded-lg bg-slate-50 prose-sm max-w-none text-[13px]"
-              dangerouslySetInnerHTML={{ __html: editForm.content ? renderMarkdown(editForm.content) : '<p class="text-slate-400 italic">Chưa có nội dung</p>' }}
-            />
-          ) : (
-            <textarea
-              value={editForm.content}
-              onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
-              rows={16}
-              placeholder="# Tiêu đề&#10;&#10;Nội dung Markdown..."
-              className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-lg focus:outline-none focus:border-[#003B95] font-mono resize-y"
-            />
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={savePage}
-            disabled={saving || !formDirty}
-            className="px-4 py-2 bg-[#003B95] hover:bg-[#002d73] text-white text-[13px] font-medium rounded-lg transition-colors disabled:opacity-50"
-          >
-            {saving ? "Đang lưu..." : selected ? "Lưu thay đổi" : "Tạo trang"}
-          </button>
-          <button
-            onClick={() => setView(selected ? "read" : "list")}
-            className="px-4 py-2 text-[13px] border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Hủy
-          </button>
-        </div>
-      </div>
-      {ConfirmDialog}
-    </div>
-  )
-}
+// s183 Phase 5 (tiếp): Avatar/SettingsModal/DocsPanel/NotesPanel/WikiPanel/FilePreviewItem/
+// AttachmentDisplay/ConfirmModal+useConfirm đã tách sang components/to-gau/*.tsx; types (Attachment/
+// ChatMessage/Member/GroupInfo/DocItem/NoteItem/WikiPage/WikiVersion/GroupOption) sang lib/to-gau-types.ts;
+// format helpers (emailColor/initials/fmtTime/fmtDate/fmtFileSize/fileIcon/renderContent/escapeHtml/
+// renderMarkdown) sang lib/to-gau-format.tsx. Tách cơ học, không đổi hành vi.
 
 // ── Main Chat Room ──
 export default function ToGauRoomPage() {
+
   const { data: session } = useSession()
   const params  = useParams()
   const router  = useRouter()
@@ -1683,7 +65,7 @@ export default function ToGauRoomPage() {
   // Phase 3: tabs — "tailieu" gộp Wiki (Chính thức) + Docs/Notes (Của nhóm)
   const [activeTab, setActiveTab]     = useState<"chat" | "tailieu">("chat")
   const [docTrack, setDocTrack]       = useState<"official" | "group">("official")
-  const [groupSubTab, setGroupSubTab] = useState<"docs" | "notes">("docs")
+  const [groupSubTab, setGroupSubTab] = useState<"docs" | "notes" | "questions">("docs")
 
   // Phase 4: @mention
   const [mentionQuery, setMentionQuery]   = useState<string | null>(null)
@@ -1725,7 +107,7 @@ export default function ToGauRoomPage() {
 
   // myEmail giữ tên biến cũ nhưng thực chất chứa USERNAME (không phải email thật) — fix bug identity-collision:
   // nhiều user Lark chưa gắn email → session.user.email rỗng cho MỌI user như vậy → cùng chung "" → lộ chéo
-  // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/Tab/analytics-to-gau.md.
+  // dữ liệu nhóm. username luôn duy nhất + luôn có. Xem CLAUDE.md / docs/wiki/system/tabs/analytics-to-gau.md.
   const myEmail      = session?.user?.username || ""
   const myName       = session?.user?.name  || ""
   // Role TƯƠI từ DB (không phải JWT) — backend (kb/wiki routes) đã dùng getDbRole(), FE phải khớp
@@ -2206,7 +588,7 @@ export default function ToGauRoomPage() {
         <div className="text-5xl mb-4">🔒</div>
         <h3 className="text-lg font-semibold text-slate-700 mb-2">Bạn chưa được thêm vào nhóm này</h3>
         <p className="text-slate-400 text-[14px]">Liên hệ Hiếu để được cấp quyền truy cập.</p>
-        <Link href="/analytics/to-gau" className="mt-4 text-[#003B95] text-[14px] hover:underline">← Quay lại danh sách nhóm</Link>
+        <Link href="/analytics/to-gau" className="mt-4 text-brand-600 text-[14px] hover:underline">← Quay lại danh sách nhóm</Link>
       </div>
     )
   }
@@ -2228,7 +610,7 @@ export default function ToGauRoomPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
         <p className="text-slate-400">Không tìm thấy nhóm.</p>
-        <Link href="/analytics/to-gau" className="mt-3 text-[#003B95] text-[14px] hover:underline">← Quay lại</Link>
+        <Link href="/analytics/to-gau" className="mt-3 text-brand-600 text-[14px] hover:underline">← Quay lại</Link>
       </div>
     )
   }
@@ -2261,7 +643,7 @@ export default function ToGauRoomPage() {
             className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
               searchOpen
-                ? "bg-[#003B95] text-white"
+                ? "bg-brand-600 text-white"
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             )}
             title="Tìm kiếm tin nhắn"
@@ -2288,7 +670,7 @@ export default function ToGauRoomPage() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Tìm kiếm tin nhắn trong nhóm..."
-                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-[#003B95]"
+                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-brand-600"
               />
               {searchQuery && (
                 <button
@@ -2305,7 +687,7 @@ export default function ToGauRoomPage() {
               <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
                 {searchLoading ? (
                   <div className="flex items-center justify-center py-6 text-slate-400 text-[13px]">
-                    <span className="w-4 h-4 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin mr-2" /> Đang tìm...
+                    <span className="w-4 h-4 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin mr-2" /> Đang tìm...
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-[13px]">Không tìm thấy kết quả</div>
@@ -2383,7 +765,7 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors",
                     activeTab === tab
-                      ? "border-[#003B95] text-[#003B95]"
+                      ? "border-brand-600 text-brand-600"
                       : "border-transparent text-slate-500 hover:text-slate-700"
                   )}
                 >
@@ -2405,7 +787,7 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[12px] font-medium border transition-colors",
                     docTrack === track
-                      ? "bg-[#003B95] text-white border-[#003B95]"
+                      ? "bg-brand-600 text-white border-brand-600"
                       : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
                   )}
                 >
@@ -2415,18 +797,18 @@ export default function ToGauRoomPage() {
             </div>
             {docTrack === "group" && (
               <div className="flex gap-1.5">
-                {(["docs", "notes"] as const).map(sub => (
+                {(["docs", "notes", "questions"] as const).map(sub => (
                   <button
                     key={sub}
                     onClick={() => setGroupSubTab(sub)}
                     className={cn(
                       "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
                       groupSubTab === sub
-                        ? "bg-white border-[#003B95] text-[#003B95]"
+                        ? "bg-white border-brand-600 text-brand-600"
                         : "bg-transparent border-transparent text-slate-500 hover:text-slate-700"
                     )}
                   >
-                    {sub === "docs" ? "📄 Docs" : "📌 Notes"}
+                    {sub === "docs" ? "📄 Docs" : sub === "notes" ? "📌 Notes" : "❓ Câu hỏi"}
                   </button>
                 ))}
               </div>
@@ -2464,7 +846,7 @@ export default function ToGauRoomPage() {
                         className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-500 text-[13px] hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 transition-colors shadow-sm"
                       >
                         {loadingMore ? (
-                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-[#003B95] rounded-full animate-spin" />
+                          <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-brand-600 rounded-full animate-spin" />
                         ) : (
                           <ChevronUp size={14} />
                         )}
@@ -2541,7 +923,7 @@ export default function ToGauRoomPage() {
                                 }}
                                 className={cn(
                                   "w-full rounded-xl px-3 py-2 text-[14px] resize-none focus:outline-none",
-                                  isMe ? "bg-[#003B95]/80 text-white border border-white/30" : "bg-white border border-[#003B95] text-slate-800"
+                                  isMe ? "bg-brand-600/80 text-white border border-white/30" : "bg-white border border-brand-600 text-slate-800"
                                 )}
                               />
                               <div className={cn("flex gap-1.5", isMe ? "justify-end" : "justify-start")}>
@@ -2561,7 +943,7 @@ export default function ToGauRoomPage() {
                               msg.is_recalled
                                 ? "bg-slate-100 text-slate-400 italic border border-dashed border-slate-200"
                                 : isMe
-                                ? "bg-[#003B95] text-white rounded-br-sm"
+                                ? "bg-brand-600 text-white rounded-br-sm"
                                 : "bg-white border border-slate-200 text-slate-800 rounded-bl-sm shadow-sm",
                               msg.is_pinned && !msg.is_recalled && "ring-1 ring-amber-400"
                             )}>
@@ -2617,7 +999,7 @@ export default function ToGauRoomPage() {
                               <button
                                 onClick={() => { setEditingMsgId(msg.id); setEditContent(msg.content) }}
                                 title="Sửa tin nhắn"
-                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-[#003B95] hover:text-[#003B95] text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                                className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-brand-600 hover:text-brand-600 text-[11px] flex items-center gap-1 transition-colors shadow-sm"
                               >
                                 <Edit2 size={11} /> Sửa
                               </button>
@@ -2653,8 +1035,8 @@ export default function ToGauRoomPage() {
                   className={cn(
                     "fixed bottom-24 right-72 z-20 rounded-full shadow-md flex items-center justify-center transition-all",
                     newMsgCount > 0
-                      ? "h-8 px-3 gap-1.5 bg-[#003B95] text-white border border-[#003B95] text-[12px] font-medium hover:bg-[#002d73]"
-                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-[#003B95] hover:text-[#003B95]"
+                      ? "h-8 px-3 gap-1.5 bg-brand-600 text-white border border-brand-600 text-[12px] font-medium hover:bg-brand-700"
+                      : "w-9 h-9 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 hover:border-brand-600 hover:text-brand-600"
                   )}
                   title="Cuộn xuống"
                 >
@@ -2690,7 +1072,7 @@ export default function ToGauRoomPage() {
                         onMouseEnter={() => setMentionIdx(idx)}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
-                          idx === mentionIdx ? "bg-blue-50" : "hover:bg-blue-50"
+                          idx === mentionIdx ? "bg-brand-50" : "hover:bg-brand-50"
                         )}
                       >
                         <Avatar name={member.user_name} email={member.user_email} size="sm" />
@@ -2709,7 +1091,7 @@ export default function ToGauRoomPage() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading || sending}
-                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-[#003B95] disabled:opacity-40 transition-colors"
+                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-brand-600 disabled:opacity-40 transition-colors"
                     title="Đính kèm file"
                   >
                     <Paperclip size={15} />
@@ -2730,7 +1112,7 @@ export default function ToGauRoomPage() {
                     onKeyDown={handleKeyDown}
                     placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng, @ để mention)"
                     rows={1}
-                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-[#003B95] focus:ring-2 focus:ring-[#003B95]/20 resize-none max-h-32 overflow-y-auto"
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 resize-none max-h-32 overflow-y-auto"
                     style={{ minHeight: "42px" }}
                   />
 
@@ -2755,7 +1137,7 @@ export default function ToGauRoomPage() {
                   <button
                     onClick={sendMessage}
                     disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#003B95] text-white flex items-center justify-center hover:bg-[#002d73] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {(sending || uploading) ? (
                       <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -2786,6 +1168,10 @@ export default function ToGauRoomPage() {
 
         {activeTab === "tailieu" && docTrack === "group" && groupSubTab === "notes" && (
           <NotesPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
+        )}
+
+        {activeTab === "tailieu" && docTrack === "group" && groupSubTab === "questions" && (
+          <QuestionsPanel groupId={groupId} myEmail={myEmail} isPrivileged={isPrivileged} />
         )}
       </div>
 

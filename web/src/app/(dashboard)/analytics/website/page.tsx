@@ -11,6 +11,7 @@ import {
 } from "recharts"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
+import { StatTile, type MetricAccent, autoDeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel WebsiteAnalytics. Data qua /api/analytics/ga4 (generic dimensions/metrics) +
 // /api/analytics/gsc + /api/config/ga4. Bỏ date-fns (không dùng), inline getDefaultDateRange,
@@ -39,7 +40,7 @@ export default function WebsiteAnalyticsPage() {
   const [loadingSites, setLoadingSites] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gscError, setGscError] = useState<string | null>(null)
-  const [sites, setSites] = useState<{ id: string, name: string, currency?: string }[]>([])
+  const [sites, setSites] = useState<{ id: string, name: string, currency?: string, kind?: "web" | "app" }[]>([])
   const [selectedSiteId, setSelectedSiteId] = useState<string>("")
   const [generalData, setGeneralData] = useState<GAData | null>(null)
   const [ecommerceData, setEcommerceData] = useState<GAData | null>(null)
@@ -85,6 +86,16 @@ export default function WebsiteAnalyticsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Đổi tab Web/App → đổi CẢ platform lẫn site cùng lúc trong 1 handler (batch chung 1 render) — tách
+  // riêng thành useEffect sẽ tạo 2 lần fetchAnalytics chồng nhau (1 lần với platform mới+site cũ trong lúc
+  // effect chưa kịp sửa site), 2 response về không theo thứ tự → có thể hiển thị nhầm data cũ vĩnh viễn
+  // (đã bắt được bug này qua Chrome QA thật trên staging trước khi ghép PR).
+  const switchPlatform = (next: "web" | "app") => {
+    const match = sites.find(s => (s.kind || "web") === next)
+    if (match) setSelectedSiteId(match.id)
+    setPlatform(next)
+  }
+
   useEffect(() => {
     if (selectedSiteId) {
       fetchAnalytics()
@@ -105,7 +116,8 @@ export default function WebsiteAnalyticsPage() {
         const list = Array.isArray(data) ? data : (data?.sites ?? [])
         setSites(list)
         if (list.length > 0) {
-          setSelectedSiteId(list[0].id)
+          // Mặc định chọn site "web" (kind cũ không có field này → coi như web) — tránh vô tình chọn property App.
+          setSelectedSiteId((list.find((s: { kind?: string }) => (s.kind || "web") === "web") || list[0]).id)
         } else {
           setLoading(false)
         }
@@ -484,12 +496,12 @@ export default function WebsiteAnalyticsPage() {
   const currentPurchases = ecoTimeSeries.reduce((acc, curr) => acc + curr.purchases, 0)
   const comparePurchases = compareEcoTimeSeries.reduce((acc: number, curr: any) => acc + curr.purchases, 0)
 
-  const kpis = [
-    { label: "Sessions", value: currentSessions.toLocaleString(), change: calculateChange(currentSessions, compareSessions), icon: Users, color: "blue" },
-    { label: "Purchases", value: currentPurchases.toLocaleString(), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, color: "emerald" },
-    { label: "Search Clicks", value: currentClicks.toLocaleString(), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, color: "indigo" },
-    { label: "Avg. CTR", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, color: "emerald" },
-    { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, color: "orange" },
+  const kpis: { label: string; value: string; change: number | null; icon: React.ElementType; accent: MetricAccent }[] = [
+    { label: "Sessions", value: currentSessions.toLocaleString(), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
+    { label: "Purchases", value: currentPurchases.toLocaleString(), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
+    { label: "Search Clicks", value: currentClicks.toLocaleString(), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
+    { label: "Avg. CTR", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, accent: "positive" },
+    { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
   ]
 
   if (error) {
@@ -517,7 +529,7 @@ export default function WebsiteAnalyticsPage() {
         <p className="text-slate-500 max-w-sm mb-6">
           Vui lòng vào phần Cài đặt để thêm thông tin Property ID và Credentials cho website của bạn.
         </p>
-        <button onClick={() => { window.location.href = "/admin" }} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-sm">
+        <button onClick={() => { window.location.href = "/admin" }} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-sm">
           Đi tới Cài đặt
         </button>
       </div>
@@ -540,14 +552,14 @@ export default function WebsiteAnalyticsPage() {
           {/* Platform toggle */}
           <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
             <button
-              onClick={() => setPlatform("web")}
+              onClick={() => switchPlatform("web")}
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                platform === "web" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                platform === "web" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >
               <Globe className="w-3.5 h-3.5" />Web
             </button>
             <button
-              onClick={() => setPlatform("app")}
+              onClick={() => switchPlatform("app")}
               className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                 platform === "app" ? "bg-white text-purple-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >
@@ -555,22 +567,26 @@ export default function WebsiteAnalyticsPage() {
             </button>
           </div>
 
-          {sites.length > 0 && (
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-500">
-              <Globe className="w-4 h-4 text-blue-500" />
-              <select value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)}
-                className="text-xs font-bold text-slate-700 outline-none bg-transparent cursor-pointer min-w-[120px]">
-                {sites.map(site => (<option key={site.id} value={site.id}>{site.name}</option>))}
-              </select>
-            </div>
-          )}
+          {(() => {
+            const platformSites = sites.filter(s => (s.kind || "web") === platform)
+            if (platformSites.length === 0) return null
+            return (
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all focus-within:ring-2 focus-within:ring-brand-500">
+                <Globe className="w-4 h-4 text-brand-500" />
+                <select value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)}
+                  className="text-xs font-bold text-slate-700 outline-none bg-transparent cursor-pointer min-w-[120px]">
+                  {platformSites.map(site => (<option key={site.id} value={site.id}>{site.name}</option>))}
+                </select>
+              </div>
+            )
+          })()}
 
           <div className="flex flex-col gap-2 items-end">
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <div className="relative">
                   <input type="checkbox" className="sr-only" checked={compareEnabled} onChange={() => setCompareEnabled(!compareEnabled)} />
-                  <div className={cn("block w-8 h-5 rounded-full transition-colors", compareEnabled ? "bg-blue-500" : "bg-slate-200")}></div>
+                  <div className={cn("block w-8 h-5 rounded-full transition-colors", compareEnabled ? "bg-brand-500" : "bg-slate-200")}></div>
                   <div className={cn("dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform", compareEnabled && "transform translate-x-3")}></div>
                 </div>
                 <span className="text-xs font-semibold text-slate-600">Compare</span>
@@ -585,7 +601,7 @@ export default function WebsiteAnalyticsPage() {
 
               <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, startDate: s, endDate: e }))} />
 
-              <button onClick={() => fetchAnalytics()} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">Lọc</button>
+              <button onClick={() => fetchAnalytics()} className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
 
               <button onClick={fetchAnalytics} disabled={loading} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                 <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
@@ -607,29 +623,14 @@ export default function WebsiteAnalyticsPage() {
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {kpis.map((kpi, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
-                kpi.color === "blue" ? "bg-blue-50 text-blue-600" :
-                kpi.color === "indigo" ? "bg-indigo-50 text-indigo-600" :
-                kpi.color === "emerald" ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"
-              )}>
-                <kpi.icon className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{kpi.label}</p>
-                <h3 className="text-2xl font-bold text-slate-900 mt-1">{kpi.value}</h3>
-              </div>
-            </div>
-            {compareEnabled && kpi.change !== null && (
-              <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg",
-                kpi.change > 0 ? "text-emerald-600 bg-emerald-50" : kpi.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
-              )}>
-                {kpi.change > 0 ? <TrendingUp className="w-3 h-3" /> : kpi.change < 0 ? <TrendingDown className="w-3 h-3" /> : null}
-                {Math.abs(kpi.change).toFixed(1)}%
-              </div>
-            )}
-          </div>
+          <StatTile
+            key={idx}
+            icon={<kpi.icon className="w-5 h-5" />}
+            label={kpi.label}
+            value={kpi.value}
+            accent={kpi.accent}
+            deltas={compareEnabled && kpi.change !== null ? [{ label: "So sánh", value: `${kpi.change >= 0 ? "+" : ""}${kpi.change.toFixed(1)}%`, kind: autoDeltaKind(kpi.change) }] : undefined}
+          />
         ))}
       </div>
 
@@ -642,7 +643,7 @@ export default function WebsiteAnalyticsPage() {
               <p className="text-sm text-slate-500">Người dùng và Phiên truy cập (GA4).</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-xs font-medium text-slate-600">Users</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-brand-500"></div><span className="text-xs font-medium text-slate-600">Users</span></div>
             </div>
           </div>
           <div className="h-[300px] w-full">
@@ -650,18 +651,18 @@ export default function WebsiteAnalyticsPage() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} /><stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorCompareUsers" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1} /><stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8) + "/" + val.substring(4, 6)} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
+                <Tooltip contentStyle={chartTooltipStyle} />
                 {compareEnabled && (<Area type="monotone" dataKey="compareUsers" name="Previous Users" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth={2} fillOpacity={1} fill="url(#colorCompareUsers)" />)}
-                <Area type="monotone" dataKey="users" name="Users" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
+                <Area type="monotone" dataKey="users" name="Users" stroke={CHART_PALETTE[0]} strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -674,7 +675,7 @@ export default function WebsiteAnalyticsPage() {
               <p className="text-sm text-slate-500">Clicks và Impressions (Search Console).</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-600"></div><span className="text-xs font-medium text-slate-600">Clicks</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[0] }}></div><span className="text-xs font-medium text-slate-600">Clicks</span></div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-300"></div><span className="text-xs font-medium text-slate-600">Impressions</span></div>
             </div>
           </div>
@@ -688,13 +689,13 @@ export default function WebsiteAnalyticsPage() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={gscTimeSeries}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8) + "/" + val.substring(4, 6)} />
                   <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
                   <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
                   {compareEnabled && (<Line yAxisId="left" type="monotone" name="Previous Clicks" dataKey="compareClicks" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth={2} dot={false} />)}
-                  <Line yAxisId="left" type="monotone" name="Clicks" dataKey="clicks" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <Line yAxisId="left" type="monotone" name="Clicks" dataKey="clicks" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} />
                   <Line yAxisId="right" type="monotone" name="Impressions" dataKey="impressions" stroke="#cbd5e1" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                 </LineChart>
               </ResponsiveContainer>
@@ -716,11 +717,11 @@ export default function WebsiteAnalyticsPage() {
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ecoTimeSeries}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8)} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [formatRevenue(val), "Revenue"]} />
-                <Bar dataKey="revenue" name="Revenue" fill="#f97316" radius={[4, 4, 0, 0]} />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(val: number) => [formatRevenue(val), "Revenue"]} />
+                <Bar dataKey="revenue" name="Revenue" fill={CHART_PALETTE[2]} radius={[4, 4, 0, 0]} />
                 {compareEnabled && (<Bar dataKey="compareRevenue" name="Previous Revenue" fill="#cbd5e1" radius={[4, 4, 0, 0]} />)}
               </BarChart>
             </ResponsiveContainer>
@@ -734,7 +735,7 @@ export default function WebsiteAnalyticsPage() {
               <h2 className="text-lg font-bold text-slate-900">Top Selling Items</h2>
               <p className="text-sm text-slate-500">Items contributing most to revenue.</p>
             </div>
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><ShoppingBag className="w-5 h-5" /></div>
+            <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center"><ShoppingBag className="w-5 h-5" /></div>
           </div>
           <div className="space-y-4">
             {productPerformance.map((product, idx) => (
@@ -758,7 +759,7 @@ export default function WebsiteAnalyticsPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900">{formatRevenue(product.revenue)}</p>
                     <div className="w-20 h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(product.revenue / productPerformance[0].revenue) * 100}%` }} />
+                      <div className="h-full bg-brand-500 rounded-full" style={{ width: `${(product.revenue / productPerformance[0].revenue) * 100}%` }} />
                     </div>
                   </div>
                 </div>
@@ -782,7 +783,7 @@ export default function WebsiteAnalyticsPage() {
               <h2 className="text-lg font-bold text-slate-900">Top Countries</h2>
               <p className="text-sm text-slate-500">Users distribution by country.</p>
             </div>
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
+            <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
           </div>
           <div className="space-y-4">
             {countriesPerformace.map((country, idx) => (
@@ -791,7 +792,7 @@ export default function WebsiteAnalyticsPage() {
                   <div className="overflow-hidden flex-1">
                     <p className="text-sm font-bold text-slate-800 truncate">{country.name}</p>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(country.users / countriesPerformace[0].users) * 100}%` }} />
+                      <div className="h-full bg-brand-500 rounded-full" style={{ width: `${(country.users / countriesPerformace[0].users) * 100}%` }} />
                     </div>
                   </div>
                 </div>
@@ -890,7 +891,7 @@ export default function WebsiteAnalyticsPage() {
                 {topQueriesPerformance.map((q: any, idx: number) => (
                   <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                     <td className="p-3 text-sm font-medium text-slate-800">{q.query}</td>
-                    <td className="p-3 text-sm font-bold text-blue-600 text-right">
+                    <td className="p-3 text-sm font-bold text-brand-600 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {compareEnabled && q.change !== null && (
                           <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-bold",
@@ -943,8 +944,8 @@ export default function WebsiteAnalyticsPage() {
                       <td className="p-3 text-sm font-bold text-slate-800 capitalize flex items-center gap-2">
                         <div className="w-5 flex justify-center">
                           {expandedDestinations.has(p.destination)
-                            ? <ChevronUp className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
-                            : <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />}
+                            ? <ChevronUp className="w-4 h-4 text-slate-400 group-hover:text-brand-500 transition-colors" />
+                            : <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-brand-500 transition-colors" />}
                         </div>
                         {p.destination}
                       </td>

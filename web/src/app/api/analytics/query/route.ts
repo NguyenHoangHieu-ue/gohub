@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { cachedAnalyticsQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 // Endpoint query chung cho các trang Analytics (port "y hệt" gohub-intel /api/query).
 // Bảo mật: chỉ role analytics, CHỈ SELECT/WITH/EXPLAIN, không multi-statement, read-only trên gohub_dw.
@@ -19,6 +20,17 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   if (!ANALYTICS_ROLES.has(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  // Rate limit: 60 req/min/user (khuyến nghị operations-runbook §7 — endpoint dùng chung mọi tab BI,
+  // đa số cache hit nên hạn mức cao hơn chat, chỉ chặn khi thật sự bất thường).
+  const rlKey = `analytics-query:${(session.user as any).username || session.user.email || "anon"}`
+  const rl = await checkRateLimit(rlKey, 60, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Quá nhiều truy vấn. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
   }
 
   const { sql } = await req.json()

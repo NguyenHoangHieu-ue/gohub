@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     })
 
     return trend
-    }, QUERY_TTL_MIN, noCache(req))
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

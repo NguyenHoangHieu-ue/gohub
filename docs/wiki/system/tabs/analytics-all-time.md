@@ -1,0 +1,85 @@
+---
+title: "All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)"
+page_type: tab_guide
+is_hidden: true
+department: all
+tags: [tab, analytics, all-time]
+created: 2026-06-28
+updated: 2026-07-15
+status: active
+---
+
+# All-Time Report (Báo Cáo Hiệu Suất Lịch Sử)
+
+Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-Strategic / B2B-Non-Strategic / B2C**. Dùng data model chung — xem [[_analytics-data-model]].
+
+---
+
+## 1. Đường dẫn & File
+| | |
+|---|---|
+| Web | `/analytics/all-time` — `web/src/app/(dashboard)/analytics/all-time/page.tsx` |
+| API | `/api/analytics/all-time-performance` |
+| Nguồn | `fact_fulfillment_revenue` + `dim_order_source` + `dim_customer` |
+
+## 2. Logic
+- Gom theo `period` (tháng/năm) × `derived_group`.
+- **`derived_group`** (s131, 2026-08-03): suy từ `group_name` + **KHÁCH `price_list_name`** → `B2B-Strategic`, `B2B-Non-Strategic`, `B2C`. Đọc cấu hình chung **`quarterly-settings`** qua `getCustomerStrategicSql()` (CÙNG nguồn Quarter Report — chỉnh 1 chỗ mọi tab theo; cache key kèm hash config). Default: Strategic=NULL/không VIP-Gold-Silver; exclude B2C Customer US/VN + B2B Ops. Nhất quán Dashboard/BOD (ISSUE-DASH-4). *Trước dùng `partner_tiers` (KÊNH) đang rỗng → Strategic=0.* Filter `customerTier` cũng theo định nghĩa này.
+- Trả: `period`, `derived_group`, `channel_name`, `revenue`, `margin`, `tier`.
+
+## 3. Gotchas
+- **⚠️ Fix s162 (2026-08-26) — thiếu Turso B2B per-customer cost**: `gpm2` (CM1) trước chỉ trừ
+  `analytics_channel_costs` (Supabase channel-level, gần như rỗng cho B2B) + group cost → CM1 B2B cao hơn thực
+  tế, khác Quarter Report cùng kỳ. Nay B2B-Strategic/B2B-Non-Strategic đổi sang Turso `b2b_customer_cost_monthly`
+  (query customer×tháng riêng, CÙNG phân loại Strategic/Non), B2C/Other giữ nguyên channel cost cũ.
+- **✅ Fix s183 Phase 2 (2026-09-04) — query chính thiếu `LEFT JOIN dim_customer c`, lỗi SQL thật với config
+  mặc định.** Phát hiện từ s162 nhưng chưa xác nhận; audit lại xác nhận: `DEFAULT_TIER_KEYWORDS`
+  (`quarterly-settings.ts`) có sẵn entry VIP/Gold/Silver (không rỗng) → `buildIsStrategicSql` LUÔN trả về
+  biểu thức tham chiếu `c.price_list_name` (không rút gọn về `(TRUE)`), và CASE trong SELECT còn tham chiếu
+  cả `c.name` (dòng loại `excludeList`) — nghĩa là với config mặc định, câu SQL chính của
+  `/api/analytics/all-time-performance` **CHẮC CHẮN throw lỗi Postgres thật** ("missing FROM-clause entry
+  for table c"), không phải chỉ "có thể sai số" như ghi trước đây. Fix: thêm
+  `LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)` vào `FROM` (khớp đúng pattern
+  join đã có sẵn ở câu `custRevRows` cùng file). tsc + vitest PASS. **Chưa verify bằng gọi API thật với DB**
+  (máy dev không có `.env.local`/`ANALYTICS_DB_*`) — Hiếu tự mở tab All-Time trên staging xác nhận hết lỗi
+  500 và số ra đúng.
+- **Group cost B2B (BOD-1, 2026-08-02)**: chi phí group-level `B2B` chia theo **revenue-share** giữa B2B-Strategic & B2B-Non-Strategic (KHÔNG cộng đầy đủ vào cả 2 → tránh đếm 2 lần). Hiện Supabase chưa có B2B group cost → 0 tác động; fix để đúng khi nhập. (Giống `bod-data.ts`.)
+- **Amount-type channel op-cost (s131)**: khi 1 channel có cả KH Strategic lẫn Non → chia theo revenue-share per (tháng, channel) để KHÔNG cộng 2 lần (percent-type theo revenue nên đúng sẵn).
+- Không giới hạn kỳ ngắn → dữ liệu lớn, dựa vào cache 12h.
+
+---
+
+## Data Sources
+
+| Column / Metric | Source Table | Formula / Note |
+|-----------------|-------------|----------------|
+| Revenue | `fact_fulfillment_revenue.fulfilled_revenue_amount_vnd` | `SUM(fulfilled_revenue_amount_vnd)` toàn thời gian |
+| Margin (GP) | `fact_fulfillment_revenue.gross_profit_vnd` | `SUM(gross_profit_vnd)` = Revenue − COGS |
+| Period | `fact_fulfillment_revenue.fulfiled_date` | GROUP BY tháng/năm (`period`) |
+| Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
+| Derived Group | `dim_order_source.group_name` + Partner Tiers | B2B-Strategic / B2B-Non-Strategic / B2C |
+| Tier (B2B) | Supabase `app_settings` Partner Tiers | `channel_name ILIKE ANY(strategic_list)` → Strategic |
+
+
+---
+
+## § Filter Chuẩn (s132 — 2026-08-04)
+
+Từ s132, tất cả tab analytics có 3 filter:
+
+| Filter | Default | Ý nghĩa |
+|--------|---------|---------|
+| `includeShip` | **Off** | Bao gồm phí ship (`sku = SHIPPINGFEE0`). Mặc định loại — doanh thu SP thuần |
+| `includeInternalOps` | **Off** | Bao gồm đơn nội bộ (`group_name = INTERNAL-TRANSACTION`). Mặc định loại — GP âm do SIM nội bộ |
+| `includeOpsCustomers` | **Off** (B2B/B2C) | Bao gồm KH ops (B2B Ops, B2C Customer US/VN). Mặc định loại khỏi B2B/B2C total |
+
+**Khi bật CẢ 3 → khớp số liệu raw `gohub_dw` (dùng để validate).**
+
+UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
+
+## UI (s193, 2026-09-05)
+Chart area + legend + bảng đổi màu hex tuỳ hứng (`#2563eb`/`#93c5fd`/`#312e81`) sang bảng màu nhất quán:
+B2B-Strategic = `brand-600`, B2B-Non-Strategic = `brand-300`, B2C = `emerald-600` (cùng họ brand cho 2 nhóm
+B2B, tách hue cho B2C). Dùng `CHART_GRID_COLOR`/`chartTooltipStyle` từ `dashboard-kit.tsx`. Mọi nút/focus
+ring `blue-*` khác đổi sang `brand-*`. Không đổi logic tính toán/query.
+

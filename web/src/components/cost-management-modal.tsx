@@ -343,7 +343,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
     const dirty = isDirty(chanName)
 
     return (
-      <div key={chanName} className={cn("bg-slate-50 rounded-2xl p-4 border border-slate-100", displayName && "ml-8 border-l-4 border-l-blue-200")}>
+      <div key={chanName} className={cn("bg-slate-50 rounded-2xl p-4 border border-slate-100", displayName && "ml-8 border-l-4 border-l-brand-200")}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex flex-col">
             <h3 className="font-bold text-slate-800">{displayName || chanName}</h3>
@@ -351,11 +351,11 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               <div className="flex items-center gap-2 mt-1">
                 <button
                   onClick={() => toggleSubchannelMode(chanName, "total")}
-                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", !isSubchannelMode ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
+                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", !isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
                 >Total Mode</button>
                 <button
                   onClick={() => toggleSubchannelMode(chanName, "subchannels")}
-                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", isSubchannelMode ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
+                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
                 >Sub-channel Mode</button>
               </div>
             )}
@@ -366,7 +366,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
             className={cn(
               "flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded-lg transition-colors",
               dirty
-                ? "bg-blue-600 text-white hover:bg-blue-700"
+                ? "bg-brand-600 text-white hover:bg-brand-700"
                 : "bg-slate-200 text-slate-400 cursor-not-allowed",
               savingCosts && "opacity-50",
             )}
@@ -390,12 +390,12 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                   value={costs[cat]?.value ? costs[cat].value : ""}
                   placeholder="0"
                   onChange={e => updateCost(chanName, cat, "value", e.target.value === "" ? 0 : (parseFloat(e.target.value) || 0))}
-                  className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-brand-500 outline-none"
                 />
                 <select
                   value={costs[cat]?.type ?? "amount"}
                   onChange={e => updateCost(chanName, cat, "type", e.target.value)}
-                  className="px-1 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="px-1 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] focus:ring-2 focus:ring-brand-500 outline-none"
                 >
                   <option value="amount">VND</option>
                   <option value="percent">%</option>
@@ -424,7 +424,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 type="month"
                 value={costMonth}
                 onChange={e => setCostMonth(e.target.value)}
-                className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none"
               />
               <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-400" />
@@ -438,17 +438,17 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
             {scope !== "b2c" && (
               <button
                 onClick={() => setActiveCostTab("b2b")}
-                className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2b" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2b" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
               >B2B Channels</button>
             )}
             <button
               onClick={() => setActiveCostTab("b2c")}
-              className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2c" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+              className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "b2c" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >B2C Channels</button>
             {/* Group Costs luôn hiện; label chỉ rõ scope */}
             <button
               onClick={() => setActiveCostTab("group")}
-              className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "group" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+              className={cn("px-6 py-2 text-sm font-bold rounded-lg transition-all", activeCostTab === "group" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
             >{scope === "b2c" ? "B2C Group" : "B2B Group"}</button>
           </div>
 
@@ -461,7 +461,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 className={cn(
                   "flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-xl transition-all",
                   isTabDirty
-                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-900/20"
+                    ? "bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-800/20"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed",
                   savingCosts && "opacity-50",
                 )}
@@ -479,13 +479,13 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
             {activeCostTab === "group" ? (
               /* ── Group Costs ─────────────────────────────────────────────── */
               <div className="space-y-6">
-                <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                <div className="bg-brand-50 rounded-2xl p-6 border border-brand-100">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-blue-900">{newGroupCost.id ? "Sửa mục chi phí" : "Thêm chi phí mới"}</h3>
+                    <h3 className="font-bold text-brand-800">{newGroupCost.id ? "Sửa mục chi phí" : "Thêm chi phí mới"}</h3>
                     {newGroupCost.id && (
                       <button
                         onClick={() => { setNewGroupCost({ group_name: defaultGroup as "B2C" | "B2B", month: costMonth, item_name: "", amount: 0, note: "" }); setGroupFormError(null) }}
-                        className="text-xs text-blue-600 hover:underline font-bold"
+                        className="text-xs text-brand-600 hover:underline font-bold"
                       >Huỷ sửa</button>
                     )}
                   </div>
@@ -495,7 +495,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       <select
                         value={newGroupCost.group_name}
                         onChange={e => setNewGroupCost(prev => ({ ...prev, group_name: e.target.value as "B2C" | "B2B" }))}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                       >
                         <option value="B2B">B2B</option>
                         <option value="B2C">B2C</option>
@@ -508,7 +508,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                         placeholder="VD: Marketing Campaign"
                         value={newGroupCost.item_name}
                         onChange={e => { setNewGroupCost(prev => ({ ...prev, item_name: e.target.value })); setGroupFormError(null) }}
-                        className={cn("w-full px-3 py-2 bg-white border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none", groupFormError && !newGroupCost.item_name.trim() ? "border-red-400" : "border-slate-200")}
+                        className={cn("w-full px-3 py-2 bg-white border rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none", groupFormError && !newGroupCost.item_name.trim() ? "border-red-400" : "border-slate-200")}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -517,7 +517,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                         type="number"
                         value={newGroupCost.amount || ""}
                         onChange={e => { setNewGroupCost(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 })); setGroupFormError(null) }}
-                        className={cn("w-full px-3 py-2 bg-white border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none", groupFormError && newGroupCost.amount <= 0 ? "border-red-400" : "border-slate-200")}
+                        className={cn("w-full px-3 py-2 bg-white border rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none", groupFormError && newGroupCost.amount <= 0 ? "border-red-400" : "border-slate-200")}
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -527,7 +527,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                         placeholder="Tuỳ chọn..."
                         value={newGroupCost.note}
                         onChange={e => setNewGroupCost(prev => ({ ...prev, note: e.target.value }))}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                       />
                     </div>
                   </div>
@@ -538,7 +538,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                     <button
                       onClick={handleSaveGroupCost}
                       disabled={savingCosts}
-                      className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50"
+                      className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white text-sm font-bold rounded-xl hover:bg-brand-700 transition-all shadow-lg shadow-brand-800/20 disabled:opacity-50"
                     >
                       <Save className="w-4 h-4" />
                       {newGroupCost.id ? "Cập nhật" : "Thêm mục"}
@@ -558,7 +558,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                         <div key={cost.id} className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-shadow">
                           <div className="flex items-center gap-4">
                             <div className={cn("px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
-                              cost.group_name === "B2C" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"
+                              cost.group_name === "B2C" ? "bg-purple-50 text-purple-600" : "bg-brand-50 text-brand-600"
                             )}>
                               {cost.group_name}
                             </div>
@@ -577,7 +577,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleEditGroupCost(cost)}
-                                className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                                className="p-2 text-slate-300 hover:text-brand-500 hover:bg-brand-50 rounded-xl transition-all"
                                 title="Sửa"
                               ><Edit2 className="w-5 h-5" /></button>
                               {confirmDeleteId === cost.id ? (
@@ -616,14 +616,14 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 if (isSubchannelMode) {
                   return (
                     <div key={channel} className="space-y-4">
-                      <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100 flex items-center justify-between">
+                      <div className="bg-brand-50 rounded-2xl p-4 border border-brand-100 flex items-center justify-between">
                         <div>
-                          <h3 className="font-bold text-blue-900">{channel} (Sub-channel Mode)</h3>
-                          <p className="text-[10px] text-blue-600">Nhập chi phí cho từng sub-channel bên dưới.</p>
+                          <h3 className="font-bold text-brand-800">{channel} (Sub-channel Mode)</h3>
+                          <p className="text-[10px] text-brand-600">Nhập chi phí cho từng sub-channel bên dưới.</p>
                         </div>
                         <button
                           onClick={() => toggleSubchannelMode(channel, "total")}
-                          className="text-xs bg-white text-blue-600 px-3 py-1 rounded-lg border border-blue-200 font-bold hover:bg-blue-50 transition-all"
+                          className="text-xs bg-white text-brand-600 px-3 py-1 rounded-lg border border-brand-200 font-bold hover:bg-brand-50 transition-all"
                         >Switch to Total Mode</button>
                       </div>
                       {subList.map(sc => renderChannelRow(`${channel} - ${sc}`, sc, channel))}

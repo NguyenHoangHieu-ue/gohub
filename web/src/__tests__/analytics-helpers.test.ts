@@ -1,11 +1,19 @@
 import { vi, describe, test, expect } from "vitest"
 
 // L2 cache (Supabase) mock: không hit sẵn (maybeSingle → null), upsert no-op → cô lập L1 in-memory.
+// overlaps() ghi lại arg cuối cùng gọi để flushByDeps test kiểm tra đúng filter được gửi đi.
+let mockLastOverlapsArgs: [string, string[]] | null = null
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
+      delete: () => ({
+        overlaps: (col: string, val: string[]) => {
+          mockLastOverlapsArgs = [col, val]
+          return Promise.resolve({ count: 0, error: null })
+        },
+      }),
     }),
   },
 }))
@@ -15,7 +23,8 @@ vi.mock("@/lib/turso", () => ({ tursoQuery: vi.fn() }))
 import {
   safeDate, safeCompanyCode, getDateFilter, getPrevDateFilter,
   getDaysInMonth, getDaysInRange, getMonthsInRange,
-  cachedQuery, isCronReq, analyticsGuard,
+  cachedQuery, flushByDeps, isCronReq, analyticsGuard,
+  excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
 } from "@/lib/analytics-helpers"
 
 describe("SQL input sanitization (chống injection)", () => {
@@ -95,6 +104,48 @@ describe("cachedQuery — L1 in-memory cache", () => {
   })
 })
 
+// s190+2: thay B2B_COST_CACHE_PREFIXES (danh sách prefix viết tay, đã lệch version thành no-op ở s169)
+// bằng deps khai NGAY tại chỗ cachedQuery() — flushByDeps xoá theo "chủ đề", không cần biết cache-key thật.
+describe("flushByDeps — flush theo deps khai tại cachedQuery (thay prefix-list viết tay)", () => {
+  test("entry có deps khớp → bị xoá khỏi L1, entry deps khác/không khai → giữ nguyên", async () => {
+    const key1 = "b2b-kpis2:test:" + Math.random()
+    const key2 = "b2c-kpis:test:" + Math.random()
+    const key3 = "no-deps:test:" + Math.random()
+
+    const fn1 = vi.fn(async () => "b2b-data")
+    const fn2 = vi.fn(async () => "b2c-data")
+    const fn3 = vi.fn(async () => "plain-data")
+
+    await cachedQuery(key1, fn1, 10, false, ["b2b-cost"])
+    await cachedQuery(key2, fn2, 10, false, ["b2c-budget"])
+    await cachedQuery(key3, fn3)
+
+    await flushByDeps(["b2b-cost"])
+
+    // key1 (deps=["b2b-cost"]) đã bị xoá khỏi L1 → gọi lại chạy fn1 lần 2
+    await cachedQuery(key1, fn1, 10, false, ["b2b-cost"])
+    expect(fn1).toHaveBeenCalledTimes(2)
+
+    // key2/key3 (deps khác hoặc không khai) không bị đụng tới → vẫn dùng cache, fn không chạy lại
+    await cachedQuery(key2, fn2, 10, false, ["b2c-budget"])
+    await cachedQuery(key3, fn3)
+    expect(fn2).toHaveBeenCalledTimes(1)
+    expect(fn3).toHaveBeenCalledTimes(1)
+  })
+
+  test("gọi đúng Supabase .overlaps('deps', [...]) — không phải .like() (đã ghi nhận không hoạt động đúng runtime)", async () => {
+    await flushByDeps(["b2b-cost", "b2c-budget"])
+    expect(mockLastOverlapsArgs).toEqual(["deps", ["b2b-cost", "b2c-budget"]])
+  })
+
+  test("deps rỗng → no-op, không gọi Supabase", async () => {
+    mockLastOverlapsArgs = null
+    const res = await flushByDeps([])
+    expect(res).toEqual({ deleted: 0 })
+    expect(mockLastOverlapsArgs).toBeNull()
+  })
+})
+
 describe("isCronReq — xác thực cron bằng CRON_SECRET", () => {
   const mkReq = (auth: string | null) =>
     ({ headers: { get: (k: string) => (k === "authorization" ? auth : null) } } as any)
@@ -110,6 +161,39 @@ describe("isCronReq — xác thực cron bằng CRON_SECRET", () => {
     expect(isCronReq(mkReq("Bearer wrong"))).toBe(false)
     expect(isCronReq(mkReq(null))).toBe(false)
     delete process.env.CRON_SECRET
+  })
+})
+
+describe("excludeInactiveCustomers (regression s168 — B2B Performance thiếu lọc KH INACTIVE)", () => {
+  test("SQL trả về loại KH có price_list_name chứa INACTIVE, self-contained (không cần JOIN sẵn)", () => {
+    const sql = excludeInactiveCustomers()
+    expect(sql).toContain("INACTIVE")
+    expect(sql).toContain("NOT EXISTS")
+    expect(sql).toContain("f.customer_code") // dùng đúng alias fact table chuẩn
+  })
+})
+
+describe("buildIsStrategicSql — phân loại B2B-Strategic theo price_list_name", () => {
+  test("không có tier Non-Strategic nào cấu hình → mọi KH B2B mặc định Strategic", () => {
+    expect(buildIsStrategicSql({})).toBe("(TRUE)")
+  })
+
+  test("có keyword VIP/Gold/Silver → Strategic = NULL hoặc KHÔNG khớp bất kỳ keyword nào", () => {
+    const sql = buildIsStrategicSql({ VIP: ["vip"], Gold: ["gold"] })
+    expect(sql).toContain("c.price_list_name IS NULL")
+    expect(sql).toContain("NOT LIKE '%VIP%'")
+    expect(sql).toContain("NOT LIKE '%GOLD%'")
+  })
+})
+
+describe("shipFilter / internalOpsFilter — filter chuẩn s132 (default OFF = loại)", () => {
+  test("include=false (default) → thêm điều kiện loại", () => {
+    expect(shipFilter(false)).toContain("!= 'SHIPPINGFEE0'")
+    expect(internalOpsFilter(false)).toContain("!= 'INTERNAL-TRANSACTION'")
+  })
+  test("include=true → không thêm filter (rỗng, giữ nguyên toàn bộ dòng)", () => {
+    expect(shipFilter(true)).toBe("")
+    expect(internalOpsFilter(true)).toBe("")
   })
 })
 

@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchCosts } from "@/lib/bod-data"
-import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
+import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
 
 export const dynamic = "force-dynamic"
@@ -183,11 +183,13 @@ export async function GET(req: NextRequest) {
       fetchCustomerCosts(months).then(m => { costMap = m }).catch(() => {}),
     ])
 
-    // elapsedRatio theo tháng (1 = tháng đã xong, <1 = tháng đang chạy) — dùng để pro-rate phần cost
-    // dạng "amount" (tiền cố định) đúng số ngày đã qua. Khớp elapsedRatio trong quarterly-b2b-customers
-    // (`meta.dim > 0 ? meta.elapsed / meta.dim : 1`) — thiếu bước này thì cost amount cố định bị nhân
-    // ĐÚP theo factor chiếu tháng (×dim/elapsed) khi cộng cm1Pr, làm CM1 Squad Progress thấp hơn Tổng quan.
-    const elapsedRatioOf = (i: number) => monthMeta[i].dim > 0 ? monthMeta[i].elapsed / monthMeta[i].dim : 1
+    // elapsedRatioOf/kpiFactorOf — s183 Phase 2: dùng thẳng `getElapsedRatio`/`getKpiFactor` dùng chung
+    // (analytics-engine/quarter-projection.ts) thay vì tự định nghĩa lại công thức tại đây. Trước s183,
+    // route này VÀ `quarterly/page.tsx` (`kpiPrFactor`/`monthKpiFactor`) mỗi nơi viết tay 1 bản y hệt nhau
+    // — chỉ đổi 1 nơi (bug s182: quên đồng bộ) từng làm Squad Progress lệch hẳn Quarter Report đầu tháng
+    // cuối quý. Công thức không đổi (đã verify bằng test `analytics-engine.test.ts`), chỉ đổi NGUỒN.
+    const elapsedRatioOf = (i: number) => getElapsedRatio(monthMeta[i])
+    const kpiFactorOf = (i: number) => getKpiFactor(monthMeta[i])
 
     // Helper: CM1 thực + PR dùng per-month data để áp đúng factor (khớp quarterly-report)
     const calcCustCm1AndPr = (r: Record<string, string>, code: string) => {
@@ -201,14 +203,14 @@ export async function GET(req: NextRequest) {
         const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, elapsedRatioOf(i)) : 0
         const mCm1 = mGm - mCost
         cm1Act += mCm1
-        cm1Pr  += mCm1 * monthMeta[i].factor
+        cm1Pr  += mCm1 * kpiFactorOf(i)
       }
       return { cm1Act, cm1Pr: Math.round(cm1Pr * futureScale) }
     }
 
     // Helper: projected revenue/hk3 dùng per-month factors × futureScale (ước tính tháng chưa tới, khớp Tổng quan).
     const calcPrByMonth = (r: Record<string, string>, field: string) =>
-      Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * monthMeta[i].factor, 0) * futureScale)
+      Math.round(months.reduce((s, _, i) => s + (Number(r[`${field}_m${i}`]) || 0) * kpiFactorOf(i), 0) * futureScale)
 
     // Gộp custRows theo customer_code — query GROUP BY cả price_list_name/currency_code/sales_pic_code nên
     // 1 KH có thể ra NHIỀU dòng SQL nếu giá trị các cột này không ổn định suốt quý (đổi PIC/bảng giá giữa quý,
@@ -243,7 +245,9 @@ export async function GET(req: NextRequest) {
       const mr = monthMeta[i]
       const gcRatio = (mr.elapsed > 0 && mr.elapsed < mr.dim) ? mr.elapsed / mr.dim : 1
       totalB2BGCAct += budget * gcRatio
-      totalB2BGCPr  += mr.isProjected ? budget : budget * gcRatio
+      // gcRatio × kpiFactorOf(i) = 1 cho mọi tháng đã bắt đầu (2 tỉ lệ triệt tiêu nhau: elapsed/dim ×
+      // dim/elapsed) → PR group cost = full budget tháng, khớp cách Tổng quan luôn chiếu ngay (ungated).
+      totalB2BGCPr  += budget * gcRatio * kpiFactorOf(i)
     })
     totalB2BGCPr *= futureScale  // ước tính group cost tháng chưa tới, khớp cách revPr/cm1Pr được nới
 
@@ -300,7 +304,7 @@ export async function GET(req: NextRequest) {
 
       // Squad-level projected values: dùng per-month factors × futureScale (khớp Tổng quan, ước tính tháng chưa tới)
       const revPr = Math.round(months.reduce((s, _, i) =>
-        s + members.reduce((ms, r) => ms + (Number(r[`rev_m${i}`]) || 0), 0) * monthMeta[i].factor, 0) * futureScale)
+        s + members.reduce((ms, r) => ms + (Number(r[`rev_m${i}`]) || 0), 0) * kpiFactorOf(i), 0) * futureScale)
       let cm1Pr = 0
       for (let i = 0; i < months.length; i++) {
         for (const r of members) {
@@ -308,7 +312,7 @@ export async function GET(req: NextRequest) {
           const mGm  = Number(r[`gm_m${i}`])  || 0
           const rec  = costMap.get(`${months[i]}_${r.customer_code}`)
           const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, elapsedRatioOf(i)) : 0
-          cm1Pr += (mGm - mCost) * monthMeta[i].factor
+          cm1Pr += (mGm - mCost) * kpiFactorOf(i)
         }
       }
       cm1Pr *= futureScale
@@ -351,7 +355,7 @@ export async function GET(req: NextRequest) {
     const totCm1Pr = squads.reduce((s, sq) => s + sq.cm1_pr,    0)
 
     return NextResponse.json({
-      quarter, year, elapsed_days: elapsedDays, quarter_days: qTotalDays, pr_factor: monthMeta[monthMeta.length - 1]?.factor ?? 1,
+      quarter, year, elapsed_days: elapsedDays, quarter_days: qTotalDays, pr_factor: kpiFactorOf(monthMeta.length - 1),
       squads,
       totals: {
         revenue: totRev, revenue_pr: totRevPr,

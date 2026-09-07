@@ -6,7 +6,7 @@ import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shi
 import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash, QB2B_CACHE_PREFIX } from "@/lib/quarterly-settings"
-import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
+import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 
 // Route nặng (per-customer B2B + Turso costs) → cho 60s (khớp vercel.json) tránh 504 treo FE.
 export const maxDuration = 60
@@ -289,8 +289,9 @@ export async function GET(req: NextRequest) {
           return
         }
 
-        // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31)
-        const elapsedRatio = meta && meta.dim > 0 ? meta.elapsed / meta.dim : 1
+        // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31) — s183 Phase 2: dùng getElapsedRatio() dùng chung
+        // (analytics-engine/quarter-projection.ts) thay công thức viết tay, công thức không đổi.
+        const elapsedRatio = meta ? getElapsedRatio(meta) : 1
 
         // 1. Projected CH.Cost (dự phóng cả tháng): amount GIỮ NGUYÊN (elapsedRatio=1),
         //    percent áp trên projected revenue (rawRevenue × factor).

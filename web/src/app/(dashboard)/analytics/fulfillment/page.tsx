@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
+import { InventoryStockView } from "@/components/inventory/stock-view"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inventory — kế hoạch nhập hàng theo tuần (VN/US) + PO tracker.
@@ -14,7 +15,7 @@ import { exportRawRows } from "@/lib/export-excel"
 // Dựa theo "Plan nhập hàng theo tháng.xlsx" (Ops): mỗi SKU dự phóng Tồn thực tế / Bán dự kiến /
 // Số nhập / Tồn cuối tuần theo từng tuần. Web tự gợi ý Bán dự kiến (tốc độ bán 30 ngày, gohub_dw)
 // + Số nhập (reorder-to-target khi tồn dự phóng dưới ngưỡng an toàn); OPS chỉnh tay khi cần —
-// xem docs/wiki/Tab/analytics-fulfillment.md.
+// xem docs/wiki/system/tabs/analytics-fulfillment.md.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type AlertLevel = "critical" | "warning" | "ok" | "none"
@@ -22,7 +23,7 @@ type Company = "VN" | "US"
 
 interface WeekMeta { weekStart: string; isActual: boolean }
 interface ComputedWeek extends WeekMeta {
-  beginStock: number; actualStock: number | null
+  beginStock: number; actualStock: number | null; actualStockAuto: boolean
   salesForecast: number; salesForecastAuto: boolean
   importQty: number; importQtyAuto: boolean
   suggestedImport: number; endStock: number; coverageWeeks: number | null
@@ -65,7 +66,7 @@ function AlertBadge({ level }: { level: AlertLevel }) {
 function StatusPill({ text }: { text: string }) {
   const cfg: Record<string, string> = {
     "Đã thanh toán": "bg-emerald-100 text-emerald-700", "Chưa thanh toán": "bg-slate-100 text-slate-500",
-    "Đã nhập kho": "bg-emerald-100 text-emerald-700", "Chờ nhận": "bg-blue-100 text-blue-700",
+    "Đã nhập kho": "bg-emerald-100 text-emerald-700", "Chờ nhận": "bg-brand-100 text-brand-700",
     "Chờ thanh toán": "bg-amber-100 text-amber-700",
   }
   return <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap", cfg[text] ?? "bg-slate-100 text-slate-500")}>{text}</span>
@@ -89,7 +90,7 @@ function WeekCell({ value, placeholder, isAuto, disabled, onChange }: {
         onChange(s === "" ? null : Number(s))
       }}
       className={cn(
-        "w-16 text-right text-xs font-bold border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500",
+        "w-16 text-right text-xs font-bold border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-500",
         isAuto && str === "" ? "border-dashed border-slate-300 text-slate-400 bg-slate-50" : "border-slate-300 bg-white",
       )}
     />
@@ -135,13 +136,13 @@ function SkuModal({ company, existing, onClose, onSaved }: {
             <div>
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
               <input value={form.sku_code} onChange={e => set("sku_code", e.target.value)} placeholder="vd. 1D0003DK00000"
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           )}
           <div>
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor <span className="normal-case font-normal">(tự lookup nếu để trống)</span></label>
             <input value={form.vendor} onChange={e => set("vendor", e.target.value)}
-              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[["Mục tiêu (tuần)", "target_weeks_coverage"], ["An toàn (tuần)", "safety_weeks"], ["Lead time (tuần)", "lead_time_weeks"]].map(([label, key]) => (
@@ -155,14 +156,14 @@ function SkuModal({ company, existing, onClose, onSaved }: {
           <div>
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ghi chú</label>
             <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2}
-              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           {error && <p className="text-xs text-red-600 font-bold">{error}</p>}
         </div>
         <div className="flex gap-2 mt-5">
           <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Hủy</button>
           <button onClick={submit} disabled={saving}
-            className="flex-1 py-2 rounded-lg text-sm font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+            className="flex-1 py-2 rounded-lg text-sm font-black bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50">
             {saving ? "Đang lưu…" : existing ? "Lưu" : "Thêm SKU"}
           </button>
         </div>
@@ -202,7 +203,7 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
           <div className="flex gap-2">
             <button onClick={() => setDrafts({})} className="text-[11px] font-bold text-slate-500 hover:text-slate-700 px-2 py-1">Hủy</button>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-1 text-[11px] font-black bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+              className="flex items-center gap-1 text-[11px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
               <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
             </button>
           </div>
@@ -215,7 +216,7 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
               <th className="sticky left-0 z-10 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-500 uppercase w-32">Tuần</th>
               {sku.weeks.map(w => (
                 <th key={w.weekStart} className={cn("px-2 py-1 text-center text-[10px] font-bold whitespace-nowrap",
-                  w.isActual ? "text-slate-400" : "text-blue-600")}>
+                  w.isActual ? "text-slate-400" : "text-brand-600")}>
                   {fmtWeek(w.weekStart)}<br /><span className="font-normal">{w.isActual ? "Actual" : "Forecast"}</span>
                 </th>
               ))}
@@ -241,7 +242,8 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
                   )
                   if (row.key === "actual") return (
                     <td key={w.weekStart} className="px-2 py-1 text-right">
-                      <WeekCell value={d?.actual_stock !== undefined ? d.actual_stock : w.actualStock} placeholder={0} isAuto={false}
+                      <WeekCell value={d?.actual_stock !== undefined ? d.actual_stock : (w.actualStockAuto ? null : w.actualStock)}
+                        placeholder={w.actualStock ?? 0} isAuto={w.actualStockAuto}
                         onChange={v => setField(w.weekStart, "actual_stock", v)} />
                     </td>
                   )
@@ -329,17 +331,17 @@ function PoTracker({ company }: { company: Company }) {
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <Truck className="w-4 h-4 text-blue-600" />
+          <Truck className="w-4 h-4 text-brand-600" />
           <h3 className="text-sm font-black text-slate-900">PO Tracker — Đơn nhập hàng</h3>
         </div>
         {editMode ? (
           <div className="flex gap-2">
-            <button onClick={addRow} className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 px-2 py-1">
+            <button onClick={addRow} className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800 px-2 py-1">
               <Plus className="w-3 h-3" />Thêm PO
             </button>
             <button onClick={() => setEditMode(false)} className="text-[11px] font-bold text-slate-500 px-2 py-1">Hủy</button>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-1 text-[11px] font-black bg-blue-600 text-white px-2.5 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+              className="flex items-center gap-1 text-[11px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
               <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
             </button>
           </div>
@@ -395,7 +397,7 @@ function PoTracker({ company }: { company: Company }) {
               )
             })}
             {editMode && newRows.map((nr, i) => (
-              <tr key={`new-${i}`} className="border-t border-blue-100 bg-blue-50/40">
+              <tr key={`new-${i}`} className="border-t border-brand-100 bg-brand-50/40">
                 <td className="px-2 py-1.5"><input value={nr.vendor} onChange={e => setNewField(i, "vendor", e.target.value)} placeholder="Vendor" className="w-24 border rounded px-1 py-0.5" /></td>
                 <td className="px-2 py-1.5"><input value={nr.sku_code} onChange={e => setNewField(i, "sku_code", e.target.value)} placeholder="SKU" className="w-32 border rounded px-1 py-0.5" /></td>
                 <td className="px-2 py-1.5"><input type="number" value={nr.qty || ""} onChange={e => setNewField(i, "qty", e.target.value)} className="w-16 border rounded px-1 py-0.5 text-right" /></td>
@@ -468,18 +470,15 @@ function InventoryInner() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center"><Package className="w-5 h-5 text-white" /></div>
-          <div>
-            <h1 className="text-lg font-black text-slate-900">Inventory — Kế hoạch nhập hàng</h1>
-            <p className="text-xs text-slate-500 font-bold">Dự phóng tồn kho theo tuần từng SKU · gợi ý bán/nhập tự động, OPS chỉnh tay khi cần</p>
-          </div>
+        <div>
+          <h2 className="text-sm font-black text-slate-900">Kế hoạch nhập hàng theo tuần</h2>
+          <p className="text-xs text-slate-500 font-bold">Dự phóng tồn kho theo tuần từng SKU · gợi ý bán/nhập tự động (tồn thực tế tuần này lấy từ Sapo), OPS chỉnh tay khi cần</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 rounded-lg p-0.5">
             {(["VN", "US"] as Company[]).map(c => (
               <button key={c} onClick={() => setCompany(c)}
-                className={cn("px-3 py-1.5 rounded-md text-xs font-black", company === c ? "bg-white shadow text-blue-600" : "text-slate-500")}>
+                className={cn("px-3 py-1.5 rounded-md text-xs font-black", company === c ? "bg-white shadow text-brand-600" : "text-slate-500")}>
                 {c}
               </button>
             ))}
@@ -537,7 +536,7 @@ function InventoryInner() {
                     <td className="px-3 py-2.5 text-slate-500">{n0(s.velocity)}</td>
                     <td className="px-3 py-2.5">
                       <span className="font-bold">{n0(thisWeek?.importQty ?? 0)}</span>
-                      {thisWeek?.importQtyAuto && thisWeek.importQty > 0 && <span className="ml-1 text-[10px] text-blue-500 font-bold">(gợi ý)</span>}
+                      {thisWeek?.importQtyAuto && thisWeek.importQty > 0 && <span className="ml-1 text-[10px] text-brand-500 font-bold">(gợi ý)</span>}
                     </td>
                     <td className="px-3 py-2.5"><AlertBadge level={s.alert} /></td>
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
@@ -567,6 +566,31 @@ function InventoryInner() {
   )
 }
 
+// ─── Page — 2 sub-tab: Tồn kho (thật, Sapo sync) / Kế hoạch nhập hàng (plan theo tuần, PO tracker) ──────
+function FulfillmentInner() {
+  const [tab, setTab] = useState<"stock" | "plan">("stock")
+  return (
+    <div className="p-4 lg:p-8 space-y-4 max-w-[1600px] mx-auto">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0"><Package className="w-5 h-5 text-white" /></div>
+        <div className="flex-1">
+          <h1 className="text-lg font-black text-slate-900">Inventory — Quản lý tồn kho & nhập hàng</h1>
+          <p className="text-xs text-slate-500 font-bold">Tồn kho thật (Sapo sync) · Kế hoạch nhập hàng theo tuần · PO tracker</p>
+        </div>
+        <div className="flex bg-slate-100 rounded-lg p-0.5">
+          {([["stock", "Tồn kho"], ["plan", "Kế hoạch nhập hàng"]] as const).map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)}
+              className={cn("px-3.5 py-1.5 rounded-md text-xs font-black transition-all", tab === key ? "bg-white shadow text-brand-600" : "text-slate-500 hover:text-slate-700")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === "stock" ? <InventoryStockView /> : <InventoryInner />}
+    </div>
+  )
+}
+
 export default function FulfillmentPage() {
-  return <Suspense><InventoryInner /></Suspense>
+  return <Suspense><FulfillmentInner /></Suspense>
 }

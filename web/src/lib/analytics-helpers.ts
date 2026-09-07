@@ -4,29 +4,38 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // ── Two-level query cache ──────────────────────────────────────────────────────
 // L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
 // L2: Supabase analytics_query_cache (shared, sống qua cold start, TTL 10 phút)
 // → Dữ liệu luôn tươi (max TTL_L2 cũ), cold start không cần re-query gohub_dw.
 
-const _cache = new Map<string, { data: unknown; exp: number }>()
+const _cache = new Map<string, { data: unknown; exp: number; deps: string[] }>()
 const TTL_L1 = 5  * 60_000  // 5 phút in-memory
 const TTL_L2 = 10            // 10 phút trong Supabase (minutes)
 
+/**
+ * `deps` (s190+2 — thay cơ chế prefix-list viết tay, đã gây ≥3 sự cố lịch sử: thiếu flush s168b, prefix
+ * lệch version thành no-op s169, flush toàn bộ gây chậm app s169(c)): mỗi route cache tự khai NÓ phụ thuộc
+ * "chủ đề" dữ liệu nào (vd `["b2b-cost"]`) NGAY tại chỗ gọi `cachedQuery` — không còn danh sách rời rạc
+ * (`B2B_COST_CACHE_PREFIXES` cũ) nào có thể lệch khỏi thực tế khi thêm route mới hoặc đổi cache-key.
+ * Route ghi dữ liệu gọi `flushByDeps(["b2b-cost"])` — không cần biết route nào đang cache nó.
+ */
 export async function cachedQuery<T>(
   key: string,
   fn:  () => Promise<T>,
   ttlMinutes = TTL_L2,
   bypass = false,   // true → bỏ qua ĐỌC cache (L1+L2), tính lại tươi; VẪN ghi cache mới (re-warm).
+  deps: string[] = [],
 ): Promise<T> {
   if (bypass) {
     const data = await fn()
-    _cache.set(key, { data, exp: Date.now() + TTL_L1 })
+    _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
     try {
       await supabaseAdmin
         .from("analytics_query_cache")
-        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
     } catch { /* Supabase lỗi → vẫn trả data */ }
     return data
   }
@@ -46,7 +55,7 @@ export async function cachedQuery<T>(
       const ageMs = Date.now() - new Date(row.cached_at).getTime()
       if (ageMs < ttlMinutes * 60_000) {
         const result = row.data as T
-        _cache.set(key, { data: result, exp: Date.now() + TTL_L1 })
+        _cache.set(key, { data: result, exp: Date.now() + TTL_L1, deps })
         return result
       }
     }
@@ -56,7 +65,7 @@ export async function cachedQuery<T>(
   const data = await fn()
 
   // Warm L1
-  _cache.set(key, { data, exp: Date.now() + TTL_L1 })
+  _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
   if (_cache.size > 200) {
     const now = Date.now()
     for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
@@ -68,13 +77,13 @@ export async function cachedQuery<T>(
   try {
     await supabaseAdmin
       .from("analytics_query_cache")
-      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
+      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
   } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
 
   return data
 }
 
-// Xoá toàn bộ L2 cache (admin — gọi từ Settings)
+// Xoá toàn bộ L2 cache (admin — gọi từ Settings, nút "Tải lại mới" toàn hệ thống)
 export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   _cache.clear()
   const { count } = await supabaseAdmin
@@ -84,33 +93,30 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   return { deleted: count ?? 0 }
 }
 
-// Danh sách prefix cache của MỌI route đọc Turso b2b_customer_cost_monthly (fetchCustomerCosts) BÊN TRONG
-// cachedQuery (nên bị stale tới 12h sau khi sửa cost) — nguồn thật duy nhất, cập nhật khi bump version key
-// ở route tương ứng (đừng lặp lại lỗi quarterly-cache-flush cũ: prefix list quên bump theo → thành no-op).
-// quarterly-report/quarterly-b2b-customers KHÔNG cần trong list này — 2 route đó cố ý đặt fetchCustomerCosts
-// NGOÀI cachedQuery nên luôn tươi sẵn, không bao giờ stale vì cost.
-export const B2B_COST_CACHE_PREFIXES = [
-  "b2b-kpis2:", "b2b-perf6:", "b2b-trend2:", "b2b-strategic2:",
-  "ch-kpis:", "ch-perf:",
-  "bod-summary2:", "bod-group-margin2:", "bod-channel-perf:",
-  "monthly-kpis:", "all-time2:",
-]
-
 /**
- * Xoá cache của các route phụ thuộc Turso b2b_customer_cost_monthly (b2b/kpis|performance|trend|
- * strategic-performance, channels/kpis|performance, bod-summary|group-margin|channel-performance,
- * monthly-kpis, all-time-performance) — gọi sau khi sửa/xoá cost per-customer B2B.
- *
- * CHỦ ĐÍCH dùng scoped-prefix thay vì flushAnalyticsCache() (xoá sạch): sửa cost 1 khách hàng không cần
- * (và không nên) nuke cache của Products/SKU/Vendors/Orders/Staff/Customers/SQL Explorer... — những tab đó
- * không phụ thuộc cost B2B, nuke sạch mỗi lần sửa cost làm CẢ APP chậm hẳn (mọi tab phải query gohub_dw sống
- * lại) trong khi chỉ vài route thật sự cần tươi (s169 dùng flushAnalyticsCache() toàn bộ ban đầu, gây đúng
- * sự cố này khi Hiếu sửa cost/bấm "Tải lại mới" nhiều lần liên tục lúc test).
+ * Xoá MỌI cache-entry đã tự khai phụ thuộc 1 trong các `deps` này (xem comment `cachedQuery` ở trên).
+ * Gọi từ route ghi dữ liệu — không cần biết/nhớ route nào đang cache nó, khác cơ chế prefix cũ.
  */
-export async function flushB2BCostCaches(): Promise<{ deleted: number }> {
-  return flushAnalyticsCacheByPrefixes(B2B_COST_CACHE_PREFIXES)
+export async function flushByDeps(deps: string[]): Promise<{ deleted: number }> {
+  const clean = deps.filter(Boolean)
+  if (clean.length === 0) return { deleted: 0 }
+
+  for (const [k, v] of _cache) {
+    if (v.deps?.some(d => clean.includes(d))) _cache.delete(k)
+  }
+
+  const { count } = await supabaseAdmin
+    .from("analytics_query_cache")
+    .delete({ count: "exact" })
+    .overlaps("deps", clean)
+  return { deleted: count ?? 0 }
 }
 
+// Xoá cache theo prefix cache-key literal — vẫn hợp lệ cho các route CHƯA khai `deps` (vd b2c-monthly/
+// b2c-leads, quarterly-report/quarterly-b2b-customers) hoặc khi cần gộp nhiều prefix biết chắc còn đúng
+// version tại chỗ gọi (import prefix TRỰC TIẾP từ module sinh ra key, không hardcode chuỗi rời rạc — xem
+// `quarterly-cache-flush/route.ts`). Cache B2B cost (trước là `B2B_COST_CACHE_PREFIXES`) đã chuyển hẳn
+// sang `flushByDeps(["b2b-cost"])` ở trên — không dùng prefix cứng cho nhóm đó nữa.
 export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise<{ deleted: number }> {
   const clean = prefixes.filter(Boolean)
   if (clean.length === 0) return { deleted: 0 }
@@ -186,7 +192,7 @@ export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: nu
     try {
       const data = await queryAnalytics(r.sql)
       const dataKey = r.key.replace("sqlreg:", "q:")
-      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1 })
+      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1, deps: [] })
       await supabaseAdmin
         .from("analytics_query_cache")
         .upsert({ cache_key: dataKey, data: data as object, cached_at: new Date().toISOString() })
@@ -556,23 +562,9 @@ export async function getCountryMappings(): Promise<Record<string, string>> {
 }
 
 // ── Day-range helpers (for target/cost pro-rata) ──────────────────────────────
-
-export function getDaysInMonth(monthStr: string): number {
-  const [year, month] = monthStr.split("-").map(Number)
-  return new Date(year, month, 0).getDate()
-}
-
-export function getDaysInRange(startDate: string, endDate: string, monthStr: string): number {
-  const [y, m] = monthStr.split("-").map(Number)
-  const monthStart = new Date(y, m - 1, 1)
-  const monthEnd   = new Date(y, m, 0)
-  const start      = new Date(startDate)
-  const end        = new Date(endDate)
-  const rangeStart = start > monthStart ? start : monthStart
-  const rangeEnd   = end   < monthEnd   ? end   : monthEnd
-  if (rangeEnd < rangeStart) return 0
-  return Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
-}
+// Nguồn thật: analytics-engine/date-math.ts (pure, client-safe, không lệch theo timezone máy chạy).
+// Re-export giữ tên cũ để ~10 file đang import getDaysInMonth/getDaysInRange từ đây không phải sửa (s183 Phase 2).
+export { getDaysInMonth, getDaysInRange }
 
 // ── Channel costs (from Supabase, replaces Turso channel_costs) ───────────────
 

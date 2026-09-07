@@ -9,7 +9,7 @@ import {
   Check, ShoppingBag, UserPlus, RefreshCw, Activity, Sparkles, Search, Filter, Calendar, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SourceBadge } from "@/components/dashboard-kit"
+import { SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
@@ -317,7 +317,7 @@ export default function CustomerPerformancePage() {
                   <div className="relative z-10">
                     <div className={cn(
                       "w-10 h-10 rounded-2xl flex items-center justify-center mb-4 shadow-sm",
-                      kpi.label.includes("Active") ? "bg-blue-600 text-white" :
+                      kpi.label.includes("Active") ? "bg-brand-600 text-white" :
                       kpi.label.includes("New") ? "bg-emerald-600 text-white" :
                       kpi.label.includes("Revenue") ? "bg-amber-600 text-white" :
                       kpi.label.includes("ARPU") ? "bg-indigo-600 text-white" :
@@ -371,7 +371,7 @@ export default function CustomerPerformancePage() {
                 <div className="h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={trendData}>
-                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={CHART_GRID_COLOR} />
                       <XAxis
                         dataKey="name"
                         axisLine={false}
@@ -634,7 +634,7 @@ export default function CustomerPerformancePage() {
                           <span className="text-sm font-bold text-slate-700 truncate max-w-[180px] block">{row.name}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-[#003B95]">{row.tier ?? "—"}</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">{row.tier ?? "—"}</span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <span className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(row.revenue)}</span>
@@ -646,10 +646,10 @@ export default function CustomerPerformancePage() {
                           {row.margin_percent.toFixed(1)}%
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className={cn("text-sm font-bold tabular-nums", row.cm1 >= 0 ? "text-blue-700" : "text-rose-600")}>{formatCurrency(row.cm1)}</span>
+                          <span className={cn("text-sm font-bold tabular-nums", row.cm1 >= 0 ? "text-brand-700" : "text-rose-600")}>{formatCurrency(row.cm1)}</span>
                         </td>
                         <td className="px-6 py-4 text-right text-xs font-bold">
-                          <span className={cn(row.cm1_pct >= 0 ? "text-blue-600" : "text-rose-500")}>{row.cm1_pct.toFixed(1)}%</span>
+                          <span className={cn(row.cm1_pct >= 0 ? "text-brand-600" : "text-rose-500")}>{row.cm1_pct.toFixed(1)}%</span>
                         </td>
                         <td className="px-6 py-4 text-right text-xs font-bold text-slate-500">
                           {row.hk3_pct.toFixed(1)}%

@@ -1,6 +1,6 @@
 import { cachedAnalyticsQuery } from "@/lib/analytics-helpers"
 
-// Logic dùng chung cho tab Inventory (kế hoạch nhập hàng theo tuần) — xem docs/wiki/Tab/analytics-fulfillment.md.
+// Logic dùng chung cho tab Inventory (kế hoạch nhập hàng theo tuần) — xem docs/wiki/system/tabs/analytics-fulfillment.md.
 // Gợi ý "Số bán dự kiến"/"Số nhập" tính từ tốc độ bán 30 ngày gần nhất (gohub_dw) + rule reorder-to-target
 // đơn giản: khi tồn dự phóng rớt dưới safety_weeks×velocity → gợi ý nhập đủ lên target_weeks_coverage×velocity.
 // OPS ghi đè (sales_forecast/import_qty có giá trị trong inventory_plan_weekly) thì giữ nguyên, không bị
@@ -31,6 +31,7 @@ export interface WeekMeta {
 export interface ComputedWeek extends WeekMeta {
   beginStock: number
   actualStock: number | null
+  actualStockAuto: boolean   // true = lấy từ fact_inventory (Sapo), chưa qua tay OPS xác nhận
   salesForecast: number
   salesForecastAuto: boolean
   importQty: number
@@ -67,6 +68,24 @@ export function buildWeekSeries(weeksBack = 2, weeksForward = 14, anchor = new D
   return out
 }
 
+// Tồn kho thật gần nhất (fact_inventory, Sapo sync) — dùng làm gợi ý "Số tồn thực tế" tuần đang chạy thay
+// vì OPS phải gõ tay 100% như trước (chưa có nguồn tự động). Sum theo mọi kho.
+export async function getLatestStock(skuCodes: string[]): Promise<Record<string, { asOfDate: string; qty: number }>> {
+  const out: Record<string, { asOfDate: string; qty: number }> = {}
+  if (!skuCodes.length) return out
+  const skuList = skuCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(",")
+  try {
+    const rows = await cachedAnalyticsQuery<{ sku: string; d: string; qty: string }>(`
+      SELECT TRIM(sku) AS sku, MAX(date)::text AS d, SUM(quantity)::text AS qty
+      FROM fact_inventory
+      WHERE TRIM(sku) IN (${skuList}) AND date = (SELECT MAX(date) FROM fact_inventory)
+      GROUP BY TRIM(sku)
+    `)
+    for (const r of rows) out[r.sku] = { asOfDate: r.d, qty: Math.round(Number(r.qty) || 0) }
+  } catch {}
+  return out
+}
+
 // Tốc độ bán trung bình/tuần (30 ngày gần nhất, gohub_dw) cho danh sách SKU. Cache 12h (dữ liệu chỉ đổi 1 lần/ngày).
 export async function getWeeklyVelocity(skuCodes: string[]): Promise<Record<string, number>> {
   const out: Record<string, number> = {}
@@ -96,18 +115,27 @@ export function alertLevel(coverageWeeks: number | null, safetyWeeks: number, ta
 
 // Roll forward theo tuần: đầu tuần = cuối tuần trước (hoặc actual_stock nếu tuần đó có nhập tay).
 // Số bán/Số nhập dùng giá trị OPS đã ghi đè nếu có, ngược lại dùng gợi ý auto.
+// liveStock: tồn thật gần nhất (fact_inventory) — gợi ý cho ĐÚNG tuần chứa ngày snapshot đó khi OPS chưa
+// gõ tay actual_stock tuần này (actualStockAuto=true, giống cách sales_forecast/import_qty auto-suggest).
 export function computePlan(
   cfg: SkuPlanConfig,
   weeks: WeekMeta[],
   inputBySku: Record<string, WeeklyInputRow>,
   velocity: number,
+  liveStock?: { asOfDate: string; qty: number },
 ): ComputedWeek[] {
+  const liveStockWeek = liveStock ? toYmd(mondayOf(new Date(liveStock.asOfDate + "T00:00:00Z"))) : null
   const out: ComputedWeek[] = []
   let begin = 0
   let haveActual = false
   for (const w of weeks) {
     const row = inputBySku[w.weekStart]
-    const actual = row?.actual_stock ?? null
+    let actual = row?.actual_stock ?? null
+    let actualStockAuto = false
+    if (actual == null && liveStock && w.weekStart === liveStockWeek) {
+      actual = liveStock.qty
+      actualStockAuto = true
+    }
     if (actual != null) { begin = actual; haveActual = true }
     else if (!haveActual) { begin = 0 }
     // else: begin giữ nguyên = endStock tuần trước (gán ở cuối vòng lặp)
@@ -130,6 +158,7 @@ export function computePlan(
       ...w,
       beginStock: begin,
       actualStock: actual,
+      actualStockAuto,
       salesForecast,
       salesForecastAuto,
       importQty,

@@ -301,6 +301,32 @@ export const writeKBDecl = {
   },
 }
 
+export const browseWebDecl = {
+  name: "browseWeb",
+  description: "Mở 1 trang web THẬT bằng headless browser (chạy JavaScript đầy đủ) và đọc nội dung — dùng cho trang SPA/JS-nặng/infinite-scroll mà webSearch (chỉ đọc snippet search) không đọc được nội dung thật, ví dụ trang đối thủ, trang bảng giá động, landing page. KHÔNG dùng cho portal NCC có login (dùng browsePortal cho việc đó).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      url: { type: SchemaType.STRING, description: "URL đầy đủ (kèm https://) cần mở." },
+      actions: {
+        type: SchemaType.ARRAY,
+        description: "Tối đa 8 thao tác thực hiện tuần tự sau khi trang load xong (tuỳ chọn) — dùng để bấm 'xem thêm', điền ô tìm kiếm, cuộn trang.",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            type:     { type: SchemaType.STRING, description: "click | fill | scroll | wait" },
+            selector: { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
+            value:    { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
+            ms:       { type: SchemaType.NUMBER, description: "Số ms chờ (cho wait), tối đa 5000." },
+          },
+        },
+      },
+      wait_ms: { type: SchemaType.NUMBER, description: "Chờ thêm N ms sau khi load + actions xong trước khi đọc nội dung (tối đa 5000)." },
+    },
+    required: ["url"],
+  },
+}
+
 export const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -464,7 +490,7 @@ export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
   listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
   queryLarkBaseDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryGA4Decl, queryGSCDecl,
-  queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browsePortalDecl,
+  queryProductDecl, webSearchDecl, generateImageDecl, getTrendSnapshotsDecl, browseWebDecl, browsePortalDecl,
   managePortalCredsDecl,
   // Phase 4 tools
   sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,

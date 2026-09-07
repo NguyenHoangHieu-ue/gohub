@@ -52,6 +52,13 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // Chặn truy cập thẳng URL trang chưa được cấp
   const pathname = headers().get("x-pathname") || ""
   const id = pathToAnalyticsId(pathname)
+
+  // Tổ Gấu KHÔNG phải trang analytics — mở cho mọi role (chỉ gate theo group-membership ở API +
+  // hiddenTabs của creator, xem sidebar.tsx/nav.ts), không nằm trong role_permissions/allowed_analytics
+  // nên sẽ luôn bị granted.has() trả false → redirect nhầm về /chatbot cho MỌI role không phải
+  // admin/creator dù đã là member group thật (bug phát hiện s194+8).
+  if (id === "to-gau") return <>{children}</>
+
   if (!granted.has(id)) {
     // Ngoại lệ: /analytics/creator/* — user được cấp GP access trong gp_allowed_users
     if (id === "creator") {

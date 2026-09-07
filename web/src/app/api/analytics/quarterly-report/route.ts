@@ -6,7 +6,7 @@ import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shi
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash, QREPORT_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
-import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
+import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -297,7 +297,9 @@ export async function GET(req: NextRequest) {
       // gcElapsedRatio: pro-rate cho MỌI tháng hiện tại (không chỉ tháng đang chiếu).
       // Sửa bug: khi T8 ngày 4 < MIN_PROJECT_DAYS=7, isProjected=false → ratio cũ=1 → Group Cost = full 150Tr
       // áp cho chỉ 4 ngày data → CM1 B2C âm -33tr. Fix: dùng isCurrent thay isProjected.
-      const gcElapsedRatio = isCurrent && dim > 0 ? elapsed / dim : 1
+      // s183 Phase 2: giá trị = getElapsedRatio(mr) cho MỌI `mr` ở đây (luôn !isFuture, elapsed>=1 → 2 công
+      // thức khớp tuyệt đối) — dùng hàm chung thay viết tay, công thức không đổi.
+      const gcElapsedRatio = isCurrent ? getElapsedRatio(mr) : 1
 
       let b2bCCAct = 0, b2cCCAct = 0
       let b2bHk3Act = 0, b2cHk3Act = 0

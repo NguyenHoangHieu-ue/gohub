@@ -5,7 +5,7 @@ import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
-import { flushB2BCostCaches } from "@/lib/analytics-helpers"
+import { flushByDeps } from "@/lib/analytics-helpers"
 
 const WRITE_ROLES_DELETE = ["admin", "creator"]
 const WRITE_ROLES_POST   = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
@@ -77,7 +77,7 @@ export async function DELETE(req: NextRequest) {
     // vì fetchCustomerCosts nằm NGOÀI cachedQuery ở 2 route đó). Flush ĐÚNG PHẠM VI các route phụ thuộc cost
     // B2B — KHÔNG dùng flushAnalyticsCache() (xoá sạch mọi tab) để tránh nuke cache Products/Staff/Vendors/
     // Orders... không liên quan, làm cả app chậm hẳn mỗi lần sửa 1 dòng cost (sự cố thật gặp phải s169).
-    await flushB2BCostCaches().catch(() => {})
+    await flushByDeps(["b2b-cost"]).catch(() => {})
     return NextResponse.json({ ok: true, deleted: id })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
     // Report tự tươi vì code ở đó cố ý đặt fetchCustomerCosts NGOÀI cachedQuery. Flush ĐÚNG PHẠM VI —
     // s169(b): flushAnalyticsCache() (xoá sạch) gây cả app chậm hẳn mỗi lần sửa cost (nuke luôn cache
     // Products/Staff/Vendors/Orders... không liên quan) khi Hiếu sửa/reload nhiều lần liên tục lúc test.
-    await flushB2BCostCaches().catch(() => {})
+    await flushByDeps(["b2b-cost"]).catch(() => {})
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
     console.error("[b2b-customer-costs POST]", e.message)

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
 import {
-  buildWeekSeries, getWeeklyVelocity, computePlan, alertLevel, findFirstCriticalWeek, needsOrderSoon,
+  buildWeekSeries, getWeeklyVelocity, getLatestStock, computePlan, alertLevel, findFirstCriticalWeek, needsOrderSoon,
   type SkuPlanConfig, type WeeklyInputRow,
 } from "@/lib/inventory-plan"
 
@@ -46,13 +46,14 @@ export async function GET(req: NextRequest) {
     const weeks = buildWeekSeries(2, weeksForward)
     const weekStarts = weeks.map(w => w.weekStart)
 
-    const [{ data: weeklyRows }, velocityMap] = await Promise.all([
+    const [{ data: weeklyRows }, velocityMap, liveStockMap] = await Promise.all([
       supabaseAdmin
         .from("inventory_plan_weekly")
         .select("*")
         .in("sku_code", skuCodes)
         .in("week_start_date", weekStarts),
       getWeeklyVelocity(skuCodes),
+      getLatestStock(skuCodes),
     ])
 
     const bySku: Record<string, Record<string, WeeklyInputRow>> = {}
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
         lead_time_weeks: sku.lead_time_weeks,
       }
       const velocity = velocityMap[sku.sku_code] ?? 0
-      const computed = computePlan(cfg, weeks, bySku[sku.sku_code] ?? {}, velocity)
+      const computed = computePlan(cfg, weeks, bySku[sku.sku_code] ?? {}, velocity, liveStockMap[sku.sku_code])
       const thisWeek = computed.find(w => !w.isActual) ?? computed[computed.length - 1]
       const firstCritical = findFirstCriticalWeek(computed, cfg)
       return {

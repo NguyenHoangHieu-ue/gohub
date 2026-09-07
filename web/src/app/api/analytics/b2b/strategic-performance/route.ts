@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
     }).sort((a, b) => b.revenue - a.revenue)
 
     return result
-   }, QUERY_TTL_MIN, noCache(req))
+   }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
    return NextResponse.json(result, { headers: CACHE_HEADERS })
   } catch (err: any) {

@@ -8,7 +8,7 @@ function isPrivileged(role: string) {
 }
 
 // NOTE: cột chat_group_members.user_email lưu USERNAME (không phải email thật) — xem CLAUDE.md /
-// docs/wiki/Tab/analytics-to-gau.md §"fix identity". Giữ tên cột cũ để không phải viết migration đổi tên.
+// docs/wiki/system/tabs/analytics-to-gau.md §"fix identity". Giữ tên cột cũ để không phải viết migration đổi tên.
 async function isMember(groupId: string, username: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from("chat_group_members")

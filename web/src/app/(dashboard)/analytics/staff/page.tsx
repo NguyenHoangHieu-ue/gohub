@@ -9,10 +9,11 @@ import {
   Users, Calendar, Filter, Download, Search,
   ChevronDown, ChevronRight, RefreshCw, X, Play,
   Pencil, Save, XCircle, AlertTriangle,
+  DollarSign, TrendingUp, Zap, Target, UserCheck,
 } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
-import { SourceBadge } from "@/components/dashboard-kit"
+import { StatTile, type MetricAccent, SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
 import {
   LineChart, Line, BarChart, Bar,
@@ -66,7 +67,7 @@ interface CustomerRow {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const STAFF_COLORS = [
-  "#003B95","#E04E1B","#10b981","#8b5cf6","#f59e0b",
+  "#0f4c81","#E04E1B","#10b981","#8b5cf6","#f59e0b",
   "#ef4444","#06b6d4","#84cc16","#ec4899","#6366f1",
 ]
 const HK3_COLOR  = "#F97316"
@@ -130,7 +131,7 @@ function TargetCell({
             }}
             className={cn(
               "w-24 text-right text-xs font-bold bg-white border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1",
-              isNeg || isInv ? "border-red-400 focus:ring-red-400" : "border-blue-300 focus:ring-blue-500",
+              isNeg || isInv ? "border-red-400 focus:ring-red-400" : "border-brand-300 focus:ring-brand-500",
             )}
             placeholder="0"
           />
@@ -152,7 +153,7 @@ function MiniSparkline({ data }: { data: MonthlyItem[] }) {
   return (
     <div className="flex items-end gap-[2px] h-6">
       {data.map(d => (
-        <div key={d.month} className="w-2 rounded-sm bg-blue-400 opacity-80"
+        <div key={d.month} className="w-2 rounded-sm bg-brand-400 opacity-80"
           style={{ height: `${Math.max(2, (d.revenue / max) * 20)}px` }}
           title={`${d.month}: ${fck(d.revenue)}`} />
       ))}
@@ -548,7 +549,7 @@ function StaffPageInner() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 rotate-3">
+          <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-200 rotate-3">
             <Users className="w-6 h-6" />
           </div>
           <div>
@@ -564,7 +565,7 @@ function StaffPageInner() {
             {(["fulfilled","created"] as const).map(m => (
               <button key={m} onClick={() => setDraft(d => ({ ...d, viewMode: m }))}
                 className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  draft.viewMode === m ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                  draft.viewMode === m ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
                 {m === "fulfilled" ? "Fulfilled" : "Created"}
               </button>
             ))}
@@ -590,7 +591,7 @@ function StaffPageInner() {
           {(["All","B2B","B2C"] as const).map(g => (
             <button key={g} onClick={() => setDraft(d => ({ ...d, channelGroup: g, channel: "" }))}
               className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
-                draft.channelGroup === g ? "bg-blue-600 border-blue-600 text-white shadow-sm" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+                draft.channelGroup === g ? "bg-brand-600 border-brand-600 text-white shadow-sm" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
               {g}
             </button>
           ))}
@@ -609,7 +610,7 @@ function StaffPageInner() {
         <div className="relative">
           <button onClick={() => setStaffDropOpen(v => !v)}
             className={cn("flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border transition-all",
-              selectedCodes.length > 0 ? "bg-blue-600 border-blue-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+              selectedCodes.length > 0 ? "bg-brand-600 border-brand-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
             <Users className="w-3 h-3" />
             {selectedCodes.length === 0 ? "All Sales" :
              selectedCodes.length === 1 ? (staffData.find(s => s.staff_code === selectedCodes[0])?.staff_name || selectedCodes[0]) :
@@ -635,7 +636,7 @@ function StaffPageInner() {
                   <input type="checkbox" checked={selectedCodes.includes(s.staff_code)}
                     onChange={() => setSelectedCodes(prev =>
                       prev.includes(s.staff_code) ? prev.filter(c => c !== s.staff_code) : [...prev, s.staff_code])}
-                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600" />
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600" />
                   <div>
                     <p className="text-[11px] font-bold text-slate-700">{s.staff_name}</p>
                     <p className="text-[9px] text-slate-400">{s.staff_code}</p>
@@ -655,7 +656,7 @@ function StaffPageInner() {
           </label>
         ))}
         <button onClick={applyFilters}
-          className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm bg-blue-600 text-white hover:bg-blue-700",
+          className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm bg-brand-600 text-white hover:bg-brand-700",
             isDirty && "animate-pulse")}>
           <Play className="w-3 h-3 fill-white" /> Apply Filters
         </button>
@@ -673,25 +674,15 @@ function StaffPageInner() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        {[
-          { label: "Tổng Revenue",  value: fck(totRev),  color: "blue"    },
-          { label: "3HK Revenue",   value: fck(totHk3),  color: "orange"  },
-          { label: "Gross Profit",  value: fck(totGP),   color: "emerald" },
-          { label: "CM1",           value: fck(totCM1),  color: "indigo"  },
-          { label: "Sales",         value: displayed.length, color: "purple" },
-          { label: "Khách hàng",    value: totCust,      color: "sky"     },
-        ].map(card => (
-          <div key={card.label} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{card.label}</p>
-            <p className={cn("text-xl font-black",
-              card.color === "blue"    && "text-blue-700",
-              card.color === "orange"  && "text-orange-600",
-              card.color === "emerald" && "text-emerald-600",
-              card.color === "indigo"  && "text-indigo-700",
-              card.color === "purple"  && "text-purple-600",
-              card.color === "sky"     && "text-sky-600",
-            )}>{typeof card.value === "number" ? card.value.toLocaleString() : card.value}</p>
-          </div>
+        {([
+          { label: "Tổng Revenue", value: fck(totRev), icon: DollarSign, accent: "revenue" },
+          { label: "3HK Revenue",  value: fck(totHk3), icon: Zap,        accent: "cost"    },
+          { label: "Gross Profit", value: fck(totGP),  icon: TrendingUp, accent: "margin"  },
+          { label: "CM1",          value: fck(totCM1), icon: Target,     accent: "margin"  },
+          { label: "Sales",        value: displayed.length.toLocaleString(), icon: Users,     accent: "neutral" },
+          { label: "Khách hàng",   value: totCust.toLocaleString(),          icon: UserCheck, accent: "positive" },
+        ] as { label: string; value: string; icon: React.ElementType; accent: MetricAccent }[]).map(card => (
+          <StatTile key={card.label} icon={<card.icon className="w-5 h-5" />} label={card.label} value={card.value} accent={card.accent} />
         ))}
       </div>
 
@@ -704,7 +695,7 @@ function StaffPageInner() {
               <p className="text-xs text-slate-500 mt-0.5">{applied.startDate} → {applied.endDate}</p>
             </div>
             <div className="flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-600 inline-block"/> Tổng Rev</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-brand-600 inline-block"/> Tổng Rev</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block"/> 3HK Rev</span>
             </div>
           </div>
@@ -719,7 +710,7 @@ function StaffPageInner() {
                 margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
                 barGap={2}
               >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false}
                   angle={-25} textAnchor="end" height={52} interval={0} />
                 <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
@@ -737,12 +728,12 @@ function StaffPageInner() {
 
       {/* Single-month: bar chart so sánh KH của sales đang expand */}
       {!isMultiMonth && expandedStaff && !custLoading && customers.length > 0 && (
-        <div className="bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-blue-100">
-            <h3 className="text-sm font-black text-blue-900">
+        <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-brand-100">
+            <h3 className="text-sm font-black text-brand-800">
               So sánh KH — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
             </h3>
-            <p className="text-xs text-blue-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
+            <p className="text-xs text-brand-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
           </div>
           <div className="p-4" style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -789,7 +780,7 @@ function StaffPageInner() {
           <div className="p-4" style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={staffMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 700 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
                 <Tooltip content={<ChartTooltip />} />
@@ -808,12 +799,12 @@ function StaffPageInner() {
 
       {/* Customer monthly line chart */}
       {isMultiMonth && expandedStaff && custMonthlyChart.length > 0 && (
-        <div className="bg-blue-50/50 rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-blue-100">
-            <h3 className="text-sm font-black text-blue-900">
+        <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-brand-100">
+            <h3 className="text-sm font-black text-brand-800">
               So sánh Revenue KH theo tháng — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
             </h3>
-            <p className="text-xs text-blue-600 mt-0.5">
+            <p className="text-xs text-brand-600 mt-0.5">
               {monthsInRange.length} tháng{customers.length > 8 && " · Top 8 KH"}
             </p>
           </div>
@@ -858,7 +849,7 @@ function StaffPageInner() {
                     className={cn(
                       "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
                       hasChanges && !saving
-                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                        ? "bg-brand-600 text-white hover:bg-brand-700 shadow-sm"
                         : "bg-slate-100 text-slate-400 cursor-not-allowed",
                     )}>
                     <Save className="w-3.5 h-3.5" />
@@ -874,7 +865,7 @@ function StaffPageInner() {
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
                     isMultiMonth
                       ? "bg-slate-50 text-slate-300 cursor-not-allowed"
-                      : "bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700",
+                      : "bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-700",
                   )}>
                   <Pencil className="w-3.5 h-3.5" />
                   Sửa Target {isMultiMonth ? "(chọn 1 tháng)" : `tháng ${applied.startDate.slice(0,7)}`}
@@ -940,17 +931,17 @@ function StaffPageInner() {
                 return (
                   <React.Fragment key={s.staff_code}>
                     <tr onClick={() => !editMode && toggleExpand(s.staff_code)}
-                      className={cn("transition-colors group", !editMode && "cursor-pointer", isExp ? "bg-blue-50 border-l-2 border-l-blue-600" : "hover:bg-slate-50")}>
+                      className={cn("transition-colors group", !editMode && "cursor-pointer", isExp ? "bg-brand-50 border-l-2 border-l-brand-600" : "hover:bg-slate-50")}>
                       <td className="px-4 py-3">
                         <span className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
                           i < 3 ? RANK_STYLE[i] : "text-slate-400 text-[11px]")}>{i + 1}</span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {isExp ? <ChevronDown className="w-4 h-4 text-blue-600 shrink-0" />
-                                 : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-blue-500" />}
+                          {isExp ? <ChevronDown className="w-4 h-4 text-brand-600 shrink-0" />
+                                 : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-brand-500" />}
                           <div>
-                            <p className={cn("text-sm font-black", isExp ? "text-blue-700" : "text-slate-900")}>{s.staff_name}</p>
+                            <p className={cn("text-sm font-black", isExp ? "text-brand-700" : "text-slate-900")}>{s.staff_name}</p>
                             <p className="text-[10px] text-slate-400 font-bold">{s.staff_code}</p>
                           </div>
                         </div>
@@ -993,9 +984,9 @@ function StaffPageInner() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contp}%` }} />
+                            <div className="h-full bg-brand-500 rounded-full" style={{ width: `${contp}%` }} />
                           </div>
-                          <span className="text-xs font-black text-blue-600 w-9 text-right">{pct(contp)}</span>
+                          <span className="text-xs font-black text-brand-600 w-9 text-right">{pct(contp)}</span>
                         </div>
                       </td>
                     </tr>
@@ -1003,7 +994,7 @@ function StaffPageInner() {
                     {/* Customer expand */}
                     {isExp && (
                       <tr><td colSpan={16} className="px-0 py-0">
-                        <div className="bg-blue-50/60 border-b border-blue-100 px-6 py-4">
+                        <div className="bg-brand-50/60 border-b border-brand-100 px-6 py-4">
                           {custLoading ? (
                             <div className="text-xs text-slate-400 py-4 text-center">Đang tải KH…</div>
                           ) : customers.length === 0 ? (
@@ -1011,30 +1002,30 @@ function StaffPageInner() {
                           ) : (
                             <>
                               <div className="flex items-center justify-between mb-3">
-                                <p className="text-xs font-black text-blue-700 uppercase tracking-wider">
+                                <p className="text-xs font-black text-brand-700 uppercase tracking-wider">
                                   Breakdown {customers.length} KH — {s.staff_name}
                                 </p>
                                 <button onClick={() => exportCustomers(s.staff_name)}
-                                  className="flex items-center gap-1.5 bg-white border border-blue-200 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors">
+                                  className="flex items-center gap-1.5 bg-white border border-brand-200 text-brand-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-brand-50 transition-colors">
                                   <Download className="w-3 h-3" /> Export KH
                                 </button>
                               </div>
-                              <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white">
+                              <div className="overflow-x-auto rounded-xl border border-brand-100 bg-white">
                                 <table className="w-full text-left border-collapse">
                                   <thead>
-                                    <tr className="bg-blue-50 border-b border-blue-100">
+                                    <tr className="bg-brand-50 border-b border-brand-100">
                                       {["#","Khách hàng","Revenue","3HK Rev","3HK%","GP","CM1","CM1%","% of Sales"].map(h => (
-                                        <th key={h} className={cn("px-4 py-2 text-[10px] font-bold text-blue-600 uppercase tracking-wider",
+                                        <th key={h} className={cn("px-4 py-2 text-[10px] font-bold text-brand-600 uppercase tracking-wider",
                                           h !== "#" && h !== "Khách hàng" && "text-right")}>{h}</th>
                                       ))}
                                     </tr>
                                   </thead>
-                                  <tbody className="divide-y divide-blue-50">
+                                  <tbody className="divide-y divide-brand-50">
                                     {customers.map((c, ci) => {
                                       const h3p = c.revenue > 0 ? (c.hk3_revenue / c.revenue) * 100 : 0
                                       const ofS = s.total_revenue > 0 ? (c.revenue / s.total_revenue) * 100 : 0
                                       return (
-                                        <tr key={c.customer_code} className="hover:bg-blue-50/40 transition-colors">
+                                        <tr key={c.customer_code} className="hover:bg-brand-50/40 transition-colors">
                                           <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
                                           <td className="px-4 py-2">
                                             <div className="flex items-center gap-1">
@@ -1060,10 +1051,10 @@ function StaffPageInner() {
                                           </td>
                                           <td className="px-4 py-2 text-right">
                                             <div className="flex items-center justify-end gap-1.5">
-                                              <div className="w-12 h-1 bg-blue-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-400 rounded-full" style={{ width: `${ofS}%` }} />
+                                              <div className="w-12 h-1 bg-brand-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-brand-400 rounded-full" style={{ width: `${ofS}%` }} />
                                               </div>
-                                              <span className="text-[10px] font-black text-blue-600">{pct(ofS)}</span>
+                                              <span className="text-[10px] font-black text-brand-600">{pct(ofS)}</span>
                                             </div>
                                           </td>
                                         </tr>

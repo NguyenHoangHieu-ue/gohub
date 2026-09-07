@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
         previous_period: prev.summary,
         previous_year: prevYear.summary,
       }
-    }, QUERY_TTL_MIN, noCache(req))
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

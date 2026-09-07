@@ -1,8 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { RefreshCw } from "lucide-react"
+import { useState, useEffect, type ReactNode } from "react"
+import { RefreshCw, DollarSign, TrendingUp, Percent, ShoppingBag, Globe, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { LogicNote, StatTile, type MetricAccent } from "@/components/dashboard-kit"
+
+// Web/App dùng chung 1 màu xuyên suốt B2C (khớp b2c-advanced-dashboard.tsx) — người xem học 1 lần,
+// dùng lại được ở cả 2 sub-tab Advanced/Metric.
+const WEB_COLOR = "#00a6a6"
+const APP_COLOR = "#2f9d55"
 
 // B2C Metric table — YTD monthly breakdown (Revenue/GP/CM1/Orders/AOV/Traffic/User/Customer by Web+App)
 // Data: /api/analytics/b2c/metric
@@ -130,6 +136,15 @@ export function B2CMetric() {
   if (!data) return null
 
   const { months, currentMonth, elapsedDays } = data
+  const cur = data.data[currentMonth]
+  const kpiTiles: { label: string; value: number; accent: MetricAccent; icon: ReactNode; unit?: string }[] = [
+    { label: "Total Revenue", value: cur?.revenue.total ?? 0, accent: "revenue", icon: <DollarSign className="w-5 h-5" />, unit: "VND" },
+    { label: "Gross Profit",  value: cur?.grossProfit.total ?? 0, accent: "margin", icon: <TrendingUp className="w-5 h-5" />, unit: "VND" },
+    { label: "CM1",           value: cur?.cm1 ?? 0, accent: "margin", icon: <Percent className="w-5 h-5" />, unit: "VND" },
+    { label: "Orders",        value: cur?.orders.total ?? 0, accent: "positive", icon: <ShoppingBag className="w-5 h-5" /> },
+    { label: "Traffic",       value: cur?.traffic.total ?? 0, accent: "neutral", icon: <Globe className="w-5 h-5" /> },
+    { label: "User",          value: cur?.users.total ?? 0, accent: "positive", icon: <Users className="w-5 h-5" /> },
+  ]
 
   return (
     <div className="p-4 lg:p-6">
@@ -143,19 +158,31 @@ export function B2CMetric() {
         </button>
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        {kpiTiles.map(t => (
+          <StatTile key={t.label} icon={t.icon} label={t.label} accent={t.accent} unit={t.unit}
+            value={t.unit ? Math.round(t.value).toLocaleString("vi-VN") : t.value.toLocaleString("vi-VN")} />
+        ))}
+      </div>
+
+      <LogicNote>
+        Revenue / GP / Orders / Customer: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App).
+        CM1 = GP tổng – OpCost (channel + group costs). Traffic / User: GA4 yearMonth.
+      </LogicNote>
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
         <table className="w-full text-left border-collapse min-w-max">
           <thead>
-            <tr className="bg-slate-800 text-white">
-              <th className="sticky left-0 z-10 bg-slate-800 px-3 py-2.5 text-xs font-bold whitespace-nowrap min-w-[140px]">Metric</th>
+            <tr className="bg-gradient-to-r from-brand-700 to-brand-600 text-white">
+              <th className="sticky left-0 z-10 bg-brand-700 px-3 py-2.5 text-xs font-bold whitespace-nowrap min-w-[140px]">Metric</th>
               {months.map((m, i) => {
                 const [yr, mo] = m.split("-")
                 const isCurrent = m === currentMonth
                 const label = isCurrent ? `${MONTH_SHORT[+mo - 1]} Actual (1-${elapsedDays})` : `${MONTH_SHORT[+mo - 1]} Actual`
                 return (
-                  <th key={m} colSpan={i === 0 ? 1 : 2} className={cn("px-3 py-2.5 text-xs font-bold text-center whitespace-nowrap border-l border-slate-600", isCurrent && "bg-slate-700")}>
+                  <th key={m} colSpan={i === 0 ? 1 : 2} className={cn("px-3 py-2.5 text-xs font-bold text-center whitespace-nowrap border-l border-brand-500/40", isCurrent && "bg-brand-800/40")}>
                     {label}
-                    {i > 0 && <span className="ml-2 text-slate-400 text-[10px] font-normal">%MoM</span>}
+                    {i > 0 && <span className="ml-2 text-brand-100/70 text-[10px] font-normal">%MoM</span>}
                   </th>
                 )
               })}
@@ -163,21 +190,26 @@ export function B2CMetric() {
           </thead>
           <tbody>
             {ROWS.map((row, ri) => {
-              const isBlue = row.bold && (ri === 0 || ri === 3 || ri === 6 || ri === 8 || ri === 11 || ri === 14 || ri === 17 || ri === 20)
+              const isGroupHeader = row.bold && (ri === 0 || ri === 3 || ri === 6 || ri === 8 || ri === 11 || ri === 14 || ri === 17 || ri === 20)
+              const dotColor = row.label.includes("Web") ? WEB_COLOR : row.label.includes("App") ? APP_COLOR : undefined
               return (
                 <>
                   <tr key={ri} className={cn(
                     "border-b border-slate-100",
                     ri % 2 === 0 ? "bg-white" : "bg-slate-50/50",
                     row.bold && "font-semibold",
+                    isGroupHeader && "bg-brand-50/50",
                   )}>
                     <td className={cn(
                       "sticky left-0 z-10 px-3 py-1.5 text-xs whitespace-nowrap border-r border-slate-100",
                       ri % 2 === 0 ? "bg-white" : "bg-slate-50",
+                      isGroupHeader && "bg-brand-50/50",
                       row.indent === 1 && "pl-6 text-slate-600",
                       row.indent === 2 && "pl-10 text-slate-500",
                       !row.indent && "text-slate-800 font-semibold",
+                      isGroupHeader && "text-brand-700",
                     )}>
+                      {dotColor && <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: dotColor }} />}
                       {row.label.trimStart()}
                     </td>
                     {months.map((m, mi) => {
@@ -192,15 +224,15 @@ export function B2CMetric() {
                       return (
                         <>
                           {mi === 0 ? (
-                            <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-blue-50/30")}>
+                            <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-brand-50/30")}>
                               {fmt}
                             </td>
                           ) : (
                             <>
-                              <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-blue-50/30")}>
+                              <td key={`${m}-val`} className={cn("px-3 py-1.5 text-xs text-right tabular-nums whitespace-nowrap border-l border-slate-100", isCurrent && "bg-brand-50/30")}>
                                 {fmt}
                               </td>
-                              <td key={`${m}-mom`} className={cn("px-2 py-1.5 text-right whitespace-nowrap", isCurrent && "bg-blue-50/30")}>
+                              <td key={`${m}-mom`} className={cn("px-2 py-1.5 text-right whitespace-nowrap", isCurrent && "bg-brand-50/30")}>
                                 <PctBadge v={change} />
                               </td>
                             </>
@@ -220,11 +252,6 @@ export function B2CMetric() {
           </tbody>
         </table>
       </div>
-
-      <p className="text-[10px] text-slate-400 mt-3">
-        Revenue / GP / Orders / Customer: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App).
-        CM1 = GP tổng – OpCost (channel + group costs). Traffic / User: GA4 yearMonth.
-      </p>
     </div>
   )
 }

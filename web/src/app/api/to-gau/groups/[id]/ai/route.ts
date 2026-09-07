@@ -22,11 +22,15 @@ async function isMember(groupId: string, username: string): Promise<boolean> {
   return !!data
 }
 
-// Tìm tài liệu KB liên quan đến câu hỏi (top 4 trang)
-async function searchKB(question: string, privileged: boolean): Promise<string> {
+// Tìm tài liệu liên quan đến câu hỏi — gộp Wiki (toàn hệ thống) + Docs/Notes của CHÍNH group này
+// (trước đây chỉ tìm Wiki, nên nội dung lưu vào Docs/Notes của nhóm không có tác dụng gì với AI —
+// đây là gap s194+6 yêu cầu vá: lưu tài liệu mới → AI dùng được ngay, không cần bước re-index riêng
+// vì search chạy trực tiếp trên bảng sống mỗi lần hỏi).
+async function searchKB(question: string, privileged: boolean, groupId: string): Promise<string> {
   const keywords = question.slice(0, 200).replace(/[^a-zA-Z0-9À-ỹ ]/g, " ")
+  const words = keywords.trim().split(/\s+/).filter(w => w.length > 2).slice(0, 4)
 
-  let query = supabaseAdmin
+  let wikiQuery = supabaseAdmin
     .from("kb_wiki_pages")
     .select("title, content, page_type, is_hidden")
     .eq("status", "active")
@@ -34,26 +38,52 @@ async function searchKB(question: string, privileged: boolean): Promise<string> 
 
   // User thường không thấy system/tab_guide docs
   if (!privileged) {
-    query = query.eq("is_hidden", false).neq("page_type", "tab_guide")
+    wikiQuery = wikiQuery.eq("is_hidden", false).neq("page_type", "tab_guide")
   }
-
-  // Tìm theo keyword trong title hoặc content
-  const words = keywords.trim().split(/\s+/).filter(w => w.length > 2).slice(0, 4)
   if (words.length > 0) {
-    const orClauses = words.map(w => `title.ilike.%${w}%,content.ilike.%${w}%`).join(",")
-    query = query.or(orClauses)
+    wikiQuery = wikiQuery.or(words.map(w => `title.ilike.%${w}%,content.ilike.%${w}%`).join(","))
   }
 
-  const { data } = await query
-  if (!data?.length) return ""
+  let docsQuery = supabaseAdmin
+    .from("chat_docs")
+    .select("title, description")
+    .eq("group_id", groupId)
+    .limit(4)
+  if (words.length > 0) {
+    docsQuery = docsQuery.or(words.map(w => `title.ilike.%${w}%,description.ilike.%${w}%`).join(","))
+  }
 
-  const snippets = data.map(p => {
-    // Lấy phần body (bỏ YAML frontmatter)
-    const body = (p.content || "").replace(/^---[\s\S]*?---\n?/, "").slice(0, 600)
-    return `### ${p.title}\n${body}`
-  })
+  let notesQuery = supabaseAdmin
+    .from("chat_notes")
+    .select("content, creator_name, created_at")
+    .eq("group_id", groupId)
+    .limit(4)
+  if (words.length > 0) {
+    notesQuery = notesQuery.or(words.map(w => `content.ilike.%${w}%`).join(","))
+  }
 
-  return `\n\n---\n**TÀI LIỆU THAM KHẢO NỘI BỘ:**\n${snippets.join("\n\n")}\n---`
+  const [{ data: wikiRows }, { data: docRows }, { data: noteRows }] = await Promise.all([
+    words.length > 0 ? wikiQuery : Promise.resolve({ data: [] as { title: string; content: string }[] }),
+    words.length > 0 ? docsQuery : Promise.resolve({ data: [] as { title: string; description: string | null }[] }),
+    words.length > 0 ? notesQuery : Promise.resolve({ data: [] as { content: string; creator_name: string | null; created_at: string }[] }),
+  ])
+
+  const sections: string[] = []
+  if (wikiRows?.length) {
+    sections.push(...wikiRows.map(p => {
+      const body = (p.content || "").replace(/^---[\s\S]*?---\n?/, "").slice(0, 600)
+      return `### [Wiki] ${p.title}\n${body}`
+    }))
+  }
+  if (docRows?.length) {
+    sections.push(...docRows.map(d => `### [Tài liệu nhóm] ${d.title}\n${d.description || "(không có mô tả)"}`))
+  }
+  if (noteRows?.length) {
+    sections.push(...noteRows.map(n => `### [Ghi chú nhóm — ${n.creator_name || "?"}]\n${n.content.slice(0, 600)}`))
+  }
+
+  if (!sections.length) return ""
+  return `\n\n---\n**TÀI LIỆU THAM KHẢO NỘI BỘ (trích nguồn khi trả lời để người hỏi kiểm chứng lại):**\n${sections.join("\n\n")}\n---`
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -91,7 +121,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .eq("group_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
-    searchKB(question, privileged),
+    searchKB(question, privileged, id),
   ])
 
   // Reverse to chronological order
@@ -102,6 +132,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
 Khi trả lời:
 - Ưu tiên dùng thông tin từ TÀI LIỆU THAM KHẢO NỘI BỘ nếu có
+- Nếu dùng thông tin từ tài liệu tham khảo, LUÔN ghi rõ nguồn ở cuối câu trả lời theo dạng
+  "(Nguồn: [Wiki] Tên trang)" hoặc "(Nguồn: [Tài liệu nhóm] Tên file)" hoặc "(Nguồn: [Ghi chú nhóm] người viết)"
+  để người hỏi bấm vào tab Docs/Notes/Wiki kiểm chứng lại nguyên văn, không bịa nguồn nếu không có
 - Không tiết lộ thông tin nhạy cảm (COGS, margin, chiến lược kinh doanh) trừ khi ai_scope cho phép
 - Nếu không biết → nói thẳng "Em chưa có thông tin về việc này, anh/chị hỏi trực tiếp bộ phận phụ trách nhé"`
 
@@ -129,13 +162,19 @@ Khi trả lời:
   // Call Gemini
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3.6-flash",
     systemInstruction,
   })
 
-  const chat   = model.startChat({ history: chatHistory })
-  const result = await chat.sendMessage(question)
-  const aiText = result.response.text().trim()
+  let aiText: string
+  try {
+    const chat   = model.startChat({ history: chatHistory })
+    const result = await chat.sendMessage(question)
+    aiText = result.response.text().trim()
+  } catch (e: any) {
+    console.error("[to-gau/ai] Gemini error:", e.message)
+    return NextResponse.json({ error: "Hiếu đang fix, vui lòng đợi" }, { status: 500 })
+  }
 
   // Save AI response to chat_messages
   const { data: saved, error: saveErr } = await supabaseAdmin

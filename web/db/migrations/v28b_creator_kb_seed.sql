@@ -602,7 +602,7 @@ Gấu Pro: "Đã cập nhật. [Tóm tắt những gì đã làm]"
 ```
 
 ### Khi nào update wiki
-- Thay đổi liên quan đến tab analytics → update `docs/wiki/Tab/analytics-<tab>.md`
+- Thay đổi liên quan đến tab analytics → update `docs/wiki/system/tabs/analytics-<tab>.md`
 - Thêm định nghĩa mới → update wiki tương ứng
 - Thay đổi quy trình → update wiki quy trình
 

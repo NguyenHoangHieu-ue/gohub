@@ -11,7 +11,7 @@ import { formatCompactNumber } from "@/lib/analytics-formatters"
 // Biểu đồ My Metrics tách riêng + React.memo (khớp pattern bod-charts.tsx): chỉ vẽ lại khi data đổi,
 // nạp qua next/dynamic({ssr:false}) ở page.tsx để recharts code-split khỏi bundle đầu.
 // Màu dùng lại đúng bảng đã chuẩn hoá cho tab này (brand-600 = accent duy nhất, emerald/amber = trạng
-// thái đạt/chưa đạt — KHÔNG thêm hue mới, xem docs/wiki/Tab/analytics-my-metrics.md mục "UI/màu").
+// thái đạt/chưa đạt — KHÔNG thêm hue mới, xem docs/wiki/system/tabs/analytics-my-metrics.md mục "UI/màu").
 
 const BRAND = "#0f4c81"
 const EMERALD = "#059669"

@@ -7,6 +7,7 @@ import { runBeGau }                            from "@/lib/agents/be-gau"
 import type { Message, UserRole }              from "@/lib/agents/types"
 import { supabaseAdmin }                       from "@/lib/supabase"
 import { checkRateLimit }                      from "@/lib/rate-limit"
+import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 
 export const maxDuration = 60
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   // Rate limit: 20 req/min/user (ngăn spam Gemini API)
   const rlKey = `chat:${(session.user as any).username || session.user.email || "anon"}`
-  const rl = checkRateLimit(rlKey, 20, 60_000)
+  const rl = await checkRateLimit(rlKey, 20, 60_000)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: `Bạn gửi quá nhiều tin nhắn. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s rồi thử lại.` },
@@ -45,7 +46,37 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { messages, userName } = await req.json()
+  // Nhận JSON (như cũ) hoặc multipart/form-data (khi có ảnh/file đính kèm — s190+3).
+  let messages: Message[] = []
+  let userName: string | undefined
+  let fileContexts: FileContext[] = []
+
+  try {
+    const contentType = req.headers.get("content-type") || ""
+    if (contentType.includes("multipart/form-data")) {
+      const form = await req.formData()
+      const raw  = form.get("messages")
+      messages   = JSON.parse(typeof raw === "string" ? raw : "[]")
+      userName   = (form.get("userName") as string) || undefined
+
+      const fileEntries: File[] = []
+      for (let i = 0; i < 5; i++) {
+        const f = form.get(`file_${i}`) as File | null
+        if (f && f.size > 0) fileEntries.push(f)
+      }
+      const parsed = await Promise.allSettled(fileEntries.map(parseUploadedFile))
+      for (const r of parsed) if (r.status === "fulfilled") fileContexts.push(r.value)
+      const errors = parsed.filter(r => r.status === "rejected").map(r => (r as PromiseRejectedResult).reason?.message)
+      if (errors.length) fileContexts.push({ name: "_errors", type: "text", content: `Lỗi đọc file: ${errors.join("; ")}` })
+    } else {
+      const body = await req.json()
+      messages = Array.isArray(body.messages) ? body.messages : []
+      userName = body.userName
+    }
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Invalid request" }, { status: 400 })
+  }
+
   const role       = (session.user.role || "staff") as UserRole
   const department = session.user.department || "all"
   const name    = userName || session.user.name || "bạn"
@@ -93,6 +124,7 @@ export async function POST(req: NextRequest) {
             userId: identity || session.user.email || undefined,
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
+            fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
           })
           // Log cả câu hỏi + câu trả lời sau khi có đủ (fire-and-forget)
           logChat(identity, name, role, lastMsg, text).catch(() => {})

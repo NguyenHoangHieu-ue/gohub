@@ -14,6 +14,8 @@ import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
 import { exportToExcel } from "@/lib/export-excel"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -39,6 +41,8 @@ interface KPI {
   label: string; value: number; actualValue?: number; lastPeriod: number; change: number
   isPositive: boolean; isCurrency?: boolean; icon?: React.ReactNode
 }
+// Màu icon StatTile theo Ý NGHĨA số liệu — khớp thứ tự combinedKpis: Revenue, Gross Profit, CM1, Margin %, CM1 %.
+const KPI_ACCENTS: MetricAccent[] = ["revenue", "margin", "positive", "margin", "positive"]
 interface PerformanceData {
   name: string; channel?: string; sub_group_name?: string; source_code?: string
   customer_code?: string; price_list_name?: string; currency_code?: string
@@ -88,21 +92,9 @@ export default function B2BPerformance() {
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
-  const getProjectionFactor = () => {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const start = new Date(startDate); const end = new Date(endDate)
-    // Chỉ project khi range trong CÙNG 1 THÁNG HIỆN TẠI.
-    // Cross-month range (vd 27/7–2/8) = snapshot lịch sử → factor=1, không chiếu.
-    // TODO (OOP refactor): đưa logic này vào class AnalyticsProjection.getProjectionFactor()
-    //   dùng chung mọi tab (B2B, B2C, BOD, Staff, Channels).
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return 1
-    if (end.getMonth() !== today.getMonth() || end.getFullYear() !== today.getFullYear()) return 1
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const targetDays  = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-    return Math.max(1, targetDays / daysElapsed)
-  }
-
-  const projectionFactor = getProjectionFactor()
+  // s183 Phase 2: dùng hàm dùng chung (lib/analytics-engine/projection.ts) thay bản viết tay tại đây —
+  // công thức y hệt (đã verify), đóng đúng cái TODO "OOP refactor" người trước để lại.
+  const projectionFactor = getProjectionFactor(startDate, endDate)
   const isProjectable = projectionFactor > 1
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
@@ -217,7 +209,7 @@ export default function B2BPerformance() {
 
   const SortIcon = ({ sort, column }: { sort: any, column: string }) => {
     if (sort.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
-    return sort.direction === "asc" ? <ArrowUpRight className="w-3 h-3 ml-1 text-blue-600" /> : <ArrowDownRight className="w-3 h-3 ml-1 text-blue-600" />
+    return sort.direction === "asc" ? <ArrowUpRight className="w-3 h-3 ml-1 text-brand-600" /> : <ArrowDownRight className="w-3 h-3 ml-1 text-brand-600" />
   }
 
   const sortData = (data: PerformanceData[], config: any) => [...data].sort((a: any, b: any) => {
@@ -332,8 +324,8 @@ export default function B2BPerformance() {
             <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} variant="dropdown" />
             <div className="h-4 w-px bg-slate-200 mx-2"></div>
             <div className="flex bg-slate-100 p-1 rounded-lg">
-              <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
-              <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
+              <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
+              <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
             </div>
             {/* Filter: Include Ship / Internal Ops / Ops Customers */}
             <div className="flex items-center gap-2">
@@ -344,7 +336,7 @@ export default function B2BPerformance() {
                 </label>
               ))}
             </div>
-            <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
+            <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>
             <button onClick={exportToPDF} disabled={exporting} className={cn("flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50", exporting && "animate-pulse")}>
@@ -362,7 +354,7 @@ export default function B2BPerformance() {
         {loading ? (
           <div className="flex-1 flex items-center justify-center py-32 rounded-3xl bg-white border border-slate-200">
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
               <p className="text-slate-500 font-medium animate-pulse">Loading data...</p>
             </div>
           </div>
@@ -378,50 +370,42 @@ export default function B2BPerformance() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {combinedKpis.map((kpi, idx) => (
-                  <div key={`actual-${idx}`} className="bg-white p-4 lg:p-5 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={cn("p-2 rounded-xl", idx === 0 ? "bg-blue-50 text-blue-600" : idx === 1 ? "bg-emerald-50 text-emerald-600" : idx === 2 ? "bg-purple-50 text-purple-600" : idx === 3 ? "bg-orange-50 text-orange-600" : "bg-indigo-50 text-indigo-600")}>{kpi.icon}</div>
-                    </div>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 truncate">{kpi.label}</p>
-                    <div className="flex items-baseline gap-1 overflow-hidden">
-                      <span className="text-base lg:text-lg font-black text-slate-900 tracking-tighter truncate">
-                        {kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
-                      </span>
-                      {kpi.isCurrency && <span className="text-[9px] font-bold text-slate-400">VND</span>}
-                    </div>
-                  </div>
+                  <StatTile
+                    key={`actual-${idx}`}
+                    icon={kpi.icon}
+                    label={kpi.label}
+                    accent={KPI_ACCENTS[idx] || "neutral"}
+                    value={kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                    unit={kpi.isCurrency ? "VND" : undefined}
+                  />
                 ))}
               </div>
 
               {isProjectable && (
                 <>
                   <div className="flex items-center justify-between px-2 pt-4 border-t border-slate-200">
-                    <h3 className="text-xs font-black text-blue-700 uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 fill-blue-500 text-blue-500" />Full Period Forecast (Projected)
+                    <h3 className="text-xs font-black text-brand-700 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 fill-brand-500 text-brand-500" />Full Period Forecast (Projected)
                     </h3>
-                    <span className="text-[10px] font-bold text-blue-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>
+                    <span className="text-[10px] font-bold text-brand-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {combinedKpis.map((kpi, idx) => (
-                      <div key={`projected-${idx}`} className="bg-blue-50/50 p-4 lg:p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity"><Zap className="w-12 h-12 text-blue-600" /></div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="p-2 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200/50">{kpi.icon}</div>
-                          {kpi.change !== 0 && (
-                            <div className={cn("flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded-lg shadow-sm bg-white", kpi.isPositive ? "text-emerald-600" : "text-rose-600")}>
-                              {kpi.isPositive ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(kpi.change).toFixed(1)}%
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-1 truncate">Proj. {kpi.label}</p>
-                        <div className="flex items-baseline gap-1 overflow-hidden">
-                          <span className="text-base lg:text-lg font-black text-blue-800 tracking-tighter truncate">
-                            {kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
-                          </span>
-                          {kpi.isCurrency && <span className="text-[9px] font-bold text-blue-400">VND</span>}
-                        </div>
-                      </div>
-                    ))}
+                    {combinedKpis.map((kpi, idx) => {
+                      const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
+                      if (kpi.change !== 0) deltas.push({ label: "vs Prev Period", value: `${kpi.isPositive ? "+" : "-"}${Math.abs(kpi.change).toFixed(1)}%`, kind: kpi.isPositive ? "up" : "down" })
+                      return (
+                        <StatTile
+                          key={`projected-${idx}`}
+                          icon={kpi.icon}
+                          label={`Proj. ${kpi.label}`}
+                          accent={KPI_ACCENTS[idx] || "neutral"}
+                          value={kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                          unit={kpi.isCurrency ? "VND" : undefined}
+                          deltas={deltas}
+                          className="bg-brand-50/50 border-brand-100"
+                        />
+                      )
+                    })}
                   </div>
                 </>
               )}
@@ -436,24 +420,24 @@ export default function B2BPerformance() {
                     <p className="text-xs text-slate-500 font-medium tracking-tight">Performance tracking across B2B channels</p>
                     <div className="flex items-center gap-1 mt-4 p-1 bg-slate-100 rounded-xl w-fit">
                       {(["day", "week", "month"] as const).map(g => (
-                        <button key={g} onClick={() => setGranularity(g)} className={cn("px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all", granularity === g ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{g}</button>
+                        <button key={g} onClick={() => setGranularity(g)} className={cn("px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all", granularity === g ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{g}</button>
                       ))}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2"><div className="w-3 h-1.5 rounded-full bg-blue-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Revenue (Bar)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-1.5 rounded-full bg-brand-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Revenue (Bar)</span></div>
                     <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-indigo-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">CM1 (Line)</span></div>
                   </div>
                 </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} dy={10} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
-                      <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "16px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", padding: "12px" }} formatter={(value: any) => [formatCurrency(value).replace("₫", "VND"), ""]} />
-                      <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" barSize={trendData.length > 20 ? 12 : 24} opacity={0.8} />
-                      <Line type="monotone" dataKey="gpm2" stroke="#4f46e5" strokeWidth={3} dot={{ fill: "#4f46e5", r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="CM1" />
+                      <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ ...chartTooltipStyle, padding: "12px" }} formatter={(value: any) => [formatCurrency(value).replace("₫", "VND"), ""]} />
+                      <Bar dataKey="revenue" fill={CHART_PALETTE[0]} radius={[4, 4, 0, 0]} name="Revenue" barSize={trendData.length > 20 ? 12 : 24} opacity={0.8} />
+                      <Line type="monotone" dataKey="gpm2" stroke={CHART_PALETTE[1]} strokeWidth={3} dot={{ fill: CHART_PALETTE[1], r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="CM1" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -527,7 +511,7 @@ export default function B2BPerformance() {
                                           <td className="px-8 py-4 text-right">
                                             <div className="flex flex-col items-end">
                                               <span className="text-sm font-bold text-slate-800 tracking-tight">{formatCurrency(row.revenue).replace("₫", "VND")}</span>
-                                              {isProjectable && <span className="text-[10px] font-bold text-blue-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
+                                              {isProjectable && <span className="text-[10px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
                                             </div>
                                           </td>
                                           <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600 tracking-tight">{formatNumber(row.units)}</span></td>
@@ -611,7 +595,7 @@ export default function B2BPerformance() {
                                   <td className="px-8 py-4 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-sm font-black text-slate-900">{formatCurrency(Math.round(totals.revenue)).replace("₫", "VND")}</span>
-                                      {isProjectable && <span className="text-[10px] font-bold text-blue-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
+                                      {isProjectable && <span className="text-[10px] font-bold text-brand-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
                                     </div>
                                   </td>
                                   <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(Math.round(totals.units))}</td>
@@ -649,7 +633,7 @@ export default function B2BPerformance() {
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-blue-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
+                    <div className="p-2.5 bg-brand-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
                     <div>
                       <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">B2B Tier Performance</h2>
                       <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá: Strategic · VIP · Gold · Silver</p>
@@ -663,7 +647,7 @@ export default function B2BPerformance() {
                         placeholder="Tìm khách hàng..."
                         value={tierSearch}
                         onChange={e => setTierSearch(e.target.value)}
-                        className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500 w-48"
+                        className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-brand-500 focus:border-brand-500 w-48"
                       />
                       {tierSearch && (
                         <button onClick={() => setTierSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -815,17 +799,17 @@ export default function B2BPerformance() {
                               const costLines = row.cost_lines || []
                               return (
                                 <React.Fragment key={idx}>
-                                  <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-blue-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
+                                  <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-brand-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
                                     <td className="px-8 py-4">
                                       <div className="flex flex-col">
-                                        <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{row.name}</span>
-                                        <span className="text-[9px] text-blue-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
+                                        <span className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{row.name}</span>
+                                        <span className="text-[9px] text-brand-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
                                       </div>
                                     </td>
                                     <td className="px-8 py-4 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-sm font-bold text-slate-800 tracking-tight">{formatCurrency(row.revenue).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-blue-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
+                                        {isProjectable && <span className="text-[10px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600 tracking-tight">{formatNumber(row.units)}</span></td>
@@ -872,8 +856,8 @@ export default function B2BPerformance() {
                                                       <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(sc.units)}</td>
                                                       <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{formatNumber(Math.round(sc.margin))}</td>
                                                       <td className="px-3 py-1.5 text-right font-medium text-slate-600">{sc.margin_percent.toFixed(1)}%</td>
-                                                      <td className="px-3 py-1.5 text-right font-bold text-blue-600">{formatNumber(Math.round(sc.gpm2))}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-blue-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
+                                                      <td className="px-3 py-1.5 text-right font-bold text-brand-600">{formatNumber(Math.round(sc.gpm2))}</td>
+                                                      <td className="px-3 py-1.5 text-right font-medium text-brand-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
                                                     </tr>
                                                   ))}
                                                 </tbody>
@@ -915,7 +899,7 @@ export default function B2BPerformance() {
                                 <React.Fragment key={grpName}>
                                   {/* Tier header — click để collapse/expand */}
                                   <tr
-                                    className="bg-blue-600 border-y border-blue-700 cursor-pointer select-none hover:bg-blue-700 transition-colors"
+                                    className="bg-brand-600 border-y border-brand-700 cursor-pointer select-none hover:bg-brand-700 transition-colors"
                                     onClick={() => toggleTier(grpName)}
                                   >
                                     <td colSpan={8} className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-white">
@@ -937,7 +921,7 @@ export default function B2BPerformance() {
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-slate-900">{formatCurrency(Math.round(totals.revenue)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-blue-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
+                                  {isProjectable && <span className="text-[10px] font-bold text-brand-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(Math.round(totals.units))}</td>
