@@ -9148,3 +9148,12 @@ trong `urls[]` (giữ đơn giản).
 Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 URL lỗi giữa chừng vẫn tiếp tục,
 click_next dừng sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới) — 10/10 pass riêng file
 này, 212/212 toàn repo. tsc + lint (0 lỗi mới) PASS.
+
+### s195+6 (2026-09-07) — Inventory: thêm note công thức tính ngay trong UI
+
+Hiếu: "thêm vào trong Inventory 1 chỗ note công thức tính đi". Dùng lại component `LogicNote` dùng chung
+(`dashboard-kit.tsx`, đã dùng ở B2C Metric s194+2) — chèn vào sub-tab "Kế hoạch nhập hàng theo tuần"
+(`fulfillment/page.tsx`), ngay trên banner cảnh báo, nêu công thức Vận tốc bán/Đầu tuần/Gợi ý nhập/
+Cảnh báo (đã có sẵn trong wiki `analytics-fulfillment.md` từ s194+5, lần này chỉ đưa lên UI). Không đổi
+logic/số liệu. tsc + vitest (212/212) PASS, 2 warning lint có sẵn từ trước (XCircle/`d` unused, không
+liên quan chỗ sửa).
