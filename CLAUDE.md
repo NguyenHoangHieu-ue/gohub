@@ -109,12 +109,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s195+3 — Bridge multi-tenant: chạy migration v51 + nhờ 1 người khác tự pair thử** —
-  (1) Chạy `web/db/migrations/v51_browser_bridge_multitenant.sql` trên Supabase (token Hiếu tự giữ nếu
-  backfill khớp username creator, không thì tự tạo lại 1 lần trên trang Bridge). (2) Nhờ 1 người đã có
-  `gp_allowed_users` tự vào `/analytics/creator/bridge` (giờ không còn creator-only), tự sinh token riêng,
-  tự load extension + pair — xác nhận `list_tabs` ra ĐÚNG tab của họ, không lẫn với tab Hiếu. Xem
-  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+3".
+- [x] **s195+3 — Bridge multi-tenant — XONG (2026-09-07), Hiếu đã tự QA với acc khác** — migration v51 đã
+  chạy; gặp gotcha PostgREST schema cache chưa nạp bảng mới (`Could not find table 'browser_bridge_pairings'
+  in schema cache`) → fix bằng "Reload schema" trong Supabase Dashboard (Database → API) hoặc
+  `NOTIFY pgrst, 'reload schema';` — không phải bug code, xem wiki mục "s195+3" phần Gotcha. Acc khác tự
+  tạo token + pair thành công, xác nhận hoạt động độc lập với token Hiếu. Xác nhận thêm: hoạt động trên
+  Microsoft Edge (và mọi trình Chromium khác) — chỉ đổi `chrome://extensions` → `edge://extensions`, code
+  không cần sửa gì (dùng chung API `chrome.*`).
 - [x] **s195+1/+2 — Gấu Pro Extension + Auto + fix Enter — XONG, Hiếu đã tự QA** — đã pair, list_tabs +
   fill (kèm `press_enter`) hoạt động đúng. Xem mục "s195+1"/"s195+2" trong wiki.
 - [x] **s195 — Gấu Pro `browseWeb` — XONG (2026-09-07), Hiếu đã tự QA trên staging** — migration v49 đã
@@ -203,7 +204,7 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
 CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bridge_commands` (hàng đợi lệnh Extension —
 Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
-(bridge multi-tenant — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận).
+(bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07).
 
 ---
 

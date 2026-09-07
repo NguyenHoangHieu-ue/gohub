@@ -381,6 +381,18 @@ rễ (multi-tenant thật) thay vì tiếp tục khoá creator-only.
   `gp_enabled` cho "Gấu Pro" — gap có từ trước, không do task này), việc dọn `app_settings.browser_bridge_*`
   cũ (vô hại, để đó).
 
+**Gotcha QA (2026-09-07)**: acc khác bấm "Tạo token" → 500. Log Vercel (`console.error` thêm vào lúc debug,
+xem `bridge/token/route.ts`) cho thấy: `Could not find the table 'public.browser_bridge_pairings' in the
+schema cache` (`code: PGRST205`). **Không phải bug code** — PostgREST (lớp API Supabase dùng) cache schema
+DB, tạo bảng mới bằng migration đôi khi không tự trigger reload cache ngay. Fix: Supabase Dashboard →
+Database → API → **Reload schema**, hoặc chạy `NOTIFY pgrst, 'reload schema';` trong SQL Editor. Sau đó
+GET/POST `bridge/token` hoạt động bình thường ngay, không cần redeploy Vercel (lỗi hoàn toàn phía Supabase).
+Nếu sau này thêm bảng mới bằng migration mà gặp `PGRST205`, nhớ ngay lỗi này.
+
+**Xác nhận trình duyệt**: hoạt động trên Microsoft Edge (và mọi trình Chromium khác: Brave/Opera/Vivaldi)
+— chỉ khác chỗ vào `edge://extensions` thay vì `chrome://extensions`, code dùng chung API `chrome.*`
+chuẩn Chromium nên không cần sửa gì.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
