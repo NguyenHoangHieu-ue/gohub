@@ -60,8 +60,8 @@ POST /api/creator-ai/chat { messages: [{role, content}] }
 | `queryProduct` | Supabase skus/products | Lookup chi tiết 1 SKU/product |
 | `webSearch` | Google Search (Gemini grounding) | Tìm kiếm web với citation |
 | `browseWeb` (s195) | Headless browser (CDP, container tự host) | Mở 1 URL thật, chạy JS đầy đủ, đọc nội dung — cho trang SPA/JS-nặng mà webSearch không đọc được. KHÔNG dùng cho portal có login (đó là `browsePortal`) |
-| `readMyBrowser` (s195+1) | Extension trên máy Hiếu (bridge queue) | Đọc tab Chrome THẬT đang mở của Hiếu (list_tabs/read_tab) — dùng session đăng nhập sẵn. **Chỉ creator** (không lộ browser Hiếu cho user khác trong `gp_allowed_users`) |
-| `controlMyBrowser` (s195+1, Auto từ s195+2) | Extension trên máy Hiếu (bridge queue) | click/fill/navigate/scroll trên tab Chrome THẬT — thực thi NGAY (Auto), chỉ hiện notification không chặn để biết. `press_enter` cho ô nhập kiểu sheet cần Enter mới commit. **Chỉ creator** |
+| `readMyBrowser` (s195+1) | Extension trên máy người dùng (bridge queue riêng/user, s195+3) | Đọc tab Chrome THẬT đang mở của người gọi (list_tabs/read_tab) — dùng session đăng nhập sẵn của họ. Mọi user có quyền Gấu Pro (`gp_enabled`) |
+| `controlMyBrowser` (s195+1, Auto từ s195+2, multi-tenant s195+3) | Extension trên máy người dùng (bridge queue riêng/user) | click/fill/navigate/scroll trên tab Chrome THẬT của người gọi — thực thi NGAY (Auto), chỉ hiện notification không chặn để biết. `press_enter` cho ô nhập kiểu sheet cần Enter mới commit. Mọi user có quyền Gấu Pro |
 
 ## Web Search
 
@@ -347,6 +347,39 @@ Hiếu QA thử s195+1 ngay trong ngày, phát hiện 3 việc cần sửa:
    `route.ts` truyền `isCreator` (đã có sẵn biến, trước đây chỉ dùng để check allowlist chứ chưa truyền vào
    agent). Chặn bằng declaration (Gemini không thấy tool thì không gọi được) — đúng pattern đã dùng ở
    `be-gau.ts` (`GP_TOOLS_ADMIN_ONLY`), không phải qua guardian.
+
+## § Gấu Pro s195+3 (2026-09-07) — Bridge multi-tenant: mỗi user tự pair browser CỦA CHÍNH HỌ
+
+Hiếu hỏi ngược lại mục 3 ở s195+2: "nhưng giờ tôi muốn người khác có thể dùng Gấu Pro như 1 trợ lý của họ
+nữa thì sao". Khác hẳn rủi ro đã cảnh báo trước (đó là *Hiếu đọc dữ liệu người khác* — cần chính sách
+privacy) — đây là *mỗi người tự cấp quyền cho máy của chính họ*, giống hệt Hiếu đang làm, nên sửa đúng gốc
+rễ (multi-tenant thật) thay vì tiếp tục khoá creator-only.
+
+- **Token/queue chuyển 1-global → 1-per-user**: bảng mới `browser_bridge_pairings` (migration
+  `v51_browser_bridge_multitenant.sql`, `username TEXT PRIMARY KEY, token TEXT UNIQUE, last_seen`) thay
+  cho `app_settings.browser_bridge_token` cũ. `browser_bridge_commands` thêm cột `owner_username` — mỗi
+  lệnh biết thuộc hàng đợi của ai. Migration best-effort giữ token Hiếu (creator) đã pair từ s195+1, khỏi
+  re-pair (không khớp thì tự tạo lại 1 lần, không sao).
+- **3 route bridge đổi sang scope theo user**: `token/route.ts` bỏ `requireCreator()` →
+  `requireGpAccess()` (helper mới `web/src/lib/gp-access.ts` — `hasGpAccess(role, username)`, tách ra dùng
+  chung với `chat/route.ts` vốn có `loadGpAllowed()` riêng lẻ trước đó); GET/POST đọc/ghi đúng row của
+  CHÍNH session gọi. `next/route.ts`/`result/route.ts`: Bearer token → `SELECT username FROM
+  browser_bridge_pairings WHERE token=$1` → mọi thao tác sweep/claim/update chỉ trong
+  `WHERE owner_username=$username` của chính họ.
+- **Thread `username` xuống tool**: `runCreatorAI()` nhận thêm `username`, truyền vào
+  `dispatchTool(call, onEvent, sources, { username })` (tham số thứ 4 mới, optional — không phá call site
+  cũ), `bridge.ts` (`runReadMyBrowser`/`runControlMyBrowser`/`enqueueAndPoll`) nhận `username` để stamp
+  `owner_username` lúc INSERT. `chat/route.ts` truyền `session.user.username`.
+- **Mở lại declaration cho mọi user có quyền Gấu Pro**: `CREATOR_ONLY_TOOLS` (`creator-ai.ts`) rỗng lại —
+  rủi ro cũ (1 token = browser Hiếu) đã hết vì mỗi user giờ có token/queue riêng biệt hoàn toàn. Giữ cơ chế
+  `buildFunctionDeclarations()` cho tool nào thật sự cần creator-only về sau.
+- **UI**: `bridge/page.tsx` đổi guard từ `role==="creator"` sang đọc `gp_enabled` từ `/api/user/me` (field
+  đã có sẵn, dùng chung với `analytics/creator/ai/page.tsx` và `sidebar.tsx` — KHÔNG cần field/route mới).
+  `sidebar.tsx` thêm nav "Bridge" vào đúng khối `gpEnabled &&` (chỗ hiện "Gấu Pro" cho non-creator allowed
+  user) — giữ nguyên entry "Bridge" trong `CREATOR_GROUP` tĩnh cho creator, 2 nơi phục vụ 2 nhóm khác nhau.
+- **Không đụng**: persona/system prompt Gấu Pro, `nav.ts` Command Palette (vốn đã không có nhánh
+  `gp_enabled` cho "Gấu Pro" — gap có từ trước, không do task này), việc dọn `app_settings.browser_bridge_*`
+  cũ (vô hại, để đó).
 
 ### Bé Gấu (chatbot team) — s131
 

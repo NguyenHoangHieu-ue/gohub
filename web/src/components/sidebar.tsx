@@ -421,6 +421,9 @@ export function Sidebar() {
             {gpEnabled && (
               <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed accent="violet" />
             )}
+            {gpEnabled && (
+              <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed accent="violet" />
+            )}
             {myMetricsEnabled && (
               <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed accent="violet" />
             )}
@@ -484,6 +487,7 @@ export function Sidebar() {
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
+                    <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed={false} accent="violet" />
                   </div>
                 )}
                 {analystOpen && myMetricsEnabled && (

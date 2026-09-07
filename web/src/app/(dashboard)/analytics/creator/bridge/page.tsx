@@ -2,27 +2,30 @@
 
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Plug, RefreshCw, Copy, CheckCircle, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function BridgePage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const [freshRole, setFreshRole] = useState<string | null>(null)
+  const { status } = useSession()
+  const [allowed, setAllowed] = useState<boolean | null>(null)
 
+  // s195+3: Bridge mở cho MỌI user có quyền Gấu Pro (gp_enabled — creator hoặc trong gp_allowed_users),
+  // không còn creator-only — mỗi người tự pair browser CỦA CHÍNH HỌ (mirror my-metrics/page.tsx).
   useEffect(() => {
     if (status !== "authenticated") return
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
-      setFreshRole(d?.role ?? session?.user?.role ?? "staff")
-    }).catch(() => setFreshRole(session?.user?.role ?? "staff"))
-  }, [status, session])
+      setAllowed(d?.gp_enabled === true)
+    }).catch(() => setAllowed(false))
+  }, [status])
 
-  useEffect(() => {
-    if (freshRole && freshRole !== "creator") router.push("/chatbot")
-  }, [freshRole, router])
-
-  if (status !== "authenticated" || !freshRole || freshRole !== "creator") return null
+  if (status !== "authenticated" || allowed === null) return null
+  if (!allowed) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-slate-400 text-sm">Bạn không có quyền truy cập trang này.</p>
+      </div>
+    )
+  }
   return <BridgeSettings />
 }
 
@@ -69,7 +72,7 @@ function BridgeSettings() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Bridge — Extension browser cá nhân</h1>
-          <p className="text-slate-500 text-sm">Gấu Pro đọc/thao tác trên chính tab Chrome đang mở của Hiếu</p>
+          <p className="text-slate-500 text-sm">Gấu Pro đọc/thao tác trên chính tab Chrome đang mở của bạn</p>
         </div>
       </div>
 
@@ -120,7 +123,7 @@ function BridgeSettings() {
           <p>2. Bấm <strong>Load unpacked</strong> → chọn thư mục <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">browser-extension/</code> trong repo.</p>
           <p>3. Bấm icon extension trên thanh Chrome → dán token phía trên + Server URL (domain đang dùng, vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://stg-intel-v2.gohub.cloud</code>) → bật toggle <strong>Bridge ON</strong>.</p>
           <p>4. Vào Gấu Pro, thử hỏi "list các tab đang mở" để xác nhận kết nối.</p>
-          <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần Hiếu duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của Hiếu — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng.</p>
+          <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của bạn — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng. Token của bạn RIÊNG — không chia sẻ cho ai.</p>
         </div>
       </div>
     </div>

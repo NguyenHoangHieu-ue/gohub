@@ -6,9 +6,24 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+2)
+## Trạng thái hiện tại (2026-09-07, s195+3)
 
 | | |
+|---|---|
+| ✅ **s195+3 (2026-09-07) — Bridge multi-tenant: mọi user có quyền Gấu Pro tự pair browser CỦA CHÍNH HỌ** |
+  Hiếu hỏi ngược s195+2: muốn người khác dùng Gấu Pro như trợ lý riêng của họ. Khác rủi ro đã cảnh báo
+  trước (Hiếu đọc dữ liệu người khác — cần chính sách privacy) — đây là mỗi người tự cấp quyền cho máy của
+  CHÍNH HỌ, nên sửa đúng gốc: token/queue chuyển 1-global → 1-per-user. Bảng mới
+  `browser_bridge_pairings` (migration `v51_browser_bridge_multitenant.sql`) thay `app_settings` singleton
+  cũ; `browser_bridge_commands` thêm `owner_username`. 3 route bridge scope theo user (helper mới
+  `lib/gp-access.ts` `hasGpAccess()`, dùng chung với `chat/route.ts`). `username` thread xuống tool
+  (`dispatchTool` thêm tham số `ctx` thứ 4 optional). `CREATOR_ONLY_TOOLS` rỗng lại — mở `readMyBrowser`/
+  `controlMyBrowser` cho MỌI user có `gp_enabled` (đúng field self-check có sẵn, dùng chung
+  `analytics/creator/ai/page.tsx`/`sidebar.tsx`). Trang `/analytics/creator/bridge` + nav "Bridge" giờ
+  hiện cho non-creator allowed user (không chỉ creator). tsc + lint (0 lỗi mới) + vitest (201/201) PASS.
+  **Cần Hiếu**: chạy migration v51 (token cũ tự giữ nếu backfill khớp, không thì tạo lại 1 lần trên trang
+  Bridge). Nhờ 1 người đã có `gp_allowed_users` tự pair — xác nhận `list_tabs` ra ĐÚNG tab của họ, không
+  lẫn với Hiếu. Xem `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+3".
 |---|---|
 | ✅ **s195+2 (2026-09-07) — Fix 3 việc phát hiện khi Hiếu QA s195+1** | (1) **Bỏ Duyệt → Auto**: Hiếu
   nhận thấy thói quen luôn bấm Duyệt khiến bước xác nhận vô nghĩa — `background.js` bỏ hẳn
@@ -94,13 +109,14 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s195+1 — Gấu Pro Extension: chạy migration v50 + load extension + pair token** —
-  (1) Chạy `web/db/migrations/v50_browser_bridge.sql` trên Supabase. (2) `chrome://extensions` → bật
-  Developer mode → Load unpacked → chọn thư mục `browser-extension/`. (3) Vào `/analytics/creator/bridge`
-  (creator-only) sinh token. (4) Bấm icon extension → dán token + Server URL (domain đang dùng) → bật
-  toggle Bridge ON. (5) Hỏi Gấu Pro "list các tab đang mở" xác nhận đọc được; thử 1 lệnh click/fill xem
-  notification Duyệt/Từ chối hiện đúng trên Chrome không. Xem
-  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+1".
+- [ ] **s195+3 — Bridge multi-tenant: chạy migration v51 + nhờ 1 người khác tự pair thử** —
+  (1) Chạy `web/db/migrations/v51_browser_bridge_multitenant.sql` trên Supabase (token Hiếu tự giữ nếu
+  backfill khớp username creator, không thì tự tạo lại 1 lần trên trang Bridge). (2) Nhờ 1 người đã có
+  `gp_allowed_users` tự vào `/analytics/creator/bridge` (giờ không còn creator-only), tự sinh token riêng,
+  tự load extension + pair — xác nhận `list_tabs` ra ĐÚNG tab của họ, không lẫn với tab Hiếu. Xem
+  `docs/wiki/system/tabs/analytics-creator-ai.md` mục "s195+3".
+- [x] **s195+1/+2 — Gấu Pro Extension + Auto + fix Enter — XONG, Hiếu đã tự QA** — đã pair, list_tabs +
+  fill (kèm `press_enter`) hoạt động đúng. Xem mục "s195+1"/"s195+2" trong wiki.
 - [x] **s195 — Gấu Pro `browseWeb` — XONG (2026-09-07), Hiếu đã tự QA trên staging** — migration v49 đã
   chạy; container `ghcr.io/browserless/chromium` tự host trên Render free tier (`browserless-gohub`) +
   keep-alive cron-job.org (10 phút/lần, KHÔNG dùng GitHub Actions — bài học cũ repo); env
@@ -186,7 +202,8 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 **v46** `okr_lark_message_log` — tất cả v44-v46 Hiếu đã xác nhận chạy. · **v47** `analytics_query_cache.deps` (Hiếu đã xác nhận chạy 2026-09-05) · **v48** `chat_questions` (Hiếu đã chạy, đã QA xong 2026-09-06) ·
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
 CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bridge_commands` (hàng đợi lệnh Extension —
-⚠️ Hiếu CẦN CHẠY, chưa xác nhận).
+Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
+(bridge multi-tenant — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận).
 
 ---
 

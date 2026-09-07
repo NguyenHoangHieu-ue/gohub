@@ -91,7 +91,7 @@ describe("ALL_TOOL_DECLARATIONS", () => {
   })
 })
 
-// ─── buildFunctionDeclarations — bridge tools chỉ dành creator ────────────────
+// ─── buildFunctionDeclarations — bridge multi-tenant (s195+3): mọi user có quyền Gấu Pro đều thấy ──────
 
 import { buildFunctionDeclarations } from "@/lib/agents/creator-ai"
 
@@ -102,16 +102,16 @@ describe("buildFunctionDeclarations", () => {
     expect(names).toContain("controlMyBrowser")
   })
 
-  it("isCreator=false → KHÔNG có readMyBrowser/controlMyBrowser (tránh lộ browser cá nhân Hiếu cho user khác trong gp_allowed_users)", () => {
+  it("isCreator=false → VẪN có readMyBrowser/controlMyBrowser (bridge đã multi-tenant, mỗi user 1 hàng đợi/token riêng — không còn nhắm nhầm vào browser Hiếu)", () => {
     const names = buildFunctionDeclarations(false).map(d => d.name)
-    expect(names).not.toContain("readMyBrowser")
-    expect(names).not.toContain("controlMyBrowser")
+    expect(names).toContain("readMyBrowser")
+    expect(names).toContain("controlMyBrowser")
   })
 
-  it("isCreator=false vẫn giữ đủ tool khác (chỉ trừ đúng 2 tool bridge)", () => {
+  it("isCreator true/false trả về cùng danh sách tool (không còn khác biệt — cơ chế lọc giữ lại cho tool khác sau này)", () => {
     const all = buildFunctionDeclarations(true)
     const restricted = buildFunctionDeclarations(false)
-    expect(restricted.length).toBe(all.length - 2)
+    expect(restricted.length).toBe(all.length)
   })
 })
 

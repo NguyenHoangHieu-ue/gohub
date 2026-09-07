@@ -21,6 +21,7 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
+  ctx?: { username?: string },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   // Emit status event
   const statusMsg = call.name === "webSearch"
@@ -67,10 +68,10 @@ export async function dispatchTool(
     return wrap(await runBrowseWeb(call.args))
 
   if (call.name === "readMyBrowser")
-    return wrap(await runReadMyBrowser(call.args, onEvent))
+    return wrap(await runReadMyBrowser(call.args, ctx?.username || "", onEvent))
 
   if (call.name === "controlMyBrowser")
-    return wrap(await runControlMyBrowser(call.args, onEvent))
+    return wrap(await runControlMyBrowser(call.args, ctx?.username || "", onEvent))
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

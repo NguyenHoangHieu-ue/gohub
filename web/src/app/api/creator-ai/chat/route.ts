@@ -7,6 +7,7 @@ import { runCreatorAI, FileContext, type GPEvent } from "@/lib/agents/creator-ai
 import { classifySensitivity }        from "@/lib/agents/guardian-classify"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
 import { parseUploadedFile }          from "@/lib/agents/file-parser"
+import { loadGpAllowed }              from "@/lib/gp-access"
 
 export const maxDuration = 300
 
@@ -47,13 +48,6 @@ function stripBase64Images(text: string): string {
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 // parseUploadedFile/FileContext nay dùng chung với Bé Gấu — xem @/lib/agents/file-parser.ts
-
-async function loadGpAllowed(): Promise<string[]> {
-  try {
-    const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle()
-    return data?.value ? JSON.parse(data.value) : []
-  } catch { return [] }
-}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -160,6 +154,7 @@ export async function POST(req: NextRequest) {
           fileContexts.length > 0 ? fileContexts : undefined,
           emit,
           isCreator,
+          username,
         )
 
         // Tạo/cập nhật conversation (đồng bộ để có convId trước khi gửi done)

@@ -329,7 +329,7 @@ export const browseWebDecl = {
 
 export const readMyBrowserDecl = {
   name: "readMyBrowser",
-  description: "Đọc tab Chrome THẬT đang mở trên máy Hiếu (dùng session đăng nhập sẵn Lark/Sapo/portal) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab. KHÔNG cần Hiếu duyệt (chỉ đọc). Nếu lỗi 'Bridge chưa phản hồi' → báo Hiếu kiểm tra đã bật extension + toggle Bridge ON chưa.",
+  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab. Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -342,7 +342,7 @@ export const readMyBrowserDecl = {
 
 export const controlMyBrowserDecl = {
   name: "controlMyBrowser",
-  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của Hiếu qua Extension đã pair — thực thi NGAY (không cần Hiếu duyệt), dùng session đăng nhập thật nên LUÔN nói rõ với Hiếu bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có). Với ô nhập kiểu spreadsheet/quick-add cần bấm Enter mới lưu (vd thêm dòng trong sheet) → set press_enter=true.",
+  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của người dùng hiện tại qua Extension đã pair — thực thi NGAY, dùng session đăng nhập thật của họ nên LUÔN nói rõ bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có). Với ô nhập kiểu spreadsheet/quick-add cần bấm Enter mới lưu (vd thêm dòng trong sheet) → set press_enter=true.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {

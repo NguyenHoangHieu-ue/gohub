@@ -3,39 +3,41 @@ import { getServerSession } from "next-auth"
 import { randomBytes } from "crypto"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { hasGpAccess } from "@/lib/gp-access"
 
-const TOKEN_KEY = "browser_bridge_token"
-const LAST_SEEN_KEY = "browser_bridge_last_seen"
-
-async function requireCreator() {
+async function requireGpAccess() {
   const session = await getServerSession(authOptions)
   if (!session?.user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
-  if (session.user.role !== "creator") return { error: NextResponse.json({ error: "Chỉ creator" }, { status: 403 }) }
-  return { session }
+  const username = session.user.username
+  if (!(await hasGpAccess(session.user.role, username))) {
+    return { error: NextResponse.json({ error: "Không có quyền truy cập Gấu Pro" }, { status: 403 }) }
+  }
+  return { username }
 }
 
-// GET: xem token hiện tại (nếu có) + lần cuối extension poll (last_seen).
+// GET: xem token hiện tại của CHÍNH mình (nếu có) + lần cuối extension của mình poll.
 export async function GET() {
-  const guard = await requireCreator()
+  const guard = await requireGpAccess()
   if (guard.error) return guard.error
 
-  const [{ data: tokenRow }, { data: seenRow }] = await Promise.all([
-    supabaseAdmin.from("app_settings").select("value").eq("key", TOKEN_KEY).maybeSingle(),
-    supabaseAdmin.from("app_settings").select("value").eq("key", LAST_SEEN_KEY).maybeSingle(),
-  ])
+  const { data } = await supabaseAdmin
+    .from("browser_bridge_pairings")
+    .select("token,last_seen")
+    .eq("username", guard.username)
+    .maybeSingle()
 
-  return NextResponse.json({ token: tokenRow?.value ?? null, last_seen: seenRow?.value ?? null })
+  return NextResponse.json({ token: data?.token ?? null, last_seen: data?.last_seen ?? null })
 }
 
-// POST: sinh token mới (ghi đè token cũ — extension cũ sẽ mất kết nối, cần dán lại token mới).
+// POST: sinh token mới cho CHÍNH mình (ghi đè token cũ của mình — extension cũ sẽ mất kết nối).
 export async function POST() {
-  const guard = await requireCreator()
+  const guard = await requireGpAccess()
   if (guard.error) return guard.error
 
   const token = randomBytes(24).toString("hex")
-  const { error } = await supabaseAdmin.from("app_settings").upsert(
-    { key: TOKEN_KEY, value: token },
-    { onConflict: "key" },
+  const { error } = await supabaseAdmin.from("browser_bridge_pairings").upsert(
+    { username: guard.username, token },
+    { onConflict: "username" },
   )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
