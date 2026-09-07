@@ -6,9 +6,22 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+3)
+## Trạng thái hiện tại (2026-09-07, s195+4)
 
 | | |
+|---|---|
+| ✅ **s195+4 (2026-09-07) — API sản phẩm cho hệ thống bên ngoài (manager tích hợp)** | Hiếu muốn cấp API
+  đọc thông tin sản phẩm (kèm giá vốn/COGS) cho manager để tích hợp vào 1 hệ thống/tool khác họ đang xây
+  (backend-to-backend, không phải browser). Audit trước: `/api/products`/`/api/skus` hiện có chỉ
+  session-cookie (không dùng được ngoài browser); `/api/mcp` (`MCP_SECRET`) đã lộ COGS từ trước nhưng dùng
+  1 secret tĩnh chung mọi mục đích, không revoke/audit riêng được — cố ý KHÔNG tái dùng. Thiết kế mới: 2
+  route `GET /api/external/products`/`/api/external/skus` (Bearer API key riêng, field list tách hẳn route
+  UI nội bộ, `page_size` tới 200, rate-limit 60/phút/key). Bảng `external_api_keys` (migration
+  `v52_external_api_keys.sql`) lưu **hash** key (không lưu plaintext — khác token Bridge cá nhân). Tab mới
+  "API bên ngoài" trong `/admin` (admin/creator) — tạo/thu hồi key, key thật chỉ hiện 1 lần lúc tạo. tsc +
+  lint (0 lỗi mới) + vitest (207/207) PASS. **Cần Hiếu**: chạy migration v52 (nhớ Reload schema Supabase
+  sau khi tạo bảng mới), vào `/admin` tab "API bên ngoài" tạo key label "Manager - <tên tool>", gửi
+  manager. Xem `docs/wiki/system/tabs/admin-product.md` mục 4.
 |---|---|
 | ✅ **s195+3 (2026-09-07) — Bridge multi-tenant: mọi user có quyền Gấu Pro tự pair browser CỦA CHÍNH HỌ** |
   Hiếu hỏi ngược s195+2: muốn người khác dùng Gấu Pro như trợ lý riêng của họ. Khác rủi ro đã cảnh báo
@@ -109,6 +122,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+4 — API sản phẩm cho manager: chạy migration v52 + tạo key + gửi manager** —
+  (1) Chạy `web/db/migrations/v52_external_api_keys.sql` trên Supabase, nhớ Reload schema (Database → API
+  → Reload schema, hoặc `NOTIFY pgrst, 'reload schema';`) — đúng gotcha đã gặp ở v51. (2) Vào `/admin` →
+  tab "API bên ngoài" → tạo key, đặt label rõ (vd "Manager - CRM tool") → copy key gửi manager (chỉ hiện 1
+  lần). (3) Gửi manager 2 endpoint: `GET /api/external/products`, `GET /api/external/skus` (header
+  `Authorization: Bearer <key>`) — xem `docs/wiki/system/tabs/admin-product.md` mục 4 để biết field trả
+  về. (4) Test thử `curl` xác nhận trả đúng data + COGS trước khi gửi manager.
 - [x] **s195+3 — Bridge multi-tenant — XONG (2026-09-07), Hiếu đã tự QA với acc khác** — migration v51 đã
   chạy; gặp gotcha PostgREST schema cache chưa nạp bảng mới (`Could not find table 'browser_bridge_pairings'
   in schema cache`) → fix bằng "Reload schema" trong Supabase Dashboard (Database → API) hoặc
@@ -204,7 +224,9 @@ v31–v42 (cũ, xem session_summary.txt nếu cần chi tiết) · **v43** `kb_w
 **v49** `creator_kb.owner_username` + `chatbot_learning_log.target_owner_username` (chuẩn bị multi-tenant,
 CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bridge_commands` (hàng đợi lệnh Extension —
 Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
-(bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07).
+(bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07) ·
+**v52** `external_api_keys` (API sản phẩm cho manager — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận — nhớ Reload schema
+Supabase sau khi chạy).
 
 ---
 
