@@ -493,7 +493,7 @@ function InventoryInner() {
         </div>
       </div>
 
-      <LogicNote>
+      <LogicNote collapsible>
         <strong>Vận tốc bán</strong> = SUM(fulfilled_quantity) 30 ngày gần nhất ÷ 30 × 7 (đơn vị/tuần).
         <strong>Đầu tuần</strong> = Tồn thực tế OPS ghi tay, hoặc tự lấy từ Sapo (đúng tuần đang chạy),
         else 0. <strong>Gợi ý nhập</strong> = nếu (tồn trước khi nhập &lt; safety_weeks × vận tốc) →

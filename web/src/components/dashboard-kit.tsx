@@ -89,7 +89,29 @@ export function SourceBadge({ source, label, className }: {
 }
 
 // ─── LogicNote (ⓘ giải thích công thức) ───────────────────────────────────────
-export function LogicNote({ children, className }: { children: React.ReactNode; className?: string }) {
+// collapsible: true → thu gọn thành nút bấm (dùng cho khu vực cần gọn thẩm mỹ, vd Inventory) thay vì
+// luôn hiện sẵn trên trang.
+export function LogicNote({ children, className, collapsible, label = "Công thức" }: {
+  children: React.ReactNode; className?: string; collapsible?: boolean; label?: string
+}) {
+  const [open, setOpen] = useState(!collapsible)
+
+  if (collapsible && !open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "inline-flex items-center gap-1.5 mb-3 px-3 py-1.5 rounded-lg text-xs font-medium",
+          "border border-brand-600/15 bg-brand-600/[0.055] text-brand-600 hover:bg-brand-600/10 transition-colors",
+          className,
+        )}
+      >
+        <span className="font-semibold leading-none">ⓘ</span> {label}
+      </button>
+    )
+  }
+
   return (
     <div className={cn(
       "grid grid-cols-[18px_1fr] gap-2 items-start mb-3 px-3 py-2.5 rounded-lg",
@@ -97,7 +119,16 @@ export function LogicNote({ children, className }: { children: React.ReactNode; 
       className,
     )}>
       <span className="text-brand-600 font-semibold leading-none mt-0.5">ⓘ</span>
-      <div className="[&_strong]:text-[#1d1d1f] [&_strong]:font-semibold">{children}</div>
+      <div className="[&_strong]:text-[#1d1d1f] [&_strong]:font-semibold flex-1">{children}</div>
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="col-start-2 justify-self-start text-brand-600 text-[11px] font-medium hover:underline mt-1"
+        >
+          Ẩn công thức
+        </button>
+      )}
     </div>
   )
 }
