@@ -6,10 +6,15 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+5)
+## Trạng thái hiện tại (2026-09-07, s195+6)
 
 | | |
 |---|---|
+| ✅ **s195+6 (2026-09-07) — Inventory: thêm note công thức tính ngay trong UI** | Hiếu: "thêm vào trong
+  Inventory 1 chỗ note công thức tính đi". Dùng lại `LogicNote` dùng chung (đã dùng ở B2C Metric) — chèn
+  vào sub-tab "Kế hoạch nhập hàng theo tuần" (`fulfillment/page.tsx`), nêu công thức Vận tốc bán/Đầu tuần/
+  Gợi ý nhập/Cảnh báo (công thức đã có sẵn trong wiki từ s194+5, lần này chỉ đưa lên UI). Không đổi logic/
+  số liệu. tsc + vitest (212/212) PASS. Không cần Hiếu làm gì thêm.
 | ✅ **s195+5 (2026-09-07) — `browseWeb` đọc được nhiều trang/lần gọi** | Hiếu phản hồi `browseWeb` (s195)
   chỉ đọc đúng 1 trang, không đủ cho lấy dữ liệu tự động nhiều trang. Hỏi rõ kiểu phân trang thật cần trước
   khi code — Hiếu chọn cả 3: `urls[]` (list URL biết trước, tối đa 20, 1 URL lỗi không chặn URL khác),
