@@ -110,6 +110,14 @@ gohub_dw hiện tại → luôn `TRIM(c.code::text)` khi so khớp.
 
 ## 5. Gotchas
 
+- **s195+7 (2026-09-08, chưa xác nhận cuối)**: Hiếu báo Orders chỉ hiện đơn eSIM, đơn SIM vật lý không
+  hiện. Đã audit kỹ `route.ts` + `page.tsx` — KHÔNG có filter code nào loại theo `type_of_sim`/eSIM. Giả
+  thuyết: mặc định `dataSource=fulfilled` dùng `fulfiled_date` (= ngày ĐÃ XUẤT/GIAO). eSIM giao tức thì
+  nên luôn có `fulfiled_date`; SIM vật lý cần ops xác nhận ship mới được set cột này trong gohub_dw — đơn
+  chưa confirm ship → `fulfiled_date` NULL → bị loại khỏi `WHERE fulfiled_date BETWEEN...`, biến mất khỏi
+  Orders dù đơn có thật. Cách verify: đổi toggle sang "Created" (`created_date`) — nếu đơn SIM vật lý hiện
+  ra thì đúng nguyên nhân (và root cause ở khâu ops/ETL nguồn, không phải bug code). Xem
+  `docs/session_summary.txt` s195+7.
 - **s194+11 (2026-09-06)**: fix hex navy SAI `#003B95`/`#002d73` (audit s192 từng flag) → `brand-600`/
   `brand-700` class. Không đổi logic/data.
 - 1 `order_code` có thể gồm nhiều SKU/dòng gốc — route `GROUP BY order_code` nên mỗi đơn ra đúng 1 row;

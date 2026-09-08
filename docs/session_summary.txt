@@ -9157,3 +9157,31 @@ Hiếu: "thêm vào trong Inventory 1 chỗ note công thức tính đi". Dùng 
 Cảnh báo (đã có sẵn trong wiki `analytics-fulfillment.md` từ s194+5, lần này chỉ đưa lên UI). Không đổi
 logic/số liệu. tsc + vitest (212/212) PASS, 2 warning lint có sẵn từ trước (XCircle/`d` unused, không
 liên quan chỗ sửa).
+
+Hiếu phản hồi ngay sau đó: hiện sẵn note công thức trên trang mất thẩm mỹ, muốn gói vào 1 nút bấm "Công
+thức". `LogicNote` (`dashboard-kit.tsx`) thêm prop `collapsible`/`label` — mặc định `collapsible=false`
+(giữ nguyên hành vi mọi chỗ dùng khác, vd B2C Metric/`Panel`), khi bật thu gọn thành 1 nút nhỏ viền brand
+"ⓘ Công thức", bấm mới render nội dung đầy đủ + thêm nút "Ẩn công thức" ở cuối để đóng lại. Inventory đổi
+sang `<LogicNote collapsible>`. tsc + vitest (212/212) PASS.
+
+### s195+7 (2026-09-08) — Audit: Orders thiếu đơn SIM vật lý (chỉ hiện eSIM)
+
+Hiếu báo tab Orders sai số liệu: chỉ thấy đơn eSIM, đơn SIM vật lý không hiện. Đọc kỹ `route.ts`
+(`/api/analytics/order-report`) + `orders/page.tsx` toàn bộ — KHÔNG có filter cứng nào (SQL hay FE) loại
+riêng theo `type_of_sim`/eSIM: không WHERE, không dropdown, search box cũng không match `sim_type`. Loại
+trừ hẳn nguyên nhân code/filter.
+
+Giả thuyết mạnh nhất (chưa verify được — máy dev không có `.env.local`, không query gohub_dw trực tiếp):
+Orders mặc định `dataSource=fulfilled` dùng `fact_fulfillment_revenue.fulfiled_date` (= ngày ĐÃ XUẤT/GIAO
+XONG, đúng nghĩa "Fulfillment" trong `analytics-data-model.md`). eSIM giao tức thì lúc bán → `fulfiled_date`
+set ngay. SIM vật lý cần ops xác nhận đã ship/giao mới được set cột này trong gohub_dw — đơn nào còn chờ
+ship/chưa confirm → `fulfiled_date` NULL → bị loại khỏi `WHERE fulfiled_date BETWEEN...` → biến mất khỏi
+Orders dù đơn có thật. Đây khớp đúng triệu chứng (eSIM luôn có mặt, SIM vật lý thiếu).
+
+Đã hướng dẫn Hiếu tự verify: đổi toggle "Fulfillment"→"Created" (`created_date`, từ lúc TẠO đơn) ở đầu
+trang Orders — nếu đơn SIM vật lý hiện ra ở Created nhưng mất ở Fulfillment → xác nhận đúng nguyên nhân.
+Lưu ý phụ: ở Created thì cột GP luôn = 0 (bảng `fact_sales_revenue` không có margin) — không phải bug
+khác. Nếu đúng, root cause KHÔNG nằm ở web app (query/code đã đúng theo đúng định nghĩa "Fulfillment")
+mà ở khâu ops xác nhận "đã giao" cho đơn SIM vật lý ở hệ thống nguồn (Sapo/ETL) — ngoài phạm vi sửa code.
+
+Chưa code gì (chỉ audit + tư vấn) — Hiếu tự check trên staging, chưa có kết luận cuối.
