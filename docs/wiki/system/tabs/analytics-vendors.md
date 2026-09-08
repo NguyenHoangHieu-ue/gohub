@@ -28,6 +28,15 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s195+9 (2026-09-08) — fix bug thật: bảng Channel Distribution trống do lỗi GROUP BY.** Hiếu báo tiếp
+  "bảng Channel Distribution không có dữ liệu" (sau khi đã fix vendor mặc định ở s195+8). `channelSql`
+  trong `fetchData()` (`page.tsx`) SELECT `${bizGroupSQL} as business_group` (CASE dùng `s.group_name`) —
+  nhưng `GROUP BY` chỉ có `s.channel_name`, KHÔNG có `s.group_name` → Postgres strict lỗi "column
+  dim_order_source.group_name must appear in the GROUP BY clause". Query fail (400) nhưng chỉ
+  `console.error`, không có banner lỗi cho riêng bảng này → `channelDistribution` không set, đứng yên `[]`
+  → bảng trống trông như "không có dữ liệu"; đồng thời `throw` này chặn luôn phần xử lý sau nó trong cùng
+  hàm (không ảnh hưởng KPI/Trend/Products vì đã set state trước đó). Fix: thêm `s.group_name` vào
+  `GROUP BY`. Không đổi logic phân loại B2B-Strategic/Non-Strategic/B2C nào khác.
 - **s195+8 (2026-09-08) — fix bug thật: trang hiện toàn số 0 do auto-chọn sai vendor mặc định.** Hiếu báo
   tab Vendors "không hiện số liệu". `fetchVendors()` (`page.tsx`) tự chọn vendor mặc định bằng
   `list.includes("3HKDATAPOOL")` (KHÔNG dấu cách) — nhưng DB lưu `'3HK DATAPOOL'` (CÓ dấu cách, xem gotcha
