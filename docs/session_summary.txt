@@ -9185,3 +9185,71 @@ khác. Nếu đúng, root cause KHÔNG nằm ở web app (query/code đã đúng
 mà ở khâu ops xác nhận "đã giao" cho đơn SIM vật lý ở hệ thống nguồn (Sapo/ETL) — ngoài phạm vi sửa code.
 
 Chưa code gì (chỉ audit + tư vấn) — Hiếu tự check trên staging, chưa có kết luận cuối.
+
+### s195+8 (2026-09-08) — Fix bug thật: tab Vendors hiện toàn số 0
+
+Hiếu báo tab Vendors "hiện tại đang bị lỗi không hiện số liệu". Audit `page.tsx` + 2 route
+`vendors/report`/`vendors/list` (không dùng — FE gọi thẳng `/api/analytics/query` với SQL tự build) +
+`/api/analytics/query` (guard role, không thấy vấn đề). Trace `fetchVendors()`: tự chọn vendor mặc định
+bằng `list.includes("3HKDATAPOOL")` (KHÔNG dấu cách) — nhưng DB lưu `'3HK DATAPOOL'` (CÓ dấu cách, đúng
+gotcha đã ghi ở `analytics-data-model.md` #9) → điều kiện KHÔNG BAO GIỜ khớp, luôn rơi về `list[0]`
+(vendor đầu bảng chữ cái ORDER BY 1 ASC — thường vendor nhỏ/ít bán trong kỳ mặc định) → mọi KPI/chart hiện
+0, trông như "lỗi". Bug có từ commit port gốc (`9c2dbca1`, xác nhận qua `git log -p --follow`), không phải
+regression của các đợt UI redesign gần đây (s194+9/+10/+12 chỉ đổi màu). Fix: so khớp bỏ dấu cách +
+hoa/thường (`v.replace(/\s+/g,"").toUpperCase()==="3HKDATAPOOL"`), fallback `list[0]` chỉ khi thật sự
+không có 3HKDATAPOOL. tsc + lint (0 lỗi mới) + vitest (212/212) PASS. Commit `644373d8`.
+
+### s195+9 (2026-09-08) — Fix bug thật: bảng Channel Distribution trống
+
+Hiếu báo tiếp "bảng Channel Distribution không có dữ liệu" (sau khi vendor mặc định đã đúng). `channelSql`
+trong `fetchData()` SELECT `${bizGroupSQL} as business_group` (CASE dùng `s.group_name`) nhưng `GROUP BY`
+chỉ có `s.channel_name` → Postgres strict lỗi "column dim_order_source.group_name must appear in the
+GROUP BY clause". Query fail (400) nhưng chỉ `console.error`, không có banner lỗi riêng cho bảng này →
+`channelDistribution` không bao giờ được set, đứng yên `[]` → bảng trống. `throw` này còn chặn luôn phần
+xử lý SAU nó trong cùng hàm (không ảnh hưởng KPI/Trend/Products vì đã set state trước đó). Fix: thêm
+`s.group_name` vào GROUP BY. tsc + vitest (212/212) PASS. Commit `99391682`.
+
+### s195+10 (2026-09-08) — Fix bug thật: Channel Distribution phân loại Strategic sai
+
+Hiếu báo tiếp "channel strategic mà nó để non-strategic", chỉ thẳng tab Quarter Report để tham khảo cách
+làm đúng. Điều tra phát hiện kiến trúc: repo có **2 hệ thống phân loại B2B-Strategic hoàn toàn khác nhau,
+lệch nhau theo thời gian**:
+1. **Cũ** — `partner_tiers` (Supabase `app_settings`, sửa qua trang Settings) = danh sách TÊN kênh/đối
+   tác liệt kê TAY, so khớp `channel_name ILIKE ANY(...)`. Ai thêm kênh Strategic mới phải nhớ vào Settings
+   thêm tay — quên → kênh đó mặc định rơi Non-Strategic. Dùng bởi: Vendors (bizGroupSQL cũ), Channels tab
+   (`channels/performance` route), `b2b/strategic-performance` route.
+2. **Mới, canonical** — `quarterly_tier_keywords` (khác key Supabase hẳn, sửa ở Quarter Report → mục Cấu
+   hình) = MỌI KH B2B mặc định **Strategic**, TRỪ KHI `dim_customer.price_list_name` khớp keyword của tier
+   VIP/Gold/Silver — không cần liệt kê tay từng KH mới, tự động đúng khi KH mới được gắn đúng price list.
+   Dùng bởi: Quarter Report, Dashboard chart, BOD group-margin, All-Time, B2B tab, Customers, Staff (xem
+   `buildGroupCaseByCustomerSql`/`buildIsStrategicSql` trong `lib/analytics-helpers.ts`, comment ghi rõ
+   "1 ĐỊNH NGHĨA DÙNG CHUNG" — Channels/Vendors/b2b-strategic-performance rõ ràng là 3 chỗ chưa từng được
+   migrate sang hệ này, nợ kỹ thuật có sẵn từ trước, không phải lỗi mới phát sinh).
+
+2 danh sách lệch nhau theo thời gian → cùng 1 kênh, Quarter Report (hệ 2) nói Strategic, Vendors (hệ 1)
+nói Non-Strategic — đúng triệu chứng Hiếu báo.
+
+Fix theo đúng yêu cầu (tham khảo Quarter Report): đổi `channelSql` sang hệ (2). Fetch
+`/api/analytics/quarterly-settings` (route đã có sẵn, share chung Quarter Report) thay vì
+`/api/config/partner-tiers`; JOIN thêm `dim_customer c ON TRIM(f.customer_code)=TRIM(c.code)`; build lại
+`bizGroupSQL` theo đúng công thức `buildIsStrategicSql` (mirror JS client-side vì `analytics-helpers.ts`
+là server-only, không import được vào "use client" page — cùng pattern JS-reimplement đã có sẵn ở
+`b2b/page.tsx`). Vì business_group giờ phụ thuộc `c.price_list_name` (không aggregate được) nên PHẢI tách
+CTE `classified` (phân loại business_group cho TỪNG DÒNG trước) rồi mới `GROUP BY (channel_name,
+business_group)` ở outer query — gộp CASE + GROUP BY 1 bước như bản cũ sẽ lại dính đúng lỗi GROUP BY vừa
+fix ở s195+9. Cân nhắc rồi CHỦ ĐỘNG KHÔNG áp `excludedCustomers` (KH Quarter Report loại khỏi B2B, vd "B2B
+Ops") — trang Vendors không loại KH nào khỏi KPI summary/Revenue Trend/Products phía trên cùng trang, áp
+riêng ở Channel Distribution sẽ làm tổng bảng lệch khỏi KPI card ngay bên trên (tạo bug mới trong lúc fix
+bug cũ). Nhân tiện sửa 1 bug latent phát hiện lúc rewrite: bản cũ dùng `SUM(f.${marginCol})` — ở chế độ
+Created `marginCol` là literal `"0"` → thành `SUM(f.0)` không hợp lệ (đã có từ trước, không ai báo vì mặc
+định trang là Fulfillment); đổi sang project cột tường minh trong CTE thay vì `f.*` để tránh lặp lại.
+
+`strategicPerformance` (route `b2b/strategic-performance`, danh sách đối tác Strategic NAMED cụ thể để
+drill-down theo tháng/sub-channel) CHỦ ĐỘNG CHƯA đổi — vẫn hệ (1), ngoài scope lần sửa này. Không phá gì:
+phần "Other {channel}" residual trong bảng Channel Distribution (doanh thu Strategic KHÔNG thuộc đối tác
+named nào) vẫn tính đúng vì chỉ trừ đúng số `claimed` bởi partner khỏi tổng channel, không phụ thuộc 2 hệ
+phải khớp nhau.
+
+tsc + lint (0 lỗi mới) + vitest (212/212) PASS cả 3 sub-session s195+8→+10. Wiki
+`docs/wiki/system/tabs/analytics-vendors.md` cập nhật đủ 3 mục Gotchas. CLAUDE.md cập nhật trạng thái +
+checklist QA. Commit `92327791`. Chưa có kết quả QA của Hiếu trên staging.

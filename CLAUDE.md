@@ -6,10 +6,34 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-08, s195+7)
+## Trạng thái hiện tại (2026-09-08, s195+10)
 
 | | |
 |---|---|
+| ⏳ **s195+8/+9/+10 (2026-09-08) — Fix 3 bug thật tab Vendors, chờ Hiếu QA staging** | Hiếu báo liên tiếp
+  3 lỗi khi dùng tab Vendors, mỗi lỗi fix xong lộ ra lỗi tiếp theo phía sau (đúng thứ tự user thấy khi test
+  thật). **(1) Trang hiện toàn số 0**: `fetchVendors()` tự chọn vendor mặc định bằng
+  `list.includes("3HKDATAPOOL")` (không dấu cách) nhưng DB lưu `'3HK DATAPOOL'` (CÓ dấu cách) → không bao
+  giờ khớp, luôn rơi về `list[0]` (vendor đầu bảng chữ cái, thường ít/không bán trong kỳ mặc định). Fix so
+  khớp bỏ dấu cách + hoa/thường. **(2) Bảng Channel Distribution trống**: `channelSql` SELECT
+  `business_group` (CASE dùng `s.group_name`) nhưng `GROUP BY` chỉ có `s.channel_name` → Postgres lỗi
+  grouping, query fail âm thầm (chỉ console.error, không hiện banner lỗi) → `channelDistribution` không
+  bao giờ được set. Fix thêm `s.group_name` vào GROUP BY. **(3) Channel Strategic bị gắn nhầm
+  Non-Strategic**: phát hiện repo có **2 hệ thống phân loại Strategic lệch nhau** — Vendors dùng
+  `partner_tiers` (danh sách TÊN kênh liệt kê tay, Supabase) trong khi Quarter Report/Dashboard/BOD/
+  All-Time dùng hệ canonical `quarterly_tier_keywords` (mọi KH B2B mặc định Strategic trừ khi
+  `price_list_name` khớp keyword VIP/Gold/Silver, xem `buildGroupCaseByCustomerSql` trong
+  `analytics-helpers.ts`). Kênh Strategic mới/chưa kịp thêm tay vào `partner_tiers` bị rơi nhầm
+  Non-Strategic. Fix đổi `channelSql` sang hệ canonical (JOIN `dim_customer`, tách CTE `classified` phân
+  loại từng dòng trước khi GROUP BY vì business_group phụ thuộc cột không aggregate được); KHÔNG áp
+  exclusion list của Quarter Report (tránh lệch tổng khỏi KPI card cùng trang). `strategicPerformance`
+  (bảng đối tác Strategic named cụ thể, route `b2b/strategic-performance`) CHƯA đổi — vẫn hệ cũ, ngoài
+  scope lần này, không ảnh hưởng tính đúng của Channel Distribution. Kèm fix 1 bug latent: `SUM(f.marginCol)`
+  ở chế độ Created (`marginCol="0"` literal) từng thành `SUM(f.0)` không hợp lệ. Cả 3 fix: tsc + lint (0
+  lỗi mới) + vitest (212/212) PASS. Wiki `docs/wiki/system/tabs/analytics-vendors.md` đã cập nhật đủ 3
+  mục. **Cần Hiếu**: QA lại tab Vendors trên staging sau khi Vercel deploy xong — vendor mặc định load
+  đúng, Channel Distribution có dữ liệu, các channel Strategic (đối chiếu Quarter Report) hiện đúng nhóm
+  B2B-Strategic.
 | ⏳ **s195+7 (2026-09-08) — Audit: Orders thiếu đơn SIM vật lý (chỉ hiện eSIM), chờ Hiếu tự verify** | Hiếu
   báo tab Orders sai số liệu — chỉ thấy đơn eSIM, đơn SIM vật lý không hiện. Đọc kỹ `route.ts`
   (`/api/analytics/order-report`) + `orders/page.tsx` toàn bộ — KHÔNG có filter cứng nào (SQL/FE) loại theo
@@ -153,6 +177,11 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+8/+9/+10 — QA tab Vendors trên staging** — sau khi Vercel deploy xong 3 commit fix (default
+  vendor 0 số liệu / Channel Distribution trống / Strategic phân loại sai): mở `/analytics/vendors`, xem
+  (a) load lần đầu tự chọn đúng vendor 3HK DATAPOOL có số liệu thật; (b) bảng Channel Distribution có dữ
+  liệu; (c) đối chiếu vài kênh Strategic đã biết ở Quarter Report — Vendors giờ phải gắn đúng nhóm
+  B2B-Strategic. Nếu vẫn thấy sai, báo cụ thể tên kênh để điều tra tiếp.
 - [ ] **s195+7 — Orders thiếu đơn SIM vật lý: tự verify giả thuyết** — đổi toggle "Fulfillment"→"Created"
   ở đầu trang `/analytics/orders`, xem đơn SIM vật lý có hiện ra không. Có → đúng nguyên nhân
   `fulfiled_date` NULL (khâu ops/ETL nguồn, không phải bug web). Không → báo lại để điều tra tiếp hướng
