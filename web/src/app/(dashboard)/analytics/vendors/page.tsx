@@ -118,7 +118,9 @@ export default function VendorPerformancePage() {
           const list = data.map((d: any) => d.vendor)
           setVendors(list)
           if (list.length > 0 && selectedVendors.length === 0) {
-            const defaultVendor = list.includes("3HKDATAPOOL") ? "3HKDATAPOOL" : list[0]
+            // DB lưu "3HK DATAPOOL" (CÓ dấu cách) — so khớp bỏ dấu cách/hoa-thường, đúng chuẩn
+            // REPLACE(UPPER(vendor),' ','') dùng xuyên suốt repo (xem analytics-data-model.md gotcha #9).
+            const defaultVendor = list.find(v => v.replace(/\s+/g, "").toUpperCase() === "3HKDATAPOOL") || list[0]
             setSelectedVendors([defaultVendor])
           }
         } else {

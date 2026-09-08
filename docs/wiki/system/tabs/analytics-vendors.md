@@ -28,6 +28,14 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s195+8 (2026-09-08) — fix bug thật: trang hiện toàn số 0 do auto-chọn sai vendor mặc định.** Hiếu báo
+  tab Vendors "không hiện số liệu". `fetchVendors()` (`page.tsx`) tự chọn vendor mặc định bằng
+  `list.includes("3HKDATAPOOL")` (KHÔNG dấu cách) — nhưng DB lưu `'3HK DATAPOOL'` (CÓ dấu cách, xem gotcha
+  dưới) nên KHÔNG BAO GIỜ khớp, luôn rơi về `list[0]` (vendor đầu bảng chữ cái — thường vendor nhỏ/ít bán
+  trong kỳ mặc định) → mọi KPI/chart hiện 0, trông như "lỗi". Bug có từ commit port gốc (`9c2dbca1`), không
+  phải regression của đợt UI redesign gần đây. Fix: so khớp bỏ dấu cách + hoa/thường
+  (`v.replace(/\s+/g,"").toUpperCase()==="3HKDATAPOOL"`), fallback `list[0]` chỉ khi thật sự không có
+  3HKDATAPOOL. Không đổi logic query nào khác.
 - **s194+10 (2026-09-06)**: UI redesign — hero "Month-End Projection" banner gradient `blue-600/700`→
   `brand-600/700`; 5 KPI card viết tay đổi sang `StatTile`; chart Revenue Trend đổi sang `CHART_PALETTE`/
   `CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→`brand-*` toàn trang (giữ indigo/purple/amber phân biệt
