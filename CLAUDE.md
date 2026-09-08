@@ -6,10 +6,22 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-07, s195+6)
+## Trạng thái hiện tại (2026-09-08, s195+7)
 
 | | |
 |---|---|
+| ⏳ **s195+7 (2026-09-08) — Audit: Orders thiếu đơn SIM vật lý (chỉ hiện eSIM), chờ Hiếu tự verify** | Hiếu
+  báo tab Orders sai số liệu — chỉ thấy đơn eSIM, đơn SIM vật lý không hiện. Đọc kỹ `route.ts`
+  (`/api/analytics/order-report`) + `orders/page.tsx` toàn bộ — KHÔNG có filter cứng nào (SQL/FE) loại theo
+  `type_of_sim`/eSIM → loại trừ nguyên nhân code/filter. Giả thuyết mạnh nhất (chưa verify được — máy dev
+  không có `.env.local`, không query gohub_dw trực tiếp): mặc định `dataSource=fulfilled` dùng
+  `fulfiled_date` (= ngày ĐÃ XUẤT/GIAO XONG). eSIM giao tức thì → `fulfiled_date` set ngay; SIM vật lý cần
+  ops xác nhận ship mới được set cột này trong gohub_dw → đơn chưa confirm ship → `fulfiled_date` NULL →
+  bị loại khỏi `WHERE fulfiled_date BETWEEN...` → biến mất khỏi Orders dù đơn có thật. **Cần Hiếu**: đổi
+  toggle "Fulfillment"→"Created" ở đầu trang Orders — nếu đơn SIM vật lý hiện ra ở Created thì xác nhận
+  đúng nguyên nhân (lưu ý: Created thì GP luôn = 0, không phải bug khác); nếu đúng thì root cause ở khâu
+  ops xác nhận "đã giao" tại hệ thống nguồn (Sapo/ETL), không phải bug web app, báo lại để tính hướng tiếp.
+  Xem `docs/wiki/system/tabs/analytics-orders.md` mục Gotchas.
 | ✅ **s195+6 (2026-09-07) — Inventory: thêm note công thức tính ngay trong UI (+ dạng nút bấm)** | Hiếu:
   "thêm vào trong Inventory 1 chỗ note công thức tính đi". Dùng lại `LogicNote` dùng chung (đã dùng ở B2C
   Metric) — chèn vào sub-tab "Kế hoạch nhập hàng theo tuần" (`fulfillment/page.tsx`), nêu công thức Vận
@@ -141,6 +153,10 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+7 — Orders thiếu đơn SIM vật lý: tự verify giả thuyết** — đổi toggle "Fulfillment"→"Created"
+  ở đầu trang `/analytics/orders`, xem đơn SIM vật lý có hiện ra không. Có → đúng nguyên nhân
+  `fulfiled_date` NULL (khâu ops/ETL nguồn, không phải bug web). Không → báo lại để điều tra tiếp hướng
+  khác. Xem `docs/wiki/system/tabs/analytics-orders.md` mục Gotchas.
 - [ ] **s195+4 — API sản phẩm cho manager: chạy migration v52 + tạo key + gửi manager** —
   (1) Chạy `web/db/migrations/v52_external_api_keys.sql` trên Supabase, nhớ Reload schema (Database → API
   → Reload schema, hoặc `NOTIFY pgrst, 'reload schema';`) — đúng gotcha đã gặp ở v51. (2) Vào `/admin` →
