@@ -6,9 +6,33 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-09, s195+12)
+## Trạng thái hiện tại (2026-09-09, s195+13)
 
 | | |
+|---|---|
+| ⏳ **s195+13 (2026-09-09) — Merge branch B2C song song của Minh (codex/b2c-dashboard-preview) vào staging + main, 1 tính năng mới còn treo** | Hiếu yêu cầu merge branch của Minh. Minh đã tự merge
+  staging (có fix cutoff s195+12 của mình) vào branch anh ấy trước — giảm conflict thật từ 13 file xuống
+  còn 3 (`ga4-categories/route.ts`, `monthly/route.ts`, `b2c-report-snapshot.ts`) và `vercel.json` giờ
+  giống hệt nhau (hết rủi ro mất cron). Resolve 3 conflict: giữ cutoff `getSafeReportDate()` (VN
+  timezone-safe, đã có unit test) thay vì `b2c-report-period.ts` của Minh (dùng `new Date(y,m,d)` local —
+  có nguy cơ lệch ngày trên máy dev khác timezone, đúng lớp bug repo từng gặp) — đã xoá file đó + test
+  không còn ai dùng; giữ `ga4-categories/route.ts` bản mình (dùng field `GA4Site.kind`, Minh vẫn đoán site
+  qua tên/URL). Giữ nguyên toàn bộ tính năng mới của Minh (customer breakdown theo kênh, Revenue Comparison
+  card, GA4 Category Performance). **3 bug thật phát hiện khi audit phần auto-merge "sạch" của
+  `b2c-advanced-dashboard.tsx`** (git không coi conflict vì bên mình không đổi đúng dòng đó từ merge-base,
+  nhưng vẫn làm mất tính năng — tự phát hiện qua audit kỹ, không tin theo báo cáo trước đó): (1) mất hẳn
+  dải "6 KPI cards" (Users/ROAS/Customers/CAC/Leads/CPL) — khôi phục nguyên `KpiCard` + biến tính toán; (2)
+  mất chấm màu `Dot`/`marketDot` (redesign s194+3) ở 3 bảng — khôi phục; (3) 8 chỗ merge lùi từ `#0071e3`
+  (UI Strict Lock) về Tailwind `blue-*` mặc định — sửa lại; (4) 2 Section ("B2C MKT Profit Report",
+  "Revenue & Gross Profit Trend") bị render TRÙNG LẶP 2 lần — xoá bản cũ. tsc + lint (0 lỗi mới) + vitest
+  (216/216) PASS cả staging lẫn main. **Đã tự QA kỹ trên staging qua Chrome** — cutoff đúng, 6 KPI card
+  hiện lại, Dot màu đúng, hết trùng lặp, breakdown khách theo kênh hiện đúng số liệu thật. **1 việc treo,
+  KHÔNG phải regression** (tính năng hoàn toàn mới của Minh, chưa từng chạy được trước đây): 3 Section
+  "GA4 Web/App Category Performance" + "GA4 Conversion Rate Charts" — code tồn tại trong file, build Vercel
+  sạch không cảnh báo, không lỗi console/network, nhưng KHÔNG render ra DOM (chỉ 6/9 Section hiện, đã xác
+  nhận qua `document.querySelectorAll("section")`). Đã điều tra sâu (console/network/DOM/raw JS bundle/
+  build log) không tìm ra nguyên nhân — dừng lại vì đây là tính năng mới của Minh (chưa từng verify được),
+  không chặn gì khác. Đã merge cả staging (`9e537570`) lẫn main (`5c9f2a7b`), production đang tự deploy.
 |---|---|
 | ✅ **s195+12 (2026-09-09) — Fix bug cutoff doanh thu B2C + route GA4 category, port có chọn lọc từ branch song song của Minh, đã tự QA staging** | Hiếu yêu cầu xem deploy Vercel mới nhất từ branch khác team
   (`codex/b2c-dashboard-preview`, PR #2 của Minh, "Fix B2C reporting cutoff...") và đưa hết vào staging.
@@ -222,6 +246,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+13 — GA4 Category Performance (3 section mới của Minh) không render — cần debug tiếp** —
+  code có trong `b2c-advanced-dashboard.tsx`, build sạch, không lỗi console/network, nhưng chỉ 6/9 Section
+  hiện ra trên trang B2C Advanced (thiếu "GA4 Web Category Performance"/"GA4 App Category Performance"/
+  "GA4 Conversion Rate Charts"). Đã điều tra sâu (console/network/DOM query/raw JS bundle/build log Vercel)
+  không tìm ra nguyên nhân. Không chặn gì khác (mọi thứ còn lại đã QA đúng). Gợi ý: hỏi Minh xem anh ấy đã
+  tự thấy 3 section này chạy được ở branch riêng chưa (commit cuối "Clarify..." còn dở dang) — nếu Minh
+  cũng chưa từng thấy nó chạy thì có thể là bug có sẵn từ code gốc của Minh, không phải do merge.
 - [ ] **s195+11 — Inventory: hỏi Sapo/ETL bổ sung 3 nguồn dữ liệu (không gấp, khi rảnh)** — đã verify thật
   trên staging là hệ thống KHÔNG có: (1) "ngày nhập kho của lô" trong `fact_inventory` (chỉ có `date`
   snapshot + `expired_date`), (2) `fact_inventory.batch` (cột có nhưng ETL Sapo chưa sync, luôn NULL),
