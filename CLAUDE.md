@@ -6,9 +6,21 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-09, s195+13)
+## Trạng thái hiện tại (2026-09-09, s195+14)
 
 | | |
+|---|---|
+| ✅ **s195+14 (2026-09-09) — Fix Bé Gấu trả lời quá lâu → im lặng không có câu trả lời (đúng bug thật, đã verify qua log)** | Hiếu báo trả lời lâu thì không ra
+  gì cả, hỏi có phải do time không. Verify qua Vercel Runtime Errors: `Task timed out after 60 seconds`
+  đúng route `/api/chat`, lần gần nhất khớp đúng lúc Hiếu vừa gặp — xác nhận đúng nguyên nhân, không đoán.
+  `runBeGau()` await xong TOÀN BỘ (kể cả nhiều vòng tool-call BI) mới enqueue 1 lần — không stream token
+  thật dù bọc `ReadableStream` — câu hỏi phức tạp dễ vượt 60s, Vercel giết function giữa chừng TRƯỚC KHI
+  catch-block kịp trả message lỗi thân thiện → im lặng hoàn toàn. `maxDuration=60` vốn đã đúng = trần cứng
+  Hobby plan, không phải thiếu cấu hình. Nâng 60→300 (`web/vercel.json` + `api/chat/route.ts`) — Hobby +
+  Fluid Compute cho phép tới 300s, không cần nâng gói. Cùng fix `/api/lark/events` (gọi `runBeGau()` đồng
+  bộ y hệt). Kiểm tra không có AbortController/timeout nội bộ nào khác (be-gau.ts, FE fetch) cần nâng
+  theo. tsc PASS (chỉ đổi config + comment). Đã push staging (`3692c3f2`) — **chưa merge main**, Hiếu tự
+  QA thử 1 câu hỏi BI dài trên staging trước khi merge production.
 |---|---|
 | ⏳ **s195+13 (2026-09-09) — Merge branch B2C song song của Minh (codex/b2c-dashboard-preview) vào staging + main, 1 tính năng mới còn treo** | Hiếu yêu cầu merge branch của Minh. Minh đã tự merge
   staging (có fix cutoff s195+12 của mình) vào branch anh ấy trước — giảm conflict thật từ 13 file xuống
