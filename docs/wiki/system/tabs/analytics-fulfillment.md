@@ -11,6 +11,24 @@ status: active
 
 # Inventory (Tồn Kho & Kế Hoạch Nhập Hàng)
 
+> **s195+11 (2026-09-09) — feedback team OPS, sub-tab "Tồn kho".** Đã verify trực tiếp schema thật trên
+> staging (SQL Query, Dev Tools) trước khi code, không đoán. Làm được: tách **VN/US** theo `company_code`
+> thật (JOIN `fact_fulfillment_revenue`, KHÔNG đoán qua ký tự đầu SKU — 1 SKU prefix `E` từng thấy CẢ 2
+> company khác nhau khi test), tách **SIM/eSIM** theo `dim_sku.type_of_sim` (đồng thời fix bug: field này
+> trước bị gán nhầm vào biến hiển thị "Sản phẩm", nay dùng đúng `category_name` cho tên sản phẩm), thêm
+> cột **"Bán tuần trước"** (SUM fulfilled_quantity tuần liền trước, Thứ Hai→Chủ Nhật), đổi **cảnh báo hết
+> hàng sang 4 mức** (An toàn/Bình thường/Cần chú ý/Nguy hiểm) theo ngưỡng ngày tồn kho (DOI) **OPS tự cấu
+> hình** qua `/analytics/settings` (không hardcode — `app_settings` key `inventory_alert_thresholds`, xem
+> `lib/inventory-thresholds.ts`), mặc định 90/60/30 ngày. Thêm **Export Excel** (client-side, `xlsx`).
+> Chuẩn bị sẵn cột **Mã lô** trong bảng breakdown theo kho (group theo `warehouse×batch×expired_date`) —
+> **KHÔNG hiện dữ liệu** vì verify trực tiếp: `fact_inventory.batch` có cột nhưng 0/451 dòng có giá trị
+> (ETL Sapo chưa sync lot-tracking); code đã sẵn sàng, tự tách nhiều dòng/kho khi ETL bổ sung, không cần
+> sửa lại. **KHÔNG làm được** (blocker thật, cần Hiếu hỏi Sapo/ETL): "ngày nhập kho của lô" — cột không hề
+> tồn tại trong `fact_inventory` (chỉ có `date` snapshot + `expired_date`); **ICCID** — không có bảng tồn
+> kho per-unit nào trong gohub_dw (ICCID chỉ có ở `fact_data_usage`/`data_usage_log`, dùng cho usage 3HK,
+> khác hoàn toàn tồn kho vật lý/eSIM). tsc + lint (0 lỗi mới) + vitest (212/212) PASS. Chưa tự QA UI qua
+> Chrome (chờ deploy staging) — xem checklist QA trong CLAUDE.md.
+
 > **s160 (2026-08-25) — thay hoàn toàn nội dung cũ.** Tab từng là "Inventory Management" (theo dõi tồn kho theo kho vật lý PQ/DD/TSN + vendor balance, xây từ s147) — đã bỏ hoàn toàn theo yêu cầu Hiếu. Thay bằng **kế hoạch nhập hàng theo tuần từng SKU (VN/US)** + **PO tracker**, dựa theo file Ops dùng ngoài Intel `Plan nhập hàng theo tháng.xlsx`. Route/permission key giữ nguyên `/analytics/fulfillment` (id `"fulfillment"`).
 >
 > **s194 (2026-09-06) — thêm sub-tab "Tồn kho" thật.** gohub_dw có thêm 2 bảng mới (`fact_inventory` +
@@ -29,7 +47,8 @@ status: active
 |---|---|
 | Web | `/analytics/fulfillment` — `web/src/app/(dashboard)/analytics/fulfillment/page.tsx` (2 sub-tab: `stock`/`plan`) |
 | UI sub-tab Tồn kho | `web/src/components/inventory/stock-view.tsx` |
-| API Tồn kho (mới) | `GET /api/analytics/inventory-stock` — đọc `fact_inventory`+`dim_warehouse` (gohub_dw) |
+| API Tồn kho (mới) | `GET /api/analytics/inventory-stock` — đọc `fact_inventory`+`dim_warehouse`+`dim_sku`+`fact_fulfillment_revenue` (gohub_dw) |
+| API ngưỡng cảnh báo | `GET/POST /api/config/inventory-alert-thresholds` — `lib/inventory-thresholds.ts` (Supabase `app_settings`, POST admin/creator) |
 | API watchlist | `GET/POST/PATCH/DELETE /api/analytics/inventory-plan/skus` |
 | API lưới tuần | `GET/POST /api/analytics/inventory-plan/weekly` |
 | API PO | `GET/POST/PATCH/DELETE /api/analytics/inventory-po` |
@@ -74,16 +93,26 @@ Query velocity dùng đúng pattern trailing-30d đã có ở hệ thống (`ful
 
 ## 4. UI
 
-### 4a. Sub-tab "Tồn kho" (mới, mặc định, s194)
-- 4 `StatTile`: SKU theo dõi, SKU nguy hiểm (cảnh báo), sắp hết hạn (<30 ngày), số kho đang có hàng.
+### 4a. Sub-tab "Tồn kho" (mới, mặc định, s194 — mở rộng s195+11 theo feedback OPS)
+- 4 `StatTile`: SKU theo dõi (theo filter đang chọn), SKU nguy hiểm, sắp hết hạn (<30 ngày), số kho đang có hàng.
 - Trend chart (area, `CHART_PALETTE[0]`): tổng tồn kho mọi SKU×kho theo ngày, 30 ngày gần nhất.
-- Bảng SKU: mã SKU, sản phẩm/vendor, tổng tồn kho, tốc độ bán/ngày (30d), ước tính số ngày còn hàng (đỏ
-  <7 ngày, vàng <14), hạn dùng gần nhất + số ngày còn (đỏ <14, vàng <30), badge cảnh báo. Click dòng →
-  expand xem breakdown theo từng kho (tồn kho, % tổng, hạn dùng riêng theo kho/batch).
-- Filter theo mức cảnh báo (Nguy hiểm/Cần chú ý/Ổn định) + search theo SKU/vendor/tên sản phẩm.
-- **Alert logic** (`alertFor()` trong route): `critical` nếu ước tính hết hàng <7 ngày HOẶC hạn dùng <14
-  ngày HOẶC tồn=0 mà vẫn còn bán; `warning` nếu <14 ngày HOẶC hạn dùng <30 ngày; `ok` nếu còn tồn và không
-  cảnh báo; `none` nếu tồn=0 và không bán (SKU inactive/discontinued, không đáng lo).
+- Filter: mức cảnh báo · **Kho (VN/US/Tất cả)** · **Loại (SIM/eSIM/Tất cả)** · search SKU/vendor/tên SP.
+- Bảng SKU: mã SKU, sản phẩm (`dim_sku.category_name`)/vendor, badge SIM/eSIM (`type_of_sim`), thị trường
+  VN/US, tổng tồn kho, tốc độ bán/ngày (30d), **bán tuần trước** (SUM tuần liền trước, T2→CN), ước tính số
+  ngày còn hàng (đỏ/vàng theo ngưỡng cấu hình), hạn dùng gần nhất + số ngày còn (đỏ <14, vàng <30), badge
+  cảnh báo 4 mức. Click dòng → expand breakdown theo kho×lô (tồn kho, % tổng, **mã lô** — hiện luôn trống,
+  hạn dùng riêng).
+- **Export Excel** (nút góc trên): xuất đúng danh sách đang filter, 1 dòng/kho/SKU, gồm SKU/sản phẩm/loại/
+  thị trường/vendor/tổng tồn/tốc độ bán/bán tuần trước/DOI/HSD/cảnh báo/kho/mã lô/tồn theo kho/HSD theo kho.
+- **Alert logic** (`alertFor()` trong route, ngưỡng lấy từ `/api/config/inventory-alert-thresholds`,
+  OPS tự set qua Settings): tồn=0 mà còn bán → `critical`; tồn=0 không bán → `none` (inactive); còn lại so
+  DOI (ngày tồn = tồn hiện tại ÷ tốc độ bán/ngày) với 3 ngưỡng — dưới `warningDays` → `critical`, dưới
+  `normalDays` → `warning`, dưới `safeDays` → `normal`, còn lại → `safe`. Mặc định 30/60/90. HSD (hạn dùng)
+  KHÔNG gộp vào badge này nữa (tô màu đỏ/vàng riêng ở cột Hạn dùng) — đúng công thức OPS đưa (thuần DOI).
+- **Market (VN/US)**: JOIN `fact_fulfillment_revenue.company_code` theo SKU, lấy company xuất hiện nhiều
+  nhất trong lịch sử bán (mode). SKU chưa từng bán (không có lịch sử) → fallback đoán qua ký tự đầu SKU
+  (1-6=VN, A-E=US, quy ước cũ của `import_inventory_plan.mjs`) — CHỈ dùng khi không tra được company thật,
+  vì đã verify 1 SKU cùng prefix có thể thuộc cả 2 company.
 
 ### 4b. Sub-tab "Kế hoạch nhập hàng" (giữ nguyên từ s160)
 - Toggle thị trường **VN/US** đầu trang.
@@ -98,6 +127,15 @@ Query velocity dùng đúng pattern trailing-30d đã có ở hệ thống (`ful
 `node scripts/import_inventory_plan.mjs "<đường dẫn file Plan nhập hàng theo tháng.xlsx>"` (chạy trên máy có `web/.env.local`) — đọc sheet `Plan VN`/`Plan US` (map từng SKU 5-dòng → SKU watchlist + dữ liệu tuần, `week_start_date` suy từ mốc "as of" ở hàng 0 cộng dồn 7 ngày/cột) và sheet `PO Dự kiến nhập` (map thẳng cột → `inventory_po`). Ô nào Excel đã có số ở Bán dự kiến/Số nhập → import kèm `*_auto=false` để giữ đúng số Ops đã tính.
 
 ## 6. Gotchas
+- **Verify trực tiếp staging s195+11 (2026-09-09)**: TẤT CẢ 7 kho trong `dim_warehouse` đều ở VN (Bạch
+  Đằng-HCM/Cầu Giấy-HN/Tân Sơn Nhất-HCM/eSIM Only/Kho Tổng + 2 kho rác) — **không có kho US nào** trong
+  `fact_inventory`. VN/US vì vậy tách theo SKU (company_code), KHÔNG phải theo kho vật lý.
+- **`fact_inventory.batch`** có cột nhưng luôn NULL tính đến s195+11 (0/451 dòng có giá trị) — chờ Sapo/ETL
+  sync lot-tracking. **Không có cột "ngày nhập kho của lô"** nào trong `fact_inventory` (chỉ `date` snapshot
+  + `expired_date`) — OPS muốn xem cần Sapo/ETL bổ sung nguồn trước, không tự thêm được (Hiếu không có DDL).
+- **ICCID không có trong `fact_inventory`/`dim_warehouse`** — chỉ có ở `fact_data_usage`/`data_usage_log`
+  (usage 3HK theo bundle, KHÁC hoàn toàn tồn kho vật lý/eSIM per-unit). Muốn export ICCID cần 1 bảng tồn
+  kho per-unit mới trong gohub_dw, chưa tồn tại.
 - **s194+11 (2026-09-06)**: UI — phần "Kế hoạch nhập hàng" (PO tracker + lưới tuần, giữ nguyên logic) còn
   sót `blue-*` (16 chỗ, cả `stock-view.tsx`) → `brand-*`. Sub-tab "Tồn kho" đã StatTile từ s194+5, không đổi
   lần này. Không đổi logic/data.

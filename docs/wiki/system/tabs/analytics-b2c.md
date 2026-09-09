@@ -13,6 +13,25 @@ status: active
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
+> ⚠️ **s195+12 (2026-09-09) — fix bug cutoff doanh thu + thêm route GA4 category.** Phát hiện khi so sánh
+> với branch song song của Minh (`codex/b2c-dashboard-preview`, PR #2 — branch tách từ commit rất cũ nên
+> KHÔNG merge trực tiếp, chỉ port có chọn lọc sau khi audit kỹ, xem `docs/session_summary.txt`). Bug thật
+> đã xác nhận bằng cách đọc trực tiếp code (không suy đoán): `loadRevenue()` trong `lib/b2c-report-snapshot.ts`
+> (nguồn snapshot mặc định của toàn dashboard) **THIẾU HẲN điều kiện chặn ngày trên** ở cả 4 query — chỉ có
+> `>= windowStart`, không có `<=` — nên nếu `fact_fulfillment_revenue` đã có dữ liệu (dù chỉ 1 phần) của
+> ngày CHƯA kết thúc thì bị cộng dư vào doanh thu tháng. `elapsedDays` cũng tính qua `new Date().getDate()`
+> thô (giờ server UTC), không quy đổi giờ VN. Fix: thêm `lib/analytics-engine/date-math.ts` 2 hàm mới
+> `vnToday()`/`getSafeReportDate(daysAgo=1)` (dùng `Intl.DateTimeFormat` timezone Asia/Ho_Chi_Minh, đúng
+> bất kể server chạy timezone nào) — dùng LÀM CUTOFF DUY NHẤT xuyên suốt `b2c-report-snapshot.ts` VÀ
+> `api/analytics/b2c/monthly/route.ts` (trước đây 2 nơi tính khác nhau: route live có xử lý T-1 khi
+> `forceRefresh`, nhưng snapshot generator — nguồn phục vụ mặc định — hoàn toàn không có). Kèm route mới
+> `GET /api/analytics/b2c/ga4-categories` (traffic theo `sessionDefaultChannelGroup`, so kỳ trước) — port
+> từ Minh nhưng sửa lại `classifySite()` dùng đúng field `GA4Site.kind` (`"web"`/`"app"`, HEAD thêm s194+1
+> cho tách property Web/App Firebase) thay vì đoán qua tên/URL như bản gốc (bản gốc không biết `kind`,
+> nếu port nguyên sẽ phân loại App site sai). tsc + lint (0 lỗi mới) + vitest (216/216, +4 test mới cho
+> `vnToday`/`getSafeReportDate`) PASS. **CHƯA áp dụng UI mới của Minh** (breakdown khách theo kênh,
+> Revenue Compare card) — chỉ port đúng phần data-correctness đã verify, phần UI để sau nếu Hiếu muốn.
+
 > ⚠️ **CẬP NHẬT s135 (2026-08-05):**
 > - **Bỏ GA4 Conversion Rate Charts** (Section 4) khỏi tab Advanced (giữ GA4 Users KPI card). GA4 chi tiết ở tab Website.
 > - **B2C Marketing Budget tách VN/US/Total**: model `app_settings.b2c_budget` đổi `{month:number}` → `{month:{vn,us}}`

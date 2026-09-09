@@ -118,7 +118,9 @@ export default function VendorPerformancePage() {
           const list = data.map((d: any) => d.vendor)
           setVendors(list)
           if (list.length > 0 && selectedVendors.length === 0) {
-            const defaultVendor = list.includes("3HKDATAPOOL") ? "3HKDATAPOOL" : list[0]
+            // DB lưu "3HK DATAPOOL" (CÓ dấu cách) — so khớp bỏ dấu cách/hoa-thường, đúng chuẩn
+            // REPLACE(UPPER(vendor),' ','') dùng xuyên suốt repo (xem analytics-data-model.md gotcha #9).
+            const defaultVendor = list.find(v => v.replace(/\s+/g, "").toUpperCase() === "3HKDATAPOOL") || list[0]
             setSelectedVendors([defaultVendor])
           }
         } else {
@@ -300,19 +302,35 @@ export default function VendorPerformancePage() {
       })
       const qOpt = (sql: string | null): Promise<Response | null> => sql ? q(sql) : Promise.resolve(null)
 
-      // Pre-fetch partner_tiers trước → cần để build channelSql CASE phân loại đúng B2B-Strategic
-      const tiersRaw = await fetch("/api/config/partner-tiers")
-      const tiersData: Record<string, string[]> = tiersRaw.ok ? await tiersRaw.json() : {}
-      setPartnerTiers(Object.keys(tiersData).length ? tiersData : { Strategic: [] })
-      const strategicNames: string[] = tiersData.Strategic || []
-      const strategicPat = strategicNames.length > 0
-        ? strategicNames.map((n: string) => `'%${n.replace(/'/g, "''").trim()}%'`).join(",")
-        : null
-      const bizGroupSQL = strategicPat
-        ? `CASE WHEN UPPER(s.group_name) = 'B2B' AND s.channel_name ILIKE ANY(ARRAY[${strategicPat}]::text[]) THEN 'B2B-Strategic' WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
-        : `CASE WHEN UPPER(s.group_name) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+      // Phân loại B2B-Strategic/Non-Strategic THEO KHÁCH (price_list_name) — CÙNG 1 định nghĩa dùng chung
+      // với Quarter Report/Dashboard/BOD/All-Time (xem buildGroupCaseByCustomerSql trong
+      // lib/analytics-helpers.ts). Trước đây trang này tự phân loại theo channel_name khớp danh sách
+      // "partner_tiers" (Supabase, phải tay thêm từng kênh) → kênh Strategic mới/chưa kịp thêm bị rơi
+      // nhầm Non-Strategic (báo cáo 2026-09-08). quarterly-settings mặc định MỌI KH B2B là Strategic TRỪ
+      // KHI price_list_name khớp keyword VIP/Gold/Silver → không cần duy trì 2 danh sách song song nữa.
+      const qSettingsRaw = await fetch("/api/analytics/quarterly-settings")
+      const qSettings: { tierKeywords: Record<string, string[]>; excludedCustomers: string[] } =
+        qSettingsRaw.ok ? await qSettingsRaw.json() : { tierKeywords: {}, excludedCustomers: [] }
+      setPartnerTiers(Object.keys(qSettings.tierKeywords || {}).length ? qSettings.tierKeywords : { Strategic: [] })
+      const nonStratKws = Object.entries(qSettings.tierKeywords || {})
+        .filter(([tier]) => tier !== "Strategic")
+        .flatMap(([, kws]) => kws)
+        .map((kw: string) => kw.toUpperCase().replace(/'/g, "''"))
+      // KHÔNG áp exclusion list (quarterly_excluded_customers) ở đây — khác Quarter Report, trang này
+      // không loại trừ KH nào khỏi KPI summary/Revenue Trend/Products phía trên, nếu Channel Distribution
+      // tự loại riêng sẽ làm tổng bảng lệch khỏi KPI card cùng trang. Chỉ mượn phần phân loại
+      // Strategic/Non-Strategic, không mượn phần exclude.
+      const isStrategicSql = nonStratKws.length === 0
+        ? "(TRUE)"
+        : `(c.price_list_name IS NULL OR (${nonStratKws.map(kw => `UPPER(c.price_list_name) NOT LIKE '%${kw}%'`).join(" AND ")}))`
+      const bizGroupSQL = `CASE WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrategicSql} THEN 'B2B-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
 
-      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name) SELECT s.channel_name, SUM(f.${revCol}) as revenue, COUNT(DISTINCT f.order_code) as orders, SUM(f.${qtyCol}) as units_sold, SUM(f.${marginCol}) as margin, MAX(t.total_revenue) as total_channel_revenue, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '') WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name ORDER BY revenue DESC`
+      // business_group phụ thuộc c.price_list_name (không aggregate được) → phân loại từng dòng trong CTE
+      // "classified" TRƯỚC, rồi mới GROUP BY (channel_name, business_group) ở outer query. Project cột
+      // tường minh (không f.*) — marginCol có thể là literal "0" (chế độ Created, bảng sales không có
+      // margin), f.0 sẽ không hợp lệ nếu lỡ prefix bằng alias.
+      const marginExpr = marginCol === "0" ? "0" : `f.${marginCol}`
+      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name), classified AS (SELECT f.order_code as order_code, f.${revCol} as rev, f.${qtyCol} as qty, ${marginExpr} as mgn, s.channel_name as channel_name, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code) WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter}) SELECT cl.channel_name, SUM(cl.rev) as revenue, COUNT(DISTINCT cl.order_code) as orders, SUM(cl.qty) as units_sold, SUM(cl.mgn) as margin, MAX(t.total_revenue) as total_channel_revenue, cl.business_group FROM classified cl LEFT JOIN channel_totals t ON COALESCE(cl.channel_name, '') = COALESCE(t.channel_name, '') GROUP BY cl.channel_name, cl.business_group ORDER BY revenue DESC`
 
       // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
       const [

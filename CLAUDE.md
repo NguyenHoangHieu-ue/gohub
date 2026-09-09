@@ -6,10 +6,79 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-08, s195+7)
+## Trạng thái hiện tại (2026-09-09, s195+12)
 
 | | |
 |---|---|
+| ✅ **s195+12 (2026-09-09) — Fix bug cutoff doanh thu B2C + route GA4 category, port có chọn lọc từ branch song song của Minh, đã tự QA staging** | Hiếu yêu cầu xem deploy Vercel mới nhất từ branch khác team
+  (`codex/b2c-dashboard-preview`, PR #2 của Minh, "Fix B2C reporting cutoff...") và đưa hết vào staging.
+  **Thử merge trực tiếp trước — KHÔNG làm** vì branch tách từ commit rất cũ (session 86, hàng trăm commit
+  trước), merge thử ra 13 conflict đụng file lõi (cron `vercel.json` — bản Minh thiếu 5 cron production,
+  `analytics-helpers.ts`, `ga4.ts`, `b2c-advanced-dashboard.tsx` vừa redesign UI Strict Lock). Đã abort
+  merge, dùng 2 fork song song đọc kỹ + so sánh 2 bản (không đoán) cho tab B2C và Website Analytics, báo
+  cáo lại Hiếu — Hiếu chọn hướng an toàn: chỉ port phần đã verify đúng, bỏ qua UI/cron/tỷ giá của Minh.
+  **Đã port 2 việc, tự đọc trực tiếp code HEAD xác nhận bug thật (không tin theo báo cáo ngoài)**: (1)
+  `lib/b2c-report-snapshot.ts` `loadRevenue()` — nguồn snapshot mặc định toàn dashboard B2C — cả 4 query
+  THIẾU HẲN điều kiện chặn ngày trên (chỉ `>= windowStart`), cộng dư doanh thu ngày CHƯA kết thúc; thêm
+  `lib/analytics-engine/date-math.ts` 2 hàm mới `vnToday()`/`getSafeReportDate(daysAgo=1)` (Intl.DateTimeFormat
+  timezone Asia/Ho_Chi_Minh, đúng bất kể server timezone) làm cutoff DUY NHẤT cho cả snapshot generator lẫn
+  `api/analytics/b2c/monthly/route.ts` (trước route live có xử lý T-1 khi forceRefresh nhưng snapshot thì
+  không). (2) Route mới `GET /api/analytics/b2c/ga4-categories` (traffic theo channel group, so kỳ trước)
+  — port từ Minh nhưng sửa `classifySite()` dùng đúng field `GA4Site.kind` (HEAD thêm s194+1) thay vì đoán
+  tên/URL như bản gốc (bản gốc không biết field này). tsc + lint (0 lỗi mới) + vitest (216/216, +4 test)
+  PASS. **Đã tự QA trên staging**: tab `/analytics/b2c` load đúng, badge "Live · T-1 (đến 2026-09-08)"
+  khớp chính xác cutoff mới; gọi trực tiếp route `ga4-categories` qua Dev Tools → 200, trả đúng
+  `elapsedDays:8` (khớp T-1) + site `gohub-app` (kind=app) phân đúng nhóm `app`, 2 site web phân đúng nhóm
+  `web`. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. **CHƯA áp dụng UI mới của Minh**
+  (breakdown khách theo kênh, Revenue Compare card) — để sau nếu Hiếu muốn, không gấp. Không cần Hiếu làm
+  gì thêm.
+|---|---|
+| ✅ **s195+11 (2026-09-09) — Inventory: feedback team OPS (sub-tab Tồn kho), đã tự QA Chrome** | Hiếu
+  đưa feedback OPS cho tab Inventory (theo lô/HSD/ngày nhập, export ICCID, tách VN/US, tách SIM/eSIM, công
+  thức tốc độ bán/DOI/cảnh báo/số bán dự kiến). Trước khi code, tự query trực tiếp gohub_dw qua SQL Query
+  (Dev Tools) trên staging để verify schema thật — không đoán: xác nhận `fact_inventory.batch` có cột
+  nhưng 0/451 dòng có data (ETL Sapo chưa sync lot-tracking), không có cột "ngày nhập kho của lô" nào, và
+  ICCID không tồn tại trong `fact_inventory`/`dim_warehouse` (chỉ có ở `fact_data_usage`/`data_usage_log`,
+  usage 3HK, khác hẳn tồn kho vật lý) — 3 mục này **chưa làm được**, cần Hiếu hỏi Sapo/ETL bổ sung nguồn.
+  Đồng thời xác nhận tất cả 7 kho `dim_warehouse` đều ở VN (không có kho US) → tách VN/US **theo SKU**
+  (JOIN `fact_fulfillment_revenue.company_code`, lấy company xuất hiện nhiều nhất — KHÔNG đoán qua ký tự
+  đầu SKU, verify 1 SKU cùng prefix `E` có thể thuộc cả 2 company). Đã làm: tách VN/US + SIM/eSIM (filter
+  toggle, `dim_sku.type_of_sim`, kèm fix bug field này trước bị gán nhầm hiển thị làm tên sản phẩm), thêm
+  cột "Bán tuần trước", đổi cảnh báo sang 4 mức (An toàn/Bình thường/Cần chú ý/Nguy hiểm) theo ngưỡng DOI
+  **OPS tự cấu hình** qua `/analytics/settings` (card mới "Ngưỡng cảnh báo tồn kho", `app_settings` key
+  `inventory_alert_thresholds`, không hardcode — theo yêu cầu rõ của Hiếu khi hỏi lại khoảng 60-90 ngày),
+  mặc định 90/60/30. Thêm Export Excel. Chuẩn bị sẵn group theo lô trong breakdown kho (tự hiện khi ETL bổ
+  sung batch, không cần sửa lại). Không cần migration DB nào (dùng lại `app_settings` key-value có sẵn).
+  tsc + lint (0 lỗi mới) + vitest (212/212) PASS. **Đã tự QA qua Chrome trên staging**: filter VN/eSIM lọc
+  đúng (30→9 SKU), expand row hiện đúng "Mã lô: —" + ghi chú chờ ETL, đổi ngưỡng An toàn 90→120 ở Settings
+  → Inventory phản ánh ngay (1 SKU 96 ngày đổi từ "An toàn" sang "Bình thường"), đã trả lại 90 sau test.
+  Wiki `docs/wiki/system/tabs/analytics-fulfillment.md` đã cập nhật đủ. Không cần Hiếu làm gì thêm để dùng
+  ngay — 3 mục blocked (lô/ngày nhập/ICCID) cần Hiếu tự liên hệ Sapo/ETL khi rảnh, không gấp.
+|---|---|
+| ⏳ **s195+8/+9/+10 (2026-09-08) — Fix 3 bug thật tab Vendors, chờ Hiếu QA staging** | Hiếu báo liên tiếp
+  3 lỗi khi dùng tab Vendors, mỗi lỗi fix xong lộ ra lỗi tiếp theo phía sau (đúng thứ tự user thấy khi test
+  thật). **(1) Trang hiện toàn số 0**: `fetchVendors()` tự chọn vendor mặc định bằng
+  `list.includes("3HKDATAPOOL")` (không dấu cách) nhưng DB lưu `'3HK DATAPOOL'` (CÓ dấu cách) → không bao
+  giờ khớp, luôn rơi về `list[0]` (vendor đầu bảng chữ cái, thường ít/không bán trong kỳ mặc định). Fix so
+  khớp bỏ dấu cách + hoa/thường. **(2) Bảng Channel Distribution trống**: `channelSql` SELECT
+  `business_group` (CASE dùng `s.group_name`) nhưng `GROUP BY` chỉ có `s.channel_name` → Postgres lỗi
+  grouping, query fail âm thầm (chỉ console.error, không hiện banner lỗi) → `channelDistribution` không
+  bao giờ được set. Fix thêm `s.group_name` vào GROUP BY. **(3) Channel Strategic bị gắn nhầm
+  Non-Strategic**: phát hiện repo có **2 hệ thống phân loại Strategic lệch nhau** — Vendors dùng
+  `partner_tiers` (danh sách TÊN kênh liệt kê tay, Supabase) trong khi Quarter Report/Dashboard/BOD/
+  All-Time dùng hệ canonical `quarterly_tier_keywords` (mọi KH B2B mặc định Strategic trừ khi
+  `price_list_name` khớp keyword VIP/Gold/Silver, xem `buildGroupCaseByCustomerSql` trong
+  `analytics-helpers.ts`). Kênh Strategic mới/chưa kịp thêm tay vào `partner_tiers` bị rơi nhầm
+  Non-Strategic. Fix đổi `channelSql` sang hệ canonical (JOIN `dim_customer`, tách CTE `classified` phân
+  loại từng dòng trước khi GROUP BY vì business_group phụ thuộc cột không aggregate được); KHÔNG áp
+  exclusion list của Quarter Report (tránh lệch tổng khỏi KPI card cùng trang). `strategicPerformance`
+  (bảng đối tác Strategic named cụ thể, route `b2b/strategic-performance`) CHƯA đổi — vẫn hệ cũ, ngoài
+  scope lần này, không ảnh hưởng tính đúng của Channel Distribution. Kèm fix 1 bug latent: `SUM(f.marginCol)`
+  ở chế độ Created (`marginCol="0"` literal) từng thành `SUM(f.0)` không hợp lệ. Cả 3 fix: tsc + lint (0
+  lỗi mới) + vitest (212/212) PASS. Wiki `docs/wiki/system/tabs/analytics-vendors.md` đã cập nhật đủ 3
+  mục. **Cần Hiếu**: QA lại tab Vendors trên staging sau khi Vercel deploy xong — vendor mặc định load
+  đúng, Channel Distribution có dữ liệu, các channel Strategic (đối chiếu Quarter Report) hiện đúng nhóm
+  B2B-Strategic.
 | ⏳ **s195+7 (2026-09-08) — Audit: Orders thiếu đơn SIM vật lý (chỉ hiện eSIM), chờ Hiếu tự verify** | Hiếu
   báo tab Orders sai số liệu — chỉ thấy đơn eSIM, đơn SIM vật lý không hiện. Đọc kỹ `route.ts`
   (`/api/analytics/order-report`) + `orders/page.tsx` toàn bộ — KHÔNG có filter cứng nào (SQL/FE) loại theo
@@ -153,6 +222,18 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+11 — Inventory: hỏi Sapo/ETL bổ sung 3 nguồn dữ liệu (không gấp, khi rảnh)** — đã verify thật
+  trên staging là hệ thống KHÔNG có: (1) "ngày nhập kho của lô" trong `fact_inventory` (chỉ có `date`
+  snapshot + `expired_date`), (2) `fact_inventory.batch` (cột có nhưng ETL Sapo chưa sync, luôn NULL),
+  (3) ICCID theo tồn kho vật lý (chỉ có ICCID trong `fact_data_usage`/`data_usage_log`, dùng cho usage
+  3HK, khác hẳn). 3 mục OPS xin (lô/ngày nhập/export ICCID) cần Sapo/ETL bổ sung nguồn trước — không tự
+  code thêm được (Hiếu không có DDL trên gohub_dw). Còn lại (VN/US, SIM/eSIM, cảnh báo, số bán tuần trước,
+  ngưỡng tự cấu hình, Export Excel) đã xong, đã tự QA — không cần Hiếu làm gì để dùng ngay.
+- [ ] **s195+8/+9/+10 — QA tab Vendors trên staging** — sau khi Vercel deploy xong 3 commit fix (default
+  vendor 0 số liệu / Channel Distribution trống / Strategic phân loại sai): mở `/analytics/vendors`, xem
+  (a) load lần đầu tự chọn đúng vendor 3HK DATAPOOL có số liệu thật; (b) bảng Channel Distribution có dữ
+  liệu; (c) đối chiếu vài kênh Strategic đã biết ở Quarter Report — Vendors giờ phải gắn đúng nhóm
+  B2B-Strategic. Nếu vẫn thấy sai, báo cụ thể tên kênh để điều tra tiếp.
 - [ ] **s195+7 — Orders thiếu đơn SIM vật lý: tự verify giả thuyết** — đổi toggle "Fulfillment"→"Created"
   ở đầu trang `/analytics/orders`, xem đơn SIM vật lý có hiện ra không. Có → đúng nguyên nhân
   `fulfiled_date` NULL (khâu ops/ETL nguồn, không phải bug web). Không → báo lại để điều tra tiếp hướng
