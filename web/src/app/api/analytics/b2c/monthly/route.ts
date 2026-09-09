@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq, noCache, flushAnalyticsCacheByPrefixes, getDaysInMonth, getDaysInRange } from "@/lib/analytics-helpers"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { cachedQuery, CACHE_HEADERS, isCronReq, isLocalPreviewReq, noCache } from "@/lib/analytics-helpers"
 import { getSafeReportDate } from "@/lib/analytics-engine/date-math"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
-import { adminGohubConfigured, adminGohubCustomerRows } from "@/lib/admin-gohub"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
@@ -24,11 +22,16 @@ interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
+interface CustomerChannelRow { month: string; bucket: "vnWeb" | "usWeb" | "usApp"; type: "new" | "returning"; revenue: string; count: string }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
+interface RevenueComparison { previousSamePeriod: number; previousFullMonth: number; compareThrough: string }
 type CostValue = { type?: string; value?: number }
 
-const localPreviewAllowed = (req: NextRequest) =>
-  process.env.NODE_ENV === "development" && req.nextUrl.searchParams.get("localPreview") === "1"
+const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
+const localPreviewAllowed = (req: NextRequest) => isLocalPreviewReq(req)
+
+
 
 function parseCostValue(value: unknown): CostValue {
   if (!value) return { type: "amount", value: 0 }
@@ -40,6 +43,28 @@ function costAmount(value: CostValue, revenue: number, ratio: number): number {
   const n = Number(value?.value) || 0
   if (!n) return 0
   return value?.type === "percent" ? revenue * n / 100 : n * ratio
+}
+
+function emptyCustCell(): CustCell {
+  return { revenue: 0, count: 0 }
+}
+
+function emptyCustRow(): CustRow {
+  return {
+    new: emptyCustCell(),
+    returning: emptyCustCell(),
+    total: emptyCustCell(),
+  }
+}
+
+function emptyCustomerChannelCell(): CustomerChannelCell {
+  return {
+    vnB2c: emptyCustRow(),
+    vnWeb: emptyCustRow(),
+    usB2c: emptyCustRow(),
+    usWeb: emptyCustRow(),
+    usApp: emptyCustRow(),
+  }
 }
 
 async function readTargets() {
@@ -58,15 +83,13 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session && !localPreviewAllowed(req) && !isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // YTD: từ tháng 1 đến tháng hiện tại
+  // YTD: từ tháng 1 đến tháng hiện tại. Cutoff LUÔN là T-1 giờ VN (getSafeReportDate) — dữ liệu hôm nay
+  // trong fact_fulfillment_revenue chưa chắc đầy đủ (ETL/ngày chưa kết thúc). Trước đây khi KHÔNG
+  // forceRefresh thì dùng "hôm nay" (now, theo giờ server UTC) làm windowEnd → bug thật: cộng dư doanh thu
+  // của ngày chưa xong vào snapshot/live fallback. Xem docs/wiki/system/tabs/analytics-b2c.md.
   const forceRefresh = noCache(req)
-
-  // Cutoff LUÔN là T-1 giờ VN (getSafeReportDate) — dữ liệu hôm nay trong fact_fulfillment_revenue
-  // chưa chắc đầy đủ (ETL/ngày chưa kết thúc). Trước đây khi KHÔNG forceRefresh thì dùng "hôm nay" (now,
-  // theo giờ server UTC) làm windowEnd → bug thật: cộng dư doanh thu của ngày chưa xong vào snapshot/live
-  // fallback. Xem docs/wiki/system/tabs/analytics-b2c.md.
-  const windowEnd = getSafeReportDate(1)
-  const [cutoffY, cutoffM, cutoffD] = windowEnd.split("-").map(Number)
+  const dataAsOf = getSafeReportDate(1)
+  const [cutoffY, cutoffM, cutoffD] = dataAsOf.split("-").map(Number)
 
   const months: string[] = []
   for (let i = 1; i <= cutoffM; i++) months.push(`${cutoffY}-${String(i).padStart(2, "0")}`)
@@ -74,16 +97,47 @@ export async function GET(req: NextRequest) {
   const currentMonth = months[months.length - 1]
   const elapsedDays = cutoffD
   const totalDays = new Date(Date.UTC(cutoffY, cutoffM, 0)).getUTCDate()
+  const isoDateUTC = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+  const previousMonthStart = new Date(Date.UTC(cutoffY, cutoffM - 2, 1))
+  const previousMonthEnd = new Date(Date.UTC(cutoffY, cutoffM - 1, 0))
+  const previousCompareEnd = new Date(Date.UTC(
+    previousMonthStart.getUTCFullYear(),
+    previousMonthStart.getUTCMonth(),
+    Math.min(elapsedDays, previousMonthEnd.getUTCDate()),
+  ))
   const skipLeads = req.nextUrl.searchParams.get("skipLeads") === "1"
   const onlyLeads = req.nextUrl.searchParams.get("onlyLeads") === "1"
 
+  const loadRevenueComparison = async (): Promise<RevenueComparison> => {
+    const previousStart = isoDateUTC(previousMonthStart)
+    const previousEnd = isoDateUTC(previousMonthEnd)
+    const compareThrough = isoDateUTC(previousCompareEnd)
+    const rows = await cachedQuery(
+      `b2c-revenue-comparison:v1:${dataAsOf}`,
+      () => queryAnalytics<{ previous_same_period: string; previous_full_month: string }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN f.fulfiled_date::date <= $2::date THEN f.fulfilled_revenue_amount_vnd ELSE 0 END), 0) AS previous_same_period,
+           COALESCE(SUM(f.fulfilled_revenue_amount_vnd), 0) AS previous_full_month
+         FROM fact_fulfillment_revenue f
+         JOIN dim_order_source s ON f.order_source_code = s.code
+         WHERE UPPER(s.group_name) = 'B2C'
+           AND f.fulfiled_date::date BETWEEN $1::date AND $3::date`,
+        [previousStart, compareThrough, previousEnd],
+      ),
+      12 * 60,
+    )
+    return {
+      previousSamePeriod: Number(rows[0]?.previous_same_period) || 0,
+      previousFullMonth: Number(rows[0]?.previous_full_month) || 0,
+      compareThrough,
+    }
+  }
+
   try {
-    // Skip snapshot khi nocache=1 (user muốn data live, tránh lệch với Performance tab).
-    // Ngoài ra bỏ snapshot NẾU thiếu marketChannels (breakdown mới) → buộc query lại để có nested VN/US.
     try {
       const snapshots = forceRefresh ? [] : await readB2CMonthlySnapshots(months)
-      const hasMarketChannelBreakdown = snapshots.every(s => (s.payload as any)?.marketChannels)
-      if (snapshots.length === months.length && hasMarketChannelBreakdown) {
+      const hasCurrentBreakdowns = snapshots.every(s => (s.payload as any)?.marketChannels && (s.payload as any)?.customerChannels)
+      if (snapshots.length === months.length && hasCurrentBreakdowns && snapshots.every(s => s.payload.revenueAsOf === dataAsOf)) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
         if (onlyLeads) {
           return NextResponse.json(
@@ -95,12 +149,14 @@ export async function GET(req: NextRequest) {
           {
             months,
             currentMonth,
+            dataAsOf,
             elapsedDays,
             totalDays,
             targets: await readTargets(),
             customerSource: "admin-gohub-snapshot",
             customerBreakdown: "new-returning",
             refreshTimestamp: snapshots[snapshots.length - 1]?.refreshed_at ?? new Date().toISOString(),
+            revenueComparison: await loadRevenueComparison(),
             ...snapshotData,
           },
           { headers: CACHE_HEADERS },
@@ -157,7 +213,7 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
              AND f.customer_code IS NOT NULL
            GROUP BY 1, 2
          )
@@ -168,29 +224,57 @@ export async function GET(req: NextRequest) {
          FROM monthly m
          JOIN first_order fo ON m.customer_code = fo.customer_code
          GROUP BY 1, 2`,
-        [windowStart]
+        [windowStart, dataAsOf]
       )
 
-    let customerSource: "admin-gohub" | "analytics-db" = adminGohubConfigured() ? "admin-gohub" : "analytics-db"
+    // Opening the dashboard must never call Admin GoHub directly. The daily cron owns
+    // that API and writes snapshots; this warehouse query is the resilient fallback.
+    const customerSource = "analytics-db" as const
     let customerBreakdown: "new-returning" | "total-only" = "new-returning"
-    let customerError: string | undefined
-    const loadCustomerRows = async () => {
-      if (!adminGohubConfigured()) return customerRowsFromDb()
-      try {
-        return await adminGohubCustomerRows(months)
-      } catch (e) {
-        customerError = (e as Error).message
-        console.error("[b2c/monthly] customers (admin-gohub)", customerError)
-        return months.map(month => ({ month, type: "total", revenue: "0", count: "0" }))
-      }
-    }
+    const customerError = "Snapshot Admin chưa sẵn sàng; đang dùng dữ liệu khách từ Analytics DB"
+    const customerChannelRowsFromDb = () =>
+      queryAnalytics<CustomerChannelRow>(
+        `WITH first_order AS (
+           SELECT f.customer_code,
+                  MIN(f.fulfiled_date::date) AS first_order_date
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.customer_code IS NOT NULL
+           GROUP BY 1
+         ),
+         monthly AS (
+           SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                  f.customer_code,
+                  COALESCE(f.company_code, 'NA') AS market,
+                  CASE WHEN s.sub_group_name = 'Websites' THEN 'web'
+                       WHEN s.sub_group_name = 'Mobile-App' THEN 'app'
+                       ELSE 'other' END AS ctype,
+                  SUM(f.fulfilled_revenue_amount_vnd) AS revenue
+           FROM fact_fulfillment_revenue f
+           JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE UPPER(s.group_name) = 'B2C'
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
+             AND f.customer_code IS NOT NULL
+           GROUP BY 1, 2, 3, 4
+         )
+         SELECT m.month,
+                CASE WHEN m.market = 'VN' AND m.ctype = 'web' THEN 'vnWeb'
+                     WHEN m.market = 'US' AND m.ctype = 'web' THEN 'usWeb'
+                     WHEN m.market = 'US' AND m.ctype = 'app' THEN 'usApp' END AS bucket,
+                CASE WHEN to_char(fo.first_order_date, 'YYYY-MM') = m.month THEN 'new' ELSE 'returning' END AS type,
+                SUM(m.revenue) AS revenue,
+                COUNT(DISTINCT m.customer_code) AS count
+         FROM monthly m
+         JOIN first_order fo ON m.customer_code = fo.customer_code
+         WHERE (m.market = 'VN' AND m.ctype = 'web')
+            OR (m.market = 'US' AND m.ctype IN ('web', 'app'))
+         GROUP BY 1, 2, 3`,
+        [windowStart, dataAsOf]
+      )
 
-    // Cache key khác nhau khi live (windowEnd = T-1) vs cron (windowEnd = today). v8 = thêm marketChannels.
-    const cacheKey = `b2c-monthly:v8:${windowStart}:${windowEnd}:${adminGohubConfigured() ? "admin-summary" : "db"}`
-    const data = await cachedQuery(cacheKey, async () => {
-      // Khi forceRefresh: dùng windowEnd (T-1) làm upper bound để số ngày hiện tại khớp T-1.
-      const endClause = `AND f.fulfiled_date::date <= '${windowEnd}'::date`
-      const [marketRows, custRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
+    const data = await cachedQuery(`b2c-monthly:v14:${windowStart}:${dataAsOf}:snapshot-first`, async () => {
+      const [marketRows, custRows, customerChannelRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')           AS market,
@@ -198,12 +282,12 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
-             ${endClause}
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
           GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
-        loadCustomerRows(),
+        customerRowsFromDb(),
+        customerChannelRowsFromDb(),
         // Channel-type breakdown: Web (Websites) / App (Mobile-App) / Khác (còn lại)
         queryAnalytics<{ month: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -214,12 +298,10 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
-             ${endClause}
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
-        // Nested market × loại kênh (VN/US × Sales/Web/App)
         queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')            AS market,
@@ -230,10 +312,9 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
-             ${endClause}
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2, 3`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
         queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM')        AS month,
@@ -244,10 +325,9 @@ export async function GET(req: NextRequest) {
            FROM fact_fulfillment_revenue f
            JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE UPPER(s.group_name) = 'B2C'
-             AND f.fulfiled_date::date >= $1
-             ${endClause}
+             AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            GROUP BY 1, 2`,
-          [windowStart]
+          [windowStart, dataAsOf]
         ),
       ])
 
@@ -290,6 +370,25 @@ export async function GET(req: NextRequest) {
         row.total.count += cnt
       }
 
+      // ── Customers by requested B2C channel: VN Web, US Web, US App ──
+      const customerChannels: Record<string, CustomerChannelCell> = {}
+      for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
+      for (const r of customerChannelRows) {
+        const monthCell = customerChannels[r.month]
+        if (!monthCell) continue
+        const revenue = parseFloat(r.revenue || "0")
+        const count = parseInt(r.count || "0")
+        const addToBucket = (bucket: CustRow) => {
+          const target = r.type === "new" ? bucket.new : bucket.returning
+          target.revenue += revenue
+          target.count += count
+          bucket.total.revenue += revenue
+          bucket.total.count += count
+        }
+        addToBucket(monthCell[r.bucket])
+        addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
+      }
+
       // ── Channels: Web / App / Khác per month ──
       const channels: Record<string, ChannelCell> = {}
       for (const m of months) channels[m] = { web: 0, app: 0, other: 0 }
@@ -302,7 +401,7 @@ export async function GET(req: NextRequest) {
         else cell.other += rev
       }
 
-      // ── Nested market breakdown: VN/US × Sales/Web/App (cùng grain fact) ──
+      // ── Nested market breakdown: VN/US x Sales/Web/App, sourced from the same warehouse grain ──
       const marketChannels: Record<string, MarketChannelCell> = {}
       for (const m of months) marketChannels[m] = { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 }
       for (const r of marketChannelRows) {
@@ -337,7 +436,7 @@ export async function GET(req: NextRequest) {
           .from("analytics_channel_costs")
           .select("channel, month, ads, platform_fee, sponsor_products, media")
           .in("month", months)
-          .in("channel", B2C_CHANNELS)   // chỉ kênh B2C — loại chi phí kênh B2B/ecom khỏi profit trend
+          .in("channel", B2C_CHANNELS)
         if (error) throw new Error(error.message)
 
         for (const row of costRows ?? []) {
@@ -361,7 +460,7 @@ export async function GET(req: NextRequest) {
         console.error("[b2c/monthly] profit channel costs", (e as Error).message)
       }
 
-      return { markets, customers, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
+      return { markets, customers, customerChannels, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
     }, undefined, forceRefresh)
 
     // KPI targets + Budget: đều nhập trong tab KPI/Target.
@@ -445,7 +544,8 @@ export async function GET(req: NextRequest) {
       {
         months, currentMonth, elapsedDays, totalDays,
         targets, budget, budgetByMarket, spend, leads, leadsByChannel,
-        dataAsOf: windowEnd,
+        dataAsOf,
+        revenueComparison: await loadRevenueComparison(),
         isLive: forceRefresh,
         refreshTimestamp: new Date().toISOString(),
         ...data,

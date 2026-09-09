@@ -247,3 +247,9 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+
+### Revenue cutoff reconciliation — 2026-09-07
+
+The monthly endpoint and revenue snapshot queries must bound fulfillment dates through the last completed day in Asia/Ho_Chi_Minh, including customer and profit breakdowns. Cache keys include the cutoff; snapshots without matching `payload.revenueAsOf` fall back to the bounded warehouse queries.
+
+Verified against Analytics DB: September 1–6 B2C revenue is VND 284,852,800.82 (VN 258,485,490.02; US 26,367,310.80). The former unbounded query included September 7 revenue of VND 24,126,445.36, producing VND 308,979,246.18. Correct September prorata is VND 1,424,264,004.10. The local endpoint returns the corrected total with `dataAsOf=2026-09-06`; TypeScript and five UTC/Vietnam date boundary tests pass.
