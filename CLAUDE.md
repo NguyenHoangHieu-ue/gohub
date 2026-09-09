@@ -6,9 +6,32 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-09, s195+11)
+## Trạng thái hiện tại (2026-09-09, s195+12)
 
 | | |
+|---|---|
+| ✅ **s195+12 (2026-09-09) — Fix bug cutoff doanh thu B2C + route GA4 category, port có chọn lọc từ branch song song của Minh, đã tự QA staging** | Hiếu yêu cầu xem deploy Vercel mới nhất từ branch khác team
+  (`codex/b2c-dashboard-preview`, PR #2 của Minh, "Fix B2C reporting cutoff...") và đưa hết vào staging.
+  **Thử merge trực tiếp trước — KHÔNG làm** vì branch tách từ commit rất cũ (session 86, hàng trăm commit
+  trước), merge thử ra 13 conflict đụng file lõi (cron `vercel.json` — bản Minh thiếu 5 cron production,
+  `analytics-helpers.ts`, `ga4.ts`, `b2c-advanced-dashboard.tsx` vừa redesign UI Strict Lock). Đã abort
+  merge, dùng 2 fork song song đọc kỹ + so sánh 2 bản (không đoán) cho tab B2C và Website Analytics, báo
+  cáo lại Hiếu — Hiếu chọn hướng an toàn: chỉ port phần đã verify đúng, bỏ qua UI/cron/tỷ giá của Minh.
+  **Đã port 2 việc, tự đọc trực tiếp code HEAD xác nhận bug thật (không tin theo báo cáo ngoài)**: (1)
+  `lib/b2c-report-snapshot.ts` `loadRevenue()` — nguồn snapshot mặc định toàn dashboard B2C — cả 4 query
+  THIẾU HẲN điều kiện chặn ngày trên (chỉ `>= windowStart`), cộng dư doanh thu ngày CHƯA kết thúc; thêm
+  `lib/analytics-engine/date-math.ts` 2 hàm mới `vnToday()`/`getSafeReportDate(daysAgo=1)` (Intl.DateTimeFormat
+  timezone Asia/Ho_Chi_Minh, đúng bất kể server timezone) làm cutoff DUY NHẤT cho cả snapshot generator lẫn
+  `api/analytics/b2c/monthly/route.ts` (trước route live có xử lý T-1 khi forceRefresh nhưng snapshot thì
+  không). (2) Route mới `GET /api/analytics/b2c/ga4-categories` (traffic theo channel group, so kỳ trước)
+  — port từ Minh nhưng sửa `classifySite()` dùng đúng field `GA4Site.kind` (HEAD thêm s194+1) thay vì đoán
+  tên/URL như bản gốc (bản gốc không biết field này). tsc + lint (0 lỗi mới) + vitest (216/216, +4 test)
+  PASS. **Đã tự QA trên staging**: tab `/analytics/b2c` load đúng, badge "Live · T-1 (đến 2026-09-08)"
+  khớp chính xác cutoff mới; gọi trực tiếp route `ga4-categories` qua Dev Tools → 200, trả đúng
+  `elapsedDays:8` (khớp T-1) + site `gohub-app` (kind=app) phân đúng nhóm `app`, 2 site web phân đúng nhóm
+  `web`. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. **CHƯA áp dụng UI mới của Minh**
+  (breakdown khách theo kênh, Revenue Compare card) — để sau nếu Hiếu muốn, không gấp. Không cần Hiếu làm
+  gì thêm.
 |---|---|
 | ✅ **s195+11 (2026-09-09) — Inventory: feedback team OPS (sub-tab Tồn kho), đã tự QA Chrome** | Hiếu
   đưa feedback OPS cho tab Inventory (theo lô/HSD/ngày nhập, export ICCID, tách VN/US, tách SIM/eSIM, công
